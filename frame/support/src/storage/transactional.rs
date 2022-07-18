@@ -164,9 +164,9 @@ where
 
 /// Execute the supplied function, adding a new storage layer.
 ///
-/// This is the same as `with_transaction`, but assuming that any function returning
-/// an `Err` should rollback, and any function returning `Ok` should commit. This
-/// provides a cleaner API to the developer who wants this behavior.
+/// This is the same as `with_transaction`, but assuming that any function returning an `Err` should
+/// rollback, and any function returning `Ok` should commit. This provides a cleaner API to the
+/// developer who wants this behavior.
 pub fn with_storage_layer<T, E, F>(f: F) -> Result<T, E>
 where
 	E: From<DispatchError>,

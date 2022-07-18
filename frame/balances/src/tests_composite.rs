@@ -40,7 +40,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 	}
 );
 
@@ -77,6 +77,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_transaction_payment::Config for Test {
+	type Event = Event;
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<u64>;

@@ -45,6 +45,9 @@ pub use sp_core::Void;
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use sp_runtime::{bounded_btree_map, bounded_vec};
 #[doc(hidden)]
 pub use sp_runtime::{RuntimeDebug, StateVersion};
 #[cfg(feature = "std")]
@@ -117,46 +120,6 @@ pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
-}
-
-/// Build a bounded vec from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_vec {
-	($ ($values:expr),* $(,)?) => {
-		{
-			$crate::sp_std::vec![$($values),*].try_into().unwrap()
-		}
-	};
-	( $value:expr ; $repetition:expr ) => {
-		{
-			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
-		}
-	}
-}
-
-/// Build a bounded btree-map from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_btree_map {
-	($ ( $key:expr => $value:expr ),* $(,)?) => {
-		{
-			$crate::traits::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
-				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
-			).unwrap()
-		}
-	};
-
 }
 
 /// Generate a new type alias for [`storage::types::StorageValue`],
@@ -716,7 +679,7 @@ macro_rules! assert_noop {
 	) => {
 		let h = $crate::storage_root($crate::StateVersion::V1);
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
+		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1), "storage has been mutated");
 	};
 }
 
@@ -762,7 +725,7 @@ macro_rules! assert_err_with_weight {
 	($call:expr, $err:expr, $weight:expr $(,)? ) => {
 		if let Err(dispatch_err_with_post) = $call {
 			$crate::assert_err!($call.map(|_| ()).map_err(|e| e.error), $err);
-			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight.into());
+			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight);
 		} else {
 			panic!("expected Err(_), got Ok(_).")
 		}
@@ -863,6 +826,7 @@ pub mod tests {
 			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
+
 	use self::module::Module;
 
 	decl_storage! {
@@ -888,6 +852,7 @@ pub mod tests {
 	}
 
 	struct Test;
+
 	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
@@ -904,6 +869,7 @@ pub mod tests {
 	trait Sorted {
 		fn sorted(self) -> Self;
 	}
+
 	impl<T: Ord> Sorted for Vec<T> {
 		fn sorted(mut self) -> Self {
 			self.sort();

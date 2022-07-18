@@ -195,9 +195,6 @@ pub mod pallet {
 		Blake2_128Concat,
 		HashedProof,
 		PendingSwap<T>,
-		OptionQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::error]

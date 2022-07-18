@@ -308,6 +308,17 @@ impl<T: Default> Get<T> for GetDefault {
 	}
 }
 
+/// Try and collect into a collection `C`.
+pub trait TryCollect<C> {
+	/// The error type that gets returned when a collection can't be made from `self`.
+	type Error;
+	/// Consume self and try to collect the results into `C`.
+	///
+	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
+	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
+	fn try_collect(self) -> Result<C, Self::Error>;
+}
+
 macro_rules! impl_const_get {
 	($name:ident, $t:ty) => {
 		#[doc = "Const getter for a basic type."]

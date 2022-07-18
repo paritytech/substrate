@@ -30,7 +30,7 @@
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	bitswap::Bitswap,
-	config::{parse_str_addr, Params, TransportConfig},
+	config::{self, parse_str_addr, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -60,7 +60,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
-use sc_network_sync::{Status as SyncStatus, SyncState};
+use sc_network_common::sync::{SyncMode, SyncState, SyncStatus};
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -148,6 +148,47 @@ where
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(mut params: Params<B, H, Client>) -> Result<Self, Error> {
+		// Private and public keys configuration.
+		let local_identity = params.network_config.node_key.clone().into_keypair()?;
+		let local_public = local_identity.public();
+		let local_peer_id = local_public.to_peer_id();
+
+		params.network_config.boot_nodes = params
+			.network_config
+			.boot_nodes
+			.into_iter()
+			.filter(|boot_node| {
+				if boot_node.peer_id == local_peer_id {
+					warn!(
+						target: "sub-libp2p",
+						"Local peer ID used in bootnode, ignoring: {}",
+						boot_node,
+					);
+					false
+				} else {
+					true
+				}
+			})
+			.collect();
+		params.network_config.default_peers_set.reserved_nodes = params
+			.network_config
+			.default_peers_set
+			.reserved_nodes
+			.into_iter()
+			.filter(|reserved_node| {
+				if reserved_node.peer_id == local_peer_id {
+					warn!(
+						target: "sub-libp2p",
+						"Local peer ID used in reserved node, ignoring: {}",
+						reserved_node,
+					);
+					false
+				} else {
+					true
+				}
+			})
+			.collect();
+
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -190,10 +231,6 @@ where
 			.extra_sets
 			.insert(0, transactions_handler_proto.set_config());
 
-		// Private and public keys configuration.
-		let local_identity = params.network_config.node_key.clone().into_keypair()?;
-		let local_public = local_identity.public();
-		let local_peer_id = local_public.to_peer_id();
 		info!(
 			target: "sub-libp2p",
 			"🏷  Local node identity is: {}",
@@ -207,12 +244,22 @@ where
 			None => (None, None),
 		};
 
-		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
-			protocol::ProtocolConfig {
-				roles: From::from(&params.role),
-				max_parallel_downloads: params.network_config.max_parallel_downloads,
-				sync_mode: params.network_config.sync_mode.clone(),
+		let chain_sync = (params.create_chain_sync)(
+			if params.role.is_light() {
+				SyncMode::Light
+			} else {
+				match params.network_config.sync_mode {
+					config::SyncMode::Full => SyncMode::Full,
+					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+						SyncMode::LightState { skip_proofs, storage_chain_mode },
+					config::SyncMode::Warp => SyncMode::Warp,
+				}
 			},
+			params.chain.clone(),
+			warp_sync_provider,
+		)?;
+		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
+			From::from(&params.role),
 			params.chain.clone(),
 			params.protocol_id.clone(),
 			&params.network_config,
@@ -222,9 +269,8 @@ where
 						.map(|_| default_notif_handshake_message.clone()),
 				)
 				.collect(),
-			params.block_announce_validator,
 			params.metrics_registry.as_ref(),
-			warp_sync_provider,
+			chain_sync,
 		)?;
 
 		// List of multiaddresses that we know in the network.
@@ -379,7 +425,8 @@ where
 				)
 				.substream_upgrade_protocol_override(upgrade::Version::V1Lazy)
 				.notify_handler_buffer_size(NonZeroUsize::new(32).expect("32 != 0; qed"))
-				.connection_event_buffer_size(1024);
+				.connection_event_buffer_size(1024)
+				.max_negotiating_inbound_streams(2048);
 			if let Some(spawner) = params.executor {
 				struct SpawnImpl<F>(F);
 				impl<F: Fn(Pin<Box<dyn Future<Output = ()> + Send>>)> Executor for SpawnImpl<F> {

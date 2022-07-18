@@ -50,6 +50,7 @@ frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, p
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-support" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 frame-try-runtime = { version = "0.10.0-dev", default-features = false, path = "../../../frame/try-runtime", optional = true }
+pallet-alliance = { version = "4.0.0-dev", default-features = false, path = "../../../frame/alliance" }
 pallet-assets = { version = "4.0.0-dev", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../../../frame/authorship" }
@@ -187,12 +188,14 @@ std = [
 	"frame-try-runtime/std",
 	"sp-io/std",
 	"pallet-child-bounties/std",
+	"pallet-alliance/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
+	"pallet-alliance/runtime-benchmarks",
 	"pallet-assets/runtime-benchmarks",
 	"pallet-babe/runtime-benchmarks",
 	"pallet-bags-list/runtime-benchmarks",
@@ -243,6 +246,7 @@ try-runtime = [
 	"frame-executive/try-runtime",
 	"frame-try-runtime",
 	"frame-system/try-runtime",
+	"pallet-alliance/try-runtime",
 	"pallet-assets/try-runtime",
 	"pallet-authority-discovery/try-runtime",
 	"pallet-authorship/try-runtime",

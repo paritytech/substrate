@@ -124,6 +124,8 @@ impl pallet_mmr::Config for Test {
 
 impl pallet_beefy::Config for Test {
 	type BeefyId = BeefyId;
+	type MaxAuthorities = ConstU32<100>;
+	type OnNewValidatorSet = BeefyMmr;
 }
 
 parameter_types! {

@@ -419,6 +419,17 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				event: Event::TransactionPayment(
+					pallet_transaction_payment::Event::TransactionFeePaid {
+						who: alice().into(),
+						actual_fee: fees,
+						tip: 0,
+					},
+				),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
 				event: Event::System(frame_system::Event::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
@@ -490,6 +501,17 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
+				event: Event::TransactionPayment(
+					pallet_transaction_payment::Event::TransactionFeePaid {
+						who: bob().into(),
+						actual_fee: fees,
+						tip: 0,
+					},
+				),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(1),
 				event: Event::System(frame_system::Event::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
@@ -523,6 +545,17 @@ fn full_native_block_import_works() {
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
 				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
+				topics: vec![],
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(2),
+				event: Event::TransactionPayment(
+					pallet_transaction_payment::Event::TransactionFeePaid {
+						who: alice().into(),
+						actual_fee: fees,
+						tip: 0,
+					},
+				),
 				topics: vec![],
 			},
 			EventRecord {
@@ -731,7 +764,11 @@ fn deploying_wasm_contract_should_work() {
 	t.execute_with(|| {
 		// Verify that the contract does exist by querying some of its storage items
 		// It does not matter that the storage item itself does not exist.
-		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(addr, Default::default()).is_ok());
+		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(
+			addr,
+			pallet_contracts::StorageKey::<Runtime>::default().to_vec()
+		)
+		.is_ok());
 	});
 }
 
