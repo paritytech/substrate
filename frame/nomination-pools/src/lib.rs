@@ -378,7 +378,7 @@ pub struct PoolMember<T: Config> {
 
 impl<T: Config> PoolMember<T> {
 	/// The pending rewards of this member.
-	pub fn pending_rewards(
+	fn pending_rewards(
 		&self,
 		current_reward_counter: T::RewardCounter,
 	) -> Result<BalanceOf<T>, Error<T>> {
@@ -939,7 +939,7 @@ pub struct RewardPool<T: Config> {
 
 impl<T: Config> RewardPool<T> {
 	/// Getter for [`RewardPool::last_recorded_reward_counter`].
-	pub fn last_recorded_reward_counter(&self) -> T::RewardCounter {
+	pub(crate) fn last_recorded_reward_counter(&self) -> T::RewardCounter {
 		self.last_recorded_reward_counter
 	}
 
