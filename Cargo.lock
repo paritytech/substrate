@@ -6002,7 +6002,6 @@ dependencies = [
 name = "pallet-nomination-pools-rpc-runtime-api"
 version = "1.0.0-dev"
 dependencies = [
- "pallet-nomination-pools",
  "parity-scale-codec",
  "sp-api",
  "sp-std",
