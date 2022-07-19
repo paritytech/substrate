@@ -16,7 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use beefy_primitives::{crypto::Signature, BeefyApi, VersionedFinalityProof, BEEFY_ENGINE_ID};
+use codec::Encode;
+use log::error;
+use std::{collections::HashMap, sync::Arc};
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::well_known_cache_keys;
@@ -34,7 +37,6 @@ use crate::{
 	justification::decode_and_verify_commitment, notification::BeefySignedCommitmentSender,
 	Client as BeefyClient,
 };
-use beefy_primitives::{crypto::Signature, BeefyApi, VersionedFinalityProof, BEEFY_ENGINE_ID};
 
 /// A block-import handler for BEEFY.
 ///
@@ -43,19 +45,19 @@ use beefy_primitives::{crypto::Signature, BeefyApi, VersionedFinalityProof, BEEF
 ///
 /// When using BEEFY, the block import worker should be using this block import object.
 pub struct BeefyBlockImport<Backend, Block: BlockT, Client, I> {
+	backend: Arc<Backend>,
 	client: Arc<Client>,
 	inner: I,
 	justification_sender: BeefySignedCommitmentSender<Block>,
-	_phantom: PhantomData<Backend>,
 }
 
 impl<BE, Block: BlockT, Client, I: Clone> Clone for BeefyBlockImport<BE, Block, Client, I> {
 	fn clone(&self) -> Self {
 		BeefyBlockImport {
+			backend: self.backend.clone(),
 			client: self.client.clone(),
 			inner: self.inner.clone(),
 			justification_sender: self.justification_sender.clone(),
-			_phantom: PhantomData,
 		}
 	}
 }
@@ -63,11 +65,12 @@ impl<BE, Block: BlockT, Client, I: Clone> Clone for BeefyBlockImport<BE, Block, 
 impl<BE, Block: BlockT, Client, I> BeefyBlockImport<BE, Block, Client, I> {
 	/// Create a new BeefyBlockImport.
 	pub fn new(
+		backend: Arc<BE>,
 		client: Arc<Client>,
 		inner: I,
 		justification_sender: BeefySignedCommitmentSender<Block>,
 	) -> BeefyBlockImport<BE, Block, Client, I> {
-		BeefyBlockImport { inner, client, justification_sender, _phantom: PhantomData }
+		BeefyBlockImport { backend, inner, client, justification_sender }
 	}
 }
 
@@ -78,7 +81,7 @@ where
 	Client: BeefyClient<Block, BE> + ProvideRuntimeApi<Block>,
 	Client::Api: BeefyApi<Block>,
 {
-	fn import_beefy_justification(
+	fn decode_and_verify(
 		&self,
 		encoded: &EncodedJustification,
 		number: NumberFor<Block>,
@@ -93,6 +96,34 @@ where
 			.ok_or_else(|| ConsensusError::ClientImport("Unknown validator set".to_string()))?;
 
 		decode_and_verify_commitment::<Block>(&encoded[..], number, &validator_set)
+	}
+
+	/// Import BEEFY justification: Send it to worker for processing and also append it to backend.
+	///
+	/// This function assumes:
+	/// - `justification` is verified and valid,
+	/// - the block referred by `justification` has been imported _and_ finalized.
+	fn import_beefy_justification_unchecked(
+		&self,
+		number: NumberFor<Block>,
+		justification: VersionedFinalityProof<NumberFor<Block>, Signature>,
+	) {
+		// Append the justification to the block in the backend.
+		if let Err(e) = self.backend.append_justification(
+			BlockId::Number(number),
+			(BEEFY_ENGINE_ID, justification.encode()),
+		) {
+			error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, justification);
+		}
+		// Send the justification to the BEEFY voter for processing.
+		match justification {
+			// TODO #11838: Should not unpack, these channels should also use
+			// `VersionedFinalityProof`.
+			VersionedFinalityProof::V1(signed_commitment) => self
+				.justification_sender
+				.notify(|| Ok::<_, ()>(signed_commitment))
+				.expect("forwards closure result; the closure always returns Ok; qed."),
+		};
 	}
 }
 
@@ -124,7 +155,7 @@ where
 			.justifications
 			.as_ref()
 			.and_then(|just| just.get(BEEFY_ENGINE_ID))
-			.map(|encoded| self.import_beefy_justification(encoded, number, hash))
+			.map(|encoded| self.decode_and_verify(encoded, number, hash))
 			.and_then(|result| match result {
 				Ok(proof) => Some(proof),
 				Err(ConsensusError::InvalidJustification) => {
@@ -141,16 +172,24 @@ where
 		let inner_import_result = self.inner.import_block(block, new_cache).await?;
 
 		match (beefy_proof, &inner_import_result) {
-			// If both BEEFY proof valid and block import success, send proof to voter.
 			(Some(proof), ImportResult::Imported(_)) => {
-				match proof {
-					// TODO #11838: Should not unpack, these channels should also use
-					// `VersionedFinalityProof`.
-					VersionedFinalityProof::V1(signed_commitment) => self
-						.justification_sender
-						.notify(|| Ok::<_, ()>(signed_commitment))
-						.expect("forwards closure result; the closure always returns Ok; qed."),
-				};
+				let status = self.client.info();
+				if number <= status.finalized_number &&
+					Some(hash) ==
+						self.client
+							.hash(number)
+							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+				{
+					// The proof is valid and the block is imported and final, we can import.
+					self.import_beefy_justification_unchecked(number, proof);
+				} else {
+					error!(
+						target: "beefy",
+						"🥩 Cannot import justification: {:?} for, not yet final, block number {:?}",
+						proof,
+						number,
+					);
+				}
 			},
 			_ => (),
 		}
