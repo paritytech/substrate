@@ -22,7 +22,7 @@ use log::error;
 use std::{collections::HashMap, sync::Arc};
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
-use sp_blockchain::well_known_cache_keys;
+use sp_blockchain::{well_known_cache_keys, HeaderBackend};
 use sp_consensus::Error as ConsensusError;
 use sp_runtime::{
 	generic::BlockId,
@@ -35,7 +35,6 @@ use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResul
 
 use crate::{
 	justification::decode_and_verify_commitment, notification::BeefySignedCommitmentSender,
-	Client as BeefyClient,
 };
 
 /// A block-import handler for BEEFY.
@@ -44,17 +43,21 @@ use crate::{
 /// Wraps a `inner: BlockImport` and ultimately defers to it.
 ///
 /// When using BEEFY, the block import worker should be using this block import object.
-pub struct BeefyBlockImport<Backend, Block: BlockT, Client, I> {
+pub struct BeefyBlockImport<Block: BlockT, Backend, Client, RuntimeApi, I> {
 	backend: Arc<Backend>,
 	client: Arc<Client>,
+	runtime: Arc<RuntimeApi>,
 	inner: I,
 	justification_sender: BeefySignedCommitmentSender<Block>,
 }
 
-impl<BE, Block: BlockT, Client, I: Clone> Clone for BeefyBlockImport<BE, Block, Client, I> {
+impl<Block: BlockT, BE, Client, Runtime, I: Clone> Clone
+	for BeefyBlockImport<Block, BE, Client, Runtime, I>
+{
 	fn clone(&self) -> Self {
 		BeefyBlockImport {
 			backend: self.backend.clone(),
+			runtime: self.runtime.clone(),
 			client: self.client.clone(),
 			inner: self.inner.clone(),
 			justification_sender: self.justification_sender.clone(),
@@ -62,24 +65,25 @@ impl<BE, Block: BlockT, Client, I: Clone> Clone for BeefyBlockImport<BE, Block, 
 	}
 }
 
-impl<BE, Block: BlockT, Client, I> BeefyBlockImport<BE, Block, Client, I> {
+impl<Block: BlockT, BE, Client, Runtime, I> BeefyBlockImport<Block, BE, Client, Runtime, I> {
 	/// Create a new BeefyBlockImport.
 	pub fn new(
 		backend: Arc<BE>,
 		client: Arc<Client>,
+		runtime: Arc<Runtime>,
 		inner: I,
 		justification_sender: BeefySignedCommitmentSender<Block>,
-	) -> BeefyBlockImport<BE, Block, Client, I> {
-		BeefyBlockImport { backend, inner, client, justification_sender }
+	) -> BeefyBlockImport<Block, BE, Client, Runtime, I> {
+		BeefyBlockImport { backend, client, runtime, inner, justification_sender }
 	}
 }
 
-impl<BE, Block, Client, I> BeefyBlockImport<BE, Block, Client, I>
+impl<Block, BE, Client, Runtime, I> BeefyBlockImport<Block, BE, Client, Runtime, I>
 where
-	BE: Backend<Block>,
 	Block: BlockT,
-	Client: BeefyClient<Block, BE> + ProvideRuntimeApi<Block>,
-	Client::Api: BeefyApi<Block>,
+	BE: Backend<Block>,
+	Runtime: ProvideRuntimeApi<Block>,
+	Runtime::Api: BeefyApi<Block> + Send + Sync,
 {
 	fn decode_and_verify(
 		&self,
@@ -89,7 +93,7 @@ where
 	) -> Result<VersionedFinalityProof<NumberFor<Block>, Signature>, ConsensusError> {
 		let block_id = BlockId::hash(hash);
 		let validator_set = self
-			.client
+			.runtime
 			.runtime_api()
 			.validator_set(&block_id)
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
@@ -128,20 +132,23 @@ where
 }
 
 #[async_trait::async_trait]
-impl<BE, Block: BlockT, Client, I> BlockImport<Block> for BeefyBlockImport<BE, Block, Client, I>
+impl<Block, BE, Client, Runtime, I> BlockImport<Block>
+	for BeefyBlockImport<Block, BE, Client, Runtime, I>
 where
+	Block: BlockT,
 	BE: Backend<Block>,
+	Client: HeaderBackend<Block>,
 	I: BlockImport<
 			Block,
 			Error = ConsensusError,
-			Transaction = sp_api::TransactionFor<Client, Block>,
+			Transaction = sp_api::TransactionFor<Runtime, Block>,
 		> + Send
 		+ Sync,
-	Client: BeefyClient<Block, BE> + ProvideRuntimeApi<Block>,
-	Client::Api: BeefyApi<Block>,
+	Runtime: ProvideRuntimeApi<Block> + Send + Sync,
+	Runtime::Api: BeefyApi<Block>,
 {
 	type Error = ConsensusError;
-	type Transaction = TransactionFor<Client, Block>;
+	type Transaction = TransactionFor<Runtime, Block>;
 
 	async fn import_block(
 		&mut self,
