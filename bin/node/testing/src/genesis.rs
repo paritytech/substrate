@@ -92,6 +92,8 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		gilt: Default::default(),
 		transaction_storage: Default::default(),
 		transaction_payment: Default::default(),
+		alliance: Default::default(),
+		alliance_motion: Default::default(),
 		nomination_pools: Default::default(),
 	}
 }

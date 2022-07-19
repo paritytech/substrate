@@ -177,8 +177,8 @@ pub use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128, Support,
-	Supports, VoteWeight,
+	Assignment, BalancingConfig, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128,
+	Support, Supports, VoteWeight,
 };
 pub use traits::NposSolution;
 
@@ -568,11 +568,8 @@ pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
 );
 
-impl<
-		AccountId: IdentifierT,
-		Accuracy: PerThing128,
-		Balancing: Get<Option<(usize, ExtendedBalance)>>,
-	> NposSolver for SequentialPhragmen<AccountId, Accuracy, Balancing>
+impl<AccountId: IdentifierT, Accuracy: PerThing128, Balancing: Get<Option<BalancingConfig>>>
+	NposSolver for SequentialPhragmen<AccountId, Accuracy, Balancing>
 {
 	type AccountId = AccountId;
 	type Accuracy = Accuracy;
@@ -596,11 +593,8 @@ pub struct PhragMMS<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
 );
 
-impl<
-		AccountId: IdentifierT,
-		Accuracy: PerThing128,
-		Balancing: Get<Option<(usize, ExtendedBalance)>>,
-	> NposSolver for PhragMMS<AccountId, Accuracy, Balancing>
+impl<AccountId: IdentifierT, Accuracy: PerThing128, Balancing: Get<Option<BalancingConfig>>>
+	NposSolver for PhragMMS<AccountId, Accuracy, Balancing>
 {
 	type AccountId = AccountId;
 	type Accuracy = Accuracy;

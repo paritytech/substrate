@@ -262,9 +262,6 @@ pub mod pallet {
 		Blake2_128Concat,
 		T::AccountId,
 		AssetAccountOf<T, I>,
-		OptionQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::storage]
@@ -279,9 +276,6 @@ pub mod pallet {
 			NMapKey<Blake2_128Concat, T::AccountId>, // delegate
 		),
 		Approval<T::Balance, DepositBalanceOf<T, I>>,
-		OptionQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::storage]
@@ -292,8 +286,6 @@ pub mod pallet {
 		T::AssetId,
 		AssetMetadata<DepositBalanceOf<T, I>, BoundedVec<u8, T::StringLimit>>,
 		ValueQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::genesis_config]

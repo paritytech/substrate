@@ -393,10 +393,11 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
 		if let Some(ref state) = *self.state.borrow() {
-			state.apply_to_keys_while(child_info, prefix, f)
+			state.apply_to_keys_while(child_info, prefix, start_at, f)
 		}
 	}
 

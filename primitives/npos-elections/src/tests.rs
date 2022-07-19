@@ -19,7 +19,7 @@
 
 use crate::{
 	balancing, helpers::*, mock::*, seq_phragmen, seq_phragmen_core, setup_inputs, to_support_map,
-	Assignment, ElectionResult, ExtendedBalance, StakedAssignment, Support, Voter,
+	Assignment, BalancingConfig, ElectionResult, ExtendedBalance, StakedAssignment, Support, Voter,
 };
 use sp_arithmetic::{PerU16, Perbill, Percent, Permill};
 use substrate_test_utils::assert_eq_uvec;
@@ -142,7 +142,8 @@ fn balancing_core_works() {
 
 	let (candidates, voters) = setup_inputs(candidates, voters);
 	let (candidates, mut voters) = seq_phragmen_core(4, candidates, voters).unwrap();
-	let iters = balancing::balance::<AccountId>(&mut voters, 4, 0);
+	let config = BalancingConfig { iterations: 4, tolerance: 0 };
+	let iters = balancing::balance::<AccountId>(&mut voters, &config);
 
 	assert!(iters > 0);
 
@@ -282,6 +283,7 @@ fn phragmen_poc_works_with_balancing() {
 	let voters = vec![(10, vec![1, 2]), (20, vec![1, 3]), (30, vec![2, 3])];
 
 	let stake_of = create_stake_of(&[(10, 10), (20, 20), (30, 30)]);
+	let config = BalancingConfig { iterations: 4, tolerance: 0 };
 	let ElectionResult::<_, Perbill> { winners, assignments } = seq_phragmen(
 		2,
 		candidates,
@@ -289,7 +291,7 @@ fn phragmen_poc_works_with_balancing() {
 			.iter()
 			.map(|(ref v, ref vs)| (v.clone(), stake_of(v), vs.clone()))
 			.collect::<Vec<_>>(),
-		Some((4, 0)),
+		Some(config),
 	)
 	.unwrap();
 
