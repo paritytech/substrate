@@ -1345,7 +1345,6 @@ where
 				warn!(target: "afg", "Error applying finality to block {:?}: {}", (hash, number), e);
 				e
 			})?;
-		// here maybe should apply/append other justifications for this block
 
 		debug!(target: "afg", "Finalizing blocks up to ({:?}, {})", number, hash);
 
