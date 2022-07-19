@@ -17,12 +17,12 @@ jobs:
       - name: Install newset Cargo
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.60.0
+          toolchain: nightly-2022-05-11
           default: true
-      - name: Install nightly-2021-10-19 with wasm
+      - name: Install nightly-2022-05-11 with wasm
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.60.0
+          toolchain: nightly-2022-05-11
           target: wasm32-unknown-unknown
       - name: Check Cargo version
         run: |
@@ -30,12 +30,12 @@ jobs:
       - name: Build UT
         uses: actions-rs/cargo@v1
         with:
-          toolchain: 1.60.0
+          toolchain: nightly-2022-05-11
           command: test
           args: --release -j2 --no-run
       - name: Run UT
         uses: actions-rs/cargo@v1
         with:
-          toolchain: 1.60.0
+          toolchain: nightly-2022-05-11
           command: test
           args: --release
