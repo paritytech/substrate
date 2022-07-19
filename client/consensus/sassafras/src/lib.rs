@@ -575,6 +575,25 @@ pub struct SassafrasWorker<B: BlockT> {
 	handle: SassafrasWorkerHandle<B>,
 }
 
+impl<B: BlockT> SassafrasWorker<B> {
+	/// Return an event stream of notifications for when new slot happens, and the corresponding
+	/// epoch descriptor.
+	pub fn slot_notification_stream(
+		&self,
+	) -> Receiver<(Slot, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
+		const CHANNEL_BUFFER_SIZE: usize = 1024;
+
+		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
+		self.slot_notification_sinks.lock().push(sink);
+		stream
+	}
+
+	/// Get a handle to the worker.
+	pub fn handle(&self) -> SassafrasWorkerHandle<B> {
+		self.handle.clone()
+	}
+}
+
 impl<B: BlockT> Future for SassafrasWorker<B> {
 	type Output = ();
 
@@ -966,6 +985,14 @@ where
 			equivocation_proof.first_header.hash(),
 			equivocation_proof.second_header.hash(),
 		);
+
+		// Get the best block on which we will build and send the equivocation report.
+		let _best_id: BlockId<Block> = self
+			.select_chain
+			.best_chain()
+			.await
+			.map(|h| BlockId::Hash(h.hash()))
+			.map_err(|e| Error::Client(e.into()))?;
 
 		// TODO-SASS
 
