@@ -62,12 +62,12 @@ pub mod hash;
 #[cfg(feature = "std")]
 mod hasher;
 pub mod offchain;
+mod seed;
 pub mod sr25519;
 pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod uint;
-mod seed;
 pub use seed::ShufflingSeed;
 
 pub use self::{

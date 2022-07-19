@@ -605,7 +605,6 @@ impl<T: Config> Pallet<T> {
 
 	/// Unlock all token_id tokens of `who`.
 	fn do_unlock_all(who: T::AccountId, token_id: TokenIdOf<T>) -> DispatchResult {
-
 		Self::write_vesting(&who, Default::default(), token_id)?;
 		Self::write_lock(&who, Default::default(), token_id);
 
