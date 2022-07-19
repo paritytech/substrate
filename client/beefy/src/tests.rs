@@ -31,7 +31,7 @@ use sc_keystore::LocalKeystore;
 use sc_network::config::ProtocolConfig;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
-	TestNetFactory,
+	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
 
@@ -54,16 +54,24 @@ use sp_runtime::{
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 
 use crate::{
-	beefy_protocol_name, justification::*, keystore::tests::Keyring as BeefyKeyring,
-	notification::*, BeefyRPCLinks, BeefyVoterLinks,
+	beefy_block_import_and_links, beefy_protocol_name, justification::*,
+	keystore::tests::Keyring as BeefyKeyring, BeefyRPCLinks, BeefyVoterLinks,
 };
 
 pub(crate) const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
 const GOOD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0xbf);
 const BAD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0x42);
 
+type BeefyBlockImport = crate::BeefyBlockImport<
+	Block,
+	substrate_test_runtime_client::Backend,
+	PeersFullClient,
+	two_validators::TestApi,
+	BlockImportAdapter<PeersClient, sp_api::TransactionFor<two_validators::TestApi, Block>>,
+>;
+
 pub(crate) type BeefyValidatorSet = ValidatorSet<AuthorityId>;
-pub(crate) type BeefyPeer = Peer<PeerData, PeersClient>;
+pub(crate) type BeefyPeer = Peer<PeerData, BeefyBlockImport>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Genesis(std::collections::BTreeMap<String, String>);
@@ -104,6 +112,7 @@ fn beefy_protocol_name() {
 #[derive(Default)]
 pub(crate) struct PeerData {
 	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block>>>,
+	pub(crate) beefy_voter_links: Mutex<Option<BeefyVoterLinks<Block>>>,
 }
 
 pub(crate) struct BeefyTestNet {
@@ -158,7 +167,7 @@ impl BeefyTestNet {
 
 impl TestNetFactory for BeefyTestNet {
 	type Verifier = PassThroughVerifier;
-	type BlockImport = PeersClient;
+	type BlockImport = BeefyBlockImport;
 	type PeerData = PeerData;
 
 	/// Create new test network with peers and given config.
@@ -183,7 +192,18 @@ impl TestNetFactory for BeefyTestNet {
 		Option<BoxJustificationImport<Block>>,
 		Self::PeerData,
 	) {
-		(client.as_block_import(), None, PeerData::default())
+		let inner = BlockImportAdapter::new(client.clone());
+		let (block_import, voter_links, rpc_links) = beefy_block_import_and_links(
+			inner,
+			client.as_backend(),
+			client.as_client(),
+			Arc::new(two_validators::TestApi {}),
+		);
+		let peer_data = PeerData {
+			beefy_rpc_links: Mutex::new(Some(rpc_links)),
+			beefy_voter_links: Mutex::new(Some(voter_links)),
+		};
+		(BlockImportAdapter::new(block_import), None, peer_data)
 	}
 
 	fn peer(&mut self, i: usize) -> &mut BeefyPeer {
@@ -338,21 +358,12 @@ where
 
 		let keystore = create_beefy_keystore(*key);
 
-		let (to_rpc_justif_sender, from_voter_justif_stream) =
-			BeefySignedCommitmentStream::<Block>::channel();
-		let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
-			BeefyBestBlockStream::<Block>::channel();
-		let (_, from_block_import_justif_stream) = BeefySignedCommitmentStream::<Block>::channel();
+		let (_, _, peer_data) = net.make_block_import(peer.client().clone());
+		let PeerData { beefy_rpc_links, beefy_voter_links } = peer_data;
 
-		let beefy_rpc_links =
-			BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream };
-		*peer.data.beefy_rpc_links.lock() = Some(beefy_rpc_links);
-
-		let links = BeefyVoterLinks {
-			from_block_import_justif_stream,
-			to_rpc_justif_sender,
-			to_rpc_best_block_sender,
-		};
+		let beefy_voter_links = beefy_voter_links.lock().take();
+		*peer.data.beefy_rpc_links.lock() = beefy_rpc_links.lock().take();
+		*peer.data.beefy_voter_links.lock() = beefy_voter_links.clone();
 
 		let beefy_params = crate::BeefyParams {
 			client: peer.client().as_client(),
@@ -360,7 +371,7 @@ where
 			runtime: api.clone(),
 			key_store: Some(keystore),
 			network: peer.network_service().clone(),
-			links,
+			links: beefy_voter_links.unwrap(),
 			min_block_delta,
 			prometheus_registry: None,
 			protocol_name: BEEFY_PROTOCOL_NAME.into(),

@@ -116,6 +116,7 @@ where
 
 /// Links between the block importer, the background voter and the RPC layer,
 /// to be used by the voter.
+#[derive(Clone)]
 pub struct BeefyVoterLinks<B: Block> {
 	// BlockImport -> Voter links
 	/// Stream of BEEFY signed commitments from block import to voter.
