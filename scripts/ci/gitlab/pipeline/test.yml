@@ -74,7 +74,9 @@ cargo-check-nixos:
 cargo-check-benches:
   stage:                           test
   variables:
-    RUSTY_CACHIER_TOOLCHAIN: nightly
+    # Override to use nightly toolchain
+    RUSTY_CACHIER_TOOLCHAIN:       "nightly"
+    CI_JOB_NAME:                   "cargo-check-benches"
   extends:
     - .docker-env
     - .test-refs
@@ -91,16 +93,25 @@ cargo-check-benches:
         git config user.email "ci@gitlab.parity.io";
         git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
       fi
+  parallel: 2
   script:
     - rusty-cachier snapshot create
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
-    - SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all
-    - 'cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
-      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json'
-    - 'cargo run --release -p node-bench -- ::trie::read::small --json
-      | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json'
-    - sccache -s
-    - rusty-cachier cache upload
+    # this job is executed in parallel on two runners
+    - echo "___Running benchmarks___";
+    - case ${CI_NODE_INDEX} in
+        1)
+          SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all;
+          cargo run --release -p node-bench -- ::trie::read::small --json
+            | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json;
+          echo "___Uploading cache for rusty-cachier___";
+          rusty-cachier cache upload
+          ;;
+        2)
+          cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
+            | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
+          ;;
+        esac
   tags:
     - linux-docker-benches
 
@@ -116,7 +127,7 @@ node-bench-regression-guard:
     # this is a DAG
     - job:                         cargo-check-benches
       artifacts:                   true
-    # this does not like a DAG, just polls the artifact
+    # polls artifact from master to compare with current result
     - project:                     $CI_PROJECT_PATH
       job:                         cargo-check-benches
       ref:                         master
@@ -213,14 +224,27 @@ test-linux-stable:
     WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
+    # needed for rusty-cachier to keep cache in test-linux-stable folder and not in test-linux-stable-1/3
+    CI_JOB_NAME:                   "test-linux-stable"
+  parallel: 3
   script:
     - rusty-cachier snapshot create
-    # TODO: add to paritytech/ci-linux image
+    # TODO: remove when current paritytech/ci-linux:staging (with rust stable 1.62) is switched to production
     - time cargo install cargo-nextest
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
+    # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
     # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
-    - time cargo nextest run --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml --exclude node-cli
-    - rusty-cachier cache upload
+    - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
+    - time cargo nextest run --workspace
+                             --locked
+                             --release
+                             --verbose
+                             --features runtime-benchmarks
+                             --manifest-path ./bin/node/cli/Cargo.toml
+                             --exclude node-cli
+                             --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+    # we need to update cache only from one job
+    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
 test-frame-support:
   stage:                           test
@@ -356,10 +380,16 @@ test-wasmer-sandbox:
   extends:
     - .docker-env
     - .test-refs-wasmer-sandbox
+  variables:
+    CI_JOB_NAME:                   "test-wasmer-sandbox"
+  parallel: 3
   script:
     - rusty-cachier snapshot create
-    - time cargo test --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests
-    - rusty-cachier cache upload
+    # TODO: remove when current paritytech/ci-linux:staging (with rust stable 1.62) is switched to production
+    - cargo install cargo-nextest
+    - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
+    - time cargo nextest run --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+    - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
 cargo-check-macos:
   stage:                           test

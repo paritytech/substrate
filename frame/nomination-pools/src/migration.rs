@@ -191,6 +191,7 @@ pub mod v2 {
 			let mut members_translated = 0u64;
 			// just for logging.
 			let mut total_value_locked = BalanceOf::<T>::zero();
+			let mut total_points_locked = BalanceOf::<T>::zero();
 
 			// store each member of the pool, with their active points. In the process, migrate
 			// their data as well.
@@ -199,6 +200,7 @@ pub mod v2 {
 				let id = old_member.pool_id;
 				temp_members.entry(id).or_default().push((key, old_member.points));
 
+				total_points_locked += old_member.points;
 				members_translated += 1;
 				Some(PoolMember::<T> {
 					last_recorded_reward_counter: Zero::zero(),
@@ -310,10 +312,11 @@ pub mod v2 {
 
 			log!(
 				info,
-				"Upgraded {} members, {} reward pools, TVL {:?}, storage to version {:?}",
+				"Upgraded {} members, {} reward pools, TVL {:?} TPL {:?}, storage to version {:?}",
 				members_translated,
 				reward_pools_translated,
 				total_value_locked,
+				total_points_locked,
 				current
 			);
 			current.put::<Pallet<T>>();
@@ -342,13 +345,27 @@ pub mod v2 {
 		}
 
 		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+				assert!(
+					T::Currency::free_balance(&Pallet::<T>::create_reward_account(id)) >=
+						T::Currency::minimum_balance()
+				)
+			});
+
+			Ok(())
+		}
+
+		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
 			// new version must be set.
-			assert_eq!(Pallet::<T>::on_chain_storage_version(), 2);
+
+			// no reward or bonded pool has been skipped.
+			assert_eq!(RewardPools::<T>::iter().count() as u32, RewardPools::<T>::count());
+			assert_eq!(BondedPools::<T>::iter().count() as u32, BondedPools::<T>::count());
 
 			// all reward pools must have exactly ED in them. This means no reward can be claimed,
 			// and that setting reward counters all over the board to zero will work henceforth.
-			RewardPools::<T>::iter().for_each(|(id, _reward_pool)| {
+			RewardPools::<T>::iter().for_each(|(id, _)| {
 				assert_eq!(
 					RewardPool::<T>::current_balance(id),
 					Zero::zero(),

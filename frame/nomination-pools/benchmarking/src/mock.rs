@@ -147,7 +147,7 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 parameter_types! {
 	pub static PostUnbondingPoolsWindow: u32 = 10;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
-	pub const MaxPointsToBalance: u32 = 10;
+	pub const MaxPointsToBalance: u8 = 10;
 }
 
 impl pallet_nomination_pools::Config for Runtime {

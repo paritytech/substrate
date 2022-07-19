@@ -54,7 +54,7 @@
 //!
 //! ### Join
 //!
-//! A account can stake funds with a nomination pool by calling [`Call::join`].
+//! An account can stake funds with a nomination pool by calling [`Call::join`].
 //!
 //! ### Claim rewards
 //!
@@ -277,7 +277,7 @@ use frame_support::{
 		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
 		ExistenceRequirement, Get,
 	},
-	CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
+	transactional, CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
@@ -383,16 +383,18 @@ impl<T: Config> PoolMember<T> {
 		current_reward_counter: T::RewardCounter,
 	) -> Result<BalanceOf<T>, Error<T>> {
 		// accuracy note: Reward counters are `FixedU128` with base of 10^18. This value is being
-		// multiplied by a point. The worse case of a point is 10x the granularity of the balance.
+		// multiplied by a point. The worse case of a point is 10x the granularity of the balance
+		// (10x is the common configuration of `MaxPointsToBalance`).
+		//
 		// Assuming roughly the current issuance of polkadot (12,047,781,394,999,601,455, which is
-		// 1.2 * 10^9 10^10 = 1.2 * 10^19), the worse case point value is around 10^20.
+		// 1.2 * 10^9 * 10^10 = 1.2 * 10^19), the worse case point value is around 10^20.
 		//
 		// The final multiplication is:
 		//
 		// rc * 10^20 / 10^18 = rc * 100
 		//
 		// meaning that as long as reward_counter's value is less than 1/100th of its max capacity
-		// (u128), `checked_mul_int` won't saturate.
+		// (u128::MAX_VALUE), `checked_mul_int` won't saturate.
 		//
 		// given the nature of reward counter being 'pending_rewards / pool_total_point', the only
 		// (unrealistic) way that super high values can be achieved is for a pool to suddenly
@@ -780,8 +782,6 @@ impl<T: Config> BondedPool<T> {
 		let is_full_unbond = unbonding_points == target_member.active_points();
 
 		let balance_after_unbond = {
-			// NOTE: clone the member, and actually call `try_unbond`, or swap operation in the call
-			// site to receive the `unbonded_target_member` here.
 			let new_depositor_points =
 				target_member.active_points().saturating_sub(unbonding_points);
 			let mut target_member_after_unbond = (*target_member).clone();
@@ -831,7 +831,7 @@ impl<T: Config> BondedPool<T> {
 			},
 			(false, true) => {
 				// the depositor can simply not be unbonded permissionlessly, period.
-				Err(Error::<T>::DoesNotHavePermission)?
+				return Err(Error::<T>::DoesNotHavePermission.into())
 			},
 		};
 
@@ -1159,7 +1159,6 @@ pub mod pallet {
 		// a million places, so we prefer doing this.
 		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
 			+ codec::FullCodec
-			+ Copy
 			+ MaybeSerializeDeserialize
 			+ sp_std::fmt::Debug
 			+ Default
@@ -1199,7 +1198,7 @@ pub mod pallet {
 		/// For a value of 10, the threshold would be a pool points-to-balance ratio of 10:1.
 		/// Such a scenario would also be the equivalent of the pool being 90% slashed.
 		#[pallet::constant]
-		type MaxPointsToBalance: Get<u32>;
+		type MaxPointsToBalance: Get<u8>;
 
 		/// Infallible method for converting `Currency::Balance` to `U256`.
 		type BalanceToU256: Convert<BalanceOf<Self>, U256>;
@@ -1419,7 +1418,7 @@ pub mod pallet {
 		/// The amount does not meet the minimum bond to either join or create a pool.
 		///
 		/// The depositor can never unbond to a value less than
-		/// `Pallet::depositor_min_bond`. The The caller does not have nominating
+		/// `Pallet::depositor_min_bond`. The caller does not have nominating
 		/// permissions for the pool. Members can never unbond to a value below `MinJoinBond`.
 		MinimumBondNotMet,
 		/// The transaction could not be executed due to overflow risk for the pool.
@@ -1484,6 +1483,7 @@ pub mod pallet {
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
 		#[pallet::weight(T::WeightInfo::join())]
+		#[transactional]
 		pub fn join(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -1501,21 +1501,22 @@ pub mod pallet {
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
 			// IMPORTANT: reward pool records must be updated with the old points.
-			let _ = reward_pool.update_records(pool_id, bonded_pool.points)?;
+			reward_pool.update_records(pool_id, bonded_pool.points)?;
 
 			bonded_pool.try_inc_members()?;
 			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
 
-			let new_member = PoolMember::<T> {
-				pool_id,
-				points: points_issued,
-				// we just updated `last_known_reward_counter` to the current one in
-				// `update_recorded`.
-				last_recorded_reward_counter: reward_pool.last_recorded_reward_counter(),
-				unbonding_eras: Default::default(),
-			};
-			log!(debug, "created member {:?}", new_member);
-			PoolMembers::insert(who.clone(), new_member);
+			PoolMembers::insert(
+				who.clone(),
+				PoolMember::<T> {
+					pool_id,
+					points: points_issued,
+					// we just updated `last_known_reward_counter` to the current one in
+					// `update_recorded`.
+					last_recorded_reward_counter: reward_pool.last_recorded_reward_counter(),
+					unbonding_eras: Default::default(),
+				},
+			);
 
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who,
@@ -1543,13 +1544,14 @@ pub mod pallet {
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
+		#[transactional]
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
 
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
 			// before updating the bonded pool points, similar to that of `join` transaction.
-			let _ = reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
 			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
 			// Currently, bonding rewards is like a batch. In the same PR, also make this function
 			// take a boolean argument that make it either 100% pure (no storage update), or make it
@@ -1585,6 +1587,7 @@ pub mod pallet {
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
 		/// members in the pools stake. Rewards do not "expire".
 		#[pallet::weight(T::WeightInfo::claim_payout())]
+		#[transactional]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
@@ -1624,6 +1627,7 @@ pub mod pallet {
 		/// there are too many unlocking chunks, the result of this call will likely be the
 		/// `NoMoreChunks` error from the staking system.
 		#[pallet::weight(T::WeightInfo::unbond())]
+		#[transactional]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			member_account: T::AccountId,
@@ -1698,6 +1702,7 @@ pub mod pallet {
 		/// would probably see an error like `NoMoreChunks` emitted from the staking system when
 		/// they attempt to unbond.
 		#[pallet::weight(T::WeightInfo::pool_withdraw_unbonded(*num_slashing_spans))]
+		#[transactional]
 		pub fn pool_withdraw_unbonded(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -1734,6 +1739,7 @@ pub mod pallet {
 		#[pallet::weight(
 			T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans)
 		)]
+		#[transactional]
 		pub fn withdraw_unbonded(
 			origin: OriginFor<T>,
 			member_account: T::AccountId,
@@ -1854,6 +1860,7 @@ pub mod pallet {
 		/// In addition to `amount`, the caller will transfer the existential deposit; so the caller
 		/// needs at have at least `amount + existential_deposit` transferrable.
 		#[pallet::weight(T::WeightInfo::create())]
+		#[transactional]
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -1938,6 +1945,7 @@ pub mod pallet {
 		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
 		/// account.
 		#[pallet::weight(T::WeightInfo::nominate(validators.len() as u32))]
+		#[transactional]
 		pub fn nominate(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -1960,6 +1968,7 @@ pub mod pallet {
 		/// 2. if the pool conditions to be open are NOT met (as described by `ok_to_be_open`), and
 		///    then the state of the pool can be permissionlessly changed to `Destroying`.
 		#[pallet::weight(T::WeightInfo::set_state())]
+		#[transactional]
 		pub fn set_state(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -1990,6 +1999,7 @@ pub mod pallet {
 		/// The dispatch origin of this call must be signed by the state toggler, or the root role
 		/// of the pool.
 		#[pallet::weight(T::WeightInfo::set_metadata(metadata.len() as u32))]
+		#[transactional]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -2021,6 +2031,7 @@ pub mod pallet {
 		/// * `max_members` - Set [`MaxPoolMembers`].
 		/// * `max_members_per_pool` - Set [`MaxPoolMembersPerPool`].
 		#[pallet::weight(T::WeightInfo::set_configs())]
+		#[transactional]
 		pub fn set_configs(
 			origin: OriginFor<T>,
 			min_join_bond: ConfigOp<BalanceOf<T>>,
@@ -2057,6 +2068,7 @@ pub mod pallet {
 		/// It emits an event, notifying UIs of the role change. This event is quite relevant to
 		/// most pool members and they should be informed of changes to pool roles.
 		#[pallet::weight(T::WeightInfo::update_roles())]
+		#[transactional]
 		pub fn update_roles(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
@@ -2109,6 +2121,7 @@ pub mod pallet {
 		/// This directly forward the call to the staking pallet, on behalf of the pool bonded
 		/// account.
 		#[pallet::weight(T::WeightInfo::chill())]
+		#[transactional]
 		pub fn chill(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
