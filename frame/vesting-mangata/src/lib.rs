@@ -269,6 +269,8 @@ pub mod pallet {
 		/// No suitable schedule found
 		/// Perhaps the user could merge vesting schedules and try again
 		NoSuitableScheduleFound,
+		/// Sudo is not allowed to unlock tokens
+		SudoUnlockIsDisallowed,
 		/// An overflow or underflow has occured
 		MathError,
 	}
@@ -401,6 +403,23 @@ pub mod pallet {
 
 			Self::write_vesting(&who, schedules, token_id)?;
 			Self::write_lock(&who, locked_now, token_id);
+
+			Ok(())
+		}
+
+		// TODO
+		// Needs to be benchmarked
+		#[pallet::weight(400_000_000u64)]
+		pub fn sudo_unlock_all_vesting_tokens(
+			origin: OriginFor<T>,
+			target: <T::Lookup as StaticLookup>::Source,
+			token_id: TokenIdOf<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			let who = T::Lookup::lookup(target)?;
+
+			Self::do_unlock_all(who, token_id)?;
 
 			Ok(())
 		}
@@ -580,6 +599,15 @@ impl<T: Config> Pallet<T> {
 
 		Self::write_vesting(&who, schedules, token_id)?;
 		Self::write_lock(&who, locked_now, token_id);
+
+		Ok(())
+	}
+
+	/// Unlock all token_id tokens of `who`.
+	fn do_unlock_all(who: T::AccountId, token_id: TokenIdOf<T>) -> DispatchResult {
+
+		Self::write_vesting(&who, Default::default(), token_id)?;
+		Self::write_lock(&who, Default::default(), token_id);
 
 		Ok(())
 	}
