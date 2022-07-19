@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Codec;
-pub use pallet_nomination_pools::PoolId;
 
 sp_api::decl_runtime_apis! {
 	pub trait NominationPoolsApi<AccountId, Balance>
