@@ -160,20 +160,18 @@ where
 
 		let beefy_proof = block
 			.justifications
-			.as_ref()
-			.and_then(|just| just.get(BEEFY_ENGINE_ID))
-			.map(|encoded| self.decode_and_verify(encoded, number, hash))
-			.and_then(|result| match result {
-				Ok(proof) => Some(proof),
-				Err(ConsensusError::InvalidJustification) => {
-					// remove invalid justification from the list before giving to `inner`
-					block.justifications.as_mut().and_then(|j| {
-						j.remove(BEEFY_ENGINE_ID);
-						None
-					})
-				},
-				_ => None,
-			});
+			.as_mut()
+			.and_then(|just| {
+				let decoded = just
+					.get(BEEFY_ENGINE_ID)
+					.map(|encoded| self.decode_and_verify(encoded, number, hash));
+				// Remove BEEFY justification from the list before giving to `inner`;
+				// we will append it to backend ourselves at the end if all goes well.
+				just.remove(BEEFY_ENGINE_ID);
+				decoded
+			})
+			.transpose()
+			.unwrap_or(None);
 
 		// Run inner block import.
 		let inner_import_result = self.inner.import_block(block, new_cache).await?;
@@ -210,9 +208,4 @@ where
 	) -> Result<ImportResult, Self::Error> {
 		self.inner.check_block(block).await
 	}
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
-	// TODO
 }

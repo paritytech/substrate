@@ -48,7 +48,7 @@ fn verify_with_validator_set<Block: BlockT>(
 ) -> Result<(), ConsensusError> {
 	match proof {
 		VersionedFinalityProof::V1(signed_commitment) => {
-			if validator_set.len() != signed_commitment.signatures.len() ||
+			if signed_commitment.signatures.len() != validator_set.len() ||
 				signed_commitment.commitment.validator_set_id != validator_set.id() ||
 				signed_commitment.commitment.block_number != target_number
 			{

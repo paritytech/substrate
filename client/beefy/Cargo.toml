@@ -44,6 +44,7 @@ serde = "1.0.136"
 strum = { version = "0.23", features = ["derive"] }
 tempfile = "3.1.0"
 tokio = "1.17.0"
+sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
 sp-keyring = { version = "6.0.0", path = "../../primitives/keyring" }
