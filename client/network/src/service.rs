@@ -245,15 +245,11 @@ where
 		};
 
 		let chain_sync = (params.create_chain_sync)(
-			if params.role.is_light() {
-				SyncMode::Light
-			} else {
-				match params.network_config.sync_mode {
-					config::SyncMode::Full => SyncMode::Full,
-					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-						SyncMode::LightState { skip_proofs, storage_chain_mode },
-					config::SyncMode::Warp => SyncMode::Warp,
-				}
+			match params.network_config.sync_mode {
+				config::SyncMode::Full => SyncMode::Full,
+				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+					SyncMode::LightState { skip_proofs, storage_chain_mode },
+				config::SyncMode::Warp => SyncMode::Warp,
 			},
 			params.chain.clone(),
 			warp_sync_provider,
@@ -489,7 +485,6 @@ where
 
 		let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(
 			service.clone(),
-			params.role,
 			params.transaction_pool,
 			params.metrics_registry.as_ref(),
 		)?;
