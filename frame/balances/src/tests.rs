@@ -1179,6 +1179,20 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn reserved_named_to_yourself_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = Balances::deposit_creating(&1, 110);
+
+				let id = [1u8; 8];
+
+				assert_ok!(Balances::reserve_named(&id, &1, 50));
+				assert_ok!(Balances::repatriate_reserved_named(&id, &1, &1, 50, Status::Free), 0);
+				assert_eq!(Balances::free_balance(1), 110);
+				assert_eq!(Balances::reserved_balance(1), 0);
+			});
+		}
+
+		#[test]
 		fn ensure_reserved_named_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
