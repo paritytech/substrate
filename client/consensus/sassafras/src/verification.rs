@@ -97,7 +97,7 @@ pub fn check_header<B: BlockT + Sized>(
 		(Some(ticket), Some(ticket_info)) => {
 			log::debug!(target: "sassafras", "🌳 checking primary");
 			if ticket_info.authority_index != pre_digest.authority_index {
-				// TODO-SASS ... we can eventually remove auth index from ticket info
+				// TODO-SASS-P2 ... we can eventually remove auth index from ticket info
 				log::error!(target: "sassafras", "🌳 Wrong primary authority index");
 			}
 			let transcript = make_ticket_transcript(
@@ -118,12 +118,12 @@ pub fn check_header<B: BlockT + Sized>(
 		},
 		(Some(_), None) => {
 			log::warn!(target: "sassafras", "🌳 Unexpected secondary authoring mechanism");
-			// TODO-SASS: maybe we can use a different error variant
+			// TODO-SASS-P2: maybe we can use a different error variant
 			return Err(Error::UnexpectedAuthoringMechanism)
 		},
 		(None, Some(_)) => {
 			log::warn!(target: "sassafras", "🌳 Unexpected primary authoring mechanism");
-			// TODO-SASS: maybe we will use a different error variant
+			// TODO-SASS-P2: maybe we will use a different error variant
 			return Err(Error::UnexpectedAuthoringMechanism)
 		},
 	}

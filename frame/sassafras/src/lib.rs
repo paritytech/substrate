@@ -44,7 +44,7 @@
 //! to a random validator who later puts it on-chain as a transaction.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-// TODO-SASS: temporary fix
+// TODO-SASS-P1: temporary fix
 //#![warn(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 
 use scale_codec::{Decode, Encode};
@@ -65,6 +65,8 @@ pub use sp_consensus_sassafras::{
 	AuthorityId, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, Ticket,
 	PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
 };
+
+// TODO-SASS-P2: tests and benches
 
 //#[cfg(test)]
 //mod mock;
@@ -119,7 +121,6 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	/// Configuration parameters.
-	// TODO-SASS: this is incomplete
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: pallet_timestamp::Config + SendTransactionTypes<Call<Self>> {
@@ -157,13 +158,13 @@ pub mod pallet {
 		type MaxSubmittedTickets: Get<u32>;
 	}
 
-	// TODO-SASS
-	// Errors inform users that something went wrong.
-	#[pallet::error]
-	pub enum Error<T> {
-		/// Errors should have helpful documentation associated with them.
-		StorageOverflow,
-	}
+	// TODO-SASS-P1: no pallet specific errors?
+	// // Errors inform users that something went wrong.
+	// #[pallet::error]
+	// pub enum Error<T> {
+	// 	/// Errors should have helpful documentation associated with them.
+	// 	StorageOverflow,
+	// }
 
 	/// Current epoch index.
 	#[pallet::storage]
@@ -231,15 +232,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
 
-	/// TODO-SASS
-	/// Maybe we don't require to keep each ticket proof on-chain...
-	/// Current session tickets
+	/// Current session tickets.
 	#[pallet::storage]
 	pub type Tickets<T: Config> = StorageValue<_, BoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
 
-	/// TODO-SASS
-	/// Here probably the best thing is to store the Tickets in a Map
-	/// Each map entry contains a vector of tickets as they are received.
+	/// Next session tickets.
+	// TODO-SASS-P2: probably the best thing is to store the tickets in a map
+	// Each map entry contains a vector of tickets as they are received.
 	#[pallet::storage]
 	pub type NextTickets<T: Config> =
 		StorageValue<_, BoundedBTreeSet<Ticket, T::MaxSubmittedTickets>, ValueQuery>;
@@ -277,11 +276,11 @@ pub mod pallet {
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point, so the under-construction randomness
 			// will only contain outputs from the right epoch.
-			// TODO-SASS: maybe here we can `expect` that is initialized (panic if not)
+			// TODO-SASS-P2: maybe here we can `expect` that is initialized (panic if not)
 			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
 				let authority_index = pre_digest.authority_index;
 
-				// TODO-SASS: check for disabled validators
+				// TODO-SASS-P1: check for disabled validators (when are disabled?)
 				// if T::DisabledValidators::is_disabled(authority_index) {
 				// 	panic!(
 				// 		"Validator with index {:?} is disabled and should not be attempting to author
@@ -320,18 +319,14 @@ pub mod pallet {
 						inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_BLOCK_VRF_PREFIX)
 					});
 
-				// TODO-SASS: this should be infallible... i.e. randomness always deposited
-				// eventually better panic here
+				// TODO-SASS-P2: this should be infallible. Randomness should be always deposited.
+				// Eventually better to panic here?
 				if let Some(randomness) = randomness {
 					Self::deposit_randomness(&randomness);
 				}
-
-				// TODO-SASS: is this really required?
-				//AuthorVrfRandomness::<T>::put(randomness);
 			}
 
-			// TODO-SASS
-			// remove temporary "environment" entry from storage
+			// TODO-SASS-P2
 			//Lateness::<T>::kill();
 		}
 	}
@@ -350,7 +345,7 @@ pub mod pallet {
 
 			// 1. validate proof
 			// 2. append to sorted list
-			// TODO-SASS: use a scattered structure for tickets
+			// TODO-SASS-P2: use a scattered structure for tickets
 			next_tickets = next_tickets.try_mutate(|tree| {
                 for ticket in tickets.iter() {
                     tree.insert(*ticket);
@@ -358,8 +353,7 @@ pub mod pallet {
                 let max_tickets = T::MaxTickets::get() as usize;
                 if tree.len() > max_tickets {
                     // Remove the mid values
-                    // TODO-SASS... with the new structure this will be performed in a different
-                    // way
+                    // TODO-SASS-P2: with the new structure this will be reimplemented...
                     let diff = tree.len() - max_tickets;
                     let off = max_tickets / 2;
                     let val = tree.iter().nth(off).cloned().unwrap();
@@ -384,7 +378,6 @@ pub mod pallet {
 		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::submit_tickets { tickets } = call {
 				// Discard tickets not coming from the local node
-				// TODO-SASS: double check this `Local` requirement...
 				log::debug!(target: "sassafras::runtime", "🌳 Validating unsigned from {} source",
 					match source {
 						TransactionSource::Local => "local",
@@ -394,7 +387,7 @@ pub mod pallet {
 				);
 
 				if source == TransactionSource::External {
-					// TODO-SASS:
+					// TODO-SASS-P2: double check this `Local` requirement...
 					// If we only allow these txs on block production, then there is less chance to
 					// submit our tickets if we don't have enough authoring slots.
 					// If we have 0 slots => we have zero chances.
@@ -415,7 +408,7 @@ pub mod pallet {
 					return InvalidTransaction::Stale.into()
 				}
 
-				// TODO-SASS more validation steps:
+				// TODO-SASS-P2 more validation steps:
 				// 1. epoch index
 				// 2. signed by an authority for current epoch
 				// 3. single submission attempt from validator?
@@ -423,9 +416,11 @@ pub mod pallet {
 				ValidTransaction::with_tag_prefix("Sassafras")
 					// We assign the maximum priority for any equivocation report.
 					.priority(TransactionPriority::max_value())
-					// TODO-SASS: there should be a better way to distinquish duplicates...
+					// TODO-SASS-P2: if possible use a more efficient way to distinquish
+					// duplicates...
 					.and_provides(tickets)
-					// TODO-SASS: this should be set such that it is discarded after the first half
+					// TODO-SASS-P2: this should be set such that it is discarded after the first
+					// half
 					.longevity(3_u64)
 					.propagate(true)
 					.build()
@@ -440,8 +435,8 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Determine the Sassafras slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
-		// TODO-SASS: clarify why this is doubled
-		// we double the minimum block-period so each author can always propose within
+		// TODO-SASS-P2: clarify why this is doubled (copied verbatim from BABE)
+		// We double the minimum block-period so each author can always propose within
 		// the majority of their slot.
 		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
 	}
@@ -482,8 +477,8 @@ impl<T: Config> Pallet<T> {
 			T::MaxAuthorities,
 		>,
 	) {
-		//TODO-SASS: we don't depend on session module...
-		//
+		// TODO-SASS-P2: we don't depend on session module...
+
 		// PRECONDITION: caller has done initialization and is guaranteed by the session module to
 		// be called before this.
 		debug_assert!(Self::initialized().is_some());
@@ -543,7 +538,7 @@ impl<T: Config> Pallet<T> {
 	/// To work properly this should be done as the last action of the last epoch slot.
 	/// (i.e. current tickets list is not used at this point)
 	fn enact_tickets() {
-		// TODO-SASS: manage skipped epoch by killing both Tickets and NextTickets
+		// TODO-SASS-P2: manage skipped epoch by killing both Tickets and NextTickets
 
 		let mut tickets = NextTickets::<T>::get().into_iter().collect::<Vec<_>>();
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@ Enacting {} tickets", tickets.len());
@@ -588,7 +583,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Initialize authorities on genesis phase.
-	// TODO-SASS: temporary fix to make the compiler happy
+	// TODO-SASS-P2: temporary fix to make the compiler happy
 	#[allow(dead_code)]
 	fn initialize_genesis_authorities(authorities: &[(AuthorityId, SassafrasAuthorityWeight)]) {
 		if !authorities.is_empty() {
@@ -635,7 +630,7 @@ impl<T: Config> Pallet<T> {
 			})
 			.next();
 
-		// TODO-SASS: maybe here we have to assert! the presence of pre_digest...
+		// TODO-SASS-P2: maybe here we have to assert! the presence of pre_digest...
 		// Every valid sassafras block should come with a pre-digest
 
 		if let Some(ref pre_digest) = pre_digest {
@@ -648,7 +643,7 @@ impl<T: Config> Pallet<T> {
 				Self::initialize_genesis_epoch(current_slot)
 			}
 
-			// TODO-SASS
+			// TODO-SASS-P2: why we need to keep track of lateness?
 			// How many slots were skipped between current and last block
 			// let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
 			// let lateness = T::BlockNumber::from(*lateness as u32);
@@ -681,7 +676,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Fetch expected ticket for the given slot.
-	// TODO-SASS. This is a very inefficient and temporary solution.
+	// TODO-SASS-P2: This is a very inefficient and temporary solution.
 	// On refactory we will come up with a better solution (like a scattered vector).
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
 		let duration = T::EpochDuration::get();

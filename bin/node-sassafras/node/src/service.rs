@@ -228,7 +228,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 	}
 
 	let role = config.role.clone();
-	// TODO-SASS
 	let force_authoring = config.force_authoring;
 	let name = config.network.node_name.clone();
 	let enable_grandpa = !config.disable_grandpa;

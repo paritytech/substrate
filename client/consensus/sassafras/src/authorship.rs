@@ -93,14 +93,14 @@ pub fn claim_slot(
 /// - v: number of validator in epoch.
 /// The parameters should be chosen such that T <= 1.
 /// If `attempts * validators` is zero then we fallback to T = 0
-// TODO-SASS: this formula must be double-checked...
+// TODO-SASS-P3: this formula must be double-checked...
 #[inline]
 fn calculate_threshold(redundancy: u32, slots: u32, attempts: u32, validators: u32) -> u128 {
 	let den = attempts as u128 * validators as u128;
 	let num = redundancy as u128 * slots as u128;
 	let res = u128::MAX.checked_div(den).unwrap_or(0).saturating_mul(num);
 
-	// TODO-SASS remove me
+	// TODO-SASS-P4 remove me
 	log::debug!(
 		target: "sassafras",
 		"🌳 Tickets threshold: {} {:016x}", num as f64 / den as f64, res,

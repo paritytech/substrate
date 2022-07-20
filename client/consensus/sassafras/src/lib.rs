@@ -18,11 +18,11 @@
 
 //! # Sassafras
 //!
-//! TODO-SASS: documentation
+//! TODO-SASS-P2: documentation
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-// TODO-SASS: remove this
+// TODO-SASS-P1: remove this
 #![allow(unused_imports)]
 
 use std::{
@@ -132,7 +132,7 @@ impl EpochT for Epoch {
 			duration: self.duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
-			// TODO-SASS: allow config change on epoch change
+			// TODO-SASS-P2: allow config change on epoch change
 			config: self.config.clone(),
 			tickets_info: BTreeMap::new(),
 		}
@@ -164,7 +164,7 @@ impl Epoch {
 }
 
 /// Errors encountered by the Sassafras authorship task.
-/// TODO-SASS: these are BABE errors...
+/// TODO-SASS-P2: remove unused errors.
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	/// Multiple Sassafras pre-runtime digests
@@ -282,9 +282,11 @@ pub struct Config {
 
 impl Config {
 	/// Read Sassafras genesis configuration from the runtime.
-	/// TODO-SASS: FIXME
-	/// this doesn't return the genesis configuration... but the Configuration
-	/// at best block. Maybe we can add `Option<BlockId>` to be more explicit (same for Babe)
+	///
+	/// TODO-SASS-P4: (FIXME)
+	/// This doesn't return the genesis configuration, but the Configuration at best block.
+	/// There is an open PR for BABE, follow the same strategy once closed.
+	/// https://github.com/paritytech/substrate/pull/11760
 	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
@@ -338,7 +340,6 @@ pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
 	pub sassafras_link: SassafrasLink<B>,
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
-	// TODO-SASS
 }
 
 /// Start the Sassafras worker.
@@ -522,7 +523,7 @@ pub enum SassafrasRequest<B: BlockT> {
 	EpochForChild(B::Hash, NumberFor<B>, Slot, oneshot::Sender<Result<Epoch, Error<B>>>),
 }
 
-// TODO-SASS: this is currently not used
+// TODO-SASS-P1: this is currently not used
 async fn answer_requests<B, C>(
 	mut request_rx: Receiver<SassafrasRequest<B>>,
 	_config: Config,
@@ -612,7 +613,6 @@ struct SassafrasSlotWorker<B: BlockT, C, E, I, SO, L> {
 	epoch_changes: SharedEpochChanges<B, Epoch>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
 	config: Config,
-	// TODO-SASS (will be used by authorities_len method)
 }
 
 #[async_trait::async_trait]
@@ -627,7 +627,8 @@ where
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
-	ER: std::error::Error + Send + 'static, // TODO-SASS + From<ConsensusError> + From<I::Error>?
+	// TODO-SASS-P1 can we just remove `From...` bounds
+	ER: std::error::Error + Send + 'static, // From<ConsensusError> + From<I::Error>
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 	type Claim = (PreDigest, AuthorityId);
@@ -680,14 +681,11 @@ where
 	) -> Option<Self::Claim> {
 		debug!(target: "sassafras", "🌳 Attempting to claim slot {}", slot);
 
-		// Get the next slot ticket
+		// Get the next slot ticket from the runtime.
 		let block_id = BlockId::Hash(parent_header.hash());
-
-		// TODO-SASS
-		// Is this efficient? SHould we instead store the tickets list in the Epoch structure
-		// and share it within the `NextEpochData` as done for `randomness`?
 		let ticket = self.client.runtime_api().slot_ticket(&block_id, slot).ok()?;
 
+		// TODO-SASS-P1
 		debug!(target: "sassafras", "🌳 parent {}", parent_header.hash());
 
 		let claim = authorship::claim_slot(
@@ -784,7 +782,7 @@ where
 	}
 
 	fn should_backoff(&self, _slot: Slot, _chain_head: &B::Header) -> bool {
-		// TODO-SASS
+		// TODO-SASS-P2
 		false
 	}
 
@@ -805,14 +803,14 @@ where
 	}
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
-		//TODO-SASS
+		// TODO-SASS-P2
 		None
 	}
 
 	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
 		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot);
 
-		// TODO-SASS : clarify this field. In Sassafras this is part of 'self'
+		// TODO-SASS-P2 : clarify this field. In Sassafras this is part of 'self'
 		let block_proposal_slot_portion = sc_consensus_slots::SlotProportion::new(0.5);
 
 		sc_consensus_slots::proposing_remaining_duration(
@@ -988,7 +986,7 @@ where
 			.map(|h| BlockId::Hash(h.hash()))
 			.map_err(|e| Error::Client(e.into()))?;
 
-		// TODO-SASS
+		// TODO-SASS-P2
 
 		Ok(())
 	}
@@ -1089,7 +1087,6 @@ where
 			(verification::check_header::<Block>(v_params)?, epoch_descriptor)
 		};
 
-		// TODO-SASS
 		match check_header {
 			CheckedHeader::Checked(pre_header, verified_info) => {
 				let sassafras_pre_digest = verified_info
@@ -1509,7 +1506,6 @@ where
 	// startup rather than waiting until importing the next epoch change block.
 	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
 
-	// TODO-SASS: If required, register on-finality actions (e.g. aux data cleanup)
 	let import = SassafrasBlockImport::new(client, epoch_changes, wrapped_block_import, config);
 
 	Ok((import, link))

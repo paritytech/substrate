@@ -119,7 +119,7 @@ pub const MILLISECS_PER_BLOCK: u64 = 6000;
 //       Attempting to do so will brick block production.
 pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
 
-// TODO-SASS: this is an intentional small value used for testing
+// TODO-SASS-P4: this is an intentional small value used for testing
 pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10;
 
 pub const EPOCH_DURATION_IN_SLOTS: u64 = {
@@ -138,7 +138,7 @@ pub const MAX_AUTHORITIES: u32 = 32;
 /// The Sassafras epoch configuration at genesis.
 pub const SASSAFRAS_GENESIS_EPOCH_CONFIG: sp_consensus_sassafras::SassafrasEpochConfiguration =
 	sp_consensus_sassafras::SassafrasEpochConfiguration {
-        // TODO-SASS
+        // TODO-SASS-P2
 	};
 
 /// The version information used to identify this runtime when compiled natively.

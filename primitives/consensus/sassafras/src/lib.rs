@@ -16,12 +16,13 @@
 // limitations under the License.
 
 //! Primitives for Sassafras
+//! TODO-SASS-P2 : write proper docs
 
-// TODO-SASS : decomment this
+// TODO-SASS-P1: temporary
 //#![deny(warnings)]
 //#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
-// TODO-SASS: temporary
+// TODO-SASS-P1: temporary
 #![allow(unused_imports)]
 
 pub use merlin::Transcript;
@@ -104,7 +105,7 @@ pub struct SassafrasGenesisConfiguration {
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SassafrasEpochConfiguration {
-	// TODO-SASS
+	// TODO-SASS-P2
 	// x: redundancy_factor
 	// a: attempts number
 	// L: bound on aa number of tickets that can be gossiped
@@ -190,7 +191,5 @@ sp_api::decl_runtime_apis! {
 
 		/// Get expected ticket for the given slot.
 		fn slot_ticket(slot: Slot) -> Option<Ticket>;
-
-		// TODO-SASS: incomplete API
 	}
 }
