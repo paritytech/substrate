@@ -1011,7 +1011,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if slashed == beneficiary {
 			return match status {
-				Status::Free => Ok(Self::unreserve(slashed, value)),
+				Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
 				Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
 			}
 		}
