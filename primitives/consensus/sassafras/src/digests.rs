@@ -60,7 +60,6 @@ pub enum ConsensusLog {
 	/// The epoch has changed. This provides information about the _next_
 	/// epoch - information about the _current_ epoch (i.e. the one we've just
 	/// entered) should already be available earlier in the chain.
-	// TODO-SASS: are these codex indices requried?
 	#[codec(index = 1)]
 	NextEpochData(NextEpochDescriptor),
 	/// Disable the authority with given index.
@@ -81,12 +80,6 @@ pub trait CompatibleDigestItem: Sized {
 
 	/// If this item is a Sassafras signature, return the signature.
 	fn as_sassafras_seal(&self) -> Option<AuthoritySignature>;
-
-	// /// If this item is a Sassafras epoch descriptor, return it.
-	//fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor>;
-
-	// TODO-SASS
-	// Add next-config-descriptor
 }
 
 impl CompatibleDigestItem for DigestItem {
@@ -105,11 +98,4 @@ impl CompatibleDigestItem for DigestItem {
 	fn as_sassafras_seal(&self) -> Option<AuthoritySignature> {
 		self.seal_try_to(&SASSAFRAS_ENGINE_ID)
 	}
-
-	// fn as_next_epoch_descriptor(&self) -> Option<NextEpochDescriptor> {
-	// 	self.consensus_try_to(&SASSAFRAS_ENGINE_ID).and_then(|x: ConsensusLog| match x {
-	// 		ConsensusLog::NextEpochData(n) => Some(n),
-	// 		_ => None,
-	// 	})
-	// }
 }

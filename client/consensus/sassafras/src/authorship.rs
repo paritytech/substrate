@@ -23,12 +23,13 @@ use crate::Epoch;
 use scale_codec::Encode;
 use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
-	digests::PreDigest, make_ticket_transcript, make_ticket_transcript_data, make_transcript_data,
-	AuthorityId, SassafrasAuthorityWeight, Slot, Ticket, TicketInfo, SASSAFRAS_TICKET_VRF_PREFIX,
+	digests::PreDigest, make_slot_transcript_data, make_ticket_transcript,
+	make_ticket_transcript_data, AuthorityId, SassafrasAuthorityWeight, Slot, Ticket, TicketInfo,
+	SASSAFRAS_TICKET_VRF_PREFIX,
 };
 use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
 use sp_core::{twox_64, ByteArray};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{vrf::make_transcript, SyncCryptoStore, SyncCryptoStorePtr};
 
 /// Get secondary authority index for the given epoch and slot.
 #[inline]
@@ -37,11 +38,8 @@ pub fn secondary_authority_index(slot: Slot, epoch: &Epoch) -> u64 {
 		epoch.authorities.len() as u64
 }
 
-/// TODO-SASS DOCS
-/// Try to claim a slot.
-///
-/// NOTE: we can't claim primary slot if for some reason the associated ticket information has bot
-/// been preserved within the epoch structure.
+/// Try to claim an epoch slot.
+/// If ticket is `None`, then the slot should be claimed using the fallback mechanism.
 pub fn claim_slot(
 	slot: Slot,
 	epoch: &Epoch,
@@ -62,9 +60,10 @@ pub fn claim_slot(
 			(secondary_authority_index(slot, epoch), None)
 		},
 	};
+
 	let authority_id = epoch.authorities.get(authority_index as usize).map(|auth| &auth.0)?;
 
-	let transcript_data = make_transcript_data(&epoch.randomness, slot, epoch.epoch_index);
+	let transcript_data = make_slot_transcript_data(&epoch.randomness, slot, epoch.epoch_index);
 	let result = SyncCryptoStore::sr25519_vrf_sign(
 		&**keystore,
 		AuthorityId::ID,
@@ -87,33 +86,25 @@ pub fn claim_slot(
 	}
 }
 
-/// Computes the threshold for a given epoch as T = (x*s)/(a*V), where:
-/// - x: redundancy factor
-/// - s: number of slots in epoch
-/// - a: attempts number
-/// - V: number of validator in epoch
-///
-/// NOTE:
-/// - parameters should be chosen such that T <= 1.
-/// - if `attempts` or `validators` are zero then T=0
-// TODO-SASS: this shall be double-checked...
+/// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
+/// - x: redundancy factor;
+/// - s: number of slots in epoch;
+/// - a: max number of attempts;
+/// - v: number of validator in epoch.
+/// The parameters should be chosen such that T <= 1.
+/// If `attempts * validators` is zero then we fallback to T = 0
+// TODO-SASS: this formula must be double-checked...
 #[inline]
-fn calculate_threshold(
-	redundancy_factor: u32,
-	number_of_slots: u32,
-	attempts: u32,
-	validators: u32,
-) -> u128 {
-	// TODO-SASS remove me
-	log::debug!(target: "sassafras", "🌳 Tickets threshold: {}",
-        (redundancy_factor as f64 * number_of_slots as f64) / (attempts as f64 * validators as f64));
-
+fn calculate_threshold(redundancy: u32, slots: u32, attempts: u32, validators: u32) -> u128 {
 	let den = attempts as u128 * validators as u128;
-	if den == 0 {
-		return 0
-	}
-	let num = redundancy_factor as u128 * number_of_slots as u128;
-	let res = (u128::MAX / den).saturating_mul(num);
+	let num = redundancy as u128 * slots as u128;
+	let res = u128::MAX.checked_div(den).unwrap_or(0).saturating_mul(num);
+
+	// TODO-SASS remove me
+	log::debug!(
+		target: "sassafras",
+		"🌳 Tickets threshold: {} {:016x}", num as f64 / den as f64, res,
+	);
 	res
 }
 
@@ -123,7 +114,9 @@ pub fn check_threshold(inout: &VRFInOut, threshold: u128) -> bool {
 	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(SASSAFRAS_TICKET_VRF_PREFIX)) < threshold
 }
 
-/// TODO-SASS: documentation
+/// Generate the tickets for the given epoch.
+/// Tickets additional information (i.e. `TicketInfo`) will be stored within the `Epoch`
+/// structure. The additional information will be used during epoch to claim slots.
 pub fn generate_epoch_tickets(
 	epoch: &mut Epoch,
 	max_attempts: u32,
@@ -141,41 +134,51 @@ pub fn generate_epoch_tickets(
 
 	let authorities = epoch.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
 	for (authority_index, authority_id) in authorities {
-		if !SyncCryptoStore::has_keys(&**keystore, &[(authority_id.to_raw_vec(), AuthorityId::ID)])
-		{
+		let raw_key = authority_id.to_raw_vec();
+
+		if !SyncCryptoStore::has_keys(&**keystore, &[(raw_key.clone(), AuthorityId::ID)]) {
 			continue
 		}
 
-		for attempt in 0..max_attempts {
+		let public = match PublicKey::from_bytes(&raw_key) {
+			Ok(public) => public,
+			Err(_) => continue,
+		};
+
+		let get_ticket = |attempt| {
 			let transcript_data =
 				make_ticket_transcript_data(&epoch.randomness, attempt as u64, epoch.epoch_index);
 
-			// TODO-SASS: is a good idea to replace `vrf_sign` with `vrf_sign_after_check`
+			// TODO-SASS-P4: can be a good idea to replace `vrf_sign` with `vrf_sign_after_check`,
 			// But we need to modify the CryptoStore interface first.
-			let result = SyncCryptoStore::sr25519_vrf_sign(
+			let signature = SyncCryptoStore::sr25519_vrf_sign(
 				&**keystore,
 				AuthorityId::ID,
 				authority_id.as_ref(),
-				transcript_data,
-			);
+				transcript_data.clone(),
+			)
+			.ok()??;
 
-			if let Ok(Some(signature)) = result {
-				// TODO-SASS: remove unwrap()
-				let public = PublicKey::from_bytes(&authority_id.to_raw_vec()).unwrap();
-				let transcript =
-					make_ticket_transcript(&epoch.randomness, attempt as u64, epoch.epoch_index);
-				if let Ok(inout) = signature.output.attach_input_hash(&public, transcript) {
-					if check_threshold(&inout, threshold) {
-						let ticket = VRFOutput(signature.output);
-						tickets.push(ticket);
-						let ticket_info = TicketInfo {
-							attempt: attempt as u32,
-							authority_index: authority_index as u32,
-							proof: VRFProof(signature.proof),
-						};
-						epoch.tickets_info.insert(ticket, ticket_info);
-					}
-				}
+			let transcript = make_transcript(transcript_data);
+			let inout = signature.output.attach_input_hash(&public, transcript).ok()?;
+			if !check_threshold(&inout, threshold) {
+				return None
+			}
+
+			let ticket = VRFOutput(signature.output);
+			let ticket_info = TicketInfo {
+				attempt: attempt as u32,
+				authority_index: authority_index as u32,
+				proof: VRFProof(signature.proof),
+			};
+
+			Some((ticket, ticket_info))
+		};
+
+		for attempt in 0..max_attempts {
+			if let Some((ticket, ticket_info)) = get_ticket(attempt) {
+				tickets.push(ticket);
+				epoch.tickets_info.insert(ticket, ticket_info);
 			}
 		}
 	}

@@ -133,6 +133,8 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 
+pub const MAX_AUTHORITIES: u32 = 32;
+
 /// The Sassafras epoch configuration at genesis.
 pub const SASSAFRAS_GENESIS_EPOCH_CONFIG: sp_consensus_sassafras::SassafrasEpochConfiguration =
 	sp_consensus_sassafras::SassafrasEpochConfiguration {
@@ -231,32 +233,25 @@ impl pallet_sassafras::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
 	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
-	// TODO-SASS: small test value
-	type MaxAuthorities = ConstU32<3>;
-	// TODO-SASS: ...
+	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 	type MaxTickets = ConstU32<{ EPOCH_DURATION_IN_SLOTS as u32 }>;
-	// TODO-SASS: ... Add some redundancy
+	// TODO-SASS-P4. Add some redundancy before starting tickets drop.
 	type MaxSubmittedTickets = ConstU32<{ 3 * EPOCH_DURATION_IN_SLOTS as u32 }>;
 }
 
 impl pallet_grandpa::Config for Runtime {
 	type Event = Event;
 	type Call = Call;
-
 	type KeyOwnerProofSystem = ();
-
 	type KeyOwnerProof =
 		<Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
-
 	type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
 		KeyTypeId,
 		GrandpaId,
 	)>>::IdentificationTuple;
-
 	type HandleEquivocation = ();
-
 	type WeightInfo = ();
-	type MaxAuthorities = ConstU32<32>;
+	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -427,7 +422,7 @@ impl_runtime_apis! {
 
 		fn submit_tickets_unsigned_extrinsic(
 			tickets: Vec<sp_consensus_sassafras::Ticket>
-		) -> Option<()> {
+		) -> bool {
 			Sassafras::submit_tickets_unsigned_extrinsic(tickets)
 		}
 

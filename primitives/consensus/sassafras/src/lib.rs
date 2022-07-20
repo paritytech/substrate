@@ -98,7 +98,6 @@ pub struct SassafrasGenesisConfiguration {
 	pub genesis_authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
-	// TODO-SASS
 }
 
 /// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
@@ -111,10 +110,10 @@ pub struct SassafrasEpochConfiguration {
 	// L: bound on aa number of tickets that can be gossiped
 }
 
-// /// TODO-SASS: docs
+/// Ticket type.
 pub type Ticket = VRFOutput;
 
-/// TODO-SASS: move to `client`
+/// Ticket information.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketInfo {
 	/// Authority index.
@@ -125,8 +124,8 @@ pub struct TicketInfo {
 	pub proof: VRFProof,
 }
 
-/// Make a VRF transcript from given randomness, slot number and epoch.
-pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
+/// Make slot VRF transcript.
+pub fn make_slot_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
 	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
 	transcript.append_u64(b"slot number", *slot);
 	transcript.append_u64(b"current epoch", epoch);
@@ -134,9 +133,13 @@ pub fn make_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Trans
 	transcript
 }
 
-/// Make a VRF transcript data container
+/// Make slot VRF transcript data container.
 #[cfg(feature = "std")]
-pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> VRFTranscriptData {
+pub fn make_slot_transcript_data(
+	randomness: &Randomness,
+	slot: Slot,
+	epoch: u64,
+) -> VRFTranscriptData {
 	VRFTranscriptData {
 		label: &SASSAFRAS_ENGINE_ID,
 		items: vec![
@@ -147,7 +150,7 @@ pub fn make_transcript_data(randomness: &Randomness, slot: Slot, epoch: u64) -> 
 	}
 }
 
-/// Make a ticket VRF transcript.
+/// Make ticket VRF transcript.
 pub fn make_ticket_transcript(randomness: &[u8], attempt: u64, epoch: u64) -> Transcript {
 	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
 	transcript.append_message(b"type", b"ticket");
@@ -157,7 +160,7 @@ pub fn make_ticket_transcript(randomness: &[u8], attempt: u64, epoch: u64) -> Tr
 	transcript
 }
 
-/// Make a ticket VRF transcript data container
+/// Make ticket VRF transcript data container.
 #[cfg(feature = "std")]
 pub fn make_ticket_transcript_data(
 	randomness: &[u8],
@@ -181,14 +184,11 @@ sp_api::decl_runtime_apis! {
 		 /// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
 		fn configuration() -> SassafrasGenesisConfiguration;
 
-		/// TODO-SASS: improve docs
-		/// Submit the next epoch validator tickets via an unsigned extrinsic.
-		/// This method returns `None` when creation of the extrinsics fails.
-		fn submit_tickets_unsigned_extrinsic(
-			tickets: Vec<Ticket>
-		) -> Option<()>;
+		/// Submit next epoch validator tickets via an unsigned extrinsic.
+		/// This method returns `false` when creation of the extrinsics fails.
+		fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool;
 
-		/// Get ticket for the given slot.
+		/// Get expected ticket for the given slot.
 		fn slot_ticket(slot: Slot) -> Option<Ticket>;
 
 		// TODO-SASS: incomplete API

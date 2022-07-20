@@ -61,8 +61,8 @@ use sc_consensus::{
 	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
 };
 use sc_consensus_epochs::{
-	descendent_query, Epoch as EpochT, EpochChangesFor, EpochIdentifier, SharedEpochChanges,
-	ViableEpochDescriptor,
+	descendent_query, Epoch as EpochT, EpochChangesFor, EpochIdentifier, EpochIdentifierPosition,
+	SharedEpochChanges, ViableEpochDescriptor,
 };
 use sc_consensus_slots::{
 	check_equivocation, BackoffAuthoringBlocksStrategy, CheckedHeader, InherentDataProviderExt,
@@ -168,13 +168,13 @@ impl Epoch {
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	/// Multiple Sassafras pre-runtime digests
-	#[error("Multiple Sassafras pre-runtime digests, rejecting!")]
+	#[error("Multiple Sassafras pre-runtime digests")]
 	MultiplePreRuntimeDigests,
 	/// No Sassafras pre-runtime digest found
 	#[error("No Sassafras pre-runtime digest found")]
 	NoPreRuntimeDigest,
 	/// Multiple Sassafras epoch change digests
-	#[error("Multiple Sassafras epoch change digests, rejecting!")]
+	#[error("Multiple Sassafras epoch change digests")]
 	MultipleEpochChangeDigests,
 	// /// Multiple Sassafras config change digests
 	// #[error("Multiple Sassafras config change digests, rejecting!")]
@@ -452,59 +452,63 @@ async fn tickets_worker<B, C, SC>(
 	C::Api: SassafrasApi<B>,
 	SC: SelectChain<B> + 'static,
 {
-	use sc_consensus_epochs::EpochIdentifierPosition;
-
 	let mut notifications = client.import_notification_stream();
 	while let Some(notification) = notifications.next().await {
-		let next_epoch_digest = find_next_epoch_digest::<B>(&notification.header)
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))
-			.expect("TODO-SASS: remove me");
-		if let Some(epoch_desc) = next_epoch_digest {
-			debug!(target: "sassafras", "🌳 New epoch annouced {:x?}", epoch_desc);
-
-			let tickets = {
-				let mut epoch_changes = epoch_changes.shared_data();
-
-				let number = *notification.header.number();
-				let position = if number == One::one() {
-					EpochIdentifierPosition::Genesis1
-				} else {
-					EpochIdentifierPosition::Regular
-				};
-				let mut epoch_identifier =
-					EpochIdentifier { position, hash: notification.hash, number };
-
-				let epoch = match epoch_changes.epoch_mut(&mut epoch_identifier) {
-					Some(epoch) => epoch,
-					None => {
-						warn!(target: "sassafras", "🌳 Unexpected missing epoch data for {}", notification.hash);
-						continue
-					},
-				};
-
-				authorship::generate_epoch_tickets(epoch, 30, 1, &keystore)
-			};
-
-			if tickets.is_empty() {
+		let epoch_desc = match find_next_epoch_digest::<B>(&notification.header) {
+			Ok(Some(epoch_desc)) => epoch_desc,
+			Err(err) => {
+				warn!(target: "sassafras", "🌳 Error fetching next epoch digest: {}", err);
 				continue
-			}
+			},
+			_ => continue,
+		};
 
-			// Get the best block on which we will build and send the tickets.
-			let best_id = match select_chain.best_chain().await {
-				Ok(header) => BlockId::Hash(header.hash()),
-				Err(err) => {
-					error!(target: "🌳 sassafras", "{}", err.to_string());
+		debug!(target: "sassafras", "🌳 New epoch annouced {:x?}", epoch_desc);
+
+		let tickets = {
+			let mut epoch_changes = epoch_changes.shared_data();
+
+			let number = *notification.header.number();
+			let position = if number == One::one() {
+				EpochIdentifierPosition::Genesis1
+			} else {
+				EpochIdentifierPosition::Regular
+			};
+			let mut epoch_identifier =
+				EpochIdentifier { position, hash: notification.hash, number };
+
+			let epoch = match epoch_changes.epoch_mut(&mut epoch_identifier) {
+				Some(epoch) => epoch,
+				None => {
+					warn!(target: "sassafras", "🌳 Unexpected missing epoch data for {}", notification.hash);
 					continue
 				},
 			};
 
-			if let Err(err) =
-				client.runtime_api().submit_tickets_unsigned_extrinsic(&best_id, tickets)
-			{
-				error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err)
-			}
+			authorship::generate_epoch_tickets(epoch, 30, 1, &keystore)
+		};
 
-			// TODO-SASS: on error remove tickets from epoch...
+		if tickets.is_empty() {
+			continue
+		}
+
+		// Get the best block on which we will build and send the tickets.
+		let best_id = match select_chain.best_chain().await {
+			Ok(header) => BlockId::Hash(header.hash()),
+			Err(err) => {
+				error!(target: "🌳 sassafras", "Error fetching best chain block id: {}", err);
+				continue
+			},
+		};
+
+		let err = match client.runtime_api().submit_tickets_unsigned_extrinsic(&best_id, tickets) {
+			Err(err) => Some(err.to_string()),
+			Ok(false) => Some("Unknown reason".to_string()),
+			_ => None,
+		};
+		if let Some(err) = err {
+			error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err);
+			// TODO-SASS-P2: on error remove tickets from epoch...
 		}
 	}
 }
@@ -1506,7 +1510,6 @@ where
 	prune_finalized(client.clone(), &mut epoch_changes.shared_data())?;
 
 	// TODO-SASS: If required, register on-finality actions (e.g. aux data cleanup)
-
 	let import = SassafrasBlockImport::new(client, epoch_changes, wrapped_block_import, config);
 
 	Ok((import, link))

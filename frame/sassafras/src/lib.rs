@@ -297,14 +297,15 @@ pub mod pallet {
 					.and_then(|pubkey| {
 						let current_slot = CurrentSlot::<T>::get();
 
-						let transcript = sp_consensus_sassafras::make_transcript(
+						let transcript = sp_consensus_sassafras::make_slot_transcript(
 							&Self::randomness(),
 							current_slot,
 							EpochIndex::<T>::get(),
 						);
 
-						// This has already been verified by the client on block import.
 						let vrf_output = pre_digest.block_vrf_output;
+
+						// This has already been verified by the client on block import.
 						debug_assert!(pubkey
 							.vrf_verify(
 								transcript.clone(),
@@ -679,54 +680,47 @@ impl<T: Config> Pallet<T> {
 		this_randomness
 	}
 
-	/// Get ticket for the given slot.
+	/// Fetch expected ticket for the given slot.
+	// TODO-SASS. This is a very inefficient and temporary solution.
+	// On refactory we will come up with a better solution (like a scattered vector).
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
 		let duration = T::EpochDuration::get();
 		let slot_idx = Self::slot_epoch_index(slot); // % duration;
-
-		// TODO-SASS. It is a very efficient and temporary solution.
-		// On refactory we will come up with a better solution (like a scattered vector).
 
 		// Given a list of ordered tickets: t0, t1, t2, ..., tk to be assigned to N slots (N>k)
 		// The tickets are assigned to the slots in the following order: t1, t3, ..., t4, t2, t0.
 
 		let ticket_index = |slot_idx| {
-			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>>>>>>>>>>>>>>>>> SLOT-IDX {}", slot_idx);
-			let idx = if slot_idx < duration / 2 {
+			let ticket_idx = if slot_idx < duration / 2 {
 				2 * slot_idx + 1
 			} else {
 				2 * (duration - (slot_idx + 1))
 			};
-			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>>>>>>>>>>>>>>>>> TICKET-IDX {}", idx);
-			idx as usize
+			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>> SLOT-IDX {} -> TICKET-IDX {}", slot_idx, ticket_idx);
+			ticket_idx as usize
 		};
 
 		// If this is a ticket for an epoch not enacted yet we have to fetch it from the
-		// `NextTickets` list.
-		// This may happen for example when an author request for the first ticket of a new epoch.
-		if slot_idx >= duration {
+		// `NextTickets` list. For example, this may happen when an author request the first
+		// ticket of a new epoch.
+		if slot_idx < duration {
+			let tickets = Tickets::<T>::get();
+			let idx = ticket_index(slot_idx);
+			tickets.get(idx).cloned()
+		} else {
 			let tickets = NextTickets::<T>::get();
 			// Do not use modulus since we want to eventually return `None` for slots crossing the
 			// epoch boundaries.
 			let idx = ticket_index(slot_idx - duration);
 			tickets.iter().nth(idx).cloned()
-		} else {
-			let tickets = Tickets::<T>::get();
-			let idx = ticket_index(slot_idx);
-			tickets.get(idx).cloned()
 		}
 	}
 
-	/// TODO-SASS: improve docs
-	/// Submit the next epoch validator tickets via an unsigned extrinsic.
-	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> Option<()> {
+	/// Submit next epoch validator tickets via an unsigned extrinsic.
+	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool {
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
 		let call = Call::submit_tickets { tickets };
-		if let Err(_) = SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
-			log::error!(target: "sassafras::runtime","🌳 Error submitting tickets");
-		}
-
-		Some(())
+		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()).is_ok()
 	}
 }
 

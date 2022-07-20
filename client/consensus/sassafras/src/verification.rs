@@ -21,7 +21,7 @@ use super::{authorship, find_pre_digest, sassafras_err, BlockT, Epoch, Error};
 use sc_consensus_slots::CheckedHeader;
 use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, PreDigest},
-	make_ticket_transcript, make_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
+	make_slot_transcript, make_ticket_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
 	Ticket,
 };
 use sp_consensus_slots::Slot;
@@ -130,7 +130,7 @@ pub fn check_header<B: BlockT + Sized>(
 
 	// Check block-vrf proof
 
-	let transcript = make_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+	let transcript = make_slot_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
 	schnorrkel::PublicKey::from_bytes(author.as_slice())
 		.and_then(|p| {
 			p.vrf_verify(transcript, &pre_digest.block_vrf_output, &pre_digest.block_vrf_proof)
