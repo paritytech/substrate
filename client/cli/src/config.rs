@@ -212,8 +212,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		cache_size: usize,
 		database: Database,
 	) -> Result<DatabaseSource> {
-		// FIXME: There used to be `light` role dir.
-		//        May be we should move the directories one level up?
 		let role_dir = "full";
 		let rocksdb_path = base_path.join("db").join(role_dir);
 		let paritydb_path = base_path.join("paritydb").join(role_dir);
