@@ -62,7 +62,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 					format!("Error opening spec file at `{}`: {}", path.display(), e)
 				})?;
 				// SAFETY: `mmap` is fundamentally unsafe since technically the file can change
-				//         underneath us while it is mapped; in practice it's unlikely to be a 
+				//         underneath us while it is mapped; in practice it's unlikely to be a
 				//         problem
 				let bytes = unsafe {
 					memmap2::Mmap::map(&file).map_err(|e| {
