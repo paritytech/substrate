@@ -161,6 +161,39 @@ where
 	{
 		self.0.remove_entry(key)
 	}
+
+	/// Consume the map, applying `f` to each of it's values and returning a new map.
+	pub fn map<T, F>(self, mut f: F) -> BoundedBTreeMap<K, T, S>
+	where
+		F: FnMut((&K, V)) -> T,
+	{
+		self.0
+			.into_iter()
+			.map(|(k, v)| {
+				let t = f((&k, v));
+				(k, t)
+			})
+			.try_collect()
+			// SAFETY: No entries were added or removed.
+			.unwrap()
+	}
+
+	/// Consume the map, applying `f` to each of it's values as long as it returns successfully. If
+	/// an `Err(E)` is ever encountered, the mapping is short circuited and the error is returned;
+	/// otherwise, a new map is returned in the contained `Ok` value.
+	pub fn try_map<T, E, F>(self, mut f: F) -> Result<BoundedBTreeMap<K, T, S>, E>
+	where
+		F: FnMut((&K, V)) -> Result<T, E>,
+	{
+		Ok(self
+			.0
+			.into_iter()
+			.map(|(k, v)| (f((&k, v)).map(|t| (k, t))))
+			.collect::<Result<BTreeMap<_, _>, _>>()?
+			.try_into()
+			// SAFETY: No entries were added or removed.
+			.unwrap())
+	}
 }
 
 impl<K, V, S> Default for BoundedBTreeMap<K, V, S>
@@ -516,5 +549,65 @@ pub mod test {
 		let b2: Result<BoundedBTreeMap<u32, (), ConstU32<1>>, _> =
 			b1.iter().map(|(k, v)| (k + 1, *v)).skip(2).try_collect();
 		assert!(b2.is_err());
+	}
+
+	#[test]
+	fn map_retains_size() {
+		let b1 = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2]);
+		let b2 = b1.clone();
+
+		assert_eq!(b1.len(), b2.map(|(_, _)| 5_u32).len());
+	}
+
+	#[test]
+	fn map_maps_properly() {
+		let b1: BoundedBTreeMap<u32, u32, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, k * 2)).try_collect().unwrap();
+		let b2: BoundedBTreeMap<u32, u32, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, k)).try_collect().unwrap();
+
+		assert_eq!(b1, b2.map(|(_, v)| v * 2));
+	}
+
+	#[test]
+	fn try_map_retains_size() {
+		let b1 = boundedmap_from_keys::<u32, ConstU32<7>>(&[1, 2]);
+		let b2 = b1.clone();
+
+		assert_eq!(b1.len(), b2.try_map::<_, (), _>(|(_, _)| Ok(5_u32)).unwrap().len());
+	}
+
+	#[test]
+	fn try_map_maps_properly() {
+		let b1: BoundedBTreeMap<u32, u32, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, k * 2)).try_collect().unwrap();
+		let b2: BoundedBTreeMap<u32, u32, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, k)).try_collect().unwrap();
+
+		assert_eq!(b1, b2.try_map::<_, (), _>(|(_, v)| Ok(v * 2)).unwrap());
+	}
+
+	#[test]
+	fn try_map_short_circuit() {
+		let b1: BoundedBTreeMap<u8, u8, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, k)).try_collect().unwrap();
+
+		assert_eq!(
+			Err("overflow"),
+			b1.try_map(|(_, v)| v.checked_mul(100).ok_or("overflow"))
+		);
+	}
+
+	#[test]
+	fn try_map_ok() {
+		let b1: BoundedBTreeMap<u8, u8, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, k)).try_collect().unwrap();
+		let b2: BoundedBTreeMap<u8, u16, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, (k as u16) * 100)).try_collect().unwrap();
+
+		assert_eq!(
+			Ok(b2),
+			b1.try_map(|(_, v)| (v as u16).checked_mul(100_u16).ok_or("overflow"))
+		);
 	}
 }
