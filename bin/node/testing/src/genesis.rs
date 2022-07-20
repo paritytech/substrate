@@ -19,7 +19,7 @@
 //! Genesis Configuration.
 
 use crate::keyring::*;
-use node_runtime::{
+use node_kitchensink_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AccountId, BabeConfig, BalancesConfig,
 	GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig, StakerStatus,
 	StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,

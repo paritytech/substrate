@@ -22,7 +22,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughpu
 use futures::{future, StreamExt};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
-use node_runtime::{constants::currency::*, BalancesCall, SudoCall};
+use node_kitchensink_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{

@@ -10,7 +10,7 @@ description = "Bag threshold generation script for pallet-bag-list and node-runt
 readme = "README.md"
 
 [dependencies]
-node-runtime = { version = "3.0.0-dev", path = "../../../../bin/node/runtime" }
+node-kitchensink-runtime = { version = "3.0.0-dev", path = "../../../../bin/node/runtime" }
 generate-bags = { version = "4.0.0-dev", path = "../" }
 
 # third-party

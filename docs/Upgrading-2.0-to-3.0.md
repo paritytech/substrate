@@ -5,6 +5,7 @@ An incomplete guide.
 ## Refreshing the node-template
 
 Not much has changed on the top and API level for developing Substrate between 2.0 and 3.0. If you've made only small changes to the node-template, we recommend to do the following - it is easiest and quickest path forward:
+
 1. take a diff between 2.0 and your changes
 2. store that diff
 3. remove everything, copy over the 3.0 node-template
@@ -64,7 +65,6 @@ The same goes for all `<Self as frame_system::Trait>` and alike, which simply be
 
 #### SS58 Prefix is now a runtime param
 
-
 Since [#7810](https://github.com/paritytech/substrate/pull/7810) we don't define the ss58 prefix in the chainspec anymore but moved it into the runtime. Namely, `frame_system` now needs a new `SS58Prefix`, which in substrate node we have defined for ourselves as: `pub const SS58Prefix: u8 = 42;`. Use your own chain-specific value there.
 
 #### Weight Definition
@@ -77,10 +77,12 @@ Since [#7810](https://github.com/paritytech/substrate/pull/7810) we don't define
 ```
 
 e.g.
+
 ```diff
 -	type WeightInfo = weights::pallet_collective::WeightInfo;
 +	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 ```
+
 and
 
 ```diff
@@ -175,9 +177,10 @@ And update the overall definition for weights on frame and a few related types a
 ##### Assets
 
 The assets pallet has seen a variety of changes:
+
 - [Features needed for reserve-backed stablecoins #7152 ](https://github.com/paritytech/substrate/pull/7152)
 - [Freeze Assets and Asset Metadata #7346 ](https://github.com/paritytech/substrate/pull/7346)
-- [Introduces account existence providers reference counting #7363 ]((https://github.com/paritytech/substrate/pull/7363))
+- [Introduces account existence providers reference counting #7363 ](<(https://github.com/paritytech/substrate/pull/7363)>)
 
 have all altered the feature set and changed the concepts. However, it has some of the best documentation and explains the current state very well. If you are using the assets pallet and need to upgrade from an earlier version, we recommend you use the current docs to guide your way!
 
@@ -187,7 +190,7 @@ As noted in the changelog, the `contracts`-pallet is still undergoing massive ch
 
 #### (changes) Treasury
 
-As mentioned above, Bounties, Tips and Lottery have been extracted out of treasury into their own pallets - removing these options here. Secondly we must now specify the `BurnDestination`  and `SpendFunds`, which now go the `Bounties`.
+As mentioned above, Bounties, Tips and Lottery have been extracted out of treasury into their own pallets - removing these options here. Secondly we must now specify the `BurnDestination` and `SpendFunds`, which now go the `Bounties`.
 
 ```diff
 -	type Tippers = Elections;
@@ -275,9 +278,9 @@ The pallet has been moved to a new system in which the exact amount of deposit f
  	type DesiredMembers = DesiredMembers;
  	type DesiredRunnersUp = DesiredRunnersUp;
  	type TermDuration = TermDuration;
- ```
+```
 
- **This upgrade requires storage [migration](https://github.com/paritytech/substrate/blob/master/frame/elections-phragmen/src/migrations_3_0_0.rs)**. Further details can be found in the [pallet-specific changelog](https://github.com/paritytech/substrate/blob/master/frame/elections-phragmen/CHANGELOG.md#security).
+**This upgrade requires storage [migration](https://github.com/paritytech/substrate/blob/master/frame/elections-phragmen/src/migrations_3_0_0.rs)**. Further details can be found in the [pallet-specific changelog](https://github.com/paritytech/substrate/blob/master/frame/elections-phragmen/CHANGELOG.md#security).
 
 #### (changes) Democracy
 
@@ -307,13 +310,13 @@ Democracy brings three new settings with this release, all to allow for better i
  }
 ```
 
-----
+---
 
 ### Primitives
 
 The shared primitives define the API between Client and Runtime. Usually, you don't have to touch nor directly interact with them, unless you created your own client or frame-less runtime. Therefore we'd expect you to understand whether you are effected by changes and how to update your code yourself.
 
-----
+---
 
 ### Client
 
@@ -325,27 +328,25 @@ A few minor things have changed in the `cli` (compared to 2.0.1):
 2. we've [removed double accounts from our chainspec-builder](https://github.com/paritytech/substrate/commit/31499cd29ed30df932fb71b7459796f7160d0272)
 3. we [don't fallback to `--chain flaming-fir` anymore](https://github.com/paritytech/substrate/commit/13cdf1c8cd2ee62d411f82b64dc7eba860c9c6c6), if no chain is given our substrate-node will error.
 4. [the `subkey`-integration has seen a fix to the `insert`-command](https://github.com/paritytech/substrate/commit/54bde60cfd2c544c54e9e8623b6b8725b99557f8) that requires you to now add the `&cli` as a param.
-    ```diff=
-    --- a/bin/node/cli/src/command.rs
-    +++ b/bin/node/cli/src/command.rs
-    @@ -92,7 +97,7 @@ pub fn run() -> Result<()> {
-                    You can enable it with `--features runtime-benchmarks`.".into())
-                }
-            }
-    -		Some(Subcommand::Key(cmd)) => cmd.run(),
-    +		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
-            Some(Subcommand::Sign(cmd)) => cmd.run(),
-            Some(Subcommand::Verify(cmd)) => cmd.run(),
-            Some(Subcommand::Vanity(cmd)) => cmd.run(),
-    ```
-
+   ```diff=
+   --- a/bin/node/cli/src/command.rs
+   +++ b/bin/node/cli/src/command.rs
+   @@ -92,7 +97,7 @@ pub fn run() -> Result<()> {
+                   You can enable it with `--features runtime-benchmarks`.".into())
+               }
+           }
+   -		Some(Subcommand::Key(cmd)) => cmd.run(),
+   +		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
+           Some(Subcommand::Sign(cmd)) => cmd.run(),
+           Some(Subcommand::Verify(cmd)) => cmd.run(),
+           Some(Subcommand::Vanity(cmd)) => cmd.run(),
+   ```
 
 #### Service Builder Upgrades
 
 ##### Light client support
 
-As said, we've added a new optional RPC service for improved light client support. For that to work, we need to pass the `chain_spec` and give access  to the `AuxStore` to our `rpc`:
-
+As said, we've added a new optional RPC service for improved light client support. For that to work, we need to pass the `chain_spec` and give access to the `AuxStore` to our `rpc`:
 
 ```diff=
 
@@ -486,6 +487,7 @@ This has most visible changes for the rpc, where we are switching from the previ
 As already in the changelog, a few things significant things have changed in regards to GRANDPA: the finality tracker has been replaced, an RPC command has been added and WARP-sync-support for faster light client startup has been implemented. All this means we have to do a few changes to our GRANDPA setup procedures in the client.
 
 First and foremost, grandpa internalised a few aspects, and thus `new_partial` doesn't expect a tuple but only the `grandpa::SharedVoterState` as input now, and unpacking that again later is not needed anymore either. On the opposite side `grandpa::FinalityProofProvider::new_for_service` now requires the `Some(shared_authority_set)` to be passed as a new third parameter. This set also becomes relevant when adding warp-sync-support, which is added as an extra-protocol-layer to the networking as:
+
 ```diff=
 
 +	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
@@ -502,7 +504,6 @@ As these changes pull through the entirety of `cli/src/service.rs`, we recommend
 
 Altogether this accumulates to the following diff for `node/cli/src/service.rs`. If you want these features and have modified your chain you should probably try to apply these patches:
 
-
 ```diff=
 --- a/bin/node/cli/src/service.rs
 +++ b/bin/node/cli/src/service.rs
@@ -512,7 +513,7 @@ Altogether this accumulates to the following diff for `node/cli/src/service.rs`.
  use sc_consensus_babe;
 -use grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider};
  use node_primitives::Block;
- use node_runtime::RuntimeApi;
+ use node_kitchensink_runtime::RuntimeApi;
  use sc_service::{
 -	config::{Role, Configuration}, error::{Error as ServiceError},
 +	config::{Configuration}, error::{Error as ServiceError},
@@ -919,8 +920,8 @@ Altogether this accumulates to the following diff for `node/cli/src/service.rs`.
  	use sc_consensus_epochs::descendent_query;
  	use sp_consensus::{
 @@ -469,20 +475,25 @@ mod tests {
- 	use node_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
- 	use node_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
+ 	use node_kitchensink_runtime::{BalancesCall, Call, UncheckedExtrinsic, Address};
+ 	use node_kitchensink_runtime::constants::{currency::CENTS, time::SLOT_DURATION};
  	use codec::Encode;
 -	use sp_core::{crypto::Pair as CryptoPair, H256};
 +	use sp_core::{

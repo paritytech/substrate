@@ -27,7 +27,7 @@ use sp_runtime::{
 };
 
 use node_primitives::{Balance, Hash};
-use node_runtime::{
+use node_kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, Call, CheckedExtrinsic, Event, Header, Runtime, System, TransactionPayment,
 	UncheckedExtrinsic,
@@ -44,7 +44,7 @@ use self::common::{sign, *};
 /// have to execute provided wasm code instead of the native equivalent. This trick is used to
 /// test code paths that differ between native and wasm versions.
 pub fn bloaty_code_unwrap() -> &'static [u8] {
-	node_runtime::WASM_BINARY_BLOATY.expect(
+	node_kitchensink_runtime::WASM_BINARY_BLOATY.expect(
 		"Development wasm binary is not available. \
 											 Testing is only supported with the flag disabled.",
 	)
