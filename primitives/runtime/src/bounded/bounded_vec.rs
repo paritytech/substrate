@@ -17,7 +17,6 @@
 
 //! Traits, types and structs to support putting a bounded vector into storage, as a raw value, map
 //! or a double map.
-
 use super::WeakBoundedVec;
 use crate::traits::{Get, TryCollect};
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
