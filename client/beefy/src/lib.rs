@@ -19,10 +19,11 @@
 use beefy_primitives::{BeefyApi, MmrRootHash};
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
+use sc_consensus::BlockImport;
 use sc_network_gossip::Network as GossipNetwork;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_consensus::SyncOracle;
+use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::Block;
@@ -139,12 +140,22 @@ pub struct BeefyRPCLinks<B: Block> {
 }
 
 /// Make block importer and link half necessary to tie the background voter to it.
-pub fn beefy_block_import_and_links<B: Block, BE, Client, RuntimeApi, I>(
+pub fn beefy_block_import_and_links<B, BE, Client, RuntimeApi, I>(
 	wrapped_block_import: I,
 	backend: Arc<BE>,
 	client: Arc<Client>,
 	runtime: Arc<RuntimeApi>,
-) -> (BeefyBlockImport<B, BE, Client, RuntimeApi, I>, BeefyVoterLinks<B>, BeefyRPCLinks<B>) {
+) -> (BeefyBlockImport<B, BE, Client, RuntimeApi, I>, BeefyVoterLinks<B>, BeefyRPCLinks<B>)
+where
+	B: Block,
+	BE: Backend<B>,
+	Client: HeaderBackend<B>,
+	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<RuntimeApi, B>>
+		+ Send
+		+ Sync,
+	RuntimeApi: ProvideRuntimeApi<B> + Send + Sync,
+	RuntimeApi::Api: BeefyApi<B>,
+{
 	// Voter -> RPC links
 	let (to_rpc_justif_sender, from_voter_justif_stream) =
 		notification::BeefySignedCommitmentStream::<B>::channel();
