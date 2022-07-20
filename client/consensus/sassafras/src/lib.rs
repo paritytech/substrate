@@ -20,10 +20,8 @@
 //!
 //! TODO-SASS-P2: documentation
 
-#![forbid(unsafe_code)]
-#![warn(missing_docs)]
-// TODO-SASS-P1: remove this
-#![allow(unused_imports)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs)]
 
 use std::{
 	borrow::Cow,
@@ -36,10 +34,7 @@ use std::{
 };
 
 use futures::{
-	channel::{
-		mpsc::{channel, Receiver, Sender},
-		oneshot,
-	},
+	channel::mpsc::{channel, Receiver, Sender},
 	prelude::*,
 };
 use log::{debug, error, info, log, trace, warn};
@@ -50,8 +45,7 @@ use scale_codec::{Decode, Encode};
 use schnorrkel::SignatureError;
 
 use sc_client_api::{
-	backend::AuxStore, AuxDataOperations, Backend as BackendT, BlockchainEvents,
-	FinalityNotification, PreCommitActions, ProvideUncles, UsageProvider,
+	backend::AuxStore, BlockchainEvents, PreCommitActions, ProvideUncles, UsageProvider,
 };
 use sc_consensus::{
 	block_import::{
@@ -65,27 +59,24 @@ use sc_consensus_epochs::{
 	SharedEpochChanges, ViableEpochDescriptor,
 };
 use sc_consensus_slots::{
-	check_equivocation, BackoffAuthoringBlocksStrategy, CheckedHeader, InherentDataProviderExt,
-	SlotInfo, StorageChanges,
+	check_equivocation, CheckedHeader, InherentDataProviderExt, SlotInfo, StorageChanges,
 };
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::{
-	Backend as _, Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
-};
+use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::{
 	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
 	SelectChain, SyncOracle,
 };
 use sp_consensus_slots::{Slot, SlotDuration};
-use sp_core::{crypto::ByteArray, traits::SpawnEssentialNamed, ExecutionContext};
+use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
+	traits::{Block as BlockT, Header, NumberFor, One, Zero},
 	DigestItem,
 };
 
@@ -384,8 +375,6 @@ where
 	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	ER: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
-	const HANDLE_BUFFER_SIZE: usize = 1024;
-
 	info!(target: "sassafras", "🌳 🍁 Starting Sassafras Authorship worker");
 
 	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
@@ -419,27 +408,9 @@ where
 		select_chain,
 	);
 
-	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
-	let answer_requests = answer_requests(
-		worker_rx,
-		sassafras_link.config,
-		client.clone(),
-		sassafras_link.epoch_changes,
-	);
+	let inner = future::select(Box::pin(slot_worker), Box::pin(ticket_worker));
 
-	let inner = async {
-		futures::select! {
-			_ = slot_worker.fuse() => (),
-			_ = ticket_worker.fuse() => (),
-			_ = answer_requests.fuse() => (),
-		}
-	};
-
-	Ok(SassafrasWorker {
-		inner: Box::pin(inner.map(|_| ())),
-		slot_notification_sinks,
-		handle: SassafrasWorkerHandle(worker_tx),
-	})
+	Ok(SassafrasWorker { inner: Box::pin(inner.map(|_| ())), slot_notification_sinks })
 }
 
 async fn tickets_worker<B, C, SC>(
@@ -514,60 +485,10 @@ async fn tickets_worker<B, C, SC>(
 	}
 }
 
-/// Requests to the Sassafras service.
-#[non_exhaustive]
-pub enum SassafrasRequest<B: BlockT> {
-	/// Request the epoch that a child of the given block, with the given slot number would have.
-	///
-	/// The parent block is identified by its hash and number.
-	EpochForChild(B::Hash, NumberFor<B>, Slot, oneshot::Sender<Result<Epoch, Error<B>>>),
-}
-
-// TODO-SASS-P1: this is currently not used
-async fn answer_requests<B, C>(
-	mut request_rx: Receiver<SassafrasRequest<B>>,
-	_config: Config,
-	_client: Arc<C>,
-	_epoch_changes: SharedEpochChanges<B, Epoch>,
-) where
-	B: BlockT,
-	C: ProvideRuntimeApi<B>
-		+ ProvideUncles<B>
-		+ BlockchainEvents<B>
-		+ HeaderBackend<B>
-		+ HeaderMetadata<B, Error = ClientError>
-		+ Send
-		+ Sync
-		+ 'static,
-{
-	while let Some(request) = request_rx.next().await {
-		match request {
-			SassafrasRequest::EpochForChild(..) => {
-				debug!(target: "sassafras", "🌳 Received `EpochForChild` request");
-			},
-		}
-	}
-}
-
-/// A handle to the Sassafras worker for issuing requests.
-#[derive(Clone)]
-pub struct SassafrasWorkerHandle<B: BlockT>(Sender<SassafrasRequest<B>>);
-
-impl<B: BlockT> SassafrasWorkerHandle<B> {
-	/// Send a request to the Sassafras service.
-	pub async fn send(&mut self, request: SassafrasRequest<B>) {
-		// Failure to send means that the service is down.
-		// This will manifest as the receiver of the request being dropped.
-		let _ = self.0.send(request).await;
-	}
-}
-
 /// Worker for Sassafras which implements `Future<Output=()>`. This must be polled.
-#[must_use]
 pub struct SassafrasWorker<B: BlockT> {
 	inner: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
-	handle: SassafrasWorkerHandle<B>,
 }
 
 impl<B: BlockT> SassafrasWorker<B> {
@@ -581,11 +502,6 @@ impl<B: BlockT> SassafrasWorker<B> {
 		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
 		self.slot_notification_sinks.lock().push(sink);
 		stream
-	}
-
-	/// Get a handle to the worker.
-	pub fn handle(&self) -> SassafrasWorkerHandle<B> {
-		self.handle.clone()
 	}
 }
 
@@ -627,8 +543,7 @@ where
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
 	SO: SyncOracle + Send + Clone + Sync,
 	L: sc_consensus::JustificationSyncLink<B>,
-	// TODO-SASS-P1 can we just remove `From...` bounds
-	ER: std::error::Error + Send + 'static, // From<ConsensusError> + From<I::Error>
+	ER: std::error::Error + Send + 'static,
 {
 	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
 	type Claim = (PreDigest, AuthorityId);
@@ -685,7 +600,7 @@ where
 		let block_id = BlockId::Hash(parent_header.hash());
 		let ticket = self.client.runtime_api().slot_ticket(&block_id, slot).ok()?;
 
-		// TODO-SASS-P1
+		// TODO-SASS-P2
 		debug!(target: "sassafras", "🌳 parent {}", parent_header.hash());
 
 		let claim = authorship::claim_slot(

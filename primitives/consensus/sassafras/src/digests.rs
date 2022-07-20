@@ -18,8 +18,8 @@
 //! Private implementation details of Sassafras digests.
 
 use super::{
-	AuthorityId, AuthorityIndex, AuthoritySignature, SassafrasAuthorityWeight,
-	SassafrasBlockWeight, Slot, TicketInfo, SASSAFRAS_ENGINE_ID,
+	AuthorityId, AuthorityIndex, AuthoritySignature, SassafrasAuthorityWeight, Slot, TicketInfo,
+	SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -32,7 +32,7 @@ use sp_std::vec::Vec;
 /// Sassafras primary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct PreDigest {
-	// Validator index.
+	/// Validator index.
 	pub authority_index: AuthorityIndex,
 	/// Corresponding slot number.
 	pub slot: Slot,
@@ -75,7 +75,7 @@ pub trait CompatibleDigestItem: Sized {
 	/// If this item is an Sassafras pre-digest, return it.
 	fn as_sassafras_pre_digest(&self) -> Option<PreDigest>;
 
-	// /// Construct a digest item which contains a Sassafras seal.
+	/// Construct a digest item which contains a Sassafras seal.
 	fn sassafras_seal(signature: AuthoritySignature) -> Self;
 
 	/// If this item is a Sassafras signature, return the signature.

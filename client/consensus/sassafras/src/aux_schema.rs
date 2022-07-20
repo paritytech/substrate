@@ -16,9 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Schema for Sassafras epoch changes in the aux-db.
+//! Schema for Sassafras epoch changes in the auxiliary db.
 
-use log::info;
 use scale_codec::{Decode, Encode};
 
 use sc_client_api::backend::AuxStore;

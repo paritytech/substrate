@@ -16,13 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Verification for BABE headers.
-use super::{authorship, find_pre_digest, sassafras_err, BlockT, Epoch, Error};
+//! Verification for Sassafras headers.
+
+use super::{authorship, sassafras_err, BlockT, Epoch, Error};
 use sc_consensus_slots::CheckedHeader;
 use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, PreDigest},
-	make_slot_transcript, make_ticket_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
-	Ticket,
+	make_slot_transcript, make_ticket_transcript, AuthorityId, AuthorityPair, Ticket,
 };
 use sp_consensus_slots::Slot;
 use sp_core::{ByteArray, Pair};

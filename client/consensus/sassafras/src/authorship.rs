@@ -23,9 +23,8 @@ use crate::Epoch;
 use scale_codec::Encode;
 use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
-	digests::PreDigest, make_slot_transcript_data, make_ticket_transcript,
-	make_ticket_transcript_data, AuthorityId, SassafrasAuthorityWeight, Slot, Ticket, TicketInfo,
-	SASSAFRAS_TICKET_VRF_PREFIX,
+	digests::PreDigest, make_slot_transcript_data, make_ticket_transcript_data, AuthorityId, Slot,
+	Ticket, TicketInfo, SASSAFRAS_TICKET_VRF_PREFIX,
 };
 use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
 use sp_core::{twox_64, ByteArray};

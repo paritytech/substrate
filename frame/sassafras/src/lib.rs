@@ -43,9 +43,9 @@
 //! To anonymously publish the ticket to the chain a validator sends their tickets
 //! to a random validator who later puts it on-chain as a transaction.
 
+#![deny(warnings)]
+#![warn(unused_must_use, unsafe_code, unused_variables, unused_imports, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-// TODO-SASS-P1: temporary fix
-//#![warn(unused_must_use, unsafe_code, unused_variables, unused_must_use)]
 
 use scale_codec::{Decode, Encode};
 
@@ -158,13 +158,14 @@ pub mod pallet {
 		type MaxSubmittedTickets: Get<u32>;
 	}
 
-	// TODO-SASS-P1: no pallet specific errors?
-	// // Errors inform users that something went wrong.
-	// #[pallet::error]
-	// pub enum Error<T> {
-	// 	/// Errors should have helpful documentation associated with them.
-	// 	StorageOverflow,
-	// }
+	// TODO-SASS-P2
+	/// Sassafras runtime errors.
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Submitted configuration is invalid.
+		InvalidConfiguration,
+		// TODO-SASS P2 ...
+	}
 
 	/// Current epoch index.
 	#[pallet::storage]
@@ -247,7 +248,9 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
+		/// Genesis authorities.
 		pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+		/// Genesis epoch configuration.
 		pub epoch_config: Option<SassafrasEpochConfiguration>,
 	}
 
@@ -279,14 +282,6 @@ pub mod pallet {
 			// TODO-SASS-P2: maybe here we can `expect` that is initialized (panic if not)
 			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
 				let authority_index = pre_digest.authority_index;
-
-				// TODO-SASS-P1: check for disabled validators (when are disabled?)
-				// if T::DisabledValidators::is_disabled(authority_index) {
-				// 	panic!(
-				// 		"Validator with index {:?} is disabled and should not be attempting to author
-				// blocks.", 		authority_index,
-				// 	);
-				// }
 
 				let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
 					.get(authority_index as usize)
@@ -325,9 +320,6 @@ pub mod pallet {
 					Self::deposit_randomness(&randomness);
 				}
 			}
-
-			// TODO-SASS-P2
-			//Lateness::<T>::kill();
 		}
 	}
 
@@ -642,12 +634,6 @@ impl<T: Config> Pallet<T> {
 			if *GenesisSlot::<T>::get() == 0 {
 				Self::initialize_genesis_epoch(current_slot)
 			}
-
-			// TODO-SASS-P2: why we need to keep track of lateness?
-			// How many slots were skipped between current and last block
-			// let lateness = current_slot.saturating_sub(CurrentSlot::<T>::get() + 1);
-			// let lateness = T::BlockNumber::from(*lateness as u32);
-			// Lateness::<T>::put(lateness);
 
 			CurrentSlot::<T>::put(current_slot);
 		}

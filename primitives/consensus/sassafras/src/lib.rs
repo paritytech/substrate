@@ -18,12 +18,9 @@
 //! Primitives for Sassafras
 //! TODO-SASS-P2 : write proper docs
 
-// TODO-SASS-P1: temporary
-//#![deny(warnings)]
-//#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
+#![deny(warnings)]
+#![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
-// TODO-SASS-P1: temporary
-#![allow(unused_imports)]
 
 pub use merlin::Transcript;
 
