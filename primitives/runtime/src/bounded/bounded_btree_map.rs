@@ -592,10 +592,7 @@ pub mod test {
 		let b1: BoundedBTreeMap<u8, u8, ConstU32<7>> =
 			[1, 2, 3, 4].into_iter().map(|k| (k, k)).try_collect().unwrap();
 
-		assert_eq!(
-			Err("overflow"),
-			b1.try_map(|(_, v)| v.checked_mul(100).ok_or("overflow"))
-		);
+		assert_eq!(Err("overflow"), b1.try_map(|(_, v)| v.checked_mul(100).ok_or("overflow")));
 	}
 
 	#[test]
@@ -605,9 +602,6 @@ pub mod test {
 		let b2: BoundedBTreeMap<u8, u16, ConstU32<7>> =
 			[1, 2, 3, 4].into_iter().map(|k| (k, (k as u16) * 100)).try_collect().unwrap();
 
-		assert_eq!(
-			Ok(b2),
-			b1.try_map(|(_, v)| (v as u16).checked_mul(100_u16).ok_or("overflow"))
-		);
+		assert_eq!(Ok(b2), b1.try_map(|(_, v)| (v as u16).checked_mul(100_u16).ok_or("overflow")));
 	}
 }
