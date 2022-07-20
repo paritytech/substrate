@@ -15,12 +15,12 @@
 	)
 
 	;; [0, 4) len of input output
-	(data (i32.const 0) "\02")
+	(data (i32.const 0) "\08")
 
 	;; [4, 12) buffer for input
 
-	;; [12, 16) len of output buffer
-	(data (i32.const 12) "\02")
+	;; [12, 48) len of output buffer
+	(data (i32.const 12) "\20")
 
 	;; [16, inf) buffer for output
 
@@ -31,7 +31,7 @@
 
 		;; the chain extension passes through the input and returns it as output
 		(call $seal_call_chain_extension
-			(i32.load8_u (i32.const 4))	;; func_id
+			(i32.load (i32.const 4))	;; func_id
 			(i32.const 4)				;; input_ptr
 			(i32.load (i32.const 0))	;; input_len
 			(i32.const 16)				;; output_ptr
@@ -39,7 +39,7 @@
 		)
 
 		;; the chain extension passes through the func_id
-		(call $assert (i32.eq (i32.load8_u (i32.const 4))))
+		(call $assert (i32.eq (i32.load (i32.const 4))))
 
 		(call $seal_return (i32.const 0) (i32.const 16) (i32.load (i32.const 12)))
 	)

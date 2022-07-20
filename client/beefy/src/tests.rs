@@ -31,7 +31,6 @@ use sc_consensus::{
 	ImportedAux,
 };
 use sc_keystore::LocalKeystore;
-use sc_network::config::ProtocolConfig;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestNetFactory,
@@ -122,6 +121,7 @@ pub(crate) struct PeerData {
 	pub(crate) beefy_voter_links: Mutex<Option<BeefyVoterLinks<Block>>>,
 }
 
+#[derive(Default)]
 pub(crate) struct BeefyTestNet {
 	peers: Vec<BeefyPeer>,
 }
@@ -177,17 +177,7 @@ impl TestNetFactory for BeefyTestNet {
 	type BlockImport = BeefyBlockImport;
 	type PeerData = PeerData;
 
-	/// Create new test network with peers and given config.
-	fn from_config(_config: &ProtocolConfig) -> Self {
-		BeefyTestNet { peers: Vec::new() }
-	}
-
-	fn make_verifier(
-		&self,
-		_client: PeersClient,
-		_cfg: &ProtocolConfig,
-		_: &PeerData,
-	) -> Self::Verifier {
+	fn make_verifier(&self, _client: PeersClient, _: &PeerData) -> Self::Verifier {
 		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
