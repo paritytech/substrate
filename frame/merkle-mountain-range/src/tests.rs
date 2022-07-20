@@ -351,11 +351,10 @@ fn should_verify_batch_proofs() {
 	fn generate_and_verify_batch_proof(
 		ext: &mut sp_io::TestExternalities,
 		leaves: &Vec<u64>,
-		blocks_to_add: usize
+		blocks_to_add: usize,
 	) {
-		let (leaves, proof) = ext.execute_with(|| {
-			crate::Pallet::<Test>::generate_batch_proof(leaves.to_vec()).unwrap()
-		});
+		let (leaves, proof) = ext
+			.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(leaves.to_vec()).unwrap());
 
 		ext.execute_with(|| {
 			add_blocks(blocks_to_add);
@@ -382,7 +381,7 @@ fn should_verify_batch_proofs() {
 		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			generate_and_verify_batch_proof(& mut ext, leaves_subset, 0);
+			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
 			ext.persist_offchain_overlay();
 		});
 	}
