@@ -391,7 +391,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			if schedule1_index == schedule2_index {
-				return Ok(())
+				return Ok(());
 			};
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
@@ -486,7 +486,7 @@ impl<T: Config> Pallet<T> {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		if !schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		};
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
@@ -648,8 +648,8 @@ impl<T: Config> Pallet<T> {
 		};
 
 		debug_assert!(
-			locked_now > Zero::zero() && schedules.len() > 0 ||
-				locked_now == Zero::zero() && schedules.len() == 0
+			locked_now > Zero::zero() && schedules.len() > 0
+				|| locked_now == Zero::zero() && schedules.len() == 0
 		);
 
 		Ok((schedules, locked_now))
@@ -715,20 +715,21 @@ where
 		for (i, schedule) in schedules.clone().into_iter().enumerate() {
 			let schedule_locked_at = schedule.locked_at::<T::BlockNumberToBalance>(now);
 			match (schedule_locked_at >= unlock_amount, selected_schedule) {
-				(true, None) =>
+				(true, None) => {
 					selected_schedule = Some((
 						i,
 						schedule,
 						schedule_locked_at,
 						schedule.ending_block_as_balance::<T::BlockNumberToBalance>(),
-					)),
+					))
+				},
 				(true, Some(currently_selected_schedule)) => {
 					let schedule_ending_block_as_balance =
 						schedule.ending_block_as_balance::<T::BlockNumberToBalance>();
 					if currently_selected_schedule
 						.1
-						.ending_block_as_balance::<T::BlockNumberToBalance>() >
-						schedule_ending_block_as_balance
+						.ending_block_as_balance::<T::BlockNumberToBalance>()
+						> schedule_ending_block_as_balance
 					{
 						selected_schedule = Some((
 							i,
@@ -914,13 +915,13 @@ where
 		token_id: TokenIdOf<T>,
 	) -> DispatchResult {
 		if locked.is_zero() {
-			return Ok(())
+			return Ok(());
 		}
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
 		if !vesting_schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		};
 
 		let mut schedules = Self::vesting(who, token_id).unwrap_or_default();
@@ -949,12 +950,12 @@ where
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into())
+			return Err(Error::<T>::InvalidScheduleParams.into());
 		}
 
 		ensure!(
-			(Vesting::<T>::decode_len(who, token_id).unwrap_or_default() as u32) <
-				T::MAX_VESTING_SCHEDULES,
+			(Vesting::<T>::decode_len(who, token_id).unwrap_or_default() as u32)
+				< T::MAX_VESTING_SCHEDULES,
 			Error::<T>::AtMaxVestingSchedules
 		);
 

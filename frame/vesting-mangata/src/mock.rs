@@ -22,6 +22,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{AccountIdConversion, BlakeTwo256, ConvertInto, IdentityLookup},
 };
+use sp_std::convert::TryFrom;
 
 use super::*;
 use crate as pallet_vesting_mangata;
@@ -98,7 +99,7 @@ impl Contains<AccountId> for DustRemovalWhitelist {
 parameter_types! {
 	pub const NativeCurrencyId: u32 = NATIVE_CURRENCY_ID;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub TreasuryAccount: AccountId = TreasuryPalletId::get().into_account();
+	pub TreasuryAccount: AccountId = TreasuryPalletId::get().into_account_truncating();
 	pub const MaxLocks: u32 = 50;
 }
 
