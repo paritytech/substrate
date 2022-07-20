@@ -253,7 +253,6 @@ async fn build_network_future<
 
 						let node_role = match role {
 							Role::Authority { .. } => NodeRole::Authority,
-							// Role::Light => NodeRole::LightClient,
 							Role::Full => NodeRole::Full,
 						};
 
