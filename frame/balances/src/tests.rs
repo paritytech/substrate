@@ -536,6 +536,11 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::repatriate_reserved(&1, &1, 50, Status::Free), 0);
 				assert_eq!(Balances::free_balance(1), 110);
 				assert_eq!(Balances::reserved_balance(1), 0);
+
+				assert_ok!(Balances::reserve(&1, 50));
+				assert_ok!(Balances::repatriate_reserved(&1, &1, 60, Status::Free), 10);
+				assert_eq!(Balances::free_balance(1), 110);
+				assert_eq!(Balances::reserved_balance(1), 0);
 			});
 		}
 
