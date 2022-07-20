@@ -361,11 +361,7 @@ impl CliConfiguration for RunCmd {
 		let keyring = self.get_keyring();
 		let is_authority = self.validator || is_dev || keyring.is_some();
 
-		Ok(if is_authority {
-			sc_service::Role::Authority
-		} else {
-			sc_service::Role::Full
-		})
+		Ok(if is_authority { sc_service::Role::Authority } else { sc_service::Role::Full })
 	}
 
 	fn force_authoring(&self) -> Result<bool> {

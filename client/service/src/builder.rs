@@ -37,17 +37,12 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{
-	config::SyncMode,
-	NetworkService,
-};
+use sc_network::{config::SyncMode, NetworkService};
 use sc_network_common::sync::warp::WarpSyncProvider;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler,
-	state_request_handler::StateRequestHandler,
-	warp_request_handler::RequestHandler as WarpSyncRequestHandler,
-	ChainSync,
+	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
+	warp_request_handler::RequestHandler as WarpSyncRequestHandler, ChainSync,
 };
 use sc_rpc::{
 	author::AuthorApiServer,
@@ -731,10 +726,8 @@ where
 		}
 	}
 
-	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-		pool: transaction_pool,
-		client: client.clone(),
-	});
+	let transaction_pool_adapter =
+		Arc::new(TransactionPoolAdapter { pool: transaction_pool, client: client.clone() });
 
 	let protocol_id = config.protocol_id();
 
