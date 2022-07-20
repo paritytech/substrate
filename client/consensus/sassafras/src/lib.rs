@@ -276,8 +276,8 @@ impl Config {
 	///
 	/// TODO-SASS-P4: (FIXME)
 	/// This doesn't return the genesis configuration, but the Configuration at best block.
-	/// There is an open PR for BABE, follow the same strategy once closed.
-	/// https://github.com/paritytech/substrate/pull/11760
+	/// There is an open [PR](https://github.com/paritytech/substrate/pull/11760) for BABE,
+	/// we'll follow the same strategy once it is closed.
 	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
