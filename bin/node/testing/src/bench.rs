@@ -34,11 +34,11 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use futures::executor;
-use node_primitives::Block;
 use node_kitchensink_runtime::{
 	constants::currency::DOLLARS, AccountId, BalancesCall, Call, CheckedExtrinsic, MinimumPeriod,
 	Signature, SystemCall, UncheckedExtrinsic,
 };
+use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
@@ -317,7 +317,8 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.
-							value: 100 * DOLLARS - (node_kitchensink_runtime::ExistentialDeposit::get() - 1),
+							value: 100 * DOLLARS -
+								(node_kitchensink_runtime::ExistentialDeposit::get() - 1),
 						})
 					},
 					BlockType::Noop => Call::System(SystemCall::remark { remark: Vec::new() }),

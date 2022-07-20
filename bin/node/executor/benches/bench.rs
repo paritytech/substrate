@@ -19,11 +19,11 @@ use codec::{Decode, Encode};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use frame_support::Hashable;
 use node_executor::ExecutorDispatch;
-use node_primitives::{BlockNumber, Hash};
 use node_kitchensink_runtime::{
 	constants::currency::*, Block, BuildStorage, Call, CheckedExtrinsic, GenesisConfig, Header,
 	UncheckedExtrinsic,
 };
+use node_primitives::{BlockNumber, Hash};
 use node_testing::keyring::*;
 #[cfg(feature = "wasmtime")]
 use sc_executor::WasmtimeInstantiationStrategy;

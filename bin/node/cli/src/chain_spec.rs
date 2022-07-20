@@ -40,8 +40,8 @@ use sp_runtime::{
 	Perbill,
 };
 
-pub use node_primitives::{AccountId, Balance, Signature};
 pub use node_kitchensink_runtime::GenesisConfig;
+pub use node_primitives::{AccountId, Balance, Signature};
 
 type AccountPublic = <Signature as Verify>::Signer;
 

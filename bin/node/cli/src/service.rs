@@ -24,8 +24,8 @@ use codec::Encode;
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::prelude::*;
 use node_executor::ExecutorDispatch;
-use node_primitives::Block;
 use node_kitchensink_runtime::RuntimeApi;
+use node_primitives::Block;
 use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
@@ -93,7 +93,9 @@ pub fn create_extrinsic(
 		)),
 		frame_system::CheckNonce::<node_kitchensink_runtime::Runtime>::from(nonce),
 		frame_system::CheckWeight::<node_kitchensink_runtime::Runtime>::new(),
-		pallet_asset_tx_payment::ChargeAssetTxPayment::<node_kitchensink_runtime::Runtime>::from(tip, None),
+		pallet_asset_tx_payment::ChargeAssetTxPayment::<node_kitchensink_runtime::Runtime>::from(
+			tip, None,
+		),
 	);
 
 	let raw_payload = node_kitchensink_runtime::SignedPayload::from_raw(
@@ -565,11 +567,11 @@ pub fn new_full(
 mod tests {
 	use crate::service::{new_full_base, NewFullBase};
 	use codec::Encode;
-	use node_primitives::{Block, DigestItem, Signature};
 	use node_kitchensink_runtime::{
 		constants::{currency::CENTS, time::SLOT_DURATION},
 		Address, BalancesCall, Call, UncheckedExtrinsic,
 	};
+	use node_primitives::{Block, DigestItem, Signature};
 	use sc_client_api::BlockBackend;
 	use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy};
 	use sc_consensus_babe::{BabeIntermediate, CompatibleDigestItem, INTERMEDIATE_KEY};

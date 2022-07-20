@@ -24,8 +24,8 @@ use crate::{
 };
 use frame_benchmarking_cli::*;
 use node_executor::ExecutorDispatch;
-use node_primitives::Block;
 use node_kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
+use node_primitives::Block;
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
