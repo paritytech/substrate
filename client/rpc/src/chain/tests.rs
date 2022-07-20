@@ -45,6 +45,8 @@ async fn should_return_header() {
 				.parse()
 				.unwrap(),
 			digest: Default::default(),
+			count: Default::default(),
+			seed: Default::default(),
 		}
 	);
 
@@ -59,6 +61,8 @@ async fn should_return_header() {
 				.parse()
 				.unwrap(),
 			digest: Default::default(),
+			count: Default::default(),
+			seed: Default::default(),
 		}
 	);
 
@@ -98,6 +102,8 @@ async fn should_return_a_block() {
 					.parse()
 					.unwrap(),
 				digest: Default::default(),
+				count: Default::default(),
+				seed: Default::default(),
 			},
 			extrinsics: vec![],
 		}
@@ -115,6 +121,8 @@ async fn should_return_a_block() {
 					.parse()
 					.unwrap(),
 				digest: Default::default(),
+				count: Default::default(),
+				seed: Default::default(),
 			},
 			extrinsics: vec![],
 		}
