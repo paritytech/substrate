@@ -316,36 +316,26 @@ impl Config {
 pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
 	/// The client to use
 	pub client: Arc<C>,
-
 	/// The keystore that manages the keys of the node.
 	pub keystore: SyncCryptoStorePtr,
-
 	/// The chain selection strategy
 	pub select_chain: SC,
-
 	/// The environment we are producing blocks for.
 	pub env: EN,
-
 	/// The underlying block-import object to supply our produced blocks to.
 	/// This must be a `SassafrasBlockImport` or a wrapper of it, otherwise
 	/// critical consensus logic will be omitted.
 	pub block_import: I,
-
 	/// A sync oracle
 	pub sync_oracle: SO,
-
 	/// Hook into the sync module to control the justification sync process.
 	pub justification_sync_link: L,
-
 	/// Something that can create the inherent data providers.
 	pub create_inherent_data_providers: CIDP,
-
 	/// Force authoring of blocks even if we are offline
 	pub force_authoring: bool,
-
 	/// The source of timestamps for relative slots
 	pub sassafras_link: SassafrasLink<B>,
-
 	/// Checks if the current native implementation can author with a runtime at a given block.
 	pub can_author_with: CAW,
 	// TODO-SASS

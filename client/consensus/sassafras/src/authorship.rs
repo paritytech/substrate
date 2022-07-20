@@ -87,37 +87,34 @@ pub fn claim_slot(
 	}
 }
 
-/// Computes the threshold for a given epoch as:
-///
-///     T = (x*s)/(a*V)
-///
-/// with:
+/// Computes the threshold for a given epoch as T = (x*s)/(a*V), where:
 /// - x: redundancy factor
 /// - s: number of slots in epoch
 /// - a: attempts number
 /// - V: number of validator in epoch
 ///
-/// The parameters should be chosen such that T <= 1.
+/// NOTE:
+/// - parameters should be chosen such that T <= 1.
+/// - if `attempts` or `validators` are zero then T=0
 // TODO-SASS: this shall be double-checked...
-pub fn calculate_threshold(
-	redundancy_factor: usize,
-	number_of_slots: usize,
-	attempts: usize,
-	validators: usize,
+#[inline]
+fn calculate_threshold(
+	redundancy_factor: u32,
+	number_of_slots: u32,
+	attempts: u32,
+	validators: u32,
 ) -> u128 {
-	use num_bigint::{BigUint, ToBigUint};
-	use num_traits::cast::ToPrimitive;
-
+	// TODO-SASS remove me
 	log::debug!(target: "sassafras", "🌳 Tickets threshold: {}",
         (redundancy_factor as f64 * number_of_slots as f64) / (attempts as f64 * validators as f64));
 
-	const PROOF: &str = "Value is positive and finite, qed";
-	let num = BigUint::from(redundancy_factor) * number_of_slots; //to_biguint().expect(PROOF) * number_of_slots;
-	let den = attempts.to_biguint().expect(PROOF) * validators;
-	// If (because of badly chosen parameters) T > 1
-	(u128::MAX.to_biguint().expect(PROOF) * num / den)
-		.to_u128()
-		.unwrap_or(u128::MAX)
+	let den = attempts as u128 * validators as u128;
+	if den == 0 {
+		return 0
+	}
+	let num = redundancy_factor as u128 * number_of_slots as u128;
+	let res = (u128::MAX / den).saturating_mul(num);
+	res
 }
 
 /// Returns true if the given VRF output is lower than the given threshold, false otherwise.
@@ -129,17 +126,17 @@ pub fn check_threshold(inout: &VRFInOut, threshold: u128) -> bool {
 /// TODO-SASS: documentation
 pub fn generate_epoch_tickets(
 	epoch: &mut Epoch,
-	max_attempts: usize,
-	redundancy_factor: usize,
+	max_attempts: u32,
+	redundancy_factor: u32,
 	keystore: &SyncCryptoStorePtr,
 ) -> Vec<Ticket> {
 	let mut tickets = vec![];
 
 	let threshold = calculate_threshold(
 		redundancy_factor,
-		epoch.duration as usize,
+		epoch.duration as u32,
 		max_attempts,
-		epoch.authorities.len(),
+		epoch.authorities.len() as u32,
 	);
 
 	let authorities = epoch.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
