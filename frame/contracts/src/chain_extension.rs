@@ -94,6 +94,12 @@ pub type Result<T> = sp_std::result::Result<T, DispatchError>;
 /// In order to create a custom chain extension this trait must be implemented and supplied
 /// to the pallet contracts configuration trait as the associated type of the same name.
 /// Consult the [module documentation](self) for a general explanation of chain extensions.
+///
+/// # Lifetime
+///
+/// The extension will be [`Default`] initialized at the beginning of each call
+/// (**not** per call stack) and dropped afterwards. Hence any value held inside the extension
+/// can be used as a per-call scratch buffer.
 pub trait ChainExtension<C: Config> {
 	/// Call the chain extension logic.
 	///
@@ -111,7 +117,7 @@ pub trait ChainExtension<C: Config> {
 	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E>(func_id: u32, env: Environment<E, InitState>) -> Result<RetVal>
+	fn call<E>(&mut self, func_id: u32, env: Environment<E, InitState>) -> Result<RetVal>
 	where
 		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>;
@@ -150,7 +156,7 @@ pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 #[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
 impl<C: Config> ChainExtension<C> for Tuple {
-	fn call<E>(func_id: u32, mut env: Environment<E, InitState>) -> Result<RetVal>
+	fn call<E>(&mut self, func_id: u32, mut env: Environment<E, InitState>) -> Result<RetVal>
 	where
 		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
@@ -158,7 +164,7 @@ impl<C: Config> ChainExtension<C> for Tuple {
 		for_tuples!(
 			#(
 				if (Tuple::ID == (func_id >> 16) as u16) && Tuple::enabled() {
-					return Tuple::call(func_id, env);
+					return Tuple.call(func_id, env);
 				}
 			)*
 		);
