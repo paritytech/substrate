@@ -22,6 +22,7 @@ pub fn default_reward_account() -> AccountId {
 }
 
 parameter_types! {
+	pub static MinJoinBondConfig: Balance = 2;
 	pub static CurrentEra: EraIndex = 0;
 	pub static BondingDuration: EraIndex = 3;
 	pub storage BondedBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
@@ -245,6 +246,11 @@ impl ExtBuilder {
 		self
 	}
 
+	pub(crate) fn min_join_bond(self, min: Balance) -> Self {
+		MinJoinBondConfig::set(min);
+		self
+	}
+
 	pub(crate) fn with_check(self, level: u8) -> Self {
 		CheckLevel::set(level);
 		self
@@ -261,11 +267,12 @@ impl ExtBuilder {
 	}
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 		let _ = crate::GenesisConfig::<Runtime> {
-			min_join_bond: 2,
+			min_join_bond: MinJoinBondConfig::get(),
 			min_create_bond: 2,
 			max_pools: Some(2),
 			max_members_per_pool: self.max_members_per_pool,
@@ -280,8 +287,8 @@ impl ExtBuilder {
 			frame_system::Pallet::<Runtime>::set_block_number(1);
 
 			// make a pool
-			let amount_to_bond = <Runtime as pools::Config>::StakingInterface::minimum_bond();
-			Balances::make_free_balance_be(&10, amount_to_bond * 2);
+			let amount_to_bond = Pools::depositor_min_bond();
+			Balances::make_free_balance_be(&10, amount_to_bond * 5);
 			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
 
 			let last_pool = LastPoolId::<Runtime>::get();
@@ -302,12 +309,13 @@ impl ExtBuilder {
 	}
 }
 
-pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) -> Result<(), ()> {
+pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
 	BondedPools::<Runtime>::try_mutate(pool_id, |maybe_bonded_pool| {
 		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
 			bonded_pool.state = state;
 		})
 	})
+	.unwrap()
 }
 
 parameter_types! {
