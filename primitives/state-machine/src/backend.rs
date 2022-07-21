@@ -57,6 +57,13 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error>;
 
+	/// Get value at a child mmr index if defined.
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<StorageValue>, Self::Error>;
+
 	/// Get child keyed storage value hash or None if there is nothing associated.
 	fn child_storage_hash(
 		&self,
@@ -67,18 +74,21 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// true if a key exists in storage.
-	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
-		Ok(self.storage(key)?.is_some())
-	}
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error>;
+
+	/// query size of value for a key in storage.
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error>;
 
 	/// true if a key exists in child storage.
-	fn exists_child_storage(
+	fn exists_child_storage(&self, child_info: &ChildInfo, key: &[u8])
+		-> Result<bool, Self::Error>;
+
+	/// Size of value if a key exists in child storage.
+	fn child_value_size(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
-	) -> Result<bool, Self::Error> {
-		Ok(self.child_storage(child_info, key)?.is_some())
-	}
+	) -> Result<Option<u32>, Self::Error>;
 
 	/// Return the next key in storage in lexicographic order or `None` if there is no value.
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error>;
@@ -154,9 +164,14 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		H::Out: Ord;
+	) -> (Vec<u8>, bool, Self::Transaction);
+
+	/// Root and size for mmr child.
+	fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction);
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(StorageKey, StorageValue)>;
@@ -188,6 +203,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_deltas: impl Iterator<
 			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
 		>,
+		child_mmr_deltas: impl Iterator<Item = (&'a ChildInfo, impl Iterator<Item = &'a [u8]>)>,
 		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
@@ -204,9 +220,21 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 			if empty {
 				child_roots.push((prefixed_storage_key.into_inner(), None));
 			} else {
-				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root.encode())));
+				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root)));
 			}
 		}
+
+		for (child_info, child_delta) in child_mmr_deltas {
+			let (child_root, empty, child_txs) = self.child_mmr_root(child_info, child_delta);
+			let prefixed_storage_key = child_info.prefixed_storage_key();
+			txs.consolidate(child_txs);
+			if empty {
+				child_roots.push((prefixed_storage_key.into_inner(), None));
+			} else {
+				child_roots.push((prefixed_storage_key.into_inner(), Some(child_root)));
+			}
+		}
+
 		let (root, parent_txs) = self.storage_root(
 			delta
 				.map(|(k, v)| (k, v.as_ref().map(|v| &v[..])))

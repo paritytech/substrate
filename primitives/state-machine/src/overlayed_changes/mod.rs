@@ -20,7 +20,7 @@
 mod changeset;
 mod offchain;
 
-use self::changeset::OverlayedChangeSet;
+use self::changeset::{OverlayedChangeSet, OverlayedChangeSetMmr};
 use crate::{backend::Backend, stats::StateMachineStats, DefaultError};
 use codec::{Decode, Encode};
 use hash_db::Hasher;
@@ -59,6 +59,9 @@ pub type StorageCollection = Vec<(StorageKey, Option<StorageValue>)>;
 /// In memory arrays of storage values for multiple child tries.
 pub type ChildStorageCollection = Vec<(StorageKey, StorageCollection)>;
 
+/// In memory changes for Mmr (push only
+pub type ChildMmrCollection = Vec<(StorageKey, Vec<StorageValue>)>;
+
 /// In memory array of storage values.
 pub type OffchainChangesCollection = Vec<((Vec<u8>, Vec<u8>), OffchainOverlayedChange)>;
 
@@ -94,6 +97,8 @@ pub struct OverlayedChanges {
 	top: OverlayedChangeSet,
 	/// Child storage changes. The map key is the child storage key without the common prefix.
 	children: Map<StorageKey, (OverlayedChangeSet, ChildInfo)>,
+	/// Child mmr changes. The map key is the child storage key without the common prefix.
+	mmr: Map<StorageKey, (OverlayedChangeSetMmr, ChildInfo)>,
 	/// Offchain related changes.
 	offchain: OffchainOverlayedChanges,
 	/// Transaction index changes,
@@ -136,6 +141,8 @@ pub struct StorageChanges<Transaction, H: Hasher> {
 	pub main_storage_changes: StorageCollection,
 	/// All changes to the child storages.
 	pub child_storage_changes: ChildStorageCollection,
+	/// All changes to the child mmr storages.
+	pub child_mmr_changes: ChildMmrCollection,
 	/// Offchain state changes to write to the offchain database.
 	pub offchain_storage_changes: OffchainChangesCollection,
 	/// A transaction for the backend that contains all changes from
@@ -202,6 +209,7 @@ impl<Transaction: Default, H: Hasher> Default for StorageChanges<Transaction, H>
 		Self {
 			main_storage_changes: Default::default(),
 			child_storage_changes: Default::default(),
+			child_mmr_changes: Default::default(),
 			offchain_storage_changes: Default::default(),
 			transaction: Default::default(),
 			transaction_storage_root: Default::default(),
@@ -262,6 +270,20 @@ impl OverlayedChanges {
 		Some(value.map(AsRef::as_ref))
 	}
 
+	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be referred
+	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
+	/// value has been set.
+	pub fn child_storage_at(&self, child_info: &ChildInfo, at: u64) -> Option<Option<&[u8]>> {
+		let map = self.mmr.get(child_info.storage_key())?;
+		if at < map.0.offset {
+			return None
+		}
+		let value = map.0.changes.get_at(at - map.0.offset);
+		let size_read = value.map(|x| x.len() as u64).unwrap_or(0);
+		self.stats.tally_read_modified(size_read);
+		Some(value.map(AsRef::as_ref))
+	}
+
 	/// Set a new value for the specified key.
 	///
 	/// Can be rolled back or committed when called inside a transaction.
@@ -294,6 +316,31 @@ impl OverlayedChanges {
 		let updatable = info.try_update(child_info);
 		debug_assert!(updatable);
 		changeset.set(key, val, extrinsic_index);
+	}
+
+	/// Push a new value in the specified child (if support appending).
+	///
+	/// Can be rolled back or committed when called inside a transaction.
+	pub fn push_storage(
+		&mut self,
+		child_info: &ChildInfo,
+		val: StorageValue,
+		fetch_offset: impl FnOnce() -> u64,
+	) {
+		let size_write = val.len() as u64;
+		self.stats.tally_write_overlay(size_write);
+		let storage_key = child_info.storage_key().to_vec();
+		let top = &self.top;
+		let (changeset, info) = self.mmr.entry(storage_key).or_insert_with(|| {
+			let changes = top.spawn_child_list();
+			// QUESTION this should be lazy but require switching proto of get
+			// to mutable so here access directy which is incorrect.
+			let offset = fetch_offset();
+			(OverlayedChangeSetMmr { changes, offset }, child_info.clone())
+		});
+		let updatable = info.try_update(child_info);
+		debug_assert!(updatable);
+		changeset.changes.push(val);
 	}
 
 	/// Clear child storage of given storage key.
@@ -356,6 +403,12 @@ impl OverlayedChanges {
 		for (_, (changeset, _)) in self.children.iter_mut() {
 			changeset.start_transaction();
 		}
+
+		/* QUESTION TODO restore for transaction handling
+		for (_, (changeset, _)) in self.mmr.iter_mut() {
+			changeset.changes.start_transaction();
+		}
+		*/
 		self.offchain.overlay_mut().start_transaction();
 	}
 
@@ -371,6 +424,15 @@ impl OverlayedChanges {
 				.expect("Top and children changesets are started in lockstep; qed");
 			!changeset.is_empty()
 		});
+		/* QUESTION TODO restore for transaction handling
+		retain_map(&mut self.mmr, |_, (changeset, _)| {
+			changeset
+				.changes
+				.rollback_transaction()
+				.expect("Top and children changesets are started in lockstep; qed");
+			!changeset.changes.is_empty()
+		});
+		*/
 		self.offchain
 			.overlay_mut()
 			.rollback_transaction()
@@ -389,6 +451,14 @@ impl OverlayedChanges {
 				.commit_transaction()
 				.expect("Top and children changesets are started in lockstep; qed");
 		}
+		/* QUESTION TODO restore for transaction handling
+		for (_, (changeset, _)) in self.mmr.iter_mut() {
+			changeset
+				.changes
+				.commit_transaction()
+				.expect("Top and children changesets are started in lockstep; qed");
+		}
+		*/
 		self.offchain
 			.overlay_mut()
 			.commit_transaction()
@@ -407,6 +477,14 @@ impl OverlayedChanges {
 				.enter_runtime()
 				.expect("Top and children changesets are entering runtime in lockstep; qed")
 		}
+		/* QUESTION TODO uncomment for transaction implementatio
+		for (_, (changeset, _)) in self.mmr.iter_mut() {
+			changeset
+				.changes
+				.enter_runtime()
+				.expect("Top and children changesets are entering runtime in lockstep; qed")
+		}
+*/
 		self.offchain
 			.overlay_mut()
 			.enter_runtime()
@@ -425,6 +503,15 @@ impl OverlayedChanges {
 				.exit_runtime()
 				.expect("Top and children changesets are entering runtime in lockstep; qed");
 		}
+
+/* QUESTION TODO uncomment for transaction implementation
+		for (_, (changeset, _)) in self.mmr.iter_mut() {
+			changeset
+				.changes
+				.exit_runtime()
+				.expect("Top and children changesets are entering runtime in lockstep; qed");
+		}
+*/
 		self.offchain
 			.overlay_mut()
 			.exit_runtime()
@@ -448,6 +535,7 @@ impl OverlayedChanges {
 				(impl Iterator<Item = (StorageKey, Option<StorageValue>)>, ChildInfo),
 			),
 		>,
+		impl Iterator<Item = (StorageKey, (impl Iterator<Item = StorageValue>, ChildInfo))>,
 	) {
 		use sp_std::mem::take;
 		(
@@ -455,6 +543,9 @@ impl OverlayedChanges {
 			take(&mut self.children)
 				.into_iter()
 				.map(|(key, (val, info))| (key, (val.drain_commited(), info))),
+			take(&mut self.mmr)
+				.into_iter()
+				.map(|(key, (val, info))| (key, (val.changes.drain_commited(), info))),
 		)
 	}
 
@@ -477,6 +568,13 @@ impl OverlayedChanges {
 		self.children.iter().map(|(_, v)| (v.0.changes(), &v.1))
 	}
 
+	/// Get an iterator over all child changes as seen by the current transaction.
+	pub fn children_mmr(
+		&self,
+	) -> impl Iterator<Item = (impl Iterator<Item = &Vec<u8>>, &ChildInfo)> {
+		self.mmr.iter().map(|(_, v)| (v.0.changes.changes.iter(), &v.1))
+	}
+
 	/// Get an iterator over all top changes as been by the current transaction.
 	pub fn changes(&self) -> impl Iterator<Item = (&StorageKey, &OverlayedValue)> {
 		self.top.changes()
@@ -488,6 +586,16 @@ impl OverlayedChanges {
 		key: &[u8],
 	) -> Option<(impl Iterator<Item = (&StorageKey, &OverlayedValue)>, &ChildInfo)> {
 		self.children.get(key).map(|(overlay, info)| (overlay.changes(), info))
+	}
+
+	/// Get an optional iterator over all child changes stored under the supplied key.
+	pub fn child_mmr_changes(
+		&self,
+		key: &[u8],
+	) -> Option<(impl Iterator<Item = &[u8]>, &ChildInfo)> {
+		self.mmr
+			.get(key)
+			.map(|(overlay, info)| (overlay.changes.changes.iter().map(AsRef::as_ref), info))
 	}
 
 	/// Get an list of all index operations.
@@ -530,7 +638,8 @@ impl OverlayedChanges {
 			.and_then(|t| cache.transaction_storage_root.take().map(|tr| (t, tr)))
 			.expect("Transaction was be generated as part of `storage_root`; qed");
 
-		let (main_storage_changes, child_storage_changes) = self.drain_committed();
+		let (main_storage_changes, child_storage_changes, child_mmr_changes) =
+			self.drain_committed();
 		let offchain_storage_changes = self.offchain_drain_committed().collect();
 
 		#[cfg(feature = "std")]
@@ -541,6 +650,7 @@ impl OverlayedChanges {
 			child_storage_changes: child_storage_changes
 				.map(|(sk, it)| (sk, it.0.collect()))
 				.collect(),
+			child_mmr_changes: child_mmr_changes.map(|(sk, it)| (sk, it.0.collect())).collect(),
 			offchain_storage_changes,
 			transaction,
 			transaction_storage_root,
@@ -589,8 +699,11 @@ impl OverlayedChanges {
 		let child_delta = self.children().map(|(changes, info)| {
 			(info, changes.map(|(k, v)| (&k[..], v.value().map(|v| &v[..]))))
 		});
+		let child_delta_mmr =
+			self.children_mmr().map(|(changes, info)| (info, changes.map(|v| &v[..])));
 
-		let (root, transaction) = backend.full_storage_root(delta, child_delta, state_version);
+		let (root, transaction) =
+			backend.full_storage_root(delta, child_delta, child_delta_mmr, state_version);
 
 		cache.transaction = Some(transaction);
 		cache.transaction_storage_root = Some(root);

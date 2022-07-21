@@ -62,7 +62,7 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
 use sp_core::{
 	storage::{
 		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
-		StorageData, StorageKey,
+		StorageData, StorageKey, StorageMmr,
 	},
 	NativeOrEncoded,
 };
@@ -616,22 +616,42 @@ where
 							} else {
 								for parent_storage in state.parent_storage_keys {
 									let storage_key = PrefixedStorageKey::new_ref(&parent_storage);
-									let storage_key =
-										match ChildType::from_prefixed_key(storage_key) {
-											Some((ChildType::ParentKeyId, storage_key)) =>
-												storage_key,
-											None =>
-												return Err(Error::Backend(
-													"Invalid child storage key.".to_string(),
-												)),
-										};
-									let entry = storage
-										.children_default
-										.entry(storage_key.to_vec())
-										.or_insert_with(|| StorageChild {
-											data: Default::default(),
-											child_info: ChildInfo::new_default(storage_key),
-										});
+									let entry = match ChildType::from_prefixed_key(&storage_key) {
+										Some((ChildType::ParentKeyId, storage_key)) => storage
+											.children_default
+											.entry(storage_key.to_vec())
+											.or_insert_with(|| StorageChild {
+												data: Default::default(),
+												child_info: ChildInfo::new_default(storage_key),
+											}),
+										Some((ChildType::ParentSized, storage_key)) => storage
+											.children_sized
+											.entry(storage_key.to_vec())
+											.or_insert_with(|| StorageChild {
+												data: Default::default(),
+												child_info: ChildInfo::new_parent_sized(
+													storage_key,
+												),
+											}),
+										Some((ChildType::Mmr, storage_key)) => {
+											let entry = storage
+												.children_mmr
+												.entry(storage_key.to_vec())
+												.or_insert_with(|| StorageMmr {
+													data: Default::default(),
+													child_info: ChildInfo::new_mmr(storage_key),
+												});
+											debug_assert!(state.key_values.is_empty());
+											for value in state.values.iter() {
+												entry.data.push(value.clone());
+											}
+											continue
+										},
+										None =>
+											return Err(Error::Backend(
+												"Invalid child storage key.".to_string(),
+											)),
+									};
 									for (key, value) in state.key_values.iter() {
 										entry.data.insert(key.clone(), value.clone());
 									}
@@ -1195,7 +1215,8 @@ where
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
 			state, size_limit, start_key,
 		)?;
-		// This is read proof only, we can use either LayoutV0 or LayoutV1.
+		// TODO here we have in proof nodes from different trie kind. So encode_compact won't be
+		// fine. This is read proof only, we can use either LayoutV0 or LayoutV1.
 		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashFor<Block>>>(proof, root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
@@ -1216,6 +1237,10 @@ where
 			match ChildType::from_prefixed_key(storage_key) {
 				Some((ChildType::ParentKeyId, storage_key)) =>
 					Ok(ChildInfo::new_default(storage_key)),
+				Some((ChildType::ParentSized, storage_key)) =>
+					Ok(ChildInfo::new_parent_sized(storage_key)),
+				Some((ChildType::Mmr, _storage_key)) =>
+					unimplemented!("TODO probly start key u64 le"),
 				None => Err(Error::Backend("Invalid child storage key.".to_string())),
 			}
 		};
@@ -1238,6 +1263,7 @@ where
 			KeyValueStorageLevel {
 				state_root: Vec::new(),
 				key_values: Vec::new(),
+				values: Vec::new(),
 				parent_storage_keys: Vec::new(),
 			},
 			false,
@@ -1297,6 +1323,7 @@ where
 					KeyValueStorageLevel {
 						state_root: child_root,
 						key_values: entries,
+						values: Default::default(),
 						parent_storage_keys: Vec::new(),
 					},
 					complete,
@@ -1320,6 +1347,7 @@ where
 		start_key: &[Vec<u8>],
 	) -> sp_blockchain::Result<(KeyValueStates, usize)> {
 		let mut db = sp_state_machine::MemoryDB::<HashFor<Block>>::new(&[]);
+		// TODO here we need to decode in with support for multiple child kind.
 		// Compact encoding
 		let _ = sp_trie::decode_compact::<sp_state_machine::LayoutV0<HashFor<Block>>, _, _>(
 			&mut db,

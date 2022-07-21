@@ -43,7 +43,7 @@ fn count_migrate<'a, H: Hasher>(
 	root: &'a H::Out,
 ) -> std::result::Result<(u64, TrieDB<'a, H>), String> {
 	let mut nb = 0u64;
-	let trie = TrieDB::new(storage, root).map_err(|e| format!("TrieDB creation error: {}", e))?;
+	let trie = TrieDB::new(storage, root);
 	let iter_node =
 		TrieDBNodeIterator::new(&trie).map_err(|e| format!("TrieDB node iterator error: {}", e))?;
 	for node in iter_node {

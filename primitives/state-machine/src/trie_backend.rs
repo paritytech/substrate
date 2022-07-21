@@ -21,10 +21,11 @@ use crate::{
 	trie_backend_essence::{TrieBackendEssence, TrieBackendStorage},
 	Backend, StorageKey, StorageValue,
 };
-use codec::Codec;
+use codec::{Codec, Encode};
 use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, StateVersion};
+use sp_core::storage::{ChildInfo, ChildType, StateVersion};
 use sp_std::vec::Vec;
+use sp_trie::{LayoutParentSized, LayoutV0, LayoutV1};
 
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
 pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
@@ -79,12 +80,44 @@ where
 		self.essence.storage(key)
 	}
 
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		self.essence.exists_storage(key)
+	}
+
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error> {
+		self.essence.value_size(key)
+	}
+
 	fn child_storage(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, Self::Error> {
 		self.essence.child_storage(child_info, key)
+	}
+
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<StorageValue>, Self::Error> {
+		self.essence.child_storage_at(child_info, at)
+	}
+
+	fn exists_child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<bool, Self::Error> {
+		self.essence.exists_child_storage(child_info, key)
+	}
+
+	fn child_value_size(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<u32>, Self::Error> {
+		self.essence.child_value_size(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
@@ -162,11 +195,25 @@ where
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, Self::Transaction)
+	) -> (Vec<u8>, bool, Self::Transaction)
 	where
-		H::Out: Ord,
+		H::Out: Encode,
 	{
-		self.essence.child_storage_root(child_info, delta, state_version)
+		let (root, is_default, transaction) =
+			self.essence.child_storage_root(child_info, delta, state_version);
+		(root.encode(), is_default, transaction)
+	}
+
+	fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction)
+	where
+		H::Out: Encode,
+	{
+		let (size, root, is_default, transaction) = self.essence.child_mmr_root(child_info, delta);
+		((size, root).encode(), is_default, transaction)
 	}
 
 	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, H>> {
@@ -181,6 +228,22 @@ where
 
 	fn wipe(&self) -> Result<(), Self::Error> {
 		Ok(())
+	}
+}
+
+/// Empty child root for a given child info and state version.
+pub fn empty_child_trie_root<H>(child_info: &ChildInfo, state_version: StateVersion) -> H::Out
+where
+	H: Hasher,
+{
+	use sp_trie::empty_child_trie_root;
+	match child_info.child_type() {
+		ChildType::ParentKeyId => match state_version {
+			StateVersion::V0 => empty_child_trie_root::<LayoutV0<H>>(),
+			StateVersion::V1 => empty_child_trie_root::<LayoutV1<H>>(),
+		},
+		ChildType::ParentSized => empty_child_trie_root::<LayoutParentSized<H>>(),
+		ChildType::Mmr => sp_trie::mmr::empty_root::<H>(),
 	}
 }
 
@@ -379,7 +442,6 @@ pub mod tests {
 	fn keys_with_empty_prefix_returns_all_keys_inner(state_version: StateVersion) {
 		let (test_db, test_root) = test_db(state_version);
 		let expected = TrieDB::new(&test_db, &test_root)
-			.unwrap()
 			.iter()
 			.unwrap()
 			.map(|d| d.unwrap().0.to_vec())

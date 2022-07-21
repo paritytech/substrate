@@ -72,12 +72,32 @@ impl Externalities for AsyncExternalities {
 		panic!("`storage`: should not be used in async externalities!")
 	}
 
+	fn exists_storage(&self, _key: &[u8]) -> bool {
+		panic!("`exists_storage`: should not be used in async externalities!")
+	}
+
+	fn value_size(&self, _key: &[u8]) -> Option<u32> {
+		panic!("`value_size`: should not be used in async externalities!")
+	}
+
 	fn storage_hash(&self, _key: &[u8]) -> Option<Vec<u8>> {
 		panic!("`storage_hash`: should not be used in async externalities!")
 	}
 
 	fn child_storage(&self, _child_info: &ChildInfo, _key: &[u8]) -> Option<StorageValue> {
 		panic!("`child_storage`: should not be used in async externalities!")
+	}
+
+	fn child_storage_at(&self, _child_info: &ChildInfo, _at: u64) -> Option<StorageValue> {
+		panic!("`child_storage_at`: should not be used in async externalities!")
+	}
+
+	fn exists_child_storage(&self, _child_info: &ChildInfo, _key: &[u8]) -> bool {
+		panic!("`exists_child_storage`: should not be used in async externalities!")
+	}
+
+	fn child_value_size(&self, _child_info: &ChildInfo, _key: &[u8]) -> Option<u32> {
+		panic!("`child_value_size`: should not be used in async externalities!")
 	}
 
 	fn child_storage_hash(&self, _child_info: &ChildInfo, _key: &[u8]) -> Option<Vec<u8>> {
@@ -103,6 +123,10 @@ impl Externalities for AsyncExternalities {
 		_value: Option<StorageValue>,
 	) {
 		panic!("`place_child_storage`: should not be used in async externalities!")
+	}
+
+	fn push_storage(&mut self, _child_info: &ChildInfo, _value: StorageValue) {
+		panic!("`push_storage`: should not be used in async externalities!")
 	}
 
 	fn kill_child_storage(

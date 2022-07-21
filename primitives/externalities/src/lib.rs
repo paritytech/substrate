@@ -103,6 +103,11 @@ pub trait Externalities: ExtensionStore {
 	/// Returns an `Option` that holds the SCALE encoded hash.
 	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>>;
 
+	/// Read child runtime indexed by position storage.
+	///
+	/// Returns an `Option` that holds the SCALE encoded hash.
+	fn child_storage_at(&self, child_info: &ChildInfo, at: u64) -> Option<Vec<u8>>;
+
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 		self.place_storage(key, Some(value));
@@ -112,6 +117,9 @@ pub trait Externalities: ExtensionStore {
 	fn set_child_storage(&mut self, child_info: &ChildInfo, key: Vec<u8>, value: Vec<u8>) {
 		self.place_child_storage(child_info, key, Some(value))
 	}
+
+	/// Push child storage value to a child state that support appending.
+	fn push_storage(&mut self, child_info: &ChildInfo, value: Vec<u8>);
 
 	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn clear_storage(&mut self, key: &[u8]) {
@@ -125,14 +133,16 @@ pub trait Externalities: ExtensionStore {
 	}
 
 	/// Whether a storage entry exists.
-	fn exists_storage(&self, key: &[u8]) -> bool {
-		self.storage(key).is_some()
-	}
+	fn exists_storage(&self, key: &[u8]) -> bool;
+
+	/// Size of a value if it exists.
+	fn value_size(&self, key: &[u8]) -> Option<u32>;
 
 	/// Whether a child storage entry exists.
-	fn exists_child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> bool {
-		self.child_storage(child_info, key).is_some()
-	}
+	fn exists_child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> bool;
+
+	/// Child storage entry value size if it exists.
+	fn child_value_size(&self, child_info: &ChildInfo, key: &[u8]) -> Option<u32>;
 
 	/// Returns the key immediately following the given key, if it exists.
 	fn next_storage_key(&self, key: &[u8]) -> Option<Vec<u8>>;

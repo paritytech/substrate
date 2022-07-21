@@ -246,6 +246,28 @@ where
 		result
 	}
 
+	fn child_storage_at(&self, child_info: &ChildInfo, at: u64) -> Option<StorageValue> {
+		let _guard = guard();
+		let result = self
+			.overlay
+			.child_storage_at(child_info, at)
+			.map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(|| {
+				self.backend.child_storage_at(child_info, at).expect(EXT_NOT_ALLOWED_TO_FAIL)
+			});
+
+		trace!(
+			target: "state",
+			method = "ChildGet",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			at = %at,
+			result = ?result.as_ref().map(HexDisplay::from)
+		);
+
+		result
+	}
+
 	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
 		let _guard = guard();
 		let result = self
@@ -286,6 +308,24 @@ where
 		result
 	}
 
+	fn value_size(&self, key: &[u8]) -> Option<u32> {
+		let _guard = guard();
+		let result = match self.overlay.storage(key) {
+			Some(x) => x.map(|value| value.len() as u32),
+			_ => self.backend.value_size(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+		};
+
+		trace!(
+			target: "state",
+			method = "Size",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			key = %HexDisplay::from(&key),
+			?result,
+		);
+
+		result
+	}
+
 	fn exists_child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> bool {
 		let _guard = guard();
 
@@ -304,6 +344,25 @@ where
 			child_info = %HexDisplay::from(&child_info.storage_key()),
 			key = %HexDisplay::from(&key),
 			%result,
+		);
+		result
+	}
+
+	fn child_value_size(&self, child_info: &ChildInfo, key: &[u8]) -> Option<u32> {
+		let _guard = guard();
+
+		let result = match self.overlay.child_storage(child_info, key) {
+			Some(x) => x.map(|v| v.len() as u32),
+			_ => self.backend.child_value_size(child_info, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+		};
+
+		trace!(
+			target: "state",
+			method = "ChildSize",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			key = %HexDisplay::from(&key),
+			?result,
 		);
 		result
 	}
@@ -411,6 +470,34 @@ where
 
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);
+	}
+
+	fn push_storage(&mut self, child_info: &ChildInfo, value: StorageValue) {
+		let _guard = guard();
+		trace!(
+			target: "state",
+			method = "ChildPush",
+			ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+			child_info = %HexDisplay::from(&child_info.storage_key()),
+			value = %HexDisplay::from(&value),
+		);
+
+		self.mark_dirty();
+		let fetch_size_mmr = || {
+			let storage_key = child_info.storage_key();
+			if let Ok(Some(encoded)) = self.backend.storage(storage_key) {
+				let mut buf = [0u8; 8];
+				if encoded.len() < 8 {
+					0
+				} else {
+					buf.copy_from_slice(&encoded[..8]);
+					u64::from_le_bytes(buf)
+				}
+			} else {
+				0
+			}
+		};
+		self.overlay.push_storage(child_info, value, fetch_size_mmr);
 	}
 
 	fn place_child_storage(
@@ -562,6 +649,56 @@ where
 		let _guard = guard();
 		let storage_key = child_info.storage_key();
 		let prefixed_storage_key = child_info.prefixed_storage_key();
+
+		if let ChildInfo::Mmr(_) = child_info {
+			let root = if let Some((changes, info)) = self.overlay.child_mmr_changes(storage_key) {
+				Some(self.backend.child_mmr_root(info, changes))
+			} else {
+				None
+			};
+
+			return if let Some((root, is_empty, _)) = root {
+				// We store update in the overlay in order to be able to use
+				// 'self.storage_transaction' cache. This is brittle as it rely on Ext only querying
+				// the trie backend for storage root.
+				// A better design would be to manage 'child_storage_transaction' in a
+				// similar way as 'storage_transaction' but for each child trie.
+				if is_empty {
+					self.overlay.set_storage(prefixed_storage_key.into_inner(), None);
+				} else {
+					self.overlay.set_storage(prefixed_storage_key.into_inner(), Some(root.clone()));
+				}
+
+				trace!(
+					target: "state",
+					method = "ChildStorageRoot",
+					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+					child_info = %HexDisplay::from(&storage_key),
+					storage_root = %HexDisplay::from(&root.as_ref()),
+					cached = false,
+				);
+
+				root
+			} else {
+				// empty overlay
+				let root = self
+					.storage(prefixed_storage_key.as_slice())
+					.and_then(|k| Decode::decode(&mut &k[..]).ok())
+					.unwrap_or_else(|| (0u64, sp_trie::mmr::empty_root::<H>()));
+
+				trace!(
+					target: "state",
+					method = "ChildStorageRoot",
+					ext_id = %HexDisplay::from(&self.id.to_le_bytes()),
+					child_info = %HexDisplay::from(&storage_key),
+					storage_root = %HexDisplay::from(&root.1.as_ref()),
+					cached = false,
+				);
+
+				root.encode()
+			}
+		}
+
 		if self.storage_transaction_cache.transaction_storage_root.is_some() {
 			let root = self
 				.storage(prefixed_storage_key.as_slice())
@@ -915,6 +1052,8 @@ mod tests {
 					vec![40] => vec![40]
 				],
 				children_default: map![],
+				children_sized: map![],
+				children_mmr: map![],
 			},
 			StateVersion::default(),
 		)
@@ -962,6 +1101,8 @@ mod tests {
 					vec![30] => vec![30]
 				],
 				children_default: map![],
+				children_sized: map![],
+				children_mmr: map![],
 			},
 			StateVersion::default(),
 		)
@@ -996,6 +1137,8 @@ mod tests {
 						child_info: child_info.to_owned(),
 					}
 				],
+				children_sized: map![],
+				children_mmr: map![],
 			},
 			StateVersion::default(),
 		)
@@ -1044,6 +1187,8 @@ mod tests {
 						child_info: child_info.to_owned(),
 					}
 				],
+				children_sized: map![],
+				children_mmr: map![],
 			},
 			StateVersion::default(),
 		)
@@ -1084,6 +1229,8 @@ mod tests {
 						child_info: child_info.to_owned(),
 					}
 				],
+				children_sized: map![],
+				children_mmr: map![],
 			},
 			StateVersion::default(),
 		)

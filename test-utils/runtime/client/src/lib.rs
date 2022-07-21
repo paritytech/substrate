@@ -32,7 +32,7 @@ pub use self::block_builder_ext::BlockBuilderExt;
 
 use sp_core::{
 	sr25519,
-	storage::{ChildInfo, Storage, StorageChild},
+	storage::{ChildInfo, ChildType, Storage, StorageChild},
 	Pair,
 };
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
@@ -143,9 +143,29 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
 			(prefixed_storage_key.into_inner(), state_root.encode())
 		});
+		let child_roots_dummy = storage.children_sized.iter().map(|(_sk, _child_content)| {
+			unimplemented!(
+				"TODO add fn trie_root_dummy to runtime/src/traits, would mean
+		another two host function"
+			);
+			/*	let state_root =
+				<<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root_dummy(
+					child_content.data.clone().into_iter().collect(),
+					sp_runtime::StateVersion::V1,
+				);
+			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
+			(prefixed_storage_key.into_inner(), state_root.encode())*/
+		});
+
 		let state_root =
 			<<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
-				storage.top.clone().into_iter().chain(child_roots).collect(),
+				storage
+					.top
+					.clone()
+					.into_iter()
+					.chain(child_roots)
+					.chain(child_roots_dummy)
+					.collect(),
 				sp_runtime::StateVersion::V1,
 			);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
@@ -216,9 +236,12 @@ pub trait TestClientBuilderExt<B>: Sized {
 		let key = key.into();
 		assert!(!storage_key.is_empty());
 		assert!(!key.is_empty());
-		self.genesis_init_mut()
-			.extra_storage
-			.children_default
+		let child_map = match child_info.child_type() {
+			ChildType::ParentKeyId => &mut self.genesis_init_mut().extra_storage.children_default,
+			ChildType::ParentSized => &mut self.genesis_init_mut().extra_storage.children_sized,
+			ChildType::Mmr => unimplemented!(), // error actually
+		};
+		child_map
 			.entry(storage_key)
 			.or_insert_with(|| StorageChild {
 				data: Default::default(),

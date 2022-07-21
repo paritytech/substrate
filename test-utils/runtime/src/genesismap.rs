@@ -78,8 +78,12 @@ impl GenesisConfig {
 		map.extend(self.extra_storage.top.clone().into_iter());
 
 		// Assimilate the system genesis config.
-		let mut storage =
-			Storage { top: map, children_default: self.extra_storage.children_default.clone() };
+		let mut storage = Storage {
+			top: map,
+			children_default: self.extra_storage.children_default.clone(),
+			children_sized: self.extra_storage.children_sized.clone(),
+			children_mmr: self.extra_storage.children_mmr.clone(),
+		};
 		let config = system::GenesisConfig { authorities: self.authorities.clone() };
 		config
 			.assimilate_storage(&mut storage)
@@ -90,16 +94,33 @@ impl GenesisConfig {
 }
 
 pub fn insert_genesis_block(storage: &mut Storage) -> sp_core::hash::H256 {
-	let child_roots = storage.children_default.iter().map(|(sk, child_content)| {
+	let child_roots = storage.children_default.iter().map(|(_sk, child_content)| {
 		let state_root =
 			<<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				child_content.data.clone().into_iter().collect(),
 				sp_runtime::StateVersion::V1,
 			);
-		(sk.clone(), state_root.encode())
+		let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
+		(prefixed_storage_key.into_inner(), state_root.encode())
 	});
 	// add child roots to storage
 	storage.top.extend(child_roots);
+	let child_roots = storage.children_sized.iter().map(|(_sk, _child_content)| {
+		unimplemented!(
+			"TODO add fn trie_root_dummy to runtime/src/traits, would mean
+		another two host function"
+		);
+		/*		let state_root =
+			<<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root_dummy(
+				child_content.data.clone().into_iter().collect(),
+				sp_runtime::StateVersion::V1,
+			);
+		let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
+		(prefixed_storage_key.into_inner(), state_root.encode())*/
+	});
+	// add child roots to storage
+	storage.top.extend(child_roots);
+
 	let state_root = <<<crate::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 		storage.top.clone().into_iter().collect(),
 		sp_runtime::StateVersion::V1,

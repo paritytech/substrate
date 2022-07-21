@@ -29,8 +29,8 @@ use parking_lot::RwLock;
 use sp_core::storage::{ChildInfo, StateVersion};
 pub use sp_trie::trie_types::TrieError;
 use sp_trie::{
-	empty_child_trie_root, read_child_trie_value_with, read_trie_value_with, record_all_keys,
-	LayoutV1, MemoryDB, Recorder, StorageProof,
+	read_child_trie_value_with, read_trie_value_with, record_all_keys, LayoutV1, MemoryDB,
+	Recorder, StorageProof,
 };
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -77,7 +77,7 @@ where
 			.storage(storage_key)?
 			.and_then(|r| Decode::decode(&mut &r[..]).ok())
 			// V1 is equivalent to V0 on empty trie
-			.unwrap_or_else(empty_child_trie_root::<LayoutV1<H>>);
+			.unwrap_or_else(sp_trie::empty_child_trie_root::<LayoutV1<H>>);
 
 		let mut read_overlay = S::Overlay::default();
 		let eph = Ephemeral::new(self.backend.backend_storage(), &mut read_overlay);
@@ -265,12 +265,44 @@ where
 		self.0.storage(key)
 	}
 
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		self.0.exists_storage(key)
+	}
+
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error> {
+		self.0.value_size(key)
+	}
+
 	fn child_storage(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.child_storage(child_info, key)
+	}
+
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.0.child_storage_at(child_info, at)
+	}
+
+	fn exists_child_storage(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<bool, Self::Error> {
+		self.0.exists_child_storage(child_info, key)
+	}
+
+	fn child_value_size(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<u32>, Self::Error> {
+		self.0.child_value_size(child_info, key)
 	}
 
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
@@ -351,11 +383,16 @@ where
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'b [u8], Option<&'b [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, Self::Transaction)
-	where
-		H::Out: Ord,
-	{
+	) -> (Vec<u8>, bool, Self::Transaction) {
 		self.0.child_storage_root(child_info, delta, state_version)
+	}
+
+	fn child_mmr_root<'b>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'b [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction) {
+		self.0.child_mmr_root(child_info, delta)
 	}
 
 	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats) {}
@@ -494,8 +531,10 @@ mod tests {
 	fn proof_recorded_and_checked_with_child_inner(state_version: StateVersion) {
 		let child_info_1 = ChildInfo::new_default(b"sub1");
 		let child_info_2 = ChildInfo::new_default(b"sub2");
+		let child_info_mmr = ChildInfo::new_mmr(b"sub1");
 		let child_info_1 = &child_info_1;
 		let child_info_2 = &child_info_2;
+		let child_info_mmr = &child_info_mmr;
 		let contents = vec![
 			(None, (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>()),
 			(Some(child_info_1.clone()), (28..65).map(|i| (vec![i], Some(vec![i]))).collect()),
@@ -503,14 +542,24 @@ mod tests {
 		];
 		let in_memory = InMemoryBackend::<BlakeTwo256>::default();
 		let in_memory = in_memory.update(contents, state_version);
+		let mut mmr_val = Vec::new();
+		for i in 0u8..100 {
+			mmr_val.push(vec![i]);
+		}
+		let mmrs = vec![child_info_mmr.to_owned()];
 		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
-		let in_memory_root = in_memory
-			.full_storage_root(
-				std::iter::empty(),
-				child_storage_keys.iter().map(|k| (k, std::iter::empty())),
-				state_version,
-			)
-			.0;
+		let (in_memory_root, transaction) = in_memory.full_storage_root(
+			std::iter::empty(),
+			child_storage_keys.iter().map(|k| (k, std::iter::empty())),
+			mmrs.iter().map(|k| (k, mmr_val.iter().map(AsRef::as_ref))),
+			state_version,
+		);
+		let mut storage = in_memory.into_storage();
+		storage.consolidate(transaction);
+
+		let in_memory = InMemoryBackend::<BlakeTwo256>::new(storage, in_memory_root);
+
+		//in_memory.storage_mut().root = in_memory_root;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
 		(28..65).for_each(|i| {
 			assert_eq!(in_memory.child_storage(child_info_1, &[i]).unwrap().unwrap(), vec![i])
@@ -538,10 +587,13 @@ mod tests {
 
 		let proving = ProvingBackend::new(trie);
 		assert_eq!(proving.child_storage(child_info_1, &[64]), Ok(Some(vec![64])));
+		assert_eq!(proving.child_storage_at(child_info_mmr, 50), Ok(Some(vec![50])));
 
 		let proof = proving.extract_proof();
 		let proof_check = create_proof_check_backend::<BlakeTwo256>(in_memory_root, proof).unwrap();
+		// TODO compact proof?
 		assert_eq!(proof_check.child_storage(child_info_1, &[64]).unwrap().unwrap(), vec![64]);
+		assert_eq!(proof_check.child_storage_at(child_info_mmr, 50), Ok(Some(vec![50])));
 	}
 
 	#[test]

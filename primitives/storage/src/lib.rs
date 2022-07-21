@@ -19,6 +19,20 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+/// TODO
+/// Node on dummy:
+/// - H::Out remove from state-machine child api.
+/// Generally does not allow using custom hasher (as it will need to be
+/// exposed as a host function). TODO maybe just have no_std hasher for proto.
+/// - uses H.
+/// next step would be to have a child trie specific H.
+/// Generally it needs a way to expose generically in
+/// a trait access to a set of host function. Or could use a no_std hasher.
+/// - TODO first step could be to have child specific H ?? Or just specifically
+/// expose the hashing io as two H in state machine.
+/// - uses same externalites api (easier in state machine): check if can extend.
+/// - TODO a child file tree with tree being compatible with blake3.
+
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_debug_derive::RuntimeDebug;
@@ -171,6 +185,21 @@ pub struct Storage {
 	/// Children trie storage data. Key does not include prefix, only for the `default` trie kind,
 	/// of `ChildType::ParentKeyId` type.
 	pub children_default: std::collections::HashMap<Vec<u8>, StorageChild>,
+	/// Changes for child trie with size.
+	pub children_sized: std::collections::HashMap<Vec<u8>, StorageChild>,
+	/// Changes for mmr (in append order).
+	pub children_mmr: std::collections::HashMap<Vec<u8>, StorageMmr>,
+}
+
+/// Child mmr storage data (push only).
+#[cfg(feature = "std")]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct StorageMmr {
+	/// Child data for storage.
+	pub data: Vec<Vec<u8>>,
+	/// Associated child info for a child
+	/// state.
+	pub child_info: ChildInfo,
 }
 
 /// Storage change set
@@ -205,12 +234,26 @@ pub mod well_known_keys {
 	/// Prefix of the default child storage keys in the top trie.
 	pub const DEFAULT_CHILD_STORAGE_KEY_PREFIX: &[u8] = b":child_storage:default:";
 
+	/// Prefix of the sized value child storage keys in the top trie.
+	pub const SIZED_PARENT_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:sized_value:";
+
+	/// Prefix of the sized value child storage keys in the top trie.
+	pub const MMR_CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:mmr:";
+
 	/// Whether a key is a default child storage key.
 	///
 	/// This is convenience function which basically checks if the given `key` starts
 	/// with `DEFAULT_CHILD_STORAGE_KEY_PREFIX` and doesn't do anything apart from that.
 	pub fn is_default_child_storage_key(key: &[u8]) -> bool {
 		key.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+	}
+
+	/// Whether a key is a parent sized child storage key.
+	///
+	/// This is convenience function which basically checks if the given `key` starts
+	/// with `SIZED_PARENT_CHILD_STORAGE_KEY_PREFIX` and doesn't do anything apart from that.
+	pub fn is_sized_parent_child_storage_key(key: &[u8]) -> bool {
+		key.starts_with(SIZED_PARENT_CHILD_STORAGE_KEY_PREFIX)
 	}
 
 	/// Whether a key is a child storage key.
@@ -241,9 +284,19 @@ pub const TRIE_VALUE_NODE_THRESHOLD: u32 = 33;
 pub enum ChildInfo {
 	/// This is the one used by default.
 	ParentKeyId(ChildTrieParentKeyId),
+	/// Child trie storing size of value in parent node.
+	ParentSized(ChildTrieParentKeyId),
+	/// Mmr child state.
+	Mmr(ChildTrieParentKeyId),
 }
 
 impl ChildInfo {
+	/// Child info for child trie with size stored in parent node.
+	pub fn new_parent_sized(storage_key: &[u8]) -> Self {
+		let data = storage_key.to_vec();
+		ChildInfo::ParentSized(ChildTrieParentKeyId { data })
+	}
+
 	/// Instantiates child information for a default child trie
 	/// of kind `ChildType::ParentKeyId`, using an unprefixed parent
 	/// storage key.
@@ -257,11 +310,21 @@ impl ChildInfo {
 		ChildInfo::ParentKeyId(ChildTrieParentKeyId { data: storage_key })
 	}
 
+	/// Instantiates child information for a default child trie
+	/// of kind `ChildType::Mmr`, using an unprefixed parent
+	/// storage key.
+	pub fn new_mmr(storage_key: &[u8]) -> Self {
+		let data = storage_key.to_vec();
+		ChildInfo::Mmr(ChildTrieParentKeyId { data })
+	}
+
 	/// Try to update with another instance, return false if both instance
 	/// are not compatible.
 	pub fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match self {
 			ChildInfo::ParentKeyId(child_trie) => child_trie.try_update(other),
+			ChildInfo::ParentSized(child_trie) => child_trie.try_update(other),
+			ChildInfo::Mmr(child_trie) => child_trie.try_update(other),
 		}
 	}
 
@@ -271,6 +334,8 @@ impl ChildInfo {
 	pub fn keyspace(&self) -> &[u8] {
 		match self {
 			ChildInfo::ParentKeyId(..) => self.storage_key(),
+			ChildInfo::ParentSized(..) => self.storage_key(),
+			ChildInfo::Mmr(..) => self.storage_key(),
 		}
 	}
 
@@ -280,6 +345,8 @@ impl ChildInfo {
 	pub fn storage_key(&self) -> &[u8] {
 		match self {
 			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) => &data[..],
+			ChildInfo::ParentSized(ChildTrieParentKeyId { data }) => &data[..],
+			ChildInfo::Mmr(ChildTrieParentKeyId { data }) => &data[..],
 		}
 	}
 
@@ -289,6 +356,10 @@ impl ChildInfo {
 		match self {
 			ChildInfo::ParentKeyId(ChildTrieParentKeyId { data }) =>
 				ChildType::ParentKeyId.new_prefixed_key(data.as_slice()),
+			ChildInfo::ParentSized(ChildTrieParentKeyId { data }) =>
+				ChildType::ParentSized.new_prefixed_key(data.as_slice()),
+			ChildInfo::Mmr(ChildTrieParentKeyId { data }) =>
+				ChildType::Mmr.new_prefixed_key(data.as_slice()),
 		}
 	}
 
@@ -300,6 +371,14 @@ impl ChildInfo {
 				ChildType::ParentKeyId.do_prefix_key(&mut data);
 				PrefixedStorageKey(data)
 			},
+			ChildInfo::ParentSized(ChildTrieParentKeyId { mut data }) => {
+				ChildType::ParentSized.do_prefix_key(&mut data);
+				PrefixedStorageKey(data)
+			},
+			ChildInfo::Mmr(ChildTrieParentKeyId { mut data }) => {
+				ChildType::Mmr.do_prefix_key(&mut data);
+				PrefixedStorageKey(data)
+			},
 		}
 	}
 
@@ -307,6 +386,8 @@ impl ChildInfo {
 	pub fn child_type(&self) -> ChildType {
 		match self {
 			ChildInfo::ParentKeyId(..) => ChildType::ParentKeyId,
+			ChildInfo::ParentSized(..) => ChildType::ParentSized,
+			ChildInfo::Mmr(..) => ChildType::Mmr,
 		}
 	}
 }
@@ -321,6 +402,12 @@ pub enum ChildType {
 	/// If runtime module ensures that the child key is a unique id that will
 	/// only be used once, its parent key is used as a child trie unique id.
 	ParentKeyId = 1,
+	/// Variant of child trie that stores size of value in parent node.
+	/// If runtime module ensures that the child key is a unique id that will
+	/// only be used once, its parent key is used as a child trie unique id.
+	ParentSized = 2,
+	/// Variant of child trie containing integer indexed push only mmr.
+	Mmr = 3,
 }
 
 impl ChildType {
@@ -344,6 +431,8 @@ impl ChildType {
 			}
 		};
 		match_type(storage_key, ChildType::ParentKeyId)
+			.or_else(|| match_type(storage_key, ChildType::ParentSized))
+			.or_else(|| match_type(storage_key, ChildType::Mmr))
 	}
 
 	/// Produce a prefixed key for a given child type.
@@ -371,6 +460,8 @@ impl ChildType {
 	pub fn parent_prefix(&self) -> &'static [u8] {
 		match self {
 			&ChildType::ParentKeyId => well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX,
+			&ChildType::ParentSized => well_known_keys::SIZED_PARENT_CHILD_STORAGE_KEY_PREFIX,
+			&ChildType::Mmr => well_known_keys::MMR_CHILD_STORAGE_KEY_PREFIX,
 		}
 	}
 }
@@ -395,6 +486,8 @@ impl ChildTrieParentKeyId {
 	fn try_update(&mut self, other: &ChildInfo) -> bool {
 		match other {
 			ChildInfo::ParentKeyId(other) => self.data[..] == other.data[..],
+			ChildInfo::ParentSized(other) => self.data[..] == other.data[..],
+			ChildInfo::Mmr(other) => self.data[..] == other.data[..],
 		}
 	}
 }

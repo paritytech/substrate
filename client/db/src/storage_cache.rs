@@ -611,8 +611,27 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		Ok(value)
 	}
 
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		// QUESTION could use cache.
+		self.state.child_storage_at(child_info, at)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		// Note that when using storage cache we access value,
+		// this is not an issue as storage cache is not compatible
+		// with proof production.
 		Ok(self.storage(key)?.is_some())
+	}
+
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error> {
+		// Note that when using storage cache we access value,
+		// this is not an issue as storage cache is not compatible
+		// with proof production.
+		Ok(self.storage(key)?.map(|value| value.len() as u32))
 	}
 
 	fn exists_child_storage(
@@ -620,7 +639,21 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(child_info, key)
+		// Note that when using storage cache we access value,
+		// this is not an issue as storage cache is not compatible
+		// with proof production.
+		Ok(self.child_storage(child_info, key)?.is_some())
+	}
+
+	fn child_value_size(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<u32>, Self::Error> {
+		// Note that when using storage cache we access value,
+		// this is not an issue as storage cache is not compatible
+		// with proof production.
+		Ok(self.child_storage(child_info, key)?.map(|value| value.len() as u32))
 	}
 
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
@@ -690,11 +723,16 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (Vec<u8>, bool, Self::Transaction) {
 		self.state.child_storage_root(child_info, delta, state_version)
+	}
+
+	fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction) {
+		self.state.child_mmr_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -807,8 +845,20 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		self.caching_state().child_storage(child_info, key)
 	}
 
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.caching_state().child_storage_at(child_info, at)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		self.caching_state().exists_storage(key)
+	}
+
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error> {
+		self.caching_state().value_size(key)
 	}
 
 	fn exists_child_storage(
@@ -817,6 +867,14 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.caching_state().exists_child_storage(child_info, key)
+	}
+
+	fn child_value_size(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<u32>, Self::Error> {
+		self.caching_state().child_value_size(child_info, key)
 	}
 
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
@@ -891,11 +949,16 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (Vec<u8>, bool, Self::Transaction) {
 		self.caching_state().child_storage_root(child_info, delta, state_version)
+	}
+
+	fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction) {
+		self.caching_state().child_mmr_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

@@ -19,17 +19,17 @@
 
 use super::{Extrinsics, StorageKey, StorageValue};
 
-#[cfg(not(feature = "std"))]
-use sp_std::collections::btree_set::BTreeSet as Set;
-#[cfg(feature = "std")]
-use std::collections::HashSet as Set;
-
 use crate::warn;
 use smallvec::SmallVec;
+#[cfg(not(feature = "std"))]
+use sp_std::collections::btree_set::BTreeSet as Set;
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	hash::Hash,
+	vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::collections::HashSet as Set;
 
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
@@ -93,6 +93,14 @@ pub type OverlayedValue = OverlayedEntry<Option<StorageValue>>;
 /// Change set for basic key value with extrinsics index recording and removal support.
 pub type OverlayedChangeSet = OverlayedMap<StorageKey, Option<StorageValue>>;
 
+/// Change set for push only operation.
+#[derive(Debug, Clone)]
+pub struct OverlayedChangeSetMmr {
+	pub changes: OverlayedList<StorageValue>,
+	// QUESTION : there is an issue with this offset, hint could be solve by changing some prototype from &self to &mut self.
+	pub offset: u64,
+}
+
 /// Holds a set of changes with the ability modify them using nested transactions.
 #[derive(Debug, Clone)]
 pub struct OverlayedMap<K: Ord + Hash, V> {
@@ -115,6 +123,29 @@ impl<K: Ord + Hash, V> Default for OverlayedMap<K, V> {
 		Self {
 			changes: BTreeMap::new(),
 			dirty_keys: SmallVec::new(),
+			num_client_transactions: Default::default(),
+			execution_mode: Default::default(),
+		}
+	}
+}
+
+/// Push only that can be reverted
+#[derive(Debug, Clone)]
+pub struct OverlayedList<V> {
+	/// Stores the changes that this overlay constitutes.
+	pub changes: Vec<V>,
+	/// The number of how many transactions beginning from the first transactions are started
+	/// by the client. Those transactions are protected against close (commit, rollback)
+	/// when in runtime mode.
+	num_client_transactions: usize,
+	/// Determines whether the node is using the overlay from the client or the runtime.
+	execution_mode: ExecutionMode,
+}
+
+impl<V> Default for OverlayedList<V> {
+	fn default() -> Self {
+		Self {
+			changes: Vec::new(),
 			num_client_transactions: Default::default(),
 			execution_mode: Default::default(),
 		}
@@ -204,6 +235,18 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 		Self {
 			changes: Default::default(),
 			dirty_keys: repeat(Set::new()).take(self.transaction_depth()).collect(),
+			num_client_transactions: self.num_client_transactions,
+			execution_mode: self.execution_mode,
+		}
+	}
+
+	/// Create a new changeset list at the same transaction state but without any contents.
+	///
+	/// This changeset might be created when there are already open transactions.
+	/// We need to catch up here so that the child is at the same transaction depth.
+	pub fn spawn_child_list<V2>(&self) -> OverlayedList<V2> {
+		OverlayedList {
+			changes: Default::default(),
 			num_client_transactions: self.num_client_transactions,
 			execution_mode: self.execution_mode,
 		}
@@ -367,6 +410,123 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 		}
 
 		Ok(())
+	}
+
+	fn has_open_runtime_transactions(&self) -> bool {
+		self.transaction_depth() > self.num_client_transactions
+	}
+}
+
+impl<V> OverlayedList<V> {
+	/// True if no changes at all are contained in the change set.
+	pub fn is_empty(&self) -> bool {
+		self.changes.is_empty()
+	}
+
+	/// Get an optional reference to the value stored for the specified key.
+	/// warning parameter is offset from max index of mmr.
+	pub fn get_at(&self, offset: u64) -> Option<&V> {
+		self.changes.get(offset as usize)
+	}
+
+	/// Set a new value for the specified key.
+	///
+	/// Can be rolled back or committed when called inside a transaction.
+	pub fn push(&mut self, value: V) {
+		self.changes.push(value);
+	}
+
+	/// Get a list of all changes as seen by current transaction.
+	pub fn changes(&self) -> impl Iterator<Item = &V> {
+		self.changes.iter()
+	}
+
+	/// Get a list of all changes as seen by current transaction, consumes
+	/// the overlay.
+	pub fn into_changes(self) -> impl Iterator<Item = V> {
+		self.changes.into_iter()
+	}
+
+	/// Consume this changeset and return all committed changes.
+	///
+	/// Panics:
+	/// Panics if there are open transactions: `transaction_depth() > 0`
+	pub fn drain_commited(self) -> impl Iterator<Item = V> {
+		assert!(self.transaction_depth() == 0, "Drain is not allowed with open transactions.");
+		self.changes.into_iter()
+	}
+
+	/// Returns the current nesting depth of the transaction stack.
+	///
+	/// A value of zero means that no transaction is open and changes are committed on write.
+	pub fn transaction_depth(&self) -> usize {
+		unimplemented!()
+	}
+
+	/// Call this before transfering control to the runtime.
+	///
+	/// This protects all existing transactions from being removed by the runtime.
+	/// Calling this while already inside the runtime will return an error.
+	pub fn enter_runtime(&mut self) -> Result<(), AlreadyInRuntime> {
+		if let ExecutionMode::Runtime = self.execution_mode {
+			return Err(AlreadyInRuntime)
+		}
+		self.execution_mode = ExecutionMode::Runtime;
+		self.num_client_transactions = self.transaction_depth();
+		Ok(())
+	}
+
+	/// Call this when control returns from the runtime.
+	///
+	/// This commits all dangling transaction left open by the runtime.
+	/// Calling this while already outside the runtime will return an error.
+	pub fn exit_runtime(&mut self) -> Result<(), NotInRuntime> {
+		if let ExecutionMode::Client = self.execution_mode {
+			return Err(NotInRuntime)
+		}
+		self.execution_mode = ExecutionMode::Client;
+		if self.has_open_runtime_transactions() {
+			warn!(
+				"{} storage transactions are left open by the runtime. Those will be rolled back.",
+				self.transaction_depth() - self.num_client_transactions,
+			);
+		}
+		while self.has_open_runtime_transactions() {
+			self.rollback_transaction()
+				.expect("The loop condition checks that the transaction depth is > 0; qed");
+		}
+		Ok(())
+	}
+
+	/// Start a new nested transaction.
+	///
+	/// This allows to either commit or roll back all changes that were made while this
+	/// transaction was open. Any transaction must be closed by either `commit_transaction`
+	/// or `rollback_transaction` before this overlay can be converted into storage changes.
+	///
+	/// Changes made without any open transaction are committed immediately.
+	pub fn start_transaction(&mut self) {
+		unimplemented!()
+	}
+
+	/// Rollback the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are discarded. Returns an error if
+	/// there is no open transaction that can be rolled back.
+	pub fn rollback_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		self.close_transaction(true)
+	}
+
+	/// Commit the last transaction started by `start_transaction`.
+	///
+	/// Any changes made during that transaction are committed. Returns an error if
+	/// there is no open transaction that can be committed.
+	pub fn commit_transaction(&mut self) -> Result<(), NoOpenTransaction> {
+		self.close_transaction(false)
+	}
+
+	fn close_transaction(&mut self, _rollback: bool) -> Result<(), NoOpenTransaction> {
+		unimplemented!()
 	}
 
 	fn has_open_runtime_transactions(&self) -> bool {

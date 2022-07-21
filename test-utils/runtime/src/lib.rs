@@ -366,6 +366,8 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Run various tests against mmr storage.
+				fn test_mmr_storage();
 				/// Check a witness.
 				fn test_witness(proof: StorageProof, root: crate::Hash);
 				/// Test that ensures that we can call a function that takes multiple
@@ -416,6 +418,8 @@ cfg_if! {
 				fn test_ecdsa_crypto() -> (ecdsa::AppSignature, ecdsa::AppPublic);
 				/// Run various tests against storage.
 				fn test_storage();
+				/// Run various tests against mmr storage.
+				fn test_mmr_storage();
 				/// Check a witness.
 				fn test_witness(proof: StorageProof, root: crate::Hash);
 				/// Test that ensures that we can call a function that takes multiple
@@ -673,15 +677,9 @@ fn code_using_trie() -> u64 {
 		t
 	};
 
-	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
-		if let Ok(iter) = trie.iter() {
-			iter.flatten().count() as u64
-		} else {
-			102
-		}
-	} else {
-		103
-	}
+	let trie = TrieDB::<Hashing>::new(&mdb, &root);
+	let x = if let Ok(iter) = trie.iter() { iter.flatten().count() as u64 } else { 102 };
+	x
 }
 
 impl_opaque_keys! {
@@ -824,6 +822,10 @@ cfg_if! {
 				fn test_storage() {
 					test_read_storage();
 					test_read_child_storage();
+				}
+
+				fn test_mmr_storage() {
+					test_read_write_mmr_storage();
 				}
 
 				fn test_witness(proof: StorageProof, root: crate::Hash) {
@@ -1100,6 +1102,10 @@ cfg_if! {
 					test_read_child_storage();
 				}
 
+				fn test_mmr_storage() {
+					test_read_write_mmr_storage();
+				}
+
 				fn test_witness(proof: StorageProof, root: crate::Hash) {
 					test_witness(proof, root);
 				}
@@ -1274,6 +1280,34 @@ fn test_read_child_storage() {
 	assert_eq!(&v, &[0, 0, 0, 0]);
 }
 
+// QUESTION make this test run
+fn test_read_write_mmr_storage() {
+	use frame_support::storage::child;
+	const STORAGE_KEY: &[u8] = b"mmr_unique_id_1";
+	let child_info = sp_core::storage::ChildInfo::new_mmr(STORAGE_KEY);
+	let init: Option<u64> = child::get_at(&child_info, 0);
+	assert_eq!(init, None);
+	child::push(&child_info, &1u64);
+	let init = child::get_at(&child_info, 0);
+	assert_eq!(init, Some(1u64));
+	let init: Option<u64> = child::get_at(&child_info, 1);
+	assert_eq!(init, None);
+
+	/* QUESTION after this test pass, uncomment this
+	 * and complete storage overlay transaction.
+	sp_io::storage::start_transaction();
+	child::push(&child_info, &2u64);
+	child::push(&child_info, &3u64);
+	let init = child::get_at(&child_info, 2);
+	assert_eq!(init, Some(3u64));
+	sp_io::storage::rollback_transaction();
+
+	let init: Option<u64> = child::get_at(&child_info, 1);
+	assert_eq!(init, None);
+	*/
+	child::root(&child_info, Default::default());
+}
+
 fn test_witness(proof: StorageProof, root: crate::Hash) {
 	use sp_externalities::Externalities;
 	let db: sp_trie::MemoryDB<crate::Hashing> = proof.into_memory_db();
@@ -1347,6 +1381,18 @@ mod tests {
 		let block_id = BlockId::Number(client.chain_info().best_number);
 
 		runtime_api.test_storage(&block_id).unwrap();
+	}
+
+	#[test]
+	fn test_mmr_storage() {
+		// can only run once (update)
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(client.chain_info().best_number);
+
+		runtime_api.test_mmr_storage(&block_id).unwrap();
 	}
 
 	fn witness_backend() -> (sp_trie::MemoryDB<crate::Hashing>, crate::Hash) {
