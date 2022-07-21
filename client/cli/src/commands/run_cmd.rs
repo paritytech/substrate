@@ -50,10 +50,6 @@ pub struct RunCmd {
 	#[clap(long)]
 	pub no_grandpa: bool,
 
-	/// Experimental: Run in light client mode.
-	#[clap(long)]
-	pub light: bool,
-
 	/// Listen to all RPC interfaces.
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
@@ -337,7 +333,7 @@ impl CliConfiguration for RunCmd {
 
 	fn dev_key_seed(&self, is_dev: bool) -> Result<Option<String>> {
 		Ok(self.get_keyring().map(|a| format!("//{}", a)).or_else(|| {
-			if is_dev && !self.light {
+			if is_dev {
 				Some("//Alice".into())
 			} else {
 				None
@@ -363,16 +359,9 @@ impl CliConfiguration for RunCmd {
 
 	fn role(&self, is_dev: bool) -> Result<Role> {
 		let keyring = self.get_keyring();
-		let is_light = self.light;
-		let is_authority = (self.validator || is_dev || keyring.is_some()) && !is_light;
+		let is_authority = self.validator || is_dev || keyring.is_some();
 
-		Ok(if is_light {
-			sc_service::Role::Light
-		} else if is_authority {
-			sc_service::Role::Authority
-		} else {
-			sc_service::Role::Full
-		})
+		Ok(if is_authority { sc_service::Role::Authority } else { sc_service::Role::Full })
 	}
 
 	fn force_authoring(&self) -> Result<bool> {

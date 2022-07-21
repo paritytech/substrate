@@ -253,7 +253,6 @@ async fn build_network_future<
 
 						let node_role = match role {
 							Role::Authority { .. } => NodeRole::Authority,
-							Role::Light => NodeRole::LightClient,
 							Role::Full => NodeRole::Full,
 						};
 
@@ -377,7 +376,6 @@ where
 
 /// Transaction pool adapter.
 pub struct TransactionPoolAdapter<C, P> {
-	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
 }
@@ -425,11 +423,6 @@ where
 	}
 
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
-		if !self.imports_external_transactions {
-			debug!("Transaction rejected");
-			return Box::pin(futures::future::ready(TransactionImport::None))
-		}
-
 		let encoded = transaction.encode();
 		let uxt = match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => uxt,
