@@ -339,7 +339,7 @@ impl<Call: Codec + Sync + Send, Context, Extra> crate::traits::BackgroundCheckab
 {
 	fn background_check(
 		self,
-		c: &Context,
+		_: &Context,
 	) -> Result<<Self as Checkable<Context>>::Checked, TransactionValidityError> {
 		Ok(self)
 	}
