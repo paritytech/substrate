@@ -1,4 +1,4 @@
-// Sassafras This file is part of Substrate.
+// This file is part of Substrate.
 
 // Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Consensus extension module for Sassafras consensus.
+//! Extension module for Sassafras consensus.
 //!
 //! Sassafras is a constant-time block production protocol that aims to ensure that
 //! there is exactly one block produced with constant time intervals rather multiple
@@ -43,8 +43,9 @@
 //! To anonymously publish the ticket to the chain a validator sends their tickets
 //! to a random validator who later puts it on-chain as a transaction.
 
-#![deny(warnings)]
-#![warn(unused_must_use, unsafe_code, unused_variables, unused_imports, missing_docs)]
+// TODO-SASS-P2
+//#![deny(warnings)]
+//#![warn(unused_must_use, unsafe_code, unused_variables, unused_imports, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use scale_codec::{Decode, Encode};
@@ -67,13 +68,10 @@ pub use sp_consensus_sassafras::{
 };
 
 // TODO-SASS-P2: tests and benches
-
-//#[cfg(test)]
-//mod mock;
-//
-//#[cfg(test)]
-//mod tests;
-//
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
 //#[cfg(feature = "runtime-benchmarks")]
 //mod benchmarking;
 
@@ -231,7 +229,7 @@ pub mod pallet {
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in
 	/// genesis.
 	#[pallet::storage]
-	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
+	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration, ValueQuery>;
 
 	/// Current session tickets.
 	#[pallet::storage]
@@ -251,16 +249,14 @@ pub mod pallet {
 		/// Genesis authorities.
 		pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 		/// Genesis epoch configuration.
-		pub epoch_config: Option<SassafrasEpochConfiguration>,
+		pub epoch_config: SassafrasEpochConfiguration,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
-			EpochConfig::<T>::put(
-				self.epoch_config.clone().expect("epoch_config must not be None"),
-			);
+			EpochConfig::<T>::put(self.epoch_config.clone());
 		}
 	}
 
@@ -622,6 +618,7 @@ impl<T: Config> Pallet<T> {
 			})
 			.next();
 
+		// ANDRE
 		// TODO-SASS-P2: maybe here we have to assert! the presence of pre_digest...
 		// Every valid sassafras block should come with a pre-digest
 

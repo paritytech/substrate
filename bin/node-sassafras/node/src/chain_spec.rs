@@ -141,10 +141,9 @@ fn testnet_genesis(
 			// Configure endowed accounts with initial balance of 1 << 60.
 			balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
 		},
-
 		sassafras: SassafrasConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone(), 0)).collect(),
-			epoch_config: Some(node_sassafras_runtime::SASSAFRAS_GENESIS_EPOCH_CONFIG),
+			epoch_config: node_sassafras_runtime::SASSAFRAS_GENESIS_EPOCH_CONFIG,
 		},
 		grandpa: GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),

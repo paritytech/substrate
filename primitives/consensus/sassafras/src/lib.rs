@@ -108,6 +108,15 @@ pub struct SassafrasEpochConfiguration {
 	// L: bound on aa number of tickets that can be gossiped
 }
 
+// Sensible defaults for Sassafras epoch configuration.
+impl Default for SassafrasEpochConfiguration {
+	fn default() -> Self {
+		SassafrasEpochConfiguration {
+            // TODO-SASS-P2
+        }
+	}
+}
+
 /// Ticket type.
 pub type Ticket = VRFOutput;
 
