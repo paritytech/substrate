@@ -1,3 +1,4 @@
+
 // This file is part of Substrate.
 
 // Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
@@ -61,16 +62,16 @@ impl<TBlockNumber, TAggregatedSignature>
 	///
 	/// Returns the full list of signatures along with the witness.
 	pub fn from_signed<TSignatureAggregator, TSignature, TAggregatableSignature>(
-		signed: SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>,
+		signed: SignedCommitment<TBlockNumber, TSignature>,
 		aggregator: TSignatureAggregator,
 	) -> (Self, Vec<Option<TSignature>>)
 	where
 		TSignatureAggregator:
-			FnOnce(&[Option<TSignature>], &TAggregatableSignature) -> TAggregatedSignature,
+			FnOnce(&[Option<TSignature>]) -> TAggregatedSignature,
 	{
-		let SignedCommitment { commitment, signatures, aggregatable_signature } = signed;
+		let SignedCommitment { commitment, signatures } = signed;
 		let signed_by = signatures.iter().map(|s| s.is_some()).collect();
-		let aggregated_signature = aggregator(&signatures, &aggregatable_signature);
+		let aggregated_signature = aggregator(&signatures);
 
 		(Self { commitment, signed_by, aggregated_signature }, signatures)
 	}
@@ -88,10 +89,9 @@ mod tests {
 	use crate::{crypto, known_payload_ids, Payload, KEY_TYPE};
 
 	#[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-	struct TestNOPAggregatableSignature;
-	type TestCommitment = Commitment<u128>;
+type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment =
-		SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
+		SignedCommitment<u128, crypto::Signature>;
 	type TestSignedCommitmentWitness =
 		SignedCommitmentWitness<u128, Vec<Option<crypto::Signature>>>;
 
