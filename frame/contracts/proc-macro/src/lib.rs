@@ -268,7 +268,7 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 		quote! {
 			if module == #module.as_bytes()
 				&& name == #name.as_bytes()
-				&& signature == #signature
+				&& signature == &#signature
 			{
 				return true;
 			}
