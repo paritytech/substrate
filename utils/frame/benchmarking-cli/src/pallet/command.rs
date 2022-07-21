@@ -239,7 +239,7 @@ impl PalletCmd {
 					let diff = highest - lowest;
 
 					// Create up to `STEPS` steps for that component between high and low.
-					let step_size = (diff as f32 / self.steps as f32).max(1.0);
+					let step_size = (diff as f32 / (self.steps - 1) as f32).max(1.0);
 
 					for s in 0..self.steps {
 						// This is the value we will be testing for component `name`
