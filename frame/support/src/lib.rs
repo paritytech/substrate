@@ -904,6 +904,19 @@ pub mod tests {
 	}
 
 	#[test]
+	fn storage_hashed_key_works() {
+		new_test_ext().execute_with(|| {
+			#[crate::storage_alias]
+			type Value = StorageValue<DummyPrefix, u32>;
+			#[crate::storage_alias]
+			type Value2 = StorageValue<DummyPrefix, u32>;
+
+			// Ensure we don't do something immensely stupid...
+			assert!(Value::hashed_key() != Value2::hashed_key());
+		});
+	}
+
+	#[test]
 	fn map_issue_3318() {
 		new_test_ext().execute_with(|| {
 			OptionLinkedMap::insert(1, 1);

@@ -43,9 +43,31 @@ pub trait StorageValue<T: FullCodec> {
 	/// Convert a query to an optional value into storage.
 	fn from_query_to_optional_value(v: Self::Query) -> Option<T>;
 
+	/// Re-generate the full key used in top storage.
+	fn storage_value_final_key_uncached() -> [u8; 32] {
+		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
+	}
+
 	/// Generate the full key used in top storage.
 	fn storage_value_final_key() -> [u8; 32] {
-		crate::storage::storage_prefix(Self::module_prefix(), Self::storage_prefix())
+		use lazy_static::lazy_static;
+		use sp_std::collections::btree_map::BTreeMap;
+		use spin::rwlock::RwLock;
+
+		lazy_static! {
+			static ref KEYS: RwLock<BTreeMap<(&'static [u8], &'static [u8]), [u8; 32]>> =
+				RwLock::new(Default::default());
+		}
+
+		let prefix = (Self::module_prefix(), Self::storage_prefix());
+		let mut keys = KEYS.write();
+		if let Some(key) = keys.get(&prefix) {
+			*key
+		} else {
+			let k = <Self as StorageValue<T>>::storage_value_final_key_uncached();
+			keys.insert(prefix, k.clone());
+			k
+		}
 	}
 }
 
