@@ -27,7 +27,7 @@ use sp_std::{
 };
 
 pub use schnorrkel::{
-	vrf::{VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
+	vrf::{VRFInOut, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH},
 	PublicKey, SignatureError,
 };
 
@@ -35,7 +35,7 @@ pub use schnorrkel::{
 pub const RANDOMNESS_LENGTH: usize = VRF_OUTPUT_LENGTH;
 
 /// VRF output type available for `std` environment, suitable for schnorrkel operations.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VRFOutput(pub schnorrkel::vrf::VRFOutput);
 
 impl Deref for VRFOutput {
