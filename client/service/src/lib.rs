@@ -369,7 +369,8 @@ where
 	match tokio::task::block_in_place(|| {
 		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
 	}) {
-		Ok((http, ws)) => Ok(Box::new((http, ws))),
+		Ok((http, ws)) =>
+			Ok(Box::new((waiting::HttpServer(Some(http)), waiting::WsServer(Some(ws))))),
 		Err(e) => Err(Error::Application(e)),
 	}
 }
