@@ -145,7 +145,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the transaction pool options
 	///
 	/// By default this is `TransactionPoolOptions::default()`.
-	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
+	fn transaction_pool(&self, _is_dev: bool) -> Result<TransactionPoolOptions> {
 		Ok(Default::default())
 	}
 
@@ -523,7 +523,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
 			tokio_handle,
-			transaction_pool: self.transaction_pool()?,
+			transaction_pool: self.transaction_pool(is_dev)?,
 			network: self.network_config(
 				&chain_spec,
 				is_dev,

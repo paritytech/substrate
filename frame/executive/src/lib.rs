@@ -251,7 +251,7 @@ where
 		#[cfg(feature = "background-signature-verification")]
 		if !signature_batching.verify() {
 			panic!("Signature verification failed.");
-		}àabàabàab"
+		}
 
 		// do some of the checks that would normally happen in `final_checks`, but definitely skip
 		// the state root check.
