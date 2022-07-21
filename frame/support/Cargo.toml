@@ -36,6 +36,8 @@ smallvec = "1.8.0"
 log = { version = "0.4.17", default-features = false }
 sp-core-hashing-proc-macro = { version = "5.0.0", path = "../../primitives/core/hashing/proc-macro" }
 k256 = { version = "0.10.4", default-features = false, features = ["ecdsa"] }
+lazy_static = { version = "1.4.0", default-features = false, optional = true }
+spin = { version = "0.9.4", default-features = false, optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.79"
@@ -48,6 +50,8 @@ parity-util-mem = { version = "0.11.0", default-features = false, features = ["p
 default = ["std"]
 std = [
 	"once_cell",
+	"lazy_static",
+	"spin/rwlock",
 	"serde",
 	"sp-io/std",
 	"codec/std",
@@ -63,7 +67,10 @@ std = [
 	"frame-support-procedural/std",
 	"log/std",
 ]
-runtime-benchmarks = []
+runtime-benchmarks = [
+	"lazy_static/spin_no_std",
+	"spin/rwlock",
+]
 try-runtime = []
 # By default some types have documentation, `no-metadata-docs` allows to reduce the documentation
 # in the metadata.
