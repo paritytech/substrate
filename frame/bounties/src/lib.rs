@@ -390,7 +390,7 @@ pub mod pallet {
 			Bounties::<T, I>::try_mutate_exists(bounty_id, |maybe_bounty| -> DispatchResult {
 				let mut bounty = maybe_bounty.as_mut().ok_or(Error::<T, I>::InvalidIndex)?;
 				match bounty.status {
-					BountyStatus::Proposed | BountyStatus::Approved | BountyStatus::Funded => {},
+					BountyStatus::Funded => {},
 					_ => return Err(Error::<T, I>::UnexpectedStatus.into()),
 				};
 
