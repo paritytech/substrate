@@ -22,6 +22,7 @@
 
 use crate::benchmarks;
 use codec::Encode;
+use frame_support::{pallet_prelude::*, storage_alias};
 use frame_system::Pallet as System;
 use sp_application_crypto::KeyTypeId;
 use sp_runtime::{
@@ -44,6 +45,35 @@ pub struct Pallet<T: Config>(System<T>);
 pub trait Config: frame_system::Config {}
 
 benchmarks! {
+	#[skip_meta]
+	storage_value_read {
+		let i in 0 .. 100_000;
+
+		#[storage_alias]
+		type Value = StorageValue<DummyPrefix, u32, ValueQuery>;
+		Value::set(123);
+		// Ensure its in the overlay.
+		Value::get();
+	}: {
+		(0..i).for_each(|_| {
+			Value::get();
+		});
+	}
+
+	#[skip_meta]
+	storage_value_write {
+		let i in 0 .. 100_000;
+
+		#[storage_alias]
+		type Value = StorageValue<DummyPrefix, u32, ValueQuery>;
+		// Ensure its in the overlay.
+		Value::set(123);
+	}: {
+		(0..i).for_each(|_| {
+			Value::set(123);
+		});
+	}
+
 	addition {
 		let i in 0 .. 1_000_000;
 		let mut start = 0;
