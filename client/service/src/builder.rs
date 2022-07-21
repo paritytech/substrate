@@ -37,17 +37,12 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{
-	config::{Role, SyncMode},
-	NetworkService,
-};
+use sc_network::{config::SyncMode, NetworkService};
 use sc_network_common::sync::warp::WarpSyncProvider;
-use sc_network_light::light_client_requests::{self, handler::LightClientRequestHandler};
+use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::{self, BlockRequestHandler},
-	state_request_handler::{self, StateRequestHandler},
-	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler},
-	ChainSync,
+	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
+	warp_request_handler::RequestHandler as WarpSyncRequestHandler, ChainSync,
 };
 use sc_rpc::{
 	author::AuthorApiServer,
@@ -731,11 +726,8 @@ where
 		}
 	}
 
-	let transaction_pool_adapter = Arc::new(TransactionPoolAdapter {
-		imports_external_transactions: !matches!(config.role, Role::Light),
-		pool: transaction_pool,
-		client: client.clone(),
-	});
+	let transaction_pool_adapter =
+		Arc::new(TransactionPoolAdapter { pool: transaction_pool, client: client.clone() });
 
 	let protocol_id = config.protocol_id();
 
@@ -746,63 +738,42 @@ where
 	};
 
 	let block_request_protocol_config = {
-		if matches!(config.role, Role::Light) {
-			// Allow outgoing requests but deny incoming requests.
-			block_request_handler::generate_protocol_config(&protocol_id)
-		} else {
-			// Allow both outgoing and incoming requests.
-			let (handler, protocol_config) = BlockRequestHandler::new(
-				&protocol_id,
-				client.clone(),
-				config.network.default_peers_set.in_peers as usize +
-					config.network.default_peers_set.out_peers as usize,
-			);
-			spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
-			protocol_config
-		}
+		// Allow both outgoing and incoming requests.
+		let (handler, protocol_config) = BlockRequestHandler::new(
+			&protocol_id,
+			client.clone(),
+			config.network.default_peers_set.in_peers as usize +
+				config.network.default_peers_set.out_peers as usize,
+		);
+		spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
+		protocol_config
 	};
 
 	let state_request_protocol_config = {
-		if matches!(config.role, Role::Light) {
-			// Allow outgoing requests but deny incoming requests.
-			state_request_handler::generate_protocol_config(&protocol_id)
-		} else {
-			// Allow both outgoing and incoming requests.
-			let (handler, protocol_config) = StateRequestHandler::new(
-				&protocol_id,
-				client.clone(),
-				config.network.default_peers_set_num_full as usize,
-			);
-			spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
-			protocol_config
-		}
+		// Allow both outgoing and incoming requests.
+		let (handler, protocol_config) = StateRequestHandler::new(
+			&protocol_id,
+			client.clone(),
+			config.network.default_peers_set_num_full as usize,
+		);
+		spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
+		protocol_config
 	};
 
 	let warp_sync_params = warp_sync.map(|provider| {
-		let protocol_config = if matches!(config.role, Role::Light) {
-			// Allow outgoing requests but deny incoming requests.
-			warp_request_handler::generate_request_response_config(protocol_id.clone())
-		} else {
-			// Allow both outgoing and incoming requests.
-			let (handler, protocol_config) =
-				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
-			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
-			protocol_config
-		};
+		// Allow both outgoing and incoming requests.
+		let (handler, protocol_config) =
+			WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
+		spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
 		(provider, protocol_config)
 	});
 
 	let light_client_request_protocol_config = {
-		if matches!(config.role, Role::Light) {
-			// Allow outgoing requests but deny incoming requests.
-			light_client_requests::generate_protocol_config(&protocol_id)
-		} else {
-			// Allow both outgoing and incoming requests.
-			let (handler, protocol_config) =
-				LightClientRequestHandler::new(&protocol_id, client.clone());
-			spawn_handle.spawn("light-client-request-handler", Some("networking"), handler.run());
-			protocol_config
-		}
+		// Allow both outgoing and incoming requests.
+		let (handler, protocol_config) =
+			LightClientRequestHandler::new(&protocol_id, client.clone());
+		spawn_handle.spawn("light-client-request-handler", Some("networking"), handler.run());
+		protocol_config
 	};
 
 	let max_parallel_downloads = config.network.max_parallel_downloads;
