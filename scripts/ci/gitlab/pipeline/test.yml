@@ -325,7 +325,7 @@ test-frame-executive-features-compile-to-wasm:
     RUST_BACKTRACE: 1
   script:
     - cd ./frame/executive
-    - cargo test --no-default-features --features background-signature-verification
+    - cargo test --features background-signature-verification
 
 test-linux-stable-int:
   stage:                           test

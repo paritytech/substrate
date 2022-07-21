@@ -334,6 +334,15 @@ impl<Call: Codec + Sync + Send, Context, Extra> Checkable<Context> for TestXt<Ca
 	}
 }
 
+impl<Call: Codec + Sync + Send, Context, Extra> crate::traits::BackgroundCheckable<Context> for TestXt<Call, Extra> {
+	fn background_check(
+		self,
+		c: &Context,
+	) -> Result<<Self as Checkable<Context>>::Checked, TransactionValidityError> {
+		Ok(self)
+	}
+}
+
 impl<Call: Codec + Sync + Send, Extra> traits::Extrinsic for TestXt<Call, Extra> {
 	type Call = Call;
 	type SignaturePayload = (u64, Extra);
