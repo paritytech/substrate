@@ -532,7 +532,7 @@ pub mod pallet {
 		/// Emits `NextCollectionIdIncremented` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(1000)]
+		#[pallet::weight(T::WeightInfo::try_increment_id())]
 		pub fn try_increment_id(origin: OriginFor<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			ensure!(
