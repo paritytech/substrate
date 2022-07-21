@@ -34,6 +34,7 @@ node-testing = { version = "3.0.0-dev", path = "../testing" }
 pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
 pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
 pallet-im-online = { version = "4.0.0-dev", path = "../../../frame/im-online" }
+pallet-sudo = { version = "4.0.0-dev", path = "../../../frame/sudo" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
