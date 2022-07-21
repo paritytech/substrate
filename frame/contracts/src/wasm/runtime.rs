@@ -984,7 +984,7 @@ pub mod env {
 	#[host("seal0")]
 	fn gas(ctx: Runtime<E: Ext>, amount: u32) {
 		ctx.charge_gas(RuntimeCosts::MeteringBlock(amount))?;
-		Ok(sp_sandbox::ReturnValue::Unit)
+		Ok(())
 	}
 
 	#[host("seal1")]

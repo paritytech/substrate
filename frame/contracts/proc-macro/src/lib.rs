@@ -253,12 +253,12 @@ fn expand_env(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	// token stream    see how it's done in pallet proc macro, e.g. in constants
 	// 2. impls() for the set of host functions: #impls
 	let can_satisfy = expand_can_satisfy(def);
-	// expand_impls(def);
+	let impls = expand_impls(def);
 	quote! {
-			pub struct Env;
-			#can_satisfy
+		pub struct Env;
+		#can_satisfy
+		#impls
 	}
-	// expand_impls(def);
 }
 
 // Adds check to can_satisfy for a new host fn
@@ -297,8 +297,96 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 		}
 	}
 }
-//pub fn expand_impls
-// TDB
+
+fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
+	let impls =  def.host_funcs.iter().map(|f| {
+	let params = &f.item.sig.inputs.iter().skip(1).map(|arg| {
+	       match arg {
+		syn::FnArg::Typed(pt) => {
+		    if let syn::Pat::Ident(ident) = &*pt.pat {
+			let p_type = &pt.ty;
+			let p_name = ident.ident.clone();
+			quote! {
+			    let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
+				    args.next()
+				    .and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
+				    // TBD: update this msg
+				    .expect(
+						    "precondition: all imports should be checked against the signatures of corresponding
+						    functions defined by `#[define_env]` proc macro by the user of the macro;
+						    signatures of these functions defined by `$params`;
+						    calls always made with arguments types of which are defined by the corresponding imports;
+						    thus types of arguments should be equal to type list in `$params` and
+						    length of argument list and $params should be equal;
+						    thus this can never be `None`;
+						    qed;
+						    "
+				    );
+			}
+		    } else { quote! { } }
+		},
+		_ => quote! { }}
+	});
+
+	let outline = match &f.item.sig.output {
+	   syn::ReturnType::Default => quote! {
+					      body().map_err(|reason| {
+							      ctx.set_trap_reason(reason);
+							      sp_sandbox::HostError
+							  })?;
+					      return Ok(sp_sandbox::ReturnValue::Unit);
+					   },
+	    syn::ReturnType::Type(_,_) => quote! {
+					      let r = body().map_err(|reason| {
+					                     ctx.set_trap_reason(reason);
+			  				     sp_sandbox::HostError
+							 })?;
+							 return Ok(sp_sandbox::ReturnValue::Value({
+							     use crate::wasm::env_def::ConvertibleToWasm;
+							     r.to_typed_value()
+							 }));
+	    	    	    	    	    },
+	};
+
+	let p = params.clone();
+	let (module, name, ident, body) = (&f.module, &f.name, &f.item.sig.ident, &f.item.block);
+	quote! {
+	      f(#module.as_bytes(), #name.as_bytes(), {
+                fn #ident<E: Ext>(
+                    ctx: &mut crate::wasm::Runtime<E>,
+                    args: &[sp_sandbox::Value],
+                ) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
+                where
+                    <E::T as frame_system::Config>::AccountId: sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash>
+                        + AsRef<[u8]>,
+                {
+                    #[allow(unused)]
+                    let mut args = args.iter();
+		      let body = crate::wasm::env_def::macros::constrain_closure::<(), _>(|| {
+			  #( #p )*
+			  #body
+		      });
+		    #outline
+		}
+		#ident::<E>
+	      });
+	}
+    });
+	let packed_impls = quote! {
+	#( #impls )*
+	};
+	quote! {
+		impl<E: Ext> crate::wasm::env_def::FunctionImplProvider<E> for Env
+		where
+			<E::T as frame_system::Config>::AccountId:
+			sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
+		{
+			fn impls<F: FnMut(&[u8], &[u8], crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
+				#packed_impls
+			}
+		}
+	}
+}
 
 #[proc_macro_attribute]
 pub fn define_env(
