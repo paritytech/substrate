@@ -328,24 +328,23 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 		_ => quote! { }}
 	});
 
-	let outline = match &f.item.sig.output {
-	   syn::ReturnType::Default => quote! {
+	let (outline, ret_ty) = match &f.item.sig.output {
+	   syn::ReturnType::Default => (quote! {
 					      body().map_err(|reason| {
 							      ctx.set_trap_reason(reason);
 							      sp_sandbox::HostError
 							  })?;
 					      return Ok(sp_sandbox::ReturnValue::Unit);
-					   },
-	    syn::ReturnType::Type(_,_) => quote! {
+	   }, quote! {()}),
+	    syn::ReturnType::Type(_,ty) => (quote! {
 					      let r = body().map_err(|reason| {
 					                     ctx.set_trap_reason(reason);
 			  				     sp_sandbox::HostError
 							 })?;
 							 return Ok(sp_sandbox::ReturnValue::Value({
-							     use crate::wasm::env_def::ConvertibleToWasm;
 							     r.to_typed_value()
 							 }));
-	    	    	    	    	    },
+	    }, quote! {#ty}),
 	};
 
 	let p = params.clone();
@@ -362,7 +361,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
                 {
                     #[allow(unused)]
                     let mut args = args.iter();
-		      let body = crate::wasm::env_def::macros::constrain_closure::<(), _>(|| {
+		      let body = crate::wasm::env_def::macros::constrain_closure::<#ret_ty, _>(|| {
 			  #( #p )*
 			  #body
 		      });
