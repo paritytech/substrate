@@ -2107,13 +2107,7 @@ pub mod env {
 		if !<E::T as Config>::ChainExtension::enabled() {
 			return Err(Error::<E::T>::NoChainExtension.into())
 		}
-		let env = Environment::new(
-			ctx: Runtime<E: Ext>,
-			input_ptr,
-			input_len,
-			output_ptr,
-			output_len_ptr,
-		);
+		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
 		match <E::T as Config>::ChainExtension::call(func_id, env)? {
 			RetVal::Converging(val) => Ok(val),
 			RetVal::Diverging { flags, data } =>

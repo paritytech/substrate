@@ -320,70 +320,80 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let impls =  def.host_funcs.iter().map(|f| {
 	let params = &f.item.sig.inputs.iter().skip(1).map(|arg| {
-	       match arg {
-		syn::FnArg::Typed(pt) => {
-		    if let syn::Pat::Ident(ident) = &*pt.pat {
-			let p_type = &pt.ty;
-			let p_name = ident.ident.clone();
-			quote! {
-			    let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
-				    args.next()
-				    .and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
-				    .expect(
-						    "precondition: all imports should be checked against the signatures of corresponding
-						    functions defined by `#[define_env]` proc macro by the user of the macro;
-						    thus this can never be `None`;
-						    qed;"
-				    );
-			}
-		    } else { quote! { } }
-		},
-		_ => quote! { }}
+		match arg {
+			syn::FnArg::Typed(pt) => {
+				if let syn::Pat::Ident(ident) = &*pt.pat {
+					let p_type = &pt.ty;
+					let p_name = ident.ident.clone();
+					quote! {
+						let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
+						args.next()
+						.and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
+						.expect(
+							"precondition: all imports should be checked against the signatures of corresponding
+							functions defined by `#[define_env]` proc macro by the user of the macro;
+							thus this can never be `None`;
+							qed;"
+						);
+					}
+				} else { quote! { } }
+			},
+			_ => quote! { },
+		}
 	});
 
 	let (outline, ret_ty) = match &f.item.sig.output {
-	   syn::ReturnType::Default => (quote! {
-					      body().map_err(|reason| {
-							      ctx.set_trap_reason(reason);
-							      sp_sandbox::HostError
-							  })?;
-					      return Ok(sp_sandbox::ReturnValue::Unit);
-	   }, quote! {()}),
-	    syn::ReturnType::Type(_,ty) => (quote! {
-					      let r = body().map_err(|reason| {
-					                     ctx.set_trap_reason(reason);
-			  				     sp_sandbox::HostError
-							 })?;
-							 return Ok(sp_sandbox::ReturnValue::Value({
-							     r.to_typed_value()
-							 }));
-	    }, quote! {#ty}),
+		syn::ReturnType::Default => (
+			quote! {
+				body().map_err(|reason| {
+					ctx.set_trap_reason(reason);
+					sp_sandbox::HostError
+				})?;
+				return Ok(sp_sandbox::ReturnValue::Unit);
+			},
+			quote! {()}),
+		syn::ReturnType::Type(_,ty) => (
+			quote! {
+				let r = body().map_err(|reason| {
+						ctx.set_trap_reason(reason);
+						sp_sandbox::HostError
+					})?;
+					return Ok(sp_sandbox::ReturnValue::Value({
+						r.to_typed_value()
+					}));
+			},
+			quote! {#ty}),
 	};
 
-	let p = params.clone();
+	let params = params.clone();
 	let (module, name, ident, body) = (&f.module, &f.name, &f.item.sig.ident, &f.item.block);
+	let unstable_feat = match module.as_str() {
+		"__unstable__" => quote! { #[cfg(feature = "unstable-interface")] },
+		_ => quote! { },
+	};
 	quote! {
-	      f(#module.as_bytes(), #name.as_bytes(), {
-                fn #ident<E: Ext>(
-                    ctx: &mut crate::wasm::Runtime<E>,
-                    args: &[sp_sandbox::Value],
-                ) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
-                where
-                    <E::T as frame_system::Config>::AccountId: sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash>
-                        + AsRef<[u8]>,
-                {
-                    #[allow(unused)]
-                    let mut args = args.iter();
-		      let body = crate::wasm::env_def::macros::constrain_closure::<#ret_ty, _>(|| {
-			  #( #p )*
-			  #body
-		      });
-		    #outline
-		}
-		#ident::<E>
-	      });
+		#unstable_feat
+		f(#module.as_bytes(), #name.as_bytes(), {
+			fn #ident<E: Ext>(
+				ctx: &mut crate::wasm::Runtime<E>,
+				args: &[sp_sandbox::Value],
+			) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
+			where
+				<E::T as frame_system::Config>::AccountId: sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash>
+				+ AsRef<[u8]>,
+			{
+				#[allow(unused)]
+				let mut args = args.iter();
+				let body = crate::wasm::env_def::macros::constrain_closure::<#ret_ty, _>(|| {
+					#( #params )*
+					#body
+				});
+				#outline
+			}
+			#ident::<E>
+		});
 	}
-    });
+	});
 	let packed_impls = quote! {
 	#( #impls )*
 	};
