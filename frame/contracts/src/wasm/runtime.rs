@@ -103,6 +103,7 @@ pub enum ReturnCode {
 impl ConvertibleToWasm for ReturnCode {
 	const VALUE_TYPE: ValueType = ValueType::I32;
 	type NativeType = Self;
+	
 	fn to_typed_value(self) -> sp_sandbox::Value {
 		sp_sandbox::Value::I32(self as i32)
 	}
