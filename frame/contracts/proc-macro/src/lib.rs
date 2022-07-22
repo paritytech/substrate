@@ -149,13 +149,13 @@ fn format_default(field: &Ident) -> TokenStream {
 	}
 }
 
-/// Unparsed envirnoment definition.
+/// Unparsed environment definition.
 struct EnvDefInput {
 	item: syn::ItemMod,
 	ident: syn::Ident,
 }
 
-/// Parsed envirnoment definition.
+/// Parsed environment definition.
 struct EnvDef {
 	ident: syn::Ident,
 	host_funcs: Vec<HostFn>,
@@ -248,9 +248,7 @@ impl EnvDef {
 		let items = &item
 			.content
 			.as_ref()
-			.ok_or(
-				err("Invalid environment definition, expected `mod` to be inlined.".to_string()),
-			)?
+			.ok_or(err("Invalid environment definition, expected `mod` to be inlined."))?
 			.1;
 
 		let ident = input.ident;
@@ -299,8 +297,8 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let satisfy_checks = quote! {
 		#( #checks )*
 	};
-
 	let env = &def.ident;
+
 	quote! {
 		impl crate::wasm::env_def::ImportSatisfyCheck for #env {
 			fn can_satisfy(
