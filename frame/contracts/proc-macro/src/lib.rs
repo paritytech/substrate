@@ -16,6 +16,10 @@
 // limitations under the License.
 
 //! Proc macros used in the contracts module.
+//! The #[define_env] attribute macro hides boilerplate of defining external environment
+//! for a wasm module.
+//!
+//! Most likely you should use the `define_env` macro.
 
 #![no_std]
 
@@ -144,15 +148,6 @@ fn format_default(field: &Ident) -> TokenStream {
 		&self.#field
 	}
 }
-
-// define_env! macro re-write
-// first we parse env mod
-// then we expand, i.e.
-// should generate code for:
-// 1. can_satisfy checks: #can_satisfy
-//    expand def, so just add parts related to the new func to it, and return updated def as a token
-// stream    see how it's done in pallet proc macro, e.g. in constants
-// 2. impls() for the set of host functions: #impls
 
 /// Parsed envirnoment definition.
 struct EnvDef {
