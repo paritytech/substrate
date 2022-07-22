@@ -167,15 +167,15 @@ where
 	where
 		F: FnMut((&K, V)) -> T,
 	{
-		self.0
-			.into_iter()
-			.map(|(k, v)| {
-				let t = f((&k, v));
-				(k, t)
-			})
-			.try_collect()
-			// SAFETY: No entries were added or removed.
-			.unwrap()
+		BoundedBTreeMap::<K, T, S>::unchecked_from(
+			self.0
+				.into_iter()
+				.map(|(k, v)| {
+					let t = f((&k, v));
+					(k, t)
+				})
+				.collect(),
+		)
 	}
 
 	/// Consume the map, applying `f` to each of it's values as long as it returns successfully. If
@@ -185,14 +185,12 @@ where
 	where
 		F: FnMut((&K, V)) -> Result<T, E>,
 	{
-		Ok(self
-			.0
-			.into_iter()
-			.map(|(k, v)| (f((&k, v)).map(|t| (k, t))))
-			.collect::<Result<BTreeMap<_, _>, _>>()?
-			.try_into()
-			// SAFETY: No entries were added or removed.
-			.unwrap())
+		Ok(BoundedBTreeMap::<K, T, S>::unchecked_from(
+			self.0
+				.into_iter()
+				.map(|(k, v)| (f((&k, v)).map(|t| (k, t))))
+				.collect::<Result<BTreeMap<_, _>, _>>()?,
+		))
 	}
 }
 
