@@ -156,19 +156,20 @@ fn format_default(field: &Ident) -> TokenStream {
 // stream    see how it's done in pallet proc macro, e.g. in constants
 // 2. impls() for the set of host functions: #impls
 
-/// parsed definition of env
-/// (inspired by pallet attribute macro, see /frame/support/procedural/src/pallet/)
+/// Parsed envirnoment definition.
 struct EnvDef {
-	pub item: syn::ItemMod,      // the whole env module
-	pub host_funcs: Vec<HostFn>, // set of host fuctions
+	pub item: syn::ItemMod,
+	pub host_funcs: Vec<HostFn>,
 }
 
+/// Parsed host function definition.
 struct HostFn {
 	item: syn::ItemFn,
 	module: String,
 	name: String,
 }
 
+/// Helper trait to convert a host function definition into its wasm signature.
 trait ToWasmSig {
 	fn to_wasm_sig(&self) -> TokenStream;
 }
@@ -179,7 +180,6 @@ impl ToWasmSig for HostFn {
 			syn::FnArg::Typed(pt) => Some(&pt.ty),
 			_ => None,
 		});
-
 		let returns = match &self.item.sig.output {
 			syn::ReturnType::Type(_, bt) => quote! { vec![ #bt::VALUE_TYPE ] },
 			_ => quote! { vec![] },
@@ -215,7 +215,9 @@ impl HostFn {
 
 		let name = item.sig.ident.to_string();
 		let mut module = "seal0".to_string();
-		let attrs = &item.attrs;
+		let attrs: Vec<&syn::Attribute> =
+			item.attrs.iter().filter(|m| !m.path.is_ident("doc")).collect();
+
 		match attrs.len() {
 			0 => (),
 			1 => {
@@ -246,7 +248,7 @@ impl EnvDef {
 			.content
 			.as_mut()
 			.ok_or_else(|| {
-				let msg = "Invalid environment definition, expected mod to be inlined.";
+				let msg = "Invalid environment definition, expected `mod` to be inlined.";
 				syn::Error::new(item_span, msg)
 			})?
 			.1;
@@ -260,12 +262,12 @@ impl EnvDef {
 	}
 }
 
+/// Expands environment definiton.
+/// Should generate source code for:
+///  - wasm import satisfy checks (see `expand_can_satisfy()`);
+///  - implementations of the host functions to be added to the wasm runtime environment (see
+///    `expand_impls()`).
 fn expand_env(def: &mut EnvDef) -> proc_macro2::TokenStream {
-	// should generate code for:
-	// 1. can_satisfy checks: #can_satisfy
-	//    expand def, so just add parts related to the new func to it, and return updated def as a
-	// token stream    see how it's done in pallet proc macro, e.g. in constants
-	// 2. impls() for the set of host functions: #impls
 	let can_satisfy = expand_can_satisfy(def);
 	let impls = expand_impls(def);
 	quote! {
@@ -275,7 +277,9 @@ fn expand_env(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	}
 }
 
-// Adds check to can_satisfy for a new host fn
+/// Generates `can_satisfy()` method for every host function, to be used to check
+/// these functions versus expected module, name and signatures when imporing them from a wasm
+/// module.
 fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let checks = def.host_funcs.iter().map(|f| {
 		let (module, name, signature) = (&f.module, &f.name, &f.to_wasm_sig());
@@ -288,7 +292,6 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 			}
 		}
 	});
-
 	let satisfy_checks = quote! {
 		#( #checks )*
 	};
@@ -312,6 +315,8 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	}
 }
 
+/// Generates implementation for every host function, to register it in the contract execution
+/// environment.
 fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let impls =  def.host_funcs.iter().map(|f| {
 	let params = &f.item.sig.inputs.iter().skip(1).map(|arg| {
@@ -324,17 +329,11 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 			    let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
 				    args.next()
 				    .and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
-				    // TBD: update this msg
 				    .expect(
 						    "precondition: all imports should be checked against the signatures of corresponding
 						    functions defined by `#[define_env]` proc macro by the user of the macro;
-						    signatures of these functions defined by `$params`;
-						    calls always made with arguments types of which are defined by the corresponding imports;
-						    thus types of arguments should be equal to type list in `$params` and
-						    length of argument list and $params should be equal;
 						    thus this can never be `None`;
-						    qed;
-						    "
+						    qed;"
 				    );
 			}
 		    } else { quote! { } }
