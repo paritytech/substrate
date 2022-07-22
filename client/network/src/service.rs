@@ -2020,12 +2020,16 @@ where
 
 						if this.boot_node_ids.contains(&peer_id) {
 							if let DialError::WrongPeerId { obtained, endpoint } = &error {
-								error!(
-									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}` with `{}`:`{:?}`.",
-									peer_id,
-									obtained,
-									endpoint,
-								);
+								if let ConnectedPoint::Dialer { address, role_override: _ } =
+									endpoint
+								{
+									error!(
+										"💔 The bootnode you want to connect to at `{}` provided a different peer ID `{}` than the one you expect `{}`.",
+										address,
+										obtained,
+										peer_id,
+									);
+								}
 							}
 						}
 					}
