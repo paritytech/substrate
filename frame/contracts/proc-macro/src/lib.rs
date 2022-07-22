@@ -22,15 +22,13 @@
 extern crate alloc;
 
 use alloc::{
-	boxed::Box,
 	format,
 	string::{String, ToString},
-	vec,
 	vec::Vec,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Ident, Item, ItemFn};
+use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Ident};
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
@@ -158,7 +156,6 @@ fn format_default(field: &Ident) -> TokenStream {
 
 /// Parsed envirnoment definition.
 struct EnvDef {
-	pub item: syn::ItemMod,
 	pub host_funcs: Vec<HostFn>,
 }
 
@@ -201,14 +198,14 @@ impl ToTokens for HostFn {
 }
 
 impl HostFn {
-	pub fn try_from(mut item: syn::Item) -> syn::Result<Self> {
+	pub fn try_from(item: syn::Item) -> syn::Result<Self> {
 		let span = item.span();
 		let err = || {
 			let msg = "Invalid host function definition, only #[v(<u8>)] or #[unstable] attribute is allowed.";
 			syn::Error::new(span, msg)
 		};
 
-		let mut item = match item {
+		let item = match item {
 			syn::Item::Fn(i_fn) => Ok(i_fn),
 			_ => Err(err()),
 		}?;
@@ -258,7 +255,7 @@ impl EnvDef {
 			host_funcs.push(HostFn::try_from(i.clone())?);
 		}
 
-		Ok(Self { item, host_funcs })
+		Ok(Self { host_funcs })
 	}
 }
 
