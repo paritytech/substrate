@@ -25,7 +25,6 @@ use handlebars::Handlebars;
 use log::info;
 use serde::Serialize;
 use std::{env, fs, path::PathBuf};
-use sp_state_machine::ExecutionStrategy;
 
 use crate::{overhead::{bench::BenchmarkType, cmd::OverheadParams}, OverheadCmd, shared::{Stats, UnderscoreHelper}};
 
@@ -60,7 +59,7 @@ pub(crate) struct TemplateData {
 	/// Contents of the header file provided in the params of the executed command
 	header: String,
 	/// The Execution Strategy used
-	execution_strategy: ExecutionStrategy,
+	execution_strategy: String,
 }
 
 impl TemplateData {
@@ -95,7 +94,7 @@ impl TemplateData {
 			stats: stats.clone(),
 			weight,
 			header: header_text.clone(),
-
+			execution_strategy: cmd.import_params.wasm_method.to_string()
 		})
 	}
 

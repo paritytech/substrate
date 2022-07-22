@@ -49,6 +49,10 @@ pub struct WeightParams {
 	/// Is applied after `weight_mul`.
 	#[clap(long = "add", default_value = "0")]
 	pub weight_add: u64,
+
+	/// The block weight key
+	#[clap(long = "key", default_value = "26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96")]
+	pub block_weight_key: String,
 }
 
 /// Calculates the final weight by multiplying the selected metric with
