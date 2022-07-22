@@ -33,7 +33,7 @@
 		(call $seal_input (i32.const 4) (i32.const 0))
 
 		(call $seal_call_chain_extension
-			(i32.load (i32.const 4))	;; func_id
+			(i32.load (i32.const 4))	;; id
 			(i32.const 0)				;; input_ptr
 			(i32.const 0)				;; input_len
 			(i32.const 0xffffffff) 		;; u32 max sentinel value: do not copy output
@@ -42,7 +42,7 @@
 		drop
 
 		(call $seal_call_chain_extension
-			(i32.load (i32.const 8))	;; func_id
+			(i32.load (i32.const 8))	;; _id
 			(i32.const 0)				;; input_ptr
 			(i32.const 0)				;; input_len
 			(i32.const 0xffffffff) 		;; u32 max sentinel value: do not copy output

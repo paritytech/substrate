@@ -108,8 +108,10 @@ pub trait ChainExtension<C: Config> {
 	/// imported wasm function.
 	///
 	/// # Parameters
-	/// - `func_id`: The first argument to `seal_call_chain_extension`. Usually used to determine
-	///   which function to realize.
+	/// - `id`: The first argument to `seal_call_chain_extension`. It determines which function
+	/// is being called. The chain extension id is **not** stripped. This makes it
+	/// `RegisteredChainExtension::ID << 16 | func_id`. It routes through verbatim whatever the
+	/// contract passed as `id` as long as the higher bits represent a valid chain extension.
 	/// - `env`: Access to the remaining arguments and the execution environment.
 	///
 	/// # Return
@@ -117,7 +119,7 @@ pub trait ChainExtension<C: Config> {
 	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E>(&mut self, func_id: u32, env: Environment<E, InitState>) -> Result<RetVal>
+	fn call<E>(&mut self, id: u32, env: Environment<E, InitState>) -> Result<RetVal>
 	where
 		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>;
@@ -138,7 +140,7 @@ pub trait ChainExtension<C: Config> {
 ///
 /// An extension that implements this trait can be put in a tuple in order to have multiple
 /// extensions available. The tuple implementation routes requests based on the first two
-/// most significant bytes of the `func_id` passed to `call`.
+/// most significant bytes of the `id` passed to `call`.
 ///
 /// If this extensions is to be used by multiple runtimes consider
 /// [registering it](https://github.com/paritytech/chainextension-registry) to ensure that there
@@ -156,15 +158,15 @@ pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
 #[impl_trait_for_tuples::impl_for_tuples(10)]
 #[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
 impl<C: Config> ChainExtension<C> for Tuple {
-	fn call<E>(&mut self, func_id: u32, mut env: Environment<E, InitState>) -> Result<RetVal>
+	fn call<E>(&mut self, id: u32, mut env: Environment<E, InitState>) -> Result<RetVal>
 	where
 		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		for_tuples!(
 			#(
-				if (Tuple::ID == (func_id >> 16) as u16) && Tuple::enabled() {
-					return Tuple.call(func_id, env);
+				if (Tuple::ID == (id >> 16) as u16) && Tuple::enabled() {
+					return Tuple.call(id, env);
 				}
 			)*
 		);

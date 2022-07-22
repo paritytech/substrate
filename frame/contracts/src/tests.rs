@@ -150,18 +150,18 @@ impl Default for TestExtension {
 }
 
 impl ChainExtension<Test> for TestExtension {
-	fn call<E>(&mut self, func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	fn call<E>(&mut self, id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
 	where
 		E: Ext<T = Test>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
-		match func_id & 0x00FF {
+		match id & 0x00FF {
 			0 => {
 				let mut env = env.buf_in_buf_out();
 				let input = env.read(8)?;
 				env.write(&input, false, None)?;
 				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
-				Ok(RetVal::Converging(func_id))
+				Ok(RetVal::Converging(id))
 			},
 			1 => {
 				let env = env.only_in();
@@ -169,17 +169,17 @@ impl ChainExtension<Test> for TestExtension {
 					e.borrow_mut().last_seen_inputs =
 						(env.val0(), env.val1(), env.val2(), env.val3())
 				});
-				Ok(RetVal::Converging(func_id))
+				Ok(RetVal::Converging(id))
 			},
 			2 => {
 				let mut env = env.buf_in_buf_out();
 				let weight = env.read(5)?[4].into();
 				env.charge_weight(weight)?;
-				Ok(RetVal::Converging(func_id))
+				Ok(RetVal::Converging(id))
 			},
 			3 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
 			_ => {
-				panic!("Passed unknown func_id to test chain extension: {}", func_id);
+				panic!("Passed unknown id to test chain extension: {}", id);
 			},
 		}
 	}
@@ -194,7 +194,7 @@ impl RegisteredChainExtension<Test> for TestExtension {
 }
 
 impl ChainExtension<Test> for RevertingExtension {
-	fn call<E>(&mut self, _func_id: u32, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	fn call<E>(&mut self, _id: u32, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
 	where
 		E: Ext<T = Test>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
@@ -212,7 +212,7 @@ impl RegisteredChainExtension<Test> for RevertingExtension {
 }
 
 impl ChainExtension<Test> for DisabledExtension {
-	fn call<E>(&mut self, _func_id: u32, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	fn call<E>(&mut self, _id: u32, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
 	where
 		E: Ext<T = Test>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
@@ -230,12 +230,12 @@ impl RegisteredChainExtension<Test> for DisabledExtension {
 }
 
 impl ChainExtension<Test> for TempStorageExtension {
-	fn call<E>(&mut self, func_id: u32, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	fn call<E>(&mut self, id: u32, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
 	where
 		E: Ext<T = Test>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
-		match func_id & 0x00FF {
+		match id & 0x00FF {
 			0 => self.storage = 42,
 			1 => assert_eq!(self.storage, 42, "Storage is preserved inside the same call."),
 			2 => {
@@ -244,7 +244,7 @@ impl ChainExtension<Test> for TempStorageExtension {
 			},
 			3 => assert_eq!(self.storage, 99, "Storage is preserved inside the same call."),
 			_ => {
-				panic!("Passed unknown func_id to test chain extension: {}", func_id);
+				panic!("Passed unknown id to test chain extension: {}", id);
 			},
 		}
 		Ok(RetVal::Converging(0))

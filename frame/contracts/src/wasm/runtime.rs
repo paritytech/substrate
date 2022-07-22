@@ -103,7 +103,7 @@ pub enum ReturnCode {
 impl ConvertibleToWasm for ReturnCode {
 	const VALUE_TYPE: ValueType = ValueType::I32;
 	type NativeType = Self;
-	
+
 	fn to_typed_value(self) -> sp_sandbox::Value {
 		sp_sandbox::Value::I32(self as i32)
 	}
@@ -2014,7 +2014,7 @@ define_env!(Env, <E: Ext>,
 	// module error.
 	[seal0] seal_call_chain_extension(
 		ctx,
-		func_id: u32,
+		id: u32,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
@@ -2029,7 +2029,7 @@ define_env!(Env, <E: Ext>,
 			It is always reset to `Some` afterwards. qed"
 		);
 		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
-		let ret = match chain_extension.call(func_id, env)? {
+		let ret = match chain_extension.call(id, env)? {
 			RetVal::Converging(val) => Ok(val),
 			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
 				flags: flags.bits(),
