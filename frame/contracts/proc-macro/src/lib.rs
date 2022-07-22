@@ -149,9 +149,16 @@ fn format_default(field: &Ident) -> TokenStream {
 	}
 }
 
+/// Unparsed envirnoment definition.
+struct EnvDefInput {
+	item: syn::ItemMod,
+	ident: syn::Ident,
+}
+
 /// Parsed envirnoment definition.
 struct EnvDef {
-	pub host_funcs: Vec<HostFn>,
+	ident: syn::Ident,
+	host_funcs: Vec<HostFn>,
 }
 
 /// Parsed host function definition.
@@ -234,23 +241,26 @@ impl HostFn {
 }
 
 impl EnvDef {
-	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
-		let item_span = item.span();
-		let items = &mut item
+	pub fn try_from(input: EnvDefInput) -> syn::Result<Self> {
+		let item = &input.item;
+		let span = item.span();
+		let err = |msg| syn::Error::new(span.clone(), msg);
+		let items = &item
 			.content
-			.as_mut()
-			.ok_or_else(|| {
-				let msg = "Invalid environment definition, expected `mod` to be inlined.";
-				syn::Error::new(item_span, msg)
-			})?
+			.as_ref()
+			.ok_or(
+				err("Invalid environment definition, expected `mod` to be inlined.".to_string()),
+			)?
 			.1;
+
+		let ident = input.ident;
 		let mut host_funcs = Vec::<HostFn>::default();
 
 		for i in items.iter() {
 			host_funcs.push(HostFn::try_from(i.clone())?);
 		}
 
-		Ok(Self { host_funcs })
+		Ok(Self { ident, host_funcs })
 	}
 }
 
@@ -262,8 +272,10 @@ impl EnvDef {
 fn expand_env(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let can_satisfy = expand_can_satisfy(def);
 	let impls = expand_impls(def);
+	let env = &def.ident;
+
 	quote! {
-		pub struct Env;
+		pub struct #env;
 		#can_satisfy
 		#impls
 	}
@@ -288,8 +300,9 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 		#( #checks )*
 	};
 
+	let env = &def.ident;
 	quote! {
-		impl crate::wasm::env_def::ImportSatisfyCheck for Env {
+		impl crate::wasm::env_def::ImportSatisfyCheck for #env {
 			fn can_satisfy(
 					module: &[u8],
 					name: &[u8],
@@ -389,8 +402,10 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let packed_impls = quote! {
 	#( #impls )*
 	};
+	let env = &def.ident;
+
 	quote! {
-		impl<E: Ext> crate::wasm::env_def::FunctionImplProvider<E> for Env
+		impl<E: Ext> crate::wasm::env_def::FunctionImplProvider<E> for #env
 		where
 			<E::T as frame_system::Config>::AccountId:
 			sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
@@ -407,15 +422,18 @@ pub fn define_env(
 	attr: proc_macro::TokenStream,
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-	if !attr.is_empty() {
-		let msg = "Invalid define_env macro call: expected no attributes, the call must be just \
-			`#[define_env]`";
+	if attr.is_empty() {
+		let msg = "Invalid `define_env` attribute macro: expected enviroment identificator, \
+                         e.g. `#[define_env(Env)]`.";
 		let span = proc_macro2::TokenStream::from(attr).span();
 		return syn::Error::new(span, msg).to_compile_error().into()
 	}
 
-	let i = syn::parse_macro_input!(item as syn::ItemMod);
-	match EnvDef::try_from(i) {
+	let item = syn::parse_macro_input!(item as syn::ItemMod);
+	let ident = syn::parse_macro_input!(attr as syn::Ident);
+	let input = EnvDefInput { item, ident };
+
+	match EnvDef::try_from(input) {
 		Ok(mut def) => expand_env(&mut def).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
