@@ -65,7 +65,7 @@ impl KeyType {
 /// This enum can be extended in the future: New codes can be added but existing codes
 /// will not be changed or removed. This means that any contract **must not** exhaustively
 /// match return codes. Instead, contracts should prepare for unknown variants and deal with
-/// those errors gracefuly in order to be forward compatible.
+/// those errors gracefully in order to be forward compatible.
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.
@@ -2028,8 +2028,8 @@ define_env!(Env, <E: Ext>,
 			"Constructor initializes with `Some`. This is the only place where it is set to `None`.\
 			It is always reset to `Some` afterwards. qed"
 		);
-		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
-		let ret = match chain_extension.call(id, env)? {
+		let env = Environment::new(ctx, id, input_ptr, input_len, output_ptr, output_len_ptr);
+		let ret = match chain_extension.call(env)? {
 			RetVal::Converging(val) => Ok(val),
 			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
 				flags: flags.bits(),
