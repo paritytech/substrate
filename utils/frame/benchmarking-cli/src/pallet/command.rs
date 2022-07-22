@@ -238,6 +238,10 @@ impl PalletCmd {
 
 					let diff = highest - lowest;
 
+					if self.steps <= 1 {
+						return Err("Invalid number of steps".into())
+					}
+
 					// Create up to `STEPS` steps for that component between high and low.
 					let step_size = (diff as f32 / (self.steps - 1) as f32).max(1.0);
 
