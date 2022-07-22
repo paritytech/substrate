@@ -976,7 +976,7 @@ pub mod env {
 	///
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
-	#[v(1)]
+	#[version(1)]
 	fn seal_set_storage(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 {
 		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len)
 	}
@@ -1254,7 +1254,7 @@ pub mod env {
 	/// `ReturnCode::CalleeTrapped`
 	/// `ReturnCode::TransferFailed`
 	/// `ReturnCode::NotCallable`
-	#[v(1)]
+	#[version(1)]
 	fn seal_call(
 		ctx: Runtime<E: Ext>,
 		flags: u32,
@@ -1401,7 +1401,7 @@ pub mod env {
 	/// `ReturnCode::CalleeTrapped`
 	/// `ReturnCode::TransferFailed`
 	/// `ReturnCode::CodeNotFound`
-	#[v(1)]
+	#[version(1)]
 	fn seal_instantiate(
 		ctx: Runtime<E: Ext>,
 		code_hash_ptr: u32,
@@ -1462,7 +1462,7 @@ pub mod env {
 	/// - The contract is live i.e is already on the call stack.
 	/// - Failed to send the balance to the beneficiary.
 	/// - The deletion queue is full.
-	#[v(1)]
+	#[version(1)]
 	fn seal_terminate(ctx: Runtime<E: Ext>, beneficiary_ptr: u32) {
 		ctx.terminate(beneficiary_ptr)
 	}
@@ -1769,7 +1769,7 @@ pub mod env {
 	/// made afterwards), then ensure no further commitments may be made and repeatedly
 	/// call this on later blocks until the block number returned is later than the latest
 	/// commitment.
-	#[v(1)]
+	#[version(1)]
 	fn seal_random(
 		ctx: Runtime<E: Ext>,
 		subject_ptr: u32,
@@ -1865,7 +1865,7 @@ pub mod env {
 	///
 	/// The state rent functionality was removed. This is stub only exists for
 	/// backwards compatiblity
-	#[v(1)]
+	#[version(1)]
 	fn seal_restore_to(
 		ctx: Runtime<E: Ext>,
 		_dest_ptr: u32,
@@ -1955,7 +1955,7 @@ pub mod env {
 	///
 	/// The state rent functionality was removed. This is stub only exists for
 	/// backwards compatiblity.
-	#[v(1)]
+	#[version(1)]
 	fn seal_set_rent_allowance(ctx: Runtime<E: Ext>, _value_ptr: u32) {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())

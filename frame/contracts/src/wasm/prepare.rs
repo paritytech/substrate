@@ -549,7 +549,7 @@ mod tests {
 			}
 
 			// new version of nop with other data type for argumebt
-			#[v(1)]
+			#[version(1)]
 			fn nop(_ctx: _, _unused: i32) {
 				unreachable!();
 			}

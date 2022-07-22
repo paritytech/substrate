@@ -203,7 +203,7 @@ impl HostFn {
 	pub fn try_from(item: syn::Item) -> syn::Result<Self> {
 		let span = item.span();
 		let err = || {
-			let msg = "Invalid host function definition, only #[v(<u8>)] or #[unstable] attribute is allowed.";
+			let msg = "Invalid host function definition, only #[version(<u8>)] or #[unstable] attribute is allowed.";
 			syn::Error::new(span, msg)
 		};
 
@@ -223,7 +223,7 @@ impl HostFn {
 				let attr = &attrs[0];
 				let ident = attr.path.get_ident().ok_or(err())?.to_string();
 				match ident.as_str() {
-					"v" => {
+					"version" => {
 						let ver: syn::LitInt = attr.parse_args()?;
 						module = format!("seal{}", ver.base10_parse::<u8>().map_err(|_| err())?);
 					},
