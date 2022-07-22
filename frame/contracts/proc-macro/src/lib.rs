@@ -23,6 +23,7 @@ extern crate alloc;
 
 use alloc::{
 	boxed::Box,
+	format,
 	string::{String, ToString},
 	vec,
 	vec::Vec,
@@ -203,7 +204,7 @@ impl HostFn {
 	pub fn try_from(mut item: syn::Item) -> syn::Result<Self> {
 		let span = item.span();
 		let err = || {
-			let msg = "Invalid environment definition, only fn with #[host(\"...\")] attribute are allowed.";
+			let msg = "Invalid host function definition, only #[v(<u8>)] or #[unstable] attribute is allowed.";
 			syn::Error::new(span, msg)
 		};
 
@@ -212,16 +213,29 @@ impl HostFn {
 			_ => Err(err()),
 		}?;
 
-		let attr = item.attrs.pop().ok_or(err())?;
-		let module = attr.parse_args().map(|a: syn::LitStr| a.value())?;
 		let name = item.sig.ident.to_string();
-		attr.path
-			.get_ident()
-			.ok_or(err())?
-			.to_string()
-			.eq("host")
-			.then(|| Ok(Self { item, module, name }))
-			.ok_or(err())?
+		let mut module = "seal0".to_string();
+		let attrs = &item.attrs;
+		match attrs.len() {
+			0 => (),
+			1 => {
+				let attr = &attrs[0];
+				let ident = attr.path.get_ident().ok_or(err())?.to_string();
+				match ident.as_str() {
+					"v" => {
+						let ver: syn::LitInt = attr.parse_args()?;
+						module = format!("seal{}", ver.base10_parse::<u8>().map_err(|_| err())?);
+					},
+					"unstable" => {
+						module = "__unstable__".to_string();
+					},
+					_ => return Err(err()),
+				}
+			},
+			_ => return Err(err()),
+		}
+
+		Ok(Self { item, module, name })
 	}
 }
 

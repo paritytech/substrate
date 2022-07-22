@@ -981,15 +981,29 @@ where
 // it is done for pallet (see e.g. lib.rs in contracts/)
 #[define_env]
 pub mod env {
-	#[host("seal0")]
 	fn gas(ctx: Runtime<E: Ext>, amount: u32) {
 		ctx.charge_gas(RuntimeCosts::MeteringBlock(amount))?;
 		Ok(())
 	}
 
-	#[host("seal1")]
+	fn seal_set_storage(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) {
+		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
+	}
+
+	#[v(1)]
 	fn seal_set_storage(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 {
 		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len)
+	}
+
+	#[unstable]
+	fn seal_set_storage(
+		ctx: Runtime<E: Ext>,
+		key_ptr: u32,
+		key_len: u32,
+		value_ptr: u32,
+		value_len: u32,
+	) -> u32 {
+		ctx.set_storage(KeyType::Variable(key_len), key_ptr, value_ptr, value_len)
 	}
 }
 
