@@ -205,9 +205,9 @@ where
 		self.storage.iter().flat_map(|(_, hashes)| hashes.iter()).cloned().collect()
 	}
 
-	/// Number of known leaves
+	/// Number of known leaves.
 	pub fn count(&self) -> usize {
-		self.storage.len()
+		self.storage.iter().fold(0, |curr, level| curr + level.1.len())
 	}
 
 	/// Write the leaf list to the database transaction.
@@ -298,6 +298,7 @@ mod tests {
 		set.import(2_1, 2, 1_1);
 		set.import(3_1, 3, 2_1);
 
+		assert_eq!(set.count(), 1);
 		assert!(set.contains(3, 3_1));
 		assert!(!set.contains(2, 2_1));
 		assert!(!set.contains(1, 1_1));
@@ -307,6 +308,7 @@ mod tests {
 		set.import(1_2, 1, 0);
 		set.import(2_3, 2, 1_2);
 
+		assert_eq!(set.count(), 3);
 		assert!(set.contains(3, 3_1));
 		assert!(set.contains(2, 2_2));
 		assert!(set.contains(2, 2_3));
@@ -385,10 +387,12 @@ mod tests {
 		set.import(11_2, 11, 10_1);
 
 		let displaced = set.import(12_1, 12, 11_1).unwrap();
+		assert_eq!(set.count(), 2);
 		assert!(set.contains(11, 11_2));
 		assert!(set.contains(12, 12_1));
 
 		set.undo().undo_import(displaced);
+		assert_eq!(set.count(), 2);
 		assert!(set.contains(11, 11_1));
 		assert!(set.contains(11, 11_2));
 	}
@@ -404,10 +408,12 @@ mod tests {
 		set.import(12_1, 12, 11_2);
 
 		let displaced = set.finalize_height(11);
+		assert_eq!(set.count(), 2);
 		assert!(set.contains(11, 11_1));
 		assert!(set.contains(12, 12_1));
 
 		set.undo().undo_finalization(displaced);
+		assert_eq!(set.count(), 3);
 		assert!(set.contains(11, 11_1));
 		assert!(set.contains(12, 12_1));
 		assert!(set.contains(10, 10_2));
