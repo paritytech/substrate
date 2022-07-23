@@ -358,6 +358,15 @@ pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &Dispatc
 	.calc_actual_weight(info)
 }
 
+/// Extract the actual pays_fee from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_pays_fee(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Pays {
+	match result {
+		Ok(post_info) => post_info,
+		Err(err) => &err.post_info,
+	}
+	.pays_fee(info)
+}
+
 impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
 		let (actual_weight, pays_fee) = post_weight_info;
@@ -954,6 +963,34 @@ mod tests {
 			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(1300)), &pre),
 			1000
 		);
+	}
+
+	#[test]
+	fn extract_actual_pays_fee_works() {
+		let pre = DispatchInfo { weight: 1000, ..Default::default() };
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::No).into()), &pre), Pays::No);
+		assert_eq!(
+			extract_actual_pays_fee(&Err(DispatchError::BadOrigin.with_weight(9)), &pre),
+			Pays::Yes
+		);
+		assert_eq!(
+			extract_actual_pays_fee(
+				&Err(DispatchErrorWithPostInfo {
+					post_info: PostDispatchInfo { actual_weight: None, pays_fee: Pays::No },
+					error: DispatchError::BadOrigin,
+				}),
+				&pre
+			),
+			Pays::No
+		);
+
+		let pre = DispatchInfo { weight: 1000, pays_fee: Pays::No, ..Default::default() };
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::No);
 	}
 
 	type Balance = u64;
