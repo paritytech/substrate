@@ -15,7 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cmd;
-pub mod template;
+//! Benchmark the time it takes to execute a specific extrinsic.
+//! This is a generalization of the *overhead* benchmark which can only measure `System::Remark`
+//! extrinsics.
 
-pub use cmd::OverheadCmd;
+pub mod bench;
+pub mod cmd;
+pub mod extrinsic_factory;
+
+pub use cmd::ExtrinsicCmd;
+pub use extrinsic_factory::{ExtrinsicBuilder, ExtrinsicFactory};
