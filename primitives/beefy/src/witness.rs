@@ -88,8 +88,7 @@ mod tests {
 
 	use crate::{crypto, known_payload_ids, Payload, KEY_TYPE};
 
-	#[derive(Debug, PartialEq, Eq, codec::Encode, codec::Decode)]
-type TestCommitment = Commitment<u128>;
+	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment =
 		SignedCommitment<u128, crypto::Signature>;
 	type TestSignedCommitmentWitness =
@@ -128,7 +127,6 @@ type TestCommitment = Commitment<u128>;
 		SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
-			aggregatable_signature: TestNOPAggregatableSignature,
 		}
 	}
 
@@ -138,9 +136,9 @@ type TestCommitment = Commitment<u128>;
 		let signed = signed_commitment();
 
 		// when
-		let (witness, signatures) = TestSignedCommitmentWitness::from_signed(
+		let (witness, signatures) = TestSignedCommitmentWitness::from_signed::<_,_,Vec<Option<crypto::Signature>>>(
 			signed,
-			|sigs: &[std::option::Option<crypto::Signature>], TestNOPAggregatableSignature| {
+			|sigs| {
 				sigs.to_vec()
 			},
 		);
@@ -153,9 +151,9 @@ type TestCommitment = Commitment<u128>;
 	fn should_encode_and_decode_witness() {
 		// given
 		let signed = signed_commitment();
-		let (witness, _) = TestSignedCommitmentWitness::from_signed(
+		let (witness, _) = TestSignedCommitmentWitness::from_signed::<_,_,Vec<Option<crypto::Signature>>>(
 			signed,
-			|sigs: &[std::option::Option<crypto::Signature>], TestNOPAggregatableSignature| {
+			|sigs: &[std::option::Option<crypto::Signature>]| {
 				sigs.to_vec()
 			},
 		);
