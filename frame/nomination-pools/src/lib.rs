@@ -2149,9 +2149,9 @@ impl<T: Config> Pallet<T> {
 	///
 	/// In the case of error the function returns balance of zero.
 	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
-		if let Some(member) = PoolMembers::<T>::get(member_account) {
-			if let Some(reward_pool) = RewardPools::<T>::get(member.pool_id) {
-				return member
+		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
+			if let Some(reward_pool) = RewardPools::<T>::get(pool_member.pool_id) {
+				return pool_member
 					.pending_rewards(reward_pool.last_recorded_reward_counter())
 					.unwrap_or_default()
 			}
