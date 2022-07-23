@@ -116,7 +116,7 @@ where
 			Err(e) => return future::err(e.into()),
 		};
 
-		if validation_result.ghost().is_some() {
+		if validation_result.is_valid() {
 			let finalized_hash = commit.target_hash;
 			let finalized_number = commit.target_number;
 

@@ -33,7 +33,7 @@ use pallet_contracts_primitives::{
 use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_core::{Bytes, H256};
+use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::{
 	generic::BlockId,
@@ -44,6 +44,7 @@ pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
 
 const RUNTIME_ERROR: i32 = 1;
 const CONTRACT_DOESNT_EXIST: i32 = 2;
+const KEY_DECODING_FAILED: i32 = 3;
 
 pub type Weight = u64;
 
@@ -71,6 +72,12 @@ impl From<ContractAccessError> for JsonRpseeError {
 			DoesntExist => CallError::Custom(ErrorObject::owned(
 				CONTRACT_DOESNT_EXIST,
 				"The specified contract doesn't exist.",
+				None::<()>,
+			))
+			.into(),
+			KeyDecodingFailed => CallError::Custom(ErrorObject::owned(
+				KEY_DECODING_FAILED,
+				"Failed to decode the specified storage key.",
 				None::<()>,
 			))
 			.into(),
@@ -167,7 +174,7 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: H256,
+		key: Bytes,
 		at: Option<BlockHash>,
 	) -> RpcResult<Option<Bytes>>;
 }
@@ -292,13 +299,13 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: H256,
+		key: Bytes,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<Option<Bytes>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let result = api
-			.get_storage(&at, address, key.into())
+			.get_storage(&at, address, key.to_vec())
 			.map_err(runtime_error_into_rpc_err)?
 			.map_err(ContractAccessError)?
 			.map(Bytes);

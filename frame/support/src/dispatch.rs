@@ -19,7 +19,9 @@
 //! generating values representing lazy module function calls.
 
 pub use crate::{
-	codec::{Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, Output},
+	codec::{
+		Codec, Decode, Encode, EncodeAsRef, EncodeLike, HasCompact, Input, MaxEncodedLen, Output,
+	},
 	scale_info::TypeInfo,
 	sp_std::{
 		fmt, marker,
@@ -63,7 +65,7 @@ pub trait Callable<T> {
 pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
 
 /// Origin for the System pallet.
-#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum RawOrigin<AccountId> {
 	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
 	Root,
@@ -2698,7 +2700,9 @@ mod tests {
 		}
 	}
 
-	#[derive(TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode)]
+	#[derive(
+		TypeInfo, crate::RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen,
+	)]
 	pub struct OuterOrigin;
 
 	impl From<RawOrigin<<TraitImpl as system::Config>::AccountId>> for OuterOrigin {

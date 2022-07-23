@@ -12,7 +12,7 @@ description = "Substrate test utilities macros"
 proc-macro-crate = "1.1.3"
 proc-macro2 = "1.0.37"
 quote = "1.0.10"
-syn = { version = "1.0.82", features = ["full"] }
+syn = { version = "1.0.98", features = ["full"] }
 
 [lib]
 proc-macro = true

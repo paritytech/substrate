@@ -22,3 +22,4 @@ toml = "0.5.4"
 walkdir = "2.3.2"
 wasm-gc-api = "0.1.11"
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
+filetime = "0.2.16"

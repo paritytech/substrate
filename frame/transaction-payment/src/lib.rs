@@ -249,6 +249,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
 		/// Handler for withdrawing, refunding and depositing the transaction fee.
 		/// Transaction fees are withdrawn before the transaction is executed.
 		/// After the transaction was executed the transaction weight can be
@@ -319,6 +322,14 @@ pub mod pallet {
 		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
 		}
+	}
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee,
+		/// has been paid by `who`.
+		TransactionFeePaid { who: T::AccountId, actual_fee: BalanceOf<T>, tip: BalanceOf<T> },
 	}
 
 	#[pallet::hooks]
@@ -734,6 +745,7 @@ where
 			T::OnChargeTransaction::correct_and_deposit_fee(
 				&who, info, post_info, actual_fee, tip, imbalance,
 			)?;
+			Pallet::<T>::deposit_event(Event::<T>::TransactionFeePaid { who, actual_fee, tip });
 		}
 		Ok(())
 	}
@@ -790,7 +802,7 @@ mod tests {
 		{
 			System: system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-			TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+			TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 		}
 	);
 
@@ -899,6 +911,7 @@ mod tests {
 	}
 
 	impl Config for Runtime {
+		type Event = Event;
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;
@@ -1407,8 +1420,14 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::total_balance(&user), 0);
-				// No events for such a scenario
-				assert_eq!(System::events().len(), 0);
+				// TransactionFeePaid Event
+				System::assert_has_event(Event::TransactionPayment(
+					pallet_transaction_payment::Event::TransactionFeePaid {
+						who: user,
+						actual_fee: 0,
+						tip: 0,
+					},
+				));
 			});
 	}
 

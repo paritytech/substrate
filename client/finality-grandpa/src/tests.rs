@@ -28,7 +28,7 @@ use sc_consensus::{
 	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
 	ImportedAux,
 };
-use sc_network::config::{ProtocolConfig, Role};
+use sc_network::config::Role;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestClient, TestNetFactory,
@@ -73,6 +73,7 @@ type GrandpaBlockImport = crate::GrandpaBlockImport<
 	LongestChain<substrate_test_runtime_client::Backend, Block>,
 >;
 
+#[derive(Default)]
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
 	test_config: TestApi,
@@ -110,16 +111,6 @@ impl TestNetFactory for GrandpaTestNet {
 	type PeerData = PeerData;
 	type BlockImport = GrandpaBlockImport;
 
-	/// Create new test network with peers and given config.
-	fn from_config(_config: &ProtocolConfig) -> Self {
-		GrandpaTestNet { peers: Vec::new(), test_config: Default::default() }
-	}
-
-	fn default_config() -> ProtocolConfig {
-		// This is unused.
-		ProtocolConfig::default()
-	}
-
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
 			notifications_protocols: vec![grandpa_protocol_name::NAME.into()],
@@ -128,12 +119,7 @@ impl TestNetFactory for GrandpaTestNet {
 		})
 	}
 
-	fn make_verifier(
-		&self,
-		_client: PeersClient,
-		_cfg: &ProtocolConfig,
-		_: &PeerData,
-	) -> Self::Verifier {
+	fn make_verifier(&self, _client: PeersClient, _: &PeerData) -> Self::Verifier {
 		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
@@ -1567,6 +1553,73 @@ fn grandpa_environment_never_overwrites_round_voter_state() {
 	environment.completed(1, round_state(), base(), &historical_votes()).unwrap();
 
 	assert_matches!(get_current_round(2).unwrap(), HasVoted::Yes(_, _));
+}
+
+#[test]
+fn justification_with_equivocation() {
+	use sp_application_crypto::Pair;
+
+	// we have 100 authorities
+	let pairs = (0..100).map(|n| AuthorityPair::from_seed(&[n; 32])).collect::<Vec<_>>();
+	let voters = pairs.iter().map(AuthorityPair::public).map(|id| (id, 1)).collect::<Vec<_>>();
+	let api = TestApi::new(voters.clone());
+	let mut net = GrandpaTestNet::new(api.clone(), 1, 0);
+
+	// we create a basic chain with 3 blocks (no forks)
+	net.peer(0).push_blocks(3, false);
+
+	let client = net.peer(0).client().clone();
+	let block1 = client.header(&BlockId::Number(1)).ok().flatten().unwrap();
+	let block2 = client.header(&BlockId::Number(2)).ok().flatten().unwrap();
+	let block3 = client.header(&BlockId::Number(3)).ok().flatten().unwrap();
+
+	let set_id = 0;
+	let justification = {
+		let round = 1;
+
+		let make_precommit = |target_hash, target_number, pair: &AuthorityPair| {
+			let precommit = finality_grandpa::Precommit { target_hash, target_number };
+
+			let msg = finality_grandpa::Message::Precommit(precommit.clone());
+			let encoded = sp_finality_grandpa::localized_payload(round, set_id, &msg);
+
+			let precommit = finality_grandpa::SignedPrecommit {
+				precommit: precommit.clone(),
+				signature: pair.sign(&encoded[..]),
+				id: pair.public(),
+			};
+
+			precommit
+		};
+
+		let mut precommits = Vec::new();
+
+		// we have 66/100 votes for block #3 and therefore do not have threshold to finalize
+		for pair in pairs.iter().take(66) {
+			let precommit = make_precommit(block3.hash(), *block3.number(), pair);
+			precommits.push(precommit);
+		}
+
+		// we create an equivocation for the 67th validator targetting blocks #1 and #2.
+		// this should be accounted as "voting for all blocks" and therefore block #3 will
+		// have 67/100 votes, reaching finality threshold.
+		{
+			precommits.push(make_precommit(block1.hash(), *block1.number(), &pairs[66]));
+			precommits.push(make_precommit(block2.hash(), *block2.number(), &pairs[66]));
+		}
+
+		let commit = finality_grandpa::Commit {
+			target_hash: block3.hash(),
+			target_number: *block3.number(),
+			precommits,
+		};
+
+		GrandpaJustification::from_commit(&client.as_client(), round, commit).unwrap()
+	};
+
+	// the justification should include the minimal necessary vote ancestry and
+	// the commit should be valid
+	assert!(justification.verify(set_id, &voters).is_ok());
 }
 
 #[test]
