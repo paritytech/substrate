@@ -1089,7 +1089,12 @@ pub mod pallet {
 		///
 		/// The deposit that is reserved might be rewarded or slashed based on the outcome.
 		#[pallet::weight(
-			T::MinerConfig::solution_weight()
+			T::MinerConfig::solution_weight(
+				T::BenchmarkingConfig::SNAPSHOT_MAXIMUM_VOTERS,
+				T::BenchmarkingConfig::MAXIMUM_TARGETS,
+				T::BenchmarkingConfig::ACTIVE_VOTERS[1],
+				T::BenchmarkingConfig::DESIRED_TARGETS[1]
+			)
 			.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 		)]
 		pub fn submit_emergency_solution(
