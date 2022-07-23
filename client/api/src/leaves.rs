@@ -275,7 +275,7 @@ where
 	pub fn undo_import(&mut self, displaced: ImportDisplaced<H, N>) {
 		let new_number = Reverse(displaced.displaced.number.0.clone() + N::one());
 		self.inner.remove_leaf(&new_number, &displaced.new_hash);
-		self.inner.insert_leaf(new_number, displaced.displaced.hash);
+		self.inner.insert_leaf(displaced.displaced.number, displaced.displaced.hash);
 	}
 
 	/// Undo a finalization operation by providing the displaced leaves.
@@ -304,9 +304,12 @@ mod tests {
 		assert!(!set.contains(0, 0));
 
 		set.import(2_2, 2, 1_1);
+		set.import(1_2, 1, 0);
+		set.import(2_3, 2, 1_2);
 
 		assert!(set.contains(3, 3_1));
 		assert!(set.contains(2, 2_2));
+		assert!(set.contains(2, 2_3));
 	}
 
 	#[test]
@@ -381,25 +384,32 @@ mod tests {
 		set.import(11_1, 11, 10_1);
 		set.import(11_2, 11, 10_1);
 
-		let displaced = set.import(12_1, 12, 11_2).unwrap();
+		let displaced = set.import(12_1, 12, 11_1).unwrap();
+		assert!(set.contains(11, 11_2));
 		assert!(set.contains(12, 12_1));
 
 		set.undo().undo_import(displaced);
-		assert!(!set.contains(12, 12_1));
+		assert!(set.contains(11, 11_1));
+		assert!(set.contains(11, 11_2));
 	}
 
 	#[test]
 	fn undo_finalization() {
 		let mut set = LeafSet::new();
-		set.import(10_1u32, 10u32, 0u32);
-		set.import(11_1, 11, 10_2);
-		set.import(11_2, 11, 10_2);
-		set.import(12_1, 12, 11_123);
+		set.import(9_1u32, 9u32, 0u32);
+		set.import(10_1, 10, 9_1);
+		set.import(10_2, 10, 9_1);
+		set.import(11_1, 11, 10_1);
+		set.import(11_2, 11, 10_1);
+		set.import(12_1, 12, 11_2);
 
 		let displaced = set.finalize_height(11);
-		assert!(!set.contains(10, 10_1));
+		assert!(set.contains(11, 11_1));
+		assert!(set.contains(12, 12_1));
 
 		set.undo().undo_finalization(displaced);
-		assert!(set.contains(10, 10_1));
+		assert!(set.contains(11, 11_1));
+		assert!(set.contains(12, 12_1));
+		assert!(set.contains(10, 10_2));
 	}
 }
