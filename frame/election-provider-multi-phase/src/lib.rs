@@ -1095,7 +1095,7 @@ pub mod pallet {
 			T::BenchmarkingConfig::ACTIVE_VOTERS[1],
 			T::BenchmarkingConfig::DESIRED_TARGETS[1]
 		)
-		+ T::DbWeight::get().reads_writes(1, 1))]
+		.saturating_add(T::DbWeight::get().reads_writes(1, 1)))]
 		pub fn submit_emergency_solution(
 			origin: OriginFor<T>,
 			raw_solution: Box<RawSolution<SolutionOf<T::MinerConfig>>>,
