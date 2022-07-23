@@ -4143,7 +4143,7 @@ mod bond_extra {
 			Balances::make_free_balance_be(&default_reward_account(), 8);
 			// ... if which only 3 is claimable to make sure the reward account does not die.
 			let claimable_reward = 8 - ExistentialDeposit::get();
-			// NOTE: easier to read of we use 3, so let's use the number instead of variable.
+			// NOTE: easier to read if we use 3, so let's use the number instead of variable.
 			assert_eq!(claimable_reward, 3, "test is correct if rewards are divisible by 3");
 
 			// given
