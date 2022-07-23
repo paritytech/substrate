@@ -728,11 +728,7 @@ type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>
 
 impl<Block: BlockT> Inner<Block> {
 	fn new(config: crate::Config) -> Self {
-		let catch_up_config = if config.local_role.is_light() {
-			// if we are a light client we shouldn't be issuing any catch-up requests
-			// as we don't participate in the full GRANDPA protocol
-			CatchUpConfig::disabled()
-		} else if config.observer_enabled {
+		let catch_up_config = if config.observer_enabled {
 			if config.local_role.is_authority() {
 				// since the observer protocol is enabled, we will only issue
 				// catch-up requests if we are an authority (and only to other
@@ -1231,10 +1227,6 @@ impl<Block: BlockT> Inner<Block> {
 			None => return false,
 		};
 
-		if self.config.local_role.is_light() {
-			return false
-		}
-
 		if round_elapsed < round_duration.mul_f32(PROPAGATION_SOME) {
 			self.peers.first_stage_peers.contains(who)
 		} else if round_elapsed < round_duration.mul_f32(PROPAGATION_ALL) {
@@ -1265,10 +1257,6 @@ impl<Block: BlockT> Inner<Block> {
 			Some(ref local_view) => local_view.round_start.elapsed(),
 			None => return false,
 		};
-
-		if self.config.local_role.is_light() {
-			return false
-		}
 
 		if round_elapsed < round_duration.mul_f32(PROPAGATION_ALL) {
 			self.peers.first_stage_peers.contains(who) ||
