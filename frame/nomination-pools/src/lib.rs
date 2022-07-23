@@ -901,8 +901,11 @@ impl<T: Config> BondedPool<T> {
 
 	/// Bond all of the pending_rewards from `member` into this pool.
 	///
-	/// Similar to `try_bond_funds`, but doesn't transfer funds from an account, but instead
-	/// transfers the rewards directly from the member's reward pool to the `bonded_account`.
+	/// Transfers the member's rewards directly to the bonded account of the
+	/// member. Makes a call to the `StakingInterface::bond_extra` to bond the
+	/// newly claimed rewards.
+	///
+	/// Emits the `PaidOut` event.
 	///
 	/// Returns `Ok((points_issues, bonded))`, `Err` otherwise.
 	fn try_bond_funds_from_rewards(
@@ -912,7 +915,6 @@ impl<T: Config> BondedPool<T> {
 		reward_pool: &mut RewardPool<T>,
 	) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
 		debug_assert_eq!(member.pool_id, self.id);
-
 		// a member who has no skin in the game anymore cannot claim any rewards.
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 
@@ -927,13 +929,13 @@ impl<T: Config> BondedPool<T> {
 			return Ok((BalanceOf::<T>::zero(), pending_rewards))
 		}
 
-		// IFF the reward is non-zero alter the member and reward pool info.
+		// update member's reward counter to the pools current reward counter.
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
 		let bonded_account = self.bonded_account();
 
-		// Transfer payout to the bonded pool.
+		// Transfer the member's payout to the member's bonded account.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
 			&bonded_account,
@@ -2339,8 +2341,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// If the member has some rewards, transfer a payout from the reward pool to the member.
-	/// Emits events and potentially modifies pool state if any arithmetic saturates, but does
-	/// not persist any of the mutable inputs to storage.
+	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
+	// not persist any of the mutable inputs to storage.
 	fn do_reward_payout(
 		member_account: &T::AccountId,
 		member: &mut PoolMember<T>,
