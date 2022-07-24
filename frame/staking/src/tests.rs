@@ -2081,8 +2081,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		let _ = Balances::make_free_balance_be(&11, stake);
 		let _ = Balances::make_free_balance_be(&2, stake);
 
-		// only slashes out of bonded stake are applied. without this line,
-		// it is 0.
+		// only slashes out of bonded stake are applied. without this line, it is 0.
 		Staking::bond(Origin::signed(2), 20000, stake - 1, RewardDestination::default()).unwrap();
 		// Override exposure of 11
 		ErasStakers::<Test>::insert(
@@ -2104,7 +2103,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			&[Perbill::from_percent(100)],
 		);
 
-		assert_eq!(Balances::total_balance(&11), stake);
+		assert_eq!(Balances::total_balance(&11), stake - 1);
 		assert_eq!(Balances::total_balance(&2), 1);
 	})
 }
@@ -4960,7 +4959,6 @@ fn proportional_ledger_slash_works() {
 		unlocking: bounded_vec![],
 		claimed_rewards: vec![],
 	};
-
 	assert_eq!(BondingDuration::get(), 3);
 
 	// When we slash a ledger with no unlocking chunks
@@ -4997,7 +4995,7 @@ fn proportional_ledger_slash_works() {
 	ledger.total = 4 * 100;
 	ledger.active = 0;
 	// When the first 2 chunks don't overlap with the affected range of unlock eras.
-	assert_eq!(ledger.slash(140, 0, 2), 140);
+	assert_eq!(ledger.slash(140, 0, 3), 140);
 	// Then
 	assert_eq!(ledger.unlocking, vec![c(4, 100), c(5, 100), c(6, 30), c(7, 30)]);
 	assert_eq!(ledger.total, 4 * 100 - 140);
@@ -5039,7 +5037,7 @@ fn proportional_ledger_slash_works() {
 	ledger.active = 500;
 	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
 	assert_eq!(ledger.total, 900);
-	// When  we have a higher min balance
+	// When we have a higher min balance
 	assert_eq!(
 		ledger.slash(
 			900 / 2,
@@ -5047,16 +5045,17 @@ fn proportional_ledger_slash_works() {
 			     * get swept */
 			0
 		),
-		475
+		450
 	);
-	let dust = (10 / 2) + (40 / 2);
 	assert_eq!(ledger.active, 500 / 2);
-	assert_eq!(ledger.unlocking, vec![c(5, 100 / 2), c(7, 250 / 2)]);
-	assert_eq!(ledger.total, 900 / 2 - dust);
+	// the last chunk was not slashed 50% like all the rest, because some other earlier chunks got
+	// dusted.
+	assert_eq!(ledger.unlocking, vec![c(5, 100 / 2), c(7, 150)]);
+	assert_eq!(ledger.total, 900 / 2);
 	assert_eq!(LedgerSlashPerEra::get().0, 500 / 2);
 	assert_eq!(
 		LedgerSlashPerEra::get().1,
-		BTreeMap::from([(4, 0), (5, 100 / 2), (6, 0), (7, 250 / 2)])
+		BTreeMap::from([(4, 0), (5, 100 / 2), (6, 0), (7, 150)])
 	);
 
 	// Given
@@ -5068,7 +5067,7 @@ fn proportional_ledger_slash_works() {
 		ledger.slash(
 			500 + 10 + 250 + 100 / 2, // active + era 6 + era 7 + era 5 / 2
 			0,
-			2 /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
+			3 /* slash era 6 first, so the affected parts are era 6, era 7 and
 			   * ledge.active. This will cause the affected to go to zero, and then we will
 			   * start slashing older chunks */
 		),
@@ -5091,7 +5090,7 @@ fn proportional_ledger_slash_works() {
 		ledger.slash(
 			351, // active + era 6 + era 7 + era 5 / 2 + 1
 			50,  // min balance - everything slashed below 50 will get dusted
-			2    /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
+			3    /* slash era 3+3 first, so the affected parts are era 6, era 7 and
 			      * ledge.active. This will cause the affected to go to zero, and then we will
 			      * start slashing older chunks */
 		),
@@ -5108,9 +5107,8 @@ fn proportional_ledger_slash_works() {
 
 	// Given
 	let slash = u64::MAX as Balance * 2;
-	let value = slash
-		- (9 * 4) // The value of the other parts of ledger that will get slashed
-		+ 1;
+	// The value of the other parts of ledger that will get slashed
+	let value = slash - (10 * 4);
 
 	ledger.active = 10;
 	ledger.unlocking = bounded_vec![c(4, 10), c(5, 10), c(6, 10), c(7, value)];

@@ -38,7 +38,7 @@ use libp2p::{
 	NetworkBehaviour,
 };
 use log::debug;
-use prost::Message;
+
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_network_common::{config::ProtocolId, request_responses::ProtocolConfig};
@@ -382,42 +382,44 @@ where
 				.events
 				.push_back(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
 			CustomMessageOutcome::BlockRequest { target, request, pending_response } => {
-				let mut buf = Vec::with_capacity(request.encoded_len());
-				if let Err(err) = request.encode(&mut buf) {
-					log::warn!(
-						target: "sync",
-						"Failed to encode block request {:?}: {:?}",
-						request, err
-					);
-					return
+				match self.substrate.encode_block_request(&request) {
+					Ok(data) => {
+						self.request_responses.send_request(
+							&target,
+							&self.block_request_protocol_name,
+							data,
+							pending_response,
+							IfDisconnected::ImmediateError,
+						);
+					},
+					Err(err) => {
+						log::warn!(
+							target: "sync",
+							"Failed to encode block request {:?}: {:?}",
+							request, err
+						);
+					},
 				}
-
-				self.request_responses.send_request(
-					&target,
-					&self.block_request_protocol_name,
-					buf,
-					pending_response,
-					IfDisconnected::ImmediateError,
-				);
 			},
 			CustomMessageOutcome::StateRequest { target, request, pending_response } => {
-				let mut buf = Vec::with_capacity(request.encoded_len());
-				if let Err(err) = request.encode(&mut buf) {
-					log::warn!(
-						target: "sync",
-						"Failed to encode state request {:?}: {:?}",
-						request, err
-					);
-					return
+				match self.substrate.encode_state_request(&request) {
+					Ok(data) => {
+						self.request_responses.send_request(
+							&target,
+							&self.state_request_protocol_name,
+							data,
+							pending_response,
+							IfDisconnected::ImmediateError,
+						);
+					},
+					Err(err) => {
+						log::warn!(
+							target: "sync",
+							"Failed to encode state request {:?}: {:?}",
+							request, err
+						);
+					},
 				}
-
-				self.request_responses.send_request(
-					&target,
-					&self.state_request_protocol_name,
-					buf,
-					pending_response,
-					IfDisconnected::ImmediateError,
-				);
 			},
 			CustomMessageOutcome::WarpSyncRequest { target, request, pending_response } =>
 				match &self.warp_sync_protocol_name {
