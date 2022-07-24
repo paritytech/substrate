@@ -168,7 +168,11 @@
 
 pub mod onchain;
 pub mod traits;
-use sp_runtime::traits::{Bounded, Saturating, Zero};
+use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::{traits::ConstU32, DebugNoBound, DefaultNoBound, RuntimeDebugNoBound};
+use scale_info::TypeInfo;
+use sp_npos_elections::EvaluateSupport;
+use sp_runtime::traits::{Bounded, Convert, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
 /// Re-export the solution generation macro.
@@ -370,6 +374,12 @@ pub trait ElectionProvider {
 		BlockNumber = Self::BlockNumber,
 	>;
 
+	/// Maximum number of backers that each winner will have in any call to
+	/// [`ElectionProvider::elect`].
+	///
+	/// It is up to any particular implementation to know how it is going to achieve this property.
+	type MaxBackersPerWinner: Get<u32>;
+
 	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
 	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
@@ -377,7 +387,7 @@ pub trait ElectionProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
 /// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure an election needs to
@@ -416,8 +426,9 @@ where
 	type BlockNumber = BlockNumber;
 	type Error = &'static str;
 	type DataProvider = DataProvider;
+	type MaxBackersPerWinner = ConstU32<0>;
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("<NoElection as ElectionProvider> cannot do anything.")
 	}
 }
@@ -618,3 +629,76 @@ pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId,
 /// Same as [`Voter`], but parameterized by an [`ElectionDataProvider`].
 pub type VoterOf<D> =
 	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;
+
+/// A bounded equivalent to [`sp_npos_elections::Support`].
+#[derive(Default, RuntimeDebug, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen)]
+#[codec(mel_bound(AccountId: MaxEncodedLen, Bound: Get<u32>))]
+#[scale_info(skip_type_params(Bound))]
+pub struct BoundedSupport<AccountId, Bound: Get<u32>> {
+	/// Total support.
+	pub total: ExtendedBalance,
+	/// Support from voters.
+	pub voters: BoundedVec<(AccountId, ExtendedBalance), Bound>,
+}
+
+pub type BoundedSupportOf<E> = BoundedSupport<
+	<E as ElectionProvider>::AccountId,
+	<E as ElectionProvider>::MaxBackersPerWinner,
+>;
+
+pub type BoundedSupportsOf<E> = Vec<(<E as ElectionProvider>::AccountId, BoundedSupportOf<E>)>;
+
+impl<AccountId, Bound: Get<u32>> sp_npos_elections::Backings for &BoundedSupport<AccountId, Bound> {
+	fn total(&self) -> ExtendedBalance {
+		self.total
+	}
+}
+
+impl<AccountId: PartialEq, Bound: Get<u32>> PartialEq for BoundedSupport<AccountId, Bound> {
+	fn eq(&self, other: &Self) -> bool {
+		self.total == other.total && self.voters == other.voters
+	}
+}
+impl<AccountId: PartialEq, Bound: Get<u32>> Eq for BoundedSupport<AccountId, Bound> {}
+
+impl<AccountId: Clone, Bound: Get<u32>> Clone for BoundedSupport<AccountId, Bound> {
+	fn clone(&self) -> Self {
+		Self { voters: self.voters.clone(), total: self.total }
+	}
+}
+
+impl<AccountId, Bound: Get<u32>> From<BoundedSupport<AccountId, Bound>> for Support<AccountId> {
+	fn from(b: BoundedSupport<AccountId, Bound>) -> Self {
+		Support { total: b.total, voters: b.voters.into_inner() }
+	}
+}
+
+impl<AccountId, Bound: Get<u32>> TryFrom<sp_npos_elections::Support<AccountId>>
+	for BoundedSupport<AccountId, Bound>
+{
+	type Error = &'static str;
+	fn try_from(s: sp_npos_elections::Support<AccountId>) -> Result<Self, Self::Error> {
+		let voters = s.voters.try_into().map_err(|_| "voters bound not respected")?;
+		Ok(Self { voters, total: s.total })
+	}
+}
+
+pub struct SortIntoBoundedSupports<T>(sp_std::marker::PhantomData<T>);
+
+impl<E: ElectionProvider> Convert<sp_npos_elections::Supports<E::AccountId>, BoundedSupportsOf<E>>
+	for SortIntoBoundedSupports<E>
+{
+	fn convert(a: sp_npos_elections::Supports<E::AccountId>) -> BoundedSupportsOf<E> {
+		todo!();
+	}
+}
+
+pub struct TruncateIntoBoundedSupports<T>(sp_std::marker::PhantomData<T>);
+
+impl<E: ElectionProvider> Convert<sp_npos_elections::Supports<E::AccountId>, BoundedSupportsOf<E>>
+	for TruncateIntoBoundedSupports<E>
+{
+	fn convert(a: sp_npos_elections::Supports<E::AccountId>) -> BoundedSupportsOf<E> {
+		todo!();
+	}
+}

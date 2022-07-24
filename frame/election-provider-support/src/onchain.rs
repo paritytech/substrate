@@ -20,10 +20,12 @@
 //! careful when using it onchain.
 
 use crate::{
-	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
+	BoundedSupport, BoundedSupportsOf, Debug, ElectionDataProvider, ElectionProvider,
+	InstantElectionProvider, NposSolver, WeightInfo,
 };
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
+use sp_runtime::traits::Convert;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// Errors of the on-chain election.
@@ -77,6 +79,23 @@ pub trait Config {
 		AccountId = <Self::System as frame_system::Config>::AccountId,
 		Error = sp_npos_elections::Error,
 	>;
+	/// Maximum number of backers per winner to return.
+	type MaxBackersPerWinner: Get<u32>;
+
+	/// Something that can convert the final `Supports` into a bounded version.
+	type Bounder: Convert<
+		sp_npos_elections::Supports<<Self::System as frame_system::Config>::AccountId>,
+		Vec<
+		(
+			<Self::System as frame_system::Config>::AccountId,
+			BoundedSupport<
+				<Self::System as frame_system::Config>::AccountId,
+				Self::MaxBackersPerWinner,
+			>
+		)
+		>,
+	>;
+
 	/// Something that provides the data for election.
 	type DataProvider: ElectionDataProvider<
 		AccountId = <Self::System as frame_system::Config>::AccountId,
@@ -129,6 +148,8 @@ fn elect_with<T: Config>(
 		DispatchClass::Mandatory,
 	);
 
+	// TODO: not very efficient, but cleaner API. Ideally we would possibly trim while
+	// `to_supports`.
 	Ok(to_supports(&staked))
 }
 
@@ -136,9 +157,10 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
 	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
 	type Error = Error;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
 		// testing)
 		if cfg!(not(feature = "std")) {
@@ -148,7 +170,7 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 			);
 		}
 
-		elect_with::<T>(None, None)
+		elect_with::<T>(None, None).map(|supports| T::Bounder::convert(supports))
 	}
 }
 
@@ -165,10 +187,12 @@ impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
 	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
 	type Error = Error;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))
+			.map(|supports| T::Bounder::convert(supports))
 	}
 }
 

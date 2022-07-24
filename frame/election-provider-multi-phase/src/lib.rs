@@ -232,6 +232,7 @@
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
 	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
+	BoundedSupportsOf
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -695,6 +696,10 @@ pub mod pallet {
 
 		/// OCW election solution miner algorithm implementation.
 		type Solver: NposSolver<AccountId = Self::AccountId>;
+
+		/// Maximum number of backers per winner that this pallet should, as its implementation of
+		/// `ElectionProvider` return.
+		type MaxBackersPerWinner: Get<u32>;
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
@@ -1570,14 +1575,21 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 	type DataProvider = T::DataProvider;
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
 				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
+
+				// TODO: this is just to make it compile -- this should be checked inside of
+				// `feasibility_check`, and ReadySolution should already store a `BoundedSupports`.
+				use frame_election_provider_support::TruncateIntoBoundedSupports;
+				use sp_runtime::traits::Convert;
+				let supports = TruncateIntoBoundedSupports::<Self>::convert(supports);
 				Ok(supports)
 			},
 			Err(why) => {

@@ -444,6 +444,18 @@ impl<AccountId> Default for Support<AccountId> {
 	}
 }
 
+/// Generic representation of a support.
+pub trait Backings {
+	/// The total backing of an individual winner.
+	fn total(&self) -> ExtendedBalance;
+}
+
+impl<AccountId: IdentifierT> Backings for &Support<AccountId> {
+	fn total(&self) -> ExtendedBalance {
+		self.total
+	}
+}
+
 /// A target-major representation of the the election outcome.
 ///
 /// Essentially a flat variant of [`SupportMap`].
@@ -494,23 +506,28 @@ pub trait EvaluateSupport {
 
 impl<AccountId: IdentifierT> EvaluateSupport for Supports<AccountId> {
 	fn evaluate(&self) -> ElectionScore {
-		let mut minimal_stake = ExtendedBalance::max_value();
-		let mut sum_stake: ExtendedBalance = Zero::zero();
-		// NOTE: The third element might saturate but fine for now since this will run on-chain and
-		// need to be fast.
-		let mut sum_stake_squared: ExtendedBalance = Zero::zero();
-
-		for (_, support) in self {
-			sum_stake = sum_stake.saturating_add(support.total);
-			let squared = support.total.saturating_mul(support.total);
-			sum_stake_squared = sum_stake_squared.saturating_add(squared);
-			if support.total < minimal_stake {
-				minimal_stake = support.total;
-			}
-		}
-
-		ElectionScore { minimal_stake, sum_stake, sum_stake_squared }
+		evaluate_support_core(self.iter().map(|(_, s)| s))
 	}
+}
+
+/// Core implementation of how to evaluate a support (in the most generic form), exported as a
+/// free-standing function for easy re-use.
+pub fn evaluate_support_core(backings: impl Iterator<Item = impl Backings>) -> ElectionScore {
+	let mut minimal_stake = ExtendedBalance::max_value();
+	let mut sum_stake: ExtendedBalance = Zero::zero();
+	// NOTE: The third element might saturate but fine for now since this will run on-chain and
+	// need to be fast.
+	let mut sum_stake_squared: ExtendedBalance = Zero::zero();
+
+	for backing in backings {
+		sum_stake = sum_stake.saturating_add(backing.total());
+		let squared = backing.total().saturating_mul(backing.total());
+		sum_stake_squared = sum_stake_squared.saturating_add(squared);
+		if backing.total() < minimal_stake {
+			minimal_stake = backing.total();
+		}
+	}
+	ElectionScore { minimal_stake, sum_stake, sum_stake_squared }
 }
 
 /// Converts raw inputs to types used in this crate.
