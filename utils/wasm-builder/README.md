@@ -64,6 +64,7 @@ By using environment variables, you can configure which Wasm binaries are built 
                            to be absolute.
 - `WASM_BUILD_TOOLCHAIN` - The toolchain that should be used to build the Wasm binaries. The
                            format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
+- `CARGO_NET_OFFLINE` - If `true`, `--offline` will be passed to all processes launched to prevent network access. Useful in offline environments.
 
 Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
 Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will

@@ -947,6 +947,16 @@ cfg_if! {
 				}
 			}
 
+			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for RuntimeApi {
+				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
+					Default::default()
+				}
+
+				fn next_authority_set_proof() -> beefy_primitives::mmr::BeefyNextAuthoritySet<beefy_primitives::MmrRootHash> {
+					Default::default()
+				}
+			}
+
 			impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
 				fn account_nonce(_account: AccountId) -> Index {
 					0
