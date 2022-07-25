@@ -525,7 +525,7 @@ pub mod pallet {
 
 		/// Increments the `CollectionId` stored in `NextCollectionId`.
 		///
-		///This is only callable when the next `CollectionId` is already being
+		/// This is only callable when the next `CollectionId` is already being
 		/// used for some other collection.
 		///
 		/// The origin must be Signed and the sender must have sufficient funds
