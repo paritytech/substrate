@@ -379,7 +379,6 @@ impl PalletCmd {
 									.expect("Encoded from String; qed"),
 								components.len(),
 								s + 1, // s starts at 0.
-								// `steps` is the number of steps *per* component.
 								all_components.len(),
 								r + 1,
 								self.external_repeat,
