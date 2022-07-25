@@ -207,7 +207,7 @@ where
 
 	/// Number of known leaves.
 	pub fn count(&self) -> usize {
-		self.storage.iter().fold(0, |curr, level| curr + level.1.len())
+		self.storage.values().map(|level| level.len()).sum()
 	}
 
 	/// Write the leaf list to the database transaction.
