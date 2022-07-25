@@ -128,6 +128,8 @@ node-bench-regression-guard:
     - job:                         cargo-check-benches
       artifacts:                   true
     # polls artifact from master to compare with current result
+    # need to specify both parallel jobs from master because of the bug
+    # https://gitlab.com/gitlab-org/gitlab/-/issues/39063
     - project:                     $CI_PROJECT_PATH
       job:                         "cargo-check-benches 1/2"
       ref:                         master
