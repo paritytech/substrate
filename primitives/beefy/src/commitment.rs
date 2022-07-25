@@ -361,7 +361,6 @@ use sp_core::{keccak_256, Pair};
 	}
 
 	///generates mock aggregatable bls signature for generating test commitment
-	///note that with the current scheme we need Signer's BLS public key in order to aggregate
 	///BLS signatures
 	fn mock_bls_signatures() ->  (BLSSignature, BLSSignature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
