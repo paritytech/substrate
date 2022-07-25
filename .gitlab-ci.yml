@@ -291,7 +291,7 @@ debug-job:
     - cd artifacts/benches/
     - ls -la
     - cd ..
-    - cd master-*
+    - cd master-fe3437e7
     - ls -la
 
 # include:
