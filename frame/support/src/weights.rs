@@ -91,27 +91,19 @@
 //! # fn main() {}
 //! ```
 //!
-//! ### 2. Define weights as a function of input arguments using `FunctionOf` tuple struct.
+//! ### 2. Define weights as a function of input arguments.
 //!
-//! This struct works in a similar manner as above. 3 items must be provided and each can be either
-//! a fixed value or a function/closure with the same parameters list as the dispatchable function
-//! itself, wrapper in a tuple.
-//!
-//! Using this only makes sense if you want to use a function for at least one of the elements. If
-//! all 3 are static values, providing a raw tuple is easier.
+//! The arguments of the dispatch are available in the weight expressions as a borrowed value.
 //!
 //! ```
 //! # use frame_system::Config;
-//! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
+//! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//!         #[weight = FunctionOf(
-//! 			// weight, function.
-//! 			|args: (&u32, &u64)| *args.0 as u64 + args.1,
-//! 			// class, fixed.
+//!         #[weight = (
+//! 			*a as u64 + *b,
 //! 			DispatchClass::Operational,
-//! 			// pays fee, function.
-//! 			|args: (&u32, &u64)| if *args.0 > 1000 { Pays::Yes } else { Pays::No },
+//! 			if *a > 1000 { Pays::Yes } else { Pays::No }
 //! 		)]
 //!         fn dispatching(origin, a: u32, b: u64) { unimplemented!() }
 //!     }
