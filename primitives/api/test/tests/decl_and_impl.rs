@@ -205,7 +205,7 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 fn check_runtime_api_versions() {
 	check_runtime_api_versions_contains::<dyn Api<Block>>();
 	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block>>();
- 	assert!(RUNTIME_API_VERSIONS
+	assert!(RUNTIME_API_VERSIONS
 		.iter()
 		.any(|v| v == &(<dyn ApiWithMultipleVersions<Block>>::ID, 3)));
 	check_runtime_api_versions_contains::<dyn sp_api::Core<Block>>();

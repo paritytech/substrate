@@ -272,7 +272,8 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 /// Versioned API traits are used to catch missing methods when implementing a specific version of a
 /// versioned API. They contain all non-versioned methods (aka stable methods) from the main trait
 /// and all versioned methods for the specific version. This means that there is one trait for each
-/// version mentioned in the trait definition. For example: ```ignore
+/// version mentioned in the trait definition. For example:
+/// ```ignore
 /// // The trait version implicitly is 1
 /// decl_runtime_apis!(
 /// 	trait SomeApi {
@@ -288,7 +289,9 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 /// 		fn method4();
 /// 	}
 /// );
-/// This trait has got three different versions. The function below will generate the following code:
+/// ```
+/// This trait has got three different versions. The function below will generate the following
+/// code:
 /// ```
 /// trait SomeApiV1 {
 /// 	// in V1 only the stable methods are required. The rest has got default implementations.
@@ -302,7 +305,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 /// 	fn method3();
 /// }
 ///
-/// SomeApiV3 {
+/// trait SomeApiV3 {
 /// 	// And V3 contains all methods from the trait.
 /// 	fn method1();
 /// 	fn method2();

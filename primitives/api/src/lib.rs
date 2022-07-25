@@ -187,6 +187,55 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// To check if a given runtime implements a runtime api trait, the `RuntimeVersion` has the
 /// function `has_api<A>()`. Also the `ApiExt` provides a function `has_api<A>(at: &BlockId)`
 /// to check if the runtime at the given block id implements the requested runtime api trait.
+///
+/// # Declaring multiple api versions
+///
+/// Optionally multiple versions of the same api can be declared. This is useful for
+/// development purposes. For example if you want to have a testing version of the api which
+/// is available only on a testnet (for example) you can define one stable and one development
+/// version. This can be done like this:
+/// ```rust
+/// sp_api::decl_runtime_apis! {
+///     /// Declare the api trait.
+/// 	#[api_version(2)]
+///     pub trait Balance {
+///         /// Get the balance.
+///         fn get_balance() -> u64;
+///         /// Set the balance.
+///         fn set_balance(val: u64);
+///         /// Transfer the balance to another user id
+///         #[api_version(3)]
+///         fn transfer_balance(uid: u64);
+///     }
+/// }
+///
+/// # fn main() {}
+/// ```
+/// The example above defines two api versions - 2 and 3. Version 2 contains `get_balance` and
+/// `set_balance`. Version 3 additionally contains `transfer_balance`, which is not available
+/// in version 2. Version 2 in this case is considered the default/base version of the api.
+/// More than two versions can be defined this way. For example:
+/// ```rust
+/// sp_api::decl_runtime_apis! {
+///     /// Declare the api trait.
+/// 	#[api_version(2)]
+///     pub trait Balance {
+///         /// Get the balance.
+///         fn get_balance() -> u64;
+///         /// Set the balance.
+///         fn set_balance(val: u64);
+///         /// Transfer the balance to another user id
+///         #[api_version(3)]
+///         fn transfer_balance(uid: u64);
+/// 		/// Clears the balance
+/// 		#[api_version(4)]
+/// 		fn clear_balance();
+///     }
+/// }
+///
+/// # fn main() {}
+/// ```
+/// Note that version 4 contains all methods from 3 and 2.
 pub use sp_api_proc_macro::decl_runtime_apis;
 
 /// Tags given trait implementations as runtime apis.
@@ -276,6 +325,22 @@ pub use sp_api_proc_macro::decl_runtime_apis;
 ///
 /// # fn main() {}
 /// ```
+///
+/// # Implementing specific api version
+///
+/// If `decl_runtime_apis!` declares multiple versions for an api `impl_runtime_apis!`
+/// should specify which version it implements by adding `api_version` attribute to the
+/// `impl` block. If omitted - the base/default version is implemented. Here is an example:
+/// ```ignore
+/// sp_api::impl_runtime_apis! {
+///     #[api_version(3)]
+///     impl self::Balance<Block> for Runtime {
+///          // implementation
+///     }
+/// }
+/// ```
+/// In this case `Balance` api version 3 is being implemented for `Runtime`. The `impl` block
+/// must contain all methods declared in version 3 and below.
 pub use sp_api_proc_macro::impl_runtime_apis;
 
 /// Mocks given trait implementations as runtime apis.
