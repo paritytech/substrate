@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_scored_pool;
 
 use frame_support::{
-	ord_parameter_types, parameter_types,
+	bounded_vec, ord_parameter_types, parameter_types,
 	traits::{ConstU32, ConstU64, GenesisBuild},
 };
 use frame_system::EnsureSignedBy;
@@ -97,7 +97,9 @@ impl pallet_balances::Config for Test {
 }
 
 thread_local! {
-	pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+
+	pub static MEMBERS: RefCell<BoundedVec<u64,ConstU32<256_u32>>> = RefCell::new(bounded_vec![0,256]);
+
 }
 
 pub struct TestChangeMembers;
@@ -113,13 +115,18 @@ impl ChangeMembers<u64> for TestChangeMembers {
 
 		assert_eq!(old_plus_incoming, new_plus_outgoing);
 
-		MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
+		MEMBERS.with(|m| {
+			*m.borrow_mut() = <BoundedVec<u64, ConstU32<256_u32>>>::truncate_from(new.to_vec())
+		});
 	}
 }
 
 impl InitializeMembers<u64> for TestChangeMembers {
 	fn initialize_members(new_members: &[u64]) {
-		MEMBERS.with(|m| *m.borrow_mut() = new_members.to_vec());
+		MEMBERS.with(|m| {
+			*m.borrow_mut() =
+				<BoundedVec<u64, ConstU32<256_u32>>>::truncate_from(new_members.to_vec())
+		});
 	}
 }
 
@@ -133,6 +140,7 @@ impl Config for Test {
 	type Period = ConstU64<4>;
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64>;
+	type MaximumMembers = ConstU32<256>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -151,7 +159,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.assimilate_storage(&mut t)
 	.unwrap();
 	pallet_scored_pool::GenesisConfig::<Test> {
-		pool: vec![(5, None), (10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3))],
+		pool: bounded_vec![(5, None), (10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3))],
 		member_count: 2,
 	}
 	.assimilate_storage(&mut t)

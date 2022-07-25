@@ -98,10 +98,11 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use codec::FullCodec;
+use codec::{FullCodec, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	traits::{ChangeMembers, Currency, Get, InitializeMembers, ReservableCurrency},
+	BoundedVec,
 };
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32Bit, StaticLookup, Zero};
@@ -109,7 +110,10 @@ use sp_std::{fmt::Debug, prelude::*};
 
 type BalanceOf<T, I> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type PoolT<T, I> = Vec<(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>)>;
+type PoolT<T, I> = BoundedVec<
+	(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>),
+	<T as Config<I>>::MaximumMembers,
+>;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -129,13 +133,17 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The currency used for deposits.
 		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+
+		/// Maximum acceptable members length.
+		///
+		#[pallet::constant]
+		type MaximumMembers: Get<u32>;
 
 		/// The score attributed to a member or candidate.
 		type Score: AtLeast32Bit
@@ -145,7 +153,8 @@ pub mod pallet {
 			+ FullCodec
 			+ MaybeSerializeDeserialize
 			+ Debug
-			+ scale_info::TypeInfo;
+			+ scale_info::TypeInfo
+			+ MaxEncodedLen;
 
 		/// The overarching event type.
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
@@ -228,7 +237,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub(crate) type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AccountId, T::MaximumMembers>, ValueQuery>;
 
 	/// Size of the `Members` set.
 	#[pallet::storage]
@@ -251,7 +260,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			let mut pool = self.pool.clone();
+			let mut pool = self.pool.clone().into_inner();
 
 			// reserve balance for each candidate in the pool.
 			// panicking here is ok, since this just happens one time, pre-genesis.
@@ -264,10 +273,10 @@ pub mod pallet {
 			// Sorts the `Pool` by score in a descending order. Entities which
 			// have a score of `None` are sorted to the beginning of the vec.
 			pool.sort_by_key(|(_, maybe_score)| Reverse(maybe_score.unwrap_or_default()));
-
+			let pool_bounded = <PoolT<T, I>>::truncate_from(pool);
 			<MemberCount<T, I>>::put(self.member_count);
-			<Pool<T, I>>::put(&pool);
-			<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipInitialized);
+			<Pool<T, I>>::put(&pool_bounded);
+			<Pallet<T, I>>::refresh_members(pool_bounded, ChangeReceiver::MembershipInitialized);
 		}
 	}
 
@@ -307,7 +316,8 @@ pub mod pallet {
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
-			<Pool<T, I>>::append((who.clone(), Option::<<T as Config<I>>::Score>::None));
+			<Pool<T, I>>::try_append((who.clone(), Option::<<T as Config<I>>::Score>::None))
+				.expect("Pool  must be less than T::MaximumMembers");
 
 			<CandidateExists<T, I>>::insert(&who, true);
 
@@ -393,7 +403,8 @@ pub mod pallet {
 					Reverse(maybe_score.unwrap_or_default())
 				})
 				.unwrap_or_else(|l| l);
-			pool.insert(location, item);
+			pool.try_insert(location, item)
+				.expect("Pool  must be less than T::MaximumMembers");
 
 			<Pool<T, I>>::put(&pool);
 			Self::deposit_event(Event::<T, I>::CandidateScored);
@@ -424,22 +435,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn refresh_members(pool: PoolT<T, I>, notify: ChangeReceiver) {
 		let count = MemberCount::<T, I>::get();
 
+		let pool = pool.into_inner();
+
 		let mut new_members: Vec<T::AccountId> = pool
 			.into_iter()
 			.filter(|(_, score)| score.is_some())
 			.take(count as usize)
 			.map(|(account_id, _)| account_id)
 			.collect();
-		new_members.sort();
 
+		new_members.sort();
+		let new_members_bounded =
+			BoundedVec::<T::AccountId, T::MaximumMembers>::truncate_from(new_members);
 		let old_members = <Members<T, I>>::get();
-		<Members<T, I>>::put(&new_members);
+
+		<Members<T, I>>::put(&new_members_bounded);
 
 		match notify {
-			ChangeReceiver::MembershipInitialized =>
-				T::MembershipInitialized::initialize_members(&new_members),
-			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(&new_members[..], &old_members[..]),
+			ChangeReceiver::MembershipInitialized => {
+				T::MembershipInitialized::initialize_members(&new_members_bounded)
+			},
+			ChangeReceiver::MembershipChanged => {
+				T::MembershipChanged::set_members_sorted(&new_members_bounded[..], &old_members[..])
+			},
 		}
 	}
 
