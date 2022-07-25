@@ -4754,7 +4754,6 @@ dependencies = [
  "node-primitives",
  "pallet-contracts-rpc",
  "pallet-mmr-rpc",
- "pallet-nomination-pools-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
  "sc-client-api",
@@ -5983,20 +5982,6 @@ dependencies = [
  "sp-runtime",
  "sp-staking",
  "sp-std",
-]
-
-[[package]]
-name = "pallet-nomination-pools-rpc"
-version = "1.0.0-dev"
-dependencies = [
- "jsonrpsee",
- "pallet-nomination-pools-rpc-runtime-api",
- "parity-scale-codec",
- "sp-api",
- "sp-blockchain",
- "sp-core",
- "sp-rpc",
- "sp-runtime",
 ]
 
 [[package]]
