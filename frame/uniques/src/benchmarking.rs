@@ -411,7 +411,7 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()))
 	verify {
 		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
-			next_id: T::CollectionId::from_u8(1).unwrap()
+			next_id: 1u32.into()
 	}.into());
   }
 
