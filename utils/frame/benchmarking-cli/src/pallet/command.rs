@@ -239,12 +239,12 @@ impl PalletCmd {
 					let diff =
 						highest.checked_sub(lowest).ok_or("`low` cannot be higher than `high`")?;
 
+					// The slope logic needs at least two points
+					// to compute a slope.
 					if self.steps < 2 {
 						return Err("`steps` must be at least 2.".into())
 					}
 
-					// The slope logic needs at least two points
-					// to compute a slope.
 					let step_size = (diff as f32 / (self.steps - 1) as f32).max(0.0);
 
 					for s in 0..self.steps {
@@ -378,7 +378,7 @@ impl PalletCmd {
 								String::from_utf8(extrinsic.clone())
 									.expect("Encoded from String; qed"),
 								components.len(),
-								s + 1, // s starts at 0. todo show step
+								s + 1, // s starts at 0.
 								// `steps` is the number of steps *per* component.
 								all_components.len(),
 								r + 1,
