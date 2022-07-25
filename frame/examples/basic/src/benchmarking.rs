@@ -63,7 +63,7 @@ benchmarks! {
 		}
 	}: {
 		// The benchmark execution phase could also be a closure with custom code
-		m.sort();
+		m.sort_unstable();
 	}
 
 	// This line generates test cases for benchmarking, and could be run by:

@@ -99,7 +99,7 @@ benchmarks! {
 	propose_curator {
 		setup_pot_account::<T>();
 		let (caller, curator, fee, value, reason) = setup_bounty::<T>(0, T::MaximumReasonLength::get());
-		let curator_lookup = T::Lookup::unlookup(curator.clone());
+		let curator_lookup = T::Lookup::unlookup(curator);
 		Bounties::<T>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T>::get() - 1;
 		Bounties::<T>::approve_bounty(RawOrigin::Root.into(), bounty_id)?;

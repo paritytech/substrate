@@ -16,12 +16,13 @@
 // limitations under the License.
 
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_noop, assert_ok, assert_storage_noop,
 	dispatch::{DispatchError, DispatchResult},
 	storage::{with_transaction, TransactionOutcome::*},
 	transactional, StorageMap, StorageValue,
 };
 use sp_io::TestExternalities;
+use sp_runtime::TransactionOutcome;
 use sp_std::result;
 
 pub trait Config: frame_support_test::Config {}
@@ -67,13 +68,13 @@ fn storage_transaction_basic_commit() {
 		assert_eq!(Value::get(), 0);
 		assert!(!Map::contains_key("val0"));
 
-		with_transaction(|| {
+		assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 			Value::set(99);
 			Map::insert("val0", 99);
 			assert_eq!(Value::get(), 99);
 			assert_eq!(Map::get("val0"), 99);
-			Commit(())
-		});
+			Commit(Ok(()))
+		}));
 
 		assert_eq!(Value::get(), 99);
 		assert_eq!(Map::get("val0"), 99);
@@ -86,13 +87,26 @@ fn storage_transaction_basic_rollback() {
 		assert_eq!(Value::get(), 0);
 		assert_eq!(Map::get("val0"), 0);
 
-		with_transaction(|| {
-			Value::set(99);
-			Map::insert("val0", 99);
-			assert_eq!(Value::get(), 99);
-			assert_eq!(Map::get("val0"), 99);
-			Rollback(())
-		});
+		assert_noop!(
+			with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				Value::set(99);
+				Map::insert("val0", 99);
+				assert_eq!(Value::get(), 99);
+				assert_eq!(Map::get("val0"), 99);
+				Rollback(Err("revert".into()))
+			}),
+			"revert"
+		);
+
+		assert_storage_noop!(assert_ok!(with_transaction(
+			|| -> TransactionOutcome<DispatchResult> {
+				Value::set(99);
+				Map::insert("val0", 99);
+				assert_eq!(Value::get(), 99);
+				assert_eq!(Map::get("val0"), 99);
+				Rollback(Ok(()))
+			}
+		)));
 
 		assert_eq!(Value::get(), 0);
 		assert_eq!(Map::get("val0"), 0);
@@ -105,32 +119,35 @@ fn storage_transaction_rollback_then_commit() {
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		with_transaction(|| {
+		assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
 			Value::set(2);
 			Map::insert("val1", 2);
 			Map::insert("val2", 2);
 
-			with_transaction(|| {
-				Value::set(3);
-				Map::insert("val1", 3);
-				Map::insert("val2", 3);
-				Map::insert("val3", 3);
+			assert_noop!(
+				with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					Value::set(3);
+					Map::insert("val1", 3);
+					Map::insert("val2", 3);
+					Map::insert("val3", 3);
 
-				assert_eq!(Value::get(), 3);
-				assert_eq!(Map::get("val1"), 3);
-				assert_eq!(Map::get("val2"), 3);
-				assert_eq!(Map::get("val3"), 3);
+					assert_eq!(Value::get(), 3);
+					assert_eq!(Map::get("val1"), 3);
+					assert_eq!(Map::get("val2"), 3);
+					assert_eq!(Map::get("val3"), 3);
 
-				Rollback(())
-			});
+					Rollback(Err("revert".into()))
+				}),
+				"revert"
+			);
 
 			assert_eq!(Value::get(), 2);
 			assert_eq!(Map::get("val1"), 2);
 			assert_eq!(Map::get("val2"), 2);
 			assert_eq!(Map::get("val3"), 0);
 
-			Commit(())
-		});
+			Commit(Ok(()))
+		}));
 
 		assert_eq!(Value::get(), 2);
 		assert_eq!(Map::get("val1"), 2);
@@ -145,32 +162,35 @@ fn storage_transaction_commit_then_rollback() {
 		Value::set(1);
 		Map::insert("val1", 1);
 
-		with_transaction(|| {
-			Value::set(2);
-			Map::insert("val1", 2);
-			Map::insert("val2", 2);
+		assert_noop!(
+			with_transaction(|| -> TransactionOutcome<DispatchResult> {
+				Value::set(2);
+				Map::insert("val1", 2);
+				Map::insert("val2", 2);
 
-			with_transaction(|| {
-				Value::set(3);
-				Map::insert("val1", 3);
-				Map::insert("val2", 3);
-				Map::insert("val3", 3);
+				assert_ok!(with_transaction(|| -> TransactionOutcome<DispatchResult> {
+					Value::set(3);
+					Map::insert("val1", 3);
+					Map::insert("val2", 3);
+					Map::insert("val3", 3);
+
+					assert_eq!(Value::get(), 3);
+					assert_eq!(Map::get("val1"), 3);
+					assert_eq!(Map::get("val2"), 3);
+					assert_eq!(Map::get("val3"), 3);
+
+					Commit(Ok(()))
+				}));
 
 				assert_eq!(Value::get(), 3);
 				assert_eq!(Map::get("val1"), 3);
 				assert_eq!(Map::get("val2"), 3);
 				assert_eq!(Map::get("val3"), 3);
 
-				Commit(())
-			});
-
-			assert_eq!(Value::get(), 3);
-			assert_eq!(Map::get("val1"), 3);
-			assert_eq!(Map::get("val2"), 3);
-			assert_eq!(Map::get("val3"), 3);
-
-			Rollback(())
-		});
+				Rollback(Err("revert".into()))
+			}),
+			"revert"
+		);
 
 		assert_eq!(Value::get(), 1);
 		assert_eq!(Map::get("val1"), 1);

@@ -20,7 +20,7 @@ The supported dispatchable functions are documented in the [`uniques::Call`](htt
 * **Asset transfer:** The action of transferring an asset instance from one account to another.
 * **Asset burning:** The destruction of an asset instance.
 * **Non-fungible asset:** An asset for which each unit has unique characteristics. There is exactly
-  one instance of such an asset in existance and there is exactly one owning account.
+  one instance of such an asset in existence and there is exactly one owning account.
 
 ### Goals
 
@@ -73,6 +73,6 @@ and its associated variants for documentation on each function.
 
 * [`System`](https://docs.rs/frame-system/latest/frame_system/)
 * [`Support`](https://docs.rs/frame-support/latest/frame_support/)
-* [`Assets`](https://docs.rs/pallet-assets/latest/pallet_assetss/)
+* [`Assets`](https://docs.rs/pallet-assets/latest/pallet_assets/)
 
 License: Apache-2.0

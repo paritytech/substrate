@@ -1,28 +1,23 @@
 error[E0053]: method `test` has an incompatible type for trait
-  --> $DIR/impl_incorrect_method_signature.rs:19:17
+  --> tests/ui/impl_incorrect_method_signature.rs:19:17
    |
-13 |         fn test(data: u64);
-   |                       --- type in trait
-...
 19 |         fn test(data: String) {}
    |                       ^^^^^^
    |                       |
    |                       expected `u64`, found struct `std::string::String`
    |                       help: change the parameter type to match the trait: `u64`
    |
+note: type in trait
+  --> tests/ui/impl_incorrect_method_signature.rs:13:17
+   |
+13 |         fn test(data: u64);
+   |                       ^^^
    = note: expected fn pointer `fn(u64)`
               found fn pointer `fn(std::string::String)`
 
 error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for trait
-  --> $DIR/impl_incorrect_method_signature.rs:17:1
+  --> tests/ui/impl_incorrect_method_signature.rs:17:1
    |
-11 | / sp_api::decl_runtime_apis! {
-12 | |     pub trait Api {
-13 | |         fn test(data: u64);
-14 | |     }
-15 | | }
-   | |_- type in trait
-16 |
 17 |   sp_api::impl_runtime_apis! {
    |   -^^^^^^^^^^^^^^^^^^^^^^^^^
    |   |
@@ -36,12 +31,21 @@ error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for tr
 33 | | }
    | |_- help: change the parameter type to match the trait: `std::option::Option<u64>`
    |
+note: type in trait
+  --> tests/ui/impl_incorrect_method_signature.rs:11:1
+   |
+11 | / sp_api::decl_runtime_apis! {
+12 | |     pub trait Api {
+13 | |         fn test(data: u64);
+14 | |     }
+15 | | }
+   | |_^
    = note: expected fn pointer `fn(&RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>, &BlockId<__SR_API_BLOCK__>, ExecutionContext, std::option::Option<u64>, Vec<_>) -> Result<_, _>`
               found fn pointer `fn(&RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>, &BlockId<__SR_API_BLOCK__>, ExecutionContext, std::option::Option<std::string::String>, Vec<_>) -> Result<_, _>`
    = note: this error originates in the macro `sp_api::impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
-  --> $DIR/impl_incorrect_method_signature.rs:17:1
+  --> tests/ui/impl_incorrect_method_signature.rs:17:1
    |
 17 | / sp_api::impl_runtime_apis! {
 18 | |     impl self::Api<Block> for Runtime {
@@ -55,7 +59,7 @@ error[E0308]: mismatched types
    = note: this error originates in the macro `sp_api::impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
-  --> $DIR/impl_incorrect_method_signature.rs:19:11
+  --> tests/ui/impl_incorrect_method_signature.rs:19:11
    |
 19 |         fn test(data: String) {}
    |                 ^^^^ expected `u64`, found struct `std::string::String`

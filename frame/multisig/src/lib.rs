@@ -295,8 +295,7 @@ pub mod pallet {
 						let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
 							.saturating_add(actual_weight);
 						let post_info = Some(weight_used).into();
-						let error = err.error.into();
-						DispatchErrorWithPostInfo { post_info, error }
+						DispatchErrorWithPostInfo { post_info, error: err.error }
 					},
 					None => err,
 				})

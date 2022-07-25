@@ -23,19 +23,20 @@ pub mod tokens;
 pub use tokens::{
 	currency::{
 		Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency,
-		VestingSchedule,
+		TotalIssuanceOf, VestingSchedule,
 	},
 	fungible, fungibles,
 	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
-	BalanceStatus, ExistenceRequirement, WithdrawReasons,
+	BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
 };
 
 mod members;
 #[allow(deprecated)]
 pub use members::{AllowAll, DenyAll, Filter};
 pub use members::{
-	AsContains, ChangeMembers, Contains, ContainsLengthBound, Everything, InitializeMembers,
-	IsInVec, Nothing, SortedMembers,
+	AsContains, ChangeMembers, Contains, ContainsLengthBound, ContainsPair, Everything,
+	EverythingBut, FromContainsPair, InitializeMembers, InsideBoth, IsInVec, Nothing,
+	SortedMembers, TheseExcept,
 };
 
 mod validation;
@@ -45,18 +46,24 @@ pub use validation::{
 	ValidatorSetWithIdentification, VerifySeal,
 };
 
+mod error;
+pub use error::PalletError;
+
 mod filter;
 pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
 
 mod misc;
 pub use misc::{
+	defensive_prelude::{self, *},
 	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
-	ConstU32, ConstU64, ConstU8, EnsureInherentsAreFirst, EqualPrivilegeOnly, EstimateCallFee,
-	ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime, IsSubType, IsType,
-	Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider, PreimageRecipient,
-	PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, UnixTime, WrapperKeepOpaque,
-	WrapperOpaque,
+	ConstU32, ConstU64, ConstU8, DefensiveSaturating, EnsureInherentsAreFirst, EqualPrivilegeOnly,
+	EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime,
+	IsSubType, IsType, Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider,
+	PreimageRecipient, PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, UnixTime,
+	WrapperKeepOpaque, WrapperOpaque,
 };
+#[doc(hidden)]
+pub use misc::{DEFENSIVE_OP_INTERNAL_ERROR, DEFENSIVE_OP_PUBLIC_ERROR};
 
 mod stored_map;
 pub use stored_map::{StorageMapShim, StoredMap};
@@ -86,7 +93,12 @@ pub use storage::{
 };
 
 mod dispatch;
-pub use dispatch::{EnsureOneOf, EnsureOrigin, OriginTrait, UnfilteredDispatchable};
+pub use dispatch::{
+	AsEnsureOriginWithArg, EnsureOneOf, EnsureOrigin, EnsureOriginWithArg, OriginTrait,
+	UnfilteredDispatchable,
+};
 
 mod voting;
-pub use voting::{CurrencyToVote, SaturatingCurrencyToVote, U128CurrencyToVote};
+pub use voting::{
+	CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote, U128CurrencyToVote, VoteTally,
+};

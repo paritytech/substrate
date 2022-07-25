@@ -281,7 +281,7 @@ benchmarks_instance_pallet! {
 		let target0 = T::Lookup::unlookup(account("target", 0, SEED));
 		let target1 = T::Lookup::unlookup(account("target", 1, SEED));
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
-	}: _(SystemOrigin::Signed(caller), Default::default(), target0.clone(), target1.clone(), target2.clone())
+	}: _(SystemOrigin::Signed(caller), Default::default(), target0, target1, target2)
 	verify {
 		assert_last_event::<T, I>(Event::TeamChanged {
 			asset_id: Default::default(),
@@ -346,7 +346,7 @@ benchmarks_instance_pallet! {
 		let (caller, _) = create_default_asset::<T, I>(true);
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
 		let dummy = vec![0u8; T::StringLimit::get() as usize];
-		let origin = SystemOrigin::Signed(caller.clone()).into();
+		let origin = SystemOrigin::Signed(caller).into();
 		Assets::<T, I>::set_metadata(origin, Default::default(), dummy.clone(), dummy, 12)?;
 
 		let origin = T::ForceOrigin::successful_origin();
@@ -365,7 +365,7 @@ benchmarks_instance_pallet! {
 			owner: caller_lookup.clone(),
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
-			freezer: caller_lookup.clone(),
+			freezer: caller_lookup,
 			min_balance: 100u32.into(),
 			is_sufficient: true,
 			is_frozen: false,
@@ -398,7 +398,7 @@ benchmarks_instance_pallet! {
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 		let amount = 100u32.into();
 		let origin = SystemOrigin::Signed(owner.clone()).into();
-		Assets::<T, I>::approve_transfer(origin, id, delegate_lookup.clone(), amount)?;
+		Assets::<T, I>::approve_transfer(origin, id, delegate_lookup, amount)?;
 
 		let dest: T::AccountId = account("dest", 0, SEED);
 		let dest_lookup = T::Lookup::unlookup(dest.clone());

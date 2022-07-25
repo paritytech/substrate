@@ -21,7 +21,10 @@ use super::{
 	imbalance::{Imbalance, SignedImbalance},
 	misc::{Balance, ExistenceRequirement, WithdrawReasons},
 };
-use crate::dispatch::{DispatchError, DispatchResult};
+use crate::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::Get,
+};
 use codec::MaxEncodedLen;
 use sp_runtime::traits::MaybeSerializeDeserialize;
 use sp_std::fmt::Debug;
@@ -80,7 +83,7 @@ pub trait Currency<AccountId> {
 	/// This is just the same as burning and issuing the same amount and has no effect on the
 	/// total issuance.
 	fn pair(amount: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
-		(Self::burn(amount.clone()), Self::issue(amount))
+		(Self::burn(amount), Self::issue(amount))
 	}
 
 	/// The 'free' balance of a given account.
@@ -198,6 +201,15 @@ pub trait Currency<AccountId> {
 		who: &AccountId,
 		balance: Self::Balance,
 	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance>;
+}
+
+/// A non-const `Get` implementation parameterised by a `Currency` impl which provides the result
+/// of `total_issuance`.
+pub struct TotalIssuanceOf<C: Currency<A>, A>(sp_std::marker::PhantomData<(C, A)>);
+impl<C: Currency<A>, A> Get<C::Balance> for TotalIssuanceOf<C, A> {
+	fn get() -> C::Balance {
+		C::total_issuance()
+	}
 }
 
 #[cfg(feature = "std")]

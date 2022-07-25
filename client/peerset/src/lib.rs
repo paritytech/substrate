@@ -129,7 +129,7 @@ impl PeersetHandle {
 	/// Has no effect if the node was already a reserved peer.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for this node,
-	/// >           otherwise it will not be able to connect to it.
+	/// > otherwise it will not be able to connect to it.
 	pub fn add_reserved_peer(&self, set_id: SetId, peer_id: PeerId) {
 		let _ = self.tx.unbounded_send(Action::AddReservedPeer(set_id, peer_id));
 	}
@@ -232,7 +232,7 @@ pub struct SetConfig {
 	/// List of bootstrap nodes to initialize the set with.
 	///
 	/// > **Note**: Keep in mind that the networking has to know an address for these nodes,
-	/// >           otherwise it will not be able to connect to them.
+	/// > otherwise it will not be able to connect to them.
 	pub bootnodes: Vec<PeerId>,
 
 	/// Lists of nodes we should always be connected to.
@@ -619,11 +619,9 @@ impl Peerset {
 
 		self.update_time();
 
-		if self.reserved_nodes[set_id.0].1 {
-			if !self.reserved_nodes[set_id.0].0.contains(&peer_id) {
-				self.message_queue.push_back(Message::Reject(index));
-				return
-			}
+		if self.reserved_nodes[set_id.0].1 && !self.reserved_nodes[set_id.0].0.contains(&peer_id) {
+			self.message_queue.push_back(Message::Reject(index));
+			return
 		}
 
 		let not_connected = match self.data.peer(set_id.0, &peer_id) {
@@ -730,8 +728,7 @@ impl Stream for Peerset {
 				return Poll::Ready(Some(message))
 			}
 
-			if let Poll::Ready(_) = Future::poll(Pin::new(&mut self.next_periodic_alloc_slots), cx)
-			{
+			if Future::poll(Pin::new(&mut self.next_periodic_alloc_slots), cx).is_ready() {
 				self.next_periodic_alloc_slots = Delay::new(Duration::new(1, 0));
 
 				for set_index in 0..self.data.num_sets() {
@@ -798,7 +795,7 @@ mod tests {
 
 	fn next_message(mut peerset: Peerset) -> Result<(Message, Peerset), ()> {
 		let next = futures::executor::block_on_stream(&mut peerset).next();
-		let message = next.ok_or_else(|| ())?;
+		let message = next.ok_or(())?;
 		Ok((message, peerset))
 	}
 

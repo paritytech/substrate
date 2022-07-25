@@ -17,13 +17,14 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	block_request_handler::BlockRequestHandler, config,
-	light_client_requests::handler::LightClientRequestHandler,
-	state_request_handler::StateRequestHandler, Event, NetworkService, NetworkWorker,
+	config, state_request_handler::StateRequestHandler, Event, NetworkService, NetworkWorker,
 };
 
 use futures::prelude::*;
 use libp2p::PeerId;
+use sc_network_common::config::ProtocolId;
+use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
+use sc_network_sync::block_request_handler::BlockRequestHandler;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
@@ -87,7 +88,7 @@ fn build_test_full_node(
 		None,
 	));
 
-	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+	let protocol_id = ProtocolId::from("/test-protocol-name");
 
 	let block_request_protocol_config = {
 		let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), 50);
@@ -186,7 +187,6 @@ fn build_nodes_one_proto() -> (
 	(node1, events_stream1, node2, events_stream2)
 }
 
-#[ignore]
 #[test]
 fn notifications_state_consistent() {
 	// Runs two nodes and ensures that events are propagated out of the API in a consistent
@@ -272,38 +272,38 @@ fn notifications_state_consistent() {
 			match next_event {
 				future::Either::Left(Event::NotificationStreamOpened {
 					remote, protocol, ..
-				}) => {
-					something_happened = true;
-					assert!(!node1_to_node2_open);
-					node1_to_node2_open = true;
-					assert_eq!(remote, *node2.local_peer_id());
-					assert_eq!(protocol, PROTOCOL_NAME);
-				},
+				}) =>
+					if protocol == PROTOCOL_NAME {
+						something_happened = true;
+						assert!(!node1_to_node2_open);
+						node1_to_node2_open = true;
+						assert_eq!(remote, *node2.local_peer_id());
+					},
 				future::Either::Right(Event::NotificationStreamOpened {
 					remote, protocol, ..
-				}) => {
-					something_happened = true;
-					assert!(!node2_to_node1_open);
-					node2_to_node1_open = true;
-					assert_eq!(remote, *node1.local_peer_id());
-					assert_eq!(protocol, PROTOCOL_NAME);
-				},
+				}) =>
+					if protocol == PROTOCOL_NAME {
+						something_happened = true;
+						assert!(!node2_to_node1_open);
+						node2_to_node1_open = true;
+						assert_eq!(remote, *node1.local_peer_id());
+					},
 				future::Either::Left(Event::NotificationStreamClosed {
 					remote, protocol, ..
-				}) => {
-					assert!(node1_to_node2_open);
-					node1_to_node2_open = false;
-					assert_eq!(remote, *node2.local_peer_id());
-					assert_eq!(protocol, PROTOCOL_NAME);
-				},
+				}) =>
+					if protocol == PROTOCOL_NAME {
+						assert!(node1_to_node2_open);
+						node1_to_node2_open = false;
+						assert_eq!(remote, *node2.local_peer_id());
+					},
 				future::Either::Right(Event::NotificationStreamClosed {
 					remote, protocol, ..
-				}) => {
-					assert!(node2_to_node1_open);
-					node2_to_node1_open = false;
-					assert_eq!(remote, *node1.local_peer_id());
-					assert_eq!(protocol, PROTOCOL_NAME);
-				},
+				}) =>
+					if protocol == PROTOCOL_NAME {
+						assert!(node2_to_node1_open);
+						node2_to_node1_open = false;
+						assert_eq!(remote, *node1.local_peer_id());
+					},
 				future::Either::Left(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node1_to_node2_open);
 					assert_eq!(remote, *node2.local_peer_id());

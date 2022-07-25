@@ -17,10 +17,11 @@
 
 use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
+	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
-		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
+		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
@@ -29,7 +30,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 pub struct SomeType1;
 impl From<SomeType1> for u64 {
@@ -96,13 +97,9 @@ impl SomeAssociation2 for u64 {
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::{
-		SomeAssociation1, SomeAssociation2, SomeType1, SomeType2, SomeType3, SomeType4, SomeType5,
-		SomeType6, SomeType7, StorageVersion,
-	};
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use scale_info::TypeInfo;
 
 	type BalanceOf<T> = <T as Config>::Balance;
 
@@ -229,9 +226,14 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
+	#[derive(PartialEq, Eq)]
 	pub enum Error<T> {
 		/// doc comment put into metadata
 		InsufficientProposersBalance,
+		Code(u8),
+		#[codec(skip)]
+		Skipped(u128),
+		CompactU8(#[codec(compact)] u8),
 	}
 
 	#[pallet::event]
@@ -432,7 +434,7 @@ pub mod pallet {
 }
 
 // Test that a pallet with non generic event and generic genesis_config is correctly handled
-// and that a pallet without the attribute generate_storage_info is correctly handled.
+// and that a pallet with the attribute without_storage_info is correctly handled.
 #[frame_support::pallet]
 pub mod pallet2 {
 	use super::{SomeAssociation1, SomeType1};
@@ -654,8 +656,13 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 1,
+			error: [0, 0, 0, 0],
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
+	assert_eq!(<pallet::Error::<Runtime> as PalletError>::MAX_ENCODED_SIZE, 3);
 }
 
 #[test]
@@ -1624,4 +1631,18 @@ fn assert_type_all_pallets_without_system_reversed_is_correct() {
 	fn _b(t: (Example4, (Example2, (Example,)))) {
 		_a(t)
 	}
+}
+
+#[test]
+fn test_storage_alias() {
+	#[frame_support::storage_alias]
+	type Value<T: pallet::Config>
+	where
+		<T as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
+	= StorageValue<pallet::Pallet<T>, u32, ValueQuery>;
+
+	TestExternalities::default().execute_with(|| {
+		pallet::Value::<Runtime>::put(10);
+		assert_eq!(10, Value::<Runtime>::get());
+	})
 }

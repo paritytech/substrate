@@ -40,26 +40,27 @@
 
 extern crate alloc;
 
+pub mod embedded_executor;
+pub mod env;
+#[cfg(not(feature = "std"))]
+pub mod host_executor;
+
+use sp_core::RuntimeDebug;
 use sp_std::prelude::*;
 
-pub use sp_core::sandbox::HostError;
 pub use sp_wasm_interface::{ReturnValue, Value};
+
+#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
+pub use self::embedded_executor as default_executor;
+pub use self::env::HostError;
+#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
+pub use self::host_executor as default_executor;
 
 /// The target used for logging.
 const TARGET: &str = "runtime::sandbox";
 
-pub mod embedded_executor;
-#[cfg(not(feature = "std"))]
-pub mod host_executor;
-
-#[cfg(all(feature = "wasmer-sandbox", not(feature = "std")))]
-pub use host_executor as default_executor;
-
-#[cfg(not(all(feature = "wasmer-sandbox", not(feature = "std"))))]
-pub use embedded_executor as default_executor;
-
 /// Error that can occur while using this crate.
-#[derive(sp_core::RuntimeDebug)]
+#[derive(RuntimeDebug)]
 pub enum Error {
 	/// Module is not valid, couldn't be instantiated.
 	Module,

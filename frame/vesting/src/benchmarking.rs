@@ -72,7 +72,7 @@ fn add_vesting_schedules<T: Config>(
 		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
 	}
 
-	Ok(total_locked.into())
+	Ok(total_locked)
 }
 
 benchmarks! {
@@ -91,7 +91,7 @@ benchmarks! {
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
-			Some(expected_balance.into()),
+			Some(expected_balance),
 			"Vesting schedule not added",
 		);
 	}: vest(RawOrigin::Signed(caller.clone()))
@@ -99,7 +99,7 @@ benchmarks! {
 		// Nothing happened since everything is still vested.
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
-			Some(expected_balance.into()),
+			Some(expected_balance),
 			"Vesting schedule was removed",
 		);
 	}
@@ -156,7 +156,7 @@ benchmarks! {
 		// Nothing happened since everything is still vested.
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&other),
-			Some(expected_balance.into()),
+			Some(expected_balance),
 			"Vesting schedule was removed",
 		);
 	}
@@ -260,7 +260,7 @@ benchmarks! {
 		);
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&target),
-			Some(expected_balance.into()),
+			Some(expected_balance),
 				"Lock not correctly updated",
 			);
 		}
@@ -274,7 +274,7 @@ benchmarks! {
 		// Give target existing locks.
 		add_locks::<T>(&caller, l as u8);
 		// Add max vesting schedules.
-		let expected_balance = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
+		let expected_balance = add_vesting_schedules::<T>(caller_lookup, s)?;
 
 		// Schedules are not vesting at block 0.
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
@@ -324,7 +324,7 @@ benchmarks! {
 		// Give target other locks.
 		add_locks::<T>(&caller, l as u8);
 		// Add max vesting schedules.
-		let total_transferred = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
+		let total_transferred = add_vesting_schedules::<T>(caller_lookup, s)?;
 
 		// Go to about half way through all the schedules duration. (They all start at 1, and have a duration of 20 or 21).
 		System::<T>::set_block_number(11u32.into());

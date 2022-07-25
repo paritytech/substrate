@@ -15,16 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_support::{traits::Contains,parameter_types, PalletId};
+use frame_support::{parameter_types, traits::Contains, PalletId};
+use orml_traits::parameter_type_with_key;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{AccountIdConversion, BlakeTwo256, ConvertInto, IdentityLookup},
 };
-use orml_traits::parameter_type_with_key;
-use sp_runtime::{
-	traits::{AccountIdConversion, ConvertInto},
-};
+use sp_std::convert::TryFrom;
 
 use super::*;
 use crate as pallet_vesting_mangata;
@@ -36,7 +34,6 @@ pub(crate) type AccountId = u64;
 pub(crate) type TokenId = u32;
 pub(crate) type Amount = i128;
 pub(crate) type BlockNumber = u64;
-
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -102,7 +99,7 @@ impl Contains<AccountId> for DustRemovalWhitelist {
 parameter_types! {
 	pub const NativeCurrencyId: u32 = NATIVE_CURRENCY_ID;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub TreasuryAccount: AccountId = TreasuryPalletId::get().into_account();
+	pub TreasuryAccount: AccountId = TreasuryPalletId::get().into_account_truncating();
 	pub const MaxLocks: u32 = 50;
 }
 
@@ -147,7 +144,10 @@ impl ExtBuilder {
 		self
 	}
 
-	pub fn vesting_genesis_config(mut self, config: Vec<(AccountId, TokenId, u64, u64, Balance)>) -> Self {
+	pub fn vesting_genesis_config(
+		mut self,
+		config: Vec<(AccountId, TokenId, u64, u64, Balance)>,
+	) -> Self {
 		self.vesting_genesis_config = Some(config);
 		self
 	}
@@ -173,9 +173,21 @@ impl ExtBuilder {
 			vesting_config
 		} else {
 			vec![
-				(1, NATIVE_CURRENCY_ID, 0, 10, (10 * self.existential_deposit) - (5 * self.existential_deposit)),
+				(
+					1,
+					NATIVE_CURRENCY_ID,
+					0,
+					10,
+					(10 * self.existential_deposit) - (5 * self.existential_deposit),
+				),
 				(2, NATIVE_CURRENCY_ID, 10, 20, 20 * self.existential_deposit),
-				(12, NATIVE_CURRENCY_ID, 10, 20, (10 * self.existential_deposit) - (5 * self.existential_deposit)),
+				(
+					12,
+					NATIVE_CURRENCY_ID,
+					10,
+					20,
+					(10 * self.existential_deposit) - (5 * self.existential_deposit),
+				),
 			]
 		};
 
@@ -188,7 +200,12 @@ impl ExtBuilder {
 	}
 }
 
-pub (crate) fn usable_native_balance<T: frame_system::Config + orml_tokens::Config> (who: <T as frame_system::Config>::AccountId) -> <T as orml_tokens::Config>::Balance {
-	let orml_account= <orml_tokens::Pallet<T>>::accounts::<<T as frame_system::Config>::AccountId, <T as orml_tokens::Config>::CurrencyId>(who.into(), NATIVE_CURRENCY_ID.into());
+pub(crate) fn usable_native_balance<T: frame_system::Config + orml_tokens::Config>(
+	who: <T as frame_system::Config>::AccountId,
+) -> <T as orml_tokens::Config>::Balance {
+	let orml_account = <orml_tokens::Pallet<T>>::accounts::<
+		<T as frame_system::Config>::AccountId,
+		<T as orml_tokens::Config>::CurrencyId,
+	>(who.into(), NATIVE_CURRENCY_ID.into());
 	orml_account.free.saturating_sub(orml_account.frozen)
 }

@@ -47,8 +47,9 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,
 		amount: Self::Balance,
+		mint: bool,
 	) -> DepositConsequence {
-		Pallet::<T, I>::can_increase(asset, who, amount)
+		Pallet::<T, I>::can_increase(asset, who, amount, mint)
 	}
 
 	fn can_withdraw(

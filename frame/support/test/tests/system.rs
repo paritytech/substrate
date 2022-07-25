@@ -69,23 +69,7 @@ frame_support::decl_error! {
 	}
 }
 
-/// Origin for the system module.
-#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, scale_info::TypeInfo)]
-pub enum RawOrigin<AccountId> {
-	Root,
-	Signed(AccountId),
-	None,
-}
-
-impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
-	fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
-		match s {
-			Some(who) => RawOrigin::Signed(who),
-			None => RawOrigin::None,
-		}
-	}
-}
-
+pub use frame_support::dispatch::RawOrigin;
 pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 
 #[allow(dead_code)]

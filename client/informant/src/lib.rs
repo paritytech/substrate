@@ -116,7 +116,7 @@ where
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best {
 				let maybe_ancestor =
-					sp_blockchain::lowest_common_ancestor(&*client, last_hash.clone(), n.hash);
+					sp_blockchain::lowest_common_ancestor(&*client, *last_hash, n.hash);
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
@@ -135,13 +135,13 @@ where
 		}
 
 		if n.is_new_best {
-			last_best = Some((n.header.number().clone(), n.hash.clone()));
+			last_best = Some((*n.header.number(), n.hash));
 		}
 
 		// If we already printed a message for a given block recently,
 		// we should not print it again.
 		if !last_blocks.contains(&n.hash) {
-			last_blocks.push_back(n.hash.clone());
+			last_blocks.push_back(n.hash);
 
 			if last_blocks.len() > max_blocks_to_track {
 				last_blocks.pop_front();

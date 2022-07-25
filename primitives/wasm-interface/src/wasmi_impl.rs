@@ -16,8 +16,8 @@
 // limitations under the License.
 
 //! Implementation of conversions between Substrate and wasmi types.
-
 use crate::{Signature, Value, ValueType};
+use sp_std::vec::Vec;
 
 impl From<Value> for wasmi::RuntimeValue {
 	fn from(value: Value) -> Self {
@@ -73,7 +73,7 @@ impl From<Signature> for wasmi::Signature {
 impl From<&wasmi::Signature> for Signature {
 	fn from(sig: &wasmi::Signature) -> Self {
 		Signature::new(
-			sig.params().into_iter().copied().map(Into::into).collect::<Vec<_>>(),
+			sig.params().iter().copied().map(Into::into).collect::<Vec<_>>(),
 			sig.return_type().map(Into::into),
 		)
 	}

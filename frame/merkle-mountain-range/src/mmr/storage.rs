@@ -18,7 +18,6 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
-use frame_support::log;
 use mmr_lib::helper;
 use sp_io::offchain_index;
 use sp_std::iter::Peekable;
@@ -93,7 +92,7 @@ where
 		}
 
 		sp_std::if_std! {
-			log::trace!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
+			frame_support::log::trace!("elems: {:?}", elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>());
 		}
 
 		let leaves = NumberOfLeaves::<T, I>::get();
@@ -152,8 +151,8 @@ fn peaks_to_prune_and_store(
 	let peaks_before = if old_size == 0 { vec![] } else { helper::get_peaks(old_size) };
 	let peaks_after = helper::get_peaks(new_size);
 	sp_std::if_std! {
-		log::trace!("peaks_before: {:?}", peaks_before);
-		log::trace!("peaks_after: {:?}", peaks_after);
+		frame_support::log::trace!("peaks_before: {:?}", peaks_before);
+		frame_support::log::trace!("peaks_after: {:?}", peaks_after);
 	}
 	let mut peaks_before = peaks_before.into_iter().peekable();
 	let mut peaks_after = peaks_after.into_iter().peekable();

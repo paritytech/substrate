@@ -104,7 +104,7 @@ use sp_staking::{
 	offence::{Kind, Offence, ReportOffence},
 	SessionIndex,
 };
-use sp_std::{convert::TryInto, prelude::*};
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub mod sr25519 {
@@ -238,8 +238,7 @@ where
 /// `MultiAddrEncodingLimit` represents the size limit of the encoding of `MultiAddr`
 /// `AddressesLimit` represents the size limit of the vector of peers connected
 #[derive(Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-#[codec(mel_bound(PeerIdEncodingLimit: Get<u32>,
-  	MultiAddrEncodingLimit: Get<u32>, AddressesLimit: Get<u32>))]
+#[codec(mel_bound())]
 #[scale_info(skip_type_params(PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit))]
 pub struct BoundedOpaqueNetworkState<PeerIdEncodingLimit, MultiAddrEncodingLimit, AddressesLimit>
 where
@@ -509,9 +508,9 @@ pub mod pallet {
 
 				Ok(())
 			} else if exists {
-				Err(Error::<T>::DuplicatedHeartbeat)?
+				Err(Error::<T>::DuplicatedHeartbeat.into())
 			} else {
-				Err(Error::<T>::InvalidKey)?
+				Err(Error::<T>::InvalidKey.into())
 			}
 		}
 	}
@@ -574,7 +573,7 @@ pub mod pallet {
 
 				// check signature (this is expensive so we do it last).
 				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
-					authority_id.verify(&encoded_heartbeat, &signature)
+					authority_id.verify(&encoded_heartbeat, signature)
 				});
 
 				if !signature_valid {

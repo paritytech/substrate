@@ -70,20 +70,20 @@ pub(crate) mod tests;
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
 
-	pub(crate) const NAME: &'static str = "/grandpa/1";
+	pub(crate) const NAME: &str = "/grandpa/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
-	pub(crate) const LEGACY_NAMES: [&'static str; 1] = ["/paritytech/grandpa/1"];
+	pub(crate) const LEGACY_NAMES: [&str; 1] = ["/paritytech/grandpa/1"];
 
 	/// Name of the notifications protocol used by GRANDPA.
 	///
 	/// Must be registered towards the networking in order for GRANDPA to properly function.
-	pub fn standard_name<Hash: std::fmt::Display>(
+	pub fn standard_name<Hash: AsRef<[u8]>>(
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> std::borrow::Cow<'static, str> {
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", genesis_hash, fork_id),
-			None => format!("/{}", genesis_hash),
+			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
+			None => format!("/{}", hex::encode(genesis_hash)),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}
@@ -876,7 +876,7 @@ fn check_catch_up<Block: BlockT>(
 		let mut total_weight = 0;
 
 		for id in votes {
-			if let Some(weight) = voters.get(&id).map(|info| info.weight()) {
+			if let Some(weight) = voters.get(id).map(|info| info.weight()) {
 				total_weight += weight.get();
 				if total_weight > full_threshold {
 					return Err(cost::MALFORMED_CATCH_UP)

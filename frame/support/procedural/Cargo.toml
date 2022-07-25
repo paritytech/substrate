@@ -15,11 +15,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 proc-macro = true
 
 [dependencies]
-frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
-proc-macro2 = "1.0.36"
-quote = "1.0.10"
 Inflector = "0.11.4"
-syn = { version = "1.0.82", features = ["full"] }
+proc-macro2 = "1.0.37"
+quote = "1.0.10"
+syn = { version = "1.0.98", features = ["full"] }
+frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
 
 [features]
 default = ["std"]

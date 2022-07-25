@@ -63,14 +63,14 @@ impl Ord for RationalInfinite {
 	fn cmp(&self, other: &Self) -> Ordering {
 		// handle some edge cases.
 		if self.d() == other.d() {
-			self.n().cmp(&other.n())
+			self.n().cmp(other.n())
 		} else if self.d().is_zero() {
 			Ordering::Greater
 		} else if other.d().is_zero() {
 			Ordering::Less
 		} else {
 			// (a/b) cmp (c/d) => (a*d) cmp (c*b)
-			self.n().clone().mul(&other.d()).cmp(&other.n().clone().mul(&self.d()))
+			self.n().clone().mul(other.d()).cmp(&other.n().clone().mul(self.d()))
 		}
 	}
 }
@@ -272,6 +272,7 @@ impl PartialEq for Rational128 {
 #[cfg(test)]
 mod tests {
 	use super::{helpers_128bit::*, *};
+	use static_assertions::const_assert;
 
 	const MAX128: u128 = u128::MAX;
 	const MAX64: u128 = u64::MAX as u128;
@@ -349,8 +350,8 @@ mod tests {
 			r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64 - 1)),
 			Ok(340282366920938463408034375210639556610),
 		);
-		assert!(340282366920938463408034375210639556610 < MAX128);
-		assert!(340282366920938463408034375210639556610 == MAX64 * (MAX64 - 1));
+		const_assert!(340282366920938463408034375210639556610 < MAX128);
+		const_assert!(340282366920938463408034375210639556610 == MAX64 * (MAX64 - 1));
 	}
 
 	#[test]

@@ -173,7 +173,18 @@ where
 		<Self as crate::storage::StorageNMap<Key, Value>>::remove(key)
 	}
 
-	/// Remove all values under the first key.
+	/// Remove all values starting with `partial_key` in the overlay and up to `limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	pub fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
 	where
 		Key: HasKeyPrefix<KP>,
@@ -217,6 +228,8 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KArg, R, E, F>(key: KArg, f: F) -> Result<R, E>
 	where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
@@ -275,7 +288,17 @@ where
 		<Self as crate::storage::StorageNMap<Key, Value>>::migrate_keys::<_>(key, hash_fns)
 	}
 
-	/// Remove all value of the storage.
+	/// Remove all values in the overlay and up to `limit` in the backend.
+	///
+	/// All values in the client overlay will be deleted, if there is some `limit` then up to
+	/// `limit` values are deleted from the client backend, if `limit` is none then all values in
+	/// the client backend are deleted.
+	///
+	/// # Note
+	///
+	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
+	/// removed and the same result being returned. This happens because the keys to delete in the
+	/// overlay are not taken into account when deleting keys in the backend.
 	pub fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::remove_all(limit)
 	}
@@ -458,7 +481,7 @@ where
 			modifier: QueryKind::METADATA,
 			ty: StorageEntryType::Map {
 				key: scale_info::meta_type::<Key::Key>(),
-				hashers: Key::HASHER_METADATA.iter().cloned().collect(),
+				hashers: Key::HASHER_METADATA.to_vec(),
 				value: scale_info::meta_type::<Value>(),
 			},
 			default: OnEmpty::get().encode(),
@@ -566,10 +589,8 @@ mod test {
 			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 10);
 
 			{
-				crate::generate_storage_alias!(test, Foo => NMap<
-					Key<(u16, Blake2_128Concat)>,
-					u32
-				>);
+				#[crate::storage_alias]
+				type Foo = StorageNMap<test, (Key<Blake2_128Concat, u16>), u32>;
 
 				assert_eq!(Foo::contains_key((3,)), true);
 				assert_eq!(Foo::get((3,)), Some(10));

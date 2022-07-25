@@ -17,6 +17,7 @@
 
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
+	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
@@ -25,7 +26,7 @@ use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
 	TestExternalities,
 };
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, ModuleError};
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -341,7 +342,11 @@ fn error_expand() {
 	);
 	assert_eq!(
 		DispatchError::from(pallet::Error::<Runtime>::InsufficientProposersBalance),
-		DispatchError::Module { index: 1, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 1,
+			error: [0; 4],
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 
 	assert_eq!(
@@ -358,7 +363,11 @@ fn error_expand() {
 		DispatchError::from(
 			pallet::Error::<Runtime, pallet::Instance1>::InsufficientProposersBalance
 		),
-		DispatchError::Module { index: 2, error: 0, message: Some("InsufficientProposersBalance") },
+		DispatchError::Module(ModuleError {
+			index: 2,
+			error: [0; 4],
+			message: Some("InsufficientProposersBalance")
+		}),
 	);
 }
 
@@ -812,4 +821,16 @@ fn test_pallet_info_access() {
 	assert_eq!(<Instance1Example as frame_support::traits::PalletInfoAccess>::index(), 2);
 	assert_eq!(<Example2 as frame_support::traits::PalletInfoAccess>::index(), 3);
 	assert_eq!(<Instance1Example2 as frame_support::traits::PalletInfoAccess>::index(), 4);
+}
+
+#[test]
+fn test_storage_alias() {
+	#[frame_support::storage_alias]
+	type Value<T: pallet::Config<I>, I: 'static> =
+		StorageValue<pallet::Pallet<T, I>, u32, ValueQuery>;
+
+	TestExternalities::default().execute_with(|| {
+		pallet::Value::<Runtime, pallet::Instance1>::put(10);
+		assert_eq!(10, Value::<Runtime, pallet::Instance1>::get());
+	})
 }

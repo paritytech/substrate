@@ -22,7 +22,7 @@ use super::{
 	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
 };
 use frame_support::traits::Randomness as RandomnessT;
-use sp_runtime::traits::Hash;
+use sp_runtime::traits::{Hash, One, Saturating};
 
 /// Randomness usable by consensus protocols that **depend** upon finality and take action
 /// based upon on-chain commitments made during the epoch before the previous epoch.
@@ -38,7 +38,7 @@ use sp_runtime::traits::Hash;
 ///
 /// All input commitments used with `RandomnessFromTwoEpochsAgo` should come from at least
 /// three epochs ago. We require BABE session keys be registered at least three epochs
-/// before being used to derive `CurrentBlockRandomness` for example.
+/// before being used to derive `ParentBlockRandomness` for example.
 ///
 /// All users learn `RandomnessFromTwoEpochsAgo` when epoch `current_epoch - 1` starts,
 /// although some learn it a few block earlier inside epoch `current_epoch - 2`.
@@ -76,7 +76,7 @@ pub struct RandomnessFromTwoEpochsAgo<T>(sp_std::marker::PhantomData<T>);
 /// end of every epoch, but they possess some influence over when they possess more slots.
 ///
 /// As an example usage, we determine parachain auctions ending times in Polkadot using
-/// `RandomnessFromOneEpochAgo` because it reduces bias from `CurrentBlockRandomness` and
+/// `RandomnessFromOneEpochAgo` because it reduces bias from `ParentBlockRandomness` and
 /// does not require the extra finality delay of `RandomnessFromTwoEpochsAgo`.
 pub struct RandomnessFromOneEpochAgo<T>(sp_std::marker::PhantomData<T>);
 
@@ -89,28 +89,44 @@ pub struct RandomnessFromOneEpochAgo<T>(sp_std::marker::PhantomData<T>);
 /// wins whatever game they play.
 ///
 /// As with `RandomnessFromTwoEpochsAgo`, all input commitments combined with
-/// `CurrentBlockRandomness` should come from at least two epoch ago, except preferably
+/// `ParentBlockRandomness` should come from at least two epoch ago, except preferably
 /// not near epoch ending, and thus ideally three epochs ago.
 ///
-/// Almost all users learn this randomness for a block when the block producer announces
-/// the block, which makes this randomness appear quite fresh. Yet, the block producer
+/// Almost all users learn this randomness for a given block by the time they receive it's
+/// parent block, which makes this randomness appear fresh enough. Yet, the block producer
 /// themselves learned this randomness at the beginning of epoch `current_epoch - 2`, at
 /// the same time as they learn `RandomnessFromTwoEpochsAgo`.
 ///
 /// Aside from just biasing `RandomnessFromTwoEpochsAgo`, adversaries could also bias
-/// `CurrentBlockRandomness` by never announcing their block if doing so yields an
-/// unfavorable randomness. As such, `CurrentBlockRandomness` should be considered weaker
-/// than both other randomness sources provided by BABE, but `CurrentBlockRandomness`
+/// `ParentBlockRandomness` by never announcing their block if doing so yields an
+/// unfavorable randomness. As such, `ParentBlockRandomness` should be considered weaker
+/// than both other randomness sources provided by BABE, but `ParentBlockRandomness`
 /// remains constrained by declared staking, while a randomness source like block hash is
 /// only constrained by adversaries' unknowable computational power.
 ///
 /// As an example use, parachains could assign block production slots based upon the
-/// `CurrentBlockRandomness` of their relay parent or relay parent's parent, provided the
+/// `ParentBlockRandomness` of their relay parent or relay parent's parent, provided the
 /// parachain registers collators but avoids censorship sensitive functionality like
 /// slashing. Any parachain with slashing could operate BABE itself or perhaps better yet
-/// a BABE-like approach that derives its `CurrentBlockRandomness`, and authorizes block
-/// production, based upon the relay parent's `CurrentBlockRandomness` or more likely the
+/// a BABE-like approach that derives its `ParentBlockRandomness`, and authorizes block
+/// production, based upon the relay parent's `ParentBlockRandomness` or more likely the
 /// relay parent's `RandomnessFromTwoEpochsAgo`.
+///
+/// NOTE: there is some nuance here regarding what is current and parent randomness. If
+/// you are using this trait from within the runtime (i.e. as part of block execution)
+/// then the randomness provided here will always be generated from the parent block. If
+/// instead you are using this randomness externally, i.e. after block execution, then
+/// this randomness will be provided by the "current" block (this stems from the fact that
+/// we process VRF outputs on block execution finalization, i.e. `on_finalize`).
+pub struct ParentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
+
+/// Randomness produced semi-freshly with each block, but inherits limitations of
+/// `RandomnessFromTwoEpochsAgo` from which it derives.
+///
+/// See [`ParentBlockRandomness`].
+#[deprecated(note = "Should not be relied upon for correctness, \
+					 will not provide fresh randomness for the current block. \
+					 Please use `ParentBlockRandomness` instead.")]
 pub struct CurrentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoEpochsAgo<T> {
@@ -133,7 +149,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneEpochA
 	}
 }
 
-impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRandomness<T> {
+impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for ParentBlockRandomness<T> {
 	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
 		let random = AuthorVrfRandomness::<T>::get().map(|random| {
 			let mut subject = subject.to_vec();
@@ -143,6 +159,14 @@ impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRan
 			T::Hashing::hash(&subject[..])
 		});
 
+		(random, <frame_system::Pallet<T>>::block_number().saturating_sub(One::one()))
+	}
+}
+
+#[allow(deprecated)]
+impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRandomness<T> {
+	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
+		let (random, _) = ParentBlockRandomness::<T>::random(subject);
 		(random, <frame_system::Pallet<T>>::block_number())
 	}
 }

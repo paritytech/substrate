@@ -41,6 +41,14 @@ pub(super) fn calculate_primary_threshold(
 	use num_rational::BigRational;
 	use num_traits::{cast::ToPrimitive, identities::One};
 
+	// Prevent div by zero and out of bounds access.
+	// While Babe's pallet implementation that ships with FRAME performs a sanity check over
+	// configuration parameters, this is not sufficient to guarantee that `c.1` is non-zero
+	// (i.e. third party implementations are possible).
+	if c.1 == 0 || authority_index >= authorities.len() {
+		return 0
+	}
+
 	let c = c.0 as f64 / c.1 as f64;
 
 	let theta = authorities[authority_index].1 as f64 /
@@ -202,15 +210,15 @@ pub fn claim_slot_using_keys(
 	keystore: &SyncCryptoStorePtr,
 	keys: &[(AuthorityId, usize)],
 ) -> Option<(PreDigest, AuthorityId)> {
-	claim_primary_slot(slot, epoch, epoch.config.c, keystore, &keys).or_else(|| {
+	claim_primary_slot(slot, epoch, epoch.config.c, keystore, keys).or_else(|| {
 		if epoch.config.allowed_slots.is_secondary_plain_slots_allowed() ||
 			epoch.config.allowed_slots.is_secondary_vrf_slots_allowed()
 		{
 			claim_secondary_slot(
 				slot,
-				&epoch,
+				epoch,
 				keys,
-				&keystore,
+				keystore,
 				epoch.config.allowed_slots.is_secondary_vrf_slots_allowed(),
 			)
 		} else {
@@ -235,12 +243,6 @@ fn claim_primary_slot(
 	for (authority_id, authority_index) in keys {
 		let transcript = make_transcript(randomness, slot, *epoch_index);
 		let transcript_data = make_transcript_data(randomness, slot, *epoch_index);
-		// Compute the threshold we will use.
-		//
-		// We already checked that authorities contains `key.public()`, so it can't
-		// be empty.  Therefore, this division in `calculate_threshold` is safe.
-		let threshold = calculate_primary_threshold(c, authorities, *authority_index);
-
 		let result = SyncCryptoStore::sr25519_vrf_sign(
 			&**keystore,
 			AuthorityId::ID,
@@ -253,6 +255,8 @@ fn claim_primary_slot(
 				Ok(inout) => inout,
 				Err(_) => continue,
 			};
+
+			let threshold = calculate_primary_threshold(c, authorities, *authority_index);
 			if check_primary_threshold(&inout, threshold) {
 				let pre_digest = PreDigest::Primary(PrimaryPreDigest {
 					slot,

@@ -84,23 +84,23 @@
 //!
 //! We only send polite messages to peers,
 
-use parity_scale_codec::{Decode, Encode};
-use sc_network::{ObservedRole, PeerId, ReputationChange};
-use sc_network_gossip::{MessageIntent, ValidatorContext};
-use sp_finality_grandpa::AuthorityId;
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
-
+use ahash::{AHashMap, AHashSet};
 use log::{debug, trace};
+use parity_scale_codec::{Decode, Encode};
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 use rand::seq::SliceRandom;
+use sc_network::{ObservedRole, PeerId, ReputationChange};
+use sc_network_gossip::{MessageIntent, ValidatorContext};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sp_finality_grandpa::AuthorityId;
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 
 use super::{benefit, cost, Round, SetId};
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 
 use std::{
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{HashSet, VecDeque},
 	time::{Duration, Instant},
 };
 
@@ -260,7 +260,7 @@ const KEEP_RECENT_ROUNDS: usize = 3;
 struct KeepTopics<B: BlockT> {
 	current_set: SetId,
 	rounds: VecDeque<(Round, SetId)>,
-	reverse_map: HashMap<B::Hash, (Option<Round>, SetId)>,
+	reverse_map: AHashMap<B::Hash, (Option<Round>, SetId)>,
 }
 
 impl<B: BlockT> KeepTopics<B> {
@@ -268,7 +268,7 @@ impl<B: BlockT> KeepTopics<B> {
 		KeepTopics {
 			current_set: SetId(0),
 			rounds: VecDeque::with_capacity(KEEP_RECENT_ROUNDS + 2),
-			reverse_map: HashMap::new(),
+			reverse_map: Default::default(),
 		}
 	}
 
@@ -290,7 +290,7 @@ impl<B: BlockT> KeepTopics<B> {
 			let _ = self.rounds.pop_front();
 		}
 
-		let mut map = HashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
+		let mut map = AHashMap::with_capacity(KEEP_RECENT_ROUNDS + 3);
 		map.insert(super::global_topic::<B>(self.current_set.0), (None, self.current_set));
 
 		for &(round, set) in &self.rounds {
@@ -477,10 +477,10 @@ impl<N> PeerInfo<N> {
 
 /// The peers we're connected to in gossip.
 struct Peers<N> {
-	inner: HashMap<PeerId, PeerInfo<N>>,
+	inner: AHashMap<PeerId, PeerInfo<N>>,
 	/// The randomly picked set of `LUCKY_PEERS` we'll gossip to in the first stage of round
 	/// gossiping.
-	first_stage_peers: HashSet<PeerId>,
+	first_stage_peers: AHashSet<PeerId>,
 	/// The randomly picked set of peers we'll gossip to in the second stage of gossiping if the
 	/// first stage didn't allow us to spread the voting data enough to conclude the round. This
 	/// set should have size `sqrt(connected_peers)`.
@@ -492,10 +492,10 @@ struct Peers<N> {
 impl<N> Default for Peers<N> {
 	fn default() -> Self {
 		Peers {
-			inner: HashMap::new(),
-			first_stage_peers: HashSet::new(),
-			second_stage_peers: HashSet::new(),
-			lucky_light_peers: HashSet::new(),
+			inner: Default::default(),
+			first_stage_peers: Default::default(),
+			second_stage_peers: Default::default(),
+			lucky_light_peers: Default::default(),
 		}
 	}
 }
@@ -504,13 +504,13 @@ impl<N: Ord> Peers<N> {
 	fn new_peer(&mut self, who: PeerId, role: ObservedRole) {
 		match role {
 			ObservedRole::Authority if self.first_stage_peers.len() < LUCKY_PEERS => {
-				self.first_stage_peers.insert(who.clone());
+				self.first_stage_peers.insert(who);
 			},
 			ObservedRole::Authority if self.second_stage_peers.len() < LUCKY_PEERS => {
-				self.second_stage_peers.insert(who.clone());
+				self.second_stage_peers.insert(who);
 			},
 			ObservedRole::Light if self.lucky_light_peers.len() < LUCKY_PEERS => {
-				self.lucky_light_peers.insert(who.clone());
+				self.lucky_light_peers.insert(who);
 			},
 			_ => {},
 		}
@@ -590,11 +590,8 @@ impl<N: Ord> Peers<N> {
 		// - third set: LUCKY_PEERS random light client peers
 
 		let shuffled_peers = {
-			let mut peers = self
-				.inner
-				.iter()
-				.map(|(peer_id, info)| (*peer_id, info.clone()))
-				.collect::<Vec<_>>();
+			let mut peers =
+				self.inner.iter().map(|(peer_id, info)| (*peer_id, info)).collect::<Vec<_>>();
 
 			peers.shuffle(&mut rand::thread_rng());
 			peers
@@ -608,7 +605,7 @@ impl<N: Ord> Peers<N> {
 			}
 		});
 
-		let mut first_stage_peers = HashSet::new();
+		let mut first_stage_peers = AHashSet::new();
 		let mut second_stage_peers = HashSet::new();
 
 		// we start by allocating authorities to the first stage set and when the minimum of
@@ -799,7 +796,7 @@ impl<Block: BlockT> Inner<Block> {
 				Some(ref mut v) =>
 					if v.set_id == set_id {
 						let diff_authorities = self.authorities.iter().collect::<HashSet<_>>() !=
-							authorities.iter().collect();
+							authorities.iter().collect::<HashSet<_>>();
 
 						if diff_authorities {
 							debug!(target: "afg",
@@ -1103,7 +1100,7 @@ impl<Block: BlockT> Inner<Block> {
 		// won't be able to reply since they don't follow the full GRANDPA
 		// protocol and therefore might not have the vote data available.
 		if let (Some(peer), Some(local_view)) = (self.peers.peer(who), &self.local_view) {
-			if self.catch_up_config.request_allowed(&peer) &&
+			if self.catch_up_config.request_allowed(peer) &&
 				peer.view.set_id == local_view.set_id &&
 				peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
 			{
@@ -1195,7 +1192,7 @@ impl<Block: BlockT> Inner<Block> {
 					return (false, None)
 				} else {
 					// report peer for timeout
-					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
+					Some((*peer, cost::CATCH_UP_REQUEST_TIMEOUT))
 				}
 			},
 			PendingCatchUp::Processing { instant, .. } => {
@@ -1209,7 +1206,7 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		self.pending_catch_up = PendingCatchUp::Requesting {
-			who: who.clone(),
+			who: *who,
 			request: catch_up_request.clone(),
 			instant: Instant::now(),
 		};
@@ -1488,7 +1485,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 	) {
 		let packet = {
 			let mut inner = self.inner.write();
-			inner.peers.new_peer(who.clone(), roles);
+			inner.peers.new_peer(*who, roles);
 
 			inner.local_view.as_ref().map(|v| NeighborPacket {
 				round: v.round,
@@ -1526,16 +1523,16 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 		match action {
 			Action::Keep(topic, cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				context.broadcast_message(topic, data.to_vec(), false);
 				sc_network_gossip::ValidationResult::ProcessAndKeep(topic)
 			},
 			Action::ProcessAndDiscard(topic, cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				sc_network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			},
 			Action::Discard(cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				sc_network_gossip::ValidationResult::Discard
 			},
 		}
@@ -1572,7 +1569,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
-			let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
+			let (maybe_round, set_id) = match inner.live_topics.topic_info(topic) {
 				None => return false,
 				Some(x) => x,
 			};
@@ -1583,11 +1580,9 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 						// early return if the vote message isn't allowed at this stage.
 						return false
 					}
-				} else {
-					if !inner.global_message_allowed(who) {
-						// early return if the global message isn't allowed at this stage.
-						return false
-					}
+				} else if !inner.global_message_allowed(who) {
+					// early return if the global message isn't allowed at this stage.
+					return false
 				}
 			}
 

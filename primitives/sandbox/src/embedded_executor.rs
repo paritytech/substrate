@@ -17,17 +17,19 @@
 
 //! An embedded WASM executor utilizing `wasmi`.
 
-use super::{Error, HostError, HostFuncType, ReturnValue, Value, TARGET};
 use alloc::string::String;
-use log::debug;
-use sp_std::{
-	borrow::ToOwned, collections::btree_map::BTreeMap, fmt, marker::PhantomData, prelude::*,
-};
+
 use wasmi::{
 	memory_units::Pages, Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef,
 	ImportResolver, MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
 	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind,
 };
+
+use sp_std::{
+	borrow::ToOwned, collections::btree_map::BTreeMap, fmt, marker::PhantomData, prelude::*,
+};
+
+use crate::{Error, HostError, HostFuncType, ReturnValue, Value, TARGET};
 
 /// The linear memory used by the sandbox.
 #[derive(Clone)]
@@ -162,13 +164,18 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 	) -> Result<FuncRef, wasmi::Error> {
 		let key = (module_name.as_bytes().to_owned(), field_name.as_bytes().to_owned());
 		let externval = self.map.get(&key).ok_or_else(|| {
-			debug!(target: TARGET, "Export {}:{} not found", module_name, field_name);
+			log::debug!(target: TARGET, "Export {}:{} not found", module_name, field_name);
 			wasmi::Error::Instantiation(String::new())
 		})?;
 		let host_func_idx = match *externval {
 			ExternVal::HostFunc(ref idx) => idx,
 			_ => {
-				debug!(target: TARGET, "Export {}:{} is not a host func", module_name, field_name);
+				log::debug!(
+					target: TARGET,
+					"Export {}:{} is not a host func",
+					module_name,
+					field_name,
+				);
 				return Err(wasmi::Error::Instantiation(String::new()))
 			},
 		};
@@ -181,7 +188,7 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 		_field_name: &str,
 		_global_type: &GlobalDescriptor,
 	) -> Result<GlobalRef, wasmi::Error> {
-		debug!(target: TARGET, "Importing globals is not supported yet");
+		log::debug!(target: TARGET, "Importing globals is not supported yet");
 		Err(wasmi::Error::Instantiation(String::new()))
 	}
 
@@ -193,13 +200,18 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 	) -> Result<MemoryRef, wasmi::Error> {
 		let key = (module_name.as_bytes().to_owned(), field_name.as_bytes().to_owned());
 		let externval = self.map.get(&key).ok_or_else(|| {
-			debug!(target: TARGET, "Export {}:{} not found", module_name, field_name);
+			log::debug!(target: TARGET, "Export {}:{} not found", module_name, field_name);
 			wasmi::Error::Instantiation(String::new())
 		})?;
 		let memory = match *externval {
 			ExternVal::Memory(ref m) => m,
 			_ => {
-				debug!(target: TARGET, "Export {}:{} is not a memory", module_name, field_name);
+				log::debug!(
+					target: TARGET,
+					"Export {}:{} is not a memory",
+					module_name,
+					field_name,
+				);
 				return Err(wasmi::Error::Instantiation(String::new()))
 			},
 		};
@@ -212,7 +224,7 @@ impl<T> ImportResolver for EnvironmentDefinitionBuilder<T> {
 		_field_name: &str,
 		_table_type: &TableDescriptor,
 	) -> Result<TableRef, wasmi::Error> {
-		debug!("Importing tables is not supported yet");
+		log::debug!("Importing tables is not supported yet");
 		Err(wasmi::Error::Instantiation(String::new()))
 	}
 }
@@ -254,7 +266,7 @@ impl<T> super::SandboxInstance<T> for Instance<T> {
 
 		let mut externals =
 			GuestExternals { state, defined_host_functions: &self.defined_host_functions };
-		let result = self.instance.invoke_export(&name, &args, &mut externals);
+		let result = self.instance.invoke_export(name, &args, &mut externals);
 
 		match result {
 			Ok(None) => Ok(ReturnValue::Unit),

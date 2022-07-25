@@ -57,14 +57,14 @@ impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Bloc
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
 		if let Some(recorder) = &self.proof_recorder {
-			if let Some(v) = recorder.get(&key) {
-				return Ok(v.clone())
+			if let Some(v) = recorder.get(key) {
+				return Ok(v)
 			}
 			let backend_value = self
 				.db
 				.get(0, &prefixed_key)
 				.map_err(|e| format!("Database backend error: {:?}", e))?;
-			recorder.record(key.clone(), backend_value.clone());
+			recorder.record(*key, backend_value.clone());
 			Ok(backend_value)
 		} else {
 			self.db
@@ -114,7 +114,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
 			db: Cell::new(None),
-			root: Cell::new(root.clone()),
+			root: Cell::new(root),
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
@@ -123,7 +123,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 			child_key_tracker: Default::default(),
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
-			proof_recorder_root: Cell::new(root.clone()),
+			proof_recorder_root: Cell::new(root),
 			enable_tracking,
 		};
 
@@ -143,7 +143,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 				state_version,
 			);
 		state.genesis = transaction.clone().drain();
-		state.genesis_root = root.clone();
+		state.genesis_root = root;
 		state.commit(root, transaction, Vec::new(), Vec::new())?;
 		state.record.take();
 		Ok(state)
@@ -201,9 +201,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker
-				.entry(childtrie.to_vec())
-				.or_insert_with(|| LinkedHashMap::new())
+			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(LinkedHashMap::new)
 		} else {
 			&mut main_key_tracker
 		};
@@ -244,9 +242,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let mut main_key_tracker = self.main_key_tracker.borrow_mut();
 
 		let key_tracker = if let Some(childtrie) = childtrie {
-			child_key_tracker
-				.entry(childtrie.to_vec())
-				.or_insert_with(|| LinkedHashMap::new())
+			child_key_tracker.entry(childtrie.to_vec()).or_insert_with(LinkedHashMap::new)
 		} else {
 			&mut main_key_tracker
 		};
@@ -517,7 +513,7 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			self.db.set(Some(db));
 		}
 
-		self.root.set(self.genesis_root.clone());
+		self.root.set(self.genesis_root);
 		self.reopen()?;
 		self.wipe_tracker();
 		Ok(())
@@ -612,18 +608,17 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			if proof_recorder_root == Default::default() || proof_size == 1 {
 				// empty trie
 				proof_size
+			} else if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root)
+			{
+				size as u32
 			} else {
-				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
-					size as u32
-				} else {
-					panic!(
-						"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
-						self.proof_recorder_root.get(),
-						self.root.get(),
-						self.genesis_root,
-						proof_size,
-					);
-				}
+				panic!(
+					"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
+					self.proof_recorder_root.get(),
+					self.root.get(),
+					self.genesis_root,
+					proof_size,
+				);
 			}
 		})
 	}

@@ -20,6 +20,10 @@
 //! This is suitable for a testing environment.
 
 use futures::channel::{mpsc::SendError, oneshot};
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObject},
+};
 use sc_consensus::ImportResult;
 use sp_blockchain::Error as BlockchainError;
 use sp_consensus::Error as ConsensusError;
@@ -27,55 +31,67 @@ use sp_inherents::Error as InherentsError;
 
 /// Error code for rpc
 mod codes {
-	pub const SERVER_SHUTTING_DOWN: i64 = 10_000;
-	pub const BLOCK_IMPORT_FAILED: i64 = 11_000;
-	pub const EMPTY_TRANSACTION_POOL: i64 = 12_000;
-	pub const BLOCK_NOT_FOUND: i64 = 13_000;
-	pub const CONSENSUS_ERROR: i64 = 14_000;
-	pub const INHERENTS_ERROR: i64 = 15_000;
-	pub const BLOCKCHAIN_ERROR: i64 = 16_000;
-	pub const UNKNOWN_ERROR: i64 = 20_000;
+	pub const SERVER_SHUTTING_DOWN: i32 = 10_000;
+	pub const BLOCK_IMPORT_FAILED: i32 = 11_000;
+	pub const EMPTY_TRANSACTION_POOL: i32 = 12_000;
+	pub const BLOCK_NOT_FOUND: i32 = 13_000;
+	pub const CONSENSUS_ERROR: i32 = 14_000;
+	pub const INHERENTS_ERROR: i32 = 15_000;
+	pub const BLOCKCHAIN_ERROR: i32 = 16_000;
+	pub const UNKNOWN_ERROR: i32 = 20_000;
 }
 
 /// errors encountered by background block authorship task
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// An error occurred while importing the block
-	#[display(fmt = "Block import failed: {:?}", _0)]
+	#[error("Block import failed: {0:?}")]
 	BlockImportError(ImportResult),
 	/// Transaction pool is empty, cannot create a block
-	#[display(fmt = "Transaction pool is empty, set create_empty to true,\
-	if you want to create empty blocks")]
+	#[error(
+		"Transaction pool is empty, set create_empty to true, if you want to create empty blocks"
+	)]
 	EmptyTransactionPool,
 	/// encountered during creation of Proposer.
-	#[display(fmt = "Consensus Error: {}", _0)]
-	ConsensusError(ConsensusError),
+	#[error("Consensus Error: {0}")]
+	ConsensusError(#[from] ConsensusError),
 	/// Failed to create Inherents data
-	#[display(fmt = "Inherents Error: {}", _0)]
-	InherentError(InherentsError),
+	#[error("Inherents Error: {0}")]
+	InherentError(#[from] InherentsError),
 	/// error encountered during finalization
-	#[display(fmt = "Finalization Error: {}", _0)]
-	BlockchainError(BlockchainError),
+	#[error("Finalization Error: {0}")]
+	BlockchainError(#[from] BlockchainError),
 	/// Supplied parent_hash doesn't exist in chain
-	#[display(fmt = "Supplied parent_hash: {} doesn't exist in chain", _0)]
-	#[from(ignore)]
+	#[error("Supplied parent_hash: {0} doesn't exist in chain")]
 	BlockNotFound(String),
 	/// Some string error
-	#[display(fmt = "{}", _0)]
+	#[error("{0}")]
 	StringError(String),
 	/// send error
-	#[display(fmt = "Consensus process is terminating")]
-	Canceled(oneshot::Canceled),
+	#[error("Consensus process is terminating")]
+	Canceled(#[from] oneshot::Canceled),
 	/// send error
-	#[display(fmt = "Consensus process is terminating")]
-	SendError(SendError),
+	#[error("Consensus process is terminating")]
+	SendError(#[from] SendError),
 	/// Some other error.
-	#[display(fmt = "Other error: {}", _0)]
-	Other(Box<dyn std::error::Error + Send>),
+	#[error("Other error: {0}")]
+	Other(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl From<ImportResult> for Error {
+	fn from(err: ImportResult) -> Self {
+		Error::BlockImportError(err)
+	}
+}
+
+impl From<String> for Error {
+	fn from(s: String) -> Self {
+		Error::StringError(s)
+	}
 }
 
 impl Error {
-	fn to_code(&self) -> i64 {
+	fn to_code(&self) -> i32 {
 		use Error::*;
 		match self {
 			BlockImportError(_) => codes::BLOCK_IMPORT_FAILED,
@@ -90,12 +106,8 @@ impl Error {
 	}
 }
 
-impl std::convert::From<Error> for jsonrpc_core::Error {
-	fn from(error: Error) -> Self {
-		jsonrpc_core::Error {
-			code: jsonrpc_core::ErrorCode::ServerError(error.to_code()),
-			message: format!("{}", error),
-			data: None,
-		}
+impl From<Error> for JsonRpseeError {
+	fn from(err: Error) -> Self {
+		CallError::Custom(ErrorObject::owned(err.to_code(), err.to_string(), None::<()>)).into()
 	}
 }

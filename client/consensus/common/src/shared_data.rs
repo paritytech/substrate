@@ -167,6 +167,13 @@ struct SharedDataInner<T> {
 /// // As we don't know the order of the threads, we need to check for both combinations
 /// assert!(*data == "hello world321" || *data == "hello world312");
 /// ```
+///
+/// # Deadlock
+///
+/// Be aware that this data structure doesn't give you any guarantees that you can not create a
+/// deadlock. If you use [`release_mutex`](SharedDataLocked::release_mutex) followed by a call
+/// to [`shared_data`](Self::shared_data) in the same thread will make your program dead lock.
+/// The same applies when you are using a single threaded executor.
 pub struct SharedData<T> {
 	inner: Arc<Mutex<SharedDataInner<T>>>,
 	cond_var: Arc<Condvar>,

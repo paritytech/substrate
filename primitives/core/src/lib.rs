@@ -56,22 +56,19 @@ pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_6
 pub mod crypto;
 pub mod hexdisplay;
 
-pub mod u32_trait;
-
 pub mod ecdsa;
 pub mod ed25519;
 pub mod hash;
 #[cfg(feature = "std")]
 mod hasher;
 pub mod offchain;
-pub mod sandbox;
 mod seed;
-pub use seed::ShufflingSeed;
 pub mod sr25519;
 pub mod testing;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod uint;
+pub use seed::ShufflingSeed;
 
 pub use self::{
 	hash::{convert_hash, H160, H256, H512},
@@ -100,7 +97,7 @@ pub enum ExecutionContext {
 	/// We distinguish between major sync and import so that validators who are running
 	/// their initial sync (or catching up after some time offline) can use the faster
 	/// native runtime (since we can reasonably assume the network as a whole has already
-	/// come to a broad conensus on the block and it probably hasn't been crafted
+	/// come to a broad consensus on the block and it probably hasn't been crafted
 	/// specifically to attack this node), but when importing blocks at the head of the
 	/// chain in normal operation they can use the safer Wasm version.
 	Syncing,

@@ -230,7 +230,7 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl #scrate::sp_std::convert::TryFrom<OriginCaller> for #system_path::Origin<#runtime> {
+		impl TryFrom<OriginCaller> for #system_path::Origin<#runtime> {
 			type Error = OriginCaller;
 			fn try_from(x: OriginCaller)
 				-> #scrate::sp_std::result::Result<#system_path::Origin<#runtime>, OriginCaller>
@@ -359,7 +359,7 @@ fn expand_origin_pallet_conversions(
 			}
 		}
 
-		impl #scrate::sp_std::convert::TryFrom<OriginCaller> for #pallet_origin {
+		impl TryFrom<OriginCaller> for #pallet_origin {
 			type Error = OriginCaller;
 			fn try_from(
 				x: OriginCaller,

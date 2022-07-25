@@ -27,13 +27,10 @@ pub(super) const LAST_PRUNE: &[u8] = b"session_historical_last_prune";
 
 /// Derive the key used to store the list of validators
 pub(super) fn derive_key<P: AsRef<[u8]>>(prefix: P, session_index: SessionIndex) -> Vec<u8> {
-	let prefix: &[u8] = prefix.as_ref();
 	session_index.using_encoded(|encoded_session_index| {
-		prefix
-			.into_iter()
-			.chain(b"/".into_iter())
-			.chain(encoded_session_index.into_iter())
-			.copied()
-			.collect::<Vec<u8>>()
+		let mut key = prefix.as_ref().to_owned();
+		key.push(b'/');
+		key.extend_from_slice(encoded_session_index);
+		key
 	})
 }

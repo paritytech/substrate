@@ -18,7 +18,9 @@
 //! Test utilities
 
 use crate::{self as pallet_staking, *};
-use frame_election_provider_support::{onchain, SortedListProvider};
+use frame_election_provider_support::{
+	onchain, SequentialPhragmen, SortedListProvider, VoteWeight,
+};
 use frame_support::{
 	assert_ok, parameter_types,
 	traits::{
@@ -234,29 +236,55 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub static MaxNominations: u32 = 16;
+	pub static RewardOnUnbalanceWasCalled: bool = false;
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 }
 
 impl pallet_bags_list::Config for Test {
 	type Event = Event;
 	type WeightInfo = ();
-	type VoteWeightProvider = Staking;
+	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
+	type Score = VoteWeight;
 }
 
-impl onchain::Config for Test {
-	type Accuracy = Perbill;
+pub struct OnChainSeqPhragmen;
+impl onchain::Config for OnChainSeqPhragmen {
+	type System = Test;
+	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
+	type WeightInfo = ();
+}
+
+pub struct MockReward {}
+impl OnUnbalanced<PositiveImbalanceOf<Test>> for MockReward {
+	fn on_unbalanced(_: PositiveImbalanceOf<Test>) {
+		RewardOnUnbalanceWasCalled::set(true);
+	}
+}
+
+pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
+impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
+	fn on_slash(
+		_pool_account: &AccountId,
+		slashed_bonded: Balance,
+		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+	) {
+		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
+	}
 }
 
 impl crate::pallet::pallet::Config for Test {
-	const MAX_NOMINATIONS: u32 = 16;
+	type MaxNominations = MaxNominations;
 	type Currency = Balances;
+	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = Event;
 	type Slash = ();
-	type Reward = ();
+	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
 	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
@@ -266,10 +294,12 @@ impl crate::pallet::pallet::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	// NOTE: consider a macro and use `UseNominatorsMap<Self>` as well.
-	type SortedListProvider = BagsList;
+	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
+	type VoterList = BagsList;
+	type MaxUnlockingChunks = ConstU32<32>;
+	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -293,7 +323,7 @@ pub struct ExtBuilder {
 	invulnerables: Vec<AccountId>,
 	has_stakers: bool,
 	initialize_first_session: bool,
-	min_nominator_bond: Balance,
+	pub min_nominator_bond: Balance,
 	min_validator_bond: Balance,
 	balance_factor: Balance,
 	status: BTreeMap<AccountId, StakerStatus<AccountId>>,
@@ -533,14 +563,14 @@ fn post_conditions() {
 }
 
 fn check_count() {
-	let nominator_count = Nominators::<Test>::iter().count() as u32;
+	let nominator_count = Nominators::<Test>::iter_keys().count() as u32;
 	let validator_count = Validators::<Test>::iter().count() as u32;
 	assert_eq!(nominator_count, Nominators::<Test>::count());
 	assert_eq!(validator_count, Validators::<Test>::count());
 
-	// the voters that the `SortedListProvider` list is storing for us.
-	let external_voters = <Test as Config>::SortedListProvider::count();
-	assert_eq!(external_voters, nominator_count);
+	// the voters that the `VoterList` list is storing for us.
+	let external_voters = <Test as Config>::VoterList::count();
+	assert_eq!(external_voters, nominator_count + validator_count);
 }
 
 fn check_ledgers() {

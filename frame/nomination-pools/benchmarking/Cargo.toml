@@ -1,0 +1,55 @@
+[package]
+name = "pallet-nomination-pools-benchmarking"
+version = "1.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME nomination pools pallet benchmarking"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+# parity
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+
+# FRAME
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../benchmarking" }
+frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../election-provider-support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+pallet-bags-list = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../bags-list" }
+pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
+pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../", features = ["runtime-benchmarks"] }
+
+# Substrate Primitives
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
+
+[dev-dependencies]
+pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
+pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-io = { version = "6.0.0", path = "../../../primitives/io" }
+
+[features]
+default = ["std"]
+std = [
+	"frame-benchmarking/std",
+	"frame-election-provider-support/std",
+	"frame-support/std",
+	"frame-system/std",
+	"pallet-bags-list/std",
+	"pallet-staking/std",
+	"pallet-nomination-pools/std",
+	"sp-runtime/std",
+	"sp-staking/std",
+	"sp-std/std",
+	"pallet-balances/std",
+]

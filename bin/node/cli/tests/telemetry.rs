@@ -21,7 +21,7 @@ use nix::{
 	sys::signal::{kill, Signal::SIGINT},
 	unistd::Pid,
 };
-use std::{convert::TryInto, process};
+use std::process;
 
 pub mod common;
 pub mod websocket_server;
@@ -71,6 +71,7 @@ async fn telemetry_works() {
 	let mut substrate = substrate
 		.args(&["--dev", "--tmp", "--telemetry-url"])
 		.arg(format!("ws://{} 10", addr))
+		.arg("--no-hardware-benchmarks")
 		.stdout(process::Stdio::piped())
 		.stderr(process::Stdio::piped())
 		.stdin(process::Stdio::null())

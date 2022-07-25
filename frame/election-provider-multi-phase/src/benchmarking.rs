@@ -20,11 +20,14 @@
 use super::*;
 use crate::{unsigned::IndexAssignmentOf, Pallet as MultiPhase};
 use frame_benchmarking::account;
-use frame_support::{assert_ok, traits::Hooks};
+use frame_support::{
+	assert_ok,
+	traits::{Hooks, TryCollect},
+	BoundedVec,
+};
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
 use sp_arithmetic::{per_things::Percent, traits::One};
-use sp_npos_elections::IndexAssignment;
 use sp_runtime::InnerOf;
 
 const SEED: u32 = 999;
@@ -36,15 +39,15 @@ fn solution_with_size<T: Config>(
 	size: SolutionOrSnapshotSize,
 	active_voters_count: u32,
 	desired_targets: u32,
-) -> Result<RawSolution<SolutionOf<T>>, &'static str> {
+) -> Result<RawSolution<SolutionOf<T::MinerConfig>>, &'static str> {
 	ensure!(size.targets >= desired_targets, "must have enough targets");
 	ensure!(
-		size.targets >= (<SolutionOf<T>>::LIMIT * 2) as u32,
+		size.targets >= (<SolutionOf<T::MinerConfig>>::LIMIT * 2) as u32,
 		"must have enough targets for unique votes."
 	);
 	ensure!(size.voters >= active_voters_count, "must have enough voters");
 	ensure!(
-		(<SolutionOf<T>>::LIMIT as u32) < desired_targets,
+		(<SolutionOf<T::MinerConfig>>::LIMIT as u32) < desired_targets,
 		"must have enough winners to give them votes."
 	);
 
@@ -69,11 +72,12 @@ fn solution_with_size<T: Config>(
 	let active_voters = (0..active_voters_count)
 		.map(|i| {
 			// chose a random subset of winners.
-			let winner_votes = winners
+			let winner_votes: BoundedVec<_, _> = winners
 				.as_slice()
-				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
+				.choose_multiple(&mut rng, <SolutionOf<T::MinerConfig>>::LIMIT)
 				.cloned()
-				.collect::<Vec<_>>();
+				.try_collect()
+				.expect("<SolutionOf<T::MinerConfig>>::LIMIT is the correct bound; qed.");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, winner_votes)
 		})
@@ -87,10 +91,11 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<T::AccountId>>();
 	let rest_voters = (active_voters_count..size.voters)
 		.map(|i| {
-			let votes = (&non_winners)
-				.choose_multiple(&mut rng, <SolutionOf<T>>::LIMIT)
+			let votes: BoundedVec<_, _> = (&non_winners)
+				.choose_multiple(&mut rng, <SolutionOf<T::MinerConfig>>::LIMIT)
 				.cloned()
-				.collect::<Vec<T::AccountId>>();
+				.try_collect()
+				.expect("<SolutionOf<T::MinerConfig>>::LIMIT is the correct bound; qed.");
 			let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 			(voter, stake, votes)
 		})
@@ -115,12 +120,12 @@ fn solution_with_size<T: Config>(
 	// down the road.
 	T::DataProvider::put_snapshot(all_voters.clone(), targets.clone(), Some(stake));
 
-	let cache = helpers::generate_voter_cache::<T>(&all_voters);
-	let stake_of = helpers::stake_of_fn::<T>(&all_voters, &cache);
-	let voter_index = helpers::voter_index_fn::<T>(&cache);
-	let target_index = helpers::target_index_fn::<T>(&targets);
-	let voter_at = helpers::voter_at_fn::<T>(&all_voters);
-	let target_at = helpers::target_at_fn::<T>(&targets);
+	let cache = helpers::generate_voter_cache::<T::MinerConfig>(&all_voters);
+	let stake_of = helpers::stake_of_fn::<T::MinerConfig>(&all_voters, &cache);
+	let voter_index = helpers::voter_index_fn::<T::MinerConfig>(&cache);
+	let target_index = helpers::target_index_fn::<T::MinerConfig>(&targets);
+	let voter_at = helpers::voter_at_fn::<T::MinerConfig>(&all_voters);
+	let target_at = helpers::target_at_fn::<T::MinerConfig>(&targets);
 
 	let assignments = active_voters
 		.iter()
@@ -138,11 +143,15 @@ fn solution_with_size<T: Config>(
 		.collect::<Vec<_>>();
 
 	let solution =
-		<SolutionOf<T>>::from_assignment(&assignments, &voter_index, &target_index).unwrap();
+		<SolutionOf<T::MinerConfig>>::from_assignment(&assignments, &voter_index, &target_index)
+			.unwrap();
 	let score = solution.clone().score(stake_of, voter_at, target_at).unwrap();
 	let round = <MultiPhase<T>>::round();
 
-	assert!(score[0] > 0, "score is zero, this probably means that the stakes are not set.");
+	assert!(
+		score.minimal_stake > 0,
+		"score is zero, this probably means that the stakes are not set."
+	);
 	Ok(RawSolution { solution, score, round })
 }
 
@@ -152,7 +161,7 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 		info,
 		"setting up with voters = {} [degree = {}], targets = {}",
 		v,
-		T::DataProvider::MAXIMUM_VOTES_PER_VOTER,
+		<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get(),
 		t
 	);
 
@@ -165,14 +174,16 @@ fn set_up_data_provider<T: Config>(v: u32, t: u32) {
 		})
 		.collect::<Vec<_>>();
 	// we should always have enough voters to fill.
-	assert!(targets.len() > T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
-	targets.truncate(T::DataProvider::MAXIMUM_VOTES_PER_VOTER as usize);
+	assert!(
+		targets.len() > <T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize
+	);
+	targets.truncate(<T::DataProvider as ElectionDataProvider>::MaxVotesPerVoter::get() as usize);
 
 	// fill voters.
 	(0..v).for_each(|i| {
 		let voter = frame_benchmarking::account::<T::AccountId>("Voter", i, SEED);
 		let weight = T::Currency::minimum_balance().saturated_into::<u64>() * 1000;
-		T::DataProvider::add_voter(voter, weight, targets.clone());
+		T::DataProvider::add_voter(voter, weight, targets.clone().try_into().unwrap());
 	});
 }
 
@@ -215,14 +226,24 @@ frame_benchmarking::benchmarks! {
 			compute: Default::default()
 		};
 		let deposit: BalanceOf<T> = 10u32.into();
-		let reward: BalanceOf<T> = 20u32.into();
+
+		let reward: BalanceOf<T> = T::SignedRewardBase::get();
+		let call_fee: BalanceOf<T> = 30u32.into();
 
 		assert_ok!(T::Currency::reserve(&receiver, deposit));
 		assert_eq!(T::Currency::free_balance(&receiver), initial_balance - 10u32.into());
 	}: {
-		<MultiPhase<T>>::finalize_signed_phase_accept_solution(ready, &receiver, deposit, reward)
+		<MultiPhase<T>>::finalize_signed_phase_accept_solution(
+			ready,
+			&receiver,
+			deposit,
+			call_fee
+		)
 	} verify {
-		assert_eq!(T::Currency::free_balance(&receiver), initial_balance + 20u32.into());
+		assert_eq!(
+			T::Currency::free_balance(&receiver),
+			initial_balance + reward + call_fee
+		);
 		assert_eq!(T::Currency::reserved_balance(&receiver), 0u32.into());
 	}
 
@@ -250,8 +271,8 @@ frame_benchmarking::benchmarks! {
 
 		// we don't directly need the data-provider to be populated, but it is just easy to use it.
 		set_up_data_provider::<T>(v, t);
-		let targets = T::DataProvider::targets(None)?;
-		let voters = T::DataProvider::voters(None)?;
+		let targets = T::DataProvider::electable_targets(None)?;
+		let voters = T::DataProvider::electing_voters(None)?;
 		let desired_targets = T::DataProvider::desired_targets()?;
 		assert!(<MultiPhase<T>>::snapshot().is_none());
 	}: {
@@ -299,12 +320,10 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-		let c in 1 .. (T::SignedMaxSubmissions::get() - 1);
-
 		// the solution will be worse than all of them meaning the score need to be checked against
 		// ~ log2(c)
 		let solution = RawSolution {
-			score: [(10_000_000u128 - 1).into(), 0, 0],
+			score: ElectionScore { minimal_stake: 10_000_000u128 - 1, ..Default::default() },
 			..Default::default()
 		};
 
@@ -313,27 +332,34 @@ frame_benchmarking::benchmarks! {
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
-		for i in 0..c {
+
+		// Insert `max - 1` submissions because the call to `submit` will insert another
+		// submission and the score is worse then the previous scores.
+		for i in 0..(T::SignedMaxSubmissions::get() - 1) {
 			let raw_solution = RawSolution {
-				score: [(10_000_000 + i).into(), 0, 0],
+				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
 				..Default::default()
 			};
 			let signed_submission = SignedSubmission {
 				raw_solution,
 				who: account("submitters", i, SEED),
 				deposit: Default::default(),
-				reward: Default::default(),
+				call_fee: Default::default(),
 			};
 			signed_submissions.insert(signed_submission);
 		}
 		signed_submissions.put();
 
 		let caller = frame_benchmarking::whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 10u32.into());
+		let deposit = MultiPhase::<T>::deposit_for(
+			&solution,
+			MultiPhase::<T>::snapshot_metadata().unwrap_or_default(),
+		);
+		T::Currency::make_free_balance_be(&caller,  T::Currency::minimum_balance() * 1000u32.into() + deposit);
 
-	}: _(RawOrigin::Signed(caller), Box::new(solution), c)
+	}: _(RawOrigin::Signed(caller), Box::new(solution))
 	verify {
-		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == c + 1);
+		assert!(<MultiPhase<T>>::signed_submissions().len() as u32 == T::SignedMaxSubmissions::get());
 	}
 
 	submit_unsigned {
@@ -448,24 +474,25 @@ frame_benchmarking::benchmarks! {
 			T::BenchmarkingConfig::DESIRED_TARGETS[1];
 		// Subtract this percentage from the actual encoded size
 		let f in 0 .. 95;
+		use frame_election_provider_support::IndexAssignment;
 
 		// Compute a random solution, then work backwards to get the lists of voters, targets, and
 		// assignments
 		let witness = SolutionOrSnapshotSize { voters: v, targets: t };
 		let RawSolution { solution, .. } = solution_with_size::<T>(witness, a, d)?;
 		let RoundSnapshot { voters, targets } = MultiPhase::<T>::snapshot().ok_or("snapshot missing")?;
-		let voter_at = helpers::voter_at_fn::<T>(&voters);
-		let target_at = helpers::target_at_fn::<T>(&targets);
+		let voter_at = helpers::voter_at_fn::<T::MinerConfig>(&voters);
+		let target_at = helpers::target_at_fn::<T::MinerConfig>(&targets);
 		let mut assignments = solution.into_assignment(voter_at, target_at).expect("solution generated by `solution_with_size` must be valid.");
 
 		// make a voter cache and some helper functions for access
-		let cache = helpers::generate_voter_cache::<T>(&voters);
-		let voter_index = helpers::voter_index_fn::<T>(&cache);
-		let target_index = helpers::target_index_fn::<T>(&targets);
+		let cache = helpers::generate_voter_cache::<T::MinerConfig>(&voters);
+		let voter_index = helpers::voter_index_fn::<T::MinerConfig>(&cache);
+		let target_index = helpers::target_index_fn::<T::MinerConfig>(&targets);
 
 		// sort assignments by decreasing voter stake
 		assignments.sort_by_key(|crate::unsigned::Assignment::<T> { who, .. }| {
-			let stake = cache.get(&who).map(|idx| {
+			let stake = cache.get(who).map(|idx| {
 				let (_, stake, _) = voters[*idx];
 				stake
 			}).unwrap_or_default();
@@ -478,21 +505,21 @@ frame_benchmarking::benchmarks! {
 			.collect::<Result<Vec<_>, _>>()
 			.unwrap();
 
-		let encoded_size_of = |assignments: &[IndexAssignmentOf<T>]| {
-			SolutionOf::<T>::try_from(assignments).map(|solution| solution.encoded_size())
+		let encoded_size_of = |assignments: &[IndexAssignmentOf<T::MinerConfig>]| {
+			SolutionOf::<T::MinerConfig>::try_from(assignments).map(|solution| solution.encoded_size())
 		};
 
 		let desired_size = Percent::from_percent(100 - f.saturated_into::<u8>())
 			.mul_ceil(encoded_size_of(index_assignments.as_slice()).unwrap());
 		log!(trace, "desired_size = {}", desired_size);
 	}: {
-		MultiPhase::<T>::trim_assignments_length(
+		crate::Miner::<T::MinerConfig>::trim_assignments_length(
 			desired_size.saturated_into(),
 			&mut index_assignments,
 			&encoded_size_of,
 		).unwrap();
 	} verify {
-		let solution = SolutionOf::<T>::try_from(index_assignments.as_slice()).unwrap();
+		let solution = SolutionOf::<T::MinerConfig>::try_from(index_assignments.as_slice()).unwrap();
 		let encoding = solution.encode();
 		log!(
 			trace,

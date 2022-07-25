@@ -114,10 +114,11 @@ use codec::{Encode, HasCompact};
 use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
-	traits::{Contains, Currency, Get, Randomness, ReservableCurrency, StorageVersion, Time},
-	weights::{GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
+	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	BoundedVec,
 };
-use frame_system::Pallet as System;
+use frame_system::{limits::BlockWeights, Pallet as System};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, CodeUploadReturnValue, ContractAccessError, ContractExecResult,
 	ContractInstantiateResult, ExecReturnValue, GetStorageResult, InstantiateReturnValue,
@@ -126,15 +127,22 @@ use pallet_contracts_primitives::{
 use scale_info::TypeInfo;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
-type TrieId = Vec<u8>;
+type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
+type RelaxedCodeVec<T> = BoundedVec<u8, <T as Config>::RelaxedMaxCodeLen>;
 
-/// The current storage version.
-const STORAGE_VERSION: StorageVersion = StorageVersion::new(6);
+/// Used as a sentinel value when reading and writing contract memory.
+///
+/// It is usually used to signal `None` to a contract when only a primitive is allowed
+/// and we don't want to go through encoding a full Rust type. Using `u32::Max` is a safe
+/// sentinel because contracts are never allowed to use such a large amount of resources
+/// that this value makes sense for a memory location or length.
+const SENTINEL: u32 = u32::MAX;
 
 /// Provides the contract address generation method.
 ///
@@ -185,11 +193,41 @@ where
 	}
 }
 
+/// A conservative implementation to be used for [`pallet::Config::ContractAccessWeight`].
+///
+/// This derives the weight from the [`BlockWeights`] passed as `B` and the `maxPovSize` passed
+/// as `P`. The default value for `P` is the `maxPovSize` used by Polkadot and Kusama.
+///
+/// It simply charges from the weight meter pro rata: If loading the contract code would consume
+/// 50% of the max storage proof then this charges 50% of the max block weight.
+pub struct DefaultContractAccessWeight<B: Get<BlockWeights>, const P: u32 = 5_242_880>(
+	PhantomData<B>,
+);
+
+impl<B: Get<BlockWeights>, const P: u32> Get<Weight> for DefaultContractAccessWeight<B, P> {
+	fn get() -> Weight {
+		let block_weights = B::get();
+		block_weights
+			.per_class
+			.get(DispatchClass::Normal)
+			.max_total
+			.unwrap_or(block_weights.max_block) /
+			Weight::from(P)
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+
+	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -289,6 +327,27 @@ pub mod pallet {
 		#[pallet::constant]
 		type DepositPerByte: Get<BalanceOf<Self>>;
 
+		/// The weight per byte of code that is charged when loading a contract from storage.
+		///
+		/// Currently, FRAME only charges fees for computation incurred but not for PoV
+		/// consumption caused for storage access. This is usually not exploitable because
+		/// accessing storage carries some substantial weight costs, too. However in case
+		/// of contract code very much PoV consumption can be caused while consuming very little
+		/// computation. This could be used to keep the chain busy without paying the
+		/// proper fee for it. Until this is resolved we charge from the weight meter for
+		/// contract access.
+		///
+		/// For more information check out: <https://github.com/paritytech/substrate/issues/10301>
+		///
+		/// [`DefaultContractAccessWeight`] is a safe default to be used for polkadot or kusama
+		/// parachains.
+		///
+		/// # Note
+		///
+		/// This is only relevant for parachains. Set to zero in case of a standalone chain.
+		#[pallet::constant]
+		type ContractAccessWeight: Get<Weight>;
+
 		/// The amount of balance a caller has to pay for each storage item.
 		///
 		/// # Note
@@ -299,12 +358,21 @@ pub mod pallet {
 
 		/// The address generator used to generate the addresses of contracts.
 		type AddressGenerator: AddressGenerator<Self>;
-	}
 
-	#[pallet::pallet]
-	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
-	pub struct Pallet<T>(PhantomData<T>);
+		/// The maximum length of a contract code in bytes. This limit applies to the instrumented
+		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
+		/// a wasm binary below this maximum size.
+		type MaxCodeLen: Get<u32>;
+
+		/// The maximum length of a contract code after reinstrumentation.
+		///
+		/// When uploading a new contract the size defined by [`Self::MaxCodeLen`] is used for both
+		/// the pristine **and** the instrumented version. When a existing contract needs to be
+		/// reinstrumented after a runtime upgrade we apply this bound. The reason is that if the
+		/// new instrumentation increases the size beyond the limit it would make that contract
+		/// inaccessible until rectified by another runtime upgrade.
+		type RelaxedMaxCodeLen: Get<u32>;
+	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
@@ -312,15 +380,28 @@ pub mod pallet {
 		T::AccountId: UncheckedFrom<T::Hash>,
 		T::AccountId: AsRef<[u8]>,
 	{
+		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
+			Storage::<T>::process_deletion_queue_batch(remaining_weight)
+				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
+		}
+
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
-			// We do not want to go above the block limit and rather avoid lazy deletion
-			// in that case. This should only happen on runtime upgrades.
-			let weight_limit = T::BlockWeights::get()
-				.max_block
-				.saturating_sub(System::<T>::block_weight().total())
-				.min(T::DeletionWeightLimit::get());
-			Storage::<T>::process_deletion_queue_batch(weight_limit)
-				.saturating_add(T::WeightInfo::on_initialize())
+			// We want to process the deletion_queue in the on_idle hook. Only in the case
+			// that the queue length has reached its maximal depth, we process it here.
+			let max_len = T::DeletionQueueDepth::get() as usize;
+			let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
+			if queue_len >= max_len {
+				// We do not want to go above the block limit and rather avoid lazy deletion
+				// in that case. This should only happen on runtime upgrades.
+				let weight_limit = T::BlockWeights::get()
+					.max_block
+					.saturating_sub(System::<T>::block_weight().total())
+					.min(T::DeletionWeightLimit::get());
+				Storage::<T>::process_deletion_queue_batch(weight_limit)
+					.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
+			} else {
+				T::WeightInfo::on_process_deletion_queue_batch()
+			}
 		}
 	}
 
@@ -402,10 +483,7 @@ pub mod pallet {
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(
-				code.len() as u32 / 1024,
-				salt.len() as u32 / 1024,
-			)
+			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
@@ -437,7 +515,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len / 1024, salt_len / 1024),
+				T::WeightInfo::instantiate_with_code(code_len, salt_len),
 			)
 		}
 
@@ -447,7 +525,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32 / 1024).saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -477,7 +555,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len / 1024),
+				T::WeightInfo::instantiate(salt_len),
 			)
 		}
 
@@ -497,7 +575,7 @@ pub mod pallet {
 		/// To avoid this situation a constructor could employ access control so that it can
 		/// only be instantiated by permissioned entities. The same is true when uploading
 		/// through [`Self::instantiate_with_code`].
-		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32 / 1024))]
+		#[pallet::weight(T::WeightInfo::upload_code(code.len() as u32))]
 		pub fn upload_code(
 			origin: OriginFor<T>,
 			code: Vec<u8>,
@@ -520,6 +598,42 @@ pub mod pallet {
 			<PrefabWasmModule<T>>::remove(&origin, code_hash)?;
 			// we waive the fee because removing unused code is beneficial
 			Ok(Pays::No.into())
+		}
+
+		/// Privileged function that changes the code of an existing contract.
+		///
+		/// This takes care of updating refcounts and all other necessary operations. Returns
+		/// an error if either the `code_hash` or `dest` do not exist.
+		///
+		/// # Note
+		///
+		/// This does **not** change the address of the contract in question. This means
+		/// that the contract address is no longer derived from its code hash after calling
+		/// this dispatchable.
+		#[pallet::weight(T::WeightInfo::set_code())]
+		pub fn set_code(
+			origin: OriginFor<T>,
+			dest: <T::Lookup as StaticLookup>::Source,
+			code_hash: CodeHash<T>,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let dest = T::Lookup::lookup(dest)?;
+			<ContractInfoOf<T>>::try_mutate(&dest, |contract| {
+				let contract = if let Some(contract) = contract {
+					contract
+				} else {
+					return Err(<Error<T>>::ContractNotFound.into())
+				};
+				<PrefabWasmModule<T>>::add_user(code_hash)?;
+				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
+				Self::deposit_event(Event::ContractCodeUpdated {
+					contract: dest.clone(),
+					new_code_hash: code_hash,
+					old_code_hash: contract.code_hash,
+				});
+				contract.code_hash = code_hash;
+				Ok(())
+			})
 		}
 	}
 
@@ -556,12 +670,24 @@ pub mod pallet {
 
 		/// A code with the specified hash was removed.
 		CodeRemoved { code_hash: T::Hash },
+
+		/// A contract's code was updated.
+		ContractCodeUpdated {
+			/// The contract that has been updated.
+			contract: T::AccountId,
+			/// New code hash that was set for the contract.
+			new_code_hash: T::Hash,
+			/// Previous code hash of the contract.
+			old_code_hash: T::Hash,
+		},
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
 		/// A new schedule must have a greater version than the current one.
 		InvalidScheduleVersion,
+		/// Invalid combination of flags supplied to `seal_call` or `seal_delegate_call`.
+		InvalidCallFlags,
 		/// The executed contract exhausted its gas limit.
 		OutOfGas,
 		/// The output buffer supplied to a contract API call was too small.
@@ -637,7 +763,7 @@ pub mod pallet {
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
 	#[pallet::storage]
-	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, Vec<u8>>;
+	pub(crate) type PristineCode<T: Config> = StorageMap<_, Identity, CodeHash<T>, CodeVec<T>>;
 
 	/// A mapping between an original code hash and instrumented wasm code, ready for execution.
 	#[pallet::storage]
@@ -648,9 +774,30 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type OwnerInfoOf<T: Config> = StorageMap<_, Identity, CodeHash<T>, OwnerInfo<T>>;
 
-	/// The subtrie counter.
+	/// This is a **monotonic** counter incremented on contract instantiation.
+	///
+	/// This is used in order to generate unique trie ids for contracts.
+	/// The trie id of a new contract is calculated from hash(account_id, nonce).
+	/// The nonce is required because otherwise the following sequence would lead to
+	/// a possible collision of storage:
+	///
+	/// 1. Create a new contract.
+	/// 2. Terminate the contract.
+	/// 3. Immediately recreate the contract with the same account_id.
+	///
+	/// This is bad because the contents of a trie are deleted lazily and there might be
+	/// storage of the old instantiation still in it when the new contract is created. Please
+	/// note that we can't replace the counter by the block number because the sequence above
+	/// can happen in the same block. We also can't keep the account counter in memory only
+	/// because storage is the only way to communicate across different extrinsics in the
+	/// same block.
+	///
+	/// # Note
+	///
+	/// Do not use it to determine the number of contracts. It won't be decremented if
+	/// a contract is destroyed.
 	#[pallet::storage]
-	pub(crate) type AccountCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
+	pub(crate) type Nonce<T: Config> = StorageValue<_, u64, ValueQuery>;
 
 	/// The code associated with a given account.
 	///
@@ -664,7 +811,8 @@ pub mod pallet {
 	/// Child trie deletion is a heavy operation depending on the amount of storage items
 	/// stored in said trie. Therefore this operation is performed lazily in `on_initialize`.
 	#[pallet::storage]
-	pub(crate) type DeletionQueue<T: Config> = StorageValue<_, Vec<DeletedContract>, ValueQuery>;
+	pub(crate) type DeletionQueue<T: Config> =
+		StorageValue<_, BoundedVec<DeletedContract, T::DeletionQueueDepth>, ValueQuery>;
 }
 
 /// Return type of the private [`Pallet::internal_call`] function.
@@ -782,8 +930,8 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module = PrefabWasmModule::from_code(code, &schedule, origin)
-			.map_err(|_| <Error<T>>::CodeRejected)?;
+		let module =
+			PrefabWasmModule::from_code(code, &schedule, origin).map_err(|(err, _)| err)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -831,7 +979,7 @@ where
 		module: &mut PrefabWasmModule<T>,
 		schedule: &Schedule<T>,
 	) -> frame_support::dispatch::DispatchResult {
-		self::wasm::reinstrument(module, schedule)
+		self::wasm::reinstrument(module, schedule).map(|_| ())
 	}
 
 	/// Internal function that does the actual call.
@@ -889,19 +1037,11 @@ where
 			let schedule = T::Schedule::get();
 			let (extra_deposit, executable) = match code {
 				Code::Upload(Bytes(binary)) => {
-					ensure!(
-						binary.len() as u32 <= schedule.limits.code_len,
-						<Error<T>>::CodeTooLarge
-					);
 					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
-						.map_err(|msg| {
+						.map_err(|(err, msg)| {
 							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
-							<Error<T>>::CodeRejected
+							err
 						})?;
-					ensure!(
-						executable.code_len() <= schedule.limits.code_len,
-						<Error<T>>::CodeTooLarge
-					);
 					// The open deposit will be charged during execution when the
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transfered to the contract but

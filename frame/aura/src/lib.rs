@@ -153,7 +153,7 @@ impl<T: Config> Pallet<T> {
 			AURA_ENGINE_ID,
 			ConsensusLog::AuthoritiesChange(new.into_inner()).encode(),
 		);
-		<frame_system::Pallet<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
@@ -225,7 +225,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
 
-		<frame_system::Pallet<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log);
 	}
 }
 
@@ -261,7 +261,7 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::AuthorityId>
 		let i = Inner::find_author(digests)?;
 
 		let validators = <Pallet<T>>::authorities();
-		validators.get(i as usize).map(|k| k.clone())
+		validators.get(i as usize).cloned()
 	}
 }
 

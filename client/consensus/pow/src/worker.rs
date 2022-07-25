@@ -169,7 +169,7 @@ where
 				Err(err) => {
 					warn!(
 						target: "pow",
-						"Unable to import mined block: {:?}",
+						"Unable to import mined block: {}",
 						err,
 					);
 					return false
@@ -238,7 +238,7 @@ where
 			Err(err) => {
 				warn!(
 					target: "pow",
-					"Unable to import mined block: {:?}",
+					"Unable to import mined block: {}",
 					err,
 				);
 				false
@@ -295,7 +295,7 @@ impl<Block: BlockT> Stream for UntilImportedOrTimeout<Block> {
 			}
 		}
 
-		let timeout = self.timeout.clone();
+		let timeout = self.timeout;
 		let inner_delay = self.inner_delay.get_or_insert_with(|| Delay::new(timeout));
 
 		match Future::poll(Pin::new(inner_delay), cx) {

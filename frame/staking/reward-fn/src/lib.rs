@@ -137,20 +137,18 @@ fn compute_taylor_serie_part(p: &INPoSParam) -> BigUint {
 
 		if taylor_sum_positive == last_taylor_term_positive {
 			taylor_sum = taylor_sum.add(&last_taylor_term);
+		} else if taylor_sum >= last_taylor_term {
+			taylor_sum = taylor_sum
+				.sub(&last_taylor_term)
+				// NOTE: Should never happen as checked above
+				.unwrap_or_else(|e| e);
 		} else {
-			if taylor_sum >= last_taylor_term {
-				taylor_sum = taylor_sum
-					.sub(&last_taylor_term)
-					// NOTE: Should never happen as checked above
-					.unwrap_or_else(|e| e);
-			} else {
-				taylor_sum_positive = !taylor_sum_positive;
-				taylor_sum = last_taylor_term
-					.clone()
-					.sub(&taylor_sum)
-					// NOTE: Should never happen as checked above
-					.unwrap_or_else(|e| e);
-			}
+			taylor_sum_positive = !taylor_sum_positive;
+			taylor_sum = last_taylor_term
+				.clone()
+				.sub(&taylor_sum)
+				// NOTE: Should never happen as checked above
+				.unwrap_or_else(|e| e);
 		}
 	}
 
@@ -217,10 +215,10 @@ fn div_by_stripped(mut a: BigUint, b: &BigUint) -> BigUint {
 		return new_a
 			.div(b, false)
 			.map(|res| res.0)
-			.unwrap_or_else(|| BigUint::zero())
+			.unwrap_or_else(BigUint::zero)
 			.div_unit(100_000)
 			.div_unit(100_000)
 	}
 
-	a.div(b, false).map(|res| res.0).unwrap_or_else(|| BigUint::zero())
+	a.div(b, false).map(|res| res.0).unwrap_or_else(BigUint::zero)
 }

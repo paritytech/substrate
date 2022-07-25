@@ -14,6 +14,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+//! Testing pallet macro
+
+// Ensure docs are propagated properly by the macros.
+#![warn(missing_docs)]
+
 pub use pallet::*;
 
 #[frame_support::pallet]
@@ -29,6 +35,10 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
+	/// I'm the documentation
+	#[pallet::storage]
+	pub type Value<T> = StorageValue<Value = u32>;
+
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {}
@@ -36,5 +46,11 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {}
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Something failed
+		Test,
 	}
 }

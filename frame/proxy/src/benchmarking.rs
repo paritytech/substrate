@@ -32,8 +32,8 @@ fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 }
 
 fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(), &'static str> {
-	let caller = maybe_who.unwrap_or_else(|| whitelisted_caller());
-	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+	let caller = maybe_who.unwrap_or_else(whitelisted_caller);
+	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 	for i in 0..n {
 		Proxy::<T>::add_proxy(
 			RawOrigin::Signed(caller.clone()).into(),
@@ -51,12 +51,12 @@ fn add_announcements<T: Config>(
 	maybe_real: Option<T::AccountId>,
 ) -> Result<(), &'static str> {
 	let caller = maybe_who.unwrap_or_else(|| account("caller", 0, SEED));
-	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 	let real = if let Some(real) = maybe_real {
 		real
 	} else {
 		let real = account("real", 0, SEED);
-		T::Currency::make_free_balance_be(&real, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&real, BalanceOf::<T>::max_value() / 2u32.into());
 		Proxy::<T>::add_proxy(
 			RawOrigin::Signed(real.clone()).into(),
 			caller.clone(),
@@ -77,10 +77,10 @@ fn add_announcements<T: Config>(
 
 benchmarks! {
 	proxy {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
@@ -91,11 +91,11 @@ benchmarks! {
 
 	proxy_announced {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("anonymous", 0, SEED);
 		let delegate: T::AccountId = account("target", p - 1, SEED);
-		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
@@ -112,10 +112,10 @@ benchmarks! {
 
 	remove_announcement {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
@@ -133,10 +133,10 @@ benchmarks! {
 
 	reject_announcement {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
@@ -154,10 +154,10 @@ benchmarks! {
 
 	announce {
 		let a in 0 .. T::MaxPending::get() - 1;
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
@@ -169,11 +169,11 @@ benchmarks! {
 	}
 
 	add_proxy {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		account("target", T::MaxProxies::get().into(), SEED),
+		account("target", T::MaxProxies::get(), SEED),
 		T::ProxyType::default(),
 		T::BlockNumber::zero()
 	)
@@ -183,7 +183,7 @@ benchmarks! {
 	}
 
 	remove_proxy {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -197,7 +197,7 @@ benchmarks! {
 	}
 
 	remove_proxies {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
@@ -206,7 +206,7 @@ benchmarks! {
 	}
 
 	anonymous {
-		let p in 1 .. (T::MaxProxies::get() - 1).into() => add_proxies::<T>(p, None)?;
+		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
 		RawOrigin::Signed(caller.clone()),
@@ -225,7 +225,7 @@ benchmarks! {
 	}
 
 	kill_anonymous {
-		let p in 0 .. (T::MaxProxies::get() - 2).into();
+		let p in 0 .. (T::MaxProxies::get() - 2);
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());

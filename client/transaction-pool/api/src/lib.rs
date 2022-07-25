@@ -22,15 +22,16 @@
 pub mod error;
 
 use futures::{Future, Stream};
-use serde::{Deserialize, Serialize};
-pub use sp_runtime::transaction_validity::{
-	TransactionLongevity, TransactionPriority, TransactionSource, TransactionTag,
-};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Member, NumberFor},
 };
 use std::{collections::HashMap, hash::Hash, pin::Pin, sync::Arc};
+
+pub use sp_runtime::transaction_validity::{
+	TransactionLongevity, TransactionPriority, TransactionSource, TransactionTag,
+};
 
 /// Transaction pool status.
 #[derive(Debug)]
@@ -177,7 +178,7 @@ pub trait TransactionPool: Send + Sync {
 	/// Block type.
 	type Block: BlockT;
 	/// Transaction hash type.
-	type Hash: Hash + Eq + Member + Serialize;
+	type Hash: Hash + Eq + Member + Serialize + DeserializeOwned;
 	/// In-pool transaction type.
 	type InPoolTransaction: InPoolTransaction<
 		Transaction = TransactionFor<Self>,
@@ -278,7 +279,7 @@ impl<T> ReadyTransactions for std::iter::Empty<T> {
 
 /// Events that the transaction pool listens for.
 pub enum ChainEvent<B: BlockT> {
-	/// New best block have been added to the chain
+	/// New best block have been added to the chain.
 	NewBestBlock {
 		/// Hash of the block.
 		hash: B::Hash,
@@ -289,8 +290,10 @@ pub enum ChainEvent<B: BlockT> {
 	},
 	/// An existing block has been finalized.
 	Finalized {
-		/// Hash of just finalized block
+		/// Hash of just finalized block.
 		hash: B::Hash,
+		/// Path from old finalized to new finalized parent.
+		tree_route: Arc<[B::Hash]>,
 	},
 }
 
@@ -348,12 +351,12 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 			extrinsic
 		);
 
-		let result = self.submit_local(&at, extrinsic);
+		let result = self.submit_local(at, extrinsic);
 
 		result.map(|_| ()).map_err(|e| {
 			log::warn!(
 				target: "txpool",
-				"(offchain call) Error submitting a transaction to the pool: {:?}",
+				"(offchain call) Error submitting a transaction to the pool: {}",
 				e
 			)
 		})

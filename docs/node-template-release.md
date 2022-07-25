@@ -7,7 +7,7 @@ the existence of your current git commit ID in the remote repository.
 	Assume you are in root directory of Substrate. Run:
 
 	```bash
-	cd .maintain/
+	cd scripts/ci/
 	./node-template-release.sh <output tar.gz file>
 	```
 
@@ -50,7 +50,7 @@ commit in Substrate remote repository, such as:
 	```
 
 	P.S: This step can be automated if we update `node-template-release` package in
-	`.maintain/node-template-release`.
+	`scripts/ci/node-template-release`.
 
 4. Once the three `Cargo.toml`s are updated, compile and confirm that the Node Template builds. Then
 commit the changes to a new branch in [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), and make a PR.

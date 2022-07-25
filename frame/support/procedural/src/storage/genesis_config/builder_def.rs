@@ -49,7 +49,7 @@ impl BuilderDef {
 			let mut data = None;
 
 			if let Some(builder) = &line.build {
-				is_generic |= ext::expr_contains_ident(&builder, &def.module_runtime_generic);
+				is_generic |= ext::expr_contains_ident(builder, &def.module_runtime_generic);
 				is_generic |= line.is_generic;
 
 				data = Some(match &line.storage_type {
@@ -138,7 +138,7 @@ impl BuilderDef {
 		}
 
 		if let Some(builder) = def.extra_genesis_build.as_ref() {
-			is_generic |= ext::expr_contains_ident(&builder, &def.module_runtime_generic);
+			is_generic |= ext::expr_contains_ident(builder, &def.module_runtime_generic);
 
 			blocks.push(quote_spanned! { builder.span() =>
 				let extra_genesis_builder: fn(&Self) = #builder;

@@ -40,15 +40,14 @@ pub use graph::{base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transact
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
-	convert::TryInto,
 	pin::Pin,
 	sync::Arc,
 };
 
 use graph::{ExtrinsicHash, IsValidator};
 use sc_transaction_pool_api::{
-	ChainEvent, ImportNotificationStream, MaintainedTransactionPool, PoolFuture, PoolStatus,
-	ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
+	error::Error as TxPoolError, ChainEvent, ImportNotificationStream, MaintainedTransactionPool,
+	PoolFuture, PoolStatus, ReadyTransactions, TransactionFor, TransactionPool, TransactionSource,
 	TransactionStatusStreamFor, TxHash,
 };
 use sp_core::traits::SpawnEssentialNamed;
@@ -418,8 +417,8 @@ where
 			.validate_transaction_blocking(at, TransactionSource::Local, xt.clone())?
 			.map_err(|e| {
 				Self::Error::Pool(match e {
-					TransactionValidityError::Invalid(i) => i.into(),
-					TransactionValidityError::Unknown(u) => u.into(),
+					TransactionValidityError::Invalid(i) => TxPoolError::InvalidTransaction(i),
+					TransactionValidityError::Unknown(u) => TxPoolError::UnknownTransaction(u),
 				})
 			})?;
 
@@ -431,7 +430,7 @@ where
 
 		let validated = ValidatedTransaction::valid_at(
 			block_number.saturated_into::<u64>(),
-			hash.clone(),
+			hash,
 			TransactionSource::Local,
 			xt,
 			bytes,
@@ -534,12 +533,12 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 		.block_body(&block_id)
 		.await
 		.unwrap_or_else(|e| {
-			log::warn!("Prune known transactions: error request {:?}!", e);
+			log::warn!("Prune known transactions: error request: {}", e);
 			None
 		})
 		.unwrap_or_default();
 
-	let hashes = extrinsics.iter().map(|tx| pool.hash_of(&tx)).collect::<Vec<_>>();
+	let hashes = extrinsics.iter().map(|tx| pool.hash_of(tx)).collect::<Vec<_>>();
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
@@ -550,14 +549,14 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 			return hashes
 		},
 		Err(e) => {
-			log::debug!(target: "txpool", "Error retrieving header for {:?}: {:?}", block_id, e);
+			log::debug!(target: "txpool", "Error retrieving header for {:?}: {}", block_id, e);
 			return hashes
 		},
 	};
 
 	if let Err(e) = pool.prune(&block_id, &BlockId::hash(*header.parent_hash()), &extrinsics).await
 	{
-		log::error!("Cannot prune known in the pool {:?}!", e);
+		log::error!("Cannot prune known in the pool: {}", e);
 	}
 
 	hashes
@@ -610,11 +609,11 @@ where
 					if let Some(ref tree_route) = tree_route {
 						for retracted in tree_route.retracted() {
 							// notify txs awaiting finality that it has been retracted
-							pool.validated_pool().on_block_retracted(retracted.hash.clone());
+							pool.validated_pool().on_block_retracted(retracted.hash);
 						}
 
 						future::join_all(tree_route.enacted().iter().map(|h| {
-							prune_known_txs_for_block(BlockId::Hash(h.hash.clone()), &*api, &*pool)
+							prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)
 						}))
 						.await
 						.into_iter()
@@ -623,7 +622,7 @@ where
 						})
 					}
 
-					pruned_log.extend(prune_known_txs_for_block(id.clone(), &*api, &*pool).await);
+					pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
 
 					metrics.report(|metrics| {
 						metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
@@ -633,13 +632,13 @@ where
 						let mut resubmit_transactions = Vec::new();
 
 						for retracted in tree_route.retracted() {
-							let hash = retracted.hash.clone();
+							let hash = retracted.hash;
 
 							let block_transactions = api
 								.block_body(&BlockId::hash(hash))
 								.await
 								.unwrap_or_else(|e| {
-									log::warn!("Failed to fetch block body {:?}!", e);
+									log::warn!("Failed to fetch block body: {}", e);
 									None
 								})
 								.unwrap_or_default()
@@ -650,7 +649,7 @@ where
 
 							resubmit_transactions.extend(block_transactions.into_iter().filter(
 								|tx| {
-									let tx_hash = pool.hash_of(&tx);
+									let tx_hash = pool.hash_of(tx);
 									let contains = pruned_log.contains(&tx_hash);
 
 									// need to count all transactions, not just filtered, here
@@ -685,7 +684,7 @@ where
 						{
 							log::debug!(
 								target: "txpool",
-								"[{:?}] Error re-submitting transactions: {:?}",
+								"[{:?}] Error re-submitting transactions: {}",
 								id,
 								e,
 							)
@@ -700,8 +699,7 @@ where
 					});
 
 					if next_action.revalidate {
-						let hashes =
-							pool.validated_pool().ready().map(|tx| tx.hash.clone()).collect();
+						let hashes = pool.validated_pool().ready().map(|tx| tx.hash).collect();
 						revalidation_queue.revalidate_later(block_number, hashes).await;
 
 						revalidation_strategy.lock().clear();
@@ -709,15 +707,17 @@ where
 				}
 				.boxed()
 			},
-			ChainEvent::Finalized { hash } => {
+			ChainEvent::Finalized { hash, tree_route } => {
 				let pool = self.pool.clone();
 				async move {
-					if let Err(e) = pool.validated_pool().on_block_finalized(hash).await {
-						log::warn!(
-							target: "txpool",
-							"Error [{}] occurred while attempting to notify watchers of finalization {}",
-							e, hash
-						)
+					for hash in tree_route.iter().chain(&[hash]) {
+						if let Err(e) = pool.validated_pool().on_block_finalized(*hash).await {
+							log::warn!(
+								target: "txpool",
+								"Error [{}] occurred while attempting to notify watchers of finalization {}",
+								e, hash
+							)
+						}
 					}
 				}
 				.boxed()

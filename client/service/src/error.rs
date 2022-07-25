@@ -71,7 +71,7 @@ impl<'a> From<&'a str> for Error {
 	}
 }
 
-impl<'a> From<String> for Error {
+impl From<String> for Error {
 	fn from(s: String) -> Self {
 		Error::Other(s)
 	}

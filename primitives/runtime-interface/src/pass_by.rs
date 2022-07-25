@@ -33,7 +33,7 @@ use crate::wasm::*;
 #[cfg(feature = "std")]
 use sp_wasm_interface::{FunctionContext, Pointer, Result};
 
-use sp_std::{convert::TryFrom, marker::PhantomData};
+use sp_std::marker::PhantomData;
 
 #[cfg(not(feature = "std"))]
 use sp_std::vec::Vec;
@@ -382,7 +382,7 @@ impl<T: PassByInner<Inner = I>, I: RIType> RIType for Inner<T, I> {
 ///     }
 /// }
 ///
-/// impl std::convert::TryFrom<u8> for Test {
+/// impl TryFrom<u8> for Test {
 ///     type Error = ();
 ///
 ///     fn try_from(val: u8) -> Result<Test, ()> {

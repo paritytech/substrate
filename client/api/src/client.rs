@@ -25,9 +25,10 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
+use std::{collections::HashSet, fmt, sync::Arc};
 
-use crate::{blockchain::Info, notifications::StorageEventStream};
+use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
+
 use sc_transaction_pool_api::ChainEvent;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain;
@@ -76,6 +77,34 @@ pub trait BlockchainEvents<Block: BlockT> {
 	) -> sp_blockchain::Result<StorageEventStream<Block::Hash>>;
 }
 
+/// List of operations to be performed on storage aux data.
+/// First tuple element is the encoded data key.
+/// Second tuple element is the encoded optional data to write.
+/// If `None`, the key and the associated data are deleted from storage.
+pub type AuxDataOperations = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+
+/// Callback invoked before committing the operations created during block import.
+/// This gives the opportunity to perform auxiliary pre-commit actions and optionally
+/// enqueue further storage write operations to be atomically performed on commit.
+pub type OnImportAction<Block> =
+	Box<dyn (Fn(&BlockImportNotification<Block>) -> AuxDataOperations) + Send>;
+
+/// Callback invoked before committing the operations created during block finalization.
+/// This gives the opportunity to perform auxiliary pre-commit actions and optionally
+/// enqueue further storage write operations to be atomically performed on commit.
+pub type OnFinalityAction<Block> =
+	Box<dyn (Fn(&FinalityNotification<Block>) -> AuxDataOperations) + Send>;
+
+/// Interface to perform auxiliary actions before committing a block import or
+/// finality operation.
+pub trait PreCommitActions<Block: BlockT> {
+	/// Actions to be performed on block import.
+	fn register_import_action(&self, op: OnImportAction<Block>);
+
+	/// Actions to be performed on block finalization.
+	fn register_finality_action(&self, op: OnFinalityAction<Block>);
+}
+
 /// Interface for fetching block data.
 pub trait BlockBackend<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
@@ -117,6 +146,9 @@ pub trait BlockBackend<Block: BlockT> {
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
+
+	/// Tells whether the current client configuration requires full-sync mode.
+	fn requires_full_sync(&self) -> bool;
 }
 
 /// Provide a list of potential uncle headers for a given block.
@@ -273,10 +305,16 @@ pub struct BlockImportNotification<Block: BlockT> {
 /// Summary of a finalized block.
 #[derive(Clone, Debug)]
 pub struct FinalityNotification<Block: BlockT> {
-	/// Imported block header hash.
+	/// Finalized block header hash.
 	pub hash: Block::Hash,
-	/// Imported block header.
+	/// Finalized block header.
 	pub header: Block::Header,
+	/// Path from the old finalized to new finalized parent (implicitly finalized blocks).
+	///
+	/// This maps to the range `(old_finalized, new_finalized)`.
+	pub tree_route: Arc<[Block::Hash]>,
+	/// Stale branches heads.
+	pub stale_heads: Arc<[Block::Hash]>,
 }
 
 impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
@@ -293,6 +331,30 @@ impl<B: BlockT> TryFrom<BlockImportNotification<B>> for ChainEvent<B> {
 
 impl<B: BlockT> From<FinalityNotification<B>> for ChainEvent<B> {
 	fn from(n: FinalityNotification<B>) -> Self {
-		Self::Finalized { hash: n.hash }
+		Self::Finalized { hash: n.hash, tree_route: n.tree_route }
+	}
+}
+
+impl<B: BlockT> From<FinalizeSummary<B>> for FinalityNotification<B> {
+	fn from(mut summary: FinalizeSummary<B>) -> Self {
+		let hash = summary.finalized.pop().unwrap_or_default();
+		FinalityNotification {
+			hash,
+			header: summary.header,
+			tree_route: Arc::from(summary.finalized),
+			stale_heads: Arc::from(summary.stale_heads),
+		}
+	}
+}
+
+impl<B: BlockT> From<ImportSummary<B>> for BlockImportNotification<B> {
+	fn from(summary: ImportSummary<B>) -> Self {
+		BlockImportNotification {
+			hash: summary.hash,
+			origin: summary.origin,
+			header: summary.header,
+			is_new_best: summary.is_new_best,
+			tree_route: summary.tree_route.map(Arc::new),
+		}
 	}
 }

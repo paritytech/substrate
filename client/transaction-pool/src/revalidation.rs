@@ -92,7 +92,7 @@ async fn batch_revalidate<Api: ChainApi>(
 			},
 			Ok(Ok(validity)) => {
 				revalidated.insert(
-					ext_hash.clone(),
+					ext_hash,
 					ValidatedTransaction::valid_at(
 						at.saturated_into::<u64>(),
 						ext_hash,
@@ -106,7 +106,7 @@ async fn batch_revalidate<Api: ChainApi>(
 			Err(validation_err) => {
 				log::debug!(
 					target: "txpool",
-					"[{:?}]: Error during revalidation: {:?}. Removing.",
+					"[{:?}]: Removing due to error during revalidation: {}",
 					ext_hash,
 					validation_err
 				);
@@ -194,14 +194,14 @@ impl<Api: ChainApi> RevalidationWorker<Api> {
 			self.block_ordered
 				.entry(block_number)
 				.and_modify(|value| {
-					value.insert(ext_hash.clone());
+					value.insert(ext_hash);
 				})
 				.or_insert_with(|| {
 					let mut bt = HashSet::new();
-					bt.insert(ext_hash.clone());
+					bt.insert(ext_hash);
 					bt
 				});
-			self.members.insert(ext_hash.clone(), block_number);
+			self.members.insert(ext_hash, block_number);
 		}
 	}
 

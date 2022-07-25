@@ -53,19 +53,19 @@
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
-//! 		max_block_size: usize,
-//! 		max_extrinsic_size: usize,
+//! 	max_block_size: usize,
+//! 	max_extrinsic_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
-//! 		max_transaction_size: usize,
+//! 	max_transaction_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, ChainSpecGroup, ChainSpecExtension)]
 //! pub struct Extension {
-//! 		pub client: ClientParams,
-//! 		pub pool: PoolParams,
+//! 	pub client: ClientParams,
+//! 	pub pool: PoolParams,
 //! }
 //!
 //! pub type BlockNumber = u64;
@@ -88,24 +88,92 @@
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct ClientParams {
-//! 		max_block_size: usize,
-//! 		max_extrinsic_size: usize,
+//! 	max_block_size: usize,
+//! 	max_extrinsic_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecGroup)]
 //! pub struct PoolParams {
-//! 		max_transaction_size: usize,
+//! 	max_transaction_size: usize,
 //! }
 //!
 //! #[derive(Clone, Debug, Serialize, Deserialize, ChainSpecExtension)]
 //! pub struct Extension {
-//! 		pub client: ClientParams,
-//! 		#[forks]
-//! 		pub pool: Forks<u64, PoolParams>,
+//! 	pub client: ClientParams,
+//! 	#[forks]
+//! 	pub pool: Forks<u64, PoolParams>,
 //! }
 //!
 //! pub type MyChainSpec<G> = GenericChainSpec<G, Extension>;
 //! ```
+//!
+//! # Substrate chain specification format
+//!
+//! The Substrate chain specification is a `json` file that describes the basics of a chain. Most
+//! importantly it lays out the genesis storage which leads to the genesis hash. The default
+//! Substrate chain specification format is the following:
+//!
+//! ```json
+//! // The human readable name of the chain.
+//! "name": "Flaming Fir",
+//! // The id of the chain.
+//! "id": "flamingfir9",
+//! // The chain type of this chain.
+//! // Possible values are `Live`, `Development`, `Local`.
+//! "chainType": "Live",
+//! // A list of multi addresses that belong to boot nodes of the chain.
+//! "bootNodes": [
+//!   "/dns/0.flamingfir.paritytech.net/tcp/30333/p2p/12D3KooWLK2gMLhWsYJzjW3q35zAs9FDDVqfqVfVuskiGZGRSMvR",
+//! ],
+//! // Optional list of "multi address, verbosity" of telemetry endpoints.
+//! // The verbosity goes from `0` to `9`. With `0` being the mode with the lowest verbosity.
+//! "telemetryEndpoints": [
+//!   [
+//!     "/dns/telemetry.polkadot.io/tcp/443/x-parity-wss/%2Fsubmit%2F",
+//!     0
+//!   ]
+//! ],
+//! // Optional networking protocol id that identifies the chain.
+//! "protocolId": "fir9",
+//! // Optional fork id. Should most likely be left empty.
+//! // Can be used to signal a fork on the network level when two chains have the
+//! // same genesis hash.
+//! "forkId": "random_fork",
+//! // Custom properties.
+//! "properties": {
+//!   "tokenDecimals": 15,
+//!   "tokenSymbol": "FIR"
+//! },
+//! // Deprecated field. Should be ignored.
+//! "consensusEngine": null,
+//! // The genesis declaration of the chain.
+//! //
+//! // `runtime`, `raw`, `stateRootHash` denote the type of the genesis declaration.
+//! //
+//! // These declarations are in the following formats:
+//! // - `runtime` is a `json` object that can be parsed by a compatible `GenesisConfig`. This
+//! //  `GenesisConfig` is declared by a runtime and opaque to the node.
+//! // - `raw` is a `json` object with two fields `top` and `children_default`. Each of these
+//! //   fields is a map of `key => value`. These key/value pairs represent the genesis storage.
+//! // - `stateRootHash` is a single hex encoded hash that represents the genesis hash. The hash
+//! //   type depends on the hash used by the chain.
+//! //
+//! "genesis": { "runtime": {} },
+//! /// Optional map of `block_number` to `wasm_code`.
+//! ///
+//! /// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
+//! /// given block number until the `spec_version` on-chain changes. The given `wasm_code` should
+//! /// be as close as possible to the on-chain wasm code. A substitute should be used to fix a bug
+//! /// that can not be fixed with a runtime upgrade, if for example the runtime is constantly
+//! /// panicking. Introducing new runtime apis isn't supported, because the node
+//! /// will read the runtime version from the on-chain wasm code. Use this functionality only when
+//! /// there is no other way around it and only patch the problematic bug, the rest should be done
+//! /// with a on-chain runtime upgrade.
+//! "codeSubstitutes": [],
+//! ```
+//!
+//! The chain spec can be extended with other fields that are opaque to the default chain spec.
+//! Specific node implementations will need to be able to deserialize these extensions.
 
 mod chain_spec;
 mod extension;

@@ -101,7 +101,7 @@ by block production. A good starting point for observing them on the console is 
 command line in the root directory of the substrate repository:
 
 ```bash
-cargo run --release -- --dev --tmp -lerror,runtime::contracts=debug
+cargo run --release -- --dev -lerror,runtime::contracts=debug
 ```
 
 This raises the log level of `runtime::contracts` to `debug` and all other targets

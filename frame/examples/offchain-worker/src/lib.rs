@@ -154,11 +154,14 @@ pub mod pallet {
 		/// multiple pallets send unsigned transactions.
 		#[pallet::constant]
 		type UnsignedPriority: Get<TransactionPriority>;
+
+		/// Maximum number of prices.
+		#[pallet::constant]
+		type MaxPrices: Get<u32>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -330,7 +333,7 @@ pub mod pallet {
 	/// This is used to calculate average price, should have bounded size.
 	#[pallet::storage]
 	#[pallet::getter(fn prices)]
-	pub(super) type Prices<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
+	pub(super) type Prices<T: Config> = StorageValue<_, BoundedVec<u32, T::MaxPrices>, ValueQuery>;
 
 	/// Defines the block when next unsigned transaction will be accepted.
 	///
@@ -443,7 +446,7 @@ impl<T: Config> Pallet<T> {
 		if !signer.can_sign() {
 			return Err(
 				"No local accounts available. Consider adding one via `author_insertKey` RPC.",
-			)?
+			)
 		}
 		// Make an external HTTP request to fetch the current price.
 		// Note this call will block until response is received.
@@ -637,7 +640,7 @@ impl<T: Config> Pallet<T> {
 			_ => return None,
 		};
 
-		let exp = price.fraction_length.checked_sub(2).unwrap_or(0);
+		let exp = price.fraction_length.saturating_sub(2);
 		Some(price.integer as u32 * 100 + (price.fraction / 10_u64.pow(exp)) as u32)
 	}
 
@@ -645,12 +648,8 @@ impl<T: Config> Pallet<T> {
 	fn add_price(maybe_who: Option<T::AccountId>, price: u32) {
 		log::info!("Adding to the average: {}", price);
 		<Prices<T>>::mutate(|prices| {
-			const MAX_LEN: usize = 64;
-
-			if prices.len() < MAX_LEN {
-				prices.push(price);
-			} else {
-				prices[price as usize % MAX_LEN] = price;
+			if prices.try_push(price).is_err() {
+				prices[(price % T::MaxPrices::get()) as usize] = price;
 			}
 		});
 

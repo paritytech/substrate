@@ -218,17 +218,13 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 	}
 }
 
-parameter_types! {
-	pub const UnsignedPriority: u64 = 1 << 20;
-}
-
 impl Config for Runtime {
 	type AuthorityId = UintAuthorityId;
 	type Event = Event;
 	type ValidatorSet = Historical;
 	type NextSessionRotation = TestNextSessionRotation;
 	type ReportUnresponsiveness = OffenceHandler;
-	type UnsignedPriority = UnsignedPriority;
+	type UnsignedPriority = ConstU64<{ 1 << 20 }>;
 	type WeightInfo = ();
 	type MaxKeys = ConstU32<10_000>;
 	type MaxPeerInHeartbeats = ConstU32<10_000>;

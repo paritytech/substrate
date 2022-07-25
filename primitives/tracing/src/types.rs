@@ -639,7 +639,7 @@ mod std_features {
 
 			tracing::span::Span::child_of(
 				a.parent_id.map(tracing_core::span::Id::from_u64),
-				&metadata,
+				metadata,
 				&tracing::valueset! { metadata.fields(), target, name, file, line, module_path, ?params },
 			)
 		}
@@ -658,7 +658,7 @@ mod std_features {
 
 			tracing_core::Event::child_of(
 				self.parent_id.map(tracing_core::span::Id::from_u64),
-				&metadata,
+				metadata,
 				&tracing::valueset! { metadata.fields(), target, name, file, line, module_path, ?params },
 			)
 		}

@@ -39,18 +39,62 @@ mod attributes {
 	syn::custom_keyword!(register_only);
 }
 
-/// Runtime interface function with all associated versions of this function.
-pub struct RuntimeInterfaceFunction<'a> {
-	latest_version_to_call: Option<u32>,
-	versions: BTreeMap<u32, &'a TraitItemMethod>,
+/// A concrete, specific version of a runtime interface function.
+pub struct RuntimeInterfaceFunction {
+	item: TraitItemMethod,
+	should_trap_on_return: bool,
 }
 
-impl<'a> RuntimeInterfaceFunction<'a> {
-	fn new(version: VersionAttribute, trait_item: &'a TraitItemMethod) -> Self {
-		Self {
-			latest_version_to_call: version.is_callable().then(|| version.version),
-			versions: BTreeMap::from([(version.version, trait_item)]),
+impl std::ops::Deref for RuntimeInterfaceFunction {
+	type Target = TraitItemMethod;
+	fn deref(&self) -> &Self::Target {
+		&self.item
+	}
+}
+
+impl RuntimeInterfaceFunction {
+	fn new(item: &TraitItemMethod) -> Result<Self> {
+		let mut item = item.clone();
+		let mut should_trap_on_return = false;
+		item.attrs.retain(|attr| {
+			if attr.path.is_ident("trap_on_return") {
+				should_trap_on_return = true;
+				false
+			} else {
+				true
+			}
+		});
+
+		if should_trap_on_return && !matches!(item.sig.output, syn::ReturnType::Default) {
+			return Err(Error::new(
+				item.sig.ident.span(),
+				"Methods marked as #[trap_on_return] cannot return anything",
+			))
 		}
+
+		Ok(Self { item, should_trap_on_return })
+	}
+
+	pub fn should_trap_on_return(&self) -> bool {
+		self.should_trap_on_return
+	}
+}
+
+/// Runtime interface function with all associated versions of this function.
+struct RuntimeInterfaceFunctionSet {
+	latest_version_to_call: Option<u32>,
+	versions: BTreeMap<u32, RuntimeInterfaceFunction>,
+}
+
+impl RuntimeInterfaceFunctionSet {
+	fn new(version: VersionAttribute, trait_item: &TraitItemMethod) -> Result<Self> {
+		Ok(Self {
+			latest_version_to_call: version.is_callable().then(|| version.version),
+			versions: BTreeMap::from([(
+				version.version,
+				RuntimeInterfaceFunction::new(trait_item)?,
+			)]),
+		})
 	}
 
 	/// Returns the latest version of this runtime interface function plus the actual function
@@ -59,11 +103,11 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 	/// This isn't required to be the latest version, because a runtime interface function can be
 	/// annotated with `register_only` to ensure that the host exposes the host function but it
 	/// isn't used when compiling the runtime.
-	pub fn latest_version_to_call(&self) -> Option<(u32, &TraitItemMethod)> {
+	pub fn latest_version_to_call(&self) -> Option<(u32, &RuntimeInterfaceFunction)> {
 		self.latest_version_to_call.map(|v| {
 			(
 			v,
-			*self.versions.get(&v).expect(
+			self.versions.get(&v).expect(
 				"If latest_version_to_call has a value, the key with this value is in the versions; qed",
 			),
 		)
@@ -74,7 +118,7 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 	fn add_version(
 		&mut self,
 		version: VersionAttribute,
-		trait_item: &'a TraitItemMethod,
+		trait_item: &TraitItemMethod,
 	) -> Result<()> {
 		if let Some(existing_item) = self.versions.get(&version.version) {
 			let mut err = Error::new(trait_item.span(), "Duplicated version attribute");
@@ -86,7 +130,8 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 			return Err(err)
 		}
 
-		self.versions.insert(version.version, trait_item);
+		self.versions
+			.insert(version.version, RuntimeInterfaceFunction::new(trait_item)?);
 		if self.latest_version_to_call.map_or(true, |v| v < version.version) &&
 			version.is_callable()
 		{
@@ -98,22 +143,24 @@ impl<'a> RuntimeInterfaceFunction<'a> {
 }
 
 /// All functions of a runtime interface grouped by the function names.
-pub struct RuntimeInterface<'a> {
-	items: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>>,
+pub struct RuntimeInterface {
+	items: BTreeMap<syn::Ident, RuntimeInterfaceFunctionSet>,
 }
 
-impl<'a> RuntimeInterface<'a> {
+impl RuntimeInterface {
 	/// Returns an iterator over all runtime interface function
-	/// [`latest_version_to_call`](RuntimeInterfaceFunction::latest_version).
-	pub fn latest_versions_to_call(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
+	/// [`latest_version_to_call`](RuntimeInterfaceFunctionSet::latest_version).
+	pub fn latest_versions_to_call(
+		&self,
+	) -> impl Iterator<Item = (u32, &RuntimeInterfaceFunction)> {
 		self.items.iter().filter_map(|(_, item)| item.latest_version_to_call())
 	}
 
-	pub fn all_versions(&self) -> impl Iterator<Item = (u32, &TraitItemMethod)> {
+	pub fn all_versions(&self) -> impl Iterator<Item = (u32, &RuntimeInterfaceFunction)> {
 		self.items
 			.iter()
 			.flat_map(|(_, item)| item.versions.iter())
-			.map(|(v, i)| (*v, *i))
+			.map(|(v, i)| (*v, i))
 	}
 }
 
@@ -163,7 +210,7 @@ pub fn create_function_ident_with_version(name: &Ident, version: u32) -> Ident {
 }
 
 /// Returns the function arguments of the given `Signature`, minus any `self` arguments.
-pub fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = PatType> + 'a {
+pub fn get_function_arguments(sig: &Signature) -> impl Iterator<Item = PatType> + '_ {
 	sig.inputs
 		.iter()
 		.filter_map(|a| match a {
@@ -185,20 +232,20 @@ pub fn get_function_arguments<'a>(sig: &'a Signature) -> impl Iterator<Item = Pa
 }
 
 /// Returns the function argument names of the given `Signature`, minus any `self`.
-pub fn get_function_argument_names<'a>(sig: &'a Signature) -> impl Iterator<Item = Box<Pat>> + 'a {
+pub fn get_function_argument_names(sig: &Signature) -> impl Iterator<Item = Box<Pat>> + '_ {
 	get_function_arguments(sig).map(|pt| pt.pat)
 }
 
 /// Returns the function argument types of the given `Signature`, minus any `Self` type.
-pub fn get_function_argument_types<'a>(sig: &'a Signature) -> impl Iterator<Item = Box<Type>> + 'a {
+pub fn get_function_argument_types(sig: &Signature) -> impl Iterator<Item = Box<Type>> + '_ {
 	get_function_arguments(sig).map(|pt| pt.ty)
 }
 
 /// Returns the function argument types, minus any `Self` type. If any of the arguments
 /// is a reference, the underlying type without the ref is returned.
-pub fn get_function_argument_types_without_ref<'a>(
-	sig: &'a Signature,
-) -> impl Iterator<Item = Box<Type>> + 'a {
+pub fn get_function_argument_types_without_ref(
+	sig: &Signature,
+) -> impl Iterator<Item = Box<Type>> + '_ {
 	get_function_arguments(sig).map(|pt| pt.ty).map(|ty| match *ty {
 		Type::Reference(type_ref) => type_ref.elem,
 		_ => ty,
@@ -207,9 +254,9 @@ pub fn get_function_argument_types_without_ref<'a>(
 
 /// Returns the function argument names and types, minus any `self`. If any of the arguments
 /// is a reference, the underlying type without the ref is returned.
-pub fn get_function_argument_names_and_types_without_ref<'a>(
-	sig: &'a Signature,
-) -> impl Iterator<Item = (Box<Pat>, Box<Type>)> + 'a {
+pub fn get_function_argument_names_and_types_without_ref(
+	sig: &Signature,
+) -> impl Iterator<Item = (Box<Pat>, Box<Type>)> + '_ {
 	get_function_arguments(sig).map(|pt| match *pt.ty {
 		Type::Reference(type_ref) => (pt.pat, type_ref.elem),
 		_ => (pt.pat, pt.ty),
@@ -218,9 +265,9 @@ pub fn get_function_argument_names_and_types_without_ref<'a>(
 
 /// Returns the `&`/`&mut` for all function argument types, minus the `self` arg. If a function
 /// argument is not a reference, `None` is returned.
-pub fn get_function_argument_types_ref_and_mut<'a>(
-	sig: &'a Signature,
-) -> impl Iterator<Item = Option<(token::And, Option<token::Mut>)>> + 'a {
+pub fn get_function_argument_types_ref_and_mut(
+	sig: &Signature,
+) -> impl Iterator<Item = Option<(token::And, Option<token::Mut>)>> + '_ {
 	get_function_arguments(sig).map(|pt| pt.ty).map(|ty| match *ty {
 		Type::Reference(type_ref) => Some((type_ref.and_token, type_ref.mutability)),
 		_ => None,
@@ -228,7 +275,7 @@ pub fn get_function_argument_types_ref_and_mut<'a>(
 }
 
 /// Returns an iterator over all trait methods for the given trait definition.
-fn get_trait_methods<'a>(trait_def: &'a ItemTrait) -> impl Iterator<Item = &'a TraitItemMethod> {
+fn get_trait_methods(trait_def: &ItemTrait) -> impl Iterator<Item = &TraitItemMethod> {
 	trait_def.items.iter().filter_map(|i| match i {
 		TraitItem::Method(ref method) => Some(method),
 		_ => None,
@@ -288,8 +335,8 @@ fn get_item_version(item: &TraitItemMethod) -> Result<Option<VersionAttribute>> 
 }
 
 /// Returns all runtime interface members, with versions.
-pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait) -> Result<RuntimeInterface<'a>> {
-	let mut functions: BTreeMap<syn::Ident, RuntimeInterfaceFunction<'a>> = BTreeMap::new();
+pub fn get_runtime_interface(trait_def: &ItemTrait) -> Result<RuntimeInterface> {
+	let mut functions: BTreeMap<syn::Ident, RuntimeInterfaceFunctionSet> = BTreeMap::new();
 
 	for item in get_trait_methods(trait_def) {
 		let name = item.sig.ident.clone();
@@ -301,7 +348,7 @@ pub fn get_runtime_interface<'a>(trait_def: &'a ItemTrait) -> Result<RuntimeInte
 
 		match functions.entry(name.clone()) {
 			Entry::Vacant(entry) => {
-				entry.insert(RuntimeInterfaceFunction::new(version, item));
+				entry.insert(RuntimeInterfaceFunctionSet::new(version, item)?);
 			},
 			Entry::Occupied(mut entry) => {
 				entry.get_mut().add_version(version, item)?;

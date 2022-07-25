@@ -18,23 +18,23 @@
 //! Implementation of the `inspect-node-key` subcommand
 
 use crate::{Error, NetworkSchemeFlag};
+use clap::Parser;
 use libp2p::identity::{ed25519, PublicKey};
 use std::{fs, path::PathBuf};
-use structopt::StructOpt;
 
 /// The `inspect-node-key` command
-#[derive(Debug, StructOpt)]
-#[structopt(
+#[derive(Debug, Parser)]
+#[clap(
 	name = "inspect-node-key",
 	about = "Print the peer ID corresponding to the node key in the given file."
 )]
 pub struct InspectNodeKeyCmd {
 	/// Name of file to read the secret key from.
-	#[structopt(long)]
+	#[clap(long)]
 	file: PathBuf,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub network_scheme: NetworkSchemeFlag,
 }
 
@@ -63,11 +63,11 @@ mod tests {
 	fn inspect_node_key() {
 		let path = tempfile::tempdir().unwrap().into_path().join("node-id").into_os_string();
 		let path = path.to_str().unwrap();
-		let cmd = GenerateNodeKeyCmd::from_iter(&["generate-node-key", "--file", path.clone()]);
+		let cmd = GenerateNodeKeyCmd::parse_from(&["generate-node-key", "--file", path.clone()]);
 
 		assert!(cmd.run().is_ok());
 
-		let cmd = InspectNodeKeyCmd::from_iter(&["inspect-node-key", "--file", path]);
+		let cmd = InspectNodeKeyCmd::parse_from(&["inspect-node-key", "--file", path]);
 		assert!(cmd.run().is_ok());
 	}
 }

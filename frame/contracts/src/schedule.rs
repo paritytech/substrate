@@ -33,7 +33,7 @@ use wasm_instrument::{gas_metering, parity_wasm::elements};
 /// How many API calls are executed in a single batch. The reason for increasing the amount
 /// of API calls in batches (per benchmark component increase) is so that the linear regression
 /// has an easier time determining the contribution of that component.
-pub const API_BENCHMARK_BATCH_SIZE: u32 = 100;
+pub const API_BENCHMARK_BATCH_SIZE: u32 = 80;
 
 /// How many instructions are executed in a single batch. The reasoning is the same
 /// as for `API_BENCHMARK_BATCH_SIZE`.
@@ -104,7 +104,13 @@ pub struct Limits {
 	/// See <https://wiki.parity.io/WebAssembly-StackHeight> to find out
 	/// how the stack frame cost is calculated. Each element can be of one of the
 	/// wasm value types. This means the maximum size per element is 64bit.
-	pub stack_height: u32,
+	///
+	/// # Note
+	///
+	/// It is safe to disable (pass `None`) the `stack_height` when the execution engine
+	/// is part of the runtime and hence there can be no indeterminism between different
+	/// client resident execution engines.
+	pub stack_height: Option<u32>,
 
 	/// Maximum number of globals a module is allowed to declare.
 	///
@@ -141,11 +147,6 @@ pub struct Limits {
 
 	/// The maximum size of a storage value and event payload in bytes.
 	pub payload_len: u32,
-
-	/// The maximum length of a contract code in bytes. This limit applies to the instrumented
-	/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
-	/// a wasm binary below this maximum size.
-	pub code_len: u32,
 }
 
 impl Limits {
@@ -256,6 +257,18 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller`.
 	pub caller: Weight,
 
+	/// Weight of calling `seal_is_contract`.
+	pub is_contract: Weight,
+
+	/// Weight of calling `seal_code_hash`.
+	pub code_hash: Weight,
+
+	/// Weight of calling `seal_own_code_hash`.
+	pub own_code_hash: Weight,
+
+	/// Weight of calling `seal_caller_is_origin`.
+	pub caller_is_origin: Weight,
+
 	/// Weight of calling `seal_address`.
 	pub address: Weight,
 
@@ -316,14 +329,26 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_set_storage`.
 	pub set_storage: Weight,
 
-	/// Weight per byte of an item stored with `seal_set_storage`.
-	pub set_storage_per_byte: Weight,
+	/// Weight per written byten of an item stored with `seal_set_storage`.
+	pub set_storage_per_new_byte: Weight,
+
+	/// Weight per overwritten byte of an item stored with `seal_set_storage`.
+	pub set_storage_per_old_byte: Weight,
+
+	/// Weight of calling `seal_set_code_hash`.
+	pub set_code_hash: Weight,
 
 	/// Weight of calling `seal_clear_storage`.
 	pub clear_storage: Weight,
 
+	/// Weight of calling `seal_clear_storage` per byte of the stored item.
+	pub clear_storage_per_byte: Weight,
+
 	/// Weight of calling `seal_contains_storage`.
 	pub contains_storage: Weight,
+
+	/// Weight of calling `seal_contains_storage` per byte of the stored item.
+	pub contains_storage_per_byte: Weight,
 
 	/// Weight of calling `seal_get_storage`.
 	pub get_storage: Weight,
@@ -343,23 +368,20 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_call`.
 	pub call: Weight,
 
+	/// Weight of calling `seal_delegate_call`.
+	pub delegate_call: Weight,
+
 	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
 	pub call_transfer_surcharge: Weight,
 
-	/// Weight per input byte supplied to `seal_call`.
-	pub call_per_input_byte: Weight,
-
-	/// Weight per output byte received through `seal_call`.
-	pub call_per_output_byte: Weight,
+	/// Weight per byte that is cloned by supplying the `CLONE_INPUT` flag.
+	pub call_per_cloned_byte: Weight,
 
 	/// Weight of calling `seal_instantiate`.
 	pub instantiate: Weight,
 
-	/// Weight per input byte supplied to `seal_instantiate`.
-	pub instantiate_per_input_byte: Weight,
-
-	/// Weight per output byte received through `seal_instantiate`.
-	pub instantiate_per_output_byte: Weight,
+	/// Weight surcharge that is claimed if `seal_instantiate` does a balance transfer.
+	pub instantiate_transfer_surcharge: Weight,
 
 	/// Weight per salt byte supplied to `seal_instantiate`.
 	pub instantiate_per_salt_byte: Weight,
@@ -390,6 +412,9 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight of calling `seal_ecdsa_recover`.
 	pub ecdsa_recover: Weight,
+
+	/// Weight of calling `seal_ecdsa_to_eth_address`.
+	pub ecdsa_to_eth_address: Weight,
 
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
@@ -481,8 +506,8 @@ impl Default for Limits {
 	fn default() -> Self {
 		Self {
 			event_topics: 4,
-			// 512 * sizeof(i64) will give us a 4k stack.
-			stack_height: 512,
+			// No stack limit required because we use a runtime resident execution engine.
+			stack_height: None,
 			globals: 256,
 			parameters: 128,
 			memory_pages: 16,
@@ -492,7 +517,6 @@ impl Default for Limits {
 			subject_len: 32,
 			call_depth: 32,
 			payload_len: 16 * 1024,
-			code_len: 128 * 1024,
 		}
 	}
 }
@@ -562,6 +586,10 @@ impl<T: Config> Default for HostFnWeights<T> {
 	fn default() -> Self {
 		Self {
 			caller: cost_batched!(seal_caller),
+			is_contract: cost_batched!(seal_is_contract),
+			code_hash: cost_batched!(seal_code_hash),
+			own_code_hash: cost_batched!(seal_own_code_hash),
+			caller_is_origin: cost_batched!(seal_caller_is_origin),
 			address: cost_batched!(seal_address),
 			gas_left: cost_batched!(seal_gas_left),
 			balance: cost_batched!(seal_balance),
@@ -586,49 +614,30 @@ impl<T: Config> Default for HostFnWeights<T> {
 			),
 			debug_message: cost_batched!(seal_debug_message),
 			set_storage: cost_batched!(seal_set_storage),
-			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
+			set_code_hash: cost_batched!(seal_set_code_hash),
+			set_storage_per_new_byte: cost_byte_batched!(seal_set_storage_per_new_kb),
+			set_storage_per_old_byte: cost_byte_batched!(seal_set_storage_per_old_kb),
 			clear_storage: cost_batched!(seal_clear_storage),
+			clear_storage_per_byte: cost_byte_batched!(seal_clear_storage_per_kb),
 			contains_storage: cost_batched!(seal_contains_storage),
+			contains_storage_per_byte: cost_byte_batched!(seal_contains_storage_per_kb),
 			get_storage: cost_batched!(seal_get_storage),
 			get_storage_per_byte: cost_byte_batched!(seal_get_storage_per_kb),
 			take_storage: cost_batched!(seal_take_storage),
 			take_storage_per_byte: cost_byte_batched!(seal_take_storage_per_kb),
 			transfer: cost_batched!(seal_transfer),
 			call: cost_batched!(seal_call),
-			call_transfer_surcharge: cost_batched_args!(
-				seal_call_per_transfer_input_output_kb,
-				1,
-				0,
-				0
-			),
-			call_per_input_byte: cost_byte_batched_args!(
-				seal_call_per_transfer_input_output_kb,
-				0,
-				1,
-				0
-			),
-			call_per_output_byte: cost_byte_batched_args!(
-				seal_call_per_transfer_input_output_kb,
-				0,
-				0,
-				1
-			),
+			delegate_call: cost_batched!(seal_delegate_call),
+			call_transfer_surcharge: cost_batched_args!(seal_call_per_transfer_clone_kb, 1, 0),
+			call_per_cloned_byte: cost_batched_args!(seal_call_per_transfer_clone_kb, 0, 1),
 			instantiate: cost_batched!(seal_instantiate),
-			instantiate_per_input_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				1,
-				0,
-				0
-			),
-			instantiate_per_output_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				0,
+			instantiate_transfer_surcharge: cost_byte_batched_args!(
+				seal_instantiate_per_transfer_salt_kb,
 				1,
 				0
 			),
 			instantiate_per_salt_byte: cost_byte_batched_args!(
-				seal_instantiate_per_input_output_salt_kb,
-				0,
+				seal_instantiate_per_transfer_salt_kb,
 				0,
 				1
 			),
@@ -641,6 +650,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
 			ecdsa_recover: cost_batched!(seal_ecdsa_recover),
+			ecdsa_to_eth_address: cost_batched!(seal_ecdsa_to_eth_address),
 			_phantom: PhantomData,
 		}
 	}
@@ -654,7 +664,7 @@ struct ScheduleRules<'a, T: Config> {
 impl<T: Config> Schedule<T> {
 	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
-			schedule: &self,
+			schedule: self,
 			params: module
 				.type_section()
 				.iter()

@@ -38,6 +38,8 @@ pub mod service;
 mod cli;
 #[cfg(feature = "cli")]
 mod command;
+#[cfg(feature = "cli")]
+mod command_helper;
 
 #[cfg(feature = "cli")]
 pub use cli::*;

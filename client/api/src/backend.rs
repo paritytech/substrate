@@ -70,14 +70,28 @@ pub struct ImportSummary<Block: BlockT> {
 	pub tree_route: Option<sp_blockchain::TreeRoute<Block>>,
 }
 
-/// Import operation wrapper
+/// Finalization operation summary.
+///
+/// Contains information about the block that just got finalized,
+/// including tree heads that became stale at the moment of finalization.
+pub struct FinalizeSummary<Block: BlockT> {
+	/// Last finalized block header.
+	pub header: Block::Header,
+	/// Blocks that were finalized.
+	/// The last entry is the one that has been explicitly finalized.
+	pub finalized: Vec<Block::Hash>,
+	/// Heads that became stale during this finalization operation.
+	pub stale_heads: Vec<Block::Hash>,
+}
+
+/// Import operation wrapper.
 pub struct ClientImportOperation<Block: BlockT, B: Backend<Block>> {
 	/// DB Operation.
 	pub op: B::BlockImportOperation,
 	/// Summary of imported block.
 	pub notify_imported: Option<ImportSummary<Block>>,
-	/// A list of hashes of blocks that got finalized.
-	pub notify_finalized: Vec<Block::Hash>,
+	/// Summary of finalized block.
+	pub notify_finalized: Option<FinalizeSummary<Block>>,
 }
 
 /// Helper function to apply auxiliary data insertion into an operation.
@@ -485,7 +499,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
-		self.state_at(BlockId::Hash(hash.clone())).is_ok()
+		self.state_at(BlockId::Hash(*hash)).is_ok()
 	}
 
 	/// Returns state backend with post-state of given block.
@@ -532,6 +546,9 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &RwLock<()>;
+
+	/// Tells whether the backend requires full-sync mode.
+	fn requires_full_sync(&self) -> bool;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

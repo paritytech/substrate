@@ -26,7 +26,7 @@ use crate::utils::{
 	create_host_function_ident, generate_crate_access, get_function_argument_names,
 	get_function_argument_names_and_types_without_ref, get_function_argument_types,
 	get_function_argument_types_ref_and_mut, get_function_argument_types_without_ref,
-	get_function_arguments, get_runtime_interface,
+	get_function_arguments, get_runtime_interface, RuntimeInterfaceFunction,
 };
 
 use syn::{
@@ -205,7 +205,7 @@ fn generate_host_functions_struct(
 /// implementation of the function.
 fn generate_host_function_implementation(
 	trait_name: &Ident,
-	method: &TraitItemMethod,
+	method: &RuntimeInterfaceFunction,
 	version: u32,
 	is_wasm_only: bool,
 ) -> Result<(TokenStream, Ident, TokenStream)> {
@@ -374,11 +374,27 @@ fn generate_host_function_implementation(
 				-> std::result::Result<#ffi_return_ty, #crate_::sp_wasm_interface::wasmtime::Trap>
 			{
 				T::with_function_context(caller, move |__function_context__| {
-					#struct_name::call(
-						__function_context__,
-						#(#ffi_names,)*
-					)
-				}).map_err(#crate_::sp_wasm_interface::wasmtime::Trap::new)
+					let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+						#struct_name::call(
+							__function_context__,
+							#(#ffi_names,)*
+						).map_err(#crate_::sp_wasm_interface::wasmtime::Trap::new)
+					}));
+					match result {
+						Ok(result) => result,
+						Err(panic) => {
+							let message =
+								if let Some(message) = panic.downcast_ref::<String>() {
+									format!("host code panicked while being called by the runtime: {}", message)
+								} else if let Some(message) = panic.downcast_ref::<&'static str>() {
+									format!("host code panicked while being called by the runtime: {}", message)
+								} else {
+									"host code panicked while being called by the runtime".to_owned()
+								};
+							return Err(#crate_::sp_wasm_interface::wasmtime::Trap::new(message));
+						}
+					}
+				})
 			}
 		)?;
 	};

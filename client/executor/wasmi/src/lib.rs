@@ -18,26 +18,28 @@
 
 //! This crate provides an implementation of `WasmModule` that is baked by wasmi.
 
-use codec::{Decode, Encode};
-use log::{debug, error, trace};
-use sc_executor_common::{
-	error::{Error, WasmError},
-	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
-	sandbox,
-	util::MemoryTransfer,
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
-};
-use sp_core::sandbox as sandbox_primitives;
-use sp_runtime_interface::unpack_ptr_and_len;
-use sp_wasm_interface::{
-	Function, FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
-};
 use std::{cell::RefCell, rc::Rc, str, sync::Arc};
+
+use log::{debug, error, trace};
 use wasmi::{
 	memory_units::Pages,
 	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
 	RuntimeValue::{self, I32, I64},
 	TableRef,
+};
+
+use codec::{Decode, Encode};
+use sc_executor_common::{
+	error::{Error, MessageWithBacktrace, WasmError},
+	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
+	sandbox,
+	util::MemoryTransfer,
+	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+};
+use sp_runtime_interface::unpack_ptr_and_len;
+use sp_sandbox::env as sandbox_env;
+use sp_wasm_interface::{
+	Function, FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
 };
 
 struct FunctionExecutor {
@@ -48,6 +50,7 @@ struct FunctionExecutor {
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
 	missing_functions: Arc<Vec<String>>,
+	panic_message: Option<String>,
 }
 
 impl FunctionExecutor {
@@ -69,6 +72,7 @@ impl FunctionExecutor {
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions,
+			panic_message: None,
 		})
 	}
 }
@@ -99,8 +103,8 @@ impl<'a> sandbox::SandboxContext for SandboxContext<'a> {
 
 		match result {
 			Ok(Some(RuntimeValue::I64(val))) => Ok(val),
-			Ok(_) => return Err("Supervisor function returned unexpected result!".into()),
-			Err(err) => Err(Error::Trap(err)),
+			Ok(_) => Err("Supervisor function returned unexpected result!".into()),
+			Err(err) => Err(Error::Sandbox(err.to_string())),
 		}
 	}
 
@@ -133,6 +137,10 @@ impl FunctionContext for FunctionExecutor {
 	fn sandbox(&mut self) -> &mut dyn Sandbox {
 		self
 	}
+
+	fn register_panic_error_message(&mut self, message: &str) {
+		self.panic_message = Some(message.to_owned());
+	}
 }
 
 impl Sandbox for FunctionExecutor {
@@ -149,15 +157,15 @@ impl Sandbox for FunctionExecutor {
 		let len = buf_len as usize;
 
 		let buffer = match sandboxed_memory.read(Pointer::new(offset as u32), len) {
-			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) = self.memory.set(buf_ptr.into(), &buffer) {
-			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+		if self.memory.set(buf_ptr.into(), &buffer).is_err() {
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
-		Ok(sandbox_primitives::ERR_OK)
+		Ok(sandbox_env::ERR_OK)
 	}
 
 	fn memory_set(
@@ -173,15 +181,15 @@ impl Sandbox for FunctionExecutor {
 		let len = val_len as usize;
 
 		let buffer = match self.memory.get(val_ptr.into(), len) {
-			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
+			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
 		};
 
-		if let Err(_) = sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer) {
-			return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS)
+		if sandboxed_memory.write_from(Pointer::new(offset as u32), &buffer).is_err() {
+			return Ok(sandbox_env::ERR_OUT_OF_BOUNDS)
 		}
 
-		Ok(sandbox_primitives::ERR_OK)
+		Ok(sandbox_env::ERR_OK)
 	}
 
 	fn memory_teardown(&mut self, memory_id: MemoryId) -> WResult<()> {
@@ -213,7 +221,6 @@ impl Sandbox for FunctionExecutor {
 		let args = Vec::<sp_wasm_interface::Value>::decode(&mut args)
 			.map_err(|_| "Can't decode serialized arguments for the invocation")?
 			.into_iter()
-			.map(Into::into)
 			.collect::<Vec<_>>();
 
 		let instance =
@@ -231,18 +238,18 @@ impl Sandbox for FunctionExecutor {
 			state,
 			&mut SandboxContext { dispatch_thunk, executor: self },
 		) {
-			Ok(None) => Ok(sandbox_primitives::ERR_OK),
+			Ok(None) => Ok(sandbox_env::ERR_OK),
 			Ok(Some(val)) => {
 				// Serialize return value and write it back into the memory.
-				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
+				sp_wasm_interface::ReturnValue::Value(val).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
-						Err("Return value buffer is too small")?;
+						return Err("Return value buffer is too small".into())
 					}
 					self.write_memory(return_val, val).map_err(|_| "Return value buffer is OOB")?;
-					Ok(sandbox_primitives::ERR_OK)
+					Ok(sandbox_env::ERR_OK)
 				})
 			},
-			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
+			Err(_) => Ok(sandbox_env::ERR_EXECUTION),
 		}
 	}
 
@@ -265,17 +272,17 @@ impl Sandbox for FunctionExecutor {
 			let table = self
 				.table
 				.as_ref()
-				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
+				.ok_or("Runtime doesn't have a table; sandbox is unavailable")?;
 			table
 				.get(dispatch_thunk_id)
 				.map_err(|_| "dispatch_thunk_idx is out of the table bounds")?
-				.ok_or_else(|| "dispatch_thunk_idx points on an empty table entry")?
+				.ok_or("dispatch_thunk_idx points on an empty table entry")?
 		};
 
 		let guest_env =
 			match sandbox::GuestEnvironment::decode(&*self.sandbox_store.borrow(), raw_env_def) {
 				Ok(guest_env) => guest_env,
-				Err(_) => return Ok(sandbox_primitives::ERR_MODULE as u32),
+				Err(_) => return Ok(sandbox_env::ERR_MODULE as u32),
 			};
 
 		let store = self.sandbox_store.clone();
@@ -289,8 +296,8 @@ impl Sandbox for FunctionExecutor {
 		let instance_idx_or_err_code =
 			match result.map(|i| i.register(&mut store.borrow_mut(), dispatch_thunk)) {
 				Ok(instance_idx) => instance_idx,
-				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
-				Err(_) => sandbox_primitives::ERR_MODULE,
+				Err(sandbox::InstantiationError::StartTrapped) => sandbox_env::ERR_EXECUTION,
+				Err(_) => sandbox_env::ERR_MODULE,
 			};
 
 		Ok(instance_idx_or_err_code)
@@ -451,9 +458,9 @@ impl wasmi::Externals for FunctionExecutor {
 fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef, Error> {
 	Ok(module
 		.export_by_name("memory")
-		.ok_or_else(|| Error::InvalidMemoryReference)?
+		.ok_or(Error::InvalidMemoryReference)?
 		.as_memory()
-		.ok_or_else(|| Error::InvalidMemoryReference)?
+		.ok_or(Error::InvalidMemoryReference)?
 		.clone())
 }
 
@@ -462,9 +469,9 @@ fn get_mem_instance(module: &ModuleRef) -> Result<MemoryRef, Error> {
 fn get_heap_base(module: &ModuleRef) -> Result<u32, Error> {
 	let heap_base_val = module
 		.export_by_name("__heap_base")
-		.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+		.ok_or(Error::HeapBaseNotFoundOrInvalid)?
 		.as_global()
-		.ok_or_else(|| Error::HeapBaseNotFoundOrInvalid)?
+		.ok_or(Error::HeapBaseNotFoundOrInvalid)?
 		.get();
 
 	match heap_base_val {
@@ -502,12 +509,31 @@ fn call_in_wasm_module(
 	let offset = function_executor.allocate_memory(data.len() as u32)?;
 	function_executor.write_memory(offset, data)?;
 
+	fn convert_trap(executor: &mut FunctionExecutor, trap: wasmi::Trap) -> Error {
+		if let Some(message) = executor.panic_message.take() {
+			Error::AbortedDueToPanic(MessageWithBacktrace { message, backtrace: None })
+		} else {
+			Error::AbortedDueToTrap(MessageWithBacktrace {
+				message: trap.to_string(),
+				backtrace: None,
+			})
+		}
+	}
+
 	let result = match method {
-		InvokeMethod::Export(method) => module_instance.invoke_export(
-			method,
-			&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-			&mut function_executor,
-		),
+		InvokeMethod::Export(method) => module_instance
+			.invoke_export(
+				method,
+				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
+				&mut function_executor,
+			)
+			.map_err(|error| {
+				if let wasmi::Error::Trap(trap) = error {
+					convert_trap(&mut function_executor, trap)
+				} else {
+					error.into()
+				}
+			}),
 		InvokeMethod::Table(func_ref) => {
 			let func = table
 				.ok_or(Error::NoTable)?
@@ -518,7 +544,7 @@ fn call_in_wasm_module(
 				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
 				&mut function_executor,
 			)
-			.map_err(Into::into)
+			.map_err(|trap| convert_trap(&mut function_executor, trap))
 		},
 		InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
 			let dispatcher = table
@@ -531,14 +557,14 @@ fn call_in_wasm_module(
 				&[I32(func as _), I32(u32::from(offset) as i32), I32(data.len() as i32)],
 				&mut function_executor,
 			)
-			.map_err(Into::into)
+			.map_err(|trap| convert_trap(&mut function_executor, trap))
 		},
 	};
 
 	match result {
 		Ok(Some(I64(r))) => {
 			let (ptr, length) = unpack_ptr_and_len(r as u64);
-			memory.get(ptr.into(), length as usize).map_err(|_| Error::Runtime)
+			memory.get(ptr, length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {
 			trace!(
@@ -546,7 +572,7 @@ fn call_in_wasm_module(
 				"Failed to execute code with {} pages",
 				memory.current_size().0,
 			);
-			Err(e.into())
+			Err(e)
 		},
 		_ => Err(Error::InvalidReturn),
 	}

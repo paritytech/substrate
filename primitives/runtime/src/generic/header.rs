@@ -29,7 +29,7 @@ use crate::{
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::U256;
-use sp_std::{convert::TryFrom, fmt::Debug};
+use sp_std::fmt::Debug;
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(Encode, Decode, PartialEq, Eq, Clone, sp_core::RuntimeDebug, TypeInfo)]

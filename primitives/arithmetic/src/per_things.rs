@@ -22,11 +22,9 @@ use crate::traits::{
 	BaseArithmetic, Bounded, CheckedAdd, CheckedMul, CheckedSub, One, SaturatedConversion,
 	Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
-use codec::{CompactAs, Encode, MaxEncodedLen};
+use codec::{CompactAs, Encode};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
-use sp_debug_derive::RuntimeDebug;
 use sp_std::{
-	convert::{TryFrom, TryInto},
 	fmt, ops,
 	ops::{Add, Sub},
 	prelude::*,
@@ -275,7 +273,7 @@ pub trait PerThing:
 	/// ```rust
 	/// # use sp_arithmetic::{Percent, PerThing};
 	/// # fn main () {
-	/// // 989/100 is technically closer to 99%.
+	/// // 989/1000 is technically closer to 99%.
 	/// assert_eq!(
 	/// 		Percent::from_rational(989u64, 1000),
 	/// 		Percent::from_parts(98),
@@ -425,15 +423,8 @@ macro_rules! implement_per_thing {
 		///
 		#[doc = $title]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-		#[derive(Encode, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, RuntimeDebug, scale_info::TypeInfo)]
+		#[derive(Encode, Copy, Clone, PartialEq, Eq, codec::MaxEncodedLen, PartialOrd, Ord, sp_std::fmt::Debug, scale_info::TypeInfo)]
 		pub struct $name($type);
-
-		impl MaxEncodedLen for $name{
-			fn max_encoded_len() -> usize {
-				// a bit too much but solves problems in parachain_staking
-				<$type>::max_encoded_len()
-			}
-		}
 
 		/// Implementation makes any compact encoding of `PerThing::Inner` valid,
 		/// when decoding it will saturate up to `PerThing::ACCURACY`.
@@ -854,7 +845,7 @@ macro_rules! implement_per_thing {
 		#[cfg(test)]
 		mod $test_mod {
 			use codec::{Encode, Decode};
-			use super::{$name, Saturating, RuntimeDebug, PerThing};
+			use super::{$name, Saturating, PerThing};
 			use crate::traits::Zero;
 
 			#[test]
@@ -878,7 +869,7 @@ macro_rules! implement_per_thing {
 				assert!(<$upper_type>::from($max) * <$upper_type>::from($max) < <$upper_type>::max_value());
 			}
 
-			#[derive(Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+			#[derive(Encode, Decode, PartialEq, Eq, Debug)]
 			struct WithCompact<T: codec::HasCompact> {
 				data: T,
 			}
@@ -910,6 +901,15 @@ macro_rules! implement_per_thing {
 					let per_thingy: $name = decoded.into();
 					assert_eq!(per_thingy, $name(n));
 				}
+			}
+
+			#[test]
+			fn has_max_encoded_len() {
+				struct AsMaxEncodedLen<T: codec::MaxEncodedLen> {
+					_data: T,
+				}
+
+				let _ = AsMaxEncodedLen { _data: $name(1) };
 			}
 
 			#[test]

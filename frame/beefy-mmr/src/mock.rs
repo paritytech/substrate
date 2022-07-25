@@ -18,6 +18,7 @@
 use std::vec;
 
 use beefy_primitives::mmr::MmrLeafVersion;
+use codec::Encode;
 use frame_support::{
 	construct_runtime, parameter_types,
 	sp_io::TestExternalities,
@@ -34,7 +35,9 @@ use sp_runtime::{
 
 use crate as pallet_beefy_mmr;
 
-pub use beefy_primitives::{crypto::AuthorityId as BeefyId, ConsensusLog, BEEFY_ENGINE_ID};
+pub use beefy_primitives::{
+	crypto::AuthorityId as BeefyId, mmr::BeefyDataProvider, ConsensusLog, BEEFY_ENGINE_ID,
+};
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
@@ -102,6 +105,7 @@ pub type MmrLeaf = beefy_primitives::mmr::MmrLeaf<
 	<Test as frame_system::Config>::BlockNumber,
 	<Test as frame_system::Config>::Hash,
 	<Test as pallet_mmr::Config>::Hash,
+	Vec<u8>,
 >;
 
 impl pallet_mmr::Config for Test {
@@ -131,13 +135,20 @@ impl pallet_beefy_mmr::Config for Test {
 
 	type BeefyAuthorityToMerkleLeaf = pallet_beefy_mmr::BeefyEcdsaToEthereum;
 
-	type ParachainHeads = DummyParaHeads;
+	type LeafExtra = Vec<u8>;
+
+	type BeefyDataProvider = DummyDataProvider;
 }
 
-pub struct DummyParaHeads;
-impl pallet_beefy_mmr::ParachainHeadsProvider for DummyParaHeads {
-	fn parachain_heads() -> Vec<(pallet_beefy_mmr::ParaId, pallet_beefy_mmr::ParaHead)> {
-		vec![(15, vec![1, 2, 3]), (5, vec![4, 5, 6])]
+pub struct DummyDataProvider;
+impl BeefyDataProvider<Vec<u8>> for DummyDataProvider {
+	fn extra_data() -> Vec<u8> {
+		let mut col = vec![(15, vec![1, 2, 3]), (5, vec![4, 5, 6])];
+		col.sort();
+		beefy_merkle_tree::merkle_root::<crate::Pallet<Test>, _, _>(
+			col.into_iter().map(|pair| pair.encode()),
+		)
+		.to_vec()
 	}
 }
 
@@ -158,9 +169,12 @@ impl pallet_session::SessionManager<u64> for MockSessionManager {
 
 // Note, that we can't use `UintAuthorityId` here. Reason is that the implementation
 // of `to_public_key()` assumes, that a public key is 32 bytes long. This is true for
-// ed25519 and sr25519 but *not* for ecdsa. An ecdsa public key is 33 bytes.
+// ed25519 and sr25519 but *not* for ecdsa. A compressed ecdsa public key is 33 bytes,
+// with the first one containing information to reconstruct the uncompressed key.
 pub fn mock_beefy_id(id: u8) -> BeefyId {
-	let buf: [u8; 33] = [id; 33];
+	let mut buf: [u8; 33] = [id; 33];
+	// Set to something valid.
+	buf[0] = 0x02;
 	let pk = Public::from_raw(buf);
 	BeefyId::from(pk)
 }

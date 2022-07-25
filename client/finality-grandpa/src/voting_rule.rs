@@ -125,7 +125,7 @@ where
 		let current_target = current_target.clone();
 
 		// find the block at the given target height
-		Box::pin(std::future::ready(find_target(&*backend, target_number.clone(), &current_target)))
+		Box::pin(std::future::ready(find_target(&*backend, target_number, &current_target)))
 	}
 }
 

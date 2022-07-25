@@ -74,11 +74,11 @@ where
 	H: ExHashT,
 {
 	fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		self.set_authorized_peers(peers)
+		NetworkService::set_authorized_peers(self, peers)
 	}
 
 	fn set_authorized_only(&self, reserved_only: bool) {
-		self.set_authorized_only(reserved_only)
+		NetworkService::set_authorized_only(self, reserved_only)
 	}
 }
 
@@ -194,7 +194,7 @@ where
 				if let Err(e) = run {
 					tracing::error!(
 						target: LOG_TARGET,
-						"Error running offchain workers at {:?}: {:?}",
+						"Error running offchain workers at {:?}: {}",
 						at,
 						e
 					);

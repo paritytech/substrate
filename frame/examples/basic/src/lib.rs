@@ -758,8 +758,8 @@ where
 			Some(Call::set_dummy { .. }) => {
 				sp_runtime::print("set_dummy was received.");
 
-				let mut valid_tx = ValidTransaction::default();
-				valid_tx.priority = Bounded::max_value();
+				let valid_tx =
+					ValidTransaction { priority: Bounded::max_value(), ..Default::default() };
 				Ok(valid_tx)
 			},
 			_ => Ok(Default::default()),

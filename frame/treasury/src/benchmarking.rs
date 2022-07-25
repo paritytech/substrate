@@ -87,6 +87,17 @@ benchmarks_instance_pallet! {
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 	}: _(RawOrigin::Root, proposal_id)
 
+	remove_approval {
+		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
+		Treasury::<T, _>::propose_spend(
+			RawOrigin::Signed(caller).into(),
+			value,
+			beneficiary_lookup
+		)?;
+		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
+		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
+	}: _(RawOrigin::Root, proposal_id)
+
 	on_initialize_proposals {
 		let p in 0 .. T::MaxApprovals::get();
 		setup_pot_account::<T, _>();

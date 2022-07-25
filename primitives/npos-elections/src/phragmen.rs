@@ -70,7 +70,7 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
 	candidates: Vec<AccountId>,
-	voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
 	balancing: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, voters) = setup_inputs(candidates, voters);
@@ -97,8 +97,7 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments
 		.iter_mut()
-		.map(|a| a.try_normalize().map_err(|e| crate::Error::ArithmeticError(e)))
-		.collect::<Result<(), _>>()?;
+		.try_for_each(|a| a.try_normalize().map_err(crate::Error::ArithmeticError))?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
@@ -200,7 +199,7 @@ pub fn seq_phragmen_core<AccountId: IdentifierT>(
 		// edge of all candidates that eventually have a non-zero weight must be elected.
 		debug_assert!(voter.edges.iter().all(|e| e.candidate.borrow().elected));
 		// inc budget to sum the budget.
-		voter.try_normalize_elected().map_err(|e| crate::Error::ArithmeticError(e))?;
+		voter.try_normalize_elected().map_err(crate::Error::ArithmeticError)?;
 	}
 
 	Ok((candidates, voters))

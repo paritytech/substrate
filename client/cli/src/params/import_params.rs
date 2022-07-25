@@ -18,63 +18,84 @@
 
 use crate::{
 	arg_enums::{
-		ExecutionStrategy, WasmExecutionMethod, DEFAULT_EXECUTION_BLOCK_CONSTRUCTION,
-		DEFAULT_EXECUTION_IMPORT_BLOCK, DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR,
-		DEFAULT_EXECUTION_OFFCHAIN_WORKER, DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
+		ExecutionStrategy, WasmExecutionMethod, WasmtimeInstantiationStrategy,
+		DEFAULT_EXECUTION_BLOCK_CONSTRUCTION, DEFAULT_EXECUTION_IMPORT_BLOCK,
+		DEFAULT_EXECUTION_IMPORT_BLOCK_VALIDATOR, DEFAULT_EXECUTION_OFFCHAIN_WORKER,
+		DEFAULT_EXECUTION_OTHER, DEFAULT_EXECUTION_SYNCING,
+		DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
 	},
 	params::{DatabaseParams, PruningParams},
 };
+use clap::Args;
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use std::path::PathBuf;
-use structopt::StructOpt;
-
-#[cfg(feature = "wasmtime")]
-const WASM_METHOD_DEFAULT: &str = "Compiled";
-
-#[cfg(not(feature = "wasmtime"))]
-const WASM_METHOD_DEFAULT: &str = "interpreted-i-know-what-i-do";
 
 /// Parameters for block import.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct ImportParams {
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub pruning_params: PruningParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub database_params: DatabaseParams,
 
-	/// Force start with unsafe pruning settings.
+	/// THIS IS A DEPRECATED CLI-ARGUMENT.
 	///
-	/// When running as a validator it is highly recommended to disable state
-	/// pruning (i.e. 'archive') which is the default. The node will refuse to
-	/// start as a validator if pruning is enabled unless this option is set.
-	#[structopt(long = "unsafe-pruning")]
+	/// It has been preserved in order to not break the compatibility with the existing scripts.
+	/// Enabling this option will lead to a runtime warning.
+	/// In future this option will be removed completely, thus specifying it will lead to a start
+	/// up error.
+	///
+	/// Details: <https://github.com/paritytech/substrate/issues/8103>
+	#[clap(long)]
+	#[deprecated = "According to https://github.com/paritytech/substrate/issues/8103"]
 	pub unsafe_pruning: bool,
 
 	/// Method for executing Wasm runtime code.
-	#[structopt(
+	#[clap(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
-		case_insensitive = true,
-		default_value = WASM_METHOD_DEFAULT
+		possible_values = WasmExecutionMethod::variants(),
+		ignore_case = true,
+		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
+
+	/// The WASM instantiation method to use.
+	///
+	/// Only has an effect when `wasm-execution` is set to `compiled`.
+	///
+	/// The copy-on-write strategies are only supported on Linux.
+	/// If the copy-on-write variant of a strategy is unsupported
+	/// the executor will fall back to the non-CoW equivalent.
+	///
+	/// The fastest (and the default) strategy available is `pooling-copy-on-write`.
+	///
+	/// The `legacy-instance-reuse` strategy is deprecated and will
+	/// be removed in the future. It should only be used in case of
+	/// issues with the default instantiation strategy.
+	#[clap(
+		long,
+		value_name = "STRATEGY",
+		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+		arg_enum,
+	)]
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// Specify the path where local WASM runtimes are stored.
 	///
 	/// These runtimes will override on-chain runtimes when the version matches.
-	#[structopt(long, value_name = "PATH", parse(from_os_str))]
+	#[clap(long, value_name = "PATH", parse(from_os_str))]
 	pub wasm_runtime_overrides: Option<PathBuf>,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub execution_strategies: ExecutionStrategiesParams,
 
 	/// Specify the state cache size.
-	#[structopt(long = "state-cache-size", value_name = "Bytes", default_value = "67108864")]
+	#[clap(long, value_name = "Bytes", default_value = "67108864")]
 	pub state_cache_size: usize,
 }
 
@@ -86,7 +107,7 @@ impl ImportParams {
 
 	/// Get the WASM execution method from the parameters
 	pub fn wasm_method(&self) -> sc_service::config::WasmExecutionMethod {
-		self.wasm_method.into()
+		crate::execution_method_from_cli(self.wasm_method, self.wasmtime_instantiation_strategy)
 	}
 
 	/// Enable overriding on-chain WASM with locally-stored WASM
@@ -127,62 +148,37 @@ impl ImportParams {
 }
 
 /// Execution strategies parameters.
-#[derive(Debug, StructOpt, Clone)]
+#[derive(Debug, Clone, Args)]
 pub struct ExecutionStrategiesParams {
 	/// The means of execution used when calling into the runtime for importing blocks as
 	/// part of an initial sync.
-	#[structopt(
-		long = "execution-syncing",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_syncing: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime for general block import
 	/// (including locally authored blocks).
-	#[structopt(
-		long = "execution-import-block",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_import_block: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while constructing blocks.
-	#[structopt(
-		long = "execution-block-construction",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_block_construction: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while using an off-chain worker.
-	#[structopt(
-		long = "execution-offchain-worker",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_offchain_worker: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while not syncing, importing or
 	/// constructing blocks.
-	#[structopt(
-		long = "execution-other",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
 	pub execution_other: Option<ExecutionStrategy>,
 
 	/// The execution strategy that should be used by all execution contexts.
-	#[structopt(
-		long = "execution",
+	#[clap(
+		long,
 		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
+		arg_enum,
+		ignore_case = true,
 		conflicts_with_all = &[
 			"execution-other",
 			"execution-offchain-worker",

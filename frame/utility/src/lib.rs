@@ -113,8 +113,12 @@ pub mod pallet {
 		BatchInterrupted { index: u32, error: DispatchError },
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
+		/// Batch of dispatches completed but has errors.
+		BatchCompletedWithErrors,
 		/// A single item within a Batch of dispatches has completed with no error.
 		ItemCompleted,
+		/// A single item within a Batch of dispatches has completed with error.
+		ItemFailed { error: DispatchError },
 		/// A call was dispatched.
 		DispatchedAs { result: DispatchResult },
 	}
@@ -384,6 +388,76 @@ pub mod pallet {
 				result: res.map(|_| ()).map_err(|e| e.error),
 			});
 			Ok(())
+		}
+
+		/// Send a batch of dispatch calls.
+		/// Unlike `batch`, it allows errors and won't interrupt.
+		///
+		/// May be called from any origin.
+		///
+		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
+		///
+		/// If origin is root then call are dispatch without checking origin filter. (This includes
+		/// bypassing `frame_system::Config::BaseCallFilter`).
+		///
+		/// # <weight>
+		/// - Complexity: O(C) where C is the number of calls to be batched.
+		/// # </weight>
+		#[pallet::weight({
+			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
+			let dispatch_weight = dispatch_infos.iter()
+				.map(|di| di.weight)
+				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
+				.saturating_add(T::WeightInfo::force_batch(calls.len() as u32));
+			let dispatch_class = {
+				let all_operational = dispatch_infos.iter()
+					.map(|di| di.class)
+					.all(|class| class == DispatchClass::Operational);
+				if all_operational {
+					DispatchClass::Operational
+				} else {
+					DispatchClass::Normal
+				}
+			};
+			(dispatch_weight, dispatch_class)
+		})]
+		pub fn force_batch(
+			origin: OriginFor<T>,
+			calls: Vec<<T as Config>::Call>,
+		) -> DispatchResultWithPostInfo {
+			let is_root = ensure_root(origin.clone()).is_ok();
+			let calls_len = calls.len();
+			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
+
+			// Track the actual weight of each of the batch calls.
+			let mut weight: Weight = 0;
+			// Track failed dispatch occur.
+			let mut has_error: bool = false;
+			for call in calls.into_iter() {
+				let info = call.get_dispatch_info();
+				// If origin is root, don't apply any dispatch filters; root can call anything.
+				let result = if is_root {
+					call.dispatch_bypass_filter(origin.clone())
+				} else {
+					call.dispatch(origin.clone())
+				};
+				// Add the weight of this call.
+				weight = weight.saturating_add(extract_actual_weight(&result, &info));
+				if let Err(e) = result {
+					has_error = true;
+					Self::deposit_event(Event::ItemFailed { error: e.error });
+				} else {
+					Self::deposit_event(Event::ItemCompleted);
+				}
+			}
+			if has_error {
+				Self::deposit_event(Event::BatchCompletedWithErrors);
+			} else {
+				Self::deposit_event(Event::BatchCompleted);
+			}
+			let base_weight = T::WeightInfo::batch(calls_len as u32);
+			Ok(Some(base_weight + weight).into())
 		}
 	}
 }

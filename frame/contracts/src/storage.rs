@@ -22,13 +22,12 @@ pub mod meter;
 use crate::{
 	exec::{AccountIdOf, StorageKey},
 	weights::WeightInfo,
-	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId,
+	BalanceOf, CodeHash, Config, ContractInfoOf, DeletionQueue, Error, TrieId, SENTINEL,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	storage::child::{self, ChildInfo, KillStorageResult},
-	traits::Get,
 	weights::Weight,
 };
 use scale_info::TypeInfo;
@@ -44,7 +43,7 @@ pub type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
 
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct RawContractInfo<CodeHash, Balance> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
@@ -67,7 +66,7 @@ fn child_trie_info(trie_id: &[u8]) -> ChildInfo {
 	ChildInfo::new_default(trie_id)
 }
 
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct DeletedContract {
 	pub(crate) trie_id: TrieId,
 }
@@ -87,6 +86,33 @@ pub enum WriteOutcome {
 	Taken(Vec<u8>),
 }
 
+impl WriteOutcome {
+	/// Extracts the size of the overwritten value or `0` if there
+	/// was no value in storage.
+	pub fn old_len(&self) -> u32 {
+		match self {
+			Self::New => 0,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+
+	/// Extracts the size of the overwritten value or `SENTINEL` if there
+	/// was no value in storage.
+	///
+	/// # Note
+	///
+	/// We cannot use `0` as sentinel value because there could be a zero sized
+	/// storage entry which is different from a non existing one.
+	pub fn old_len_with_sentinel(&self) -> u32 {
+		match self {
+			Self::New => SENTINEL,
+			Self::Overwritten(len) => *len,
+			Self::Taken(value) => value.len() as u32,
+		}
+	}
+}
+
 pub struct Storage<T>(PhantomData<T>);
 
 impl<T> Storage<T>
@@ -102,9 +128,12 @@ where
 		child::get_raw(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
-	/// Returns `true` iff the `key` exists in storage.
-	pub fn contains(trie_id: &TrieId, key: &StorageKey) -> bool {
-		child::exists(&child_trie_info(trie_id), &blake2_256(key))
+	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
+	///
+	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
+	/// was deleted.
+	pub fn size(trie_id: &TrieId, key: &StorageKey) -> Option<u32> {
+		child::len(&child_trie_info(trie_id), &blake2_256(key))
 	}
 
 	/// Update a storage entry into a contract's kv storage.
@@ -124,10 +153,10 @@ where
 		let hashed_key = blake2_256(key);
 		let child_trie_info = &child_trie_info(trie_id);
 		let (old_len, old_value) = if take {
-			let val = child::get_raw(&child_trie_info, &hashed_key);
+			let val = child::get_raw(child_trie_info, &hashed_key);
 			(val.as_ref().map(|v| v.len() as u32), val)
 		} else {
-			(child::len(&child_trie_info, &hashed_key), None)
+			(child::len(child_trie_info, &hashed_key), None)
 		};
 
 		if let Some(storage_meter) = storage_meter {
@@ -153,8 +182,8 @@ where
 		}
 
 		match &new_value {
-			Some(new_value) => child::put_raw(&child_trie_info, &hashed_key, new_value),
-			None => child::kill(&child_trie_info, &hashed_key),
+			Some(new_value) => child::put_raw(child_trie_info, &hashed_key, new_value),
+			None => child::kill(child_trie_info, &hashed_key),
 		}
 
 		Ok(match (old_len, old_value) {
@@ -187,19 +216,15 @@ where
 	///
 	/// You must make sure that the contract is also removed when queuing the trie for deletion.
 	pub fn queue_trie_for_deletion(contract: &ContractInfo<T>) -> DispatchResult {
-		if <DeletionQueue<T>>::decode_len().unwrap_or(0) >= T::DeletionQueueDepth::get() as usize {
-			Err(Error::<T>::DeletionQueueFull.into())
-		} else {
-			<DeletionQueue<T>>::append(DeletedContract { trie_id: contract.trie_id.clone() });
-			Ok(())
-		}
+		<DeletionQueue<T>>::try_append(DeletedContract { trie_id: contract.trie_id.clone() })
+			.map_err(|_| <Error<T>>::DeletionQueueFull.into())
 	}
 
 	/// Calculates the weight that is necessary to remove one key from the trie and how many
 	/// of those keys can be deleted from the deletion queue given the supplied queue length
 	/// and weight limit.
 	pub fn deletion_budget(queue_len: usize, weight_limit: Weight) -> (u64, u32) {
-		let base_weight = T::WeightInfo::on_initialize();
+		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
 			T::WeightInfo::on_initialize_per_queue_item(0);
 		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
@@ -238,7 +263,9 @@ where
 
 		let mut queue = <DeletionQueue<T>>::get();
 
-		if let (Some(trie), true) = (queue.get(0), remaining_key_budget > 0) {
+		while !queue.is_empty() && remaining_key_budget > 0 {
+			// Cannot panic due to loop condition
+			let trie = &mut queue[0];
 			let outcome =
 				child::kill_storage(&child_trie_info(&trie.trie_id), Some(remaining_key_budget));
 			let keys_removed = match outcome {
@@ -246,7 +273,7 @@ where
 				KillStorageResult::SomeRemaining(count) => count,
 				KillStorageResult::AllRemoved(count) => {
 					// We do not care to preserve order. The contract is deleted already and
-					// noone waits for the trie to be deleted.
+					// no one waits for the trie to be deleted.
 					queue.swap_remove(0);
 					count
 				},
@@ -258,11 +285,14 @@ where
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
-	/// This generator uses inner counter for account id and applies the hash over `AccountId +
-	/// accountid_counter`.
-	pub fn generate_trie_id(account_id: &AccountIdOf<T>, seed: u64) -> TrieId {
-		let buf: Vec<_> = account_id.as_ref().iter().chain(&seed.to_le_bytes()).cloned().collect();
-		T::Hashing::hash(&buf).as_ref().into()
+	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.
+	pub fn generate_trie_id(account_id: &AccountIdOf<T>, nonce: u64) -> TrieId {
+		let buf: Vec<_> = account_id.as_ref().iter().chain(&nonce.to_le_bytes()).cloned().collect();
+		T::Hashing::hash(&buf)
+			.as_ref()
+			.to_vec()
+			.try_into()
+			.expect("Runtime uses a reasonable hash size. Hence sizeof(T::Hash) <= 128; qed")
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
@@ -274,9 +304,11 @@ where
 	/// Fill up the queue in order to exercise the limits during testing.
 	#[cfg(test)]
 	pub fn fill_queue_with_dummies() {
-		let queue: Vec<_> = (0..T::DeletionQueueDepth::get())
-			.map(|_| DeletedContract { trie_id: vec![] })
+		use frame_support::{traits::Get, BoundedVec};
+		let queue: Vec<DeletedContract> = (0..T::DeletionQueueDepth::get())
+			.map(|_| DeletedContract { trie_id: TrieId::default() })
 			.collect();
-		<DeletionQueue<T>>::put(queue);
+		let bounded: BoundedVec<_, _> = queue.try_into().unwrap();
+		<DeletionQueue<T>>::put(bounded);
 	}
 }

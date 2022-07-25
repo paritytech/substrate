@@ -98,7 +98,7 @@ pub trait Environment<B: BlockT> {
 		+ Unpin
 		+ 'static;
 	/// Error which can occur upon creation.
-	type Error: From<Error> + std::fmt::Debug + 'static;
+	type Error: From<Error> + std::error::Error + 'static;
 
 	/// Initialize the proposal logic on top of a specific header. Provide
 	/// the authorities at that header.
@@ -169,7 +169,7 @@ impl ProofRecording for EnableProofRecording {
 	const ENABLED: bool = true;
 
 	fn into_proof(proof: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded> {
-		proof.ok_or_else(|| NoProofRecorded)
+		proof.ok_or(NoProofRecorded)
 	}
 }
 
@@ -191,7 +191,7 @@ mod private {
 /// Proposers are generic over bits of "consensus data" which are engine-specific.
 pub trait Proposer<B: BlockT> {
 	/// Error type which can occur when proposing or evaluating.
-	type Error: From<Error> + std::fmt::Debug + 'static;
+	type Error: From<Error> + std::error::Error + 'static;
 	/// The transaction type used by the backend.
 	type Transaction: Default + Send + 'static;
 	/// Future that resolves to a committed proposal with an optional proof.
@@ -326,10 +326,4 @@ impl<Block: BlockT> CanAuthorWith<Block> for NeverCanAuthor {
 	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> {
 		Err("Authoring is always disabled.".to_string())
 	}
-}
-
-/// A type from which a slot duration can be obtained.
-pub trait SlotData {
-	/// Gets the slot duration.
-	fn slot_duration(&self) -> sp_std::time::Duration;
 }

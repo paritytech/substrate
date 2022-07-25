@@ -104,7 +104,7 @@ pub struct OverlayedChanges {
 	stats: StateMachineStats,
 }
 
-/// Transcation index operation.
+/// Transaction index operation.
 #[derive(Debug, Clone)]
 pub enum IndexOperation {
 	/// Insert transaction into index.
@@ -500,22 +500,20 @@ impl OverlayedChanges {
 	pub fn into_storage_changes<B: Backend<H>, H: Hasher>(
 		mut self,
 		backend: &B,
-		parent_hash: H::Out,
 		mut cache: StorageTransactionCache<B::Transaction, H>,
 		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
 	where
 		H::Out: Ord + Encode + 'static,
 	{
-		self.drain_storage_changes(backend, parent_hash, &mut cache, state_version)
+		self.drain_storage_changes(backend, &mut cache, state_version)
 	}
 
 	/// Drain all changes into a [`StorageChanges`] instance. Leave empty overlay in place.
 	pub fn drain_storage_changes<B: Backend<H>, H: Hasher>(
 		&mut self,
 		backend: &B,
-		_parent_hash: H::Out,
-		mut cache: &mut StorageTransactionCache<B::Transaction, H>,
+		cache: &mut StorageTransactionCache<B::Transaction, H>,
 		state_version: StateVersion,
 	) -> Result<StorageChanges<B::Transaction, H>, DefaultError>
 	where
@@ -523,7 +521,7 @@ impl OverlayedChanges {
 	{
 		// If the transaction does not exist, we generate it.
 		if cache.transaction.is_none() {
-			self.storage_root(backend, &mut cache, state_version);
+			self.storage_root(backend, cache, state_version);
 		}
 
 		let (transaction, transaction_storage_root) = cache

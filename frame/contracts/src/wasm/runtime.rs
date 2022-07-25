@@ -21,9 +21,8 @@ use crate::{
 	exec::{ExecError, ExecResult, Ext, StorageKey, TopicOf},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
-	storage::WriteOutcome,
 	wasm::env_def::ConvertibleToWasm,
-	BalanceOf, CodeHash, Config, Error,
+	BalanceOf, CodeHash, Config, Error, SENTINEL,
 };
 use bitflags::bitflags;
 use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
@@ -72,8 +71,9 @@ pub enum ReturnCode {
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
 	#[cfg(feature = "unstable-interface")]
 	CallRuntimeReturnedError = 10,
-	/// ECDSA pubkey recovery failed. Most probably wrong recovery id or signature.
-	#[cfg(feature = "unstable-interface")]
+	/// ECDSA pubkey recovery failed (most probably wrong recovery id or signature), or
+	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
+	/// wrong pubkey provided).
 	EcdsaRecoverFailed = 11,
 }
 
@@ -137,8 +137,20 @@ pub enum RuntimeCosts {
 	/// Charge the gas meter with the cost of a metering block. The charged costs are
 	/// the supplied cost of the block plus the overhead of the metering itself.
 	MeteringBlock(u32),
+	/// Weight charged for copying data from the sandbox.
+	CopyFromContract(u32),
+	/// Weight charged for copying data to the sandbox.
+	CopyToContract(u32),
 	/// Weight of calling `seal_caller`.
 	Caller,
+	/// Weight of calling `seal_is_contract`.
+	IsContract,
+	/// Weight of calling `seal_code_hash`.
+	CodeHash,
+	/// Weight of calling `seal_own_code_hash`.
+	OwnCodeHash,
+	/// Weight of calling `seal_caller_is_origin`.
+	CallerIsOrigin,
 	/// Weight of calling `seal_address`.
 	Address,
 	/// Weight of calling `seal_gas_left`.
@@ -157,8 +169,6 @@ pub enum RuntimeCosts {
 	WeightToFee,
 	/// Weight of calling `seal_input` without the weight of copying the input.
 	InputBase,
-	/// Weight of copying the input data for the given size.
-	InputCopyOut(u32),
 	/// Weight of calling `seal_return` for the given output size.
 	Return(u32),
 	/// Weight of calling `seal_terminate`.
@@ -169,37 +179,31 @@ pub enum RuntimeCosts {
 	DepositEvent { num_topic: u32, len: u32 },
 	/// Weight of calling `seal_debug_message`.
 	DebugMessage,
-	/// Weight of calling `seal_set_storage` for the given storage item size.
-	SetStorage(u32),
-	/// Weight of calling `seal_clear_storage`.
-	ClearStorage,
-	/// Weight of calling `seal_contains_storage`.
+	/// Weight of calling `seal_set_storage` for the given storage item sizes.
+	SetStorage { old_bytes: u32, new_bytes: u32 },
+	/// Weight of calling `seal_clear_storage` per cleared byte.
+	ClearStorage(u32),
+	/// Weight of calling `seal_contains_storage` per byte of the checked item.
+	ContainsStorage(u32),
+	/// Weight of calling `seal_get_storage` with the specified size in storage.
+	GetStorage(u32),
+	/// Weight of calling `seal_take_storage` for the given size.
 	#[cfg(feature = "unstable-interface")]
-	ContainsStorage,
-	/// Weight of calling `seal_get_storage` without output weight.
-	GetStorageBase,
-	/// Weight of an item received via `seal_get_storage` for the given size.
-	GetStorageCopyOut(u32),
-	/// Weight of calling `seal_take_storage` without output weight.
-	#[cfg(feature = "unstable-interface")]
-	TakeStorageBase,
-	/// Weight of an item received via `seal_take_storage` for the given size.
-	#[cfg(feature = "unstable-interface")]
-	TakeStorageCopyOut(u32),
+	TakeStorage(u32),
 	/// Weight of calling `seal_transfer`.
 	Transfer,
-	/// Weight of calling `seal_call` for the given input size.
-	CallBase(u32),
+	/// Base weight of calling `seal_call`.
+	CallBase,
+	/// Weight of calling `seal_delegate_call` for the given input size.
+	DelegateCallBase,
 	/// Weight of the transfer performed during a call.
 	CallSurchargeTransfer,
-	/// Weight of output received through `seal_call` for the given size.
-	CallCopyOut(u32),
-	/// Weight of calling `seal_instantiate` for the given input and salt without output weight.
-	/// This includes the transfer as an instantiate without a value will always be below
-	/// the existential deposit and is disregarded as corner case.
+	/// Weight per byte that is cloned by supplying the `CLONE_INPUT` flag.
+	CallInputCloned(u32),
+	/// Weight of calling `seal_instantiate` for the given input length and salt.
 	InstantiateBase { input_data_len: u32, salt_len: u32 },
-	/// Weight of output received through `seal_instantiate` for the given size.
-	InstantiateCopyOut(u32),
+	/// Weight of the transfer performed during an instantiate.
+	InstantiateSurchargeTransfer,
 	/// Weight of calling `seal_hash_sha_256` for the given input size.
 	HashSha256(u32),
 	/// Weight of calling `seal_hash_keccak_256` for the given input size.
@@ -209,16 +213,16 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_hash_blake2_128` for the given input size.
 	HashBlake128(u32),
 	/// Weight of calling `seal_ecdsa_recover`.
-	#[cfg(feature = "unstable-interface")]
 	EcdsaRecovery,
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(u64),
-	/// Weight charged for copying data from the sandbox.
-	#[cfg(feature = "unstable-interface")]
-	CopyIn(u32),
 	/// Weight charged for calling into the runtime.
 	#[cfg(feature = "unstable-interface")]
 	CallRuntime(Weight),
+	/// Weight of calling `seal_set_code_hash`
+	SetCodeHash,
+	/// Weight of calling `ecdsa_to_eth_address`
+	EcdsaToEthAddress,
 }
 
 impl RuntimeCosts {
@@ -230,7 +234,13 @@ impl RuntimeCosts {
 		use self::RuntimeCosts::*;
 		let weight = match *self {
 			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
+			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
+			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
+			IsContract => s.is_contract,
+			CodeHash => s.code_hash,
+			OwnCodeHash => s.own_code_hash,
+			CallerIsOrigin => s.caller_is_origin,
 			Address => s.address,
 			GasLeft => s.gas_left,
 			Balance => s.balance,
@@ -240,7 +250,6 @@ impl RuntimeCosts {
 			Now => s.now,
 			WeightToFee => s.weight_to_fee,
 			InputBase => s.input,
-			InputCopyOut(len) => s.input_per_byte.saturating_mul(len.into()),
 			Return(len) => s.r#return.saturating_add(s.return_per_byte.saturating_mul(len.into())),
 			Terminate => s.terminate,
 			Random => s.random,
@@ -249,27 +258,32 @@ impl RuntimeCosts {
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			DebugMessage => s.debug_message,
-			SetStorage(len) =>
-				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
-			ClearStorage => s.clear_storage,
+			SetStorage { new_bytes, old_bytes } => s
+				.set_storage
+				.saturating_add(s.set_storage_per_new_byte.saturating_mul(new_bytes.into()))
+				.saturating_add(s.set_storage_per_old_byte.saturating_mul(old_bytes.into())),
+			ClearStorage(len) => s
+				.clear_storage
+				.saturating_add(s.clear_storage_per_byte.saturating_mul(len.into())),
+			ContainsStorage(len) => s
+				.contains_storage
+				.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
+			GetStorage(len) =>
+				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
-			ContainsStorage => s.contains_storage,
-			GetStorageBase => s.get_storage,
-			GetStorageCopyOut(len) => s.get_storage_per_byte.saturating_mul(len.into()),
-			#[cfg(feature = "unstable-interface")]
-			TakeStorageBase => s.take_storage,
-			#[cfg(feature = "unstable-interface")]
-			TakeStorageCopyOut(len) => s.take_storage_per_byte.saturating_mul(len.into()),
+			TakeStorage(len) => s
+				.take_storage
+				.saturating_add(s.take_storage_per_byte.saturating_mul(len.into())),
 			Transfer => s.transfer,
-			CallBase(len) =>
-				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
+			CallBase => s.call,
+			DelegateCallBase => s.delegate_call,
 			CallSurchargeTransfer => s.call_transfer_surcharge,
-			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
+			CallInputCloned(len) => s.call_per_cloned_byte.saturating_mul(len.into()),
 			InstantiateBase { input_data_len, salt_len } => s
 				.instantiate
-				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
+				.saturating_add(s.return_per_byte.saturating_mul(input_data_len.into()))
 				.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
-			InstantiateCopyOut(len) => s.instantiate_per_output_byte.saturating_mul(len.into()),
+			InstantiateSurchargeTransfer => s.instantiate_transfer_surcharge,
 			HashSha256(len) => s
 				.hash_sha2_256
 				.saturating_add(s.hash_sha2_256_per_byte.saturating_mul(len.into())),
@@ -282,13 +296,12 @@ impl RuntimeCosts {
 			HashBlake128(len) => s
 				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
-			#[cfg(feature = "unstable-interface")]
 			EcdsaRecovery => s.ecdsa_recover,
 			ChainExtension(amount) => amount,
 			#[cfg(feature = "unstable-interface")]
-			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
-			#[cfg(feature = "unstable-interface")]
 			CallRuntime(weight) => weight,
+			SetCodeHash => s.set_code_hash,
+			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -296,6 +309,17 @@ impl RuntimeCosts {
 			weight,
 		}
 	}
+}
+
+/// Same as [`Runtime::charge_gas`].
+///
+/// We need this access as a macro because sometimes hiding the lifetimes behind
+/// a function won't work out.
+macro_rules! charge_gas {
+	($runtime:expr, $costs:expr) => {{
+		let token = $costs.token(&$runtime.ext.schedule().host_fn_weights);
+		$runtime.ext.gas_meter().charge(token)
+	}};
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
@@ -317,8 +341,8 @@ where
 }
 
 bitflags! {
-	/// Flags used to change the behaviour of `seal_call`.
-	struct CallFlags: u32 {
+	/// Flags used to change the behaviour of `seal_call` and `seal_delegate_call`.
+	pub struct CallFlags: u32 {
 		/// Forward the input of current function to the callee.
 		///
 		/// Supplied input pointers are ignored when set.
@@ -353,7 +377,29 @@ bitflags! {
 		/// Without this flag any reentrancy into the current contract that originates from
 		/// the callee (or any of its callees) is denied. This includes the first callee:
 		/// You cannot call into yourself with this flag set.
+		///
+		/// # Note
+		///
+		/// For `seal_delegate_call` should be always unset, otherwise
+		/// [`Error::InvalidCallFlags`] is returned.
 		const ALLOW_REENTRY = 0b0000_1000;
+	}
+}
+
+/// The kind of call that should be performed.
+enum CallType {
+	/// Execute another instantiated contract
+	Call { callee_ptr: u32, value_ptr: u32, gas: u64 },
+	/// Execute deployed code in the context (storage, account ID, value) of the caller contract
+	DelegateCall { code_hash_ptr: u32 },
+}
+
+impl CallType {
+	fn cost(&self) -> RuntimeCosts {
+		match self {
+			CallType::Call { .. } => RuntimeCosts::CallBase,
+			CallType::DelegateCall { .. } => RuntimeCosts::DelegateCallBase,
+		}
 	}
 }
 
@@ -400,13 +446,13 @@ where
 			return match trap_reason {
 				// The trap was the result of the execution `return` host function.
 				TrapReason::Return(ReturnData { flags, data }) => {
-					let flags = ReturnFlags::from_bits(flags)
-						.ok_or_else(|| "used reserved bit in return flags")?;
+					let flags =
+						ReturnFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
 					Ok(ExecReturnValue { flags, data: Bytes(data) })
 				},
 				TrapReason::Termination =>
 					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
-				TrapReason::SupervisorError(error) => Err(error)?,
+				TrapReason::SupervisorError(error) => return Err(error.into()),
 			}
 		}
 
@@ -420,10 +466,10 @@ where
 			//
 			// Because panics are really undesirable in the runtime code, we treat this as
 			// a trap for now. Eventually, we might want to revisit this.
-			Err(sp_sandbox::Error::Module) => Err("validation error")?,
+			Err(sp_sandbox::Error::Module) => return Err("validation error".into()),
 			// Any other kind of a trap should result in a failure.
 			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-				Err(Error::<E::T>::ContractTrapped)?,
+				return Err(Error::<E::T>::ContractTrapped.into()),
 		}
 	}
 
@@ -448,8 +494,7 @@ where
 	///
 	/// Returns `Err(HostError)` if there is not enough gas.
 	pub fn charge_gas(&mut self, costs: RuntimeCosts) -> Result<ChargedAmount, DispatchError> {
-		let token = costs.token(&self.ext.schedule().host_fn_weights);
-		self.ext.gas_meter().charge(token)
+		charge_gas!(self, costs)
 	}
 
 	/// Adjust a previously charged amount down to its actual amount.
@@ -534,7 +579,7 @@ where
 	/// length of the buffer located at `out_ptr`. If that buffer is large enough the actual
 	/// `buf.len()` is written to this location.
 	///
-	/// If `out_ptr` is set to the sentinel value of `u32::MAX` and `allow_skip` is true the
+	/// If `out_ptr` is set to the sentinel value of `SENTINEL` and `allow_skip` is true the
 	/// operation is skipped and `Ok` is returned. This is supposed to help callers to make copying
 	/// output optional. For example to skip copying back the output buffer of an `seal_call`
 	/// when the caller is not interested in the result.
@@ -553,7 +598,7 @@ where
 		allow_skip: bool,
 		create_token: impl FnOnce(u32) -> Option<RuntimeCosts>,
 	) -> Result<(), DispatchError> {
-		if allow_skip && out_ptr == u32::MAX {
+		if allow_skip && out_ptr == SENTINEL {
 			return Ok(())
 		}
 
@@ -561,7 +606,7 @@ where
 		let len: u32 = self.read_sandbox_memory_as(out_len_ptr)?;
 
 		if len < buf_len {
-			Err(Error::<E::T>::OutputBufferTooSmall)?
+			return Err(Error::<E::T>::OutputBufferTooSmall.into())
 		}
 
 		if let Some(costs) = create_token(buf_len) {
@@ -648,78 +693,83 @@ where
 		}
 	}
 
-	/// Extracts the size of the overwritten value or `u32::MAX` if there
-	/// was no value in storage.
-	///
-	/// # Note
-	///
-	/// We cannot use `0` as sentinel value because there could be a zero sized
-	/// storage entry which is different from a non existing one.
-	fn overwritten_len(outcome: WriteOutcome) -> u32 {
-		match outcome {
-			WriteOutcome::New => u32::MAX,
-			WriteOutcome::Overwritten(len) => len,
-			WriteOutcome::Taken(value) => value.len() as u32,
-		}
-	}
-
 	fn set_storage(
 		&mut self,
 		key_ptr: u32,
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
-		self.charge_gas(RuntimeCosts::SetStorage(value_len))?;
-		if value_len > self.ext.max_value_size() {
-			Err(Error::<E::T>::ValueTooLarge)?;
+		let max_size = self.ext.max_value_size();
+		let charged = self
+			.charge_gas(RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: max_size })?;
+		if value_len > max_size {
+			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
 		let mut key: StorageKey = [0; 32];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
-		self.ext
-			.set_storage(key, value, false)
-			.map(Self::overwritten_len)
-			.map_err(Into::into)
+		let write_outcome = self.ext.set_storage(key, value, false)?;
+		self.adjust_gas(
+			charged,
+			RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: write_outcome.old_len() },
+		);
+		Ok(write_outcome.old_len_with_sentinel())
 	}
 
 	fn clear_storage(&mut self, key_ptr: u32) -> Result<u32, TrapReason> {
-		self.charge_gas(RuntimeCosts::ClearStorage)?;
+		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		self.ext
-			.set_storage(key, None, false)
-			.map(Self::overwritten_len)
-			.map_err(Into::into)
+		let outcome = self.ext.set_storage(key, None, false)?;
+		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
+		Ok(outcome.old_len_with_sentinel())
 	}
 
 	fn call(
 		&mut self,
 		flags: CallFlags,
-		callee_ptr: u32,
-		gas: u64,
-		value_ptr: u32,
+		call_type: CallType,
 		input_data_ptr: u32,
 		input_data_len: u32,
 		output_ptr: u32,
 		output_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		self.charge_gas(RuntimeCosts::CallBase(input_data_len))?;
-		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
-			self.read_sandbox_memory_as(callee_ptr)?;
-		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
+		self.charge_gas(call_type.cost())?;
 		let input_data = if flags.contains(CallFlags::CLONE_INPUT) {
-			self.input_data.as_ref().ok_or_else(|| Error::<E::T>::InputForwarded)?.clone()
+			let input = self.input_data.as_ref().ok_or(Error::<E::T>::InputForwarded)?;
+			charge_gas!(self, RuntimeCosts::CallInputCloned(input.len() as u32))?;
+			input.clone()
 		} else if flags.contains(CallFlags::FORWARD_INPUT) {
-			self.input_data.take().ok_or_else(|| Error::<E::T>::InputForwarded)?
+			self.input_data.take().ok_or(Error::<E::T>::InputForwarded)?
 		} else {
+			self.charge_gas(RuntimeCosts::CopyFromContract(input_data_len))?;
 			self.read_sandbox_memory(input_data_ptr, input_data_len)?
 		};
-		if value > 0u32.into() {
-			self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
-		}
-		let ext = &mut self.ext;
-		let call_outcome =
-			ext.call(gas, callee, value, input_data, flags.contains(CallFlags::ALLOW_REENTRY));
+
+		let call_outcome = match call_type {
+			CallType::Call { callee_ptr, value_ptr, gas } => {
+				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
+					self.read_sandbox_memory_as(callee_ptr)?;
+				let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
+				if value > 0u32.into() {
+					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
+				}
+				self.ext.call(
+					gas,
+					callee,
+					value,
+					input_data,
+					flags.contains(CallFlags::ALLOW_REENTRY),
+				)
+			},
+			CallType::DelegateCall { code_hash_ptr } => {
+				if flags.contains(CallFlags::ALLOW_REENTRY) {
+					return Err(Error::<E::T>::InvalidCallFlags.into())
+				}
+				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
+				self.ext.delegate_call(code_hash, input_data)
+			},
+		};
 
 		// `TAIL_CALL` only matters on an `OK` result. Otherwise the call stack comes to
 		// a halt anyways without anymore code being executed.
@@ -734,7 +784,7 @@ where
 
 		if let Ok(output) = &call_outcome {
 			self.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
-				Some(RuntimeCosts::CallCopyOut(len))
+				Some(RuntimeCosts::CopyToContract(len))
 			})?;
 		}
 		Ok(Runtime::<E>::exec_into_return_code(call_outcome)?)
@@ -755,8 +805,11 @@ where
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
-		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
+		if value > 0u32.into() {
+			self.charge_gas(RuntimeCosts::InstantiateSurchargeTransfer)?;
+		}
+		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let input_data = self.read_sandbox_memory(input_data_ptr, input_data_len)?;
 		let salt = self.read_sandbox_memory(salt_ptr, salt_len)?;
 		let instantiate_outcome = self.ext.instantiate(gas, code_hash, value, input_data, &salt);
@@ -771,7 +824,7 @@ where
 				)?;
 			}
 			self.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
-				Some(RuntimeCosts::InstantiateCopyOut(len))
+				Some(RuntimeCosts::CopyToContract(len))
 			})?;
 		}
 		Ok(Runtime::<E>::exec_into_return_code(instantiate_outcome.map(|(_, retval)| retval))?)
@@ -827,8 +880,8 @@ define_env!(Env, <E: Ext>,
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
-	// `u32::MAX` is returned as a sentinel value.
-	[__unstable__] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
+	// `SENTINEL` is returned as a sentinel value.
+	[seal1] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
 		ctx.set_storage(key_ptr, value_ptr, value_len)
 	},
 
@@ -849,7 +902,7 @@ define_env!(Env, <E: Ext>,
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
-	// `u32::MAX` is returned as a sentinel value.
+	// `SENTINEL` is returned as a sentinel value.
 	[__unstable__] seal_clear_storage(ctx, key_ptr: u32) -> u32 => {
 		ctx.clear_storage(key_ptr).map_err(Into::into)
 	},
@@ -867,39 +920,39 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::GetStorageBase)?;
+		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, |len| {
-				Some(RuntimeCosts::GetStorageCopyOut(len))
-			})?;
+			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
 		} else {
+			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(0));
 			Ok(ReturnCode::KeyNotFound)
 		}
 	},
 
 	// Checks whether there is a value stored under the given key.
 	//
-	// Returns `ReturnCode::Success` if there is a key in storage. Otherwise an error
-	// is returned.
-	//
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
 	//
-	// # Errors
+	// # Return Value
 	//
-	// `ReturnCode::KeyNotFound`
-	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::ContainsStorage)?;
+	// Returns the size of the pre-existing value at the specified key if any. Otherwise
+	// `SENTINEL` is returned as a sentinel value.
+	[seal0] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
+		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if ctx.ext.contains_storage(&key) {
-			Ok(ReturnCode::Success)
+		if let Some(len) = ctx.ext.get_storage_size(&key) {
+			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
+			Ok(len)
 		} else {
-			Ok(ReturnCode::KeyNotFound)
+			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
+			Ok(SENTINEL)
 		}
 	},
 
@@ -916,15 +969,15 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		ctx.charge_gas(RuntimeCosts::TakeStorageBase)?;
+		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
 		let mut key: StorageKey = [0; 32];
 		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, |len| {
-				Some(RuntimeCosts::TakeStorageCopyOut(len))
-			})?;
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
+			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
 		} else {
+			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(0));
 			Ok(ReturnCode::KeyNotFound)
 		}
 	},
@@ -992,9 +1045,7 @@ define_env!(Env, <E: Ext>,
 	) -> ReturnCode => {
 		ctx.call(
 			CallFlags::ALLOW_REENTRY,
-			callee_ptr,
-			gas,
-			value_ptr,
+			CallType::Call{callee_ptr, value_ptr, gas},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1006,7 +1057,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// The callees output buffer is copied to `output_ptr` and its length to `output_len_ptr`.
 	// The copy of the output buffer can be skipped by supplying the sentinel value
-	// of `u32::MAX` to `output_ptr`.
+	// of `SENTINEL` to `output_ptr`.
 	//
 	// # Parameters
 	//
@@ -1043,10 +1094,51 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> ReturnCode => {
 		ctx.call(
-			CallFlags::from_bits(flags).ok_or_else(|| "used reserved bit in CallFlags")?,
-			callee_ptr,
-			gas,
-			value_ptr,
+			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
+			CallType::Call{callee_ptr, value_ptr, gas},
+			input_data_ptr,
+			input_data_len,
+			output_ptr,
+			output_len_ptr,
+		)
+	},
+
+	// Execute code in the context (storage, caller, value) of the current contract.
+	//
+	// Reentrancy protection is always disabled since the callee is allowed
+	// to modify the callers storage. This makes going through a reentrancy attack
+	// unnecessary for the callee when it wants to exploit the caller.
+	//
+	// # Parameters
+	//
+	// - flags: See [`CallFlags`] for a documentation of the supported flags.
+	// - code_hash: a pointer to the hash of the code to be called.
+	// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
+	// - input_data_len: length of the input data buffer.
+	// - output_ptr: a pointer where the output buffer is copied to.
+	// - output_len_ptr: in-out pointer to where the length of the buffer is read from
+	//   and the actual length is written to.
+	//
+	// # Errors
+	//
+	// An error means that the call wasn't successful and no output buffer is returned unless
+	// stated otherwise.
+	//
+	// `ReturnCode::CalleeReverted`: Output buffer is returned.
+	// `ReturnCode::CalleeTrapped`
+	// `ReturnCode::CodeNotFound`
+	[seal0] seal_delegate_call(
+		ctx,
+		flags: u32,
+		code_hash_ptr: u32,
+		input_data_ptr: u32,
+		input_data_len: u32,
+		output_ptr: u32,
+		output_len_ptr: u32
+	) -> ReturnCode => {
+		ctx.call(
+			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
+			CallType::DelegateCall{code_hash_ptr},
 			input_data_ptr,
 			input_data_len,
 			output_ptr,
@@ -1103,7 +1195,7 @@ define_env!(Env, <E: Ext>,
 	// by the code hash. The address of this new account is copied to `address_ptr` and its length
 	// to `address_len_ptr`. The constructors output buffer is copied to `output_ptr` and its
 	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
-	// supplying the sentinel value of `u32::MAX` to `output_ptr` or `address_ptr`.
+	// supplying the sentinel value of `SENTINEL` to `output_ptr` or `address_ptr`.
 	//
 	// `value` must be at least the minimum balance. Otherwise the instantiation fails and the
 	// contract is not created.
@@ -1215,7 +1307,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeCosts::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &input, false, |len| {
-				Some(RuntimeCosts::InputCopyOut(len))
+				Some(RuntimeCosts::CopyToContract(len))
 			})?;
 			ctx.input_data = Some(input);
 			Ok(())
@@ -1266,6 +1358,75 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
+	// Checks whether a specified address belongs to a contract.
+	//
+	// # Parameters
+	//
+	// - account_ptr: a pointer to the address of the beneficiary account
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	//
+	// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
+	[seal0] seal_is_contract(ctx, account_ptr: u32) -> u32 => {
+		ctx.charge_gas(RuntimeCosts::IsContract)?;
+		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
+
+		Ok(ctx.ext.is_contract(&address) as u32)
+	},
+
+	// Retrieve the code hash for a specified contract address.
+	//
+	// # Parameters
+	//
+	// - `account_ptr`: a pointer to the address in question.
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	//
+	// # Errors
+	//
+	// `ReturnCode::KeyNotFound`
+	[seal0] seal_code_hash(ctx, account_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::CodeHash)?;
+		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
+		if let Some(value) = ctx.ext.code_hash(&address) {
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value.encode(), false, already_charged)?;
+			Ok(ReturnCode::Success)
+		} else {
+			Ok(ReturnCode::KeyNotFound)
+		}
+	},
+
+	// Retrieve the code hash of the currently executing contract.
+	//
+	// # Parameters
+	//
+	// - `out_ptr`: pointer to the linear memory where the returning value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	[seal0] seal_own_code_hash(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::OwnCodeHash)?;
+		let code_hash_encoded = &ctx.ext.own_code_hash().encode();
+		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, code_hash_encoded, false, already_charged)?)
+	},
+
+	// Checks whether the caller of the current contract is the origin of the whole call stack.
+	//
+	// Prefer this over `seal_is_contract` when checking whether your contract is being called by a contract
+	// or a plain account. The reason is that it performs better since it does not need to
+	// do any storage lookups.
+	//
+	// A return value of`true` indicates that this contract is being called by a plain account
+	// and `false` indicates that the caller is another contract.
+	//
+	// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
+	[seal0] seal_caller_is_origin(ctx) -> u32 => {
+		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
+		Ok(ctx.ext.caller_is_origin() as u32)
+	},
+
 	// Stores the address of the current contract into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
@@ -1311,7 +1472,7 @@ define_env!(Env, <E: Ext>,
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
 		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
 		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &gas_left, false, already_charged,
+			out_ptr, out_len_ptr, gas_left, false, already_charged,
 		)?)
 	},
 
@@ -1360,7 +1521,7 @@ define_env!(Env, <E: Ext>,
 	[seal0] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
-			Err(Error::<E::T>::RandomSubjectTooLong)?;
+			return Err(Error::<E::T>::RandomSubjectTooLong.into());
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
@@ -1392,7 +1553,7 @@ define_env!(Env, <E: Ext>,
 	[seal1] seal_random(ctx, subject_ptr: u32, subject_len: u32, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::Random)?;
 		if subject_len > ctx.ext.schedule().limits.subject_len {
-			Err(Error::<E::T>::RandomSubjectTooLong)?;
+			return Err(Error::<E::T>::RandomSubjectTooLong.into());
 		}
 		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
@@ -1510,13 +1671,13 @@ define_env!(Env, <E: Ext>,
 
 		let num_topic = topics_len
 			.checked_div(sp_std::mem::size_of::<TopicOf<E::T>>() as u32)
-			.ok_or_else(|| "Zero sized topics are not allowed")?;
+			.ok_or("Zero sized topics are not allowed")?;
 		ctx.charge_gas(RuntimeCosts::DepositEvent {
 			num_topic,
 			len: data_len,
 		})?;
 		if data_len > ctx.ext.max_value_size() {
-			Err(Error::<E::T>::ValueTooLarge)?;
+			return Err(Error::<E::T>::ValueTooLarge.into());
 		}
 
 		let mut topics: Vec::<TopicOf<<E as Ext>::T>> = match topics_len {
@@ -1526,14 +1687,14 @@ define_env!(Env, <E: Ext>,
 
 		// If there are more than `event_topics`, then trap.
 		if topics.len() > ctx.ext.schedule().limits.event_topics as usize {
-			Err(Error::<E::T>::TooManyTopics)?;
+			return Err(Error::<E::T>::TooManyTopics.into());
 		}
 
 		// Check for duplicate topics. If there are any, then trap.
 		// Complexity O(n * log(n)) and no additional allocations.
 		// This also sorts the topics.
 		if has_duplicates(&mut topics) {
-			Err(Error::<E::T>::DuplicateTopics)?;
+			return Err(Error::<E::T>::DuplicateTopics.into());
 		}
 
 		let event_data = ctx.read_sandbox_memory(data_ptr, data_len)?;
@@ -1713,7 +1874,7 @@ define_env!(Env, <E: Ext>,
 	) -> u32 => {
 		use crate::chain_extension::{ChainExtension, Environment, RetVal};
 		if !<E::T as Config>::ChainExtension::enabled() {
-			Err(Error::<E::T>::NoChainExtension)?;
+			return Err(Error::<E::T>::NoChainExtension.into());
 		}
 		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
 		match <E::T as Config>::ChainExtension::call(func_id, env)? {
@@ -1793,7 +1954,7 @@ define_env!(Env, <E: Ext>,
 	// deploy a contract using it to a production chain.
 	[__unstable__] seal_call_runtime(ctx, call_ptr: u32, call_len: u32) -> ReturnCode => {
 		use frame_support::{dispatch::GetDispatchInfo, weights::extract_actual_weight};
-		ctx.charge_gas(RuntimeCosts::CopyIn(call_len))?;
+		ctx.charge_gas(RuntimeCosts::CopyFromContract(call_len))?;
 		let call: <E::T as Config>::Call = ctx.read_sandbox_memory_as_unbounded(
 			call_ptr, call_len
 		)?;
@@ -1816,17 +1977,17 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `signature_ptr`: the pointer into the linear memory where the signature
-	//					  is placed. Should be decodable as a 65 bytes. Traps otherwise.
+	//					 is placed. Should be decodable as a 65 bytes. Traps otherwise.
 	// - `message_hash_ptr`: the pointer into the linear memory where the message
 	// 						 hash is placed. Should be decodable as a 32 bytes. Traps otherwise.
 	// - `output_ptr`: the pointer into the linear memory where the output
-	//                 data is placed. The buffer should be 33 bytes. Traps otherwise.
-	// 				   The function will write the result directly into this buffer.
+	//                 data is placed. The buffer should be 33 bytes. The function
+	// 					will write the result directly into this buffer.
 	//
 	// # Errors
 	//
 	// `ReturnCode::EcdsaRecoverFailed`
-	[__unstable__] seal_ecdsa_recover(ctx, signature_ptr: u32, message_hash_ptr: u32, output_ptr: u32) -> ReturnCode => {
+	[seal0] seal_ecdsa_recover(ctx, signature_ptr: u32, message_hash_ptr: u32, output_ptr: u32) -> ReturnCode => {
 		ctx.charge_gas(RuntimeCosts::EcdsaRecovery)?;
 
 		let mut signature: [u8; 65] = [0; 65];
@@ -1842,6 +2003,74 @@ define_env!(Env, <E: Ext>,
 				// buffer.
 				ctx.write_sandbox_memory(output_ptr, pub_key.as_ref())?;
 
+				Ok(ReturnCode::Success)
+			},
+			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
+		}
+	},
+
+	// Replace the contract code at the specified address with new code.
+	//
+	// # Note
+	//
+	// There are a couple of important considerations which must be taken into account when
+	// using this API:
+	//
+	// 1. The storage at the code address will remain untouched. This means that contract developers
+	// must ensure that the storage layout of the new code is compatible with that of the old code.
+	//
+	// 2. Contracts using this API can't be assumed as having deterministic addresses. Said another way,
+	// when using this API you lose the guarantee that an address always identifies a specific code hash.
+	//
+	// 3. If a contract calls into itself after changing its code the new call would use
+	// the new code. However, if the original caller panics after returning from the sub call it
+	// would revert the changes made by `seal_set_code_hash` and the next caller would use
+	// the old code.
+	//
+	// # Parameters
+	//
+	// - `code_hash_ptr`: A pointer to the buffer that contains the new code hash.
+	//
+	// # Errors
+	//
+	// `ReturnCode::CodeNotFound`
+	[seal0] seal_set_code_hash(ctx, code_hash_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
+		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
+		match ctx.ext.set_code_hash(code_hash) {
+			Err(err) =>	{
+				let code = Runtime::<E>::err_into_return_code(err)?;
+				Ok(code)
+			},
+			Ok(()) => Ok(ReturnCode::Success)
+		}
+	},
+
+	// Calculates Ethereum address from the ECDSA compressed public key and stores
+	// it into the supplied buffer.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: a pointer to the ECDSA compressed public key. Should be decodable as a 33 bytes value.
+	//		Traps otherwise.
+	// - `out_ptr`: the pointer into the linear memory where the output
+	//                 data is placed. The function will write the result
+	//                 directly into this buffer.
+	//
+	// The value is stored to linear memory at the address pointed to by `out_ptr`.
+	// If the available space at `out_ptr` is less than the size of the value a trap is triggered.
+	//
+	// # Errors
+	//
+	// `ReturnCode::EcdsaRecoverFailed`
+	[seal0] seal_ecdsa_to_eth_address(ctx, key_ptr: u32, out_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
+		let mut compressed_key: [u8; 33] = [0;33];
+		ctx.read_sandbox_memory_into_buf(key_ptr, &mut compressed_key)?;
+		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key);
+		match result {
+			Ok(eth_address) => {
+				ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?;
 				Ok(ReturnCode::Success)
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),

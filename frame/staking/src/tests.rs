@@ -17,10 +17,10 @@
 
 //! Tests for the module.
 
-use super::{Event, *};
+use super::{ConfigOp, Event, MaxUnlockingChunks, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{Currency, Get, ReservableCurrency},
@@ -39,6 +39,56 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
+
+#[test]
+fn set_staking_configs_works() {
+	ExtBuilder::default().build_and_execute(|| {
+		// setting works
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Set(1_500),
+			ConfigOp::Set(2_000),
+			ConfigOp::Set(10),
+			ConfigOp::Set(20),
+			ConfigOp::Set(Percent::from_percent(75)),
+			ConfigOp::Set(Zero::zero())
+		));
+		assert_eq!(MinNominatorBond::<Test>::get(), 1_500);
+		assert_eq!(MinValidatorBond::<Test>::get(), 2_000);
+		assert_eq!(MaxNominatorsCount::<Test>::get(), Some(10));
+		assert_eq!(MaxValidatorsCount::<Test>::get(), Some(20));
+		assert_eq!(ChillThreshold::<Test>::get(), Some(Percent::from_percent(75)));
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+
+		// noop does nothing
+		assert_storage_noop!(assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Noop
+		)));
+
+		// removing works
+		assert_ok!(Staking::set_staking_configs(
+			Origin::root(),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove
+		));
+		assert_eq!(MinNominatorBond::<Test>::get(), 0);
+		assert_eq!(MinValidatorBond::<Test>::get(), 0);
+		assert_eq!(MaxNominatorsCount::<Test>::get(), None);
+		assert_eq!(MaxValidatorsCount::<Test>::get(), None);
+		assert_eq!(ChillThreshold::<Test>::get(), None);
+		assert_eq!(MinCommission::<Test>::get(), Perbill::from_percent(0));
+	});
+}
 
 #[test]
 fn force_unstake_works() {
@@ -104,7 +154,7 @@ fn basic_setup_works() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![]
 			})
 		);
@@ -115,7 +165,7 @@ fn basic_setup_works() {
 				stash: 21,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![]
 			})
 		);
@@ -138,7 +188,7 @@ fn basic_setup_works() {
 				stash: 101,
 				total: 500,
 				active: 500,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![]
 			})
 		);
@@ -382,7 +432,7 @@ fn staking_should_work() {
 				stash: 3,
 				total: 1500,
 				active: 1500,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![0],
 			})
 		);
@@ -936,7 +986,7 @@ fn reward_destination_works() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -959,7 +1009,7 @@ fn reward_destination_works() {
 				stash: 11,
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![0],
 			})
 		);
@@ -987,7 +1037,7 @@ fn reward_destination_works() {
 				stash: 11,
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![0, 1],
 			})
 		);
@@ -1016,7 +1066,7 @@ fn reward_destination_works() {
 				stash: 11,
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![0, 1, 2],
 			})
 		);
@@ -1081,7 +1131,7 @@ fn bond_extra_works() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1098,7 +1148,7 @@ fn bond_extra_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 1000 + 100,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1112,7 +1162,7 @@ fn bond_extra_works() {
 				stash: 11,
 				total: 1000000,
 				active: 1000000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1150,7 +1200,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1168,7 +1218,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 1000 + 100,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1189,7 +1239,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 1000 + 100,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1207,7 +1257,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 1000, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1220,7 +1270,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 1000, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1236,7 +1286,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 1000 + 100,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 1000, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1252,7 +1302,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				stash: 11,
 				total: 100,
 				active: 100,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![]
 			}),
 		);
@@ -1262,23 +1312,35 @@ fn bond_extra_and_withdraw_unbonded_works() {
 #[test]
 fn too_many_unbond_calls_should_not_work() {
 	ExtBuilder::default().build_and_execute(|| {
-		// locked at era 0 until 3
-		for _ in 0..MAX_UNLOCKING_CHUNKS - 1 {
+		let mut current_era = 0;
+		// locked at era MaxUnlockingChunks - 1 until 3
+		for i in 0..MaxUnlockingChunks::get() - 1 {
+			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
+			current_era = i as u32;
+			mock::start_active_era(current_era);
 			assert_ok!(Staking::unbond(Origin::signed(10), 1));
 		}
 
-		mock::start_active_era(1);
+		current_era += 1;
+		mock::start_active_era(current_era);
 
-		// locked at era 1 until 4
+		// This chunk is locked at `current_era` through `current_era + 2` (because BondingDuration
+		// == 3).
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
+		assert_eq!(
+			Staking::ledger(&10).unwrap().unlocking.len(),
+			MaxUnlockingChunks::get() as usize
+		);
 		// can't do more.
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
-		mock::start_active_era(3);
+		current_era += 2;
+		mock::start_active_era(current_era);
 
 		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
-		// free up.
+		// free up everything except the most recently added chunk.
 		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
+		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 1);
 
 		// Can add again.
 		assert_ok!(Staking::unbond(Origin::signed(10), 1));
@@ -1310,7 +1372,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1329,7 +1391,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 900, era: 2 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 2 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1342,7 +1404,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1355,7 +1417,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 900, era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1368,7 +1430,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: vec![UnlockChunk { value: 400, era: 5 }],
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1381,7 +1443,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1396,11 +1458,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![
-					UnlockChunk { value: 300, era: 5 },
-					UnlockChunk { value: 300, era: 5 },
-					UnlockChunk { value: 300, era: 5 },
-				],
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1413,10 +1471,7 @@ fn rebond_works() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: vec![
-					UnlockChunk { value: 300, era: 5 },
-					UnlockChunk { value: 100, era: 5 },
-				],
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1443,7 +1498,7 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1458,7 +1513,7 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 600,
-				unlocking: vec![UnlockChunk { value: 400, era: 2 + 3 },],
+				unlocking: bounded_vec![UnlockChunk { value: 400, era: 2 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1473,7 +1528,7 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 300,
-				unlocking: vec![
+				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
 				],
@@ -1491,7 +1546,7 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![
+				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
 					UnlockChunk { value: 200, era: 4 + 3 },
@@ -1508,7 +1563,7 @@ fn rebond_is_fifo() {
 				stash: 11,
 				total: 1000,
 				active: 500,
-				unlocking: vec![
+				unlocking: bounded_vec![
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 100, era: 3 + 3 },
 				],
@@ -1540,7 +1595,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 100,
-				unlocking: vec![UnlockChunk { value: 900, era: 1 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 900, era: 1 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1553,7 +1608,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 200,
-				unlocking: vec![UnlockChunk { value: 800, era: 1 + 3 }],
+				unlocking: bounded_vec![UnlockChunk { value: 800, era: 1 + 3 }],
 				claimed_rewards: vec![],
 			})
 		);
@@ -1568,7 +1623,7 @@ fn rebond_emits_right_value_in_event() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -1604,7 +1659,7 @@ fn reward_to_stake_works() {
 					stash: 21,
 					total: 69,
 					active: 69,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
@@ -1665,7 +1720,7 @@ fn reap_stash_works() {
 					stash: 11,
 					total: 5,
 					active: 5,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![],
 				},
 			);
@@ -1784,7 +1839,7 @@ fn bond_with_no_staked_value() {
 					stash: 1,
 					active: 0,
 					total: 5,
-					unlocking: vec![UnlockChunk { value: 5, era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 5, era: 3 }],
 					claimed_rewards: vec![],
 				})
 			);
@@ -2049,7 +2104,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 			&[Perbill::from_percent(100)],
 		);
 
-		assert_eq!(Balances::total_balance(&11), stake - 1);
+		assert_eq!(Balances::total_balance(&11), stake);
 		assert_eq!(Balances::total_balance(&2), 1);
 	})
 }
@@ -2733,6 +2788,80 @@ fn deferred_slashes_are_deferred() {
 }
 
 #[test]
+fn staker_cannot_bail_deferred_slash() {
+	// as long as SlashDeferDuration is less than BondingDuration, this should not be possible.
+	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
+		mock::start_active_era(1);
+
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+
+		let exposure = Staking::eras_stakers(active_era(), 11);
+		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+
+		on_offence_now(
+			&[OffenceDetails {
+				offender: (11, Staking::eras_stakers(active_era(), 11)),
+				reporters: vec![],
+			}],
+			&[Perbill::from_percent(10)],
+		);
+
+		// now we chill
+		assert_ok!(Staking::chill(Origin::signed(100)));
+		assert_ok!(Staking::unbond(Origin::signed(100), 500));
+
+		assert_eq!(Staking::current_era().unwrap(), 1);
+		assert_eq!(active_era(), 1);
+
+		assert_eq!(
+			Ledger::<Test>::get(100).unwrap(),
+			StakingLedger {
+				active: 0,
+				total: 500,
+				stash: 101,
+				claimed_rewards: Default::default(),
+				unlocking: bounded_vec![UnlockChunk { era: 4u32, value: 500 }],
+			}
+		);
+
+		// no slash yet.
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+
+		// no slash yet.
+		mock::start_active_era(2);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+		assert_eq!(Staking::current_era().unwrap(), 2);
+		assert_eq!(active_era(), 2);
+
+		// no slash yet.
+		mock::start_active_era(3);
+		assert_eq!(Balances::free_balance(11), 1000);
+		assert_eq!(Balances::free_balance(101), 2000);
+		assert_eq!(Staking::current_era().unwrap(), 3);
+		assert_eq!(active_era(), 3);
+
+		// and cannot yet unbond:
+		assert_storage_noop!(assert!(Staking::withdraw_unbonded(Origin::signed(100), 0).is_ok()));
+		assert_eq!(
+			Ledger::<Test>::get(100).unwrap().unlocking.into_inner(),
+			vec![UnlockChunk { era: 4u32, value: 500 as Balance }],
+		);
+
+		// at the start of era 4, slashes from era 1 are processed,
+		// after being deferred for at least 2 full eras.
+		mock::start_active_era(4);
+
+		assert_eq!(Balances::free_balance(11), 900);
+		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
+
+		// and the leftover of the funds can now be unbonded.
+	})
+}
+
+#[test]
 fn remove_deferred() {
 	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
 		mock::start_active_era(1);
@@ -3315,26 +3444,47 @@ fn set_history_depth_works() {
 
 #[test]
 fn test_payout_stakers() {
-	// Here we will test validator can set `max_nominators_payout` and it works.
-	// We also test that `payout_extra_nominators` works.
+	// Test that payout_stakers work in general, including that only the top
+	// `T::MaxNominatorRewardedPerValidator` nominators are rewarded.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
+		// Track the exposure of the validator and all nominators.
+		let mut total_exposure = balance;
+		// Track the exposure of the validator and the nominators that will get paid out.
+		let mut payout_exposure = balance;
 		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
+		assert_eq!(Validators::<Test>::count(), 1);
 
 		// Create nominators, targeting stash of validators
 		for i in 0..100 {
-			bond_nominator(1000 + i, 100 + i, balance + i as Balance, vec![11]);
+			let bond_amount = balance + i as Balance;
+			bond_nominator(1000 + i, 100 + i, bond_amount, vec![11]);
+			total_exposure += bond_amount;
+			if i >= 36 {
+				payout_exposure += bond_amount;
+			};
 		}
+		let payout_exposure_part = Perbill::from_rational(payout_exposure, total_exposure);
 
 		mock::start_active_era(1);
 		Staking::reward_by_ids(vec![(11, 1)]);
 
 		// compute and ensure the reward amount is greater than zero.
-		let _ = current_total_payout_for_duration(reward_time_per_era());
+		let payout = current_total_payout_for_duration(reward_time_per_era());
+		let actual_paid_out = payout_exposure_part * payout;
 
 		mock::start_active_era(2);
+
+		let pre_payout_total_issuance = Balances::total_issuance();
+		RewardOnUnbalanceWasCalled::set(false);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+		assert_eq_error_rate!(
+			Balances::total_issuance(),
+			pre_payout_total_issuance + actual_paid_out,
+			1
+		);
+		assert!(RewardOnUnbalanceWasCalled::get());
 
 		// Top 64 nominators of validator 11 automatically paid out, including the validator
 		// Validator payout goes to controller.
@@ -3354,7 +3504,7 @@ fn test_payout_stakers() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![1]
 			})
 		);
@@ -3363,10 +3513,19 @@ fn test_payout_stakers() {
 			Staking::reward_by_ids(vec![(11, 1)]);
 
 			// compute and ensure the reward amount is greater than zero.
-			let _ = current_total_payout_for_duration(reward_time_per_era());
+			let payout = current_total_payout_for_duration(reward_time_per_era());
+			let actual_paid_out = payout_exposure_part * payout;
+			let pre_payout_total_issuance = Balances::total_issuance();
 
 			mock::start_active_era(i);
+			RewardOnUnbalanceWasCalled::set(false);
 			assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, i - 1));
+			assert_eq_error_rate!(
+				Balances::total_issuance(),
+				pre_payout_total_issuance + actual_paid_out,
+				1
+			);
+			assert!(RewardOnUnbalanceWasCalled::get());
 		}
 
 		// We track rewards in `claimed_rewards` vec
@@ -3376,7 +3535,7 @@ fn test_payout_stakers() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: (1..=14).collect()
 			})
 		);
@@ -3397,7 +3556,7 @@ fn test_payout_stakers() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![15, 98]
 			})
 		);
@@ -3412,7 +3571,7 @@ fn test_payout_stakers() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![15, 23, 42, 69, 98]
 			})
 		);
@@ -3607,7 +3766,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				stash: 9,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: vec![],
 			})
 		);
@@ -3619,7 +3778,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				stash: 11,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: (0..5).collect(),
 			})
 		);
@@ -3631,7 +3790,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				stash: 13,
 				total: 1000,
 				active: 1000,
-				unlocking: vec![],
+				unlocking: Default::default(),
 				claimed_rewards: (15..99).collect(),
 			})
 		);
@@ -3850,7 +4009,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 10 * 1000,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![]
 				}
 			);
@@ -3864,7 +4023,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: vec![UnlockChunk { value: 10 * 1000, era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
 					claimed_rewards: vec![]
 				}
 			);
@@ -3887,7 +4046,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 10 * 1000,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![]
 				}
 			);
@@ -3901,7 +4060,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					stash: 21,
 					total: 10 * 1000,
 					active: 0,
-					unlocking: vec![UnlockChunk { value: 10 * 1000, era: 3 }],
+					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
 					claimed_rewards: vec![]
 				}
 			);
@@ -3928,7 +4087,7 @@ fn do_not_die_when_active_is_ed() {
 					stash: 21,
 					total: 1000 * ed,
 					active: 1000 * ed,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![]
 				}
 			);
@@ -3945,7 +4104,7 @@ fn do_not_die_when_active_is_ed() {
 					stash: 21,
 					total: ed,
 					active: ed,
-					unlocking: vec![],
+					unlocking: Default::default(),
 					claimed_rewards: vec![]
 				}
 			);
@@ -4000,10 +4159,12 @@ mod election_data_provider {
 	#[test]
 	fn voters_include_self_vote() {
 		ExtBuilder::default().nominate(false).build_and_execute(|| {
-			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::voters(None)
-				.unwrap()
-				.into_iter()
-				.any(|(w, _, t)| { v == w && t[0] == w })))
+			assert!(<Validators<Test>>::iter().map(|(x, _)| x).all(|v| Staking::electing_voters(
+				None
+			)
+			.unwrap()
+			.into_iter()
+			.any(|(w, _, t)| { v == w && t[0] == w })))
 		})
 	}
 
@@ -4012,7 +4173,7 @@ mod election_data_provider {
 		ExtBuilder::default().build_and_execute(|| {
 			assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4027,7 +4188,7 @@ mod election_data_provider {
 			// 11 is gone.
 			start_active_era(2);
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4039,7 +4200,7 @@ mod election_data_provider {
 			// resubmit and it is back
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
 			assert_eq!(
-				<Staking as ElectionDataProvider>::voters(None)
+				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
 					.iter()
 					.find(|x| x.0 == 101)
@@ -4056,67 +4217,66 @@ mod election_data_provider {
 			.set_status(41, StakerStatus::Validator)
 			.build_and_execute(|| {
 				// sum of all nominators who'd be voters (1), plus the self-votes (4).
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					5
-				);
+				assert_eq!(<Test as Config>::VoterList::count(), 5);
 
 				// if limits is less..
-				assert_eq!(Staking::voters(Some(1)).unwrap().len(), 1);
+				assert_eq!(Staking::electing_voters(Some(1)).unwrap().len(), 1);
 
 				// if limit is equal..
-				assert_eq!(Staking::voters(Some(5)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(Some(5)).unwrap().len(), 5);
 
 				// if limit is more.
-				assert_eq!(Staking::voters(Some(55)).unwrap().len(), 5);
+				assert_eq!(Staking::electing_voters(Some(55)).unwrap().len(), 5);
 
 				// if target limit is more..
-				assert_eq!(Staking::targets(Some(6)).unwrap().len(), 4);
-				assert_eq!(Staking::targets(Some(4)).unwrap().len(), 4);
+				assert_eq!(Staking::electable_targets(Some(6)).unwrap().len(), 4);
+				assert_eq!(Staking::electable_targets(Some(4)).unwrap().len(), 4);
 
 				// if target limit is less, then we return an error.
-				assert_eq!(Staking::targets(Some(1)).unwrap_err(), "Target snapshot too big");
+				assert_eq!(
+					Staking::electable_targets(Some(1)).unwrap_err(),
+					"Target snapshot too big"
+				);
 			});
 	}
 
+	// Tests the criteria that in `ElectionDataProvider::voters` function, we try to get at most
+	// `maybe_max_len` voters, and if some of them end up being skipped, we iterate at most `2 *
+	// maybe_max_len`.
 	#[test]
-	fn only_iterates_max_2_times_nominators_quota() {
+	fn only_iterates_max_2_times_max_allowed_len() {
 		ExtBuilder::default()
-			.nominate(true) // add nominator 101, who nominates [11, 21]
+			.nominate(false)
 			// the other nominators only nominate 21
 			.add_staker(61, 60, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(71, 70, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.add_staker(81, 80, 2_000, StakerStatus::<AccountId>::Nominator(vec![21]))
 			.build_and_execute(|| {
-				// given our nominators ordered by stake,
+				// all voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-					vec![61, 71, 81, 101]
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+					vec![61, 71, 81, 11, 21, 31]
 				);
 
-				// and total voters
-				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					7
-				);
-
-				// roll to session 5
 				run_to_block(25);
 
 				// slash 21, the only validator nominated by our first 3 nominators
 				add_slash(&21);
 
-				// we take 4 voters: 2 validators and 2 nominators (so nominators quota = 2)
+				// we want 2 voters now, and in maximum we allow 4 iterations. This is what happens:
+				// 61 is pruned;
+				// 71 is pruned;
+				// 81 is pruned;
+				// 11 is taken;
+				// we finish since the 2x limit is reached.
 				assert_eq!(
-					Staking::voters(Some(3))
+					Staking::electing_voters(Some(2))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					vec![31, 11], // 2 validators, but no nominators because we hit the quota
+					vec![11],
 				);
 			});
 	}
@@ -4129,57 +4289,43 @@ mod election_data_provider {
 	#[test]
 	fn get_max_len_voters_even_if_some_nominators_are_slashed() {
 		ExtBuilder::default()
-			.nominate(true) // add nominator 101, who nominates [11, 21]
+			.nominate(false)
 			.add_staker(61, 60, 20, StakerStatus::<AccountId>::Nominator(vec![21]))
-			//                                 61 only nominates validator 21 ^^
 			.add_staker(71, 70, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
+			.add_staker(81, 80, 10, StakerStatus::<AccountId>::Nominator(vec![11, 21]))
 			.build_and_execute(|| {
-				// given our nominators ordered by stake,
+				// given our voters ordered by stake,
 				assert_eq!(
-					<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(),
-					vec![101, 61, 71]
+					<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+					vec![11, 21, 31, 61, 71, 81]
 				);
 
-				// and total voters
+				// we take 4 voters
 				assert_eq!(
-					<Test as Config>::SortedListProvider::count() +
-						<Validators<Test>>::iter().count() as u32,
-					6
-				);
-
-				// we take 5 voters
-				assert_eq!(
-					Staking::voters(Some(5))
+					Staking::electing_voters(Some(4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					// then
-					vec![
-						31, 21, 11, // 3 nominators
-						101, 61 // 2 validators, and 71 is excluded
-					],
+					vec![11, 21, 31, 61],
 				);
 
 				// roll to session 5
 				run_to_block(25);
 
-				// slash 21, the only validator nominated by 61
+				// slash 21, the only validator nominated by 61.
 				add_slash(&21);
 
-				// we take 4 voters
+				// we take 4 voters; 71 and 81 are replacing the ejected ones.
 				assert_eq!(
-					Staking::voters(Some(4))
+					Staking::electing_voters(Some(4))
 						.unwrap()
 						.iter()
 						.map(|(stash, _, _)| stash)
 						.copied()
 						.collect::<Vec<_>>(),
-					vec![
-						31, 11, // 2 validators (21 was slashed)
-						101, 71 // 2 nominators, excluding 61
-					],
+					vec![11, 31, 71, 81],
 				);
 			});
 	}
@@ -4248,7 +4394,11 @@ fn count_check_works() {
 		Validators::<Test>::insert(987654321, ValidatorPrefs::default());
 		Nominators::<Test>::insert(
 			987654321,
-			Nominations { targets: vec![], submitted_in: Default::default(), suppressed: false },
+			Nominations {
+				targets: Default::default(),
+				submitted_in: Default::default(),
+				suppressed: false,
+			},
 		);
 	})
 }
@@ -4359,12 +4509,12 @@ fn chill_other_works() {
 			// Change the minimum bond... but no limits.
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				None,
-				None,
-				None,
-				Zero::zero()
+				ConfigOp::Set(1_500),
+				ConfigOp::Set(2_000),
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Remove
 			));
 
 			// Still can't chill these users
@@ -4380,12 +4530,12 @@ fn chill_other_works() {
 			// Add limits, but no threshold
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				Some(10),
-				Some(10),
-				None,
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Set(10),
+				ConfigOp::Set(10),
+				ConfigOp::Noop,
+				ConfigOp::Noop
 			));
 
 			// Still can't chill these users
@@ -4401,12 +4551,12 @@ fn chill_other_works() {
 			// Add threshold, but no limits
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				None,
-				None,
-				Some(Percent::from_percent(0)),
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Remove,
+				ConfigOp::Remove,
+				ConfigOp::Noop,
+				ConfigOp::Noop
 			));
 
 			// Still can't chill these users
@@ -4422,12 +4572,12 @@ fn chill_other_works() {
 			// Add threshold and limits
 			assert_ok!(Staking::set_staking_configs(
 				Origin::root(),
-				1_500,
-				2_000,
-				Some(10),
-				Some(10),
-				Some(Percent::from_percent(75)),
-				Zero::zero()
+				ConfigOp::Noop,
+				ConfigOp::Noop,
+				ConfigOp::Set(10),
+				ConfigOp::Set(10),
+				ConfigOp::Set(Percent::from_percent(75)),
+				ConfigOp::Noop
 			));
 
 			// 16 people total because tests start with 2 active one
@@ -4467,12 +4617,12 @@ fn capped_stakers_works() {
 		let max = 10;
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			10,
-			10,
-			Some(max),
-			Some(max),
-			Some(Percent::from_percent(0)),
-			Zero::zero(),
+			ConfigOp::Set(10),
+			ConfigOp::Set(10),
+			ConfigOp::Set(max),
+			ConfigOp::Set(max),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
 		));
 
 		// can create `max - validator_count` validators
@@ -4537,12 +4687,12 @@ fn capped_stakers_works() {
 		// No problem when we set to `None` again
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			10,
-			10,
-			None,
-			None,
-			None,
-			Zero::zero(),
+			ConfigOp::Noop,
+			ConfigOp::Noop,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Noop,
+			ConfigOp::Noop,
 		));
 		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
 		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
@@ -4552,19 +4702,29 @@ fn capped_stakers_works() {
 #[test]
 fn min_commission_works() {
 	ExtBuilder::default().build_and_execute(|| {
+		// account 10 controls the stash from account 11
 		assert_ok!(Staking::validate(
 			Origin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 		));
 
+		// event emitted should be correct
+		assert_eq!(
+			*staking_events().last().unwrap(),
+			Event::ValidatorPrefsSet(
+				11,
+				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			)
+		);
+
 		assert_ok!(Staking::set_staking_configs(
 			Origin::root(),
-			0,
-			0,
-			None,
-			None,
-			None,
-			Perbill::from_percent(10),
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Remove,
+			ConfigOp::Set(Perbill::from_percent(10)),
 		));
 
 		// can't make it less than 10 now
@@ -4589,6 +4749,100 @@ fn min_commission_works() {
 	})
 }
 
+#[test]
+fn change_of_max_nominations() {
+	use frame_election_provider_support::ElectionDataProvider;
+	ExtBuilder::default()
+		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.balance_factor(10)
+		.build_and_execute(|| {
+			// pre-condition
+			assert_eq!(MaxNominations::get(), 16);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			// 3 validators and 3 nominators
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 16 to 4, everyone should be fine.
+			MaxNominations::set(4);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 4 to 3, everyone should be fine.
+			MaxNominations::set(3);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
+			// thus non-existent unless if they update.
+			MaxNominations::set(2);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(101, 2), (60, 1)]
+			);
+			// 70 is still in storage..
+			assert!(Nominators::<Test>::contains_key(70));
+			// but its value cannot be decoded and default is returned.
+			assert!(Nominators::<Test>::get(70).is_none());
+
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 2);
+			assert!(Nominators::<Test>::contains_key(101));
+
+			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
+			// thus non-existent unless if they update.
+			MaxNominations::set(1);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(60, 1)]
+			);
+			assert!(Nominators::<Test>::contains_key(70));
+			assert!(Nominators::<Test>::contains_key(60));
+			assert!(Nominators::<Test>::get(70).is_none());
+			assert!(Nominators::<Test>::get(60).is_some());
+			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 1);
+
+			// now one of them can revive themselves by re-nominating to a proper value.
+			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 1), (60, 1)]
+			);
+
+			// or they can be chilled by any account.
+			assert!(Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+			assert_ok!(Staking::chill_other(Origin::signed(70), 100));
+			assert!(!Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+		})
+}
+
 mod sorted_list_provider {
 	use super::*;
 	use frame_election_provider_support::SortedListProvider;
@@ -4597,19 +4851,293 @@ mod sorted_list_provider {
 	fn re_nominate_does_not_change_counters_or_list() {
 		ExtBuilder::default().nominate(true).build_and_execute(|| {
 			// given
-			let pre_insert_nominator_count = Nominators::<Test>::iter().count() as u32;
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
-			assert!(Nominators::<Test>::contains_key(101));
-			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+			let pre_insert_voter_count =
+				(Nominators::<Test>::count() + Validators::<Test>::count()) as u32;
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+
+			assert_eq!(
+				<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+				vec![11, 21, 31, 101]
+			);
 
 			// when account 101 renominates
 			assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
 
 			// then counts don't change
-			assert_eq!(<Test as Config>::SortedListProvider::count(), pre_insert_nominator_count);
-			assert_eq!(Nominators::<Test>::iter().count() as u32, pre_insert_nominator_count);
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
 			// and the list is the same
-			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
+			assert_eq!(
+				<Test as Config>::VoterList::iter().collect::<Vec<_>>(),
+				vec![11, 21, 31, 101]
+			);
 		});
 	}
+
+	#[test]
+	fn re_validate_does_not_change_counters_or_list() {
+		ExtBuilder::default().nominate(false).build_and_execute(|| {
+			// given
+			let pre_insert_voter_count =
+				(Nominators::<Test>::count() + Validators::<Test>::count()) as u32;
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+
+			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
+
+			// when account 11 re-validates
+			assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
+
+			// then counts don't change
+			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
+			// and the list is the same
+			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
+		});
+	}
+}
+
+#[test]
+fn force_apply_min_commission_works() {
+	let prefs = |c| ValidatorPrefs { commission: Perbill::from_percent(c), blocked: false };
+	let validators = || Validators::<Test>::iter().collect::<Vec<_>>();
+	ExtBuilder::default().build_and_execute(|| {
+		assert_ok!(Staking::validate(Origin::signed(30), prefs(10)));
+		assert_ok!(Staking::validate(Origin::signed(20), prefs(5)));
+
+		// Given
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
+		MinCommission::<Test>::set(Perbill::from_percent(5));
+
+		// When applying to a commission greater than min
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 31));
+		// Then the commission is not changed
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
+
+		// When applying to a commission that is equal to min
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 21));
+		// Then the commission is not changed
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
+
+		// When applying to a commission that is less than the min
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 11));
+		// Then the commission is bumped to the min
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
+
+		// When applying commission to a validator that doesn't exist then storage is not altered
+		assert_noop!(
+			Staking::force_apply_min_commission(Origin::signed(1), 420),
+			Error::<Test>::NotStash
+		);
+	});
+}
+
+#[test]
+fn proportional_ledger_slash_works() {
+	let c = |era, value| UnlockChunk::<Balance> { era, value };
+	// Given
+	let mut ledger = StakingLedger::<Test> {
+		stash: 123,
+		total: 10,
+		active: 10,
+		unlocking: bounded_vec![],
+		claimed_rewards: vec![],
+	};
+
+	assert_eq!(BondingDuration::get(), 3);
+
+	// When we slash a ledger with no unlocking chunks
+	assert_eq!(ledger.slash(5, 1, 0), 5);
+	// Then
+	assert_eq!(ledger.total, 5);
+	assert_eq!(ledger.active, 5);
+	assert_eq!(LedgerSlashPerEra::get().0, 5);
+	assert_eq!(LedgerSlashPerEra::get().1, Default::default());
+
+	// When we slash a ledger with no unlocking chunks and the slash amount is greater then the
+	// total
+	assert_eq!(ledger.slash(11, 1, 0), 5);
+	// Then
+	assert_eq!(ledger.total, 0);
+	assert_eq!(ledger.active, 0);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, Default::default());
+
+	// Given
+	ledger.unlocking = bounded_vec![c(4, 10), c(5, 10)];
+	ledger.total = 2 * 10;
+	ledger.active = 0;
+	// When all the chunks overlap with the slash eras
+	assert_eq!(ledger.slash(20, 0, 0), 20);
+	// Then
+	assert_eq!(ledger.unlocking, vec![]);
+	assert_eq!(ledger.total, 0);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0)]));
+
+	// Given
+	ledger.unlocking = bounded_vec![c(4, 100), c(5, 100), c(6, 100), c(7, 100)];
+	ledger.total = 4 * 100;
+	ledger.active = 0;
+	// When the first 2 chunks don't overlap with the affected range of unlock eras.
+	assert_eq!(ledger.slash(140, 0, 2), 140);
+	// Then
+	assert_eq!(ledger.unlocking, vec![c(4, 100), c(5, 100), c(6, 30), c(7, 30)]);
+	assert_eq!(ledger.total, 4 * 100 - 140);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(6, 30), (7, 30)]));
+
+	// Given
+	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
+	ledger.active = 500;
+	// 900
+	ledger.total = 40 + 10 + 100 + 250 + 500;
+	// When we have a partial slash that touches all chunks
+	assert_eq!(ledger.slash(900 / 2, 0, 0), 450);
+	// Then
+	assert_eq!(ledger.active, 500 / 2);
+	assert_eq!(ledger.unlocking, vec![c(4, 40 / 2), c(5, 100 / 2), c(6, 10 / 2), c(7, 250 / 2)]);
+	assert_eq!(ledger.total, 900 / 2);
+	assert_eq!(LedgerSlashPerEra::get().0, 500 / 2);
+	assert_eq!(
+		LedgerSlashPerEra::get().1,
+		BTreeMap::from([(4, 40 / 2), (5, 100 / 2), (6, 10 / 2), (7, 250 / 2)])
+	);
+
+	// slash 1/4th with not chunk.
+	ledger.unlocking = bounded_vec![];
+	ledger.active = 500;
+	ledger.total = 500;
+	// When we have a partial slash that touches all chunks
+	assert_eq!(ledger.slash(500 / 4, 0, 0), 500 / 4);
+	// Then
+	assert_eq!(ledger.active, 3 * 500 / 4);
+	assert_eq!(ledger.unlocking, vec![]);
+	assert_eq!(ledger.total, ledger.active);
+	assert_eq!(LedgerSlashPerEra::get().0, 3 * 500 / 4);
+	assert_eq!(LedgerSlashPerEra::get().1, Default::default());
+
+	// Given we have the same as above,
+	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
+	ledger.active = 500;
+	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
+	assert_eq!(ledger.total, 900);
+	// When  we have a higher min balance
+	assert_eq!(
+		ledger.slash(
+			900 / 2,
+			25, /* min balance - chunks with era 0 & 2 will be slashed to <=25, causing it to
+			     * get swept */
+			0
+		),
+		475
+	);
+	let dust = (10 / 2) + (40 / 2);
+	assert_eq!(ledger.active, 500 / 2);
+	assert_eq!(ledger.unlocking, vec![c(5, 100 / 2), c(7, 250 / 2)]);
+	assert_eq!(ledger.total, 900 / 2 - dust);
+	assert_eq!(LedgerSlashPerEra::get().0, 500 / 2);
+	assert_eq!(
+		LedgerSlashPerEra::get().1,
+		BTreeMap::from([(4, 0), (5, 100 / 2), (6, 0), (7, 250 / 2)])
+	);
+
+	// Given
+	// slash order --------------------NA--------2----------0----------1----
+	ledger.unlocking = bounded_vec![c(4, 40), c(5, 100), c(6, 10), c(7, 250)];
+	ledger.active = 500;
+	ledger.total = 40 + 10 + 100 + 250 + 500; // 900
+	assert_eq!(
+		ledger.slash(
+			500 + 10 + 250 + 100 / 2, // active + era 6 + era 7 + era 5 / 2
+			0,
+			2 /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
+			   * ledge.active. This will cause the affected to go to zero, and then we will
+			   * start slashing older chunks */
+		),
+		500 + 250 + 10 + 100 / 2
+	);
+	// Then
+	assert_eq!(ledger.active, 0);
+	assert_eq!(ledger.unlocking, vec![c(4, 40), c(5, 100 / 2)]);
+	assert_eq!(ledger.total, 90);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(5, 100 / 2), (6, 0), (7, 0)]));
+
+	// Given
+	// iteration order------------------NA---------2----------0----------1----
+	ledger.unlocking = bounded_vec![c(4, 100), c(5, 100), c(6, 100), c(7, 100)];
+	ledger.active = 100;
+	ledger.total = 5 * 100;
+	// When
+	assert_eq!(
+		ledger.slash(
+			351, // active + era 6 + era 7 + era 5 / 2 + 1
+			50,  // min balance - everything slashed below 50 will get dusted
+			2    /* slash era 2+4 first, so the affected parts are era 2+4, era 3+4 and
+			      * ledge.active. This will cause the affected to go to zero, and then we will
+			      * start slashing older chunks */
+		),
+		400
+	);
+	// Then
+	assert_eq!(ledger.active, 0);
+	assert_eq!(ledger.unlocking, vec![c(4, 100)]);
+	assert_eq!(ledger.total, 100);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(5, 0), (6, 0), (7, 0)]));
+
+	// Tests for saturating arithmetic
+
+	// Given
+	let slash = u64::MAX as Balance * 2;
+	let value = slash
+		- (9 * 4) // The value of the other parts of ledger that will get slashed
+		+ 1;
+
+	ledger.active = 10;
+	ledger.unlocking = bounded_vec![c(4, 10), c(5, 10), c(6, 10), c(7, value)];
+	ledger.total = value + 40;
+	// When
+	let slash_amount = ledger.slash(slash, 0, 0);
+	assert_eq_error_rate!(slash_amount, slash, 5);
+	// Then
+	assert_eq!(ledger.active, 0); // slash of 9
+	assert_eq!(ledger.unlocking, vec![]);
+	assert_eq!(ledger.total, 0);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0), (6, 0), (7, 0)]));
+
+	// Given
+	let slash = u64::MAX as Balance * 2;
+	let value = u64::MAX as Balance * 2;
+	let unit = 100;
+	// slash * value that will saturate
+	assert!(slash.checked_mul(value).is_none());
+	// but slash * unit won't.
+	assert!(slash.checked_mul(unit).is_some());
+	ledger.unlocking = bounded_vec![c(4, unit), c(5, value), c(6, unit), c(7, unit)];
+	//--------------------------------------note value^^^
+	ledger.active = unit;
+	ledger.total = unit * 4 + value;
+	// When
+	assert_eq!(ledger.slash(slash, 0, 0), slash - 43);
+	// Then
+	// The amount slashed out of `unit`
+	let affected_balance = value + unit * 4;
+	let ratio = Perquintill::from_rational(slash, affected_balance);
+	// `unit` after the slash is applied
+	let unit_slashed = {
+		let unit_slash = ratio * unit;
+		unit - unit_slash
+	};
+	let value_slashed = {
+		let value_slash = ratio * value;
+		value - value_slash
+	};
+	assert_eq!(ledger.active, unit_slashed);
+	assert_eq!(ledger.unlocking, vec![c(5, value_slashed)]);
+	assert_eq!(ledger.total, value_slashed);
+	assert_eq!(LedgerSlashPerEra::get().0, 0);
+	assert_eq!(
+		LedgerSlashPerEra::get().1,
+		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 0)])
+	);
 }

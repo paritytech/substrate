@@ -49,7 +49,7 @@ fn offchain_key(pos: usize) -> Vec<u8> {
 }
 
 fn read_mmr_leaf(ext: &mut TestExternalities, index: usize) -> MmrLeaf {
-	type Node = pallet_mmr_primitives::DataOrHash<Keccak256, MmrLeaf>;
+	type Node = pallet_mmr::primitives::DataOrHash<Keccak256, MmrLeaf>;
 	ext.persist_offchain_overlay();
 	let offchain_db = ext.offchain_db();
 	offchain_db
@@ -70,9 +70,14 @@ fn should_contain_mmr_digest() {
 
 		assert_eq!(
 			System::digest().logs,
-			vec![beefy_log(ConsensusLog::MmrRoot(
-				hex!("f3e3afbfa69e89cd1e99f8d3570155962f3346d1d8758dc079be49ef70387758").into()
-			))]
+			vec![
+				beefy_log(ConsensusLog::AuthoritiesChange(
+					ValidatorSet::new(vec![mock_beefy_id(1), mock_beefy_id(2)], 1).unwrap()
+				)),
+				beefy_log(ConsensusLog::MmrRoot(
+					hex!("95803defe6ea9f41e7ec6afa497064f21bfded027d8812efacbdf984e630cbdc").into()
+				))
+			]
 		);
 
 		// unique every time
@@ -81,14 +86,17 @@ fn should_contain_mmr_digest() {
 		assert_eq!(
 			System::digest().logs,
 			vec![
+				beefy_log(ConsensusLog::AuthoritiesChange(
+					ValidatorSet::new(vec![mock_beefy_id(1), mock_beefy_id(2)], 1).unwrap()
+				)),
 				beefy_log(ConsensusLog::MmrRoot(
-					hex!("f3e3afbfa69e89cd1e99f8d3570155962f3346d1d8758dc079be49ef70387758").into()
+					hex!("95803defe6ea9f41e7ec6afa497064f21bfded027d8812efacbdf984e630cbdc").into()
 				)),
 				beefy_log(ConsensusLog::AuthoritiesChange(
-					ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4),], 1,).unwrap()
+					ValidatorSet::new(vec![mock_beefy_id(3), mock_beefy_id(4)], 2).unwrap()
 				)),
 				beefy_log(ConsensusLog::MmrRoot(
-					hex!("7d4ae4524bae75d52b63f08eab173b0c263eb95ae2c55c3a1d871241bd0cc559").into()
+					hex!("a73271a0974f1e67d6e9b8dd58e506177a2e556519a330796721e98279a753e2").into()
 				)),
 			]
 		);
@@ -109,15 +117,13 @@ fn should_contain_valid_leaf_data() {
 			version: MmrLeafVersion::new(1, 5),
 			parent_number_and_hash: (0_u64, H256::repeat_byte(0x45)),
 			beefy_next_authority_set: BeefyNextAuthoritySet {
-				id: 1,
+				id: 2,
 				len: 2,
-				root: hex!("01b1a742589773fc054c8f5021a456316ffcec0370b25678b0696e116d1ef9ae")
+				root: hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5")
 					.into(),
 			},
-			parachain_heads: hex!(
-				"ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e"
-			)
-			.into(),
+			leaf_extra: hex!("55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648")
+				.to_vec(),
 		}
 	);
 
@@ -133,15 +139,13 @@ fn should_contain_valid_leaf_data() {
 			version: MmrLeafVersion::new(1, 5),
 			parent_number_and_hash: (1_u64, H256::repeat_byte(0x45)),
 			beefy_next_authority_set: BeefyNextAuthoritySet {
-				id: 2,
+				id: 3,
 				len: 2,
 				root: hex!("9c6b2c1b0d0b25a008e6c882cc7b415f309965c72ad2b944ac0931048ca31cd5")
 					.into(),
 			},
-			parachain_heads: hex!(
-				"ed893c8f8cc87195a5d4d2805b011506322036bcace79642aa3e94ab431e442e"
-			)
-			.into(),
+			leaf_extra: hex!("55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648")
+				.to_vec()
 		}
 	);
 }

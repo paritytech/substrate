@@ -1,26 +1,18 @@
 error: Only `&self` is supported!
-  --> $DIR/mock_only_self_reference.rs:14:11
+  --> tests/ui/mock_only_self_reference.rs:14:11
    |
 14 |         fn test(self, data: u64) {}
    |                 ^^^^
 
 error: Only `&self` is supported!
-  --> $DIR/mock_only_self_reference.rs:16:12
+  --> tests/ui/mock_only_self_reference.rs:16:12
    |
 16 |         fn test2(&mut self, data: u64) {}
    |                  ^
 
 error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for trait
-  --> $DIR/mock_only_self_reference.rs:12:1
+  --> tests/ui/mock_only_self_reference.rs:12:1
    |
-3  | / sp_api::decl_runtime_apis! {
-4  | |     pub trait Api {
-5  | |         fn test(data: u64);
-6  | |         fn test2(data: u64);
-7  | |     }
-8  | | }
-   | |_- type in trait
-...
 12 |   sp_api::mock_impl_runtime_apis! {
    |   -^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |   |
@@ -34,21 +26,23 @@ error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for tr
 18 | | }
    | |_- help: change the parameter type to match the trait: `Option<u64>`
    |
+note: type in trait
+  --> tests/ui/mock_only_self_reference.rs:3:1
+   |
+3  | / sp_api::decl_runtime_apis! {
+4  | |     pub trait Api {
+5  | |         fn test(data: u64);
+6  | |         fn test2(data: u64);
+7  | |     }
+8  | | }
+   | |_^
    = note: expected fn pointer `fn(&MockApi, &BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, Extrinsic>>, ExecutionContext, Option<u64>, Vec<_>) -> Result<_, _>`
               found fn pointer `fn(&MockApi, &BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, Extrinsic>>, ExecutionContext, Option<()>, Vec<_>) -> Result<_, _>`
    = note: this error originates in the macro `sp_api::mock_impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0053]: method `Api_test2_runtime_api_impl` has an incompatible type for trait
-  --> $DIR/mock_only_self_reference.rs:12:1
+  --> tests/ui/mock_only_self_reference.rs:12:1
    |
-3  | / sp_api::decl_runtime_apis! {
-4  | |     pub trait Api {
-5  | |         fn test(data: u64);
-6  | |         fn test2(data: u64);
-7  | |     }
-8  | | }
-   | |_- type in trait
-...
 12 |   sp_api::mock_impl_runtime_apis! {
    |   -^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |   |
@@ -62,6 +56,16 @@ error[E0053]: method `Api_test2_runtime_api_impl` has an incompatible type for t
 18 | | }
    | |_- help: change the parameter type to match the trait: `Option<u64>`
    |
+note: type in trait
+  --> tests/ui/mock_only_self_reference.rs:3:1
+   |
+3  | / sp_api::decl_runtime_apis! {
+4  | |     pub trait Api {
+5  | |         fn test(data: u64);
+6  | |         fn test2(data: u64);
+7  | |     }
+8  | | }
+   | |_^
    = note: expected fn pointer `fn(&MockApi, &BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, Extrinsic>>, ExecutionContext, Option<u64>, Vec<_>) -> Result<_, _>`
               found fn pointer `fn(&MockApi, &BlockId<sp_runtime::generic::block::Block<sp_runtime::generic::header::Header<u64, sp_runtime::traits::BlakeTwo256>, Extrinsic>>, ExecutionContext, Option<()>, Vec<_>) -> Result<_, _>`
    = note: this error originates in the macro `sp_api::mock_impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)

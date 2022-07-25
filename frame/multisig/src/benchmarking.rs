@@ -45,7 +45,7 @@ fn setup_multi<T: Config>(
 	let call: <T as Config>::Call =
 		frame_system::Call::<T>::remark { remark: vec![0; z as usize] }.into();
 	let call_data = OpaqueCall::<T>::from_encoded(call.encode());
-	return Ok((signatories, call_data))
+	Ok((signatories, call_data))
 }
 
 benchmarks! {
@@ -74,7 +74,7 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		// Whitelist caller account from further DB operations.
@@ -92,7 +92,7 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
@@ -111,7 +111,7 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
@@ -136,7 +136,7 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
@@ -162,7 +162,7 @@ benchmarks! {
 		// Transaction Length
 		let z in 0 .. 10_000;
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
@@ -195,7 +195,7 @@ benchmarks! {
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
@@ -214,16 +214,16 @@ benchmarks! {
 		let mut signatories2 = signatories.clone();
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
 		Multisig::<T>::as_multi(
-			RawOrigin::Signed(caller.clone()).into(),
+			RawOrigin::Signed(caller).into(),
 			s as u16,
 			signatories,
 			None,
-			call.clone(),
+			call,
 			false,
 			0
 		)?;
@@ -247,7 +247,7 @@ benchmarks! {
 		let mut signatories2 = signatories.clone();
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		// before the call, get the timepoint
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
@@ -284,11 +284,11 @@ benchmarks! {
 		let (mut signatories, call) = setup_multi::<T>(s, z)?;
 		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
 		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		let call_hash = blake2_256(&call.encoded());
+		let call_hash = blake2_256(call.encoded());
 		let timepoint = Multisig::<T>::timepoint();
 		// Create the multi
 		let o = RawOrigin::Signed(caller.clone()).into();
-		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call.clone(), true, 0)?;
+		Multisig::<T>::as_multi(o, s as u16, signatories.clone(), None, call, true, 0)?;
 		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
 		assert!(Calls::<T>::contains_key(call_hash));
 		// Whitelist caller account from further DB operations.

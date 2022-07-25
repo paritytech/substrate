@@ -625,7 +625,7 @@ fn reject_address_with_invalid_peer_signature() {
 	));
 	// tamper with the signature
 	let mut record = schema::SignedAuthorityRecord::decode(kv_pairs[0].1.as_slice()).unwrap();
-	record.peer_signature.as_mut().map(|p| p.signature[1] += 1);
+	record.peer_signature.as_mut().map(|p| p.signature[1] = !p.signature[1]);
 	record.encode(&mut kv_pairs[0].1).unwrap();
 
 	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);

@@ -38,7 +38,7 @@ pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
 pub fn get_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
-	get(key).unwrap_or_else(Default::default)
+	get(key).unwrap_or_default()
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
@@ -70,7 +70,7 @@ pub fn take<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
 pub fn take_or_default<T: Decode + Sized + Default>(key: &[u8]) -> T {
-	take(key).unwrap_or_else(Default::default)
+	take(key).unwrap_or_default()
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no

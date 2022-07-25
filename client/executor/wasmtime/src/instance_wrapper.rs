@@ -21,12 +21,13 @@
 
 use crate::runtime::{Store, StoreData};
 use sc_executor_common::{
-	error::{Error, Result},
+	error::{Backtrace, Error, MessageWithBacktrace, Result, WasmError},
 	wasm_runtime::InvokeMethod,
 };
-use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
+use sp_wasm_interface::{Pointer, Value, WordSize};
 use wasmtime::{
-	AsContext, AsContextMut, Extern, Func, Global, Instance, Memory, Module, Table, Val,
+	AsContext, AsContextMut, Engine, Extern, Func, Global, Instance, InstancePre, Memory, Table,
+	Val,
 };
 
 /// Invoked entrypoint format.
@@ -53,25 +54,51 @@ pub struct EntryPoint {
 
 impl EntryPoint {
 	/// Call this entry point.
-	pub fn call(
+	pub(crate) fn call(
 		&self,
-		ctx: impl AsContextMut,
+		store: &mut Store,
 		data_ptr: Pointer<u8>,
 		data_len: WordSize,
 	) -> Result<u64> {
 		let data_ptr = u32::from(data_ptr);
 		let data_len = u32::from(data_len);
 
-		fn handle_trap(err: wasmtime::Trap) -> Error {
-			Error::from(format!("Wasm execution trapped: {}", err))
-		}
-
 		match self.call_type {
 			EntryPointType::Direct { ref entrypoint } =>
-				entrypoint.call(ctx, (data_ptr, data_len)).map_err(handle_trap),
+				entrypoint.call(&mut *store, (data_ptr, data_len)),
 			EntryPointType::Wrapped { func, ref dispatcher } =>
-				dispatcher.call(ctx, (func, data_ptr, data_len)).map_err(handle_trap),
+				dispatcher.call(&mut *store, (func, data_ptr, data_len)),
 		}
+		.map_err(|trap| {
+			let host_state = store
+				.data_mut()
+				.host_state
+				.as_mut()
+				.expect("host state cannot be empty while a function is being called; qed");
+
+			// The logic to print out a backtrace is somewhat complicated,
+			// so let's get wasmtime to print it out for us.
+			let mut backtrace_string = trap.to_string();
+			let suffix = "\nwasm backtrace:";
+			if let Some(index) = backtrace_string.find(suffix) {
+				// Get rid of the error message and just grab the backtrace,
+				// since we're storing the error message ourselves separately.
+				backtrace_string.replace_range(0..index + suffix.len(), "");
+			}
+
+			let backtrace = Backtrace { backtrace_string };
+			if let Some(error) = host_state.take_panic_message() {
+				Error::AbortedDueToPanic(MessageWithBacktrace {
+					message: error,
+					backtrace: Some(backtrace),
+				})
+			} else {
+				Error::AbortedDueToTrap(MessageWithBacktrace {
+					message: trap.display_reason().to_string(),
+					backtrace: Some(backtrace),
+				})
+			}
+		})
 	}
 
 	pub fn direct(
@@ -136,62 +163,41 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 	}
 }
 
+pub(crate) fn create_store(engine: &wasmtime::Engine, max_memory_size: Option<usize>) -> Store {
+	let limits = if let Some(max_memory_size) = max_memory_size {
+		wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
+	} else {
+		Default::default()
+	};
+
+	let mut store =
+		Store::new(engine, StoreData { limits, host_state: None, memory: None, table: None });
+	if max_memory_size.is_some() {
+		store.limiter(|s| &mut s.limits);
+	}
+	store
+}
+
 impl InstanceWrapper {
-	/// Create a new instance wrapper from the given wasm module.
-	pub fn new<H>(
-		module: &Module,
-		heap_pages: u64,
-		allow_missing_func_imports: bool,
+	pub(crate) fn new(
+		engine: &Engine,
+		instance_pre: &InstancePre<StoreData>,
 		max_memory_size: Option<usize>,
-	) -> Result<Self>
-	where
-		H: HostFunctions,
-	{
-		let limits = if let Some(max_memory_size) = max_memory_size {
-			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
-		} else {
-			Default::default()
-		};
+	) -> Result<Self> {
+		let mut store = create_store(engine, max_memory_size);
+		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
+			WasmError::Other(
+				format!("failed to instantiate a new WASM module instance: {}", error,),
+			)
+		})?;
 
-		let mut store = Store::new(
-			module.engine(),
-			StoreData { limits, host_state: None, memory: None, table: None },
-		);
-		if max_memory_size.is_some() {
-			store.limiter(|s| &mut s.limits);
-		}
-
-		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
-		// and results.
-		let imports = crate::imports::resolve_imports::<H>(
-			&mut store,
-			module,
-			heap_pages,
-			allow_missing_func_imports,
-		)?;
-
-		let instance = Instance::new(&mut store, module, &imports.externs)
-			.map_err(|e| Error::from(format!("cannot instantiate: {}", e)))?;
-
-		let memory = match imports.memory_import_index {
-			Some(memory_idx) => extern_memory(&imports.externs[memory_idx])
-				.expect("only memory can be at the `memory_idx`; qed")
-				.clone(),
-			None => {
-				let memory = get_linear_memory(&instance, &mut store)?;
-				if !memory.grow(&mut store, heap_pages).is_ok() {
-					return Err("failed top increase the linear memory size".into())
-				}
-				memory
-			},
-		};
-
+		let memory = get_linear_memory(&instance, &mut store)?;
 		let table = get_table(&instance, &mut store);
 
 		store.data_mut().memory = Some(memory);
 		store.data_mut().table = table;
 
-		Ok(Self { instance, memory, store })
+		Ok(InstanceWrapper { instance, memory, store })
 	}
 
 	/// Resolves a substrate entrypoint by the given name.
@@ -361,6 +367,33 @@ impl InstanceWrapper {
 						return;
 					}
 				}
+			} else if #[cfg(target_os = "macos")] {
+				use std::sync::Once;
+
+				unsafe {
+					let ptr = self.memory.data_ptr(&self.store);
+					let len = self.memory.data_size(&self.store);
+
+					// On MacOS we can simply overwrite memory mapping.
+					if libc::mmap(
+						ptr as _,
+						len,
+						libc::PROT_READ | libc::PROT_WRITE,
+						libc::MAP_FIXED | libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+						-1,
+						0,
+					) == libc::MAP_FAILED {
+						static LOGGED: Once = Once::new();
+						LOGGED.call_once(|| {
+							log::warn!(
+								"Failed to decommit WASM instance memory through mmap: {}",
+								std::io::Error::last_os_error(),
+							);
+						});
+					} else {
+						return;
+					}
+				}
 			}
 		}
 
@@ -376,4 +409,19 @@ impl InstanceWrapper {
 	pub(crate) fn store_mut(&mut self) -> &mut Store {
 		&mut self.store
 	}
+}
+
+#[test]
+fn decommit_works() {
+	let engine = wasmtime::Engine::default();
+	let code = wat::parse_str("(module (memory (export \"memory\") 1 4))").unwrap();
+	let module = wasmtime::Module::new(&engine, code).unwrap();
+	let linker = wasmtime::Linker::new(&engine);
+	let mut store = create_store(&engine, None);
+	let instance_pre = linker.instantiate_pre(&mut store, &module).unwrap();
+	let mut wrapper = InstanceWrapper::new(&engine, &instance_pre, None).unwrap();
+	unsafe { *wrapper.memory.data_ptr(&wrapper.store) = 42 };
+	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 42);
+	wrapper.decommit();
+	assert_eq!(unsafe { *wrapper.memory.data_ptr(&wrapper.store) }, 0);
 }

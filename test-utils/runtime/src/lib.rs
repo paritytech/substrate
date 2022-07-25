@@ -176,6 +176,19 @@ impl serde::Serialize for Extrinsic {
 	}
 }
 
+// rustc can't deduce this trait bound https://github.com/rust-lang/rust/issues/48214
+#[cfg(feature = "std")]
+impl<'a> serde::Deserialize<'a> for Extrinsic {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'a>,
+	{
+		let r = sp_core::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
+	}
+}
+
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
@@ -426,7 +439,7 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-#[derive(Clone, RuntimeDebug)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo)]
 pub struct Origin;
 
 impl From<frame_system::Origin<Runtime>> for Origin {
@@ -553,7 +566,6 @@ impl frame_support::traits::PalletInfo for Runtime {
 }
 
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 2400;
 	pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 		read: 100,
 		write: 1000,
@@ -578,7 +590,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<2400>;
 	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = Self;
@@ -701,7 +713,7 @@ cfg_if! {
 					None
 				}
 
-				fn is_new_session(_: <<Block as BlockT>::Header as HeaderT>::Number) -> bool{
+				fn is_storage_migration_scheduled() -> bool{
 					false
 				}
 
@@ -937,6 +949,12 @@ cfg_if! {
 					_set_id: sp_finality_grandpa::SetId,
 					_authority_id: sp_finality_grandpa::AuthorityId,
 				) -> Option<sp_finality_grandpa::OpaqueKeyOwnershipProof> {
+					None
+				}
+			}
+
+			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
+				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
 			}

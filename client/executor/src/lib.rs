@@ -51,6 +51,9 @@ pub use wasmi;
 
 pub use sc_executor_common::{error, sandbox};
 
+#[cfg(feature = "wasmtime")]
+pub use sc_executor_wasmtime::InstantiationStrategy as WasmtimeInstantiationStrategy;
+
 /// Extracts the runtime version of a given runtime code.
 pub trait RuntimeVersionOf {
 	/// Extract [`RuntimeVersion`](sp_version::RuntimeVersion) of the given `runtime_code`.

@@ -30,14 +30,7 @@
 //!
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
-use std::{
-	convert::{TryFrom, TryInto},
-	fmt::Debug,
-	hash::Hash,
-	marker::PhantomData,
-	pin::Pin,
-	sync::Arc,
-};
+use std::{fmt::Debug, hash::Hash, marker::PhantomData, pin::Pin, sync::Arc};
 
 use futures::prelude::*;
 use log::{debug, trace};
@@ -47,7 +40,8 @@ use codec::{Codec, Decode, Encode};
 use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
 use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy, StateAction};
 use sc_consensus_slots::{
-	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SlotInfo, StorageChanges,
+	BackoffAuthoringBlocksStrategy, InherentDataProviderExt, SimpleSlotWorkerToSlotWorker,
+	SlotInfo, StorageChanges,
 };
 use sc_telemetry::TelemetryHandle;
 use sp_api::ProvideRuntimeApi;
@@ -77,13 +71,10 @@ pub use sp_consensus::SyncOracle;
 pub use sp_consensus_aura::{
 	digests::CompatibleDigestItem,
 	inherents::{InherentDataProvider, InherentType as AuraInherent, INHERENT_IDENTIFIER},
-	AuraApi, ConsensusLog, AURA_ENGINE_ID,
+	AuraApi, ConsensusLog, SlotDuration, AURA_ENGINE_ID,
 };
 
 type AuthorityId<P> = <P as Pair>::Public;
-
-/// Slot duration type for Aura.
-pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::SlotDuration>;
 
 /// Get the slot duration for Aura.
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration>
@@ -94,9 +85,7 @@ where
 	C::Api: AuraApi<B, A>,
 {
 	let best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-	let slot_duration = client.runtime_api().slot_duration(&best_block_id)?;
-
-	Ok(SlotDuration::new(slot_duration))
+	client.runtime_api().slot_duration(&best_block_id).map_err(|err| err.into())
 }
 
 /// Get slot author for given block along with authorities.
@@ -197,7 +186,7 @@ where
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
-		client: client.clone(),
+		client,
 		block_import,
 		proposer_factory,
 		keystore,
@@ -213,7 +202,7 @@ where
 	Ok(sc_consensus_slots::start_slot_worker(
 		slot_duration,
 		select_chain,
-		worker,
+		SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
 		can_author_with,
@@ -268,7 +257,15 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 		telemetry,
 		force_authoring,
 	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS>,
-) -> impl sc_consensus_slots::SlotWorker<B, <PF::Proposer as Proposer<B>>::Proof>
+) -> impl sc_consensus_slots::SimpleSlotWorker<
+	B,
+	Proposer = PF::Proposer,
+	BlockImport = I,
+	SyncOracle = SO,
+	JustificationSyncLink = L,
+	Claim = P::Public,
+	EpochData = Vec<AuthorityId<P>>,
+>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + AuxStore + HeaderBackend<B> + Send + Sync,
@@ -460,11 +457,10 @@ where
 	}
 
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
-		Box::pin(
-			self.env
-				.init(block)
-				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)).into()),
-		)
+		self.env
+			.init(block)
+			.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e)))
+			.boxed()
 	}
 
 	fn telemetry(&self) -> Option<TelemetryHandle> {
@@ -499,37 +495,38 @@ fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
 }
 
 /// Aura Errors
-#[derive(derive_more::Display, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	/// Multiple Aura pre-runtime headers
-	#[display(fmt = "Multiple Aura pre-runtime headers")]
+	#[error("Multiple Aura pre-runtime headers")]
 	MultipleHeaders,
 	/// No Aura pre-runtime digest found
-	#[display(fmt = "No Aura pre-runtime digest found")]
+	#[error("No Aura pre-runtime digest found")]
 	NoDigestFound,
 	/// Header is unsealed
-	#[display(fmt = "Header {:?} is unsealed", _0)]
+	#[error("Header {0:?} is unsealed")]
 	HeaderUnsealed(B::Hash),
 	/// Header has a bad seal
-	#[display(fmt = "Header {:?} has a bad seal", _0)]
+	#[error("Header {0:?} has a bad seal")]
 	HeaderBadSeal(B::Hash),
 	/// Slot Author not found
-	#[display(fmt = "Slot Author not found")]
+	#[error("Slot Author not found")]
 	SlotAuthorNotFound,
 	/// Bad signature
-	#[display(fmt = "Bad signature on {:?}", _0)]
+	#[error("Bad signature on {0:?}")]
 	BadSignature(B::Hash),
 	/// Client Error
+	#[error(transparent)]
 	Client(sp_blockchain::Error),
 	/// Unknown inherent error for identifier
-	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
+	#[error("Unknown inherent error for identifier: {}", String::from_utf8_lossy(.0))]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
-	#[display(fmt = "Inherent error: {}", _0)]
 	/// Inherents Error
+	#[error("Inherent error: {0}")]
 	Inherent(sp_inherents::Error),
 }
 
-impl<B: BlockT> std::convert::From<Error<B>> for String {
+impl<B: BlockT> From<Error<B>> for String {
 	fn from(error: Error<B>) -> String {
 		error.to_string()
 	}
@@ -545,7 +542,7 @@ pub fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Resul
 	for log in header.digest().logs() {
 		trace!(target: "aura", "Checking log {:?}", log);
 		match (CompatibleDigestItem::<Signature>::as_aura_pre_digest(log), pre_digest.is_some()) {
-			(Some(_), true) => Err(aura_err(Error::MultipleHeaders))?,
+			(Some(_), true) => return Err(aura_err(Error::MultipleHeaders)),
 			(None, _) => trace!(target: "aura", "Ignoring digest not meant for us"),
 			(s, false) => pre_digest = s,
 		}
@@ -564,7 +561,7 @@ where
 		.runtime_api()
 		.authorities(at)
 		.ok()
-		.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet.into())
+		.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 }
 
 #[cfg(test)]
@@ -581,7 +578,7 @@ mod tests {
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
 	use sp_consensus::{
-		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal, SlotData,
+		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
 	};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
@@ -679,14 +676,14 @@ mod tests {
 			let client = client.as_client();
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
+			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION);
 			import_queue::AuraVerifier::new(
 				client,
 				Box::new(|_, _| async {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
-					let slot = InherentDataProvider::from_timestamp_and_duration(
+					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						Duration::from_secs(6),
+						SlotDuration::from_millis(6000),
 					);
 
 					Ok((timestamp, slot))
@@ -769,9 +766,9 @@ mod tests {
 					justification_sync_link: (),
 					create_inherent_data_providers: |_, _| async {
 						let timestamp = TimestampInherentDataProvider::from_system_time();
-						let slot = InherentDataProvider::from_timestamp_and_duration(
+						let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 							*timestamp,
-							Duration::from_secs(12),
+							SlotDuration::from_millis(12000),
 						);
 
 						Ok((timestamp, slot))

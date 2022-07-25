@@ -18,17 +18,18 @@
 //! The signed phase implementation.
 
 use crate::{
-	Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
-	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf,
-	SolutionOrSnapshotSize, Weight, WeightInfo,
+	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
+	ReadySolution, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
+	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
+use frame_election_provider_support::NposSolution;
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
+	traits::{defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_npos_elections::{is_score_better, ElectionScore, NposSolution};
+use sp_npos_elections::ElectionScore;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
@@ -37,6 +38,7 @@ use sp_std::{
 	cmp::Ordering,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	ops::Deref,
+	vec::Vec,
 };
 
 /// A raw, unchecked signed submission.
@@ -50,8 +52,8 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, Solution> {
 	pub deposit: Balance,
 	/// The raw solution itself.
 	pub raw_solution: RawSolution<Solution>,
-	/// The reward that should potentially be paid for this solution, if accepted.
-	pub reward: Balance,
+	// The estimated fee `who` paid to submit the solution.
+	pub call_fee: Balance,
 }
 
 impl<AccountId, Balance, Solution> Ord for SignedSubmission<AccountId, Balance, Solution>
@@ -91,8 +93,11 @@ pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-pub type SignedSubmissionOf<T> =
-	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, SolutionOf<T>>;
+pub type SignedSubmissionOf<T> = SignedSubmission<
+	<T as frame_system::Config>::AccountId,
+	BalanceOf<T>,
+	<<T as crate::Config>::MinerConfig as MinerConfig>::Solution,
+>;
 
 pub type SubmissionIndicesOf<T> =
 	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
@@ -234,20 +239,33 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Empty the set of signed submissions, returning an iterator of signed submissions in
-	/// arbitrary order.
+	/// order of submission.
 	///
 	/// Note that if the iterator is dropped without consuming all elements, not all may be removed
 	/// from the underlying `SignedSubmissionsMap`, putting the storages into an invalid state.
 	///
 	/// Note that, like `put`, this function consumes `Self` and modifies storage.
-	fn drain(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
+	fn drain_submitted_order(mut self) -> impl Iterator<Item = SignedSubmissionOf<T>> {
+		let mut keys = SignedSubmissionsMap::<T>::iter_keys()
+			.filter(|k| {
+				if self.deletion_overlay.contains(k) {
+					// Remove submissions that should be deleted.
+					SignedSubmissionsMap::<T>::remove(k);
+					false
+				} else {
+					true
+				}
+			})
+			.chain(self.insertion_overlay.keys().copied())
+			.collect::<Vec<_>>();
+		keys.sort();
+
 		SignedSubmissionIndices::<T>::kill();
 		SignedSubmissionNextIndex::<T>::kill();
-		let insertion_overlay = sp_std::mem::take(&mut self.insertion_overlay);
-		SignedSubmissionsMap::<T>::drain()
-			.filter(move |(k, _v)| !self.deletion_overlay.contains(k))
-			.map(|(_k, v)| v)
-			.chain(insertion_overlay.into_iter().map(|(_k, v)| v))
+
+		keys.into_iter().filter_map(move |index| {
+			SignedSubmissionsMap::<T>::take(index).or_else(|| self.insertion_overlay.remove(&index))
+		})
 	}
 
 	/// Decode the length of the signed submissions without actually reading the entire struct into
@@ -290,10 +308,10 @@ impl<T: Config> SignedSubmissions<T> {
 					None => return InsertResult::NotInserted,
 					Some((score, _)) => *score,
 				};
-				let threshold = T::SolutionImprovementThreshold::get();
+				let threshold = T::BetterSignedThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
-				if !is_score_better(insert_score, weakest_score, threshold) {
+				if !insert_score.strict_threshold_better(weakest_score, threshold) {
 					return InsertResult::NotInserted
 				}
 
@@ -361,11 +379,11 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot_metadata().unwrap_or_default();
 
 		while let Some(best) = all_submissions.pop_last() {
-			let SignedSubmission { raw_solution, who, deposit, reward } = best;
+			let SignedSubmission { raw_solution, who, deposit, call_fee } = best;
 			let active_voters = raw_solution.solution.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
-				let desired_targets = Self::desired_targets().unwrap_or_default();
+				let desired_targets = Self::desired_targets().defensive_unwrap_or_default();
 				T::WeightInfo::feasibility_check(voters, targets, active_voters, desired_targets)
 			};
 			// the feasibility check itself has some weight
@@ -376,7 +394,7 @@ impl<T: Config> Pallet<T> {
 						ready_solution,
 						&who,
 						deposit,
-						reward,
+						call_fee,
 					);
 					found_solution = true;
 
@@ -395,10 +413,23 @@ impl<T: Config> Pallet<T> {
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
 		let discarded = all_submissions.len();
-		for SignedSubmission { who, deposit, .. } in all_submissions.drain() {
+		let mut refund_count = 0;
+		let max_refunds = T::SignedMaxRefunds::get();
+
+		for SignedSubmission { who, deposit, call_fee, .. } in
+			all_submissions.drain_submitted_order()
+		{
+			if refund_count < max_refunds {
+				// Refund fee
+				let positive_imbalance = T::Currency::deposit_creating(&who, call_fee);
+				T::RewardHandler::on_unbalanced(positive_imbalance);
+				refund_count += 1;
+			}
+
+			// Unreserve deposit
 			let _remaining = T::Currency::unreserve(&who, deposit);
-			weight = weight.saturating_add(T::DbWeight::get().writes(1));
 			debug_assert!(_remaining.is_zero());
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 2));
 		}
 
 		debug_assert!(!SignedSubmissionIndices::<T>::exists());
@@ -423,20 +454,22 @@ impl<T: Config> Pallet<T> {
 		ready_solution: ReadySolution<T::AccountId>,
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
-		reward: BalanceOf<T>,
+		call_fee: BalanceOf<T>,
 	) {
 		// write this ready solution.
 		<QueuedSolution<T>>::put(ready_solution);
 
+		let reward = T::SignedRewardBase::get();
 		// emit reward event
 		Self::deposit_event(crate::Event::Rewarded { account: who.clone(), value: reward });
 
-		// unreserve deposit.
+		// Unreserve deposit.
 		let _remaining = T::Currency::unreserve(who, deposit);
 		debug_assert!(_remaining.is_zero());
 
-		// Reward.
-		let positive_imbalance = T::Currency::deposit_creating(who, reward);
+		// Reward and refund the call fee.
+		let positive_imbalance =
+			T::Currency::deposit_creating(who, reward.saturating_add(call_fee));
 		T::RewardHandler::on_unbalanced(positive_imbalance);
 	}
 
@@ -452,12 +485,12 @@ impl<T: Config> Pallet<T> {
 		T::SlashHandler::on_unbalanced(negative_imbalance);
 	}
 
-	/// The feasibility weight of the given raw solution.
-	pub fn feasibility_weight_of(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+	/// The weight of the given raw solution.
+	pub fn solution_weight_of(
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> Weight {
-		T::WeightInfo::feasibility_check(
+		T::MinerConfig::solution_weight(
 			size.voters,
 			size.targets,
 			raw_solution.solution.voter_count() as u32,
@@ -473,12 +506,12 @@ impl<T: Config> Pallet<T> {
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
 	pub fn deposit_for(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
 		let encoded_len: u32 = raw_solution.encoded_size().saturated_into();
 		let encoded_len: BalanceOf<T> = encoded_len.into();
-		let feasibility_weight = Self::feasibility_weight_of(raw_solution, size);
+		let feasibility_weight = Self::solution_weight_of(raw_solution, size);
 
 		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
 		let weight_deposit =
@@ -495,23 +528,12 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			balances, raw_solution, roll_to, ExtBuilder, MultiPhase, Origin, Runtime,
-			SignedMaxSubmissions, SignedMaxWeight,
+			balances, raw_solution, roll_to, Balances, ExtBuilder, MockedWeightInfo, MultiPhase,
+			Origin, Runtime, SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
 		},
-		Error, Phase,
+		Error, Perbill, Phase,
 	};
-	use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::DispatchResult};
-
-	fn submit_with_witness(
-		origin: Origin,
-		solution: RawSolution<SolutionOf<Runtime>>,
-	) -> DispatchResult {
-		MultiPhase::submit(
-			origin,
-			Box::new(solution),
-			MultiPhase::signed_submissions().len() as u32,
-		)
-	}
+	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
 	fn cannot_submit_too_early() {
@@ -524,27 +546,8 @@ mod tests {
 			let solution = raw_solution();
 
 			assert_noop!(
-				submit_with_witness(Origin::signed(10), solution),
+				MultiPhase::submit(Origin::signed(10), Box::new(solution)),
 				Error::<Runtime>::PreDispatchEarlySubmission,
-			);
-		})
-	}
-
-	#[test]
-	fn wrong_witness_fails() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
-
-			let solution = raw_solution();
-			// submit this once correctly
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
-			assert_eq!(MultiPhase::signed_submissions().len(), 1);
-
-			// now try and cheat by passing a lower queue length
-			assert_noop!(
-				MultiPhase::submit(Origin::signed(99), Box::new(solution), 0),
-				Error::<Runtime>::SignedInvalidWitness,
 			);
 		})
 	}
@@ -558,7 +561,7 @@ mod tests {
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
 
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(MultiPhase::signed_submissions().iter().next().unwrap().deposit, 5);
@@ -574,7 +577,7 @@ mod tests {
 			let solution = raw_solution();
 			assert_eq!(balances(&99), (100, 0));
 
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			assert_eq!(balances(&99), (95, 5));
 
 			assert!(MultiPhase::finalize_signed_phase());
@@ -592,9 +595,9 @@ mod tests {
 			assert_eq!(balances(&99), (100, 0));
 
 			// make the solution invalid.
-			solution.score[0] += 1;
+			solution.score.minimal_stake += 1;
 
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			assert_eq!(balances(&99), (95, 5));
 
 			// no good solution was stored.
@@ -615,11 +618,11 @@ mod tests {
 			assert_eq!(balances(&999), (100, 0));
 
 			// submit as correct.
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution.clone())));
 
 			// make the solution invalid and weaker.
-			solution.score[0] -= 1;
-			assert_ok!(submit_with_witness(Origin::signed(999), solution));
+			solution.score.minimal_stake -= 1;
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(balances(&999), (95, 5));
 
@@ -628,8 +631,8 @@ mod tests {
 
 			// 99 is rewarded.
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
-			// 999 gets everything back.
-			assert_eq!(balances(&999), (100, 0));
+			// 999 gets everything back, including the call fee.
+			assert_eq!(balances(&999), (100 + 8, 0));
 		})
 	}
 
@@ -641,18 +644,110 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
 			// weaker.
-			let solution = RawSolution { score: [4, 0, 0], ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 4, ..Default::default() },
+				..Default::default()
+			};
 
 			assert_noop!(
-				submit_with_witness(Origin::signed(99), solution),
+				MultiPhase::submit(Origin::signed(99), Box::new(solution)),
 				Error::<Runtime>::SignedQueueFull,
 			);
 		})
+	}
+
+	#[test]
+	fn call_fee_refund_is_limited_by_signed_max_refunds() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+			assert_eq!(SignedMaxRefunds::get(), 1);
+			assert!(SignedMaxSubmissions::get() > 2);
+
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 100);
+				// score is always decreasing
+				let mut solution = raw_solution();
+				solution.score.minimal_stake -= s as u128;
+
+				assert_ok!(MultiPhase::submit(Origin::signed(account), Box::new(solution)));
+				assert_eq!(balances(&account), (95, 5));
+			}
+
+			assert!(MultiPhase::finalize_signed_phase());
+
+			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				// lower accounts have higher scores
+				if s == 0 {
+					// winning solution always gets call fee + reward
+					assert_eq!(balances(&account), (100 + 8 + 7, 0))
+				} else if s == 1 {
+					// 1 runner up gets their call fee refunded
+					assert_eq!(balances(&account), (100 + 8, 0))
+				} else {
+					// all other solutions don't get a call fee refund
+					assert_eq!(balances(&account), (100, 0));
+				}
+			}
+		});
+	}
+
+	#[test]
+	fn cannot_submit_worse_with_full_queue_depends_on_threshold() {
+		ExtBuilder::default()
+			.signed_max_submission(1)
+			.better_signed_threshold(Perbill::from_percent(20))
+			.build_and_execute(|| {
+				roll_to(15);
+				assert!(MultiPhase::current_phase().is_signed());
+
+				let mut solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 10u128,
+					},
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+
+				// This is 10% better, so does not meet the 20% threshold and is therefore rejected.
+				solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 9u128,
+					},
+					..Default::default()
+				};
+
+				assert_noop!(
+					MultiPhase::submit(Origin::signed(99), Box::new(solution)),
+					Error::<Runtime>::SignedQueueFull,
+				);
+
+				// This is however 30% better and should therefore be accepted.
+				solution = RawSolution {
+					score: ElectionScore {
+						minimal_stake: 5u128,
+						sum_stake: 0u128,
+						sum_stake_squared: 7u128,
+					},
+					..Default::default()
+				};
+
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
+			})
 	}
 
 	#[test]
@@ -662,31 +757,43 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
+				let account = 99 + s as u64;
+				Balances::make_free_balance_be(&account, 100);
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(account), Box::new(solution)));
+				assert_eq!(balances(&account), (95, 5));
 			}
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7, 8, 9]
 			);
 
 			// better.
-			let solution = RawSolution { score: [20, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 20, ..Default::default() },
+				..Default::default()
+			};
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![6, 7, 8, 9, 20]
 			);
+
+			// the submitter of the ejected solution does *not* get a call fee refund
+			assert_eq!(balances(&(99 + 0)), (100, 0));
 		})
 	}
 
@@ -698,30 +805,39 @@ mod tests {
 
 			for s in 1..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
-			let solution = RawSolution { score: [4, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 4, ..Default::default() },
+				..Default::default()
+			};
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![4, 6, 7, 8, 9],
 			);
 
 			// better.
-			let solution = RawSolution { score: [5, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(99), solution));
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			// the one with score 5 was rejected, the new one inserted.
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7, 8, 9],
 			);
@@ -736,16 +852,22 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
 			assert_eq!(balances(&99).1, 2 * 5);
 			assert_eq!(balances(&999).1, 0);
 
 			// better.
-			let solution = RawSolution { score: [20, 0, 0], ..Default::default() };
-			assert_ok!(submit_with_witness(Origin::signed(999), solution));
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 20, ..Default::default() },
+				..Default::default()
+			};
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution)));
 
 			// got one bond back.
 			assert_eq!(balances(&99).1, 2 * 4);
@@ -760,21 +882,27 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for i in 0..SignedMaxSubmissions::get() {
-				let solution = RawSolution { score: [(5 + i).into(), 0, 0], ..Default::default() };
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + i).into(), ..Default::default() },
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
-					.map(|s| s.raw_solution.score[0])
+					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
 				vec![5, 6, 7]
 			);
 
 			// 5 is not accepted. This will only cause processing with no benefit.
-			let solution = RawSolution { score: [5, 0, 0], ..Default::default() };
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
 			assert_noop!(
-				submit_with_witness(Origin::signed(99), solution),
+				MultiPhase::submit(Origin::signed(99), Box::new(solution)),
 				Error::<Runtime>::SignedQueueFull,
 			);
 		})
@@ -796,18 +924,18 @@ mod tests {
 			let solution = raw_solution();
 
 			// submit a correct one.
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution.clone())));
 
 			// make the solution invalidly better and submit. This ought to be slashed.
 			let mut solution_999 = solution.clone();
-			solution_999.score[0] += 1;
-			assert_ok!(submit_with_witness(Origin::signed(999), solution_999));
+			solution_999.score.minimal_stake += 1;
+			assert_ok!(MultiPhase::submit(Origin::signed(999), Box::new(solution_999)));
 
 			// make the solution invalidly worse and submit. This ought to be suppressed and
 			// returned.
 			let mut solution_9999 = solution.clone();
-			solution_9999.score[0] -= 1;
-			assert_ok!(submit_with_witness(Origin::signed(9999), solution_9999));
+			solution_9999.score.minimal_stake -= 1;
+			assert_ok!(MultiPhase::submit(Origin::signed(9999), Box::new(solution_9999)));
 
 			assert_eq!(
 				MultiPhase::signed_submissions().iter().map(|x| x.who).collect::<Vec<_>>(),
@@ -821,8 +949,8 @@ mod tests {
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 is slashed.
 			assert_eq!(balances(&999), (95, 0));
-			// 9999 gets everything back.
-			assert_eq!(balances(&9999), (100, 0));
+			// 9999 gets everything back, including the call fee.
+			assert_eq!(balances(&9999), (100 + 8, 0));
 		})
 	}
 
@@ -830,14 +958,13 @@ mod tests {
 	fn cannot_consume_too_much_future_weight() {
 		ExtBuilder::default()
 			.signed_weight(40)
-			.mock_weight_info(true)
+			.mock_weight_info(MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to(15);
 				assert!(MultiPhase::current_phase().is_signed());
 
-				let (raw, witness) =
-					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
+				let (raw, witness) = MultiPhase::mine_solution().unwrap();
+				let solution_weight = <Runtime as MinerConfig>::solution_weight(
 					witness.voters,
 					witness.targets,
 					raw.solution.voter_count() as u32,
@@ -848,14 +975,14 @@ mod tests {
 				assert_eq!(raw.solution.voter_count(), 5);
 				assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), 40);
 
-				assert_ok!(submit_with_witness(Origin::signed(99), raw.clone()));
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(raw.clone())));
 
 				<SignedMaxWeight>::set(30);
 
 				// note: resubmitting the same solution is technically okay as long as the queue has
 				// space.
 				assert_noop!(
-					submit_with_witness(Origin::signed(99), raw),
+					MultiPhase::submit(Origin::signed(99), Box::new(raw)),
 					Error::<Runtime>::SignedTooMuchWeight,
 				);
 			})
@@ -871,7 +998,7 @@ mod tests {
 
 			assert_eq!(balances(&123), (0, 0));
 			assert_noop!(
-				submit_with_witness(Origin::signed(123), solution),
+				MultiPhase::submit(Origin::signed(123), Box::new(solution)),
 				Error::<Runtime>::SignedCannotPayDeposit,
 			);
 
@@ -889,19 +1016,25 @@ mod tests {
 
 			for s in 0..SignedMaxSubmissions::get() {
 				// score is always getting better
-				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
-				assert_ok!(submit_with_witness(Origin::signed(99), solution));
+				let solution = RawSolution {
+					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
+					..Default::default()
+				};
+				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 			}
 
 			// this solution has a higher score than any in the queue
 			let solution = RawSolution {
-				score: [(5 + SignedMaxSubmissions::get()).into(), 0, 0],
+				score: ElectionScore {
+					minimal_stake: (5 + SignedMaxSubmissions::get()).into(),
+					..Default::default()
+				},
 				..Default::default()
 			};
 
 			assert_eq!(balances(&123), (0, 0));
 			assert_noop!(
-				submit_with_witness(Origin::signed(123), solution),
+				MultiPhase::submit(Origin::signed(123), Box::new(solution)),
 				Error::<Runtime>::SignedCannotPayDeposit,
 			);
 
@@ -930,7 +1063,7 @@ mod tests {
 			let solution = raw_solution();
 
 			// submit a correct one.
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+			assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(solution)));
 
 			// _some_ good solution was stored.
 			assert!(MultiPhase::finalize_signed_phase());

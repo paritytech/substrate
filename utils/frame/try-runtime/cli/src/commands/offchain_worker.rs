@@ -28,19 +28,19 @@ use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::OffchainWorker`].
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct OffchainWorkerCmd {
 	/// Overwrite the wasm code in state or not.
-	#[structopt(long)]
+	#[clap(long)]
 	overwrite_wasm_code: bool,
 
 	/// The block hash at which to fetch the header.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = parse::hash)
 	)]
 	header_at: Option<String>,
@@ -49,15 +49,15 @@ pub struct OffchainWorkerCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[structopt(
+	#[clap(
 		long,
-		multiple = false,
+		multiple_values = false,
 		parse(try_from_str = parse::url)
 	)]
 	header_ws_uri: Option<String>,
 
 	/// The state type to use.
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	pub state: State,
 }
 
@@ -68,12 +68,12 @@ impl OffchainWorkerCmd {
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		match (&self.header_at, &self.state) {
-			(Some(header_at), State::Snap { .. }) => hash_of::<Block>(&header_at),
+			(Some(header_at), State::Snap { .. }) => hash_of::<Block>(header_at),
 			(Some(header_at), State::Live { .. }) => {
 				log::error!(target: LOG_TARGET, "--header-at is provided while state type is live, this will most likely lead to a nonsensical result.");
-				hash_of::<Block>(&header_at)
+				hash_of::<Block>(header_at)
 			},
-			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(&at),
+			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
 			_ => {
 				panic!("either `--header-at` must be provided, or state must be `live` with a proper `--at`");
 			},
@@ -131,6 +131,11 @@ where
 		let builder = command.state.builder::<Block>()?;
 
 		let builder = if command.overwrite_wasm_code {
+			log::info!(
+				target: LOG_TARGET,
+				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
+				config.chain_spec.name(),
+			);
 			let (code_key, code) = extract_code(&config.chain_spec)?;
 			builder.inject_hashed_key_value(&[(code_key, code)])
 		} else {

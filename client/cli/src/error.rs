@@ -31,7 +31,7 @@ pub enum Error {
 	Io(#[from] std::io::Error),
 
 	#[error(transparent)]
-	Cli(#[from] structopt::clap::Error),
+	Cli(#[from] clap::Error),
 
 	#[error(transparent)]
 	Service(#[from] sc_service::Error),
@@ -80,19 +80,19 @@ pub enum Error {
 	GlobalLoggerError(#[from] sc_tracing::logging::Error),
 }
 
-impl std::convert::From<&str> for Error {
+impl From<&str> for Error {
 	fn from(s: &str) -> Error {
 		Error::Input(s.to_string())
 	}
 }
 
-impl std::convert::From<String> for Error {
+impl From<String> for Error {
 	fn from(s: String) -> Error {
 		Error::Input(s)
 	}
 }
 
-impl std::convert::From<crypto::PublicError> for Error {
+impl From<crypto::PublicError> for Error {
 	fn from(e: crypto::PublicError) -> Error {
 		Error::InvalidUri(e)
 	}

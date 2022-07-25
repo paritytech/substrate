@@ -21,30 +21,30 @@
 use crate::{
 	error, utils, with_crypto_scheme, CryptoSchemeFlag, NetworkSchemeFlag, OutputTypeFlag,
 };
+use clap::Parser;
 use rand::{rngs::OsRng, RngCore};
 use sp_core::crypto::{unwrap_or_default_ss58_version, Ss58AddressFormat, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
-use structopt::StructOpt;
 use utils::print_from_uri;
 
 /// The `vanity` command
-#[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "vanity", about = "Generate a seed that provides a vanity address")]
+#[derive(Debug, Clone, Parser)]
+#[clap(name = "vanity", about = "Generate a seed that provides a vanity address")]
 pub struct VanityCmd {
 	/// Desired pattern
-	#[structopt(long, parse(try_from_str = assert_non_empty_string))]
+	#[clap(long, parse(try_from_str = assert_non_empty_string))]
 	pattern: String,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	network_scheme: NetworkSchemeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	crypto_scheme: CryptoSchemeFlag,
 }
 
@@ -64,8 +64,8 @@ impl VanityCmd {
 			print_from_uri(
 				&formated_seed,
 				None,
-				self.network_scheme.network.clone(),
-				self.output_scheme.output_type.clone(),
+				self.network_scheme.network,
+				self.output_scheme.output_type,
 			),
 		);
 		Ok(())
@@ -98,7 +98,7 @@ where
 
 		let p = Pair::from_seed(&seed);
 		let ss58 = p.public().into_account().to_ss58check_with_version(network_override);
-		let score = calculate_score(&desired, &ss58);
+		let score = calculate_score(desired, &ss58);
 		if score > best || desired.len() < 2 {
 			best = score;
 			if best >= top {
@@ -117,20 +117,20 @@ where
 fn good_waypoint(done: u64) -> u64 {
 	match done {
 		0..=1_000_000 => 100_000,
-		0..=10_000_000 => 1_000_000,
-		0..=100_000_000 => 10_000_000,
-		_ => 100_000_000,
+		1_000_001..=10_000_000 => 1_000_000,
+		10_000_001..=100_000_000 => 10_000_000,
+		100_000_001.. => 100_000_000,
 	}
 }
 
 fn next_seed(seed: &mut [u8]) {
-	for i in 0..seed.len() {
-		match seed[i] {
+	for s in seed {
+		match s {
 			255 => {
-				seed[i] = 0;
+				*s = 0;
 			},
 			_ => {
-				seed[i] += 1;
+				*s += 1;
 				break
 			},
 		}
@@ -166,13 +166,12 @@ mod tests {
 		crypto::{default_ss58_version, Ss58AddressFormatRegistry, Ss58Codec},
 		sr25519, Pair,
 	};
-	use structopt::StructOpt;
 	#[cfg(feature = "bench")]
 	use test::Bencher;
 
 	#[test]
 	fn vanity() {
-		let vanity = VanityCmd::from_iter(&["vanity", "--pattern", "j"]);
+		let vanity = VanityCmd::parse_from(&["vanity", "--pattern", "j"]);
 		assert!(vanity.run().is_ok());
 	}
 

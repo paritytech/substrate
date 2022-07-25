@@ -382,9 +382,9 @@ where
 		// Check that `parent_hash` is correct.
 		let n = header.number().clone();
 		assert!(
-			n > System::BlockNumber::zero() &&
-				<frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one()) ==
-					*header.parent_hash(),
+			n > System::BlockNumber::zero()
+				&& <frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one())
+					== *header.parent_hash(),
 			"Parent hash should be valid.",
 		);
 
@@ -699,7 +699,7 @@ mod tests {
 			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
 			WithdrawReasons,
 		},
-		weights::{IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial},
+		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
@@ -789,7 +789,7 @@ mod tests {
 
 			#[pallet::weight(0)]
 			pub fn calculate_storage_root(_origin: OriginFor<T>) -> DispatchResult {
-				let root = sp_io::storage::root();
+				let root = sp_io::storage::root(sp_runtime::StateVersion::V1);
 				sp_io::storage::set("storage_root".as_bytes(), &root);
 				Ok(())
 			}
@@ -911,9 +911,9 @@ mod tests {
 	}
 	impl pallet_transaction_payment::Config for Runtime {
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
-		type TransactionByteFee = TransactionByteFee;
 		type OperationalFeeMultiplier = ConstU8<5>;
 		type WeightToFee = IdentityFee<Balance>;
+		type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
 		type FeeMultiplierUpdate = ();
 	}
 	impl custom::Config for Runtime {}
@@ -986,12 +986,12 @@ mod tests {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let xt = TestXt::new(call_transfer(2, 69), sign_extra(1, 0, 0));
-		let weight = xt.get_dispatch_info().weight +
-			<Runtime as frame_system::Config>::BlockWeights::get()
+		let weight = xt.get_dispatch_info().weight
+			+ <Runtime as frame_system::Config>::BlockWeights::get()
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
 		let fee: Balance =
-			<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
+			<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -1207,8 +1207,8 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			let extrinsic_weight = len as Weight +
-				<Runtime as frame_system::Config>::BlockWeights::get()
+			let extrinsic_weight = len as Weight
+				+ <Runtime as frame_system::Config>::BlockWeights::get()
 					.get(DispatchClass::Normal)
 					.base_extrinsic;
 			assert_eq!(
@@ -1279,12 +1279,14 @@ mod tests {
 					Call::System(SystemCall::remark { remark: vec![1u8] }),
 					sign_extra(1, 0, 0),
 				);
-				let weight = xt.get_dispatch_info().weight +
-					<Runtime as frame_system::Config>::BlockWeights::get()
+				let weight = xt.get_dispatch_info().weight
+					+ <Runtime as frame_system::Config>::BlockWeights::get()
 						.get(DispatchClass::Normal)
 						.base_extrinsic;
 				let fee: Balance =
-					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(
+						&weight,
+					);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
@@ -1525,9 +1527,10 @@ mod tests {
 			// Weights are recorded correctly
 			assert_eq!(
 				frame_system::Pallet::<Runtime>::block_weight().total(),
-				custom_runtime_upgrade_weight +
-					runtime_upgrade_weight +
-					on_initialize_weight + base_block_weight,
+				custom_runtime_upgrade_weight
+					+ runtime_upgrade_weight
+					+ on_initialize_weight
+					+ base_block_weight,
 			);
 		});
 	}
