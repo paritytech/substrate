@@ -512,7 +512,7 @@ name = "beefy-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
  "beefy-primitives",
- "env_logger 0.9.0",
+ "env_logger",
  "hex",
  "hex-literal",
  "log",
@@ -1900,25 +1900,12 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
-dependencies = [
- "atty",
- "humantime 1.3.0",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
 dependencies = [
  "atty",
- "humantime 2.1.0",
+ "humantime",
  "log",
  "regex",
  "termcolor",
@@ -2008,11 +1995,11 @@ dependencies = [
 
 [[package]]
 name = "file-per-thread-logger"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fdbe0d94371f9ce939b555dd342d0686cc4c0cadbcd4b61d70af5ff97eb4126"
+checksum = "21e16290574b39ee41c71aeb90ae960c504ebaf1e2a1c87bd52aa56ed6e1a02f"
 dependencies = [
- "env_logger 0.7.1",
+ "env_logger",
  "log",
 ]
 
@@ -2940,15 +2927,6 @@ name = "httpdate"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6456b8a6c8f33fee7d958fcd1b60d55b11940a79e63ae87013e6d22e26034440"
-
-[[package]]
-name = "humantime"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df004cfca50ef23c36850aaaa59ad52cc70d0e90243c3c7737a4dd32dc7a3c4f"
-dependencies = [
- "quick-error 1.2.3",
-]
 
 [[package]]
 name = "humantime"
@@ -5491,7 +5469,7 @@ version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
  "bitflags",
- "env_logger 0.9.0",
+ "env_logger",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -5857,7 +5835,7 @@ name = "pallet-mmr"
 version = "4.0.0-dev"
 dependencies = [
  "ckb-merkle-mountain-range",
- "env_logger 0.9.0",
+ "env_logger",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -7571,7 +7549,7 @@ dependencies = [
 name = "remote-externalities"
 version = "0.10.0-dev"
 dependencies = [
- "env_logger 0.9.0",
+ "env_logger",
  "frame-support",
  "jsonrpsee",
  "log",
@@ -8308,7 +8286,7 @@ name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
  "criterion",
- "env_logger 0.9.0",
+ "env_logger",
  "hex-literal",
  "lazy_static",
  "lru",
@@ -8738,7 +8716,7 @@ name = "sc-rpc"
 version = "4.0.0-dev"
 dependencies = [
  "assert_matches",
- "env_logger 0.9.0",
+ "env_logger",
  "futures",
  "hash-db",
  "jsonrpsee",
