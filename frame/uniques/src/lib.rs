@@ -56,7 +56,7 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-use num_traits::{FromPrimitive, One, Unsigned};
+use sp_runtime::traits::AtLeast32BitUnsigned;
 
 pub use pallet::*;
 pub use types::*;
@@ -99,8 +99,7 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ Copy
 			+ Default
-			+ Unsigned
-			+ FromPrimitive
+			+ AtLeast32BitUnsigned
 			+ Saturating;
 
 		/// The type used to identify a unique item within a collection.
@@ -542,7 +541,7 @@ pub mod pallet {
 				Error::<T, I>::NextIdNotUsed
 			);
 
-			let next_id = NextCollectionId::<T, I>::get().saturating_add(T::CollectionId::one());
+			let next_id = NextCollectionId::<T, I>::get().saturating_add(1u32.into());
 			NextCollectionId::<T, I>::set(next_id);
 			Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
 			Ok(())
