@@ -149,7 +149,7 @@ build-rustdoc:
     - ./crate-docs/
   script:
     - rusty-cachier snapshot create
-    - time cargo +nightly doc --workspace --all-features --verbose
+    - time cargo +nightly doc --workspace --all-features --verbose --no-deps
     - rm -f $CARGO_TARGET_DIR/doc/.lock
     - mv $CARGO_TARGET_DIR/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot

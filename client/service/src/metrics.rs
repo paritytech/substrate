@@ -160,7 +160,7 @@ impl MetricsService {
 	) -> Result<Self, PrometheusError> {
 		let role_bits = match config.role {
 			Role::Full => 1u64,
-			Role::Light => 2u64,
+			// 2u64 used to represent light client role
 			Role::Authority { .. } => 4u64,
 		};
 
