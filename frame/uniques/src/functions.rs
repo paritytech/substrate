@@ -88,9 +88,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
-		CollectionAccount::<T, I>::insert(&owner, &collection, ());
-		NextCollectionId::<T, I>::set(collection.saturating_add(1u32.into()));
+		let next_id = collection.saturating_add(1u32.into());
 
+		CollectionAccount::<T, I>::insert(&owner, &collection, ());
+		NextCollectionId::<T, I>::set(next_id);
+
+		Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
 		Self::deposit_event(event);
 		Ok(())
 	}
