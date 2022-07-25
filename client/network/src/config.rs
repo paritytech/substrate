@@ -147,8 +147,6 @@ where
 pub enum Role {
 	/// Regular full node.
 	Full,
-	/// Regular light node.
-	Light,
 	/// Actual authority.
 	Authority,
 }
@@ -158,18 +156,12 @@ impl Role {
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Self::Authority { .. })
 	}
-
-	/// True for [`Role::Light`].
-	pub fn is_light(&self) -> bool {
-		matches!(self, Self::Light { .. })
-	}
 }
 
 impl fmt::Display for Role {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Full => write!(f, "FULL"),
-			Self::Light => write!(f, "LIGHT"),
 			Self::Authority { .. } => write!(f, "AUTHORITY"),
 		}
 	}
