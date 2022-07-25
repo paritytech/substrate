@@ -99,8 +99,7 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ Copy
 			+ Default
-			+ AtLeast32BitUnsigned
-			+ Saturating;
+			+ AtLeast32BitUnsigned;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
