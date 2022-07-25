@@ -701,9 +701,11 @@ fn try_increment_id_works() {
 		// should fail because the next `CollectionId` is not being used.
 		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
 
-		// create two collections.
+		// create two collections & check for events.
 		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
+		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
 		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
+		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 2 }));
 
 		// there are now two collections.
 		assert_eq!(Uniques::get_next_id(), 2);

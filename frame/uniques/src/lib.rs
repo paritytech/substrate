@@ -51,12 +51,10 @@ use frame_support::{
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
-	traits::{Saturating, StaticLookup, Zero},
+	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
 	ArithmeticError, RuntimeDebug,
 };
 use sp_std::prelude::*;
-
-use sp_runtime::traits::AtLeast32BitUnsigned;
 
 pub use pallet::*;
 pub use types::*;
