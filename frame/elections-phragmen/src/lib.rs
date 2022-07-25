@@ -248,11 +248,13 @@ pub mod pallet {
 		#[pallet::constant]
 		type TermDuration: Get<Self::BlockNumber>;
 
-        #[pallet::constant]
-        type MaxCandidates: Get<u32>;
+		/// Maximum number of candidated in this election
+		#[pallet::constant]
+		type MaxCandidates: Get<u32>;
 
-        #[pallet::constant]
-        type MaxVoters: Get<u32>;
+		/// Maximum number of voters to allow
+		#[pallet::constant]
+		type MaxVoters: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -390,7 +392,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-            let max_candidate = <T as Config>::MaxCandidates::get();
+			let max_candidate = <T as Config>::MaxCandidates::get();
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
 			ensure!(actual_count <= candidate_count, Error::<T>::InvalidWitnessData);
 			ensure!(actual_count <= max_candidate, Error::<T>::TooManyCandidates);
@@ -909,7 +911,7 @@ impl<T: Config> Pallet<T> {
 
 		let mut num_edges: u32 = 0;
 
-        let max_voters = <T as Config>::MaxVoters::get() as usize;
+		let max_voters = <T as Config>::MaxVoters::get() as usize;
 		// used for prime election.
 		let mut voters_and_stakes = Vec::new();
 		match Voting::<T>::iter().try_for_each(|(voter, Voter { stake, votes, .. })| {
@@ -1263,8 +1265,8 @@ mod tests {
 
 	parameter_types! {
 		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
-        pub const PhragmenMaxVoters: u32 = 1000;
-        pub const PhragménMaxCandidates: u32 = 10 * 1000;
+		pub const PhragmenMaxVoters: u32 = 1000;
+		pub const PhragménMaxCandidates: u32 = 10 * 1000;
 	}
 
 	impl Config for Test {
@@ -1283,8 +1285,8 @@ mod tests {
 		type LoserCandidate = ();
 		type KickedMember = ();
 		type WeightInfo = ();
-        type MaxVoters = PhragmenMaxVoters;
-        type MaxCandidates = PhragménMaxCandidates;
+		type MaxVoters = PhragmenMaxVoters;
+		type MaxCandidates = PhragménMaxCandidates;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
