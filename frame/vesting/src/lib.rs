@@ -444,7 +444,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Root_.
 		///
-		/// - `target`: The account that received that vesting transfer
+		/// - `target`: An account that has a vesting schedule
 		/// - `schedule_index`: The vesting schedule index that should be removed
 		#[pallet::weight(
 			T::WeightInfo::force_remove_vesting_schedule(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
