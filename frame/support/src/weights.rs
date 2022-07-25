@@ -91,27 +91,19 @@
 //! # fn main() {}
 //! ```
 //!
-//! ### 2. Define weights as a function of input arguments using `FunctionOf` tuple struct.
+//! ### 2. Define weights as a function of input arguments.
 //!
-//! This struct works in a similar manner as above. 3 items must be provided and each can be either
-//! a fixed value or a function/closure with the same parameters list as the dispatchable function
-//! itself, wrapper in a tuple.
-//!
-//! Using this only makes sense if you want to use a function for at least one of the elements. If
-//! all 3 are static values, providing a raw tuple is easier.
+//! The arguments of the dispatch are available in the weight expressions as a borrowed value.
 //!
 //! ```
 //! # use frame_system::Config;
-//! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
+//! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//!         #[weight = FunctionOf(
-//! 			// weight, function.
-//! 			|args: (&u32, &u64)| *args.0 as u64 + args.1,
-//! 			// class, fixed.
+//!         #[weight = (
+//! 			*a as u64 + *b,
 //! 			DispatchClass::Operational,
-//! 			// pays fee, function.
-//! 			|args: (&u32, &u64)| if *args.0 > 1000 { Pays::Yes } else { Pays::No },
+//! 			if *a > 1000 { Pays::Yes } else { Pays::No }
 //! 		)]
 //!         fn dispatching(origin, a: u32, b: u64) { unimplemented!() }
 //!     }
@@ -505,75 +497,6 @@ impl<T> ClassifyDispatch<T> for (Weight, Pays) {
 impl<T> PaysFee<T> for (Weight, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.1
-	}
-}
-
-/// A struct to represent a weight which is a function of the input arguments. The given items have
-/// the following types:
-///
-/// - `WD`: a raw `Weight` value or a closure that returns a `Weight` with the same argument list as
-///   the dispatched, wrapped in a tuple.
-/// - `CD`: a raw `DispatchClass` value or a closure that returns a `DispatchClass` with the same
-///   argument list as the dispatched, wrapped in a tuple.
-/// - `PF`: a `Pays` variant for whether this dispatch pays fee or not or a closure that returns a
-///   `Pays` variant with the same argument list as the dispatched, wrapped in a tuple.
-#[deprecated = "Function arguments are available directly inside the annotation now."]
-pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
-
-// `WeighData` as a raw value
-#[allow(deprecated)]
-impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
-	fn weigh_data(&self, _: Args) -> Weight {
-		self.0
-	}
-}
-
-// `WeighData` as a closure
-#[allow(deprecated)]
-impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF>
-where
-	WD: Fn(Args) -> Weight,
-{
-	fn weigh_data(&self, args: Args) -> Weight {
-		(self.0)(args)
-	}
-}
-
-// `ClassifyDispatch` as a raw value
-#[allow(deprecated)]
-impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> {
-	fn classify_dispatch(&self, _: Args) -> DispatchClass {
-		self.1
-	}
-}
-
-// `ClassifyDispatch` as a raw value
-#[allow(deprecated)]
-impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF>
-where
-	CD: Fn(Args) -> DispatchClass,
-{
-	fn classify_dispatch(&self, args: Args) -> DispatchClass {
-		(self.1)(args)
-	}
-}
-
-// `PaysFee` as a raw value
-#[allow(deprecated)]
-impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
-	fn pays_fee(&self, _: Args) -> Pays {
-		self.2
-	}
-}
-
-// `PaysFee` as a closure
-#[allow(deprecated)]
-impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF>
-where
-	PF: Fn(Args) -> Pays,
-{
-	fn pays_fee(&self, args: Args) -> Pays {
-		(self.2)(args)
 	}
 }
 
