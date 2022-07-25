@@ -20,7 +20,7 @@
 use super::*;
 use mock::*;
 
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OnInitialize};
 use sp_runtime::traits::BadOrigin;
 
 type ScoredPool = Pallet<Test>;
@@ -295,5 +295,25 @@ fn candidacy_resubmitting_works() {
 
 		// then
 		assert_eq!(ScoredPool::candidate_exists(who), true);
+	});
+}
+
+#[test]
+fn pool_candidates_exceded() {
+	new_test_ext().execute_with(|| {
+		for i in [1, 2, 3, 4, 6] {
+			let who = i as u64;
+			assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
+			let index = find_in_pool(who).expect("entity must be in pool") as u32;
+			assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
+		}
+
+		let submit_candidacy_call =
+			mock::Call::ScoredPool(crate::Call::<Test>::submit_candidacy {});
+
+		assert_noop!(
+			submit_candidacy_call.dispatch(Origin::signed(8)),
+			Error::<Test, _>::TooManyMembers
+		);
 	});
 }
