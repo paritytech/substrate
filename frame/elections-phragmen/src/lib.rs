@@ -392,10 +392,9 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			let max_candidate = <T as Config>::MaxCandidates::get();
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
 			ensure!(actual_count <= candidate_count, Error::<T>::InvalidWitnessData);
-			ensure!(actual_count <= max_candidate, Error::<T>::TooManyCandidates);
+			ensure!(actual_count <= <T as Config>::MaxCandidates::get(), Error::<T>::TooManyCandidates);
 
 			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
