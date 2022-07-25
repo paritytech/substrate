@@ -21,7 +21,7 @@
 use crate::{
 	host::HostState,
 	instance_wrapper::{EntryPoint, InstanceWrapper},
-	util,
+	util::{self, replace_strategy_if_broken},
 };
 
 use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
@@ -275,12 +275,12 @@ fn setup_wasmtime_caching(
 
 	let wasmtime_cache_root = cache_path.join("wasmtime");
 	fs::create_dir_all(&wasmtime_cache_root)
-		.map_err(|err| format!("cannot create the dirs to cache: {:?}", err))?;
+		.map_err(|err| format!("cannot create the dirs to cache: {}", err))?;
 
 	// Canonicalize the path after creating the directories.
 	let wasmtime_cache_root = wasmtime_cache_root
 		.canonicalize()
-		.map_err(|err| format!("failed to canonicalize the path: {:?}", err))?;
+		.map_err(|err| format!("failed to canonicalize the path: {}", err))?;
 
 	// Write the cache config file
 	let cache_config_path = wasmtime_cache_root.join("cache-config.toml");
@@ -293,11 +293,11 @@ directory = \"{cache_dir}\"
 		cache_dir = wasmtime_cache_root.display()
 	);
 	fs::write(&cache_config_path, config_content)
-		.map_err(|err| format!("cannot write the cache config: {:?}", err))?;
+		.map_err(|err| format!("cannot write the cache config: {}", err))?;
 
 	config
 		.cache_config_load(cache_config_path)
-		.map_err(|err| format!("failed to parse the config: {:?}", err))?;
+		.map_err(|err| format!("failed to parse the config: {:#}", err))?;
 
 	Ok(())
 }
@@ -322,14 +322,14 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	};
 	config
 		.profiler(profiler)
-		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {}", e)))?;
+		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {:#}", e)))?;
 
 	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
 		semantics.deterministic_stack_limit
 	{
 		config
 			.max_wasm_stack(native_stack_max as usize)
-			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {}", e)))?;
+			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {:#}", e)))?;
 	}
 
 	config.parallel_compilation(semantics.parallel_compilation);
@@ -384,7 +384,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 				//   table_elements: 1249
 				//   memory_pages: 2070
 				size: 64 * 1024,
-				table_elements: 2048,
+				table_elements: 3072,
 				memory_pages,
 
 				// We can only have a single of those.
@@ -429,6 +429,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// See [here][stack_height] for more details of the instrumentation
 ///
 /// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
+#[derive(Clone)]
 pub struct DeterministicStackLimit {
 	/// A number of logical "values" that can be pushed on the wasm stack. A trap will be triggered
 	/// if exceeded.
@@ -486,6 +487,7 @@ enum InternalInstantiationStrategy {
 	Builtin,
 }
 
+#[derive(Clone)]
 pub struct Semantics {
 	/// The instantiation strategy to use.
 	pub instantiation_strategy: InstantiationStrategy,
@@ -616,11 +618,13 @@ where
 /// [`create_runtime_from_artifact`] to get more details.
 unsafe fn do_create_runtime<H>(
 	code_supply_mode: CodeSupplyMode<'_>,
-	config: Config,
+	mut config: Config,
 ) -> std::result::Result<WasmtimeRuntime, WasmError>
 where
 	H: HostFunctions,
 {
+	replace_strategy_if_broken(&mut config.semantics.instantiation_strategy);
+
 	let mut wasmtime_config = common_config(&config.semantics)?;
 	if let Some(ref cache_path) = config.cache_path {
 		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut wasmtime_config) {
@@ -632,7 +636,7 @@ where
 	}
 
 	let engine = Engine::new(&wasmtime_config)
-		.map_err(|e| WasmError::Other(format!("cannot create the wasmtime engine: {}", e)))?;
+		.map_err(|e| WasmError::Other(format!("cannot create the wasmtime engine: {:#}", e)))?;
 
 	let (module, instantiation_strategy) = match code_supply_mode {
 		CodeSupplyMode::Fresh(blob) => {
@@ -640,7 +644,7 @@ where
 			let serialized_blob = blob.clone().serialize();
 
 			let module = wasmtime::Module::new(&engine, &serialized_blob)
-				.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
+				.map_err(|e| WasmError::Other(format!("cannot create module: {:#}", e)))?;
 
 			match config.semantics.instantiation_strategy {
 				InstantiationStrategy::LegacyInstanceReuse => {
@@ -678,7 +682,7 @@ where
 			//
 			//         See [`create_runtime_from_artifact`] for more details.
 			let module = wasmtime::Module::deserialize_file(&engine, compiled_artifact_path)
-				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;
+				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {:#}", e)))?;
 
 			(module, InternalInstantiationStrategy::Builtin)
 		},
@@ -691,7 +695,7 @@ where
 		crate::instance_wrapper::create_store(module.engine(), config.semantics.max_memory_size);
 	let instance_pre = linker
 		.instantiate_pre(&mut store, &module)
-		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {}", e)))?;
+		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {:#}", e)))?;
 
 	Ok(WasmtimeRuntime {
 		engine,
@@ -737,14 +741,17 @@ pub fn prepare_runtime_artifact(
 	blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<Vec<u8>, WasmError> {
-	let blob = prepare_blob_for_compilation(blob, semantics)?;
+	let mut semantics = semantics.clone();
+	replace_strategy_if_broken(&mut semantics.instantiation_strategy);
 
-	let engine = Engine::new(&common_config(semantics)?)
-		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;
+	let blob = prepare_blob_for_compilation(blob, &semantics)?;
+
+	let engine = Engine::new(&common_config(&semantics)?)
+		.map_err(|e| WasmError::Other(format!("cannot create the engine: {:#}", e)))?;
 
 	engine
 		.precompile_module(&blob.serialize())
-		.map_err(|e| WasmError::Other(format!("cannot precompile module: {}", e)))
+		.map_err(|e| WasmError::Other(format!("cannot precompile module: {:#}", e)))
 }
 
 fn perform_call(
