@@ -29,6 +29,22 @@
 //! required for this endeavour are defined or re-exported in this module. There is an
 //! implementation on `()` which can be used to signal that no chain extension is available.
 //!
+//! # Using multiple chain extensions
+//!
+//! Often there is a need for having multiple chain extensions. This is often the case when
+//! some generally useful off-the-shelf extensions should be included. To have multiple chain
+//! extensions they can be put into a tuple which is then passed to `[Config::ChainExtension]` like
+//! this `type Extensions = (ExtensionA, ExtensionB)`.
+//!
+//! However, only extensions implementing [`RegisteredChainExtension`] can be put into a tuple.
+//! This is because the [`RegisteredChainExtension::ID`] is used to decide which of those extensions
+//! should should be used when the contract calls a chain extensions. Extensions which are generally
+//! useful should claim their `ID` with [the registry](https://github.com/paritytech/chainextension-registry)
+//! so that no collisions with other vendors will occur.
+//!
+//! **Chain specific extensions must use the reserved `ID = 0` so that they can't be registered with
+//! the registry.**
+//!
 //! # Security
 //!
 //! The chain author alone is responsible for the security of the chain extension.
@@ -112,20 +128,51 @@ pub trait ChainExtension<C: Config> {
 	}
 }
 
-/// Implementation that indicates that no chain extension is available.
-impl<C: Config> ChainExtension<C> for () {
-	fn call<E>(_func_id: u32, mut _env: Environment<E, InitState>) -> Result<RetVal>
+/// A [`ChainExtension`] that can be composed with other extensions using a tuple.
+///
+/// An extension that implements this trait can be put in a tuple in order to have multiple
+/// extensions available. The tuple implementation routes requests based on the first two
+/// most significant bytes of the `func_id` passed to `call`.
+///
+/// If this extensions is to be used by multiple runtimes consider
+/// [registering it](https://github.com/paritytech/chainextension-registry) to ensure that there
+/// are no collisions with other vendors.
+///
+/// # Note
+///
+/// Currently, we support tuples of up to ten registred chain extensions. If more chain extensions
+/// are needed consider opening an issue.
+pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
+	/// The extensions globally unique identifier.
+	const ID: u16;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(10)]
+#[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
+impl<C: Config> ChainExtension<C> for Tuple {
+	fn call<E>(func_id: u32, mut env: Environment<E, InitState>) -> Result<RetVal>
 	where
 		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
-		// Never called since [`Self::enabled()`] is set to `false`. Because we want to
-		// avoid panics at all costs we supply a sensible error value here instead
-		// of an `unimplemented!`.
+		for_tuples!(
+			#(
+				if (Tuple::ID == (func_id >> 16) as u16) && Tuple::enabled() {
+					return Tuple::call(func_id, env);
+				}
+			)*
+		);
 		Err(Error::<E::T>::NoChainExtension.into())
 	}
 
 	fn enabled() -> bool {
+		for_tuples!(
+			#(
+				if Tuple::enabled() {
+					return true;
+				}
+			)*
+		);
 		false
 	}
 }
