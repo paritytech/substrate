@@ -517,7 +517,7 @@ impl TraitPair for Pair {
 			Err(_) => return false,
 		};
         
-        let sig_array  = match sig.try_into() {
+		let sig_array  = match sig.try_into() {
 			Ok(s) => s,
 			Err(_) => return false,
 		};

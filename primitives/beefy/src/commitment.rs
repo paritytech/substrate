@@ -33,7 +33,7 @@ pub mod known_payload_ids {
 	pub const MMR_ROOT_ID: BeefyPayloadId = *b"mh";
 }
 
-/// A BEEFY payload type allowing for future extensibility of adding additional kinds of payloads.
+/// A BEEFY payload type allowing for future extensibility of adding additional kinds of payloads.:
 ///
 /// The idea is to store a vector of SCALE-encoded values with an extra identifier.
 /// Identifiers MUST be sorted by the [`BeefyPayloadId`] to allow efficient lookup of expected
@@ -139,7 +139,7 @@ where
 /// please take a look at custom [`Encode`] and [`Decode`] implementations and
 /// `CompactSignedCommitment` struct.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature> {
+pub struct SignedCommitment<TBlockNumber, TSignature> {
 	/// The commitment signatures are collected for.
 	pub commitment: Commitment<TBlockNumber>,
 	/// GRANDPA validators' signatures for the commitment.
@@ -147,20 +147,10 @@ pub struct SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature> {
 	/// The length of this `Vec` must match number of validators in the current set (see
 	/// [Commitment::validator_set_id]).
 	pub signatures: Vec<Option<TSignature>>,
-
-	//@drskalman: This was the original suggestion, now the suggestion is to
-	//SignedCommitment<BlockNumber, (ecdsa::Signature, (bls::Signature,
-	//ecsda::Signature))>). It still doesn't leave a place for aggregation, but maybe
-	//aggregation happens somewhere else. This also waste space on otherwise
-	//aggregatable BLSSignature.
-
-	//@AlistairStewart also said it does not make sense to gossip list bls singnature without
-	//aggergating them.
-	pub aggregatable_signature: TAggregatableSignature,
 }
 
-impl<TBlockNumber, TSignature, TAggregatableSignature>
-	SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
+impl<TBlockNumber, TSignature>
+	SignedCommitment<TBlockNumber, TSignature>
 {
 	/// Return the number of collected signatures.
 	pub fn no_of_signatures(&self) -> usize {
@@ -175,7 +165,7 @@ const CONTAINER_BIT_SIZE: usize = 8;
 
 /// Compressed representation of [`SignedCommitment`], used for encoding efficiency.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-struct CompactSignedCommitment<TBlockNumber, TSignature, TAggregatableSignature> {
+struct CompactSignedCommitment<TBlockNumber, TSignature> {
 	/// The commitment, unchanged compared to regular [`SignedCommitment`].
 	commitment: Commitment<TBlockNumber>,
 	/// A bitfield representing presence of a signature coming from a validator at some index.
@@ -196,20 +186,17 @@ struct CompactSignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
 	/// to look at the `signatures_from` bitfield, since some validators might have not produced a
 	/// signature.
 	signatures_compact: Vec<TSignature>,
-
-	/// A form of signature which can aggregate many signatures in one object rather than a vector.
-	aggregatable_signature: TAggregatableSignature,
 }
 
-impl<'a, TBlockNumber: Clone, TSignature, TAggregatableSignature>
-	CompactSignedCommitment<TBlockNumber, &'a TSignature, &'a TAggregatableSignature>
+impl<'a, TBlockNumber: Clone, TSignature>
+	CompactSignedCommitment<TBlockNumber, &'a TSignature>
 {
 	/// Packs a `SignedCommitment` into the compressed `CompactSignedCommitment` format for
 	/// efficient network transport.
 	fn pack(
-		signed_commitment: &'a SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>,
+		signed_commitment: &'a SignedCommitment<TBlockNumber, TSignature>,
 	) -> Self {
-		let SignedCommitment { commitment, signatures, aggregatable_signature } = signed_commitment;
+		let SignedCommitment { commitment, signatures} = signed_commitment;
 		let validator_set_len = signatures.len() as u32;
 
 		let signatures_compact: Vec<&'a TSignature> =
@@ -243,7 +230,6 @@ impl<'a, TBlockNumber: Clone, TSignature, TAggregatableSignature>
 			signatures_from,
 			validator_set_len,
 			signatures_compact,
-			aggregatable_signature,
 		}
 	}
 
@@ -252,15 +238,13 @@ impl<'a, TBlockNumber: Clone, TSignature, TAggregatableSignature>
 		temporary_signatures: CompactSignedCommitment<
 			TBlockNumber,
 			TSignature,
-			TAggregatableSignature,
 		>,
-	) -> SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature> {
+	) -> SignedCommitment<TBlockNumber, TSignature> {
 		let CompactSignedCommitment {
 			commitment,
 			signatures_from,
 			validator_set_len,
 			signatures_compact,
-			aggregatable_signature,
 		} = temporary_signatures;
 		let mut bits: Vec<u8> = vec![];
 
@@ -278,16 +262,15 @@ impl<'a, TBlockNumber: Clone, TSignature, TAggregatableSignature>
 			.map(|&x| if x == 1 { next_signature.next() } else { None })
 			.collect();
 
-		SignedCommitment { commitment, signatures, aggregatable_signature }
+		SignedCommitment { commitment, signatures }
 	}
 }
 
-impl<TBlockNumber, TSignature, TAggregatableSignature> Encode
-	for SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
+impl<TBlockNumber, TSignature> Encode
+	for SignedCommitment<TBlockNumber, TSignature>
 where
 	TBlockNumber: Encode + Clone,
 	TSignature: Encode,
-	TAggregatableSignature: Encode,
 {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		let temp = CompactSignedCommitment::pack(self);
@@ -295,12 +278,11 @@ where
 	}
 }
 
-impl<TBlockNumber, TSignature, TAggregatableSignature> Decode
-	for SignedCommitment<TBlockNumber, TSignature, TAggregatableSignature>
+impl<TBlockNumber, TSignature> Decode
+	for SignedCommitment<TBlockNumber, TSignature>
 where
 	TBlockNumber: Decode + Clone,
 	TSignature: Decode,
-	TAggregatableSignature: Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let temp = CompactSignedCommitment::decode(input)?;
@@ -316,10 +298,10 @@ where
 /// Note that this enum is subject to change in the future with introduction
 /// of additional cryptographic primitives to BEEFY.
 #[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-pub enum VersionedFinalityProof<N, S, AS> {
+pub enum VersionedFinalityProof<N, S> {
 	#[codec(index = 1)]
 	/// Current active version
-	V1(SignedCommitment<N, S, AS>),
+	V1(SignedCommitment<N, S>),
 }
 
 #[cfg(test)]
@@ -338,21 +320,23 @@ use sp_core::{keccak_256, Pair};
 	type TestCommitment = Commitment<u128>;
 
         ///types for bls-less commitment
-	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-	struct TestNOPAggregatableSignature;
 
 	type TestSignedCommitment =
-		SignedCommitment<u128, crypto::Signature, TestNOPAggregatableSignature>;
+		SignedCommitment<u128, crypto::Signature>;
 	type TestVersionedFinalityProof =
-	VersionedFinalityProof<u128, crypto::Signature, TestNOPAggregatableSignature>;
+	VersionedFinalityProof<u128, crypto::Signature>;
 
 	///types for commitment supporting aggregatable bls signature
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct BLSAggregatableSignature(BLSSignature);
+
+	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
+	struct ECDSABLSSignaturePair (crypto::Signature, BLSSignature); 
+
 	type TestBLSSignedCommitment =
-		SignedCommitment<u128, crypto::Signature, BLSAggregatableSignature>;
+		SignedCommitment<u128, ECDSABLSSignaturePair>;
 	type TestVersionedBLSFinalityProof =
-	VersionedFinalityProof<u128, crypto::Signature, BLSAggregatableSignature>;
+	VersionedFinalityProof<u128, ECDSABLSSignaturePair>;
 	
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_ecdsa_signatures() -> (crypto::Signature, crypto::Signature) {
@@ -377,9 +361,8 @@ use sp_core::{keccak_256, Pair};
 	}
 
 	///generates mock aggregatable bls signature for generating test commitment
-	///note that with the current scheme we need Signer's BLS public key in order to aggregate
 	///BLS signatures
-	fn mock_bls_signatures() ->  (BLSSignedMessage<BLS377>, BLSSignedMessage<BLS377>) {
+	fn mock_bls_signatures() ->  (BLSSignature, BLSSignature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let mut alice = sp_core::bls::Pair::from_string("//Alice", None).unwrap();
@@ -388,10 +371,10 @@ use sp_core::{keccak_256, Pair};
 				.unwrap();
 
 		let msg = b"This is the first message";
-		let sig1 = alice.signed_message(msg);
+		let sig1 = alice.sign(msg);
 
 		let msg = b"This is the second message";
-		let sig2 = alice.signed_message(msg);
+		let sig2 = alice.sign(msg);
 
 		(sig1.into(), sig2.into())
 	}
@@ -402,7 +385,6 @@ use sp_core::{keccak_256, Pair};
 		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
-
 		// when
 		let encoded = codec::Encode::encode(&commitment);
 		let decoded = TestCommitment::decode(&mut &*encoded);
@@ -429,7 +411,6 @@ use sp_core::{keccak_256, Pair};
 		let ecdsa_signed = SignedCommitment {
 			commitment: commitment.clone(),
 			signatures: vec![None, None, Some(ecdsa_sigs.0.clone()), Some(ecdsa_sigs.1.clone())],
-			aggregatable_signature: TestNOPAggregatableSignature,
 		};
 
 		// when
@@ -455,34 +436,30 @@ use sp_core::{keccak_256, Pair};
 		//we are going to aggregate the signatures here, in real life, this happens when
 		//validators receives other validators signatures before they are going to gossip
 		//it.
-		let mut aggregatedsigs =  SignatureAggregatorAssumingPoP::new();
+		//let mut aggregatedsigs =  SignatureAggregatorAssumingPoP::new();
 
-		aggregatedsigs.aggregate(&bls_signed_msgs.0);
-		aggregatedsigs.aggregate(&bls_signed_msgs.1);
+		//aggregatedsigs.aggregate(&bls_signed_msgs.0);
+		//aggregatedsigs.aggregate(&bls_signed_msgs.1);
 
-		let aggregated_signature = (&aggregatedsigs).signature(); //<SignatureAggregatorAssumingPoP<BLS377>) as Signed>::signature(&aggregatedsigs.signature());
+		//let aggregated_signature = (&aggregatedsigs).signature(); //<SignatureAggregatorAssumingPoP<BLS377>) as Signed>::signature(&aggregatedsigs.signature());
 
 		let ecdsa_and_bls_signed = SignedCommitment {
 			commitment,
-			signatures: vec![None, None, Some(ecdsa_sigs.0), Some(ecdsa_sigs.1)], aggregatable_signature: BLSAggregatableSignature(BLSSignature::from(sp_core::bls::Signature(aggregated_signature.to_bytes()))),
+			signatures: vec![None, None, Some(ECDSABLSSignaturePair(ecdsa_sigs.0, bls_signed_msgs.0)), Some(ECDSABLSSignaturePair(ecdsa_sigs.1, bls_signed_msgs.1))],
 		};
 
 		//when
 		let encoded = codec::Encode::encode(&ecdsa_and_bls_signed);
 		let decoded = TestBLSSignedCommitment::decode(&mut &*encoded);
 
+		println!("encoded is {}", encoded.encode_hex::<String>());
+
 		// then
 		assert_eq!(decoded, Ok(ecdsa_and_bls_signed));
-		assert_eq!(
+		assert_eq!( 
 			encoded,
 			hex_literal::hex!(
-				"046d68343048656c6c6f20576f726c6421050000000000000000000000000000000000000000000000
-                                 04300400000008558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c74
-                                 6cc321f2319a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba012d6e1f8105c337a86cdd
-                                 9aaacdc496577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca23
-                                 24b6a0046395a71681be3d0c2a00c6f6312da571e1278f0e2420dd3419277883d7b9a2e5d1f6c0eba0
-                                 4d0014f1644ba83ec7a24476e8ea7c4d05d1193d001c7f0bb4b946934de462bb2c3c9ddfcccde6be37
-                                 486b1178ff35013222f529a2d22e043395034290b27ef07c92147401"
+				"046d68343048656c6c6f20576f726c642105000000000000000000000000000000000000000000000004300400000008558455ad81279df0795cc985580e4fb75d72d948d1107b2ac80a09abed4da8480c746cc321f2319a5e99a830e314d10dd3cd68ce3dc0c33c86e99bcb7816f9ba0134835b340f62cb1bcb58f2cbdb4435a0e1780c5ec56c88ec198f9300581712a1d4876ce82befeeaf97d72351b25b9c002c729c651768c11f692807fb5ee5e8c50c1f07576fe705b406bc677e706304e92438b80e1bc87e0591ed99273a5a46012d6e1f8105c337a86cdd9aaacdc496577f3db8c55ef9e6fd48f2c5c05a2274707491635d8ba3df64f324575b7b2a34487bca2324b6a0046395a71681be3d0c2a0084c79ad33c5c69de77c1242167b1b11469df914306073696dbedd1d03805c917a9fb0074d2003dad4bb476f1f560650085fb69b3c2cedfbbd8d3aa8b80ac9525fe5cafbd585d84c0e49052df577e85602bb892a3bfd8525d15478e05a0f47b80"
 			)
 		);
 
@@ -501,7 +478,6 @@ use sp_core::{keccak_256, Pair};
 		let mut signed = SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
-			aggregatable_signature: TestNOPAggregatableSignature,
 		};
 		assert_eq!(signed.no_of_signatures(), 2);
 
@@ -547,7 +523,6 @@ use sp_core::{keccak_256, Pair};
 		let signed = SignedCommitment {
 			commitment,
 			signatures: vec![None, None, Some(sigs.0), Some(sigs.1)],
-			aggregatable_signature: TestNOPAggregatableSignature,
 		};
 
 		let versioned = TestVersionedFinalityProof::V1(signed.clone());
@@ -575,8 +550,7 @@ use sp_core::{keccak_256, Pair};
 			.into_iter()
 			.map(|x| if x < 340 { None } else { Some(sigs.0.clone()) })
 			.collect();
-		let aggregatable_signature = TestNOPAggregatableSignature;
-		let signed = SignedCommitment { commitment, signatures, aggregatable_signature };
+		let signed = SignedCommitment { commitment, signatures };
 
 		// when
 		let encoded = codec::Encode::encode(&signed);
