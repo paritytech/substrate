@@ -290,8 +290,7 @@ debug-job:
   script:
     - cd artifacts/benches/
     - ls -la
-    - cd ..
-    - cd master-fe3437e7
+    - cd master-*
     - ls -la
 
 # include:
