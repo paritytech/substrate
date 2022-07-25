@@ -236,18 +236,22 @@ impl PalletCmd {
 					let lowest = self.lowest_range_values.get(idx).cloned().unwrap_or(*low);
 					let highest = self.highest_range_values.get(idx).cloned().unwrap_or(*high);
 
-					let diff = highest - lowest;
+					let diff =
+						highest.checked_sub(lowest).ok_or("`low` cannot be higher than `high`")?;
 
-					if self.steps <= 1 {
-						return Err("Invalid number of steps".into())
+					if self.steps < 2 {
+						return Err("`steps` must be at least 2.".into())
 					}
 
-					// Create up to `STEPS` steps for that component between high and low.
-					let step_size = (diff as f32 / (self.steps - 1) as f32).max(1.0);
+					// The slope logic needs at least two points
+					// to compute a slope.
+					let step_size = (diff as f32 / (self.steps - 1) as f32).max(0.0);
 
 					for s in 0..self.steps {
 						// This is the value we will be testing for component `name`
-						let component_value = (lowest as f32 + step_size * s as f32) as u32;
+						let component_value = ((lowest as f32 + step_size * s as f32) as u32)
+							.min(highest)
+							.max(lowest);
 
 						// Select the max value for all the other components.
 						let c: Vec<(BenchmarkParameter, u32)> = components
