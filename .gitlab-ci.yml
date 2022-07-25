@@ -269,6 +269,31 @@ node-bench-regression-guard:
     - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
 
+debug-job:
+  stage:                           test
+  extends:
+    - .docker-env
+    - .test-refs-no-trigger-prs-only
+  needs:
+    # polls artifact from master to compare with current result
+    - project:                     $CI_PROJECT_PATH
+      job:                         "cargo-check-benches 1/2"
+      ref:                         master
+      artifacts:                   true
+    - project:                     $CI_PROJECT_PATH
+      job:                         "cargo-check-benches 2/2"
+      ref:                         master
+      artifacts:                   true
+  variables:
+    CI_IMAGE:                      "paritytech/tools:latest"
+  before_script: [""]
+  script:
+    - cd artifacts/benches/
+    - ls -la
+    - cd ..
+    - cd master-*
+    - ls -la
+
 # include:
 #   # check jobs
 #   - scripts/ci/gitlab/pipeline/check.yml
