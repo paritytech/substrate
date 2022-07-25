@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
       - dev-cere
+      - 'feature/update-**'
     types:
       - opened
       - synchronize
