@@ -129,7 +129,11 @@ node-bench-regression-guard:
       artifacts:                   true
     # polls artifact from master to compare with current result
     - project:                     $CI_PROJECT_PATH
-      job:                         cargo-check-benches
+      job:                         "cargo-check-benches 1/2"
+      ref:                         master
+      artifacts:                   true
+    - project:                     $CI_PROJECT_PATH
+      job:                         "cargo-check-benches 2/2"
       ref:                         master
       artifacts:                   true
   variables:
