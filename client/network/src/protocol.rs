@@ -179,10 +179,10 @@ pub struct Protocol<B: BlockT, Client> {
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
 	important_peers: HashSet<PeerId>,
-	/// List of nodes that should never occupy peer slots
+	/// List of nodes that should never occupy peer slots.
 	default_peers_set_no_slot_peers: HashSet<PeerId>,
-	/// Actual number of connected no-slot peers
-	default_peers_set_num_no_slot_connected: usize,
+	/// Actual list of connected no-slot nodes.
+	default_peers_set_no_slot_connected_peers: HashSet<PeerId>,
 	/// Value that was passed as part of the configuration. Used to cap the number of full nodes.
 	default_peers_set_num_full: usize,
 	/// Number of slots to allocate to light nodes.
@@ -420,7 +420,7 @@ where
 			chain_sync,
 			important_peers,
 			default_peers_set_no_slot_peers,
-			default_peers_set_num_no_slot_connected: 0,
+			default_peers_set_no_slot_connected_peers: HashSet::new(),
 			default_peers_set_num_full: network_config.default_peers_set_num_full as usize,
 			default_peers_set_num_light: {
 				let total = network_config.default_peers_set.out_peers +
@@ -559,9 +559,7 @@ where
 				self.pending_messages
 					.push_back(CustomMessageOutcome::BlockImport(origin, blocks));
 			}
-			if self.default_peers_set_no_slot_peers.contains(&peer) {
-				self.default_peers_set_num_no_slot_connected -= 1;
-			}
+			self.default_peers_set_no_slot_connected_peers.remove(&peer);
 			Ok(())
 		} else {
 			Err(())
@@ -749,7 +747,7 @@ where
 		if status.roles.is_full() &&
 			self.chain_sync.num_peers() >=
 				self.default_peers_set_num_full +
-					self.default_peers_set_num_no_slot_connected +
+					self.default_peers_set_no_slot_connected_peers.len() +
 					this_peer_reserved_slot
 		{
 			debug!(target: "sync", "Too many full nodes, rejecting {}", who);
@@ -795,7 +793,7 @@ where
 
 		self.peers.insert(who, peer);
 		if no_slot_peer {
-			self.default_peers_set_num_no_slot_connected += 1;
+			self.default_peers_set_no_slot_connected_peers.insert(who);
 		}
 		self.pending_messages
 			.push_back(CustomMessageOutcome::PeerNewBest(who, status.best_number));
