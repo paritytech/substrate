@@ -375,6 +375,49 @@ benchmarks! {
 		);
 	}
 
+	force_remove_vesting_schedule {
+		let l in 0 .. MaxLocksOf::<T>::get() - 1;
+		let s in 0 .. T::MAX_VESTING_SCHEDULES;
+
+		let source: T::AccountId = account("source", 0, SEED);
+		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
+		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
+
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
+		
+		// Give target existing locks
+		add_locks::<T>(&target, l as u8);
+		
+		let per_block = T::MinVestedTransfer::get();
+		let transfer_amount = per_block.checked_mul(&20u32.into()).unwrap();
+		// 2 x transfer_amount because we will create 3 vesting schedules and remove one
+		let expected_balance = transfer_amount.checked_mul(&2u32.into()).unwrap();
+		// It will remove last vesting schedule
+		let schedule_index = 2;
+
+		let vesting_schedule = VestingInfo::new(
+			transfer_amount,
+			per_block,
+			1u32.into(),
+		);
+		// Add max vesting schedules
+		for _ in 0..T::MAX_VESTING_SCHEDULES {
+			assert_ok!(Vesting::<T>::do_vested_transfer(
+				source_lookup.clone(),
+				target_lookup.clone(),
+				vesting_schedule.into()
+			));
+		}
+	}: _(RawOrigin::Root, target_lookup, schedule_index)
+	verify {
+		assert_eq!(
+			Vesting::<T>::vesting_balance(&target),
+			Some(expected_balance),
+			"Vesting schedule was not removed",
+		);
+	}
+
 	impl_benchmark_test_suite!(
 		Vesting,
 		crate::mock::ExtBuilder::default().existential_deposit(256).build(),

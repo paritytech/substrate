@@ -1131,16 +1131,16 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 	ExtBuilder::default().existential_deposit(4 * ED).build().execute_with(|| {
 		// MinVestedTransfer is less the ED.
 		assert!(
-			<Test as Config>::Currency::minimum_balance() >
-				<Test as Config>::MinVestedTransfer::get()
+			<Test as Config>::Currency::minimum_balance()
+				> <Test as Config>::MinVestedTransfer::get()
 		);
 
 		let sched =
 			VestingInfo::new(<Test as Config>::MinVestedTransfer::get() as u64, 1u64, 10u64);
 		// The new account balance with the schedule's locked amount would be less than ED.
 		assert!(
-			Balances::free_balance(&99) + sched.locked() <
-				<Test as Config>::Currency::minimum_balance()
+			Balances::free_balance(&99) + sched.locked()
+				< <Test as Config>::Currency::minimum_balance()
 		);
 
 		// vested_transfer fails.
@@ -1152,6 +1152,42 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 		assert_noop!(
 			Vesting::force_vested_transfer(RawOrigin::Root.into(), 3, 99, sched),
 			pallet_balances::Error::<Test, _>::ExistentialDeposit,
+		);
+	});
+}
+
+#[test]
+fn remove_vesting_schedule() {
+	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
+		let user3_free_balance = Balances::free_balance(&3);
+		let user4_free_balance = Balances::free_balance(&4);
+		assert_eq!(user3_free_balance, 256 * 30);
+		assert_eq!(user4_free_balance, 256 * 40);
+		// Account 4 should not have any vesting yet.
+		assert_eq!(Vesting::vesting(&4), None);
+		// Make the schedule for the new transfer.
+		let new_vesting_schedule = VestingInfo::new(
+			256 * 5,
+			64, // Vesting over 20 blocks
+			10,
+		);
+		assert_ok!(Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule));
+		// Now account 4 should have vesting.
+		assert_eq!(Vesting::vesting(&4).unwrap(), vec![new_vesting_schedule]);
+		// Account 4 has 5 * 256 locked.
+		assert_eq!(Vesting::vesting_balance(&4), Some(256 * 5));
+		// Verify only root can call
+		assert_noop!(Vesting::force_remove_vesting_schedule(Some(4).into(), 4, 0), BadOrigin);
+		// Verifies that vesting schedule is removed
+		assert_ok!(Vesting::force_remove_vesting_schedule(RawOrigin::Root.into(), 4, 0));
+		// Appropriate storage is cleaned up
+		assert!(!<VestingStorage<Test>>::contains_key(4));
+		// Check the vesting balance is zero
+		assert_eq!(Vesting::vesting(&4), None);
+		// Verifies that trying to remove a schedule when it doesnt exist throws error
+		assert_noop!(
+			Vesting::force_remove_vesting_schedule(RawOrigin::Root.into(), 4, 0),
+			Error::<Test>::NotVesting
 		);
 	});
 }

@@ -439,6 +439,25 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/// Force remove a vesting schedule
+		///
+		/// The dispatch origin for this call must be _Root_.
+		///
+		/// - `target`: The account that received that vesting transfer
+		/// - `schedule_index`: The vesting schedule index that should be removed
+		#[pallet::weight(
+			T::WeightInfo::force_remove_vesting_schedule(MaxLocksOf::<T>::get(), T::MAX_VESTING_SCHEDULES)
+		)]
+		pub fn force_remove_vesting_schedule(
+			origin: OriginFor<T>,
+			target: <T::Lookup as StaticLookup>::Source,
+			schedule_index: u32,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			let who = T::Lookup::lookup(target)?;
+			Self::remove_vesting_schedule(&who, schedule_index)
+		}
 	}
 }
 
