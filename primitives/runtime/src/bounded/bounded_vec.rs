@@ -111,6 +111,7 @@ pub struct BoundedSlice<'a, T, S>(pub(super) &'a [T], PhantomData<S>);
 // #[derive(scale_info::TypeInfo)]
 // #[scale_info(skip_type_params(S))]
 // again once this issue is fixed in the rust compiler: https://github.com/rust-lang/rust/issues/96956
+// Tracking issues: https://github.com/paritytech/substrate/issues/11915
 impl<'a, T, S> scale_info::TypeInfo for BoundedSlice<'a, T, S>
 where
 	&'a [T]: scale_info::TypeInfo + 'static,

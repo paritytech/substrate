@@ -36,6 +36,7 @@ pub struct PiecewiseLinear<'a> {
 // #[derive(scale_info::TypeInfo)]
 // #[scale_info(skip_type_params(S))]
 // again once this issue is fixed in the rust compiler: https://github.com/rust-lang/rust/issues/96956
+// Tracking issues: https://github.com/paritytech/substrate/issues/11915
 impl scale_info::TypeInfo for PiecewiseLinear<'static> {
 	type Identity = Self;
 	fn type_info() -> ::scale_info::Type {
