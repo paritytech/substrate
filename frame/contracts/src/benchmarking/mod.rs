@@ -991,16 +991,19 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
+			let key = &VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?;
 			Storage::<T>::write(
 				&info.trie_id,
-				&VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?,
+				key,
 				Some(vec![]),
 				None,
 				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
-			// Whitelist the key from further DB operations
-			frame_benchmarking::benchmarking::add_to_whitelist(key.into());
+			// Whitelist the key hash from further DB operations
+			let hash =
+				<frame_support::BoundedVec<u8, <T as pallet::Config>::MaxStorageKeyLen> as exec::StorageKey<T>>::hash(key);
+			frame_benchmarking::benchmarking::add_to_whitelist(hash.into());
 		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -1041,17 +1044,20 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
+			let key = &VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?;
 			Storage::<T>::write(
 				&info.trie_id,
-				&VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?,
+				key,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
-			// Whitelist the key from further DB operations
-			frame_benchmarking::benchmarking::add_to_whitelist(key.into());
-		}
+			// Whitelist the key hash from further DB operations
+			let hash =
+				<frame_support::BoundedVec<u8, <T as pallet::Config>::MaxStorageKeyLen> as exec::StorageKey<T>>::hash(key);
+			frame_benchmarking::benchmarking::add_to_whitelist(hash.into());
+	}
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
@@ -1140,16 +1146,19 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
+			let key = &VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?;
 			Storage::<T>::write(
 				&info.trie_id,
-				&VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?,
+				key,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
-			// Whitelist the key from further DB operations
-			frame_benchmarking::benchmarking::add_to_whitelist(key.into());
+			// Whitelist the key hash from further DB operations
+			let hash =
+				<frame_support::BoundedVec<u8, <T as pallet::Config>::MaxStorageKeyLen> as exec::StorageKey<T>>::hash(key);
+			frame_benchmarking::benchmarking::add_to_whitelist(hash.into());
 		}
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
@@ -1250,16 +1259,19 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
+			let key = &VarSizedKey::<T>::try_from(key).map_err(|e| "Key has wrong length")?;
 			Storage::<T>::write(
 				&info.trie_id,
-				&VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?,
+				key,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
-			// Whitelist the key from further DB operations
-			frame_benchmarking::benchmarking::add_to_whitelist(key.into());
+			// Whitelist the key hash from further DB operations
+			let hash =
+				<frame_support::BoundedVec<u8, <T as pallet::Config>::MaxStorageKeyLen> as exec::StorageKey<T>>::hash(key);
+			frame_benchmarking::benchmarking::add_to_whitelist(hash.into());
 		}
 		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
@@ -1348,16 +1360,19 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
+			let key = &VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?;
 			Storage::<T>::write(
 				&info.trie_id,
-				&VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?,
+				key,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
-			// Whitelist the key from further DB operations
-			frame_benchmarking::benchmarking::add_to_whitelist(key.into());
+			// Whitelist the key hash from further DB operations
+			let hash =
+				<frame_support::BoundedVec<u8, <T as pallet::Config>::MaxStorageKeyLen> as exec::StorageKey<T>>::hash(key);
+			frame_benchmarking::benchmarking::add_to_whitelist(hash.into());
 		}
 		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
@@ -1458,16 +1473,19 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let info = instance.info()?;
 		for key in keys {
+			let key = &VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?;
 			Storage::<T>::write(
 				&info.trie_id,
-				&VarSizedKey::<T>::try_from(key.clone()).map_err(|e| "Key has wrong length")?,
+				key,
 				Some(vec![42u8; (n * 2048) as usize]), // value_len increments by 2kb up to max payload_len
 				None,
 				false,
 			)
 			.map_err(|_| "Failed to write to storage during setup.")?;
-			// Whitelist the key from further DB operations
-			frame_benchmarking::benchmarking::add_to_whitelist(key.into());
+			// Whitelist the key hash from further DB operations
+			let hash =
+				<frame_support::BoundedVec<u8, <T as pallet::Config>::MaxStorageKeyLen> as exec::StorageKey<T>>::hash(key);
+			frame_benchmarking::benchmarking::add_to_whitelist(hash.into());
 		}
 		<ContractInfoOf<T>>::insert(&instance.account_id, info);
 		let origin = RawOrigin::Signed(instance.caller.clone());
