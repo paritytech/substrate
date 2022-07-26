@@ -267,4 +267,3 @@ update-node-template:
       --template-path "bin/node-template"
       --github-api-token "$GITHUB_PR_TOKEN"
       --polkadot-branch "polkadot-v0.9.26" # for test purposes
-#      --polkadot-branch "$CI_COMMIT_REF_NAME"
