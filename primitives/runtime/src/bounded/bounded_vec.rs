@@ -104,9 +104,45 @@ where
 /// A bounded slice.
 ///
 /// Similar to a `BoundedVec`, but not owned and cannot be decoded.
-#[derive(Encode, scale_info::TypeInfo)]
-#[scale_info(skip_type_params(S))]
+#[derive(Encode)]
 pub struct BoundedSlice<'a, T, S>(pub(super) &'a [T], PhantomData<S>);
+
+// This can be replaced with
+// #[derive(scale_info::TypeInfo)]
+// #[scale_info(skip_type_params(S))]
+// again once this issue is fixed in the rust compiler: https://github.com/rust-lang/rust/issues/96956
+// Tracking issues: https://github.com/paritytech/substrate/issues/11915
+impl<'a, T, S> scale_info::TypeInfo for BoundedSlice<'a, T, S>
+where
+	&'a [T]: scale_info::TypeInfo + 'static,
+	PhantomData<S>: scale_info::TypeInfo + 'static,
+	T: scale_info::TypeInfo + 'static,
+	S: 'static,
+{
+	type Identity = Self;
+
+	fn type_info() -> ::scale_info::Type {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("BoundedSlice", "sp_runtime::bounded::bounded_vec"))
+			.type_params(<[_]>::into_vec(Box::new([
+				scale_info::TypeParameter::new(
+					"T",
+					core::option::Option::Some(::scale_info::meta_type::<T>()),
+				),
+				scale_info::TypeParameter::new("S", ::core::option::Option::None),
+			])))
+			.docs(&[
+				"A bounded slice.",
+				"",
+				"Similar to a `BoundedVec`, but not owned and cannot be decoded.",
+			])
+			.composite(
+				scale_info::build::Fields::unnamed()
+					.field(|f| f.ty::<&'static [T]>().type_name("&'static[T]").docs(&[]))
+					.field(|f| f.ty::<PhantomData<S>>().type_name("PhantomData<S>").docs(&[])),
+			)
+	}
+}
 
 // `BoundedSlice`s encode to something which will always decode into a `BoundedVec`,
 // `WeakBoundedVec`, or a `Vec`.

@@ -1835,6 +1835,12 @@ impl_runtime_apis! {
 		}
 	}
 
+	impl pallet_nomination_pools_runtime_api::NominationPoolsApi<Block, AccountId, Balance> for Runtime {
+		fn pending_rewards(member_account: AccountId) -> Balance {
+			NominationPools::pending_rewards(member_account)
+		}
+	}
+
 	impl sp_consensus_babe::BabeApi<Block> for Runtime {
 		fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
 			// The choice of `c` parameter (where `1 - c` represents the
