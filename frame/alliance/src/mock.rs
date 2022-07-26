@@ -26,7 +26,7 @@ pub use sp_runtime::{
 use sp_std::convert::{TryFrom, TryInto};
 
 pub use frame_support::{
-	assert_ok, ord_parameter_types, parameter_types,
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{EitherOfDiverse, GenesisBuild, SortedMembers},
 	BoundedVec,
 };
