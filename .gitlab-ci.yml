@@ -194,7 +194,7 @@ include:
   # build jobs
 #  - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
-  - scripts/ci/gitlab/pipeline/publish.yml
+#  - scripts/ci/gitlab/pipeline/publish.yml
 
 
 #### stage:                        deploy
@@ -256,7 +256,7 @@ cancel-pipeline:
   trigger:                         "parity/infrastructure/ci_cd/pipeline-stopper"
 
 update-node-template:
-  stage:                           publish
+  stage:                           .pre
   extends:                         .kubernetes-env
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^mak\/111.*$/ # /^polkadot-v[0-9]+\.[0-9]+.*$/ # i.e. polkadot-v1.0.99, polkadot-v2.1rc1
