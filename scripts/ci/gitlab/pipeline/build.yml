@@ -6,19 +6,26 @@
 .check-dependent-project:
   stage:                           build
   extends:
-    - .docker-env
+    - .kubernetes-env
     - .test-refs-no-trigger-prs-only
   script:
+    - rm -rf .git/pipeline-scripts
     - git clone
         --depth=1
         --branch="$PIPELINE_SCRIPTS_TAG"
         https://github.com/paritytech/pipeline-scripts
-    - ./pipeline-scripts/check_dependent_project.sh
+        .git/pipeline-scripts
+    - .git/pipeline-scripts/check_dependent_project.sh
         --org paritytech
         --dependent-repo "$DEPENDENT_REPO"
         --github-api-token "$GITHUB_PR_TOKEN"
         --extra-dependencies "$EXTRA_DEPENDENCIES"
         --companion-overrides "$COMPANION_OVERRIDES"
+        --gitlab-url "$CI_SERVER_URL"
+        --gitlab-dependent-path "$GITLAB_DEPENDENT_PATH"
+        --gitlab-dependent-token "$GITLAB_DEPENDENT_TOKEN"
+  after_script:
+    - rm -rf .git/pipeline-scripts
 
 # Individual jobs are set up for each dependent project so that they can be ran in parallel.
 # Arguably we could generate a job for each companion in the PR's description using Gitlab's
@@ -28,6 +35,8 @@ check-dependent-polkadot:
   extends:                         .check-dependent-project
   variables:
     DEPENDENT_REPO:                polkadot
+    GITLAB_DEPENDENT_PATH:         parity/mirrors/polkadot
+    GITLAB_DEPENDENT_TOKEN:        $CBS_POLKADOT_TOKEN
     COMPANION_OVERRIDES: |
       substrate: polkadot-v*
       polkadot: release-v*
@@ -38,10 +47,12 @@ check-dependent-cumulus:
   extends:                         .check-dependent-project
   variables:
     DEPENDENT_REPO:                cumulus
+    GITLAB_DEPENDENT_PATH:         parity/mirrors/cumulus
+    GITLAB_DEPENDENT_TOKEN:        $CBS_CUMULUS_TOKEN
     EXTRA_DEPENDENCIES:            polkadot
     COMPANION_OVERRIDES: |
       substrate: polkadot-v*
-      polkadot: release-v*
+      cumulus: polkadot-v*
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  #PRs
 
