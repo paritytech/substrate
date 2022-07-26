@@ -187,13 +187,13 @@ skip-if-draft:
      - ./scripts/ci/gitlab/skip_if_draft.sh
 
 include:
-   check jobs
+  # check jobs
   - scripts/ci/gitlab/pipeline/check.yml
-   tests jobs
+  # tests jobs
   - scripts/ci/gitlab/pipeline/test.yml
-   build jobs
+  # build jobs
   - scripts/ci/gitlab/pipeline/build.yml
-   publish jobs
+  # publish jobs
   - scripts/ci/gitlab/pipeline/publish.yml
 
 
