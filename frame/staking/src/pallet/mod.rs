@@ -477,10 +477,6 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// The earliest era for which we have a pending, unapplied slash.
-	#[pallet::storage]
-	pub(crate) type EarliestUnappliedSlash<T> = StorageValue<_, EraIndex>;
-
 	/// The last planned session scheduled by the session pallet.
 	///
 	/// This is basically in sync with the call to [`pallet_session::SessionManager::new_session`].
