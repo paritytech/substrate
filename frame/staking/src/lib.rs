@@ -872,11 +872,12 @@ enum Releases {
 	V2_0_0,
 	V3_0_0,
 	V4_0_0,
-	V5_0_0, // blockable validators.
-	V6_0_0, // removal of all storage associated with offchain phragmen.
-	V7_0_0, // keep track of number of nominators / validators in map
-	V8_0_0, // populate `VoterList`.
-	V9_0_0, // inject validators into `VoterList` as well.
+	V5_0_0,  // blockable validators.
+	V6_0_0,  // removal of all storage associated with offchain phragmen.
+	V7_0_0,  // keep track of number of nominators / validators in map
+	V8_0_0,  // populate `VoterList`.
+	V9_0_0,  // inject validators into `VoterList` as well.
+	V10_0_0, // remove `EarliestUnappliedSlash`.
 }
 
 impl Default for Releases {

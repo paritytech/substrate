@@ -2777,12 +2777,103 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
 
+		System::reset_events();
+
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
 		mock::start_active_era(4);
 
 		assert_eq!(Balances::free_balance(11), 900);
 		assert_eq!(Balances::free_balance(101), 2000 - (nominated_value / 10));
+
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![
+				Event::StakersElected,
+				Event::EraPaid(3, 11075, 33225),
+				Event::Slashed(11, 100),
+				Event::Slashed(101, 12)
+			]
+		);
+	})
+}
+
+#[test]
+fn retroactive_deferred_slashes_two_eras_before() {
+	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
+		assert_eq!(BondingDuration::get(), 3);
+
+		mock::start_active_era(1);
+		let exposure_11_at_era1 = Staking::eras_stakers(active_era(), 11);
+
+		mock::start_active_era(3);
+		on_offence_in_era(
+			&[OffenceDetails { offender: (11, exposure_11_at_era1), reporters: vec![] }],
+			&[Perbill::from_percent(10)],
+			1, // should be deferred for two full eras, and applied at the beginning of era 4.
+			DisableStrategy::Never,
+		);
+		System::reset_events();
+
+		mock::start_active_era(4);
+
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![
+				Event::StakersElected,
+				Event::EraPaid(3, 7100, 21300),
+				Event::Slashed(11, 100),
+				Event::Slashed(101, 12)
+			]
+		);
+	})
+}
+
+#[test]
+fn retroactive_deferred_slashes_one_before() {
+	ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
+		assert_eq!(BondingDuration::get(), 3);
+
+		mock::start_active_era(1);
+		let exposure_11_at_era1 = Staking::eras_stakers(active_era(), 11);
+
+		// unbond at slash era.
+		mock::start_active_era(2);
+		assert_ok!(Staking::chill(Origin::signed(10)));
+		assert_ok!(Staking::unbond(Origin::signed(10), 100));
+
+		mock::start_active_era(3);
+		on_offence_in_era(
+			&[OffenceDetails { offender: (11, exposure_11_at_era1), reporters: vec![] }],
+			&[Perbill::from_percent(10)],
+			2, // should be deferred for two full eras, and applied at the beginning of era 5.
+			DisableStrategy::Never,
+		);
+		System::reset_events();
+
+		mock::start_active_era(4);
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![Event::StakersElected, Event::EraPaid(3, 11075, 33225)]
+		);
+
+		assert_eq!(Staking::ledger(10).unwrap().total, 1000);
+		// slash happens after the next line.
+		mock::start_active_era(5);
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![
+				Event::StakersElected,
+				Event::EraPaid(4, 11075, 33225),
+				Event::Slashed(11, 100),
+				Event::Slashed(101, 12)
+			]
+		);
+
+		// their ledger has already been slashed.
+		assert_eq!(Staking::ledger(10).unwrap().total, 900);
+		assert_ok!(Staking::unbond(Origin::signed(10), 1000));
+		assert_eq!(Staking::ledger(10).unwrap().total, 900);
 	})
 }
 
@@ -2871,6 +2962,7 @@ fn remove_deferred() {
 		assert_eq!(Balances::free_balance(101), 2000);
 		let nominated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
+		// deferred to start of era 4.
 		on_offence_now(
 			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
 			&[Perbill::from_percent(10)],
@@ -2881,6 +2973,7 @@ fn remove_deferred() {
 
 		mock::start_active_era(2);
 
+		// reported later, but deferred to start of era 4 as well.
 		on_offence_in_era(
 			&[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
 			&[Perbill::from_percent(15)],
@@ -2894,7 +2987,8 @@ fn remove_deferred() {
 			Error::<Test>::EmptyTargets
 		);
 
-		assert_ok!(Staking::cancel_deferred_slash(Origin::root(), 1, vec![0]));
+		// cancel one of them.
+		assert_ok!(Staking::cancel_deferred_slash(Origin::root(), 4, vec![0]));
 
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
@@ -2906,13 +3000,19 @@ fn remove_deferred() {
 
 		// at the start of era 4, slashes from era 1 are processed,
 		// after being deferred for at least 2 full eras.
+		System::reset_events();
 		mock::start_active_era(4);
 
-		// the first slash for 10% was cancelled, so no effect.
-		assert_eq!(Balances::free_balance(11), 1000);
-		assert_eq!(Balances::free_balance(101), 2000);
-
-		mock::start_active_era(5);
+		// the first slash for 10% was cancelled, but the 15% one
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![
+				Event::StakersElected,
+				Event::EraPaid(3, 11075, 33225),
+				Event::Slashed(11, 50),
+				Event::Slashed(101, 7)
+			]
+		);
 
 		let slash_10 = Perbill::from_percent(10);
 		let slash_15 = Perbill::from_percent(15);
@@ -2965,7 +3065,7 @@ fn remove_multi_deferred() {
 			&[Perbill::from_percent(25)],
 		);
 
-		assert_eq!(<Staking as Store>::UnappliedSlashes::get(&1).len(), 5);
+		assert_eq!(<Staking as Store>::UnappliedSlashes::get(&4).len(), 5);
 
 		// fails if list is not sorted
 		assert_noop!(
@@ -2983,9 +3083,9 @@ fn remove_multi_deferred() {
 			Error::<Test>::InvalidSlashIndex
 		);
 
-		assert_ok!(Staking::cancel_deferred_slash(Origin::root(), 1, vec![0, 2, 4]));
+		assert_ok!(Staking::cancel_deferred_slash(Origin::root(), 4, vec![0, 2, 4]));
 
-		let slashes = <Staking as Store>::UnappliedSlashes::get(&1);
+		let slashes = <Staking as Store>::UnappliedSlashes::get(&4);
 		assert_eq!(slashes.len(), 2);
 		assert_eq!(slashes[0].validator, 21);
 		assert_eq!(slashes[1].validator, 42);

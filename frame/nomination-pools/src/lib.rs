@@ -939,7 +939,7 @@ pub struct RewardPool<T: Config> {
 
 impl<T: Config> RewardPool<T> {
 	/// Getter for [`RewardPool::last_recorded_reward_counter`].
-	fn last_recorded_reward_counter(&self) -> T::RewardCounter {
+	pub(crate) fn last_recorded_reward_counter(&self) -> T::RewardCounter {
 		self.last_recorded_reward_counter
 	}
 
@@ -2147,6 +2147,20 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Returns the pending rewards for the specified `member_account`.
+	///
+	/// In the case of error the function returns balance of zero.
+	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
+		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
+			if let Some(reward_pool) = RewardPools::<T>::get(pool_member.pool_id) {
+				return pool_member
+					.pending_rewards(reward_pool.last_recorded_reward_counter())
+					.unwrap_or_default()
+			}
+		}
+		BalanceOf::<T>::default()
+	}
+
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
 	///
 	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
