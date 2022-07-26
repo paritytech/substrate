@@ -77,36 +77,6 @@ mod tests;
 
 pub use pallet::*;
 
-/// Trigger an epoch change, if any should take place.
-pub trait EpochChangeTrigger {
-	/// Trigger an epoch change, if any should take place. This should be called
-	/// during every block, after initialization is done.
-	fn trigger<T: Config>(now: T::BlockNumber);
-}
-
-/// A type signifying to Sassafras that an external trigger for epoch changes
-/// (e.g. pallet-session) is used.
-pub struct ExternalTrigger;
-
-impl EpochChangeTrigger for ExternalTrigger {
-	fn trigger<T: Config>(_: T::BlockNumber) {} // nothing - trigger is external.
-}
-
-/// A type signifying to Sassafras that it should perform epoch changes with an internal
-/// trigger, recycling the same authorities forever.
-pub struct SameAuthoritiesForever;
-
-impl EpochChangeTrigger for SameAuthoritiesForever {
-	fn trigger<T: Config>(now: T::BlockNumber) {
-		if <Pallet<T>>::should_epoch_change(now) {
-			let authorities = <Pallet<T>>::authorities();
-			let next_authorities = authorities.clone();
-
-			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
-		}
-	}
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -150,10 +120,6 @@ pub mod pallet {
 		/// Max number of tickets that are considered for each epoch.
 		#[pallet::constant]
 		type MaxTickets: Get<u32>;
-
-		/// Max number of tickets that we are going to consider for each epoch.
-		#[pallet::constant]
-		type MaxSubmittedTickets: Get<u32>;
 	}
 
 	// TODO-SASS-P2
@@ -216,7 +182,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
 
-	/// Current epoch randomness accumulator.
+	/// Randomness accumulator.
 	#[pallet::storage]
 	pub type RandomnessAccumulator<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
 
@@ -224,7 +190,7 @@ pub mod pallet {
 	/// if per-block initialization has already been called for current block.
 	#[pallet::storage]
 	#[pallet::getter(fn initialized)]
-	pub type Initialized<T> = StorageValue<_, Option<PreDigest>>;
+	pub type Initialized<T> = StorageValue<_, PreDigest>;
 
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in
 	/// genesis.
@@ -240,7 +206,7 @@ pub mod pallet {
 	// Each map entry contains a vector of tickets as they are received.
 	#[pallet::storage]
 	pub type NextTickets<T: Config> =
-		StorageValue<_, BoundedBTreeSet<Ticket, T::MaxSubmittedTickets>, ValueQuery>;
+		StorageValue<_, BoundedBTreeSet<Ticket, T::MaxTickets>, ValueQuery>;
 
 	/// Genesis configuration for Sassafras protocol.
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -273,49 +239,41 @@ pub mod pallet {
 			// At the end of the block, we can safely include the new VRF output from
 			// this block into the randomness accumulator. If we've determined
 			// that this block was the first in a new epoch, the changeover logic has
-			// already occurred at this point, so the under-construction randomness
+			// already occurred at this point, so the
+			//
+			// TODO-SASS-P2
+			// under-construction randomness
 			// will only contain outputs from the right epoch.
-			// TODO-SASS-P2: maybe here we can `expect` that is initialized (panic if not)
-			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
-				let authority_index = pre_digest.authority_index;
+			let pre_digest = Initialized::<T>::take()
+				.expect("Finalization is called after initialization; qed.");
 
-				let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
-					.get(authority_index as usize)
-					.and_then(|(authority, _)| {
-						schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
-					})
-					.and_then(|pubkey| {
-						let current_slot = CurrentSlot::<T>::get();
+			let randomness = Authorities::<T>::get()
+				.get(pre_digest.authority_index as usize)
+				.and_then(|(authority, _)| {
+					schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
+				})
+				.and_then(|pubkey| {
+					let current_slot = CurrentSlot::<T>::get();
 
-						let transcript = sp_consensus_sassafras::make_slot_transcript(
-							&Self::randomness(),
-							current_slot,
-							EpochIndex::<T>::get(),
-						);
+					let transcript = sp_consensus_sassafras::make_slot_transcript(
+						&Self::randomness(),
+						current_slot,
+						EpochIndex::<T>::get(),
+					);
 
-						let vrf_output = pre_digest.block_vrf_output;
+					let vrf_output = pre_digest.vrf_output;
 
-						// This has already been verified by the client on block import.
-						debug_assert!(pubkey
-							.vrf_verify(
-								transcript.clone(),
-								&vrf_output,
-								&pre_digest.block_vrf_proof
-							)
-							.is_ok());
+					// This has already been verified by the client on block import.
+					debug_assert!(pubkey
+						.vrf_verify(transcript.clone(), &vrf_output, &pre_digest.vrf_proof)
+						.is_ok());
 
-						vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
-					})
-					.map(|inout| {
-						inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_BLOCK_VRF_PREFIX)
-					});
+					vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
+				})
+				.map(|inout| inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_BLOCK_VRF_PREFIX))
+				.expect("Pre-digest contains valid randomness; qed");
 
-				// TODO-SASS-P2: this should be infallible. Randomness should be always deposited.
-				// Eventually better to panic here?
-				if let Some(randomness) = randomness {
-					Self::deposit_randomness(&randomness);
-				}
-			}
+			Self::deposit_randomness(&randomness);
 		}
 	}
 
@@ -439,6 +397,11 @@ impl<T: Config> Pallet<T> {
 		// The exception is for block 1: the genesis has slot 0, so we treat epoch 0 as having
 		// started at the slot of block 1. We want to use the same randomness and validator set as
 		// signalled in the genesis, so we don't rotate the epoch.
+
+		// TODO-SASS-P2
+		// Is now != One required???
+		// What if we want epochs with len = 1. In this case we doesn't change epoch correctly
+		// in slot 1.
 		now != One::one() && Self::current_slot_epoch_index() >= T::EpochDuration::get()
 	}
 
@@ -490,12 +453,6 @@ impl<T: Config> Pallet<T> {
 		// epoch randomness.
 		let randomness = Self::randomness_change_epoch(next_epoch_index);
 		Randomness::<T>::put(randomness);
-
-		// // Update the start blocks of the previous and new current epoch.
-		// <EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
-		// 	*previous_epoch_start_block = sp_std::mem::take(current_epoch_start_block);
-		// 	*current_epoch_start_block = <frame_system::Pallet<T>>::block_number();
-		// });
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
@@ -574,33 +531,32 @@ impl<T: Config> Pallet<T> {
 	// TODO-SASS-P2: temporary fix to make the compiler happy
 	#[allow(dead_code)]
 	fn initialize_genesis_authorities(authorities: &[(AuthorityId, SassafrasAuthorityWeight)]) {
-		if !authorities.is_empty() {
-			assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
-			let bounded_authorities =
-				WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
-					.expect("Initial number of authorities should be lower than T::MaxAuthorities");
-			Authorities::<T>::put(&bounded_authorities);
-			NextAuthorities::<T>::put(&bounded_authorities);
-		}
+		//if !authorities.is_empty() {
+		assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
+		let bounded_authorities =
+			WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
+				.expect("Initial number of authorities should be lower than T::MaxAuthorities");
+		Authorities::<T>::put(&bounded_authorities);
+		NextAuthorities::<T>::put(&bounded_authorities);
+		//}
 	}
 
 	fn initialize_genesis_epoch(genesis_slot: Slot) {
 		GenesisSlot::<T>::put(genesis_slot);
-		debug_assert_ne!(*GenesisSlot::<T>::get(), 0);
 
-		// Deposit a log because this is the first block in epoch #0. We use the same values
-		// as genesis because we haven't collected any randomness yet.
+		// Deposit a log because this is the first block in epoch #0.
+		// We use the same values as genesis because we haven't collected any randomness yet.
 		let next = NextEpochDescriptor {
 			authorities: Self::authorities().to_vec(),
 			randomness: Self::randomness(),
 		};
-
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
 	}
 
 	fn initialize(now: T::BlockNumber) {
 		// Since `initialize` can be called twice (e.g. if session module is present)
-		// let's ensure that we only do the initialization once per block
+		// let's ensure that we only do the initialization once per block.
+		// TODO-SASS-P2: why session calls initialize?
 		if Self::initialized().is_some() {
 			return
 		}
@@ -618,26 +574,19 @@ impl<T: Config> Pallet<T> {
 			})
 			.next();
 
-		// ANDRE
-		// TODO-SASS-P2: maybe here we have to assert! the presence of pre_digest...
-		// Every valid sassafras block should come with a pre-digest
+		let pre_digest = pre_digest.expect("Valid Sassafras block should have a pre-digest. qed"); // let Some(ref pre_digest) = pre_digest {
+		let current_slot = pre_digest.slot;
+		CurrentSlot::<T>::put(current_slot);
 
-		if let Some(ref pre_digest) = pre_digest {
-			// The slot number of the current block being initialized
-			let current_slot = pre_digest.slot;
-
-			// On the first non-zero block (i.e. block #1) this is where the first epoch
-			// (epoch #0) actually starts. We need to adjust internal storage accordingly.
-			if *GenesisSlot::<T>::get() == 0 {
-				Self::initialize_genesis_epoch(current_slot)
-			}
-
-			CurrentSlot::<T>::put(current_slot);
+		// On the first non-zero block (i.e. block #1) this is where the first epoch
+		// (epoch #0) actually starts. We need to adjust internal storage accordingly.
+		if *GenesisSlot::<T>::get() == 0 {
+			Self::initialize_genesis_epoch(current_slot)
 		}
 
 		Initialized::<T>::put(pre_digest);
 
-		// enact epoch change, if necessary.
+		// Enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now);
 	}
 
@@ -678,19 +627,21 @@ impl<T: Config> Pallet<T> {
 			ticket_idx as usize
 		};
 
-		// If this is a ticket for an epoch not enacted yet we have to fetch it from the
-		// `NextTickets` list. For example, this may happen when an author request the first
-		// ticket of a new epoch.
 		if slot_idx < duration {
+			// Get a ticket for the current epoch.
 			let tickets = Tickets::<T>::get();
 			let idx = ticket_index(slot_idx);
 			tickets.get(idx).cloned()
-		} else {
+		} else if slot_idx < 2 * duration {
+			// Get a ticket for the next epoch. Since its state values were not enacted yet, we
+			// have to fetch it from the `NextTickets` list. This may happen when an author request
+			// the first ticket of a new epoch.
 			let tickets = NextTickets::<T>::get();
-			// Do not use modulus since we want to eventually return `None` for slots crossing the
-			// epoch boundaries.
 			let idx = ticket_index(slot_idx - duration);
 			tickets.iter().nth(idx).cloned()
+		} else {
+			// We have no tickets for the requested slot yet.
+			None
 		}
 	}
 
@@ -699,6 +650,36 @@ impl<T: Config> Pallet<T> {
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
 		let call = Call::submit_tickets { tickets };
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()).is_ok()
+	}
+}
+
+/// Trigger an epoch change, if any should take place.
+pub trait EpochChangeTrigger {
+	/// Trigger an epoch change, if any should take place. This should be called
+	/// during every block, after initialization is done.
+	fn trigger<T: Config>(now: T::BlockNumber);
+}
+
+/// A type signifying to Sassafras that an external trigger for epoch changes
+/// (e.g. pallet-session) is used.
+pub struct ExternalTrigger;
+
+impl EpochChangeTrigger for ExternalTrigger {
+	fn trigger<T: Config>(_: T::BlockNumber) {} // nothing - trigger is external.
+}
+
+/// A type signifying to Sassafras that it should perform epoch changes with an internal
+/// trigger, recycling the same authorities forever.
+pub struct SameAuthoritiesForever;
+
+impl EpochChangeTrigger for SameAuthoritiesForever {
+	fn trigger<T: Config>(now: T::BlockNumber) {
+		if <Pallet<T>>::should_epoch_change(now) {
+			let authorities = <Pallet<T>>::authorities();
+			let next_authorities = authorities.clone();
+
+			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
+		}
 	}
 }
 

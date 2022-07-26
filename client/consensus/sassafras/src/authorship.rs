@@ -75,8 +75,8 @@ pub fn claim_slot(
 			let pre_digest = PreDigest {
 				authority_index: authority_index as u32,
 				slot,
-				block_vrf_output: VRFOutput(signature.output),
-				block_vrf_proof: VRFProof(signature.proof.clone()),
+				vrf_output: VRFOutput(signature.output),
+				vrf_proof: VRFProof(signature.proof.clone()),
 				ticket_info,
 			};
 			Some((pre_digest, authority_id.clone()))

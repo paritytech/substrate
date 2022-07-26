@@ -20,11 +20,13 @@
 // TODO-SASS-P2 remove
 #![allow(unused_imports)]
 
-use crate::{self as pallet_sassafras, Authorities, Config};
+use crate::{self as pallet_sassafras, Authorities, Config, SameAuthoritiesForever};
 
 use frame_support::{
 	parameter_types,
-	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
+	traits::{
+		ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
+	},
 };
 use scale_codec::Encode;
 use sp_consensus_sassafras::{AuthorityId, AuthorityPair, Slot};
@@ -40,6 +42,9 @@ use sp_runtime::{
 	traits::{Header as _, IdentityLookup, OpaqueKeys},
 	Perbill,
 };
+
+const EPOCH_DURATION: u64 = 10;
+const MAX_TICKETS: u32 = 6;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -96,12 +101,11 @@ where
 }
 
 impl pallet_sassafras::Config for Test {
-	type EpochDuration = ConstU64<3>;
+	type EpochDuration = ConstU64<EPOCH_DURATION>;
 	type ExpectedBlockTime = ConstU64<1>;
-	type EpochChangeTrigger = crate::SameAuthoritiesForever;
+	type EpochChangeTrigger = SameAuthoritiesForever;
 	type MaxAuthorities = ConstU32<10>;
-	type MaxTickets = ConstU32<3>;
-	type MaxSubmittedTickets = ConstU32<3>;
+	type MaxTickets = ConstU32<MAX_TICKETS>;
 }
 
 frame_support::construct_runtime!(
@@ -135,4 +139,114 @@ pub fn new_test_ext_with_pairs(
 		.unwrap();
 
 	(pairs, t.into())
+}
+
+fn make_ticket_vrf(
+	slot: Slot,
+	attempt: u64,
+	pair: &sp_consensus_sassafras::AuthorityPair,
+) -> (VRFOutput, VRFProof) {
+	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
+
+	let mut epoch = Sassafras::epoch_index();
+	let epoch_start = Sassafras::current_epoch_start();
+	// Check if epoch index is going to change on initialization
+	if epoch_start != 0_u64 && slot >= epoch_start + EPOCH_DURATION {
+		epoch += 1;
+	}
+
+	let transcript =
+		sp_consensus_sassafras::make_ticket_transcript(&Sassafras::randomness(), attempt, epoch);
+	let inout = pair.vrf_sign(transcript);
+	let output = VRFOutput(inout.0.to_output());
+	let proof = VRFProof(inout.1);
+
+	(output, proof)
+}
+
+pub fn make_tickets(
+	slot: Slot,
+	attempts: u64,
+	pair: &sp_consensus_sassafras::AuthorityPair,
+) -> Vec<(VRFOutput, VRFProof)> {
+	(0..attempts)
+		.into_iter()
+		.map(|attempt| make_ticket_vrf(slot, attempt, pair))
+		.collect()
+}
+
+fn make_slot_vrf(
+	slot: Slot,
+	pair: &sp_consensus_sassafras::AuthorityPair,
+) -> (VRFOutput, VRFProof) {
+	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
+
+	let mut epoch = Sassafras::epoch_index();
+	let epoch_start = Sassafras::current_epoch_start();
+	// Check if epoch index is going to change on initialization
+	if epoch_start != 0_u64 && slot >= epoch_start + EPOCH_DURATION {
+		epoch += 1;
+	}
+
+	let transcript =
+		sp_consensus_sassafras::make_slot_transcript(&Sassafras::randomness(), slot, epoch);
+	let inout = pair.vrf_sign(transcript);
+	let output = VRFOutput(inout.0.to_output());
+	let proof = VRFProof(inout.1);
+
+	(output, proof)
+}
+
+pub fn make_pre_digest(
+	authority_index: sp_consensus_sassafras::AuthorityIndex,
+	slot: sp_consensus_sassafras::Slot,
+	pair: &sp_consensus_sassafras::AuthorityPair,
+) -> sp_consensus_sassafras::digests::PreDigest {
+	let (vrf_output, vrf_proof) = make_slot_vrf(slot, pair);
+	sp_consensus_sassafras::digests::PreDigest {
+		authority_index,
+		slot,
+		vrf_output,
+		vrf_proof,
+		ticket_info: None,
+	}
+}
+
+pub fn make_wrapped_pre_digest(
+	authority_index: sp_consensus_sassafras::AuthorityIndex,
+	slot: sp_consensus_sassafras::Slot,
+	pair: &sp_consensus_sassafras::AuthorityPair,
+) -> Digest {
+	let pre_digest = make_pre_digest(authority_index, slot, pair);
+	let log =
+		DigestItem::PreRuntime(sp_consensus_sassafras::SASSAFRAS_ENGINE_ID, pre_digest.encode());
+	Digest { logs: vec![log] }
+}
+
+pub fn go_to_block(number: u64, slot: u64, pair: &sp_consensus_sassafras::AuthorityPair) -> Digest {
+	Sassafras::on_finalize(System::block_number());
+	let parent_hash = System::finalize().hash();
+
+	let digest = make_wrapped_pre_digest(0, slot.into(), pair);
+
+	System::reset_events();
+	System::initialize(&number, &parent_hash, &digest);
+	Sassafras::on_initialize(number);
+
+	digest
+}
+
+/// Slots will grow accordingly to blocks
+pub fn progress_to_block(
+	number: u64,
+	pair: &sp_consensus_sassafras::AuthorityPair,
+) -> Option<Digest> {
+	let mut slot = u64::from(Sassafras::current_slot()) + 1;
+	let mut digest = None;
+	for i in System::block_number() + 1..=number {
+		let dig = go_to_block(i, slot, pair);
+		digest = Some(dig);
+		slot += 1;
+	}
+	digest
 }

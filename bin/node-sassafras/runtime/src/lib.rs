@@ -235,8 +235,6 @@ impl pallet_sassafras::Config for Runtime {
 	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 	type MaxTickets = ConstU32<{ EPOCH_DURATION_IN_SLOTS as u32 }>;
-	// TODO-SASS-P4. Add some redundancy before starting tickets drop.
-	type MaxSubmittedTickets = ConstU32<{ 3 * EPOCH_DURATION_IN_SLOTS as u32 }>;
 }
 
 impl pallet_grandpa::Config for Runtime {

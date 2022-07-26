@@ -746,13 +746,13 @@ pub fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error
 	// dummy one to not break any invariants in the rest of the code
 	if header.number().is_zero() {
 		const PROOF: &str = "zero sequence is a valid vrf output/proof; qed";
-		let block_vrf_output = VRFOutput::try_from([0; VRF_OUTPUT_LENGTH]).expect(PROOF);
-		let block_vrf_proof = VRFProof::try_from([0; VRF_PROOF_LENGTH]).expect(PROOF);
+		let vrf_output = VRFOutput::try_from([0; VRF_OUTPUT_LENGTH]).expect(PROOF);
+		let vrf_proof = VRFProof::try_from([0; VRF_PROOF_LENGTH]).expect(PROOF);
 		return Ok(PreDigest {
 			authority_index: 0,
 			slot: 0.into(),
-			block_vrf_output,
-			block_vrf_proof,
+			vrf_output,
+			vrf_proof,
 			ticket_info: None,
 		})
 	}

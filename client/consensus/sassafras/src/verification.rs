@@ -132,9 +132,7 @@ pub fn check_header<B: BlockT + Sized>(
 
 	let transcript = make_slot_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
 	schnorrkel::PublicKey::from_bytes(author.as_slice())
-		.and_then(|p| {
-			p.vrf_verify(transcript, &pre_digest.block_vrf_output, &pre_digest.block_vrf_proof)
-		})
+		.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
 		.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 
 	let info = VerifiedHeaderInfo {

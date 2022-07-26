@@ -6253,6 +6253,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal",
  "log",
  "pallet-session",
  "pallet-timestamp",

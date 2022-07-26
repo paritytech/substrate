@@ -36,10 +36,10 @@ pub struct PreDigest {
 	pub authority_index: AuthorityIndex,
 	/// Corresponding slot number.
 	pub slot: Slot,
-	/// Block VRF output.
-	pub block_vrf_output: VRFOutput,
-	/// Block VRF proof.
-	pub block_vrf_proof: VRFProof,
+	/// Slot VRF output.
+	pub vrf_output: VRFOutput,
+	/// Slot VRF proof.
+	pub vrf_proof: VRFProof,
 	/// Ticket information.
 	pub ticket_info: Option<TicketInfo>,
 }
