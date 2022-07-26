@@ -20,7 +20,7 @@
 use super::*;
 use mock::*;
 
-use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
+use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OnInitialize};
 use sp_runtime::traits::BadOrigin;
 
 type ScoredPool = Pallet<Test>;
@@ -166,11 +166,33 @@ fn refreshing_works() {
 		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
 
 		// when
-		ScoredPool::refresh_members(ScoredPool::pool(), ChangeReceiver::MembershipChanged);
+		ScoredPool::refresh_members(ScoredPool::pool(), ChangeReceiver::MembershipChanged).unwrap();
 
 		// then
 		assert_eq!(ScoredPool::members(), vec![15, 40]);
 		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
+	});
+}
+
+#[test]
+fn refreshing_does_not_work_exceed() {
+	new_test_ext().execute_with(|| {
+		// given
+
+		for i in [1, 2, 3, 4, 6] {
+			let who = i as u64;
+			assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
+			let index = find_in_pool(who).expect("entity must be in pool") as u32;
+			assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
+		}
+
+		let submit_candidacy_call =
+			crate::mock::Call::ScoredPool(crate::Call::<Test>::submit_candidacy {});
+
+		assert_noop!(
+			submit_candidacy_call.dispatch(Origin::signed(7)),
+			Error::<Test, _>::TooManyPoolCandidates
+		);
 	});
 }
 
@@ -295,5 +317,13 @@ fn candidacy_resubmitting_works() {
 
 		// then
 		assert_eq!(ScoredPool::candidate_exists(who), true);
+	});
+}
+
+#[test]
+fn exceed_maximum_members() {
+	new_test_ext().execute_with(|| {
+		ScoredPool::submit_candidacy(Origin::signed(15)).unwrap();
+		println!("{:?}", MEMBERS.with(|m| m.borrow().clone()));
 	});
 }
