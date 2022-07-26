@@ -188,7 +188,7 @@ skip-if-draft:
 
 include:
   # check jobs
-  - scripts/ci/gitlab/pipeline/check.yml
+#  - scripts/ci/gitlab/pipeline/check.yml
   # tests jobs
 #  - scripts/ci/gitlab/pipeline/test.yml
   # build jobs
@@ -223,11 +223,11 @@ deploy-prometheus-alerting-rules:
 
 # This job notifies rusty-cachier about the latest commit with the cache.
 # This info is later used for the cache distribution and an overlay creation.
-rusty-cachier-notify:
-  stage:                           notify
-  extends:                         .docker-env
-  script:
-    - rusty-cachier cache notify
+#rusty-cachier-notify:
+#  stage:                           notify
+#  extends:                         .docker-env
+#  script:
+#    - rusty-cachier cache notify
 
 #### stage:                        .post
 
