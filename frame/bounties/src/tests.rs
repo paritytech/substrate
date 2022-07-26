@@ -1126,8 +1126,8 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), value, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(Origin::root(), bounty_index));
 
-		System::set_block_number(3);
-		<Treasury as OnInitialize<u64>>::on_initialize(3);
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
@@ -1150,8 +1150,8 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), value, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(Origin::root(), bounty_index));
 
-		System::set_block_number(3);
-		<Treasury as OnInitialize<u64>>::on_initialize(3);
+		System::set_block_number(6);
+		<Treasury as OnInitialize<u64>>::on_initialize(6);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
