@@ -4689,6 +4689,7 @@ version = "3.0.0-dev"
 dependencies = [
  "jsonrpsee",
  "node-primitives",
+ "node-runtime",
  "pallet-contracts-rpc",
  "pallet-mmr-rpc",
  "pallet-transaction-payment-rpc",
