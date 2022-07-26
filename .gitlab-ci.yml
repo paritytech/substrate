@@ -188,7 +188,7 @@ skip-if-draft:
 
 include:
   # check jobs
-  - scripts/ci/gitlab/pipeline/check.yml
+#  - scripts/ci/gitlab/pipeline/check.yml
   # tests jobs
 #  - scripts/ci/gitlab/pipeline/test.yml
   # build jobs
@@ -255,15 +255,15 @@ cancel-pipeline:
     PIPELINE_ID:                   "${CI_PIPELINE_ID}"
   trigger:                         "parity/infrastructure/ci_cd/pipeline-stopper"
 
-#update-node-template:
-#  stage:                           check
-#  extends:                         .kubernetes-env
-#  rules:
-#    - if: $CI_COMMIT_REF_NAME =~ /^mak\/111.*$/ # /^polkadot-v[0-9]+\.[0-9]+.*$/ # i.e. polkadot-v1.0.99, polkadot-v2.1rc1
-#  script:
-#    - git clone --depth=1 --branch="mak/111-update-substrate-template" https://github.com/paritytech/pipeline-scripts
-#    - ./pipeline-scripts/update_substrate_template.sh
-#      --repo-name substrate-node-template
-#      --template-path "bin/node-template"
-#      --github-api-token "$GITHUB_PR_TOKEN"
-#      --polkadot-branch "polkadot-v0.9.26" # for test purposes
+update-node-template:
+  stage:                           check
+  extends:                         .kubernetes-env
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^11919$/ # /^polkadot-v[0-9]+\.[0-9]+.*$/ # i.e. polkadot-v1.0.99, polkadot-v2.1rc1
+  script:
+    - git clone --depth=1 --branch="mak/111-update-substrate-template" https://github.com/paritytech/pipeline-scripts
+    - ./pipeline-scripts/update_substrate_template.sh
+      --repo-name substrate-node-template
+      --template-path "bin/node-template"
+      --github-api-token "$GITHUB_PR_TOKEN"
+      --polkadot-branch "polkadot-v0.9.26" # for test purposes
