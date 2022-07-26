@@ -29,8 +29,7 @@ pub use crate::{
 		result,
 	},
 	traits::{
-		CallMetadata, GetCallMetadata, GetCallName,
-		GetStorageVersion, UnfilteredDispatchable,
+		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
 	},
 	weights::{
 		ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
