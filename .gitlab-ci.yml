@@ -186,7 +186,7 @@ skip-if-draft:
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
      - ./scripts/ci/gitlab/skip_if_draft.sh
 
-include:
+#include:
   # check jobs
 #  - scripts/ci/gitlab/pipeline/check.yml
   # tests jobs
@@ -236,7 +236,7 @@ include:
 # to fail the pipeline as soon as possible to shorten the feedback loop.
 cancel-pipeline:
   stage:                           .post
-  needs:
+#  needs:
 #    - job:                         test-linux-stable
 #      artifacts:                   false
 #    - job:                         test-linux-stable-int
