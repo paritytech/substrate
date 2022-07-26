@@ -446,14 +446,11 @@ where
 	}
 
 	/// Query runtime dispatch info of a given `Call`.
-	pub fn query_call_info<Call: GetDispatchInfo>(
-		call: Call,
-		len: u32,
-	) -> RuntimeDispatchInfo<BalanceOf<T>>
+	pub fn query_call_info(call: T::Call, len: u32) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
 		T::Call: Dispatchable<Info = DispatchInfo>,
 	{
-		let dispatch_info = Call::get_dispatch_info(&call);
+		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
 		RuntimeDispatchInfo {
@@ -464,15 +461,11 @@ where
 	}
 
 	/// Query weight_to_fee of a given `Call`.
-	pub fn query_call_fee_details<Call: GetDispatchInfo>(
-		call: Call,
-		len: u32,
-	) -> FeeDetails<BalanceOf<T>>
+	pub fn query_call_fee_details(call: T::Call, len: u32) -> FeeDetails<BalanceOf<T>>
 	where
 		T::Call: Dispatchable<Info = DispatchInfo>,
 	{
-		let dispatch_info = Call::get_dispatch_info(&call);
-
+		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
 		let tip = 0u32.into();
 
 		Self::compute_fee_details(len, &dispatch_info, tip)
