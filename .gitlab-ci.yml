@@ -30,11 +30,11 @@
 
 stages:
   - check
-  - test
-  - build
-  - publish
-  - deploy
-  - notify
+#  - test
+#  - build
+#  - publish
+#  - deploy
+#  - notify
 
 workflow:
   rules:
@@ -190,44 +190,44 @@ include:
   # check jobs
   - scripts/ci/gitlab/pipeline/check.yml
   # tests jobs
-  - scripts/ci/gitlab/pipeline/test.yml
+#  - scripts/ci/gitlab/pipeline/test.yml
   # build jobs
-  - scripts/ci/gitlab/pipeline/build.yml
+#  - scripts/ci/gitlab/pipeline/build.yml
   # publish jobs
-  - scripts/ci/gitlab/pipeline/publish.yml
+#  - scripts/ci/gitlab/pipeline/publish.yml
 
 
 #### stage:                        deploy
 
-deploy-prometheus-alerting-rules:
-  stage:                           deploy
-  needs:
-    - job:                         test-prometheus-alerting-rules
-      artifacts:                   false
-  allow_failure:                   true
-  trigger:
-    project:  parity/infrastructure/cloud-infra
-  variables:
-    SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
-    SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
-    UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_REF_NAME == "master"
-      changes:
-        - .gitlab-ci.yml
-        - ./scripts/ci/monitoring/**/*
+#deploy-prometheus-alerting-rules:
+#  stage:                           deploy
+#  needs:
+#    - job:                         test-prometheus-alerting-rules
+#      artifacts:                   false
+#  allow_failure:                   true
+#  trigger:
+#    project:  parity/infrastructure/cloud-infra
+#  variables:
+#    SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
+#    SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
+#    UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
+#  rules:
+#    - if: $CI_PIPELINE_SOURCE == "pipeline"
+#      when: never
+#    - if: $CI_COMMIT_REF_NAME == "master"
+#      changes:
+#        - .gitlab-ci.yml
+#        - ./scripts/ci/monitoring/**/*
 
 #### stage:                        notify
 
 # This job notifies rusty-cachier about the latest commit with the cache.
 # This info is later used for the cache distribution and an overlay creation.
-rusty-cachier-notify:
-  stage:                           notify
-  extends:                         .docker-env
-  script:
-    - rusty-cachier cache notify
+#rusty-cachier-notify:
+#  stage:                           notify
+#  extends:                         .docker-env
+#  script:
+#    - rusty-cachier cache notify
 
 #### stage:                        .post
 
@@ -236,17 +236,17 @@ rusty-cachier-notify:
 # to fail the pipeline as soon as possible to shorten the feedback loop.
 cancel-pipeline:
   stage:                           .post
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
-    - job:                         test-linux-stable-int
-      artifacts:                   false
-    - job:                         cargo-check-subkey
-      artifacts:                   false
-    - job:                         cargo-check-benches
-      artifacts:                   false
-    - job:                         check-tracing
-      artifacts:                   false
+#  needs:
+#    - job:                         test-linux-stable
+#      artifacts:                   false
+#    - job:                         test-linux-stable-int
+#      artifacts:                   false
+#    - job:                         cargo-check-subkey
+#      artifacts:                   false
+#    - job:                         cargo-check-benches
+#      artifacts:                   false
+#    - job:                         check-tracing
+#      artifacts:                   false
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
       when: on_failure
