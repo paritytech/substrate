@@ -467,7 +467,7 @@ fn finalize_block_and_wait_for_beefy(
 	finalize_targets: &[u64],
 	expected_beefy: &[u64],
 ) {
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
 
 	for block in finalize_targets {
 		let finalize = BlockId::number(*block);
@@ -555,7 +555,7 @@ fn lagging_validators() {
 
 	// Alice finalizes #25, Bob lags behind
 	let finalize = BlockId::number(25);
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
@@ -563,7 +563,7 @@ fn lagging_validators() {
 	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
 
 	// Bob catches up and also finalizes #25
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
 	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// expected beefy finalizes block #17 from diff-power-of-two
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[23, 24, 25]);
@@ -577,7 +577,7 @@ fn lagging_validators() {
 	// validator set).
 
 	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
 	let finalize = BlockId::number(60);
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
@@ -586,7 +586,7 @@ fn lagging_validators() {
 	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
 
 	// Bob catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut *net.lock(), peers);
+	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
 	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #40
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[60]);
@@ -629,7 +629,7 @@ fn correct_beefy_payload() {
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[1, 9]);
 
 	let (best_blocks, signed_commitments) =
-		get_beefy_streams(&mut *net.lock(), &[BeefyKeyring::Alice]);
+		get_beefy_streams(&mut net.lock(), &[BeefyKeyring::Alice]);
 
 	// now 2 good validators and 1 bad one are voting
 	net.lock()
@@ -658,7 +658,7 @@ fn correct_beefy_payload() {
 
 	// 3rd good validator catches up and votes as well
 	let (best_blocks, signed_commitments) =
-		get_beefy_streams(&mut *net.lock(), &[BeefyKeyring::Alice]);
+		get_beefy_streams(&mut net.lock(), &[BeefyKeyring::Alice]);
 	net.lock()
 		.peer(2)
 		.client()
