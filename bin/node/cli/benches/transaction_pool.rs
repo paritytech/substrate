@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use std::time::Duration;
+
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use futures::{future, StreamExt};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
@@ -58,6 +60,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 			ready: PoolLimit { count: 100_000, total_bytes: 100 * 1024 * 1024 },
 			future: PoolLimit { count: 100_000, total_bytes: 100 * 1024 * 1024 },
 			reject_future_transactions: false,
+			ban_time: Duration::from_secs(30 * 60),
 		},
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
