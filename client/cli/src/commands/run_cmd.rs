@@ -50,10 +50,6 @@ pub struct RunCmd {
 	#[clap(long)]
 	pub no_grandpa: bool,
 
-	/// Experimental: Run in light client mode.
-	#[clap(long)]
-	pub light: bool,
-
 	/// Listen to all RPC interfaces.
 	///
 	/// Default is local. Note: not all RPC methods are safe to be exposed publicly. Use an RPC
@@ -100,10 +96,25 @@ pub struct RunCmd {
 	#[clap(long)]
 	pub unsafe_ws_external: bool,
 
-	/// Set the the maximum RPC payload size for both requests and responses (both http and ws), in
-	/// megabytes. Default is 15MiB.
+	/// DEPRECATED, this has no affect anymore. Use `rpc_max_request_size` or
+	/// `rpc_max_response_size` instead.
 	#[clap(long)]
 	pub rpc_max_payload: Option<usize>,
+
+	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
+	/// Default is 15MiB.
+	#[clap(long)]
+	pub rpc_max_request_size: Option<usize>,
+
+	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
+	/// Default is 15MiB.
+	#[clap(long)]
+	pub rpc_max_response_size: Option<usize>,
+
+	/// Set the the maximum concurrent subscriptions per connection.
+	/// Default is 1024.
+	#[clap(long)]
+	pub rpc_max_subscriptions_per_connection: Option<usize>,
 
 	/// Expose Prometheus exporter on all interfaces.
 	///
@@ -111,7 +122,7 @@ pub struct RunCmd {
 	#[clap(long)]
 	pub prometheus_external: bool,
 
-	/// Specify IPC RPC server path
+	/// DEPRECATED, IPC support has been removed.
 	#[clap(long, value_name = "PATH")]
 	pub ipc_path: Option<String>,
 
@@ -127,7 +138,7 @@ pub struct RunCmd {
 	#[clap(long, value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
-	/// Set the the maximum WebSocket output buffer size in MiB. Default is 16.
+	/// DEPRECATED, this has no affect anymore. Use `rpc_max_response_size` instead.
 	#[clap(long)]
 	pub ws_max_out_buffer_capacity: Option<usize>,
 
@@ -322,7 +333,7 @@ impl CliConfiguration for RunCmd {
 
 	fn dev_key_seed(&self, is_dev: bool) -> Result<Option<String>> {
 		Ok(self.get_keyring().map(|a| format!("//{}", a)).or_else(|| {
-			if is_dev && !self.light {
+			if is_dev {
 				Some("//Alice".into())
 			} else {
 				None
@@ -348,16 +359,9 @@ impl CliConfiguration for RunCmd {
 
 	fn role(&self, is_dev: bool) -> Result<Role> {
 		let keyring = self.get_keyring();
-		let is_light = self.light;
-		let is_authority = (self.validator || is_dev || keyring.is_some()) && !is_light;
+		let is_authority = self.validator || is_dev || keyring.is_some();
 
-		Ok(if is_light {
-			sc_service::Role::Light
-		} else if is_authority {
-			sc_service::Role::Authority
-		} else {
-			sc_service::Role::Full
-		})
+		Ok(if is_authority { sc_service::Role::Authority } else { sc_service::Role::Full })
 	}
 
 	fn force_authoring(&self) -> Result<bool> {
@@ -449,12 +453,24 @@ impl CliConfiguration for RunCmd {
 		Ok(self.rpc_max_payload)
 	}
 
+	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_request_size)
+	}
+
+	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_response_size)
+	}
+
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
+		Ok(self.rpc_max_subscriptions_per_connection)
+	}
+
 	fn ws_max_out_buffer_capacity(&self) -> Result<Option<usize>> {
 		Ok(self.ws_max_out_buffer_capacity)
 	}
 
-	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
-		Ok(self.pool_config.transaction_pool())
+	fn transaction_pool(&self, is_dev: bool) -> Result<TransactionPoolOptions> {
+		Ok(self.pool_config.transaction_pool(is_dev))
 	}
 
 	fn max_runtime_instances(&self) -> Result<Option<usize>> {
@@ -540,7 +556,7 @@ impl std::error::Error for TelemetryParsingError {}
 
 impl std::fmt::Display for TelemetryParsingError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match &*self {
+		match self {
 			TelemetryParsingError::MissingVerbosity => write!(f, "Verbosity level missing"),
 			TelemetryParsingError::VerbosityParsingError(e) => write!(f, "{}", e),
 		}

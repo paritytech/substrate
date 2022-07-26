@@ -91,33 +91,37 @@ impl<B: BlockT> SlotInfo<B> {
 }
 
 /// A stream that returns every time there is a new slot.
-pub(crate) struct Slots<Block, C, IDP> {
+pub(crate) struct Slots<Block, SC, IDP> {
 	last_slot: Slot,
 	slot_duration: Duration,
 	inner_delay: Option<Delay>,
 	create_inherent_data_providers: IDP,
-	client: C,
+	select_chain: SC,
 	_phantom: std::marker::PhantomData<Block>,
 }
 
-impl<Block, C, IDP> Slots<Block, C, IDP> {
+impl<Block, SC, IDP> Slots<Block, SC, IDP> {
 	/// Create a new `Slots` stream.
-	pub fn new(slot_duration: Duration, create_inherent_data_providers: IDP, client: C) -> Self {
+	pub fn new(
+		slot_duration: Duration,
+		create_inherent_data_providers: IDP,
+		select_chain: SC,
+	) -> Self {
 		Slots {
 			last_slot: 0.into(),
 			slot_duration,
 			inner_delay: None,
 			create_inherent_data_providers,
-			client,
+			select_chain,
 			_phantom: Default::default(),
 		}
 	}
 }
 
-impl<Block, C, IDP> Slots<Block, C, IDP>
+impl<Block, SC, IDP> Slots<Block, SC, IDP>
 where
 	Block: BlockT,
-	C: SelectChain<Block>,
+	SC: SelectChain<Block>,
 	IDP: CreateInherentDataProviders<Block, ()>,
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
@@ -145,7 +149,7 @@ where
 
 			let ends_at = Instant::now() + ends_in;
 
-			let chain_head = match self.client.best_chain().await {
+			let chain_head = match self.select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(e) => {
 					log::warn!(

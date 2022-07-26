@@ -17,6 +17,7 @@
 
 //! Migrate the reference counting state.
 
+use crate::{Config, Pallet};
 use codec::{Decode, Encode, FullCodec};
 use frame_support::{
 	pallet_prelude::ValueQuery, traits::PalletInfoAccess, weights::Weight, Blake2_128Concat,
@@ -52,43 +53,24 @@ pub trait V2ToV3 {
 	type AccountData: 'static + FullCodec;
 }
 
-// ### Warning
-//
-// The call below is only valid because the name System is enforced
-// at runtime construction level for the system pallet.
-frame_support::generate_storage_alias!(
-	System, UpgradedToU32RefCount => Value<
-		bool,
-		ValueQuery
-	>
-);
+#[frame_support::storage_alias]
+type UpgradedToU32RefCount<T: Config> = StorageValue<Pallet<T>, bool, ValueQuery>;
 
-// ### Warning
-//
-// The call below is only valid because the name System is enforced
-// at runtime construction level for the system pallet.
-frame_support::generate_storage_alias!(
-	System, UpgradedToTripleRefCount => Value<
-		bool,
-		ValueQuery
-	>
-);
+#[frame_support::storage_alias]
+type UpgradedToTripleRefCount<T: Config> = StorageValue<Pallet<T>, bool, ValueQuery>;
 
-// ### Warning
-//
-// The call below is only valid because the name System is enforced
-// at runtime construction level for the system pallet.
-frame_support::generate_storage_alias!(
-	System, Account<T: V2ToV3> => Map<
-		(Blake2_128Concat, T::AccountId),
-		AccountInfo<T::Index, T::AccountData>
-	>
-);
+#[frame_support::storage_alias]
+type Account<V, T: Config> = StorageMap<
+	Pallet<T>,
+	Blake2_128Concat,
+	<V as V2ToV3>::AccountId,
+	AccountInfo<<V as V2ToV3>::Index, <V as V2ToV3>::AccountData>,
+>;
 
 /// Migrate from unique `u8` reference counting to triple `u32` reference counting.
-pub fn migrate_from_single_u8_to_triple_ref_count<T: V2ToV3>() -> Weight {
+pub fn migrate_from_single_u8_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight {
 	let mut translated: usize = 0;
-	<Account<T>>::translate::<(T::Index, u8, T::AccountData), _>(|_key, (nonce, rc, data)| {
+	<Account<V, T>>::translate::<(V::Index, u8, V::AccountData), _>(|_key, (nonce, rc, data)| {
 		translated += 1;
 		Some(AccountInfo { nonce, consumers: rc as RefCount, providers: 1, sufficients: 0, data })
 	});
@@ -97,15 +79,15 @@ pub fn migrate_from_single_u8_to_triple_ref_count<T: V2ToV3>() -> Weight {
 		"Applied migration from single u8 to triple reference counting to {:?} elements.",
 		translated
 	);
-	<UpgradedToU32RefCount>::put(true);
-	<UpgradedToTripleRefCount>::put(true);
+	<UpgradedToU32RefCount<T>>::put(true);
+	<UpgradedToTripleRefCount<T>>::put(true);
 	Weight::max_value()
 }
 
 /// Migrate from unique `u32` reference counting to triple `u32` reference counting.
-pub fn migrate_from_single_to_triple_ref_count<T: V2ToV3>() -> Weight {
+pub fn migrate_from_single_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight {
 	let mut translated: usize = 0;
-	<Account<T>>::translate::<(T::Index, RefCount, T::AccountData), _>(
+	<Account<V, T>>::translate::<(V::Index, RefCount, V::AccountData), _>(
 		|_key, (nonce, consumers, data)| {
 			translated += 1;
 			Some(AccountInfo { nonce, consumers, providers: 1, sufficients: 0, data })
@@ -116,14 +98,14 @@ pub fn migrate_from_single_to_triple_ref_count<T: V2ToV3>() -> Weight {
 		"Applied migration from single to triple reference counting to {:?} elements.",
 		translated
 	);
-	<UpgradedToTripleRefCount>::put(true);
+	<UpgradedToTripleRefCount<T>>::put(true);
 	Weight::max_value()
 }
 
 /// Migrate from dual `u32` reference counting to triple `u32` reference counting.
-pub fn migrate_from_dual_to_triple_ref_count<T: V2ToV3>() -> Weight {
+pub fn migrate_from_dual_to_triple_ref_count<V: V2ToV3, T: Config>() -> Weight {
 	let mut translated: usize = 0;
-	<Account<T>>::translate::<(T::Index, RefCount, RefCount, T::AccountData), _>(
+	<Account<V, T>>::translate::<(V::Index, RefCount, RefCount, V::AccountData), _>(
 		|_key, (nonce, consumers, providers, data)| {
 			translated += 1;
 			Some(AccountInfo { nonce, consumers, providers, sufficients: 0, data })
@@ -134,6 +116,6 @@ pub fn migrate_from_dual_to_triple_ref_count<T: V2ToV3>() -> Weight {
 		"Applied migration from dual to triple reference counting to {:?} elements.",
 		translated
 	);
-	<UpgradedToTripleRefCount>::put(true);
+	<UpgradedToTripleRefCount<T>>::put(true);
 	Weight::max_value()
 }

@@ -94,7 +94,9 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// this function should generally not be used in production as it could lead to a very large
 	/// number of storage accesses.
 	pub(crate) fn unsafe_clear() {
+		#[allow(deprecated)]
 		crate::ListBags::<T, I>::remove_all(None);
+		#[allow(deprecated)]
 		crate::ListNodes::<T, I>::remove_all();
 	}
 
@@ -388,7 +390,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// are moved into the correct bag.
 	///
 	/// Returns `Some((old_idx, new_idx))` if the node moved, otherwise `None`. In both cases, the
-	/// node's score is written to the `score_score`. Thus, this is not a noop, even if `None`.
+	/// node's score is written to the `score` field. Thus, this is not a noop, even if `None`.
 	///
 	/// This operation is somewhat more efficient than simply calling [`self.remove`] followed by
 	/// [`self.insert`]. However, given large quantities of nodes to move, it may be more efficient
@@ -450,8 +452,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
 		// decrements the node counter.
-		// defensive: both nodes have been checked to exist.
-		let _ = Self::remove(&heavier_id).defensive();
+		let _ =
+			Self::remove(&heavier_id).defensive_proof("both nodes have been checked to exist; qed");
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
@@ -811,13 +813,13 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 #[scale_info(skip_type_params(T, I))]
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound, Clone, PartialEq))]
 pub struct Node<T: Config<I>, I: 'static = ()> {
-	id: T::AccountId,
-	prev: Option<T::AccountId>,
-	next: Option<T::AccountId>,
-	bag_upper: T::Score,
-	score: T::Score,
+	pub(crate) id: T::AccountId,
+	pub(crate) prev: Option<T::AccountId>,
+	pub(crate) next: Option<T::AccountId>,
+	pub(crate) bag_upper: T::Score,
+	pub(crate) score: T::Score,
 	#[codec(skip)]
-	_phantom: PhantomData<I>,
+	pub(crate) _phantom: PhantomData<I>,
 }
 
 impl<T: Config<I>, I: 'static> Node<T, I> {

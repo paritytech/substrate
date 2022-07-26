@@ -16,19 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Implementation of the [`DevApi`] trait providing debug utilities for Substrate based
+//! Implementation of the [`DevApiServer`] trait providing debug utilities for Substrate based
 //! blockchains.
 
 #[cfg(test)]
 mod tests;
 
-pub use sc_rpc_api::dev::{BlockStats, DevApi};
-
+use jsonrpsee::core::RpcResult;
 use sc_client_api::{BlockBackend, HeaderBackend};
-use sc_rpc_api::{
-	dev::error::{Error, Result},
-	DenyUnsafe,
-};
+use sc_rpc_api::{dev::error::Error, DenyUnsafe};
 use sp_api::{ApiExt, Core, ProvideRuntimeApi};
 use sp_core::Encode;
 use sp_runtime::{
@@ -39,6 +35,8 @@ use std::{
 	marker::{PhantomData, Send, Sync},
 	sync::Arc,
 };
+
+pub use sc_rpc_api::dev::{BlockStats, DevApiServer};
 
 type HasherOf<Block> = <<Block as BlockT>::Header as Header>::Hashing;
 
@@ -56,7 +54,7 @@ impl<Block: BlockT, Client> Dev<Block, Client> {
 	}
 }
 
-impl<Block, Client> DevApi<Block::Hash> for Dev<Block, Client>
+impl<Block, Client> DevApiServer<Block::Hash> for Dev<Block, Client>
 where
 	Block: BlockT + 'static,
 	Client: BlockBackend<Block>
@@ -67,7 +65,7 @@ where
 		+ 'static,
 	Client::Api: Core<Block>,
 {
-	fn block_stats(&self, hash: Block::Hash) -> Result<Option<BlockStats>> {
+	fn block_stats(&self, hash: Block::Hash) -> RpcResult<Option<BlockStats>> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let block = {

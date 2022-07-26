@@ -17,18 +17,23 @@
 
 //! Node-specific RPC methods for interaction with contracts.
 
-use std::sync::Arc;
+#![warn(unused_crate_dependencies)]
+
+use std::{marker::PhantomData, sync::Arc};
 
 use codec::Codec;
-use jsonrpc_core::{Error, ErrorCode, Result};
-use jsonrpc_derive::rpc;
+use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	proc_macros::rpc,
+	types::error::{CallError, ErrorCode, ErrorObject},
+};
 use pallet_contracts_primitives::{
 	Code, CodeUploadResult, ContractExecResult, ContractInstantiateResult,
 };
 use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_core::{Bytes, H256};
+use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::{
 	generic::BlockId,
@@ -37,8 +42,9 @@ use sp_runtime::{
 
 pub use pallet_contracts_rpc_runtime_api::ContractsApi as ContractsRuntimeApi;
 
-const RUNTIME_ERROR: i64 = 1;
-const CONTRACT_DOESNT_EXIST: i64 = 2;
+const RUNTIME_ERROR: i32 = 1;
+const CONTRACT_DOESNT_EXIST: i32 = 2;
+const KEY_DECODING_FAILED: i32 = 3;
 
 pub type Weight = u64;
 
@@ -58,15 +64,23 @@ const GAS_LIMIT: Weight = 5 * GAS_PER_SECOND;
 
 /// A private newtype for converting `ContractAccessError` into an RPC error.
 struct ContractAccessError(pallet_contracts_primitives::ContractAccessError);
-impl From<ContractAccessError> for Error {
-	fn from(e: ContractAccessError) -> Error {
+
+impl From<ContractAccessError> for JsonRpseeError {
+	fn from(e: ContractAccessError) -> Self {
 		use pallet_contracts_primitives::ContractAccessError::*;
 		match e.0 {
-			DoesntExist => Error {
-				code: ErrorCode::ServerError(CONTRACT_DOESNT_EXIST),
-				message: "The specified contract doesn't exist.".into(),
-				data: None,
-			},
+			DoesntExist => CallError::Custom(ErrorObject::owned(
+				CONTRACT_DOESNT_EXIST,
+				"The specified contract doesn't exist.",
+				None::<()>,
+			))
+			.into(),
+			KeyDecodingFailed => CallError::Custom(ErrorObject::owned(
+				KEY_DECODING_FAILED,
+				"Failed to decode the specified storage key.",
+				None::<()>,
+			))
+			.into(),
 		}
 	}
 }
@@ -109,7 +123,7 @@ pub struct CodeUploadRequest<AccountId> {
 }
 
 /// Contracts RPC methods.
-#[rpc]
+#[rpc(client, server)]
 pub trait ContractsApi<BlockHash, BlockNumber, AccountId, Balance, Hash>
 where
 	Balance: Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
@@ -121,12 +135,12 @@ where
 	///
 	/// This method is useful for calling getter-like methods on contracts or to dry-run a
 	/// a contract call in order to determine the `gas_limit`.
-	#[rpc(name = "contracts_call")]
+	#[method(name = "contracts_call")]
 	fn call(
 		&self,
 		call_request: CallRequest<AccountId>,
 		at: Option<BlockHash>,
-	) -> Result<ContractExecResult<Balance>>;
+	) -> RpcResult<ContractExecResult<Balance>>;
 
 	/// Instantiate a new contract.
 	///
@@ -134,12 +148,12 @@ where
 	/// is not actually created.
 	///
 	/// This method is useful for UIs to dry-run contract instantiations.
-	#[rpc(name = "contracts_instantiate")]
+	#[method(name = "contracts_instantiate")]
 	fn instantiate(
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<BlockHash>,
-	) -> Result<ContractInstantiateResult<AccountId, Balance>>;
+	) -> RpcResult<ContractInstantiateResult<AccountId, Balance>>;
 
 	/// Upload new code without instantiating a contract from it.
 	///
@@ -147,48 +161,50 @@ where
 	/// won't change any state.
 	///
 	/// This method is useful for UIs to dry-run code upload.
-	#[rpc(name = "contracts_upload_code")]
+	#[method(name = "contracts_upload_code")]
 	fn upload_code(
 		&self,
 		upload_request: CodeUploadRequest<AccountId>,
 		at: Option<BlockHash>,
-	) -> Result<CodeUploadResult<Hash, Balance>>;
+	) -> RpcResult<CodeUploadResult<Hash, Balance>>;
 
 	/// Returns the value under a specified storage `key` in a contract given by `address` param,
 	/// or `None` if it is not set.
-	#[rpc(name = "contracts_getStorage")]
+	#[method(name = "contracts_getStorage")]
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: H256,
+		key: Bytes,
 		at: Option<BlockHash>,
-	) -> Result<Option<Bytes>>;
+	) -> RpcResult<Option<Bytes>>;
 }
 
-/// An implementation of contract specific RPC methods.
-pub struct Contracts<C, B> {
-	client: Arc<C>,
-	_marker: std::marker::PhantomData<B>,
+/// Contracts RPC methods.
+pub struct Contracts<Client, Block> {
+	client: Arc<Client>,
+	_marker: PhantomData<Block>,
 }
 
-impl<C, B> Contracts<C, B> {
+impl<Client, Block> Contracts<Client, Block> {
 	/// Create new `Contracts` with the given reference to the client.
-	pub fn new(client: Arc<C>) -> Self {
-		Contracts { client, _marker: Default::default() }
+	pub fn new(client: Arc<Client>) -> Self {
+		Self { client, _marker: Default::default() }
 	}
 }
-impl<C, Block, AccountId, Balance, Hash>
-	ContractsApi<
+
+#[async_trait]
+impl<Client, Block, AccountId, Balance, Hash>
+	ContractsApiServer<
 		<Block as BlockT>::Hash,
 		<<Block as BlockT>::Header as HeaderT>::Number,
 		AccountId,
 		Balance,
 		Hash,
-	> for Contracts<C, Block>
+	> for Contracts<Client, Block>
 where
 	Block: BlockT,
-	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	C::Api: ContractsRuntimeApi<
+	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
+	Client::Api: ContractsRuntimeApi<
 		Block,
 		AccountId,
 		Balance,
@@ -203,7 +219,7 @@ where
 		&self,
 		call_request: CallRequest<AccountId>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<ContractExecResult<Balance>> {
+	) -> RpcResult<ContractExecResult<Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -226,7 +242,7 @@ where
 		&self,
 		instantiate_request: InstantiateRequest<AccountId, Hash>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<ContractInstantiateResult<AccountId, Balance>> {
+	) -> RpcResult<ContractInstantiateResult<AccountId, Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -265,7 +281,7 @@ where
 		&self,
 		upload_request: CodeUploadRequest<AccountId>,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<CodeUploadResult<Hash, Balance>> {
+	) -> RpcResult<CodeUploadResult<Hash, Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
@@ -283,16 +299,13 @@ where
 	fn get_storage(
 		&self,
 		address: AccountId,
-		key: H256,
+		key: Bytes,
 		at: Option<<Block as BlockT>::Hash>,
-	) -> Result<Option<Bytes>> {
+	) -> RpcResult<Option<Bytes>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(||
-			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash));
-
+		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let result = api
-			.get_storage(&at, address, key.into())
+			.get_storage(&at, address, key.to_vec())
 			.map_err(runtime_error_into_rpc_err)?
 			.map_err(ContractAccessError)?
 			.map(Bytes);
@@ -302,32 +315,35 @@ where
 }
 
 /// Converts a runtime trap into an RPC error.
-fn runtime_error_into_rpc_err(err: impl std::fmt::Display) -> Error {
-	Error {
-		code: ErrorCode::ServerError(RUNTIME_ERROR),
-		message: "Runtime error".into(),
-		data: Some(err.to_string().into()),
-	}
+fn runtime_error_into_rpc_err(err: impl std::fmt::Debug) -> JsonRpseeError {
+	CallError::Custom(ErrorObject::owned(
+		RUNTIME_ERROR,
+		"Runtime error",
+		Some(format!("{:?}", err)),
+	))
+	.into()
 }
 
-fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(from: H, name: &str) -> Result<T> {
-	from.try_into().map_err(|_| Error {
-		code: ErrorCode::InvalidParams,
-		message: format!("{:?} does not fit into the {} type", from, name),
-		data: None,
+fn decode_hex<H: std::fmt::Debug + Copy, T: TryFrom<H>>(from: H, name: &str) -> RpcResult<T> {
+	from.try_into().map_err(|_| {
+		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			ErrorCode::InvalidParams.code(),
+			format!("{:?} does not fit into the {} type", from, name),
+			None::<()>,
+		)))
 	})
 }
 
-fn limit_gas(gas_limit: Weight) -> Result<()> {
+fn limit_gas(gas_limit: Weight) -> RpcResult<()> {
 	if gas_limit > GAS_LIMIT {
-		Err(Error {
-			code: ErrorCode::InvalidParams,
-			message: format!(
+		Err(JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			ErrorCode::InvalidParams.code(),
+			format!(
 				"Requested gas limit is greater than maximum allowed: {} > {}",
 				gas_limit, GAS_LIMIT
 			),
-			data: None,
-		})
+			None::<()>,
+		))))
 	} else {
 		Ok(())
 	}
@@ -336,6 +352,7 @@ fn limit_gas(gas_limit: Weight) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use pallet_contracts_primitives::{ContractExecResult, ContractInstantiateResult};
 	use sp_core::U256;
 
 	fn trim(json: &str) -> String {

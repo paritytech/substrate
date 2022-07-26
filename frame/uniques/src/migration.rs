@@ -34,8 +34,8 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 
 	if on_chain_storage_version < 1 {
 		let mut count = 0;
-		for (class, detail) in Class::<T, I>::iter() {
-			ClassAccount::<T, I>::insert(&detail.owner, &class, ());
+		for (collection, detail) in Collection::<T, I>::iter() {
+			CollectionAccount::<T, I>::insert(&detail.owner, &collection, ());
 			count += 1;
 		}
 		StorageVersion::new(1).put::<P>();

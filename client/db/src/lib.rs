@@ -30,15 +30,13 @@
 
 pub mod offchain;
 
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub mod bench;
 
 mod children;
-#[cfg(feature = "with-parity-db")]
 mod parity_db;
 mod stats;
 mod storage_cache;
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+#[cfg(any(feature = "rocksdb", test))]
 mod upgrade;
 mod utils;
 
@@ -94,7 +92,6 @@ use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
 pub use sc_state_db::PruningMode;
 pub use sp_database::Database;
 
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
 
 const CACHE_HEADERS: usize = 8;
@@ -106,7 +103,6 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
 
-#[cfg(feature = "with-parity-db")]
 /// Length of a [`DbHash`].
 const DB_HASH_LEN: usize = 32;
 
@@ -226,9 +222,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.state.apply_to_keys_while(child_info, prefix, f)
+		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -296,11 +293,13 @@ pub struct DatabaseSettings {
 	pub state_cache_size: usize,
 	/// Ratio of cache size dedicated to child tries.
 	pub state_cache_child_ratio: Option<(usize, usize)>,
-	/// State pruning mode.
-	pub state_pruning: PruningMode,
+	/// Requested state pruning mode.
+	pub state_pruning: Option<PruningMode>,
 	/// Where to find the database.
 	pub source: DatabaseSource,
 	/// Block pruning mode.
+	///
+	/// NOTE: only finalized blocks are subject for removal!
 	pub keep_blocks: KeepBlocks,
 }
 
@@ -327,6 +326,7 @@ pub enum DatabaseSource {
 		cache_size: usize,
 	},
 	/// Load a RocksDB database from a given path. Recommended for most uses.
+	#[cfg(feature = "rocksdb")]
 	RocksDb {
 		/// Path to the database.
 		path: PathBuf,
@@ -341,7 +341,13 @@ pub enum DatabaseSource {
 	},
 
 	/// Use a custom already-open database.
-	Custom(Arc<dyn Database<DbHash>>),
+	Custom {
+		/// the handle to the custom storage
+		db: Arc<dyn Database<DbHash>>,
+
+		/// if set, the `create` flag will be required to open such datasource
+		require_create_flag: bool,
+	},
 }
 
 impl DatabaseSource {
@@ -353,8 +359,10 @@ impl DatabaseSource {
 			// IIUC this is needed for polkadot to create its own dbs, so until it can use parity db
 			// I would think rocksdb, but later parity-db.
 			DatabaseSource::Auto { paritydb_path, .. } => Some(paritydb_path),
-			DatabaseSource::RocksDb { path, .. } | DatabaseSource::ParityDb { path } => Some(path),
-			DatabaseSource::Custom(..) => None,
+			#[cfg(feature = "rocksdb")]
+			DatabaseSource::RocksDb { path, .. } => Some(path),
+			DatabaseSource::ParityDb { path } => Some(path),
+			DatabaseSource::Custom { .. } => None,
 		}
 	}
 
@@ -365,12 +373,16 @@ impl DatabaseSource {
 				*paritydb_path = p.into();
 				true
 			},
-			DatabaseSource::RocksDb { ref mut path, .. } |
+			#[cfg(feature = "rocksdb")]
+			DatabaseSource::RocksDb { ref mut path, .. } => {
+				*path = p.into();
+				true
+			},
 			DatabaseSource::ParityDb { ref mut path } => {
 				*path = p.into();
 				true
 			},
-			DatabaseSource::Custom(..) => false,
+			DatabaseSource::Custom { .. } => false,
 		}
 	}
 }
@@ -379,9 +391,10 @@ impl std::fmt::Display for DatabaseSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let name = match self {
 			DatabaseSource::Auto { .. } => "Auto",
+			#[cfg(feature = "rocksdb")]
 			DatabaseSource::RocksDb { .. } => "RocksDb",
 			DatabaseSource::ParityDb { .. } => "ParityDb",
-			DatabaseSource::Custom(_) => "Custom",
+			DatabaseSource::Custom { .. } => "Custom",
 		};
 		write!(f, "{}", name)
 	}
@@ -416,7 +429,7 @@ struct PendingBlock<Block: BlockT> {
 struct StateMetaDb<'a>(&'a dyn Database<DbHash>);
 
 impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
-	type Error = io::Error;
+	type Error = sp_database::error::DatabaseError;
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.0.get(columns::STATE_META, key))
@@ -1009,9 +1022,23 @@ impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
-		let db = crate::utils::open_database::<Block>(&config, DatabaseType::Full)?;
-		Self::from_database(db as Arc<_>, canonicalization_delay, &config)
+	pub fn new(db_config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
+		use utils::OpenDbError;
+
+		let db_source = &db_config.source;
+
+		let (needs_init, db) =
+			match crate::utils::open_database::<Block>(db_source, DatabaseType::Full, false) {
+				Ok(db) => (false, db),
+				Err(OpenDbError::DoesNotExist) => {
+					let db =
+						crate::utils::open_database::<Block>(db_source, DatabaseType::Full, true)?;
+					(true, db)
+				},
+				Err(as_is) => return Err(as_is.into()),
+			};
+
+		Self::from_database(db as Arc<_>, canonicalization_delay, &db_config, needs_init)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1028,8 +1055,8 @@ impl<Block: BlockT> Backend<Block> {
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			state_pruning: PruningMode::keep_blocks(keep_blocks),
-			source: DatabaseSource::Custom(db),
+			state_pruning: Some(PruningMode::keep_blocks(keep_blocks)),
+			source: DatabaseSource::Custom { db, require_create_flag: true },
 			keep_blocks: KeepBlocks::Some(keep_blocks),
 		};
 
@@ -1057,18 +1084,31 @@ impl<Block: BlockT> Backend<Block> {
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
 		config: &DatabaseSettings,
+		should_init: bool,
 	) -> ClientResult<Self> {
-		let is_archive_pruning = config.state_pruning.is_archive();
-		let blockchain = BlockchainDb::new(db.clone())?;
+		let mut db_init_transaction = Transaction::new();
+
+		let requested_state_pruning = config.state_pruning.clone();
+		let state_meta_db = StateMetaDb(db.as_ref());
 		let map_e = sp_blockchain::Error::from_state_db;
-		let state_db: StateDb<_, _> = StateDb::new(
-			config.state_pruning.clone(),
+
+		let (state_db_init_commit_set, state_db) = StateDb::open(
+			&state_meta_db,
+			requested_state_pruning,
 			!db.supports_ref_counting(),
-			&StateMetaDb(&*db),
+			should_init,
 		)
 		.map_err(map_e)?;
+
+		apply_state_commit(&mut db_init_transaction, state_db_init_commit_set);
+
+		let state_pruning_used = state_db.pruning_mode();
+		let is_archive_pruning = state_pruning_used.is_archive();
+		let blockchain = BlockchainDb::new(db.clone())?;
+
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
+
 		let offchain_storage = offchain::LocalStorage::new(db.clone());
 
 		let backend = Backend {
@@ -1105,6 +1145,9 @@ impl<Block: BlockT> Backend<Block> {
 				with_state: true,
 			});
 		}
+
+		db.commit(db_init_transaction)?;
+
 		Ok(backend)
 	}
 
@@ -2249,7 +2292,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn get_import_lock(&self) -> &RwLock<()> {
-		&*self.import_lock
+		&self.import_lock
+	}
+
+	fn requires_full_sync(&self) -> bool {
+		matches!(
+			self.storage.state_db.pruning_mode(),
+			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical
+		)
 	}
 }
 
@@ -2390,8 +2440,8 @@ pub(crate) mod tests {
 			DatabaseSettings {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
-				state_pruning: PruningMode::keep_blocks(1),
-				source: DatabaseSource::Custom(backing),
+				state_pruning: Some(PruningMode::keep_blocks(1)),
+				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
 				keep_blocks: KeepBlocks::All,
 			},
 			0,

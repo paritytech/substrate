@@ -435,24 +435,15 @@ where
 		sp_io::init_tracing();
 		let encoded = uxt.encode();
 		let encoded_len = encoded.len();
-		Self::apply_extrinsic_with_len(uxt, encoded_len, encoded)
-	}
-
-	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
-	fn apply_extrinsic_with_len(
-		uxt: Block::Extrinsic,
-		encoded_len: usize,
-		to_note: Vec<u8>,
-	) -> ApplyExtrinsicResult {
 		sp_tracing::enter_span!(sp_tracing::info_span!("apply_extrinsic",
-				ext=?sp_core::hexdisplay::HexDisplay::from(&uxt.encode())));
+				ext=?sp_core::hexdisplay::HexDisplay::from(&encoded)));
 		// Verify that the signature is good.
 		let xt = uxt.check(&Default::default())?;
 
 		// We don't need to make sure to `note_extrinsic` only after we know it's going to be
 		// executed to prevent it from leaking in storage since at this point, it will either
 		// execute or panic (and revert storage changes).
-		<frame_system::Pallet<System>>::note_extrinsic(to_note);
+		<frame_system::Pallet<System>>::note_extrinsic(encoded);
 
 		// AUDIT: Under no circumstances may this function panic from here onwards.
 
@@ -576,15 +567,13 @@ mod tests {
 			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
 			WithdrawReasons,
 		},
-		weights::{
-			ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFeePolynomial,
-		},
+		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
 	};
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment::CurrencyAdapter;
 
-	const TEST_KEY: &[u8] = &*b":test:key:";
+	const TEST_KEY: &[u8] = b":test:key:";
 
 	#[frame_support::pallet]
 	mod custom {
@@ -724,7 +713,7 @@ mod tests {
 		{
 			System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-			TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+			TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 			Custom: custom::{Pallet, Call, ValidateUnsigned, Inherent},
 		}
 	);
@@ -785,6 +774,7 @@ mod tests {
 		pub const TransactionByteFee: Balance = 0;
 	}
 	impl pallet_transaction_payment::Config for Runtime {
+		type Event = Event;
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type OperationalFeeMultiplier = ConstU8<5>;
 		type WeightToFee = IdentityFee<Balance>;
@@ -816,7 +806,7 @@ mod tests {
 	type TestUncheckedExtrinsic = TestXt;
 
 	// Will contain `true` when the custom runtime logic was called.
-	const CUSTOM_ON_RUNTIME_KEY: &[u8] = &*b":custom:on_runtime";
+	const CUSTOM_ON_RUNTIME_KEY: &[u8] = b":custom:on_runtime";
 
 	struct CustomOnRuntimeUpgrade;
 	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
@@ -866,7 +856,7 @@ mod tests {
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
 		let fee: Balance =
-			<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
+			<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(&weight);
 		let mut t = sp_io::TestExternalities::new(t);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
@@ -1153,7 +1143,9 @@ mod tests {
 						.get(DispatchClass::Normal)
 						.base_extrinsic;
 				let fee: Balance =
-					<Runtime as pallet_transaction_payment::Config>::WeightToFee::calc(&weight);
+					<Runtime as pallet_transaction_payment::Config>::WeightToFee::weight_to_fee(
+						&weight,
+					);
 				Executive::initialize_block(&Header::new(
 					1,
 					H256::default(),
@@ -1299,7 +1291,7 @@ mod tests {
 					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
-			// set block number to non zero so events are not exlcuded
+			// set block number to non zero so events are not excluded
 			System::set_block_number(1);
 
 			Executive::initialize_block(&Header::new(

@@ -60,9 +60,9 @@ pub(crate) fn benchmark<E>(
 
 	let score = ((size * count) as f64 / elapsed.as_secs_f64()) / (1024.0 * 1024.0);
 	log::trace!(
-		"Calculated {} of {}MB/s in {} iterations in {}ms",
+		"Calculated {} of {:.2}MB/s in {} iterations in {}ms",
 		name,
-		score as u64,
+		score,
 		count,
 		elapsed.as_millis()
 	);
@@ -116,8 +116,12 @@ fn clobber_value<T>(input: &mut T) {
 	}
 }
 
+/// A default [`ExecutionLimit`] that can be used to call [`benchmark_cpu`].
+pub const DEFAULT_CPU_EXECUTION_LIMIT: ExecutionLimit =
+	ExecutionLimit::Both { max_iterations: 4 * 1024, max_duration: Duration::from_millis(100) };
+
 // This benchmarks the CPU speed as measured by calculating BLAKE2b-256 hashes, in MB/s.
-pub fn benchmark_cpu() -> u64 {
+pub fn benchmark_cpu(limit: ExecutionLimit) -> f64 {
 	// In general the results of this benchmark are somewhat sensitive to how much
 	// data we hash at the time. The smaller this is the *less* MB/s we can hash,
 	// the bigger this is the *more* MB/s we can hash, up until a certain point
@@ -131,8 +135,6 @@ pub fn benchmark_cpu() -> u64 {
 	// picked in such a way as to still measure how fast the hasher is at hashing,
 	// but without hitting its theoretical maximum speed.
 	const SIZE: usize = 32 * 1024;
-	const MAX_ITERATIONS: usize = 4 * 1024;
-	const MAX_DURATION: Duration = Duration::from_millis(100);
 
 	let mut buffer = Vec::new();
 	buffer.resize(SIZE, 0x66);
@@ -146,16 +148,20 @@ pub fn benchmark_cpu() -> u64 {
 		Ok(())
 	};
 
-	benchmark("CPU score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
-		.expect("benchmark cannot fail; qed") as u64
+	benchmark("CPU score", SIZE, limit.max_iterations(), limit.max_duration(), run)
+		.expect("benchmark cannot fail; qed")
 }
+
+/// A default [`ExecutionLimit`] that can be used to call [`benchmark_memory`].
+pub const DEFAULT_MEMORY_EXECUTION_LIMIT: ExecutionLimit =
+	ExecutionLimit::Both { max_iterations: 32, max_duration: Duration::from_millis(100) };
 
 // This benchmarks the effective `memcpy` memory bandwidth available in MB/s.
 //
 // It doesn't technically measure the absolute maximum memory bandwidth available,
 // but that's fine, because real code most of the time isn't optimized to take
 // advantage of the full memory bandwidth either.
-pub fn benchmark_memory() -> u64 {
+pub fn benchmark_memory(limit: ExecutionLimit) -> f64 {
 	// Ideally this should be at least as big as the CPU's L3 cache,
 	// and it should be big enough so that the `memcpy` takes enough
 	// time to be actually measurable.
@@ -163,8 +169,6 @@ pub fn benchmark_memory() -> u64 {
 	// As long as it's big enough increasing it further won't change
 	// the benchmark's results.
 	const SIZE: usize = 64 * 1024 * 1024;
-	const MAX_ITERATIONS: usize = 32;
-	const MAX_DURATION: Duration = Duration::from_millis(100);
 
 	let mut src = Vec::new();
 	let mut dst = Vec::new();
@@ -192,8 +196,8 @@ pub fn benchmark_memory() -> u64 {
 		Ok(())
 	};
 
-	benchmark("memory score", SIZE, MAX_ITERATIONS, MAX_DURATION, run)
-		.expect("benchmark cannot fail; qed") as u64
+	benchmark("memory score", SIZE, limit.max_iterations(), limit.max_duration(), run)
+		.expect("benchmark cannot fail; qed")
 }
 
 struct TemporaryFile {
@@ -249,7 +253,7 @@ pub const DEFAULT_DISK_EXECUTION_LIMIT: ExecutionLimit =
 pub fn benchmark_disk_sequential_writes(
 	limit: ExecutionLimit,
 	directory: &Path,
-) -> Result<u64, String> {
+) -> Result<f64, String> {
 	const SIZE: usize = 64 * 1024 * 1024;
 
 	let buffer = random_data(SIZE);
@@ -286,13 +290,12 @@ pub fn benchmark_disk_sequential_writes(
 		limit.max_duration(),
 		run,
 	)
-	.map(|s| s as u64)
 }
 
 pub fn benchmark_disk_random_writes(
 	limit: ExecutionLimit,
 	directory: &Path,
-) -> Result<u64, String> {
+) -> Result<f64, String> {
 	const SIZE: usize = 64 * 1024 * 1024;
 
 	let buffer = random_data(SIZE);
@@ -353,7 +356,6 @@ pub fn benchmark_disk_random_writes(
 		limit.max_duration(),
 		run,
 	)
-	.map(|s| s as u64)
 }
 
 /// Benchmarks the verification speed of sr25519 signatures.
@@ -400,8 +402,8 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> f64 {
 pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 	#[allow(unused_mut)]
 	let mut hwbench = HwBench {
-		cpu_hashrate_score: benchmark_cpu(),
-		memory_memcpy_score: benchmark_memory(),
+		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) as u64,
+		memory_memcpy_score: benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) as u64,
 		disk_sequential_write_score: None,
 		disk_random_write_score: None,
 	};
@@ -410,7 +412,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 		hwbench.disk_sequential_write_score =
 			match benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory)
 			{
-				Ok(score) => Some(score),
+				Ok(score) => Some(score as u64),
 				Err(error) => {
 					log::warn!("Failed to run the sequential write disk benchmark: {}", error);
 					None
@@ -419,7 +421,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 
 		hwbench.disk_random_write_score =
 			match benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory) {
-				Ok(score) => Some(score),
+				Ok(score) => Some(score as u64),
 				Err(error) => {
 					log::warn!("Failed to run the random write disk benchmark: {}", error);
 					None
@@ -448,26 +450,27 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_cpu() {
-		assert_ne!(benchmark_cpu(), 0);
+		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) > 0.0);
 	}
 
 	#[test]
 	fn test_benchmark_memory() {
-		assert_ne!(benchmark_memory(), 0);
+		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) > 0.0);
 	}
 
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
 		assert!(
 			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				0
+				0.0
 		);
 	}
 
 	#[test]
 	fn test_benchmark_disk_random_writes() {
 		assert!(
-			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() > 0
+			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
+				0.0
 		);
 	}
 

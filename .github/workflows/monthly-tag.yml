@@ -16,7 +16,7 @@ jobs:
           echo "::set-output name=new::$(date +'monthly-%Y-%m')"
           echo "::set-output name=old::$(date -d'1 month ago' +'monthly-%Y-%m')"
       - name: Checkout branch "master"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           ref: 'master'
           fetch-depth: 0

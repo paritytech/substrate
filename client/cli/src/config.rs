@@ -145,7 +145,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the transaction pool options
 	///
 	/// By default this is `TransactionPoolOptions::default()`.
-	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
+	fn transaction_pool(&self, _is_dev: bool) -> Result<TransactionPoolOptions> {
 		Ok(Default::default())
 	}
 
@@ -211,15 +211,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-		role: &Role,
 	) -> Result<DatabaseSource> {
-		let role_dir = match role {
-			Role::Light => "light",
-			Role::Full | Role::Authority => "full",
-		};
+		let role_dir = "full";
 		let rocksdb_path = base_path.join("db").join(role_dir);
 		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
+			#[cfg(feature = "rocksdb")]
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
 			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
 			Database::ParityDbDeprecated => {
@@ -251,9 +248,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `PruningMode` if it is available. Otherwise its
 	/// `PruningMode::default()`.
-	fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> Result<PruningMode> {
+	fn state_pruning(&self) -> Result<Option<PruningMode>> {
 		self.pruning_params()
-			.map(|x| x.state_pruning(unsafe_pruning, role))
+			.map(|x| x.state_pruning())
 			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
@@ -356,6 +353,21 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get maximum RPC payload.
 	fn rpc_max_payload(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum RPC request payload size.
+	fn rpc_max_request_size(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum RPC response payload size.
+	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum number of subscriptions per connection.
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
 		Ok(None)
 	}
 
@@ -485,7 +497,16 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(1024);
-		let database = self.database()?.unwrap_or(Database::RocksDb);
+		let database = self.database()?.unwrap_or(
+			#[cfg(feature = "rocksdb")]
+			{
+				Database::RocksDb
+			},
+			#[cfg(not(feature = "rocksdb"))]
+			{
+				Database::ParityDb
+			},
+		);
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
@@ -494,13 +515,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let telemetry_endpoints = self.telemetry_endpoints(&chain_spec)?;
 		let runtime_cache_size = self.runtime_cache_size()?;
 
-		let unsafe_pruning = self.import_params().map(|p| p.unsafe_pruning).unwrap_or(false);
-
 		Ok(Configuration {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
 			tokio_handle,
-			transaction_pool: self.transaction_pool()?,
+			transaction_pool: self.transaction_pool(is_dev)?,
 			network: self.network_config(
 				&chain_spec,
 				is_dev,
@@ -513,10 +532,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			)?,
 			keystore_remote,
 			keystore,
-			database: self.database_config(&config_dir, database_cache_size, database, &role)?,
+			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
-			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
+			state_pruning: self.state_pruning()?,
 			keep_blocks: self.keep_blocks()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
@@ -528,6 +547,10 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_ws_max_connections: self.rpc_ws_max_connections()?,
 			rpc_cors: self.rpc_cors(is_dev)?,
 			rpc_max_payload: self.rpc_max_payload()?,
+			rpc_max_request_size: self.rpc_max_request_size()?,
+			rpc_max_response_size: self.rpc_max_response_size()?,
+			rpc_id_provider: None,
+			rpc_max_subs_per_conn: self.rpc_max_subscriptions_per_connection()?,
 			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
 			prometheus_config: self
 				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,
@@ -641,6 +664,17 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
 				);
 			}
+		}
+
+		if self.import_params().map_or(false, |p| {
+			#[allow(deprecated)]
+			p.unsafe_pruning
+		}) {
+			// according to https://github.com/substrate/issues/8103;
+			warn!(
+				"WARNING: \"--unsafe-pruning\" CLI-flag is deprecated and has no effect. \
+				In future builds it will be removed, and providing this flag will lead to an error."
+			);
 		}
 
 		Ok(())

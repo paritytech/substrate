@@ -12,8 +12,8 @@ jobs:
   markdown-link-check:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: gaurav-nelson/github-action-markdown-link-check@7481451f70251762f149d69596e3e276ebf2b236
+    - uses: actions/checkout@v3
+    - uses: gaurav-nelson/github-action-markdown-link-check@9710f0fec812ce0a3b98bef4c9d842fc1f39d976 # v1.0.13
       with:
         use-quiet-mode: 'yes'
         config-file: '.github/workflows/mlc_config.json'

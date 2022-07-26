@@ -20,6 +20,36 @@
 
 use clap::ArgEnum;
 
+/// The instantiation strategy to use in compiled mode.
+#[derive(Debug, Clone, Copy, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
+pub enum WasmtimeInstantiationStrategy {
+	/// Pool the instances to avoid initializing everything from scratch
+	/// on each instantiation. Use copy-on-write memory when possible.
+	PoolingCopyOnWrite,
+
+	/// Recreate the instance from scratch on every instantiation.
+	/// Use copy-on-write memory when possible.
+	RecreateInstanceCopyOnWrite,
+
+	/// Pool the instances to avoid initializing everything from scratch
+	/// on each instantiation.
+	Pooling,
+
+	/// Recreate the instance from scratch on every instantiation. Very slow.
+	RecreateInstance,
+
+	/// Legacy instance reuse mechanism. DEPRECATED. Will be removed in the future.
+	///
+	/// Should only be used in case of encountering any issues with the new default
+	/// instantiation strategy.
+	LegacyInstanceReuse,
+}
+
+/// The default [`WasmtimeInstantiationStrategy`].
+pub const DEFAULT_WASMTIME_INSTANTIATION_STRATEGY: WasmtimeInstantiationStrategy =
+	WasmtimeInstantiationStrategy::PoolingCopyOnWrite;
+
 /// How to execute Wasm runtime code.
 #[derive(Debug, Clone, Copy)]
 pub enum WasmExecutionMethod {
@@ -71,18 +101,33 @@ impl WasmExecutionMethod {
 	}
 }
 
-impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
-	fn into(self) -> sc_service::config::WasmExecutionMethod {
-		match self {
-			WasmExecutionMethod::Interpreted =>
-				sc_service::config::WasmExecutionMethod::Interpreted,
-			#[cfg(feature = "wasmtime")]
-			WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled,
-			#[cfg(not(feature = "wasmtime"))]
-			WasmExecutionMethod::Compiled => panic!(
-				"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
-			),
-		}
+/// Converts the execution method and instantiation strategy command line arguments
+/// into an execution method which can be used internally.
+pub fn execution_method_from_cli(
+	execution_method: WasmExecutionMethod,
+	_instantiation_strategy: WasmtimeInstantiationStrategy,
+) -> sc_service::config::WasmExecutionMethod {
+	match execution_method {
+		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
+		#[cfg(feature = "wasmtime")]
+		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
+			instantiation_strategy: match _instantiation_strategy {
+				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
+					sc_service::config::WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+				WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite =>
+					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstanceCopyOnWrite,
+				WasmtimeInstantiationStrategy::Pooling =>
+					sc_service::config::WasmtimeInstantiationStrategy::Pooling,
+				WasmtimeInstantiationStrategy::RecreateInstance =>
+					sc_service::config::WasmtimeInstantiationStrategy::RecreateInstance,
+				WasmtimeInstantiationStrategy::LegacyInstanceReuse =>
+					sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse,
+			},
+		},
+		#[cfg(not(feature = "wasmtime"))]
+		WasmExecutionMethod::Compiled => panic!(
+			"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
+		),
 	}
 }
 
@@ -193,6 +238,7 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Database {
 	/// Facebooks RocksDB
+	#[cfg(feature = "rocksdb")]
 	RocksDb,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
@@ -207,12 +253,14 @@ impl std::str::FromStr for Database {
 	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, String> {
+		#[cfg(feature = "rocksdb")]
 		if s.eq_ignore_ascii_case("rocksdb") {
-			Ok(Self::RocksDb)
-		} else if s.eq_ignore_ascii_case("paritydb-experimental") {
-			Ok(Self::ParityDbDeprecated)
+			return Ok(Self::RocksDb)
+		}
+		if s.eq_ignore_ascii_case("paritydb-experimental") {
+			return Ok(Self::ParityDbDeprecated)
 		} else if s.eq_ignore_ascii_case("paritydb") {
-			Ok(Self::ParityDb)
+			return Ok(Self::ParityDb)
 		} else if s.eq_ignore_ascii_case("auto") {
 			Ok(Self::Auto)
 		} else {
@@ -223,8 +271,14 @@ impl std::str::FromStr for Database {
 
 impl Database {
 	/// Returns all the variants of this enum to be shown in the cli.
-	pub fn variants() -> &'static [&'static str] {
-		&["rocksdb", "paritydb", "paritydb-experimental", "auto"]
+	pub const fn variants() -> &'static [&'static str] {
+		&[
+			#[cfg(feature = "rocksdb")]
+			"rocksdb",
+			"paritydb",
+			"paritydb-experimental",
+			"auto",
+		]
 	}
 }
 

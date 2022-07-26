@@ -21,6 +21,8 @@
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode};
 pub use sc_executor::WasmExecutionMethod;
+#[cfg(feature = "wasmtime")]
+pub use sc_executor::WasmtimeInstantiationStrategy;
 pub use sc_network::{
 	config::{
 		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role,
@@ -73,8 +75,10 @@ pub struct Configuration {
 	/// Size in percent of cache size dedicated to child tries
 	pub state_cache_child_ratio: Option<usize>,
 	/// State pruning settings.
-	pub state_pruning: PruningMode,
+	pub state_pruning: Option<PruningMode>,
 	/// Number of blocks to keep in the db.
+	///
+	/// NOTE: only finalized blocks are subject for removal!
 	pub keep_blocks: KeepBlocks,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
@@ -100,6 +104,18 @@ pub struct Configuration {
 	pub rpc_methods: RpcMethods,
 	/// Maximum payload of rpc request/responses.
 	pub rpc_max_payload: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_request_size: Option<usize>,
+	/// Maximum payload of a rpc request
+	pub rpc_max_response_size: Option<usize>,
+	/// Custom JSON-RPC subscription ID provider.
+	///
+	/// Default: [`crate::RandomStringSubscriptionId`].
+	pub rpc_id_provider: Option<Box<dyn crate::RpcSubscriptionIdProvider>>,
+	/// Maximum allowed subscriptions per rpc connection
+	///
+	/// Default: 1024.
+	pub rpc_max_subs_per_conn: Option<usize>,
 	/// Maximum size of the output buffer capacity for websocket connections.
 	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.

@@ -23,7 +23,7 @@
 pub mod genesismap;
 pub mod system;
 
-use codec::{Decode, Encode, Error, Input};
+use codec::{Decode, Encode, Error, Input, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_std::{marker::PhantomData, prelude::*};
 
@@ -176,6 +176,19 @@ impl serde::Serialize for Extrinsic {
 	}
 }
 
+// rustc can't deduce this trait bound https://github.com/rust-lang/rust/issues/48214
+#[cfg(feature = "std")]
+impl<'a> serde::Deserialize<'a> for Extrinsic {
+	fn deserialize<D>(de: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'a>,
+	{
+		let r = sp_core::bytes::deserialize(de)?;
+		Decode::decode(&mut &r[..])
+			.map_err(|e| serde::de::Error::custom(format!("Decode error: {}", e)))
+	}
+}
+
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
 
@@ -224,7 +237,7 @@ impl sp_runtime::traits::Dispatchable for Extrinsic {
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-		panic!("This implemention should not be used for actual dispatch.");
+		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
 
@@ -426,7 +439,7 @@ impl GetRuntimeBlockType for Runtime {
 	type RuntimeBlock = Block;
 }
 
-#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
 pub struct Origin;
 
 impl From<frame_system::Origin<Runtime>> for Origin {
@@ -478,7 +491,10 @@ impl frame_support::traits::OriginTrait for Origin {
 	fn root() -> Self {
 		unimplemented!("Not required in tests!")
 	}
-	fn signed(_by: <Runtime as frame_system::Config>::AccountId) -> Self {
+	fn signed(_by: Self::AccountId) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+	fn as_signed(self) -> Option<Self::AccountId> {
 		unimplemented!("Not required in tests!")
 	}
 }
@@ -928,6 +944,16 @@ cfg_if! {
 			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
+				}
+			}
+
+			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for RuntimeApi {
+				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
+					Default::default()
+				}
+
+				fn next_authority_set_proof() -> beefy_primitives::mmr::BeefyNextAuthoritySet<beefy_primitives::MmrRootHash> {
+					Default::default()
 				}
 			}
 

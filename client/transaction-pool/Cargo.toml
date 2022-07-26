@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 futures-timer = "3.0.2"
 linked-hash-map = "0.5.4"
-log = "0.4.16"
+log = "0.4.17"
 parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
 parking_lot = "0.12.0"
 retain_mut = "0.1.4"

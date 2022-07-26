@@ -56,7 +56,7 @@ use crate::{
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
-	traits::{Currency, Get, Imbalance, OnUnbalanced},
+	traits::{Currency, Defensive, Get, Imbalance, OnUnbalanced},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -557,7 +557,9 @@ impl<'a, T: 'a + Config> Drop for InspectingSpans<'a, T> {
 
 /// Clear slashing metadata for an obsolete era.
 pub(crate) fn clear_era_metadata<T: Config>(obsolete_era: EraIndex) {
+	#[allow(deprecated)]
 	<Pallet<T> as Store>::ValidatorSlashInEra::remove_prefix(&obsolete_era, None);
+	#[allow(deprecated)]
 	<Pallet<T> as Store>::NominatorSlashInEra::remove_prefix(&obsolete_era, None);
 }
 
@@ -600,8 +602,8 @@ pub fn do_slash<T: Config>(
 	slashed_imbalance: &mut NegativeImbalanceOf<T>,
 	slash_era: EraIndex,
 ) {
-	let controller = match <Pallet<T>>::bonded(stash) {
-		None => return, // defensive: should always exist.
+	let controller = match <Pallet<T>>::bonded(stash).defensive() {
+		None => return,
 		Some(c) => c,
 	};
 

@@ -18,21 +18,26 @@
 
 use super::*;
 
+use crate::testing::{test_executor, timeout_secs};
 use assert_matches::assert_matches;
 use codec::Encode;
-use futures::executor;
+use jsonrpsee::{
+	core::Error as RpcError,
+	types::{error::CallError, EmptyParams},
+	RpcModule,
+};
 use sc_transaction_pool::{BasicPool, FullChainApi};
+use sc_transaction_pool_api::TransactionStatus;
 use sp_core::{
 	blake2_256,
+	bytes::to_hex,
 	crypto::{ByteArray, CryptoTypePublicPair, Pair},
-	ed25519,
-	hexdisplay::HexDisplay,
-	sr25519,
+	ed25519, sr25519,
 	testing::{ED25519, SR25519},
 	H256,
 };
 use sp_keystore::testing::KeyStore;
-use std::{mem, sync::Arc};
+use std::sync::Arc;
 use substrate_test_runtime_client::{
 	self,
 	runtime::{Block, Extrinsic, SessionKeys, Transfer},
@@ -75,240 +80,253 @@ impl TestSetup {
 		Author {
 			client: self.client.clone(),
 			pool: self.pool.clone(),
-			subscriptions: SubscriptionManager::new(Arc::new(crate::testing::TaskExecutor)),
 			keystore: self.keystore.clone(),
 			deny_unsafe: DenyUnsafe::No,
+			executor: test_executor(),
 		}
+	}
+
+	fn into_rpc() -> RpcModule<Author<FullTransactionPool, Client<Backend>>> {
+		Self::default().author().into_rpc()
 	}
 }
 
-#[test]
-fn submit_transaction_should_not_cause_error() {
-	let p = TestSetup::default().author();
-	let xt = uxt(AccountKeyring::Alice, 1).encode();
-	let h: H256 = blake2_256(&xt).into();
+#[tokio::test]
+async fn author_submit_transaction_should_not_cause_error() {
+	let _ = env_logger::try_init();
+	let author = TestSetup::default().author();
+	let api = author.into_rpc();
+	let xt: Bytes = uxt(AccountKeyring::Alice, 1).encode().into();
+	let extrinsic_hash: H256 = blake2_256(&xt).into();
+	let response: H256 = api.call("author_submitExtrinsic", [xt.clone()]).await.unwrap();
+
+	assert_eq!(response, extrinsic_hash);
 
 	assert_matches!(
-		executor::block_on(AuthorApi::submit_extrinsic(&p, xt.clone().into())),
-		Ok(h2) if h == h2
+		api.call::<_, H256>("author_submitExtrinsic", [xt]).await,
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Already Imported") && err.code() == 1013
 	);
-	assert!(executor::block_on(AuthorApi::submit_extrinsic(&p, xt.into())).is_err());
 }
 
-#[test]
-fn submit_rich_transaction_should_not_cause_error() {
-	let p = TestSetup::default().author();
-	let xt = uxt(AccountKeyring::Alice, 0).encode();
-	let h: H256 = blake2_256(&xt).into();
+#[tokio::test]
+async fn author_should_watch_extrinsic() {
+	let api = TestSetup::into_rpc();
+	let xt = to_hex(&uxt(AccountKeyring::Alice, 0).encode(), true);
 
-	assert_matches!(
-		executor::block_on(AuthorApi::submit_extrinsic(&p, xt.clone().into())),
-		Ok(h2) if h == h2
-	);
-	assert!(executor::block_on(AuthorApi::submit_extrinsic(&p, xt.into())).is_err());
-}
+	let mut sub = api.subscribe("author_submitAndWatchExtrinsic", [xt]).await.unwrap();
+	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
+		.await
+		.unwrap()
+		.unwrap()
+		.unwrap();
 
-#[test]
-fn should_watch_extrinsic() {
-	// given
-	let setup = TestSetup::default();
-	let p = setup.author();
+	assert_matches!(tx, TransactionStatus::Ready);
+	assert_eq!(&sub_id, sub.subscription_id());
 
-	let (subscriber, id_rx, data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
-
-	// when
-	p.watch_extrinsic(
-		Default::default(),
-		subscriber,
-		uxt(AccountKeyring::Alice, 0).encode().into(),
-	);
-
-	let id = executor::block_on(id_rx).unwrap().unwrap();
-	assert_matches!(id, SubscriptionId::String(_));
-
-	let id = match id {
-		SubscriptionId::String(id) => id,
-		_ => unreachable!(),
-	};
-
-	// check notifications
-	let replacement = {
+	// Replace the extrinsic and observe the subscription is notified.
+	let (xt_replacement, xt_hash) = {
 		let tx = Transfer {
 			amount: 5,
 			nonce: 0,
 			from: AccountKeyring::Alice.into(),
 			to: AccountKeyring::Bob.into(),
 		};
-		tx.into_signed_tx()
+		let tx = tx.into_signed_tx().encode();
+		let hash = blake2_256(&tx);
+
+		(to_hex(&tx, true), hash)
 	};
-	executor::block_on(AuthorApi::submit_extrinsic(&p, replacement.encode().into())).unwrap();
-	let (res, data) = executor::block_on(data.into_future());
 
-	let expected = Some(format!(
-		r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":"ready","subscription":"{}"}}}}"#,
-		id,
-	));
-	assert_eq!(res, expected);
+	let _ = api.call::<_, H256>("author_submitExtrinsic", [xt_replacement]).await.unwrap();
 
-	let h = blake2_256(&replacement.encode());
-	let expected = Some(format!(
-		r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":{{"usurped":"0x{}"}},"subscription":"{}"}}}}"#,
-		HexDisplay::from(&h),
-		id,
-	));
-
-	let res = executor::block_on(data.into_future()).0;
-	assert_eq!(res, expected);
+	let (tx, sub_id) = timeout_secs(10, sub.next::<TransactionStatus<H256, Block>>())
+		.await
+		.unwrap()
+		.unwrap()
+		.unwrap();
+	assert_eq!(tx, TransactionStatus::Usurped(xt_hash.into()));
+	assert_eq!(&sub_id, sub.subscription_id());
 }
 
-#[test]
-fn should_return_watch_validation_error() {
-	// given
-	let setup = TestSetup::default();
-	let p = setup.author();
+#[tokio::test]
+async fn author_should_return_watch_validation_error() {
+	const METHOD: &'static str = "author_submitAndWatchExtrinsic";
 
-	let (subscriber, id_rx, _data) = jsonrpc_pubsub::typed::Subscriber::new_test("test");
+	let api = TestSetup::into_rpc();
+	let failed_sub = api
+		.subscribe(METHOD, [to_hex(&uxt(AccountKeyring::Alice, 179).encode(), true)])
+		.await;
 
-	// when
-	p.watch_extrinsic(
-		Default::default(),
-		subscriber,
-		uxt(AccountKeyring::Alice, 179).encode().into(),
-	);
-
-	// then
-	let res = executor::block_on(id_rx).unwrap();
-	assert!(res.is_err(), "Expected the transaction to be rejected as invalid.");
-}
-
-#[test]
-fn should_return_pending_extrinsics() {
-	let p = TestSetup::default().author();
-
-	let ex = uxt(AccountKeyring::Alice, 0);
-	executor::block_on(AuthorApi::submit_extrinsic(&p, ex.encode().into())).unwrap();
 	assert_matches!(
-		p.pending_extrinsics(),
-		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
+		failed_sub,
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Invalid Transaction") && err.code() == 1010
 	);
 }
 
-#[test]
-fn should_remove_extrinsics() {
-	let setup = TestSetup::default();
-	let p = setup.author();
+#[tokio::test]
+async fn author_should_return_pending_extrinsics() {
+	let api = TestSetup::into_rpc();
 
-	let ex1 = uxt(AccountKeyring::Alice, 0);
-	executor::block_on(p.submit_extrinsic(ex1.encode().into())).unwrap();
-	let ex2 = uxt(AccountKeyring::Alice, 1);
-	executor::block_on(p.submit_extrinsic(ex2.encode().into())).unwrap();
-	let ex3 = uxt(AccountKeyring::Bob, 0);
-	let hash3 = executor::block_on(p.submit_extrinsic(ex3.encode().into())).unwrap();
-	assert_eq!(setup.pool.status().ready, 3);
-
-	// now remove all 3
-	let removed = p
-		.remove_extrinsic(vec![
-			hash::ExtrinsicOrHash::Hash(hash3),
-			// Removing this one will also remove ex2
-			hash::ExtrinsicOrHash::Extrinsic(ex1.encode().into()),
-		])
+	let xt_bytes: Bytes = uxt(AccountKeyring::Alice, 0).encode().into();
+	api.call::<_, H256>("author_submitExtrinsic", [to_hex(&xt_bytes, true)])
+		.await
 		.unwrap();
 
-	assert_eq!(removed.len(), 3);
+	let pending: Vec<Bytes> =
+		api.call("author_pendingExtrinsics", EmptyParams::new()).await.unwrap();
+	assert_eq!(pending, vec![xt_bytes]);
 }
 
-#[test]
-fn should_insert_key() {
+#[tokio::test]
+async fn author_should_remove_extrinsics() {
+	const METHOD: &'static str = "author_removeExtrinsic";
 	let setup = TestSetup::default();
-	let p = setup.author();
+	let api = setup.author().into_rpc();
 
+	// Submit three extrinsics, then remove two of them (will cause the third to be removed as well,
+	// having a higher nonce)
+	let xt1_bytes = uxt(AccountKeyring::Alice, 0).encode();
+	let xt1 = to_hex(&xt1_bytes, true);
+	let xt1_hash: H256 = api.call("author_submitExtrinsic", [xt1]).await.unwrap();
+
+	let xt2 = to_hex(&uxt(AccountKeyring::Alice, 1).encode(), true);
+	let xt2_hash: H256 = api.call("author_submitExtrinsic", [xt2]).await.unwrap();
+
+	let xt3 = to_hex(&uxt(AccountKeyring::Bob, 0).encode(), true);
+	let xt3_hash: H256 = api.call("author_submitExtrinsic", [xt3]).await.unwrap();
+	assert_eq!(setup.pool.status().ready, 3);
+
+	// Now remove all three.
+	// Notice how we need an extra `Vec` wrapping the `Vec` we want to submit as params.
+	let removed: Vec<H256> = api
+		.call(
+			METHOD,
+			vec![vec![
+				hash::ExtrinsicOrHash::Hash(xt3_hash),
+				// Removing this one will also remove xt2
+				hash::ExtrinsicOrHash::Extrinsic(xt1_bytes.into()),
+			]],
+		)
+		.await
+		.unwrap();
+
+	assert_eq!(removed, vec![xt1_hash, xt2_hash, xt3_hash]);
+}
+
+#[tokio::test]
+async fn author_should_insert_key() {
+	let setup = TestSetup::default();
+	let api = setup.author().into_rpc();
 	let suri = "//Alice";
-	let key_pair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
-	p.insert_key(
+	let keypair = ed25519::Pair::from_string(suri, None).expect("generates keypair");
+	let params: (String, String, Bytes) = (
 		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
 		suri.to_string(),
-		key_pair.public().0.to_vec().into(),
-	)
-	.expect("Insert key");
+		keypair.public().0.to_vec().into(),
+	);
+	api.call::<_, ()>("author_insertKey", params).await.unwrap();
+	let pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
 
-	let public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
-
-	assert!(public_keys
-		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, key_pair.public().to_raw_vec())));
+	assert!(
+		pubkeys.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, keypair.public().to_raw_vec()))
+	);
 }
 
-#[test]
-fn should_rotate_keys() {
+#[tokio::test]
+async fn author_should_rotate_keys() {
 	let setup = TestSetup::default();
-	let p = setup.author();
+	let api = setup.author().into_rpc();
 
-	let new_public_keys = p.rotate_keys().expect("Rotates the keys");
-
+	let new_pubkeys: Bytes = api.call("author_rotateKeys", EmptyParams::new()).await.unwrap();
 	let session_keys =
-		SessionKeys::decode(&mut &new_public_keys[..]).expect("SessionKeys decode successfully");
-
-	let ed25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
-	let sr25519_public_keys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
-
-	assert!(ed25519_public_keys
+		SessionKeys::decode(&mut &new_pubkeys[..]).expect("SessionKeys decode successfully");
+	let ed25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, ED25519).unwrap();
+	let sr25519_pubkeys = SyncCryptoStore::keys(&*setup.keystore, SR25519).unwrap();
+	assert!(ed25519_pubkeys
 		.contains(&CryptoTypePublicPair(ed25519::CRYPTO_ID, session_keys.ed25519.to_raw_vec())));
-	assert!(sr25519_public_keys
+	assert!(sr25519_pubkeys
 		.contains(&CryptoTypePublicPair(sr25519::CRYPTO_ID, session_keys.sr25519.to_raw_vec())));
 }
 
-#[test]
-fn test_has_session_keys() {
-	let setup = TestSetup::default();
-	let p = setup.author();
+#[tokio::test]
+async fn author_has_session_keys() {
+	// Setup
+	let api = TestSetup::into_rpc();
 
-	let non_existent_public_keys =
-		TestSetup::default().author().rotate_keys().expect("Rotates the keys");
+	// Add a valid session key
+	let pubkeys: Bytes = api
+		.call("author_rotateKeys", EmptyParams::new())
+		.await
+		.expect("Rotates the keys");
 
-	let public_keys = p.rotate_keys().expect("Rotates the keys");
-	let test_vectors = vec![
-		(public_keys, Ok(true)),
-		(vec![1, 2, 3].into(), Err(Error::InvalidSessionKeys)),
-		(non_existent_public_keys, Ok(false)),
-	];
+	// Add a session key in a different keystore
+	let non_existent_pubkeys: Bytes = {
+		let api2 = TestSetup::default().author().into_rpc();
+		api2.call("author_rotateKeys", EmptyParams::new())
+			.await
+			.expect("Rotates the keys")
+	};
 
-	for (keys, result) in test_vectors {
-		assert_eq!(
-			result.map_err(|e| mem::discriminant(&e)),
-			p.has_session_keys(keys).map_err(|e| mem::discriminant(&e)),
-		);
-	}
+	// Then…
+	let existing = api.call::<_, bool>("author_hasSessionKeys", vec![pubkeys]).await.unwrap();
+	assert!(existing, "Existing key is in the session keys");
+
+	let inexistent = api
+		.call::<_, bool>("author_hasSessionKeys", vec![non_existent_pubkeys])
+		.await
+		.unwrap();
+	assert_eq!(inexistent, false, "Inexistent key is not in the session keys");
+
+	assert_matches!(
+		api.call::<_, bool>("author_hasSessionKeys", vec![Bytes::from(vec![1, 2, 3])]).await,
+		Err(RpcError::Call(CallError::Custom(err))) if err.message().contains("Session keys are not encoded correctly")
+	);
 }
 
-#[test]
-fn test_has_key() {
-	let setup = TestSetup::default();
-	let p = setup.author();
+#[tokio::test]
+async fn author_has_key() {
+	let _ = env_logger::try_init();
 
+	let api = TestSetup::into_rpc();
 	let suri = "//Alice";
-	let alice_key_pair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
-	p.insert_key(
+	let alice_keypair = ed25519::Pair::from_string(suri, None).expect("Generates keypair");
+	let params = (
 		String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
 		suri.to_string(),
-		alice_key_pair.public().0.to_vec().into(),
-	)
-	.expect("Insert key");
-	let bob_key_pair = ed25519::Pair::from_string("//Bob", None).expect("Generates keypair");
+		Bytes::from(alice_keypair.public().0.to_vec()),
+	);
 
-	let test_vectors = vec![
-		(alice_key_pair.public().to_raw_vec().into(), ED25519, Ok(true)),
-		(alice_key_pair.public().to_raw_vec().into(), SR25519, Ok(false)),
-		(bob_key_pair.public().to_raw_vec().into(), ED25519, Ok(false)),
-	];
+	api.call::<_, ()>("author_insertKey", params).await.expect("insertKey works");
 
-	for (key, key_type, result) in test_vectors {
-		assert_eq!(
-			result.map_err(|e| mem::discriminant(&e)),
-			p.has_key(
-				key,
-				String::from_utf8(key_type.0.to_vec()).expect("Keytype is a valid string"),
-			)
-			.map_err(|e| mem::discriminant(&e)),
+	let bob_keypair = ed25519::Pair::from_string("//Bob", None).expect("Generates keypair");
+
+	// Alice's ED25519 key is there
+	let has_alice_ed: bool = {
+		let params = (
+			Bytes::from(alice_keypair.public().to_raw_vec()),
+			String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
 		);
-	}
+		api.call("author_hasKey", params).await.unwrap()
+	};
+	assert!(has_alice_ed);
+
+	// Alice's SR25519 key is not there
+	let has_alice_sr: bool = {
+		let params = (
+			Bytes::from(alice_keypair.public().to_raw_vec()),
+			String::from_utf8(SR25519.0.to_vec()).expect("Keytype is a valid string"),
+		);
+		api.call("author_hasKey", params).await.unwrap()
+	};
+	assert!(!has_alice_sr);
+
+	// Bob's ED25519 key is not there
+	let has_bob_ed: bool = {
+		let params = (
+			Bytes::from(bob_keypair.public().to_raw_vec()),
+			String::from_utf8(ED25519.0.to_vec()).expect("Keytype is a valid string"),
+		);
+		api.call("author_hasKey", params).await.unwrap()
+	};
+	assert!(!has_bob_ed);
 }

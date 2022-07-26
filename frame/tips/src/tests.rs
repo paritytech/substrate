@@ -25,7 +25,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill, Permill,
+	BuildStorage, Perbill, Permill,
 };
 use sp_storage::Storage;
 
@@ -34,7 +34,7 @@ use frame_support::{
 	pallet_prelude::GenesisBuild,
 	parameter_types,
 	storage::StoragePrefixedMap,
-	traits::{ConstU32, ConstU64, SortedMembers},
+	traits::{ConstU32, ConstU64, SortedMembers, StorageVersion},
 	PalletId,
 };
 
@@ -53,7 +53,9 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
+		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
 		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
+		Tips1: pallet_tips::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -127,6 +129,7 @@ parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub const Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
 }
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
@@ -144,7 +147,28 @@ impl pallet_treasury::Config for Test {
 	type WeightInfo = ();
 	type SpendFunds = ();
 	type MaxApprovals = ConstU32<100>;
+	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
 }
+
+impl pallet_treasury::Config<Instance1> for Test {
+	type PalletId = TreasuryPalletId2;
+	type Currency = pallet_balances::Pallet<Test>;
+	type ApproveOrigin = frame_system::EnsureRoot<u128>;
+	type RejectOrigin = frame_system::EnsureRoot<u128>;
+	type Event = Event;
+	type OnSlash = ();
+	type ProposalBond = ProposalBond;
+	type ProposalBondMinimum = ConstU64<1>;
+	type ProposalBondMaximum = ();
+	type SpendPeriod = ConstU64<2>;
+	type Burn = Burn;
+	type BurnDestination = (); // Just gets burned.
+	type WeightInfo = ();
+	type SpendFunds = ();
+	type MaxApprovals = ConstU32<100>;
+	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+}
+
 parameter_types! {
 	pub const TipFindersFee: Percent = Percent::from_percent(20);
 }
@@ -159,16 +183,29 @@ impl Config for Test {
 	type WeightInfo = ();
 }
 
+impl Config<Instance1> for Test {
+	type MaximumReasonLength = ConstU32<16384>;
+	type Tippers = TenToFourteen;
+	type TipCountdown = ConstU64<1>;
+	type TipFindersFee = TipFindersFee;
+	type TipReportDepositBase = ConstU64<1>;
+	type DataDepositPerByte = ConstU64<1>;
+	type Event = Event;
+	type WeightInfo = ();
+}
+
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test> {
-		// Total issuance will be 200 with treasury account initialized at ED.
-		balances: vec![(0, 100), (1, 98), (2, 1)],
+	let mut ext: sp_io::TestExternalities = GenesisConfig {
+		system: frame_system::GenesisConfig::default(),
+		balances: pallet_balances::GenesisConfig { balances: vec![(0, 100), (1, 98), (2, 1)] },
+		treasury: Default::default(),
+		treasury_1: Default::default(),
 	}
-	.assimilate_storage(&mut t)
-	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
-	t.into()
+	.build_storage()
+	.unwrap()
+	.into();
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
 
 fn last_event() -> TipEvent<Test> {
@@ -537,5 +574,38 @@ fn genesis_funding_works() {
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);
 		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
+	});
+}
+
+#[test]
+fn report_awesome_and_tip_works_second_instance() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::make_free_balance_be(&Treasury1::account_id(), 201);
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201);
+
+		assert_ok!(Tips1::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+		// duplicate report in tips1 reports don't count.
+		assert_noop!(
+			Tips1::report_awesome(Origin::signed(1), b"awesome.dot".to_vec(), 3),
+			Error::<Test, Instance1>::AlreadyKnown
+		);
+		// but tips is separate
+		assert_ok!(Tips::report_awesome(Origin::signed(0), b"awesome.dot".to_vec(), 3));
+
+		let h = tip_hash();
+		assert_ok!(Tips1::tip(Origin::signed(10), h.clone(), 10));
+		assert_ok!(Tips1::tip(Origin::signed(11), h.clone(), 10));
+		assert_ok!(Tips1::tip(Origin::signed(12), h.clone(), 10));
+		assert_noop!(Tips1::tip(Origin::signed(9), h.clone(), 10), BadOrigin);
+
+		System::set_block_number(2);
+
+		assert_ok!(Tips1::close_tip(Origin::signed(100), h.into()));
+		// Treasury 1 unchanged
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
+		// Treasury 2 gave the funds
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 191);
 	});
 }

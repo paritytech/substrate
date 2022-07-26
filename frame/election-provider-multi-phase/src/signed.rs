@@ -18,9 +18,9 @@
 //! The signed phase implementation.
 
 use crate::{
-	Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
-	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap, SolutionOf,
-	SolutionOrSnapshotSize, Weight, WeightInfo,
+	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
+	ReadySolution, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
+	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::NposSolution;
@@ -93,8 +93,11 @@ pub type PositiveImbalanceOf<T> = <<T as Config>::Currency as Currency<
 pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-pub type SignedSubmissionOf<T> =
-	SignedSubmission<<T as frame_system::Config>::AccountId, BalanceOf<T>, SolutionOf<T>>;
+pub type SignedSubmissionOf<T> = SignedSubmission<
+	<T as frame_system::Config>::AccountId,
+	BalanceOf<T>,
+	<<T as crate::Config>::MinerConfig as MinerConfig>::Solution,
+>;
 
 pub type SubmissionIndicesOf<T> =
 	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
@@ -482,12 +485,12 @@ impl<T: Config> Pallet<T> {
 		T::SlashHandler::on_unbalanced(negative_imbalance);
 	}
 
-	/// The feasibility weight of the given raw solution.
-	pub fn feasibility_weight_of(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+	/// The weight of the given raw solution.
+	pub fn solution_weight_of(
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> Weight {
-		T::WeightInfo::feasibility_check(
+		T::MinerConfig::solution_weight(
 			size.voters,
 			size.targets,
 			raw_solution.solution.voter_count() as u32,
@@ -503,12 +506,12 @@ impl<T: Config> Pallet<T> {
 	/// 2. a per-byte deposit, for renting the state usage.
 	/// 3. a per-weight deposit, for the potential weight usage in an upcoming on_initialize
 	pub fn deposit_for(
-		raw_solution: &RawSolution<SolutionOf<T>>,
+		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> BalanceOf<T> {
 		let encoded_len: u32 = raw_solution.encoded_size().saturated_into();
 		let encoded_len: BalanceOf<T> = encoded_len.into();
-		let feasibility_weight = Self::feasibility_weight_of(raw_solution, size);
+		let feasibility_weight = Self::solution_weight_of(raw_solution, size);
 
 		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
 		let weight_deposit =
@@ -525,8 +528,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			balances, raw_solution, roll_to, Balances, ExtBuilder, MultiPhase, Origin, Runtime,
-			SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
+			balances, raw_solution, roll_to, Balances, ExtBuilder, MockedWeightInfo, MultiPhase,
+			Origin, Runtime, SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
 		},
 		Error, Perbill, Phase,
 	};
@@ -955,14 +958,13 @@ mod tests {
 	fn cannot_consume_too_much_future_weight() {
 		ExtBuilder::default()
 			.signed_weight(40)
-			.mock_weight_info(true)
+			.mock_weight_info(MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to(15);
 				assert!(MultiPhase::current_phase().is_signed());
 
-				let (raw, witness) =
-					MultiPhase::mine_solution::<<Runtime as Config>::Solver>().unwrap();
-				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
+				let (raw, witness) = MultiPhase::mine_solution().unwrap();
+				let solution_weight = <Runtime as MinerConfig>::solution_weight(
 					witness.voters,
 					witness.targets,
 					raw.solution.voter_count() as u32,

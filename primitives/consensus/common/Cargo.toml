@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", features = [
 ] }
 futures = { version = "0.3.21", features = ["thread-pool"] }
 futures-timer = "3.0.1"
-log = "0.4.16"
+log = "0.4.17"
 thiserror = "1.0.30"
 sp-core = { version = "6.0.0", path = "../../core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }

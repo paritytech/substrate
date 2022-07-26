@@ -18,25 +18,32 @@
 
 use super::*;
 use assert_matches::assert_matches;
-use futures::executor;
+use jsonrpsee::{core::Error as JsonRpseeError, types::error::CallError};
 use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use substrate_test_runtime_client::{prelude::*, runtime::Block};
 
-#[test]
-fn block_stats_work() {
+#[tokio::test]
+async fn block_stats_work() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = <Dev<Block, _>>::new(client.clone(), DenyUnsafe::No);
+	let api = <Dev<Block, _>>::new(client.clone(), DenyUnsafe::No).into_rpc();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	// Can't gather stats for a block without a parent.
-	assert_eq!(api.block_stats(client.genesis_hash()).unwrap(), None);
+	assert_eq!(
+		api.call::<_, Option<BlockStats>>("dev_getBlockStats", [client.genesis_hash()])
+			.await
+			.unwrap(),
+		None
+	);
 
 	assert_eq!(
-		api.block_stats(client.info().best_hash).unwrap(),
+		api.call::<_, Option<BlockStats>>("dev_getBlockStats", [client.info().best_hash])
+			.await
+			.unwrap(),
 		Some(BlockStats {
 			witness_len: 597,
 			witness_compact_len: 500,
@@ -46,13 +53,17 @@ fn block_stats_work() {
 	);
 }
 
-#[test]
-fn deny_unsafe_works() {
+#[tokio::test]
+async fn deny_unsafe_works() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = <Dev<Block, _>>::new(client.clone(), DenyUnsafe::Yes);
+	let api = <Dev<Block, _>>::new(client.clone(), DenyUnsafe::Yes).into_rpc();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+	client.import(BlockOrigin::Own, block).await.unwrap();
 
-	assert_matches!(api.block_stats(client.info().best_hash), Err(Error::UnsafeRpcCalled(_)));
+	assert_matches!(
+		api.call::<_, Option<BlockStats>>("dev_getBlockStats", [client.info().best_hash])
+			.await,
+		Err(JsonRpseeError::Call(CallError::Custom(err))) if err.message().contains("RPC call is unsafe to be called externally")
+	);
 }

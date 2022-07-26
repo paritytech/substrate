@@ -27,10 +27,12 @@ use crate::{
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
-use sp_std::prelude::*;
+use sp_std::{marker::PhantomData, prelude::*};
 
 pub use self::{
-	transactional::{with_transaction, with_transaction_unchecked},
+	transactional::{
+		in_storage_layer, with_storage_layer, with_transaction, with_transaction_unchecked,
+	},
 	types::StorageEntryMetadataBuilder,
 };
 pub use sp_runtime::TransactionOutcome;
@@ -48,6 +50,10 @@ pub mod transactional;
 pub mod types;
 pub mod unhashed;
 pub mod weak_bounded_vec;
+
+/// Utility type for converting a storage map into a `Get<u32>` impl which returns the maximum
+/// key size.
+pub struct KeyLenOf<M>(PhantomData<M>);
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
@@ -160,6 +166,9 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
+
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KeyArg: EncodeLike<K>>(key: KeyArg, query: Self::Query);
 
 	/// Try to get the value for the given key from the map.
 	///
@@ -475,6 +484,9 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KArg1: EncodeLike<K1>, KArg2: EncodeLike<K2>>(k1: KArg1, k2: KArg2, query: Self::Query);
+
 	/// Take a value from storage, removing it afterwards.
 	fn take<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
 	where
@@ -514,7 +526,31 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
 	fn remove_prefix<KArg1>(k1: KArg1, limit: Option<u32>) -> sp_io::KillStorageResult
+	where
+		KArg1: ?Sized + EncodeLike<K1>;
+
+	/// Remove all values under the first key `k1` in the overlay and up to `maybe_limit` in the
+	/// backend.
+	///
+	/// All values in the client overlay will be deleted, if `maybe_limit` is `Some` then up to
+	/// that number of values are deleted from the client backend, otherwise all values in the
+	/// client backend are deleted.
+	///
+	/// ## Cursors
+	///
+	/// The `maybe_cursor` parameter should be `None` for the first call to initial removal.
+	/// If the resultant `maybe_cursor` is `Some`, then another call is required to complete the
+	/// removal operation. This value must be passed in as the subsequent call's `maybe_cursor`
+	/// parameter. If the resultant `maybe_cursor` is `None`, then the operation is complete and no
+	/// items remain in storage provided that no items were added between the first calls and the
+	/// final call.
+	fn clear_prefix<KArg1>(
+		k1: KArg1,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::MultiRemovalResults
 	where
 		KArg1: ?Sized + EncodeLike<K1>;
 
@@ -627,6 +663,9 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// Returns `Ok` if it exists, `Err` if not.
 	fn try_get<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg) -> Result<V, ()>;
 
+	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
+	fn set<KArg: EncodeLikeTuple<K::KArg> + TupleToEncodedIter>(key: KArg, query: Self::Query);
+
 	/// Swap the values of two keys.
 	fn swap<KOther, KArg1, KArg2>(key1: KArg1, key2: KArg2)
 	where
@@ -655,7 +694,39 @@ pub trait StorageNMap<K: KeyGenerator, V: FullCodec> {
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear_prefix` instead"]
 	fn remove_prefix<KP>(partial_key: KP, limit: Option<u32>) -> sp_io::KillStorageResult
+	where
+		K: HasKeyPrefix<KP>;
+
+	/// Attempt to remove items from the map matching a `partial_key` prefix.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map which match the `partial key`. If so, then the map may not be
+	/// empty when the resultant `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must be provided in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map and `partial_key`. Subsequent
+	/// calls operating on the same map/`partial_key` should always pass `Some`, and this should be
+	/// equal to the previous call result's `maybe_cursor` field.
+	fn clear_prefix<KP>(
+		partial_key: KP,
+		limit: u32,
+		maybe_cursor: Option<&[u8]>,
+	) -> sp_io::MultiRemovalResults
 	where
 		K: HasKeyPrefix<KP>;
 
@@ -1109,8 +1180,36 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 	/// Calling this multiple times per block with a `limit` set leads always to the same keys being
 	/// removed and the same result being returned. This happens because the keys to delete in the
 	/// overlay are not taken into account when deleting keys in the backend.
+	#[deprecated = "Use `clear` instead"]
 	fn remove_all(limit: Option<u32>) -> sp_io::KillStorageResult {
-		sp_io::storage::clear_prefix(&Self::final_prefix(), limit)
+		unhashed::clear_prefix(&Self::final_prefix(), limit, None).into()
+	}
+
+	/// Attempt to remove all items from the map.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given map, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be empty when the resultant
+	/// `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// A `limit` must always be provided through in order to cap the maximum
+	/// amount of deletions done in a single call. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A `limit` of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given storage map. Subsequent calls
+	/// operating on the same map should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
+		unhashed::clear_prefix(&Self::final_prefix(), Some(limit), maybe_cursor)
 	}
 
 	/// Iter over all value of the storage.
@@ -1168,7 +1267,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 pub trait StorageAppend<Item: Encode>: private::Sealed {}
 
 /// Marker trait that will be implemented for types that support to decode their length in an
-/// effificent way. It is expected that the length is at the beginning of the encoded object
+/// efficient way. It is expected that the length is at the beginning of the encoded object
 /// and that the length is a `Compact<u32>`.
 ///
 /// This trait is sealed.
@@ -1425,7 +1524,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3, 4]);
 
 			// test removal
-			MyStorage::remove_all(None);
+			let _ = MyStorage::clear(u32::max_value(), None);
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 
 			// test migration
@@ -1435,7 +1534,7 @@ mod test {
 			assert!(MyStorage::iter_values().collect::<Vec<_>>().is_empty());
 			MyStorage::translate_values(|v: u32| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2]);
-			MyStorage::remove_all(None);
+			let _ = MyStorage::clear(u32::max_value(), None);
 
 			// test migration 2
 			unhashed::put(&[&k[..], &vec![1][..]].concat(), &1u128);
@@ -1447,7 +1546,7 @@ mod test {
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
 			MyStorage::translate_values(|v: u128| Some(v as u64));
 			assert_eq!(MyStorage::iter_values().collect::<Vec<_>>(), vec![1, 2, 3]);
-			MyStorage::remove_all(None);
+			let _ = MyStorage::clear(u32::max_value(), None);
 
 			// test that other values are not modified.
 			assert_eq!(unhashed::get(&key_before[..]), Some(32u64));
@@ -1545,10 +1644,8 @@ mod test {
 	fn prefix_iterator_pagination_works() {
 		TestExternalities::default().execute_with(|| {
 			use crate::{hash::Identity, storage::generator::map::StorageMap};
-			crate::generate_storage_alias! {
-				MyModule,
-				MyStorageMap => Map<(Identity, u64), u64>
-			}
+			#[crate::storage_alias]
+			type MyStorageMap = StorageMap<MyModule, Identity, u64, u64>;
 
 			MyStorageMap::insert(1, 10);
 			MyStorageMap::insert(2, 20);
@@ -1663,12 +1760,13 @@ mod test {
 		});
 	}
 
-	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! { Prefix, FooMap => Map<(Twox128, u32), BoundedVec<u32, ConstU32<7>>> }
-	crate::generate_storage_alias! {
-		Prefix,
-		FooDoubleMap => DoubleMap<(Twox128, u32), (Twox128, u32), BoundedVec<u32, ConstU32<7>>>
-	}
+	#[crate::storage_alias]
+	type Foo = StorageValue<Prefix, WeakBoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooMap = StorageMap<Prefix, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
+	#[crate::storage_alias]
+	type FooDoubleMap =
+		StorageDoubleMap<Prefix, Twox128, u32, Twox128, u32, BoundedVec<u32, ConstU32<7>>>;
 
 	#[test]
 	fn try_append_works() {

@@ -369,9 +369,9 @@ pub struct ActiveEraInfo {
 #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct EraRewardPoints<AccountId: Ord> {
 	/// Total number of points. Equals the sum of reward points for each validator.
-	total: RewardPoint,
+	pub total: RewardPoint,
 	/// The reward points earned by a given validator.
-	individual: BTreeMap<AccountId, RewardPoint>,
+	pub individual: BTreeMap<AccountId, RewardPoint>,
 }
 
 impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
@@ -438,7 +438,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebugNoBound, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct StakingLedger<T: Config> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -529,68 +529,110 @@ impl<T: Config> StakingLedger<T> {
 		(self, unlocking_balance)
 	}
 
-	/// Slash the staker for a given amount of balance. This can grow the value of the slash in the
-	/// case that either the active bonded or some unlocking chunks become dust after slashing.
-	/// Returns the amount of funds actually slashed.
+	/// Slash the staker for a given amount of balance.
 	///
-	/// # Note
+	/// This implements a proportional slashing system, whereby we set our preference to slash as
+	/// such:
 	///
-	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash
-	/// was applied.
+	/// - If any unlocking chunks exist that are scheduled to be unlocked at `slash_era +
+	///   bonding_duration` and onwards, the slash is divided equally between the active ledger and
+	///   the unlocking chunks.
+	/// - If no such chunks exist, then only the active balance is slashed.
+	///
+	/// Note that the above is only a *preference*. If for any reason the active ledger, with or
+	/// without some portion of the unlocking chunks that are more justified to be slashed are not
+	/// enough, then the slashing will continue and will consume as much of the active and unlocking
+	/// chunks as needed.
+	///
+	/// This will never slash more than the given amount. If any of the chunks become dusted, the
+	/// last chunk is slashed slightly less to compensate. Returns the amount of funds actually
+	/// slashed.
+	///
+	/// `slash_era` is the era in which the slash (which is being enacted now) actually happened.
+	///
+	/// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash was
+	/// applied.
 	fn slash(
 		&mut self,
 		slash_amount: BalanceOf<T>,
 		minimum_balance: BalanceOf<T>,
 		slash_era: EraIndex,
 	) -> BalanceOf<T> {
-		use sp_staking::OnStakerSlash as _;
-
 		if slash_amount.is_zero() {
 			return Zero::zero()
 		}
 
+		use sp_staking::OnStakerSlash as _;
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
 
-		let era_after_slash = slash_era + 1;
-		let chunk_unlock_era_after_slash = era_after_slash + T::BondingDuration::get();
+		// for a `slash_era = x`, any chunk that is scheduled to be unlocked at era `x + 28`
+		// (assuming 28 is the bonding duration) onwards should be slashed.
+		let slashable_chunks_start = slash_era + T::BondingDuration::get();
 
-		// Calculate the total balance of active funds and unlocking funds in the affected range.
-		let (affected_balance, slash_chunks_priority): (_, Box<dyn Iterator<Item = usize>>) = {
-			if let Some(start_index) =
-				self.unlocking.iter().position(|c| c.era >= chunk_unlock_era_after_slash)
+		// `Some(ratio)` if this is proportional, with `ratio`, `None` otherwise. In both cases, we
+		// slash first the active chunk, and then `slash_chunks_priority`.
+		let (maybe_proportional, slash_chunks_priority) = {
+			if let Some(first_slashable_index) =
+				self.unlocking.iter().position(|c| c.era >= slashable_chunks_start)
 			{
+				// If there exists a chunk who's after the first_slashable_start, then this is a
+				// proportional slash, because we want to slash active and these chunks
+				// proportionally.
+
 				// The indices of the first chunk after the slash up through the most recent chunk.
 				// (The most recent chunk is at greatest from this era)
-				let affected_indices = start_index..self.unlocking.len();
+				let affected_indices = first_slashable_index..self.unlocking.len();
 				let unbonding_affected_balance =
 					affected_indices.clone().fold(BalanceOf::<T>::zero(), |sum, i| {
-						if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
+						if let Some(chunk) = self.unlocking.get(i).defensive() {
 							sum.saturating_add(chunk.value)
 						} else {
 							sum
 						}
 					});
+				let affected_balance = self.active.saturating_add(unbonding_affected_balance);
+				let ratio = Perquintill::from_rational(slash_amount, affected_balance);
 				(
-					self.active.saturating_add(unbonding_affected_balance),
-					Box::new(affected_indices.chain((0..start_index).rev())),
+					Some(ratio),
+					affected_indices.chain((0..first_slashable_index).rev()).collect::<Vec<_>>(),
 				)
 			} else {
-				(self.active, Box::new((0..self.unlocking.len()).rev()))
+				// We just slash from the last chunk to the most recent one, if need be.
+				(None, (0..self.unlocking.len()).rev().collect::<Vec<_>>())
 			}
 		};
 
 		// Helper to update `target` and the ledgers total after accounting for slashing `target`.
-		let ratio = Perquintill::from_rational(slash_amount, affected_balance);
+		log!(
+			debug,
+			"slashing {:?} for era {:?} out of {:?}, priority: {:?}, proportional = {:?}",
+			slash_amount,
+			slash_era,
+			self,
+			slash_chunks_priority,
+			maybe_proportional,
+		);
+
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
-			let mut slash_from_target =
-				if slash_amount < affected_balance { ratio * (*target) } else { *slash_remaining }
-					.min(*target);
+			let mut slash_from_target = if let Some(ratio) = maybe_proportional {
+				ratio * (*target)
+			} else {
+				*slash_remaining
+			}
+			// this is the total that that the slash target has. We can't slash more than
+			// this anyhow!
+			.min(*target)
+			// this is the total amount that we would have wanted to slash
+			// non-proportionally, a proportional slash should never exceed this either!
+			.min(*slash_remaining);
 
 			// slash out from *target exactly `slash_from_target`.
 			*target = *target - slash_from_target;
 			if *target < minimum_balance {
-				// Slash the rest of the target if its dust
+				// Slash the rest of the target if it's dust. This might cause the last chunk to be
+				// slightly under-slashed, by at most `MaxUnlockingChunks * ED`, which is not a big
+				// deal.
 				slash_from_target =
 					sp_std::mem::replace(target, Zero::zero()).saturating_add(slash_from_target)
 			}
@@ -604,18 +646,22 @@ impl<T: Config> StakingLedger<T> {
 
 		let mut slashed_unlocking = BTreeMap::<_, _>::new();
 		for i in slash_chunks_priority {
+			if remaining_slash.is_zero() {
+				break
+			}
+
 			if let Some(chunk) = self.unlocking.get_mut(i).defensive() {
 				slash_out_of(&mut chunk.value, &mut remaining_slash);
 				// write the new slashed value of this chunk to the map.
 				slashed_unlocking.insert(chunk.era, chunk.value);
-				if remaining_slash.is_zero() {
-					break
-				}
 			} else {
 				break
 			}
 		}
+
+		// clean unlocking chunks that are set to zero.
 		self.unlocking.retain(|c| !c.value.is_zero());
+
 		T::OnStakerSlash::on_slash(&self.stash, self.active, &slashed_unlocking);
 		pre_slash_total.saturating_sub(self.total)
 	}
@@ -841,12 +887,13 @@ enum Releases {
 	V7_0_0,  // keep track of number of nominators / validators in map
 	V8_0_0,  // populate `VoterList`.
 	V9_0_0,  // inject validators into `VoterList` as well.
-	V10_0_0, // inject validator's approval stake into `TargetList`.
+	V10_0_0, // remove `EarliestUnappliedSlash`.
+	V11_0_0, // inject validator's approval stake into `TargetList`.
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V8_0_0
+		Releases::V11_0_0
 	}
 }
 

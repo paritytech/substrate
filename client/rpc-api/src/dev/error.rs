@@ -18,14 +18,10 @@
 
 //! Error helpers for Dev RPC module.
 
-use crate::errors;
-use jsonrpc_core as rpc;
-
-/// Dev RPC Result type.
-pub type Result<T> = std::result::Result<T, Error>;
-
-/// Dev RPC future Result type.
-pub type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T>>;
+use jsonrpsee::{
+	core::Error as JsonRpseeError,
+	types::error::{CallError, ErrorObject},
+};
 
 /// Dev RPC errors.
 #[derive(Debug, thiserror::Error)]
@@ -45,27 +41,21 @@ pub enum Error {
 }
 
 /// Base error code for all dev errors.
-const BASE_ERROR: i64 = 6000;
+const BASE_ERROR: i32 = 6000;
 
-impl From<Error> for rpc::Error {
+impl From<Error> for JsonRpseeError {
 	fn from(e: Error) -> Self {
+		let msg = e.to_string();
+
 		match e {
-			Error::BlockQueryError(_) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 1),
-				message: e.to_string(),
-				data: None,
-			},
-			Error::BlockExecutionFailed => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 3),
-				message: e.to_string(),
-				data: None,
-			},
-			Error::WitnessCompactionFailed => rpc::Error {
-				code: rpc::ErrorCode::ServerError(BASE_ERROR + 4),
-				message: e.to_string(),
-				data: None,
-			},
-			e => errors::internal(e),
+			Error::BlockQueryError(_) =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 1, msg, None::<()>)),
+			Error::BlockExecutionFailed =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 3, msg, None::<()>)),
+			Error::WitnessCompactionFailed =>
+				CallError::Custom(ErrorObject::owned(BASE_ERROR + 4, msg, None::<()>)),
+			Error::UnsafeRpcCalled(e) => e.into(),
 		}
+		.into()
 	}
 }
