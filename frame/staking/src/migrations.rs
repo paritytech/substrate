@@ -20,6 +20,29 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::OnRuntimeUpgrade;
 
+pub mod v10 {
+	use super::*;
+	use frame_support::storage_alias;
+
+	#[storage_alias]
+	type EarliestUnappliedSlash<T: Config> = StorageValue<Pallet<T>, EraIndex>;
+
+	pub struct MigrateToV10<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if StorageVersion::<T>::get() == Releases::V9_0_0 {
+				EarliestUnappliedSlash::<T>::kill();
+				StorageVersion::<T>::put(Releases::V10_0_0);
+
+				T::DbWeight::get().reads_writes(1, 1)
+			} else {
+				log!(warn, "MigrateToV10 should be removed.");
+				T::DbWeight::get().reads(1)
+			}
+		}
+	}
+}
+
 pub mod v9 {
 	use super::*;
 

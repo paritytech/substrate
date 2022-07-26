@@ -253,7 +253,6 @@ async fn build_network_future<
 
 						let node_role = match role {
 							Role::Authority { .. } => NodeRole::Authority,
-							Role::Light => NodeRole::LightClient,
 							Role::Full => NodeRole::Full,
 						};
 
@@ -370,14 +369,14 @@ where
 	match tokio::task::block_in_place(|| {
 		config.tokio_handle.block_on(futures::future::try_join(http_fut, ws_fut))
 	}) {
-		Ok((http, ws)) => Ok(Box::new((http, ws))),
+		Ok((http, ws)) =>
+			Ok(Box::new((waiting::HttpServer(Some(http)), waiting::WsServer(Some(ws))))),
 		Err(e) => Err(Error::Application(e)),
 	}
 }
 
 /// Transaction pool adapter.
 pub struct TransactionPoolAdapter<C, P> {
-	imports_external_transactions: bool,
 	pool: Arc<P>,
 	client: Arc<C>,
 }
@@ -425,11 +424,6 @@ where
 	}
 
 	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture {
-		if !self.imports_external_transactions {
-			debug!("Transaction rejected");
-			return Box::pin(futures::future::ready(TransactionImport::None))
-		}
-
 		let encoded = transaction.encode();
 		let uxt = match Decode::decode(&mut &encoded[..]) {
 			Ok(uxt) => uxt,

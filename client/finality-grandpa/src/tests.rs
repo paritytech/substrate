@@ -28,7 +28,7 @@ use sc_consensus::{
 	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
 	ImportedAux,
 };
-use sc_network::config::{ProtocolConfig, Role};
+use sc_network::config::Role;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestClient, TestNetFactory,
@@ -73,6 +73,7 @@ type GrandpaBlockImport = crate::GrandpaBlockImport<
 	LongestChain<substrate_test_runtime_client::Backend, Block>,
 >;
 
+#[derive(Default)]
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
 	test_config: TestApi,
@@ -110,16 +111,6 @@ impl TestNetFactory for GrandpaTestNet {
 	type PeerData = PeerData;
 	type BlockImport = GrandpaBlockImport;
 
-	/// Create new test network with peers and given config.
-	fn from_config(_config: &ProtocolConfig) -> Self {
-		GrandpaTestNet { peers: Vec::new(), test_config: Default::default() }
-	}
-
-	fn default_config() -> ProtocolConfig {
-		// This is unused.
-		ProtocolConfig::default()
-	}
-
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
 			notifications_protocols: vec![grandpa_protocol_name::NAME.into()],
@@ -128,12 +119,7 @@ impl TestNetFactory for GrandpaTestNet {
 		})
 	}
 
-	fn make_verifier(
-		&self,
-		_client: PeersClient,
-		_cfg: &ProtocolConfig,
-		_: &PeerData,
-	) -> Self::Verifier {
+	fn make_verifier(&self, _client: PeersClient, _: &PeerData) -> Self::Verifier {
 		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
