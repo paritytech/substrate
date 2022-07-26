@@ -312,6 +312,8 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The founders/fellows/allies have already been initialized.
 		MembersAlreadyInitialized,
+		/// The Alliance has not been initialized yet, therefore accounts cannot join it.
+		AllianceNotYetInitialized,
 		/// Account is already a member.
 		AlreadyMember,
 		/// Account is not a member.
@@ -704,6 +706,19 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::join_alliance())]
 		pub fn join_alliance(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+
+			// We don't want anyone to join as an Ally before the Founders/Fellows have been
+			// initialized via Root call. The reasons are two-fold:
+			//
+			// 1. There is no `Rule` or admission criteria, so the joiner would be an ally to
+			//    nought, and
+			// 2. If one joins as an Ally and then is initialized via Root, we'll have a condition
+			//    where a member is both an Ally and a Founder or Fellow, causing lookup issues on
+			//    calls like `retire` and `kick_member`.
+			ensure!(
+				Self::has_member(MemberRole::Founder) || Self::has_member(MemberRole::Fellow),
+				Error::<T, I>::AllianceNotYetInitialized
+			);
 
 			// Unscrupulous accounts are non grata.
 			ensure!(!Self::is_unscrupulous_account(&who), Error::<T, I>::AccountNonGrata);

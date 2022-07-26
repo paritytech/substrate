@@ -291,6 +291,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 5, Judgement::KnownGood));
 		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
 
+		// Joining before init should fail.
+		assert_noop!(
+			Alliance::join_alliance(Origin::signed(1)),
+			Error::<Test, ()>::AllianceNotYetInitialized
+		);
+
 		assert_ok!(Alliance::init_members(Origin::root(), vec![1, 2], vec![3], vec![]));
 
 		System::set_block_number(1);
