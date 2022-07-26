@@ -47,8 +47,7 @@ variables:                         &default-vars
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
-  # change to production when this image is published
-  CI_IMAGE:                        "paritytech/ci-linux:staging@sha256:2c90b67f1452ed2d7236c2cd13f6224053a833d521b3630650b679f00874e0a9"
+  CI_IMAGE:                        "paritytech/ci-linux:production"
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
 
