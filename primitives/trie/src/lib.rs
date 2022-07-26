@@ -280,7 +280,7 @@ where
 	L: TrieConfiguration,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+	TrieDB::<L>::new(db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Read a value from the trie with given Query.
@@ -295,7 +295,7 @@ where
 	Q: Query<L::Hash, Item = DBValue>,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	TrieDB::<L>::new(&*db, root)?
+	TrieDB::<L>::new(db, root)?
 		.get_with(key, query)
 		.map(|x| x.map(|val| val.to_vec()))
 }
@@ -354,7 +354,7 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let trie = TrieDB::<L>::new(&*db, root)?;
+	let trie = TrieDB::<L>::new(db, root)?;
 	let iter = trie.iter()?;
 
 	for x in iter {
@@ -379,7 +379,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let db = KeySpacedDB::new(&*db, keyspace);
+	let db = KeySpacedDB::new(db, keyspace);
 	TrieDB::<L>::new(&db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 
@@ -400,7 +400,7 @@ where
 	// root is fetched from DB, not writable by runtime, so it's always valid.
 	root.as_mut().copy_from_slice(root_slice);
 
-	let db = KeySpacedDB::new(&*db, keyspace);
+	let db = KeySpacedDB::new(db, keyspace);
 	TrieDB::<L>::new(&db, &root)?
 		.get_with(key, query)
 		.map(|x| x.map(|val| val.to_vec()))
@@ -501,7 +501,7 @@ where
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
 	fn as_hash_db(&self) -> &dyn hash_db::HashDB<H, T> {
-		&*self
+		self
 	}
 
 	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, T> + 'b) {
