@@ -404,7 +404,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(raw_solution.solution.voter_count() as u32, a);
 		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
 	}: {
-		// TODO @ggwpez Why does format! work but not this?
+		// TODO @ggwpez Why does format! work but not assert_ok?
 		assert!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned).is_ok());
 	}
 

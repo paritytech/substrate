@@ -16,11 +16,10 @@
 // limitations under the License.
 
 //! Tests for the module.
+#![cfg(test)]
 
 use super::{ConfigOp, Event, MaxUnlockingChunks, *};
-use frame_election_provider_support::{
-	BoundedSupport, ElectionProvider, SortedListProvider, Support,
-};
+use frame_election_provider_support::{BoundedSupport, ElectionProvider, SortedListProvider};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	dispatch::WithPostDispatchInfo,

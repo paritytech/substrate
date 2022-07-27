@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{
 	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, Supports, VoteWeight, VoterOf,
+	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,

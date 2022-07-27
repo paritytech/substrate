@@ -19,8 +19,8 @@ use super::*;
 use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider,
-	onchain::{self, TruncatingBounderOf, UnboundedExecution},
-	ElectionDataProvider, NposSolution, SequentialPhragmen,
+	onchain::{self, TruncateIntoBoundedSupportsOf, UnboundedExecution},
+	ElectionDataProvider, NposSolution, SequentialPhragmen, TruncateIntoBoundedSupports,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
@@ -292,9 +292,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
-	// FIXME no idea what to use here
+	// TODO no idea what to use here
 	type MaxBackersPerWinner = ConstU32<16>;
-	type Bounder = TruncatingBounderOf<Runtime, Self::MaxBackersPerWinner>;
+	type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 }
 
 pub struct MockFallback;
@@ -391,6 +391,10 @@ impl crate::Config for Runtime {
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;
 	type MaxBackersPerWinner = ConstU32<16>;
+	type Bounder = TruncateIntoBoundedSupports<
+		<Self as frame_system::Config>::AccountId,
+		Self::MaxBackersPerWinner,
+	>;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }

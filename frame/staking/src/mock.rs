@@ -19,7 +19,8 @@
 
 use crate::{self as pallet_staking, *};
 use frame_election_provider_support::{
-	onchain, onchain::TruncatingBounderOf, SequentialPhragmen, SortedListProvider, VoteWeight,
+	onchain, onchain::TruncateIntoBoundedSupportsOf, SequentialPhragmen, SortedListProvider,
+	VoteWeight,
 };
 use frame_support::{
 	assert_ok, parameter_types,
@@ -255,9 +256,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
-	// FIXME no idea what to use here
+	// TODO no idea what to use here
 	type MaxBackersPerWinner = ConstU32<16>;
-	type Bounder = TruncatingBounderOf<Test, Self::MaxBackersPerWinner>;
+	type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 }
 
 pub struct MockReward {}

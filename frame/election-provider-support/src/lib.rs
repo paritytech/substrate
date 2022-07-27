@@ -169,9 +169,7 @@
 pub mod onchain;
 pub mod traits;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{traits::ConstU32, DebugNoBound, DefaultNoBound, RuntimeDebugNoBound};
-use scale_info::TypeInfo;
-use sp_npos_elections::EvaluateSupport;
+use frame_support::traits::ConstU32;
 use sp_runtime::traits::{Bounded, Convert, Saturating, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -649,8 +647,12 @@ pub type BoundedSupportOf<E> = BoundedSupport<
 
 pub type BoundedSupports<AccountId, MaxBackersPerWinner> =
 	Vec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>)>;
-// todo transform
-pub type BoundedSupportsOf<E> = Vec<(<E as ElectionProvider>::AccountId, BoundedSupportOf<E>)>;
+
+/// Convenience to create a [`BoundedSupport`] from a [`ElectionProvider`].
+pub type BoundedSupportsOf<E> = BoundedSupports<
+	<E as ElectionProvider>::AccountId,
+	<E as ElectionProvider>::MaxBackersPerWinner,
+>;
 
 impl<AccountId, Bound: Get<u32>> sp_npos_elections::Backings for &BoundedSupport<AccountId, Bound> {
 	fn total(&self) -> ExtendedBalance {
@@ -697,12 +699,28 @@ impl<E: ElectionProvider> Convert<sp_npos_elections::Supports<E::AccountId>, Bou
 	}
 }
 
-pub struct TruncateIntoBoundedSupports<T>(sp_std::marker::PhantomData<T>);
+/// Converts an unbounded support into a bounded support by truncating it.
+pub struct TruncateIntoBoundedSupports<AccountId, MaxBackersPerWinner: Get<u32>>(
+	sp_std::marker::PhantomData<(AccountId, MaxBackersPerWinner)>,
+);
 
-impl<E: ElectionProvider> Convert<sp_npos_elections::Supports<E::AccountId>, BoundedSupportsOf<E>>
-	for TruncateIntoBoundedSupports<E>
+impl<AccountId, MaxBackersPerWinner: Get<u32>>
+	Convert<sp_npos_elections::Supports<AccountId>, BoundedSupports<AccountId, MaxBackersPerWinner>>
+	for TruncateIntoBoundedSupports<AccountId, MaxBackersPerWinner>
 {
-	fn convert(a: sp_npos_elections::Supports<E::AccountId>) -> BoundedSupportsOf<E> {
-		todo!();
+	fn convert(
+		a: sp_npos_elections::Supports<AccountId>,
+	) -> BoundedSupports<AccountId, MaxBackersPerWinner> {
+		a.into_iter()
+			.map(|(who, support)| {
+				(
+					who,
+					BoundedSupport {
+						total: support.total,
+						voters: BoundedVec::truncate_from(support.voters),
+					},
+				)
+			})
+			.collect()
 	}
 }

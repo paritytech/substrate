@@ -19,8 +19,8 @@
 
 use crate::{
 	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
-	ReadySolution, ReadySolutionOf, SignedSubmissionIndices, SignedSubmissionNextIndex,
-	SignedSubmissionsMap, SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
+	ReadySolutionOf, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
+	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::NposSolution;

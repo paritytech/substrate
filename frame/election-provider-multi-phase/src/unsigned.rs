@@ -19,8 +19,7 @@
 
 use crate::{
 	helpers, Call, Config, ElectionCompute, Error, FeasibilityError, Pallet, RawSolution,
-	ReadySolution, ReadySolutionOf, RoundSnapshot, SolutionAccuracyOf, SolutionOf,
-	SolutionOrSnapshotSize, Weight,
+	ReadySolutionOf, RoundSnapshot, SolutionAccuracyOf, SolutionOf, SolutionOrSnapshotSize, Weight,
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
@@ -874,7 +873,7 @@ mod tests {
 			assert!(<MultiPhase as ValidateUnsigned>::pre_dispatch(&call).is_ok());
 
 			// set a better score
-			let ready = ReadySolution {
+			let ready = crate::ReadySolution {
 				score: ElectionScore { minimal_stake: 10, ..Default::default() },
 				..Default::default()
 			};

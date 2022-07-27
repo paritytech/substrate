@@ -239,7 +239,7 @@ use frame_support::{
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
-	BoundedVec, DebugNoBound,
+	DefaultNoBound, PartialEqNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -248,10 +248,10 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Support, Supports,
-	VoteWeight,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
 };
 use sp_runtime::{
+	traits::Convert,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
@@ -440,8 +440,6 @@ impl<C: Default> Default for RawSolution<C> {
 	}
 }
 
-use frame_support::{DefaultNoBound, EqNoBound, PartialEqNoBound};
-
 /// A checked solution, ready to be enacted.
 #[derive(PartialEqNoBound, Clone, Encode, Decode, RuntimeDebug, DefaultNoBound, TypeInfo)]
 #[scale_info(skip_type_params(MaxBackersPerWinner))]
@@ -462,20 +460,7 @@ where
 	pub compute: ElectionCompute,
 }
 
-impl<AccountId, MaxBackersPerWinner: Get<u32>> From<Vec<(AccountId, Support<AccountId>)>>
-	for ReadySolution<AccountId, MaxBackersPerWinner>
-where
-	AccountId: PartialEq,
-{
-	fn from(supports: Vec<(AccountId, Support<AccountId>)>) -> Self {
-		Self {
-			supports: Default::default(), // FIXME @ggwpez
-			score: Default::default(),
-			compute: Default::default(),
-		}
-	}
-}
-
+/// Convenience wrapper to create a [`ReadySolution`] from a [`ElectionProvider`].
 pub type ReadySolutionOf<E> =
 	ReadySolution<<E as ElectionProvider>::AccountId, <E as ElectionProvider>::MaxBackersPerWinner>;
 
@@ -730,6 +715,19 @@ pub mod pallet {
 		/// `ElectionProvider` return.
 		type MaxBackersPerWinner: Get<u32>;
 
+		/// Something that can convert the final `Supports` into a bounded version.
+		/// TODO put in trait and reuse in onchain.
+		type Bounder: Convert<
+			sp_npos_elections::Supports<<Self as frame_system::Config>::AccountId>,
+			Vec<(
+				<Self as frame_system::Config>::AccountId,
+				BoundedSupport<
+					<Self as frame_system::Config>::AccountId,
+					Self::MaxBackersPerWinner,
+				>,
+			)>,
+		>;
+
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
@@ -976,12 +974,11 @@ pub mod pallet {
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
 
-			let solution = ReadySolution::from(
-				supports,
-				/*score: Default::default(),
-					compute: ElectionCompute::Emergency,
-				};*/
-			);
+			let solution = ReadySolution {
+				supports: T::Bounder::convert(supports),
+				score: Default::default(),
+				compute: ElectionCompute::Emergency,
+			};
 
 			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Emergency,
@@ -1091,13 +1088,11 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			/*let solution = ReadySolution {
-				supports,
+			let solution = ReadySolution {
+				supports: T::Bounder::convert(supports),
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
-			};*/
-			// FIXME
-			let solution = ReadySolution::from(supports);
+			};
 
 			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Fallback,
@@ -1539,8 +1534,7 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
-		// FIXME @ggwpez
-		Ok(supports.into())
+		Ok(ReadySolution { supports: T::Bounder::convert(supports), score, compute })
 	}
 
 	/// Perform the tasks to be done after a new `elect` has been triggered:
@@ -1848,7 +1842,7 @@ mod tests {
 	};
 	use frame_election_provider_support::ElectionProvider;
 	use frame_support::{assert_noop, assert_ok};
-	use sp_npos_elections::{BalancingConfig, Support};
+	use sp_npos_elections::BalancingConfig;
 
 	#[test]
 	fn phase_rotation_works() {
@@ -2237,21 +2231,6 @@ mod tests {
 				FeasibilityError::UntrustedScoreTooLow,
 			);
 		})
-	}
-
-	#[test]
-	fn compare_ready_solution() {
-		let solution = ReadySolutionOf::<MultiPhase>::default();
-
-		assert_eq!(solution, solution);
-		assert!(solution == solution);
-	}
-
-	#[test]
-	fn debug_ready_solution() {
-		let solution = ReadySolutionOf::<MultiPhase>::default();
-
-		format!("{:?}", solution);
 	}
 
 	#[test]

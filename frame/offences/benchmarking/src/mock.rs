@@ -20,7 +20,9 @@
 #![cfg(test)]
 
 use super::*;
-use frame_election_provider_support::{onchain, onchain::TruncatingBounderOf, SequentialPhragmen};
+use frame_election_provider_support::{
+	onchain, onchain::TruncateIntoBoundedSupportsOf, SequentialPhragmen,
+};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -155,9 +157,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 
-	// FIXME no idea what to use here
+	// TODO no idea what to use here
 	type MaxBackersPerWinner = ConstU32<16>;
-	type Bounder = TruncatingBounderOf<Test, Self::MaxBackersPerWinner>;
+	type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 }
 
 impl pallet_staking::Config for Test {

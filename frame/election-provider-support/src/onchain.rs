@@ -70,35 +70,11 @@ pub struct BoundedExecution<T: BoundedConfig>(PhantomData<T>);
 /// This can be very expensive to run frequently on-chain. Use with care.
 pub struct UnboundedExecution<T: Config>(PhantomData<T>);
 
-// TODO delete this, i did not see `TruncateIntoBoundedSupports` before :facepalm:
-pub type TruncatingBounderOf<T, MaxBackersPerWinner> =
-	TruncatingBounder<<T as frame_system::Config>::AccountId, MaxBackersPerWinner>;
-pub struct TruncatingBounder<AccountId, MaxBackersPerWinner: Get<u32>>(
-	sp_std::marker::PhantomData<(AccountId, MaxBackersPerWinner)>,
-);
-
-impl<AccountId, MaxBackersPerWinner: Get<u32>>
-	Convert<Supports<AccountId>, Vec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>)>>
-	for TruncatingBounder<AccountId, MaxBackersPerWinner>
-{
-	/// Make conversion.
-	fn convert(
-		a: Supports<AccountId>,
-	) -> Vec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>)> {
-		// TODO move to TruncateIntoBoundedSupports
-		a.into_iter()
-			.map(|(who, support)| {
-				(
-					who,
-					BoundedSupport {
-						total: support.total,
-						voters: sp_runtime::BoundedVec::truncate_from(support.voters),
-					},
-				)
-			})
-			.collect()
-	}
-}
+/// Convenience alias to create a [`TruncateIntoBoundedSupports`] from a [`Config`].
+pub type TruncateIntoBoundedSupportsOf<T> = crate::TruncateIntoBoundedSupports<
+	<<T as Config>::System as frame_system::Config>::AccountId,
+	<T as Config>::MaxBackersPerWinner,
+>;
 
 /// Configuration trait for an onchain election execution.
 pub trait Config {
@@ -241,7 +217,6 @@ mod tests {
 	use super::*;
 	use crate::{PhragMMS, SequentialPhragmen};
 	use frame_support::traits::ConstU32;
-	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 	type AccountId = u64;
 	type BlockNumber = u64;
@@ -295,9 +270,9 @@ mod tests {
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
-		// FIXME no idea what to use here
+		// TODO no idea what to use here
 		type MaxBackersPerWinner = ConstU32<16>;
-		type Bounder = TruncatingBounderOf<Runtime, Self::MaxBackersPerWinner>;
+		type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 	}
 
 	impl BoundedConfig for PhragmenParams {
@@ -310,9 +285,9 @@ mod tests {
 		type Solver = PhragMMS<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
-		// FIXME no idea what to use here
+		// TODO no idea what to use here
 		type MaxBackersPerWinner = ConstU32<16>;
-		type Bounder = TruncatingBounderOf<Runtime, Self::MaxBackersPerWinner>;
+		type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 	}
 
 	impl BoundedConfig for PhragMMSParams {

@@ -19,7 +19,9 @@
 
 use crate::{self as pallet_babe, Config, CurrentSlot};
 use codec::Encode;
-use frame_election_provider_support::{onchain, onchain::TruncatingBounderOf, SequentialPhragmen};
+use frame_election_provider_support::{
+	onchain, onchain::TruncateIntoBoundedSupportsOf, SequentialPhragmen,
+};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
@@ -178,9 +180,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<DummyValidatorId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
-	// FIXME no idea what to use here
+	// TODO no idea what to use here
 	type MaxBackersPerWinner = ConstU32<16>;
-	type Bounder = TruncatingBounderOf<Test, Self::MaxBackersPerWinner>;
+	type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 }
 
 impl pallet_staking::Config for Test {

@@ -22,7 +22,6 @@ use codec::Encode;
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::{Bounded, UniqueSaturatedInto};
 use sp_npos_elections::{ElectionScore, Error, EvaluateSupport};
-use sp_runtime::traits::Get;
 use sp_std::{fmt::Debug, prelude::*};
 
 /// An opaque index-based, NPoS solution type.
@@ -32,8 +31,6 @@ where
 {
 	/// The maximum number of votes that are allowed.
 	const LIMIT: usize;
-
-	type Limit: Get<u32>;
 
 	/// The voter type. Needs to be an index (convert to usize).
 	type VoterIndex: UniqueSaturatedInto<usize>
