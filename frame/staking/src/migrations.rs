@@ -41,6 +41,7 @@ pub mod v10 {
 					for slash in slashes {
 						// in the old slashing scheme, the slash era was the key at which we read
 						// from `UnappliedSlashes`.
+						log!(warn, "prematurely applying a slash ({:?}) for era {:?}", slash, era);
 						slashing::apply_slash::<T>(slash, era);
 					}
 				}
@@ -48,6 +49,7 @@ pub mod v10 {
 				EarliestUnappliedSlash::<T>::kill();
 				StorageVersion::<T>::put(Releases::V10_0_0);
 
+				log!(info, "MigrateToV10 executed successfully");
 				T::DbWeight::get().reads_writes(1, 1)
 			} else {
 				log!(warn, "MigrateToV10 should be removed.");
