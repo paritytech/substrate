@@ -8877,7 +8877,6 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.12.0",
- "retain_mut",
  "sc-block-builder",
  "sc-client-api",
  "sc-transaction-pool-api",
