@@ -243,25 +243,25 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 		move |b| {
 			b.iter_batched(
 				|| {
-					let prepare_extrinsics = create_account_extrinsics(&*node.client, &accounts);
+					let prepare_extrinsics = create_account_extrinsics(&node.client, &accounts);
 
 					runtime.block_on(future::join_all(prepare_extrinsics.into_iter().map(|tx| {
 						submit_tx_and_wait_for_inclusion(
 							&node.transaction_pool,
 							tx,
-							&*node.client,
+							&node.client,
 							true,
 						)
 					})));
 
-					create_benchmark_extrinsics(&*node.client, &accounts, extrinsics_per_account)
+					create_benchmark_extrinsics(&node.client, &accounts, extrinsics_per_account)
 				},
 				|extrinsics| {
 					runtime.block_on(future::join_all(extrinsics.into_iter().map(|tx| {
 						submit_tx_and_wait_for_inclusion(
 							&node.transaction_pool,
 							tx,
-							&*node.client,
+							&node.client,
 							false,
 						)
 					})));
