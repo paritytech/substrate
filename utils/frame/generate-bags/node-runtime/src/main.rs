@@ -43,7 +43,7 @@ struct Opt {
 
 fn main() -> Result<(), std::io::Error> {
 	let Opt { n_bags, output, total_issuance, minimum_balance } = Opt::parse();
-	generate_thresholds::<node_kitchensink_runtime::Runtime>(
+	generate_thresholds::<kitchensink_runtime::Runtime>(
 		n_bags,
 		&output,
 		total_issuance,

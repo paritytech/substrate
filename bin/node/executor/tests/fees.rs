@@ -20,7 +20,7 @@ use frame_support::{
 	traits::Currency,
 	weights::{constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFee},
 };
-use node_kitchensink_runtime::{
+use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, Call, CheckedExtrinsic, Multiplier, Runtime, TransactionByteFee, TransactionPayment,
 };

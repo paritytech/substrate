@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Utilities to build a `TestClient` for `node-kitchensink-runtime`.
+//! Utilities to build a `TestClient` for `kitchensink-runtime`.
 
 use sc_service::client;
 use sp_runtime::BuildStorage;
@@ -34,7 +34,7 @@ pub type Client = client::Client<
 	Backend,
 	client::LocalCallExecutor<node_primitives::Block, Backend, ExecutorDispatch>,
 	node_primitives::Block,
-	node_kitchensink_runtime::RuntimeApi,
+	kitchensink_runtime::RuntimeApi,
 >;
 
 /// Transaction for node-runtime.

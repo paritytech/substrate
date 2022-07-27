@@ -23,8 +23,8 @@ use crate::{
 	Cli, Subcommand,
 };
 use frame_benchmarking_cli::*;
+use kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
 use node_executor::ExecutorDispatch;
-use node_kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
 use node_primitives::Block;
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
@@ -75,7 +75,7 @@ impl SubstrateCli for Cli {
 	}
 
 	fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
-		&node_kitchensink_runtime::VERSION
+		&kitchensink_runtime::VERSION
 	}
 }
 
