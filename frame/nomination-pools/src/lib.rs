@@ -358,6 +358,16 @@ enum AccountType {
 	Reward,
 }
 
+/// Indicates whether the the member account or the bonded accound is going
+/// to receive the payout.
+#[derive(Encode, Decode)]
+enum PayoutRecipient<T: Config> {
+	/// Stores the `AccountId` of the member account.
+	MemberAccount(T::AccountId),
+	/// Stores the `AccountId` of the bonded account.
+	BondedAccount(T::AccountId),
+}
+
 /// A member in a pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
 #[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound, DefaultNoBound))]
@@ -857,9 +867,13 @@ impl<T: Config> BondedPool<T> {
 
 	/// Bond exactly `amount` from `who`'s funds into this pool.
 	///
-	/// If the bond type is `Create`, `StakingInterface::bond` is called, and `who`
-	/// is allowed to be killed. Otherwise, `StakingInterface::bond_extra` is called and `who`
-	/// cannot be killed.
+	/// If the bond type is `Create`, `StakingInterface::bond` is called, and
+	/// `who` is allowed to be killed. Otherwise, `StakingInterface::bond_extra`
+	/// is called and `who` cannot be killed.
+	///
+	/// The `bond_from_member` argument is a flag that indicates whether the
+	/// `amount` should be transfered from `who`, or the `bonded_account`
+	/// already has the `amount`, but just needs to bond it.
 	///
 	/// Returns `Ok(points_issues)`, `Err` otherwise.
 	fn try_bond_funds(
@@ -867,18 +881,22 @@ impl<T: Config> BondedPool<T> {
 		who: &T::AccountId,
 		amount: BalanceOf<T>,
 		ty: BondType,
+		bond_from_member: bool,
 	) -> Result<BalanceOf<T>, DispatchError> {
 		// Cache the value
 		let bonded_account = self.bonded_account();
-		T::Currency::transfer(
-			&who,
-			&bonded_account,
-			amount,
-			match ty {
-				BondType::Create => ExistenceRequirement::AllowDeath,
-				BondType::Later => ExistenceRequirement::KeepAlive,
-			},
-		)?;
+
+		if bond_from_member {
+			T::Currency::transfer(
+				&who,
+				&bonded_account,
+				amount,
+				match ty {
+					BondType::Create => ExistenceRequirement::AllowDeath,
+					BondType::Later => ExistenceRequirement::KeepAlive,
+				},
+			)?;
+		}
 		// We must calculate the points issued *before* we bond who's funds, else points:balance
 		// ratio will be wrong.
 		let points_issued = self.issue(amount);
@@ -910,48 +928,21 @@ impl<T: Config> BondedPool<T> {
 	/// Returns `Ok((points_issues, bonded))`, `Err` otherwise.
 	fn try_bond_funds_from_rewards(
 		&mut self,
-		member_account: &T::AccountId,
 		member: &mut PoolMember<T>,
 		reward_pool: &mut RewardPool<T>,
 	) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
-		debug_assert_eq!(member.pool_id, self.id);
-		// a member who has no skin in the game anymore cannot claim any rewards.
-		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
-
-		let bonded_pool = BondedPool::<T>::get(member.pool_id).ok_or(Error::<T>::PoolNotFound)?;
-
-		let current_reward_counter =
-			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-		let pending_rewards = member.pending_rewards(current_reward_counter)?;
-
-		// if the pending rewards are zero, the issued points are also going to be zero.
-		if pending_rewards.is_zero() {
-			return Ok((BalanceOf::<T>::zero(), pending_rewards))
-		}
-
-		// update member's reward counter to the pools current reward counter.
-		member.last_recorded_reward_counter = current_reward_counter;
-		reward_pool.register_claimed_reward(pending_rewards);
-
 		let bonded_account = self.bonded_account();
 
-		// Transfer the member's payout to the member's bonded account.
-		T::Currency::transfer(
-			&bonded_pool.reward_account(),
-			&bonded_account,
-			pending_rewards,
-			ExistenceRequirement::KeepAlive,
+		let pending_rewards = Pallet::<T>::calculate_and_payout_rewards(
+			member,
+			self,
+			reward_pool,
+			PayoutRecipient::<T>::BondedAccount(bonded_account.clone()),
 		)?;
 
-		Pallet::<T>::deposit_event(Event::<T>::PaidOut {
-			member: member_account.clone(),
-			pool_id: member.pool_id,
-			payout: pending_rewards,
-		});
+		let points_issued =
+			self.try_bond_funds(&bonded_account, pending_rewards, BondType::Later, false)?;
 
-		let points_issued = self.issue(pending_rewards);
-
-		T::StakingInterface::bond_extra(bonded_account, pending_rewards)?;
 		Ok((points_issued, pending_rewards))
 	}
 
@@ -1559,7 +1550,7 @@ pub mod pallet {
 			reward_pool.update_records(pool_id, bonded_pool.points)?;
 
 			bonded_pool.try_inc_members()?;
-			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later)?;
+			let points_issued = bonded_pool.try_bond_funds(&who, amount, BondType::Later, true)?;
 
 			PoolMembers::insert(
 				who.clone(),
@@ -1615,9 +1606,9 @@ pub mod pallet {
 
 			let (points_issued, bonded) = match extra {
 				BondExtra::FreeBalance(amount) =>
-					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
+					(bonded_pool.try_bond_funds(&who, amount, BondType::Later, true)?, amount),
 				BondExtra::Rewards =>
-					bonded_pool.try_bond_funds_from_rewards(&who, &mut member, &mut reward_pool)?,
+					bonded_pool.try_bond_funds_from_rewards(&mut member, &mut reward_pool)?,
 			};
 
 			bonded_pool.ok_to_be_open(bonded)?;
@@ -1947,7 +1938,7 @@ pub mod pallet {
 			);
 
 			bonded_pool.try_inc_members()?;
-			let points = bonded_pool.try_bond_funds(&who, amount, BondType::Create)?;
+			let points = bonded_pool.try_bond_funds(&who, amount, BondType::Create, true)?;
 
 			T::Currency::transfer(
 				&who,
@@ -2356,23 +2347,63 @@ impl<T: Config> Pallet<T> {
 			.div(current_points)
 	}
 
-	/// If the member has some rewards, transfer a payout from the reward pool to the member.
-	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
-	// not persist any of the mutable inputs to storage.
-	fn do_reward_payout(
-		member_account: &T::AccountId,
+	/// Calculates the rewards for the given member, and makes a payout to the
+	/// defined `payout_recipient` account.
+	///
+	/// Returns the amount of pending_rewards that the member has accumulated,
+	/// that are now transfered to the `payout_recipient`.
+	fn calculate_and_payout_rewards(
 		member: &mut PoolMember<T>,
 		bonded_pool: &mut BondedPool<T>,
 		reward_pool: &mut RewardPool<T>,
+		payout_recipient: PayoutRecipient<T>,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		let (pending_rewards, current_reward_counter) =
+			Self::calculate_rewards(member, bonded_pool, reward_pool)?;
+		Self::payout_rewards(
+			member,
+			bonded_pool,
+			reward_pool,
+			pending_rewards,
+			current_reward_counter,
+			payout_recipient,
+		)?;
+		Ok(pending_rewards)
+	}
+
+	/// Only calculates the rewards for the given member without changing any
+	/// data.
+	///
+	/// Returns the pending rewards of the member and the
+	/// `current_reward_counter` of the reward pool
+	fn calculate_rewards(
+		member: &PoolMember<T>,
+		bonded_pool: &BondedPool<T>,
+		reward_pool: &RewardPool<T>,
+	) -> Result<(BalanceOf<T>, T::RewardCounter), DispatchError> {
+		let current_reward_counter =
+			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
+		let pending_rewards = member.pending_rewards(current_reward_counter)?;
+
+		Ok((pending_rewards, current_reward_counter))
+	}
+
+	/// Does the actual payout of the accumulated rewards by the member.
+	///
+	/// Returns the amount of pending rewards that got paid out.
+	/// Emits the `PaidOut` event.
+	fn payout_rewards(
+		member: &mut PoolMember<T>,
+		bonded_pool: &mut BondedPool<T>,
+		reward_pool: &mut RewardPool<T>,
+		pending_rewards: BalanceOf<T>,
+		current_reward_counter: T::RewardCounter,
+		payout_recipient: PayoutRecipient<T>,
 	) -> Result<BalanceOf<T>, DispatchError> {
 		debug_assert_eq!(member.pool_id, bonded_pool.id);
 
 		// a member who has no skin in the game anymore cannot claim any rewards.
 		ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
-
-		let current_reward_counter =
-			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
@@ -2382,21 +2413,43 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// Transfer payout to the member.
+		let recipient = match payout_recipient {
+			PayoutRecipient::<T>::MemberAccount(member_account) => member_account,
+			PayoutRecipient::<T>::BondedAccount(bonded_account) => bonded_account,
+		};
+
+		// Transfer payout to the recipient.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
-			&member_account,
+			&recipient,
 			pending_rewards,
 			ExistenceRequirement::AllowDeath,
 		)?;
 
 		Self::deposit_event(Event::<T>::PaidOut {
-			member: member_account.clone(),
+			member: recipient.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
 		});
 
 		Ok(pending_rewards)
+	}
+
+	/// If the member has some rewards, transfer a payout from the reward pool to the member.
+	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
+	// not persist any of the mutable inputs to storage.
+	fn do_reward_payout(
+		member_account: &T::AccountId,
+		member: &mut PoolMember<T>,
+		bonded_pool: &mut BondedPool<T>,
+		reward_pool: &mut RewardPool<T>,
+	) -> Result<BalanceOf<T>, DispatchError> {
+		Self::calculate_and_payout_rewards(
+			member,
+			bonded_pool,
+			reward_pool,
+			PayoutRecipient::<T>::MemberAccount(member_account.clone()),
+		)
 	}
 
 	/// Ensure the correctness of the state of this pallet.

@@ -4164,7 +4164,11 @@ mod bond_extra {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut { member: 10, pool_id: 1, payout: claimable_reward },
+					Event::PaidOut {
+						member: default_bonded_account(),
+						pool_id: 1,
+						payout: claimable_reward
+					},
 					Event::Bonded {
 						member: 10,
 						pool_id: 1,
@@ -4219,9 +4223,9 @@ mod bond_extra {
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					Event::PaidOut { member: 10, pool_id: 1, payout: 1 },
+					Event::PaidOut { member: default_bonded_account(), pool_id: 1, payout: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 1, joined: false },
-					Event::PaidOut { member: 20, pool_id: 1, payout: 2 },
+					Event::PaidOut { member: default_bonded_account(), pool_id: 1, payout: 2 },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 2, joined: false }
 				]
 			);
