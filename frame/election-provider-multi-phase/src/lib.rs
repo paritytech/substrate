@@ -2248,6 +2248,13 @@ mod tests {
 	}
 
 	#[test]
+	fn debug_ready_solution() {
+		let solution = ReadySolutionOf::<MultiPhase>::default();
+
+		format!("{:?}", solution);
+	}
+
+	#[test]
 	fn number_of_voters_allowed_2sec_block() {
 		// Just a rough estimate with the substrate weights.
 		assert_eq!(MockWeightInfo::get(), MockedWeightInfo::Real);

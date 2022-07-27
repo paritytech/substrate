@@ -310,7 +310,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<Snapshot<T>>::get().is_some());
 		assert!(<SnapshotMetadata<T>>::get().is_some());
 	}: {
-		assert_ok!(<MultiPhase<T> as ElectionProvider>::elect());
+		assert!(<MultiPhase<T> as ElectionProvider>::elect().is_ok());
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		assert!(<DesiredTargets<T>>::get().is_none());
@@ -404,7 +404,8 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(raw_solution.solution.voter_count() as u32, a);
 		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
 	}: {
-		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
+		// TODO @ggwpez Why does format! work but not this?
+		assert!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned).is_ok());
 	}
 
 	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in
