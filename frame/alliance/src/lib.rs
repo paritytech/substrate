@@ -311,7 +311,7 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// The founders/fellows/allies have already been initialized.
-		MembersAlreadyInitialized,
+		AllianceAlreadyInitialized,
 		/// The Alliance has not been initialized yet, therefore accounts cannot join it.
 		AllianceNotYetInitialized,
 		/// Account is already a member.
@@ -438,7 +438,7 @@ pub mod pallet {
 			if !self.allies.is_empty() {
 				// Only allow Allies if the Alliance is "initialized".
 				assert!(
-					!self.founders.is_empty() || !self.fellows.is_empty(),
+					Pallet::<T, I>::is_initialized(),
 					"Alliance must have Founders or Fellows to have Allies"
 				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
@@ -620,7 +620,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			// Cannot be called if the Alliance already has Founders or Fellows.
-			ensure!(!Self::is_initialized(), Error::<T, I>::MembersAlreadyInitialized);
+			ensure!(!Self::is_initialized(), Error::<T, I>::AllianceAlreadyInitialized);
 
 			let mut founders: BoundedVec<T::AccountId, T::MaxMembersCount> =
 				founders.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
