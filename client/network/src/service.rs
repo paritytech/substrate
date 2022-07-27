@@ -148,6 +148,47 @@ where
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
 	pub fn new(mut params: Params<B, H, Client>) -> Result<Self, Error> {
+		// Private and public keys configuration.
+		let local_identity = params.network_config.node_key.clone().into_keypair()?;
+		let local_public = local_identity.public();
+		let local_peer_id = local_public.to_peer_id();
+
+		params.network_config.boot_nodes = params
+			.network_config
+			.boot_nodes
+			.into_iter()
+			.filter(|boot_node| {
+				if boot_node.peer_id == local_peer_id {
+					warn!(
+						target: "sub-libp2p",
+						"Local peer ID used in bootnode, ignoring: {}",
+						boot_node,
+					);
+					false
+				} else {
+					true
+				}
+			})
+			.collect();
+		params.network_config.default_peers_set.reserved_nodes = params
+			.network_config
+			.default_peers_set
+			.reserved_nodes
+			.into_iter()
+			.filter(|reserved_node| {
+				if reserved_node.peer_id == local_peer_id {
+					warn!(
+						target: "sub-libp2p",
+						"Local peer ID used in reserved node, ignoring: {}",
+						reserved_node,
+					);
+					false
+				} else {
+					true
+				}
+			})
+			.collect();
+
 		// Ensure the listen addresses are consistent with the transport.
 		ensure_addresses_consistent_with_transport(
 			params.network_config.listen_addresses.iter(),
@@ -190,10 +231,6 @@ where
 			.extra_sets
 			.insert(0, transactions_handler_proto.set_config());
 
-		// Private and public keys configuration.
-		let local_identity = params.network_config.node_key.clone().into_keypair()?;
-		let local_public = local_identity.public();
-		let local_peer_id = local_public.to_peer_id();
 		info!(
 			target: "sub-libp2p",
 			"🏷  Local node identity is: {}",
@@ -208,15 +245,11 @@ where
 		};
 
 		let chain_sync = (params.create_chain_sync)(
-			if params.role.is_light() {
-				SyncMode::Light
-			} else {
-				match params.network_config.sync_mode {
-					config::SyncMode::Full => SyncMode::Full,
-					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-						SyncMode::LightState { skip_proofs, storage_chain_mode },
-					config::SyncMode::Warp => SyncMode::Warp,
-				}
+			match params.network_config.sync_mode {
+				config::SyncMode::Full => SyncMode::Full,
+				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+					SyncMode::LightState { skip_proofs, storage_chain_mode },
+				config::SyncMode::Warp => SyncMode::Warp,
 			},
 			params.chain.clone(),
 			warp_sync_provider,
@@ -452,7 +485,6 @@ where
 
 		let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(
 			service.clone(),
-			params.role,
 			params.transaction_pool,
 			params.metrics_registry.as_ref(),
 		)?;
@@ -1988,12 +2020,16 @@ where
 
 						if this.boot_node_ids.contains(&peer_id) {
 							if let DialError::WrongPeerId { obtained, endpoint } = &error {
-								error!(
-									"💔 The bootnode you want to connect provided a different peer ID than the one you expect: `{}` with `{}`:`{:?}`.",
-									peer_id,
-									obtained,
-									endpoint,
-								);
+								if let ConnectedPoint::Dialer { address, role_override: _ } =
+									endpoint
+								{
+									error!(
+										"💔 The bootnode you want to connect to at `{}` provided a different peer ID `{}` than the one you expect `{}`.",
+										address,
+										obtained,
+										peer_id,
+									);
+								}
 							}
 						}
 					}

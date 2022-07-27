@@ -107,7 +107,6 @@ pub mod generic {
 		fn from(roles: &'a crate::config::Role) -> Self {
 			match roles {
 				crate::config::Role::Full => Self::FULL,
-				crate::config::Role::Light => Self::LIGHT,
 				crate::config::Role::Authority { .. } => Self::AUTHORITY,
 			}
 		}
