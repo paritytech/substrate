@@ -7447,12 +7447,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "retain_mut"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "448296241d034b96c11173591deaa1302f2c17b56092106c1f92c1bc0183a8c9"
-
-[[package]]
 name = "rfc6979"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7965,7 +7959,6 @@ dependencies = [
  "parking_lot 0.12.0",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
- "retain_mut",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
@@ -8877,7 +8870,6 @@ dependencies = [
  "parity-scale-codec",
  "parity-util-mem",
  "parking_lot 0.12.0",
- "retain_mut",
  "sc-block-builder",
  "sc-client-api",
  "sc-transaction-pool-api",
