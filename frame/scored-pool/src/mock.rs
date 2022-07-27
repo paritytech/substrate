@@ -141,7 +141,6 @@ impl Config for Test {
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64>;
 	type MaximumMembers = ConstU32<10>;
-	type MaximumPoolCandidates = ConstU32<10>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

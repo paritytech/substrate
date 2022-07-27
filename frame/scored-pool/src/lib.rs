@@ -105,14 +105,17 @@ use frame_support::{
 	BoundedVec,
 };
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32Bit, StaticLookup, Zero};
+use sp_runtime::{
+	traits::{AtLeast32Bit, StaticLookup, Zero},
+	DispatchError,
+};
 use sp_std::{fmt::Debug, prelude::*};
 
 type BalanceOf<T, I> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type PoolT<T, I> = BoundedVec<
 	(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>),
-	<T as Config<I>>::MaximumPoolCandidates,
+	<T as Config<I>>::MaximumMembers,
 >;
 type MembersT<T, I> =
 	BoundedVec<<T as frame_system::Config>::AccountId, <T as Config<I>>::MaximumMembers>;
@@ -145,10 +148,6 @@ pub mod pallet {
 		/// Maximum acceptable members length.
 		#[pallet::constant]
 		type MaximumMembers: Get<u32>;
-
-		/// Maximum acceptable pool candidates length.
-		#[pallet::constant]
-		type MaximumPoolCandidates: Get<u32>;
 
 		/// The score attributed to a member or candidate.
 		type Score: AtLeast32Bit
@@ -222,8 +221,6 @@ pub mod pallet {
 		WrongAccountIndex,
 		/// Number of members exceeds `MaximumMembers`.
 		TooManyMembers,
-		/// Number of candidates exceeds `MaximumPoolCandidates`
-		TooManyPoolCandidates,
 	}
 
 	/// The current pool of candidates, stored as an ordered Bounded Vec
@@ -327,7 +324,7 @@ pub mod pallet {
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
 			<Pool<T, I>>::try_append((who.clone(), Option::<<T as Config<I>>::Score>::None))
-				.map_err(|_| Error::<T, I>::TooManyPoolCandidates)?;
+				.map_err(|_| Error::<T, I>::TooManyMembers)?;
 
 			<CandidateExists<T, I>>::insert(&who, true);
 
@@ -413,8 +410,7 @@ pub mod pallet {
 					Reverse(maybe_score.unwrap_or_default())
 				})
 				.unwrap_or_else(|l| l);
-			pool.try_insert(location, item)
-				.map_err(|_| Error::<T, I>::TooManyPoolCandidates)?;
+			pool.try_insert(location, item).map_err(|_| Error::<T, I>::TooManyMembers)?;
 
 			<Pool<T, I>>::put(&pool);
 			Self::deposit_event(Event::<T, I>::CandidateScored);
@@ -442,9 +438,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// The `notify` parameter is used to deduct which associated
 	/// type function to invoke at the end of the method.
-	fn refresh_members(pool: PoolT<T, I>, notify: ChangeReceiver) -> Result<(), Error<T, I>> {
+	fn refresh_members(pool: PoolT<T, I>, notify: ChangeReceiver) -> Result<(), DispatchError> {
 		let count = MemberCount::<T, I>::get();
-
+		let old_members = <Members<T, I>>::get();
 		let pool = pool.into_inner();
 
 		let new_members: Vec<T::AccountId> = pool
@@ -454,12 +450,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.map(|(account_id, _)| account_id)
 			.collect();
 
-		let mut new_members_bounded: BoundedVec<T::AccountId, T::MaximumMembers> =
+		let mut new_members_bounded: MembersT<T, I> =
 			BoundedVec::try_from(new_members).map_err(|_| Error::<T, I>::TooManyMembers)?;
 
 		new_members_bounded.sort();
-
-		let old_members = <Members<T, I>>::get();
 
 		<Members<T, I>>::put(&new_members_bounded);
 

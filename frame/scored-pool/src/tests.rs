@@ -175,28 +175,6 @@ fn refreshing_works() {
 }
 
 #[test]
-fn refreshing_does_not_work_exceed() {
-	new_test_ext().execute_with(|| {
-		// given
-
-		for i in [1, 2, 3, 4, 6] {
-			let who = i as u64;
-			assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
-			let index = find_in_pool(who).expect("entity must be in pool") as u32;
-			assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
-		}
-
-		let submit_candidacy_call =
-			crate::mock::Call::ScoredPool(crate::Call::<Test>::submit_candidacy {});
-
-		assert_noop!(
-			submit_candidacy_call.dispatch(Origin::signed(7)),
-			Error::<Test, _>::TooManyPoolCandidates
-		);
-	});
-}
-
-#[test]
 fn refreshing_happens_every_period() {
 	new_test_ext().execute_with(|| {
 		// given
@@ -321,9 +299,21 @@ fn candidacy_resubmitting_works() {
 }
 
 #[test]
-fn exceed_maximum_members() {
+fn pool_candidates_exceded() {
 	new_test_ext().execute_with(|| {
-		ScoredPool::submit_candidacy(Origin::signed(15)).unwrap();
-		println!("{:?}", MEMBERS.with(|m| m.borrow().clone()));
+		for i in [1, 2, 3, 4, 6] {
+			let who = i as u64;
+			assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
+			let index = find_in_pool(who).expect("entity must be in pool") as u32;
+			assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
+		}
+
+		let submit_candidacy_call =
+			mock::Call::ScoredPool(crate::Call::<Test>::submit_candidacy {});
+
+		assert_noop!(
+			submit_candidacy_call.dispatch(Origin::signed(8)),
+			Error::<Test, _>::TooManyMembers
+		);
 	});
 }
