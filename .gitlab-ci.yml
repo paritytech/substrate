@@ -262,9 +262,7 @@ update-node-template:
     - if: $CI_COMMIT_REF_NAME =~ /^11919$/ # /^polkadot-v[0-9]+\.[0-9]+.*$/ # i.e. polkadot-v1.0.99, polkadot-v2.1rc1
   script:
     - git clone --depth=1 --branch="mak/111-update-substrate-template" https://github.com/paritytech/pipeline-scripts
-    - cd ./pipeline-scripts
-    - ls -lsa
-    - ./update_substrate_template.sh
+    - ./pipeline-scripts/update_substrate_template.sh
       --repo-name "substrate-node-template"
       --template-path "bin/node-template"
       --github-api-token "$GITHUB_PR_TOKEN"
