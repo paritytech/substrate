@@ -19,7 +19,7 @@ use super::*;
 use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider,
-	onchain::{self, UnboundedExecution},
+	onchain::{self, TruncatingBounderOf, UnboundedExecution},
 	ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
@@ -44,7 +44,7 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, Convert, IdentityLookup},
 	PerU16,
 };
 use std::sync::Arc;
@@ -292,6 +292,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
+	// FIXME no idea what to use here
+	type MaxBackersPerWinner = ConstU32<16>;
+	type Bounder = TruncatingBounderOf<Runtime, Self::MaxBackersPerWinner>;
 }
 
 pub struct MockFallback;
@@ -300,9 +303,11 @@ impl ElectionProvider for MockFallback {
 	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
+	type MaxBackersPerWinner = ConstU32<16>;
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
+			.map(|supports| <OnChainSeqPhragmen as onchain::Config>::Bounder::convert(supports))
 	}
 }
 
@@ -385,6 +390,7 @@ impl crate::Config for Runtime {
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;
+	type MaxBackersPerWinner = ConstU32<16>;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }

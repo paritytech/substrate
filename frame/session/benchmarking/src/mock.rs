@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::{onchain, onchain::TruncatingBounderOf, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -160,6 +160,10 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, sp_runtime::Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+
+	// FIXME no idea what to use here
+	type MaxBackersPerWinner = ConstU32<16>;
+	type Bounder = TruncatingBounderOf<Test, Self::MaxBackersPerWinner>;
 }
 
 impl pallet_staking::Config for Test {

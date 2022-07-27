@@ -19,7 +19,8 @@
 
 use crate::{
 	helpers, Call, Config, ElectionCompute, Error, FeasibilityError, Pallet, RawSolution,
-	ReadySolution, RoundSnapshot, SolutionAccuracyOf, SolutionOf, SolutionOrSnapshotSize, Weight,
+	ReadySolution, ReadySolutionOf, RoundSnapshot, SolutionAccuracyOf, SolutionOf,
+	SolutionOrSnapshotSize, Weight,
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
@@ -351,7 +352,7 @@ impl<T: Config> Pallet<T> {
 
 		// ensure score is being improved. Panic henceforth.
 		ensure!(
-			Self::queued_solution().map_or(true, |q: ReadySolution<_>| raw_solution
+			Self::queued_solution().map_or(true, |q: ReadySolutionOf<Self>| raw_solution
 				.score
 				.strict_threshold_better(q.score, T::BetterUnsignedThreshold::get())),
 			Error::<T>::PreDispatchWeakSubmission,

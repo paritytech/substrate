@@ -70,6 +70,36 @@ pub struct BoundedExecution<T: BoundedConfig>(PhantomData<T>);
 /// This can be very expensive to run frequently on-chain. Use with care.
 pub struct UnboundedExecution<T: Config>(PhantomData<T>);
 
+// TODO delete this, i did not see `TruncateIntoBoundedSupports` before :facepalm:
+pub type TruncatingBounderOf<T, MaxBackersPerWinner> =
+	TruncatingBounder<<T as frame_system::Config>::AccountId, MaxBackersPerWinner>;
+pub struct TruncatingBounder<AccountId, MaxBackersPerWinner: Get<u32>>(
+	sp_std::marker::PhantomData<(AccountId, MaxBackersPerWinner)>,
+);
+
+impl<AccountId, MaxBackersPerWinner: Get<u32>>
+	Convert<Supports<AccountId>, Vec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>)>>
+	for TruncatingBounder<AccountId, MaxBackersPerWinner>
+{
+	/// Make conversion.
+	fn convert(
+		a: Supports<AccountId>,
+	) -> Vec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>)> {
+		// TODO move to TruncateIntoBoundedSupports
+		a.into_iter()
+			.map(|(who, support)| {
+				(
+					who,
+					BoundedSupport {
+						total: support.total,
+						voters: sp_runtime::BoundedVec::truncate_from(support.voters),
+					},
+				)
+			})
+			.collect()
+	}
+}
+
 /// Configuration trait for an onchain election execution.
 pub trait Config {
 	/// Needed for weight registration.
@@ -85,15 +115,13 @@ pub trait Config {
 	/// Something that can convert the final `Supports` into a bounded version.
 	type Bounder: Convert<
 		sp_npos_elections::Supports<<Self::System as frame_system::Config>::AccountId>,
-		Vec<
-		(
+		Vec<(
 			<Self::System as frame_system::Config>::AccountId,
 			BoundedSupport<
 				<Self::System as frame_system::Config>::AccountId,
 				Self::MaxBackersPerWinner,
-			>
-		)
-		>,
+			>,
+		)>,
 	>;
 
 	/// Something that provides the data for election.
@@ -267,6 +295,9 @@ mod tests {
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
+		// FIXME no idea what to use here
+		type MaxBackersPerWinner = ConstU32<16>;
+		type Bounder = TruncatingBounderOf<Runtime, Self::MaxBackersPerWinner>;
 	}
 
 	impl BoundedConfig for PhragmenParams {
@@ -279,6 +310,9 @@ mod tests {
 		type Solver = PhragMMS<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
+		// FIXME no idea what to use here
+		type MaxBackersPerWinner = ConstU32<16>;
+		type Bounder = TruncatingBounderOf<Runtime, Self::MaxBackersPerWinner>;
 	}
 
 	impl BoundedConfig for PhragMMSParams {
@@ -321,12 +355,13 @@ mod tests {
 
 	#[test]
 	fn onchain_seq_phragmen_works() {
+		use frame_support::bounded_vec;
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
 				BoundedExecution::<PhragmenParams>::elect().unwrap(),
 				vec![
-					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
-					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
+					(10, BoundedSupport { total: 25, voters: bounded_vec![(1, 10), (3, 15)] }),
+					(30, BoundedSupport { total: 35, voters: bounded_vec![(2, 20), (3, 15)] })
 				]
 			);
 		})
@@ -334,12 +369,13 @@ mod tests {
 
 	#[test]
 	fn onchain_phragmms_works() {
+		use frame_support::bounded_vec;
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
 				BoundedExecution::<PhragMMSParams>::elect().unwrap(),
 				vec![
-					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
-					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
+					(10, BoundedSupport { total: 25, voters: bounded_vec![(1, 10), (3, 15)] }),
+					(30, BoundedSupport { total: 35, voters: bounded_vec![(2, 20), (3, 15)] })
 				]
 			);
 		})

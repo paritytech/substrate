@@ -360,7 +360,7 @@ pub trait ElectionDataProvider {
 /// implemented of this trait through [`ElectionProvider::DataProvider`].
 pub trait ElectionProvider {
 	/// The account identifier type.
-	type AccountId;
+	type AccountId: Eq + Clone;
 
 	/// The block number type.
 	type BlockNumber;
@@ -420,6 +420,7 @@ pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 impl<AccountId, BlockNumber, DataProvider> ElectionProvider
 	for NoElection<(AccountId, BlockNumber, DataProvider)>
 where
+	AccountId: Eq + Clone,
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
 {
 	type AccountId = AccountId;
@@ -646,6 +647,9 @@ pub type BoundedSupportOf<E> = BoundedSupport<
 	<E as ElectionProvider>::MaxBackersPerWinner,
 >;
 
+pub type BoundedSupports<AccountId, MaxBackersPerWinner> =
+	Vec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>)>;
+// todo transform
 pub type BoundedSupportsOf<E> = Vec<(<E as ElectionProvider>::AccountId, BoundedSupportOf<E>)>;
 
 impl<AccountId, Bound: Get<u32>> sp_npos_elections::Backings for &BoundedSupport<AccountId, Bound> {

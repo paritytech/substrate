@@ -19,8 +19,8 @@
 
 use crate::{
 	unsigned::MinerConfig, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution,
-	ReadySolution, SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
-	SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
+	ReadySolution, ReadySolutionOf, SignedSubmissionIndices, SignedSubmissionNextIndex,
+	SignedSubmissionsMap, SolutionOf, SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::NposSolution;
@@ -451,7 +451,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_accept_solution(
-		ready_solution: ReadySolution<T::AccountId>,
+		ready_solution: ReadySolutionOf<Self>,
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
 		call_fee: BalanceOf<T>,

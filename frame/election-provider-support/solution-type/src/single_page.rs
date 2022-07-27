@@ -105,6 +105,8 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 		use _feps::__OrInvalidIndex;
 		impl _feps::NposSolution for #ident {
 			const LIMIT: usize = #count;
+
+			type Limit = sp_runtime::traits::ConstU32<{#count as u32}>;
 			type VoterIndex = #voter_type;
 			type TargetIndex = #target_type;
 			type Accuracy = #weight_type;

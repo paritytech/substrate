@@ -229,16 +229,17 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
-	BoundedSupportsOf
+	BoundedSupport, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
+	InstantElectionProvider, NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
+	BoundedVec, DebugNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -247,7 +248,8 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Support, Supports,
+	VoteWeight,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -318,8 +320,9 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
+	type MaxBackersPerWinner = T::MaxBackersPerWinner;
 
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
 		Err("NoFallback.")
 	}
@@ -394,7 +397,7 @@ impl<Bn: PartialEq + Eq> Phase<Bn> {
 }
 
 /// The type of `Computation` that provided this election data.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, Debug, MaxEncodedLen, TypeInfo)]
 pub enum ElectionCompute {
 	/// Election was computed on-chain.
 	OnChain,
@@ -437,14 +440,20 @@ impl<C: Default> Default for RawSolution<C> {
 	}
 }
 
+use frame_support::{DefaultNoBound, EqNoBound, PartialEqNoBound};
+
 /// A checked solution, ready to be enacted.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct ReadySolution<A> {
+#[derive(PartialEqNoBound, Clone, Encode, Decode, RuntimeDebug, DefaultNoBound, TypeInfo)]
+#[scale_info(skip_type_params(MaxBackersPerWinner))]
+pub struct ReadySolution<AccountId, MaxBackersPerWinner: Get<u32>>
+where
+	AccountId: PartialEq,
+{
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: Supports<A>,
+	pub supports: Vec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>)>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -452,6 +461,23 @@ pub struct ReadySolution<A> {
 	/// How this election was computed.
 	pub compute: ElectionCompute,
 }
+
+impl<AccountId, MaxBackersPerWinner: Get<u32>> From<Vec<(AccountId, Support<AccountId>)>>
+	for ReadySolution<AccountId, MaxBackersPerWinner>
+where
+	AccountId: PartialEq,
+{
+	fn from(supports: Vec<(AccountId, Support<AccountId>)>) -> Self {
+		Self {
+			supports: Default::default(), // FIXME @ggwpez
+			score: Default::default(),
+			compute: Default::default(),
+		}
+	}
+}
+
+pub type ReadySolutionOf<E> =
+	ReadySolution<<E as ElectionProvider>::AccountId, <E as ElectionProvider>::MaxBackersPerWinner>;
 
 /// A snapshot of all the data that is needed for en entire round. They are provided by
 /// [`ElectionDataProvider`] and are kept around until the round is finished.
@@ -552,6 +578,7 @@ pub enum FeasibilityError {
 	InvalidRound,
 	/// Comparison against `MinimumUntrustedScore` failed.
 	UntrustedScoreTooLow,
+	TooManyVotes,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -682,6 +709,7 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
+			MaxBackersPerWinner = Self::MaxBackersPerWinner,
 		>;
 
 		/// Configuration of the governance-only fallback.
@@ -692,6 +720,7 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
+			MaxBackersPerWinner = Self::MaxBackersPerWinner,
 		>;
 
 		/// OCW election solution miner algorithm implementation.
@@ -947,11 +976,12 @@ pub mod pallet {
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
 
-			let solution = ReadySolution {
+			let solution = ReadySolution::from(
 				supports,
-				score: Default::default(),
-				compute: ElectionCompute::Emergency,
-			};
+				/*score: Default::default(),
+					compute: ElectionCompute::Emergency,
+				};*/
+			);
 
 			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Emergency,
@@ -1061,11 +1091,13 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			let solution = ReadySolution {
+			/*let solution = ReadySolution {
 				supports,
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
-			};
+			};*/
+			// FIXME
+			let solution = ReadySolution::from(supports);
 
 			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Fallback,
@@ -1200,7 +1232,7 @@ pub mod pallet {
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
-	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId>>;
+	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolutionOf<crate::Pallet<T>>>;
 
 	/// Snapshot data of the round.
 	///
@@ -1434,7 +1466,7 @@ impl<T: Config> Pallet<T> {
 	pub fn feasibility_check(
 		raw_solution: RawSolution<SolutionOf<T::MinerConfig>>,
 		compute: ElectionCompute,
-	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
+	) -> Result<ReadySolutionOf<Self>, FeasibilityError> {
 		let RawSolution { solution, score, round } = raw_solution;
 
 		// First, check round.
@@ -1507,7 +1539,8 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
-		Ok(ReadySolution { supports, compute, score })
+		// FIXME @ggwpez
+		Ok(supports.into())
 	}
 
 	/// Perform the tasks to be done after a new `elect` has been triggered:
@@ -1526,7 +1559,7 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
+	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
@@ -1542,7 +1575,7 @@ impl<T: Config> Pallet<T> {
 						.map_err(|fe| ElectionError::Fallback(fe))
 						.map(|supports| (supports, ElectionCompute::Fallback))
 				},
-				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
+				|ReadySolutionOf::<Self> { supports, compute, .. }| Ok((supports, compute)),
 			)
 			.map(|(supports, compute)| {
 				Self::deposit_event(Event::ElectionFinalized { election_compute: Some(compute) });
@@ -1561,7 +1594,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// record the weight of the given `supports`.
-	fn weigh_supports(supports: &Supports<T::AccountId>) {
+	fn weigh_supports(supports: &BoundedSupportsOf<Self>) {
 		let active_voters = supports
 			.iter()
 			.map(|(_, x)| x)
@@ -1585,11 +1618,6 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
 
-				// TODO: this is just to make it compile -- this should be checked inside of
-				// `feasibility_check`, and ReadySolution should already store a `BoundedSupports`.
-				use frame_election_provider_support::TruncateIntoBoundedSupports;
-				use sp_runtime::traits::Convert;
-				let supports = TruncateIntoBoundedSupports::<Self>::convert(supports);
 				Ok(supports)
 			},
 			Err(why) => {
@@ -2031,6 +2059,7 @@ mod tests {
 
 	#[test]
 	fn fallback_strategy_works() {
+		use frame_support::bounded_vec;
 		ExtBuilder::default().onchain_fallback(true).build_and_execute(|| {
 			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
@@ -2042,8 +2071,20 @@ mod tests {
 			assert_eq!(
 				supports,
 				vec![
-					(30, Support { total: 40, voters: vec![(2, 5), (4, 5), (30, 30)] }),
-					(40, Support { total: 60, voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)] })
+					(
+						30,
+						BoundedSupport {
+							total: 40,
+							voters: bounded_vec![(2, 5), (4, 5), (30, 30)]
+						}
+					),
+					(
+						40,
+						BoundedSupport {
+							total: 60,
+							voters: bounded_vec![(2, 5), (3, 10), (4, 5), (40, 40)]
+						}
+					)
 				]
 			)
 		});
@@ -2196,6 +2237,14 @@ mod tests {
 				FeasibilityError::UntrustedScoreTooLow,
 			);
 		})
+	}
+
+	#[test]
+	fn compare_ready_solution() {
+		let solution = ReadySolutionOf::<MultiPhase>::default();
+
+		assert_eq!(solution, solution);
+		assert!(solution == solution);
 	}
 
 	#[test]

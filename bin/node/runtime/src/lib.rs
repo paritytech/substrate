@@ -24,7 +24,9 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
+	onchain,
+	onchain::{TruncatingBounder, TruncatingBounderOf},
+	BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
 };
 use frame_support::{
 	construct_runtime,
@@ -658,6 +660,10 @@ impl onchain::Config for OnChainSeqPhragmen {
 	>;
 	type DataProvider = <Runtime as pallet_election_provider_multi_phase::Config>::DataProvider;
 	type WeightInfo = frame_election_provider_support::weights::SubstrateWeight<Runtime>;
+
+	// FIXME no idea what to use here
+	type MaxBackersPerWinner = ConstU32<16>;
+	type Bounder = TruncatingBounderOf<Runtime, Self::MaxBackersPerWinner>;
 }
 
 impl onchain::BoundedConfig for OnChainSeqPhragmen {
@@ -711,6 +717,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
 	type MaxElectingVoters = MaxElectingVoters;
+	// TODO what to use here
+	type MaxBackersPerWinner = ConstU32<16>;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 }
