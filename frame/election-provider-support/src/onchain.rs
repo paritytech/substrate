@@ -271,7 +271,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		// TODO no idea what to use here
-		type MaxBackersPerWinner = ConstU32<16>;
+		type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 		type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 	}
 
@@ -286,7 +286,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		// TODO no idea what to use here
-		type MaxBackersPerWinner = ConstU32<16>;
+		type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 		type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 	}
 

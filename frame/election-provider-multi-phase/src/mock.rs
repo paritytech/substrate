@@ -293,7 +293,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
 	// TODO no idea what to use here
-	type MaxBackersPerWinner = ConstU32<16>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 	type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 }
 
@@ -303,7 +303,7 @@ impl ElectionProvider for MockFallback {
 	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
-	type MaxBackersPerWinner = ConstU32<16>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
@@ -390,7 +390,7 @@ impl crate::Config for Runtime {
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;
-	type MaxBackersPerWinner = ConstU32<16>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 	type Bounder = TruncateIntoBoundedSupports<
 		<Self as frame_system::Config>::AccountId,
 		Self::MaxBackersPerWinner,

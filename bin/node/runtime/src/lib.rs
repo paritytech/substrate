@@ -661,7 +661,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type WeightInfo = frame_election_provider_support::weights::SubstrateWeight<Runtime>;
 
 	// TODO no idea what to use here
-	type MaxBackersPerWinner = ConstU32<16>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 	type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 }
 
@@ -717,7 +717,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
 	type MaxElectingVoters = MaxElectingVoters;
 	// TODO what to use here
-	type MaxBackersPerWinner = ConstU32<16>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 	type Bounder = TruncateIntoBoundedSupports<
 		<Self as frame_system::Config>::AccountId,
 		Self::MaxBackersPerWinner,

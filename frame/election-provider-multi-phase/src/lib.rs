@@ -443,10 +443,7 @@ impl<C: Default> Default for RawSolution<C> {
 /// A checked solution, ready to be enacted.
 #[derive(PartialEqNoBound, Clone, Encode, Decode, RuntimeDebug, DefaultNoBound, TypeInfo)]
 #[scale_info(skip_type_params(MaxBackersPerWinner))]
-pub struct ReadySolution<AccountId, MaxBackersPerWinner: Get<u32>>
-where
-	AccountId: PartialEq,
-{
+pub struct ReadySolution<AccountId: PartialEq, MaxBackersPerWinner: Get<u32>> {
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual

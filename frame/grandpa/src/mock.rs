@@ -185,7 +185,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	// TODO no idea what to use here
-	type MaxBackersPerWinner = ConstU32<16>;
+	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
 	type Bounder = TruncateIntoBoundedSupportsOf<Self>;
 }
 
