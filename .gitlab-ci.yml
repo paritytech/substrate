@@ -265,5 +265,5 @@ update-node-template:
     - ./pipeline-scripts/update_substrate_template.sh
       --repo-name "substrate-node-template"
       --template-path "bin/node-template"
-      --github-api-token "$GITHUB_PR_TOKEN"
+      --github-api-token "$GITHUB_TOKEN"
       --polkadot-branch "polkadot-v0.9.26" # for test purposes
