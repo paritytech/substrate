@@ -231,7 +231,7 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	BoundedSupport, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
+	BoundedSupport, BoundedSupports, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
 	InstantElectionProvider, NposSolution,
 };
 use frame_support::{
@@ -451,7 +451,7 @@ where
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: Vec<(AccountId, BoundedSupport<AccountId, MaxBackersPerWinner>)>,
+	pub supports: BoundedSupports<AccountId, MaxBackersPerWinner>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -563,7 +563,6 @@ pub enum FeasibilityError {
 	InvalidRound,
 	/// Comparison against `MinimumUntrustedScore` failed.
 	UntrustedScoreTooLow,
-	TooManyVotes,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -1569,7 +1568,7 @@ impl<T: Config> Pallet<T> {
 						.map_err(|fe| ElectionError::Fallback(fe))
 						.map(|supports| (supports, ElectionCompute::Fallback))
 				},
-				|ReadySolutionOf::<Self> { supports, compute, .. }| Ok((supports, compute)),
+				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
 			)
 			.map(|(supports, compute)| {
 				Self::deposit_event(Event::ElectionFinalized { election_compute: Some(compute) });
@@ -1841,7 +1840,7 @@ mod tests {
 		Phase,
 	};
 	use frame_election_provider_support::ElectionProvider;
-	use frame_support::{assert_noop, assert_ok};
+	use frame_support::{assert_noop, assert_ok, bounded_vec};
 	use sp_npos_elections::BalancingConfig;
 
 	#[test]
@@ -2053,7 +2052,6 @@ mod tests {
 
 	#[test]
 	fn fallback_strategy_works() {
-		use frame_support::bounded_vec;
 		ExtBuilder::default().onchain_fallback(true).build_and_execute(|| {
 			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
