@@ -51,26 +51,6 @@ cargo-clippy:
     - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy --all-targets
     - rusty-cachier cache upload
 
-cargo-check-nixos:
-  stage:                           test
-  # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
-  needs:
-    - job:                         cargo-clippy
-      artifacts:                   false
-  extends:
-    - .docker-env
-    - .test-refs
-  before_script:                   []
-  # Don't use CI_IMAGE here because it breaks nightly checks of paritytech/ci-linux image
-  image:                           nixos/nix
-  variables:
-    SNAP:                          "DUMMY"
-    WS_API:                        "DUMMY"
-  script:
-    - nix-channel --update
-    - nix-shell shell.nix
-    - nix-shell --run "cargo check --workspace --all-targets --all-features"
-
 cargo-check-benches:
   stage:                           test
   variables:
@@ -337,6 +317,8 @@ test-linux-stable-int:
         time cargo test -p node-cli --release --verbose --locked -- --ignored
     - rusty-cachier cache upload
 
+# more information about this job can be found here:
+# https://github.com/paritytech/substrate/pull/6916
 check-tracing:
   stage:                           test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
@@ -355,6 +337,8 @@ check-tracing:
     - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
     - rusty-cachier cache upload
 
+# more information about this job can be found here:
+# https://github.com/paritytech/substrate/pull/3778
 test-full-crypto-feature:
   stage:                           test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs

@@ -289,7 +289,7 @@ where
 				network.note_round(
 					crate::communication::Round(round),
 					crate::communication::SetId(set_id),
-					&*voters,
+					&voters,
 				)
 			}
 		};
