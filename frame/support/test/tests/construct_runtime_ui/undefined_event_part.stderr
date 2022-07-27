@@ -32,6 +32,19 @@ help: consider importing this enum
    |
 1  | use frame_system::Event;
    |
+help: if you import `Event`, refer to it directly
+   |
+49 - construct_runtime! {
+50 -     pub enum Runtime where
+51 -         Block = Block,
+52 -         NodeBlock = Block,
+53 -         UncheckedExtrinsic = UncheckedExtrinsic
+54 -     {
+55 -         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+56 -         Pallet: pallet::{Pallet, Event},
+57 -     }
+58 - }
+   |
 
 error[E0412]: cannot find type `Event` in module `pallet`
   --> tests/construct_runtime_ui/undefined_event_part.rs:49:1
@@ -51,4 +64,17 @@ help: consider importing one of these items
 1  | use crate::Event;
    |
 1  | use frame_system::Event;
+   |
+help: if you import `Event`, refer to it directly
+   |
+49 - construct_runtime! {
+50 -     pub enum Runtime where
+51 -         Block = Block,
+52 -         NodeBlock = Block,
+53 -         UncheckedExtrinsic = UncheckedExtrinsic
+54 -     {
+55 -         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+56 -         Pallet: pallet::{Pallet, Event},
+57 -     }
+58 - }
    |
