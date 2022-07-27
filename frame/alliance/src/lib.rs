@@ -436,6 +436,11 @@ pub mod pallet {
 				Members::<T, I>::insert(MemberRole::Fellow, members);
 			}
 			if !self.allies.is_empty() {
+				// Only allow Allies if the Alliance is "initialized".
+				assert!(
+					!self.founders.is_empty() || !self.fellows.is_empty(),
+					"Alliance must have Founders or Fellows to have Allies"
+				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
 					self.allies.clone().try_into().expect("Too many genesis allies");
 				Members::<T, I>::insert(MemberRole::Ally, members);
@@ -614,6 +619,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
+			// Cannot be called if the Alliance already has Founders or Fellows.
+			ensure!(!Self::is_initialized(), Error::<T, I>::MembersAlreadyInitialized);
+
 			let mut founders: BoundedVec<T::AccountId, T::MaxMembersCount> =
 				founders.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
 			let mut fellows: BoundedVec<T::AccountId, T::MaxMembersCount> =
@@ -621,12 +629,6 @@ pub mod pallet {
 			let mut allies: BoundedVec<T::AccountId, T::MaxMembersCount> =
 				allies.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
 
-			ensure!(
-				!Self::has_member(MemberRole::Founder) &&
-					!Self::has_member(MemberRole::Fellow) &&
-					!Self::has_member(MemberRole::Ally),
-				Error::<T, I>::MembersAlreadyInitialized
-			);
 			for member in founders.iter().chain(fellows.iter()).chain(allies.iter()) {
 				Self::has_identity(member)?;
 			}
@@ -712,13 +714,9 @@ pub mod pallet {
 			//
 			// 1. There is no `Rule` or admission criteria, so the joiner would be an ally to
 			//    nought, and
-			// 2. If one joins as an Ally and then is initialized via Root, we'll have a condition
-			//    where a member is both an Ally and a Founder or Fellow, causing lookup issues on
-			//    calls like `retire` and `kick_member`.
-			ensure!(
-				Self::has_member(MemberRole::Founder) || Self::has_member(MemberRole::Fellow),
-				Error::<T, I>::AllianceNotYetInitialized
-			);
+			// 2. It adds complexity to the initialization, namely deciding to overwrite accounts
+			//    that already joined as an Ally.
+			ensure!(Self::is_initialized(), Error::<T, I>::AllianceNotYetInitialized);
 
 			// Unscrupulous accounts are non grata.
 			ensure!(!Self::is_unscrupulous_account(&who), Error::<T, I>::AccountNonGrata);
@@ -882,6 +880,11 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Check if the Alliance has been initialized.
+	fn is_initialized() -> bool {
+		Self::has_member(MemberRole::Founder) || Self::has_member(MemberRole::Fellow)
+	}
+
 	/// Check if a given role has any members.
 	fn has_member(role: MemberRole) -> bool {
 		Members::<T, I>::decode_len(role).unwrap_or_default() > 0
