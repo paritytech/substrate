@@ -385,14 +385,16 @@ benchmarks! {
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
-		
+
+		assert!(l <= u8::MAX.into());
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
 		
 		let per_block = T::MinVestedTransfer::get();
 		let transfer_amount = per_block.checked_mul(&20u32.into()).unwrap();
 		// 2 x transfer_amount because we will create 3 vesting schedules and remove one
-		let expected_balance = transfer_amount.checked_mul(&2u32.into()).unwrap();
+		let number_of_schedules_after_removal = T::MAX_VESTING_SCHEDULES - 1;
+		let expected_balance = transfer_amount.checked_mul(&number_of_schedules_after_removal.into()).unwrap();
 		// It will remove last vesting schedule
 		let schedule_index = 2;
 
