@@ -105,10 +105,7 @@ use frame_support::{
 	BoundedVec,
 };
 pub use pallet::*;
-use sp_runtime::{
-	traits::{AtLeast32Bit, StaticLookup, Zero},
-	DispatchError,
-};
+use sp_runtime::traits::{AtLeast32Bit, StaticLookup, Zero};
 use sp_std::{fmt::Debug, prelude::*};
 
 type BalanceOf<T, I> =
@@ -282,8 +279,7 @@ pub mod pallet {
 			let pool_bounded: PoolT<T, I> = BoundedVec::truncate_from(pool);
 			<MemberCount<T, I>>::put(self.member_count);
 			<Pool<T, I>>::put(&pool_bounded);
-			<Pallet<T, I>>::refresh_members(pool_bounded, ChangeReceiver::MembershipInitialized)
-				.unwrap();
+			<Pallet<T, I>>::refresh_members(pool_bounded, ChangeReceiver::MembershipInitialized);
 		}
 	}
 
@@ -294,7 +290,7 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if n % T::Period::get() == Zero::zero() {
 				let pool = <Pool<T, I>>::get();
-				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged).unwrap();
+				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
 			0
 		}
@@ -438,7 +434,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// The `notify` parameter is used to deduct which associated
 	/// type function to invoke at the end of the method.
-	fn refresh_members(pool: PoolT<T, I>, notify: ChangeReceiver) -> Result<(), DispatchError> {
+	fn refresh_members(pool: PoolT<T, I>, notify: ChangeReceiver) {
 		let count = MemberCount::<T, I>::get();
 		let old_members = <Members<T, I>>::get();
 		let pool = pool.into_inner();
@@ -450,19 +446,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.map(|(account_id, _)| account_id)
 			.collect();
 
-		let mut new_members_bounded: MembersT<T, I> =
-			BoundedVec::try_from(new_members).map_err(|_| Error::<T, I>::TooManyMembers)?;
+		let mut new_members_bounded: MembersT<T, I> = BoundedVec::truncate_from(new_members);
 
 		new_members_bounded.sort();
 
 		<Members<T, I>>::put(&new_members_bounded);
 
-		Ok(match notify {
-			ChangeReceiver::MembershipInitialized =>
-				T::MembershipInitialized::initialize_members(&new_members_bounded),
-			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(&new_members_bounded[..], &old_members[..]),
-		})
+		match notify {
+			ChangeReceiver::MembershipInitialized => {
+				T::MembershipInitialized::initialize_members(&new_members_bounded)
+			},
+			ChangeReceiver::MembershipChanged => {
+				T::MembershipChanged::set_members_sorted(&new_members_bounded[..], &old_members[..])
+			},
+		}
 	}
 
 	/// Removes an entity `remove` at `index` from the `Pool`.
@@ -486,7 +483,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// remove from set, if it was in there
 		let members = <Members<T, I>>::get();
 		if members.binary_search(&remove).is_ok() {
-			Self::refresh_members(pool, ChangeReceiver::MembershipChanged).unwrap();
+			Self::refresh_members(pool, ChangeReceiver::MembershipChanged);
 		}
 
 		<CandidateExists<T, I>>::remove(&remove);

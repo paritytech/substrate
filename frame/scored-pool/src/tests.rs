@@ -166,7 +166,7 @@ fn refreshing_works() {
 		assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
 
 		// when
-		ScoredPool::refresh_members(ScoredPool::pool(), ChangeReceiver::MembershipChanged).unwrap();
+		ScoredPool::refresh_members(ScoredPool::pool(), ChangeReceiver::MembershipChanged);
 
 		// then
 		assert_eq!(ScoredPool::members(), vec![15, 40]);
