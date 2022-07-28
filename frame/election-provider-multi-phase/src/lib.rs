@@ -329,7 +329,7 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 }
 
 impl<T: Config> InstantElectionProvider for NoFallback<T> {
-	fn elect_with_bounds(_: usize, _: usize) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect_with_bounds(_: usize, _: usize) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("NoFallback.")
 	}
 }
@@ -457,6 +457,27 @@ pub struct ReadySolution<AccountId: PartialEq, MaxBackersPerWinner: Get<u32>> {
 	pub compute: ElectionCompute,
 }
 
+/// Try to convert the supports of a solution into a [`ReadySolution`].
+///
+/// Errors if any of the supports has more than [`MaxBackersPerWinner`] backers.
+impl<AccountId: PartialEq, MaxBackersPerWinner: Get<u32>>
+	TryFrom<(Supports<AccountId>, ElectionScore, ElectionCompute)>
+	for ReadySolution<AccountId, MaxBackersPerWinner>
+{
+	type Error = &'static str;
+
+	fn try_from(
+		supports: (Supports<AccountId>, ElectionScore, ElectionCompute),
+	) -> Result<Self, Self::Error> {
+		let mut bounded_supports = BoundedSupports::default();
+		for (winner, backing) in supports.0.into_iter() {
+			bounded_supports.push((winner, backing.try_into()?));
+		}
+
+		Ok(Self { supports: bounded_supports, score: supports.1, compute: supports.2 })
+	}
+}
+
 /// Convenience wrapper to create a [`ReadySolution`] from a [`ElectionProvider`].
 pub type ReadySolutionOf<E> =
 	ReadySolution<<E as ElectionProvider>::AccountId, <E as ElectionProvider>::MaxBackersPerWinner>;
@@ -560,6 +581,8 @@ pub enum FeasibilityError {
 	InvalidRound,
 	/// Comparison against `MinimumUntrustedScore` failed.
 	UntrustedScoreTooLow,
+	/// There are too many backers.
+	TooManyBackers,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -710,19 +733,6 @@ pub mod pallet {
 		/// Maximum number of backers per winner that this pallet should, as its implementation of
 		/// `ElectionProvider` return.
 		type MaxBackersPerWinner: Get<u32>;
-
-		/// Something that can convert the final `Supports` into a bounded version.
-		/// TODO put in trait and reuse in onchain.
-		type Bounder: Convert<
-			sp_npos_elections::Supports<<Self as frame_system::Config>::AccountId>,
-			Vec<(
-				<Self as frame_system::Config>::AccountId,
-				BoundedSupport<
-					<Self as frame_system::Config>::AccountId,
-					Self::MaxBackersPerWinner,
-				>,
-			)>,
-		>;
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
@@ -970,11 +980,10 @@ pub mod pallet {
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
 
-			let solution = ReadySolution {
-				supports: T::Bounder::convert(supports),
-				score: Default::default(),
-				compute: ElectionCompute::Emergency,
-			};
+			let solution: ReadySolution<_, _> =
+				(supports, Default::default(), ElectionCompute::Emergency)
+					.try_into()
+					.map_err(|_| Error::<T>::TooManyBackersPerWinner)?;
 
 			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Emergency,
@@ -1085,7 +1094,7 @@ pub mod pallet {
 			})?;
 
 			let solution = ReadySolution {
-				supports: T::Bounder::convert(supports),
+				supports,
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
 			};
@@ -1150,6 +1159,8 @@ pub mod pallet {
 		CallNotAllowed,
 		/// The fallback failed
 		FallbackFailed,
+		/// The solution has too many backers per winner.
+		TooManyBackersPerWinner,
 	}
 
 	#[pallet::validate_unsigned]
@@ -1530,7 +1541,9 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
-		Ok(ReadySolution { supports: T::Bounder::convert(supports), score, compute })
+		(supports, score, compute)
+			.try_into()
+			.map_err(|_| FeasibilityError::TooManyBackers)
 	}
 
 	/// Perform the tasks to be done after a new `elect` has been triggered:

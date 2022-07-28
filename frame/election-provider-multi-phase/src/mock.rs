@@ -307,7 +307,6 @@ impl ElectionProvider for MockFallback {
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
-			.map(|supports| <OnChainSeqPhragmen as onchain::Config>::Bounder::convert(supports))
 	}
 }
 
@@ -315,7 +314,7 @@ impl InstantElectionProvider for MockFallback {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error> {
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if OnChainFallback::get() {
 			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
 				max_voters,
@@ -390,11 +389,8 @@ impl crate::Config for Runtime {
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;
+	// TODO what to use here
 	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
-	type Bounder = TruncateIntoBoundedSupports<
-		<Self as frame_system::Config>::AccountId,
-		Self::MaxBackersPerWinner,
-	>;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
 }

@@ -20,8 +20,8 @@
 //! careful when using it onchain.
 
 use crate::{
-	BoundedSupport, BoundedSupportsOf, Debug, ElectionDataProvider, ElectionProvider,
-	InstantElectionProvider, NposSolver, WeightInfo,
+	BoundedSupport, BoundedSupports, BoundedSupportsOf, Debug, ElectionDataProvider,
+	ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
 };
 use frame_support::{traits::Get, weights::DispatchClass};
 use sp_npos_elections::*;
@@ -119,7 +119,10 @@ pub trait BoundedConfig: Config {
 fn elect_with<T: Config>(
 	maybe_max_voters: Option<usize>,
 	maybe_max_targets: Option<usize>,
-) -> Result<Supports<<T::System as frame_system::Config>::AccountId>, Error> {
+) -> Result<
+	BoundedSupports<<T::System as frame_system::Config>::AccountId, T::MaxBackersPerWinner>,
+	Error,
+> {
 	let voters = T::DataProvider::electing_voters(maybe_max_voters).map_err(Error::DataProvider)?;
 	let targets =
 		T::DataProvider::electable_targets(maybe_max_targets).map_err(Error::DataProvider)?;
@@ -154,7 +157,7 @@ fn elect_with<T: Config>(
 
 	// TODO: not very efficient, but cleaner API. Ideally we would possibly trim while
 	// `to_supports`.
-	Ok(to_supports(&staked))
+	Ok(to_supports(&staked)).map(|s| T::Bounder::convert(s))
 }
 
 impl<T: Config> ElectionProvider for UnboundedExecution<T> {
@@ -174,7 +177,7 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 			);
 		}
 
-		elect_with::<T>(None, None).map(|supports| T::Bounder::convert(supports))
+		elect_with::<T>(None, None)
 	}
 }
 
@@ -182,7 +185,7 @@ impl<T: Config> InstantElectionProvider for UnboundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error> {
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with::<T>(Some(max_voters), Some(max_targets))
 	}
 }
@@ -196,7 +199,6 @@ impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))
-			.map(|supports| T::Bounder::convert(supports))
 	}
 }
 
@@ -204,7 +206,7 @@ impl<T: BoundedConfig> InstantElectionProvider for BoundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error> {
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with::<T>(
 			Some(max_voters.min(T::VotersBound::get() as usize)),
 			Some(max_targets.min(T::TargetsBound::get() as usize)),

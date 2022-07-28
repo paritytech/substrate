@@ -718,10 +718,6 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectingVoters = MaxElectingVoters;
 	// TODO what to use here
 	type MaxBackersPerWinner = ConstU32<{ u32::MAX }>;
-	type Bounder = TruncateIntoBoundedSupports<
-		<Self as frame_system::Config>::AccountId,
-		Self::MaxBackersPerWinner,
-	>;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
 }

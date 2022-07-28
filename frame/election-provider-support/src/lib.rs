@@ -407,7 +407,7 @@ pub trait InstantElectionProvider: ElectionProvider {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error>;
+	) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
 /// An election provider to be used only for testing.
