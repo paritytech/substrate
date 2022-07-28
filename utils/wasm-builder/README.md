@@ -51,23 +51,23 @@ Wasm binary. If this feature is not present, it will not be enabled.
 By using environment variables, you can configure which Wasm binaries are built and how:
 
 - `SKIP_WASM_BUILD` - Skips building any Wasm binary. This is useful when only native should be recompiled.
-                      If this is the first run and there doesn't exist a Wasm binary, this will set both
-                      variables to `None`.
+  If this is the first run and there doesn't exist a Wasm binary, this will set both
+  variables to `None`.
 - `WASM_BUILD_TYPE` - Sets the build type for building Wasm binaries. Supported values are `release` or `debug`.
-                      By default the build type is equal to the build type used by the main build.
+  By default the build type is equal to the build type used by the main build.
 - `FORCE_WASM_BUILD` - Can be set to force a Wasm build. On subsequent calls the value of the variable
-                       needs to change. As wasm-builder instructs `cargo` to watch for file changes
-                       this environment variable should only be required in certain circumstances.
+  needs to change. As wasm-builder instructs `cargo` to watch for file changes
+  this environment variable should only be required in certain circumstances.
 - `WASM_BUILD_RUSTFLAGS` - Extend `RUSTFLAGS` given to `cargo build` while building the wasm binary.
 - `WASM_BUILD_NO_COLOR` - Disable color output of the wasm build.
 - `WASM_TARGET_DIRECTORY` - Will copy any build Wasm binary to the given directory. The path needs
-                           to be absolute.
+  to be absolute.
 - `WASM_BUILD_TOOLCHAIN` - The toolchain that should be used to build the Wasm binaries. The
-                           format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
+  format needs to be the same as used by cargo, e.g. `nightly-2020-02-20`.
 - `CARGO_NET_OFFLINE` - If `true`, `--offline` will be passed to all processes launched to prevent network access. Useful in offline environments.
 
 Each project can be skipped individually by using the environment variable `SKIP_PROJECT_NAME_WASM_BUILD`.
-Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `node-runtime` will
+Where `PROJECT_NAME` needs to be replaced by the name of the cargo project, e.g. `kitchensink-runtime` will
 be `NODE_RUNTIME`.
 
 ## Prerequisites:

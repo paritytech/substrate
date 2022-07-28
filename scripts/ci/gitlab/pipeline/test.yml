@@ -181,13 +181,13 @@ test-deterministic-wasm:
   script:
     - rusty-cachier snapshot create
     # build runtime
-    - cargo build --verbose --release -p node-runtime
+    - cargo build --verbose --release -p kitchensink-runtime
     # make checksum
-    - sha256sum $CARGO_TARGET_DIR/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum $CARGO_TARGET_DIR/release/wbuild/kitchensink-runtime/target/wasm32-unknown-unknown/release/kitchensink_runtime.wasm > checksum.sha256
     # clean up
     - rm -rf $CARGO_TARGET_DIR/release/wbuild
     # build again
-    - cargo build --verbose --release -p node-runtime
+    - cargo build --verbose --release -p kitchensink-runtime
     # confirm checksum
     - sha256sum -c ./checksum.sha256
     # clean up again, don't put release binaries into the cache
