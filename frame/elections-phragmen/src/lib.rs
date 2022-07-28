@@ -252,7 +252,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxCandidates: Get<u32>;
 
-		/// Maximum number of voters to allow
+		/// The maximum number of voters to allow.
 		#[pallet::constant]
 		type MaxVoters: Get<u32>;
 
