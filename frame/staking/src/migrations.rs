@@ -27,14 +27,15 @@ pub mod v10 {
 	#[storage_alias]
 	type EarliestUnappliedSlash<T: Config> = StorageValue<Pallet<T>, EraIndex>;
 
+	/// Apply any pending slashes that where queued.
+	///
+	/// That means we might slash someone a bit too early, but we will definitely
+	/// won't forget to slash them. The cap of 512 is somewhat randomly taken to
+	/// prevent us from iterating over an arbitrary large number of keys `on_runtime_upgrade`.
 	pub struct MigrateToV10<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if StorageVersion::<T>::get() == Releases::V9_0_0 {
-				// apply any pending slashes that where queued -- means we might slash someone a bit
-				// too early, but we will definitely won't forget to slash them. The cap of 512 is
-				// somewhat randomly taken to prevent us from iterating over an arbitrary large
-				// number of keys `on_runtime_upgrade`.
 				let pending_slashes = <Pallet<T> as Store>::UnappliedSlashes::iter().take(512);
 				for (era, slashes) in pending_slashes {
 					for slash in slashes {
