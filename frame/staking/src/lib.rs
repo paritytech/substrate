@@ -882,7 +882,7 @@ enum Releases {
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V8_0_0
+		Releases::V10_0_0
 	}
 }
 
