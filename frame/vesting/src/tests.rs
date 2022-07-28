@@ -1167,8 +1167,8 @@ fn remove_vesting_schedule() {
 		assert_eq!(Vesting::vesting(&4), None);
 		// Make the schedule for the new transfer.
 		let new_vesting_schedule = VestingInfo::new(
-			256 * 5,
-			64, // Vesting over 20 blocks
+			ED * 5,
+			(ED * 5) / 20, // Vesting over 20 blocks
 			10,
 		);
 		assert_ok!(Vesting::vested_transfer(Some(3).into(), 4, new_vesting_schedule));
@@ -1176,15 +1176,15 @@ fn remove_vesting_schedule() {
 		assert_eq!(Vesting::vesting(&4).unwrap(), vec![new_vesting_schedule]);
 		// Account 4 has 5 * 256 locked.
 		assert_eq!(Vesting::vesting_balance(&4), Some(256 * 5));
-		// Verify only root can call
+		// Verify only root can call.
 		assert_noop!(Vesting::force_remove_vesting_schedule(Some(4).into(), 4, 0), BadOrigin);
-		// Verifies that vesting schedule is removed
+		// Verify that root can remove the schedule.
 		assert_ok!(Vesting::force_remove_vesting_schedule(RawOrigin::Root.into(), 4, 0));
-		// Appropriate storage is cleaned up
+		// Appropriate storage is cleaned up.
 		assert!(!<VestingStorage<Test>>::contains_key(4));
-		// Check the vesting balance is zero
+		// Check the vesting balance is zero.
 		assert_eq!(Vesting::vesting(&4), None);
-		// Verifies that trying to remove a schedule when it doesnt exist throws error
+		// Verifies that trying to remove a schedule when it doesnt exist throws error.
 		assert_noop!(
 			Vesting::force_remove_vesting_schedule(RawOrigin::Root.into(), 4, 0),
 			Error::<Test>::NotVesting
