@@ -235,7 +235,10 @@ pub mod pallet {
 		/// reading a key, we simply cannot know how many bytes it is. In other words, this should
 		/// not be used in any environment where resources are strictly bounded (e.g. a parachain),
 		/// but it is acceptable otherwise (relay chain, offchain workers).
-		pub fn migrate_until_exhaustion(&mut self, limits: MigrationLimits) -> Result<(), Error<T>> {
+		pub fn migrate_until_exhaustion(
+			&mut self,
+			limits: MigrationLimits,
+		) -> Result<(), Error<T>> {
 			log!(debug, "running migrations on top of {:?} until {:?}", self, limits);
 
 			if limits.item.is_zero() || limits.size.is_zero() {
