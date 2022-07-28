@@ -248,7 +248,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type TermDuration: Get<Self::BlockNumber>;
 
-		/// Maximum number of candidated in this election
+		/// The maximum number of candidates in a phragmen election.
 		#[pallet::constant]
 		type MaxCandidates: Get<u32>;
 
