@@ -35,8 +35,7 @@ pub mod v10 {
 				// too early, but we will definitely won't forget to slash them. The cap of 512 is
 				// somewhat randomly taken to prevent us from iterating over an arbitrary large
 				// number of keys `on_runtime_upgrade`.
-				let pending_slashes =
-					<Pallet<T> as Store>::UnappliedSlashes::iter().take(512);
+				let pending_slashes = <Pallet<T> as Store>::UnappliedSlashes::iter().take(512);
 				for (era, slashes) in pending_slashes {
 					for slash in slashes {
 						// in the old slashing scheme, the slash era was the key at which we read
