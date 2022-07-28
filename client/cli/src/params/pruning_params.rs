@@ -28,14 +28,14 @@ pub struct PruningParams {
 	/// Default is to keep only the last 256 blocks,
 	/// otherwise, the state can be kept for all of the blocks (i.e 'archive'),
 	/// or for all of the canonical blocks (i.e 'archive-canonical').
-	#[clap(long, value_name = "PRUNING_MODE")]
+	#[clap(long = "state-pruning", value_name = "PRUNING_MODE")]
 	pub pruning: Option<String>,
 	/// Specify the number of finalized blocks to keep in the database.
 	///
 	/// Default is to keep all blocks.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	#[clap(long, value_name = "COUNT")]
+	#[clap(long = "blocks-pruning", value_name = "COUNT")]
 	pub keep_blocks: Option<u32>,
 }
 
