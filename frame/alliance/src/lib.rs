@@ -620,6 +620,8 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			// Cannot be called if the Alliance already has Founders or Fellows.
+			// TODO: Remove check and allow Root to set members at any time.
+			// https://github.com/paritytech/substrate/issues/11928
 			ensure!(!Self::is_initialized(), Error::<T, I>::AllianceAlreadyInitialized);
 
 			let mut founders: BoundedVec<T::AccountId, T::MaxMembersCount> =
