@@ -1267,8 +1267,8 @@ mod tests {
 
 	parameter_types! {
 		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
-		pub const PhragmenMaxVoters: u32 = 1000;
-		pub const PhragménMaxCandidates: u32 = 10 * 1000;
+		pub const PhragmenMaxVoters: u32 = 100;
+		pub const PhragmenMaxCandidates: u32 = 1000;
 	}
 
 	impl Config for Test {
@@ -1288,7 +1288,7 @@ mod tests {
 		type KickedMember = ();
 		type WeightInfo = ();
 		type MaxVoters = PhragmenMaxVoters;
-		type MaxCandidates = PhragménMaxCandidates;
+		type MaxCandidates = PhragmenMaxCandidates;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
