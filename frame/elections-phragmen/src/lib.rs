@@ -1267,8 +1267,8 @@ mod tests {
 
 	parameter_types! {
 		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
-		pub const PhragmenMaxVoters: u32 = 100;
-		pub const PhragmenMaxCandidates: u32 = 1000;
+		pub const PhragmenMaxVoters: u32 = 1000;
+		pub const PhragmenMaxCandidates: u32 = 100;
 	}
 
 	impl Config for Test {
