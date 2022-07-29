@@ -26,6 +26,7 @@
 extern crate alloc;
 
 use alloc::{
+	boxed::Box,
 	format,
 	string::{String, ToString},
 	vec::Vec,
@@ -149,15 +150,9 @@ fn format_default(field: &Ident) -> TokenStream {
 	}
 }
 
-/// Unparsed environment definition.
-struct EnvDefInput {
-	item: syn::ItemMod,
-	ident: syn::Ident,
-}
-
 /// Parsed environment definition.
 struct EnvDef {
-	ident: syn::Ident,
+	item: syn::ItemMod,
 	host_funcs: Vec<HostFn>,
 }
 
@@ -166,6 +161,25 @@ struct HostFn {
 	item: syn::ItemFn,
 	module: String,
 	name: String,
+	ret_type: HostFnReturn,
+}
+
+enum HostFnReturn {
+	Unit,
+	U32,
+	ReturnCode,
+}
+
+impl syn::parse::Parse for HostFnReturn {
+	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+		// let lookahead = input.lookahead1();
+		// if lookahead.peek(syn::Ident) {
+		//     input.parse().map(HostFnReturn::Unit)
+		// } else {
+		//     Err(lookahead.error())
+		// }
+		input.parse::<syn::Ident>().map(|_| Self::Unit)
+	}
 }
 
 /// Helper trait to convert a host function definition into its wasm signature.
@@ -236,13 +250,53 @@ impl HostFn {
 			_ => return Err(err()),
 		}
 
-		Ok(Self { item, module, name })
+		let ret_ty = match item.clone().sig.output {
+			syn::ReturnType::Type(_, ty) => Ok(ty.clone()),
+			_ => {
+				let msg = "Invalid host function definition, return val is expected.";
+				Err(syn::Error::new(span, msg))
+			},
+		}?;
+
+		// TODO: refactor errs
+		let err1 = |span| {
+			let msg =
+				format!("Invalid host function definition: expected Result<...> return value");
+			syn::Error::new(span, msg)
+		};
+		match *ret_ty {
+			syn::Type::Path(tp) => {
+				let tmp = &tp.path.segments.first().ok_or(err1(span))?;
+				let (id, span) = (tmp.ident.to_string(), tmp.ident.span());
+				if id == "Result".to_string() {
+					match tmp.arguments {
+						syn::PathArguments::AngleBracketed(group) => {
+						    (group.args.len() == 2).then_some(42).ok_or(err1(span))?;
+						    
+						    (group.args.last().ok_or(err1(span))?.to_string() == "TrapReason")
+								.then_some(42)
+								.ok_or(err1(span))?;
+							let ret_val = group.args.first().ok_or(err1(span))?.to_string();
+							let ret_type = match ret_val {
+								"()" => Ok(HostFnReturn::Unit),
+								"u32" => Ok(HostFnReturn::U32),
+								"ReturnCode" => Ok(HostFnReturn::ReturnCode),
+								_ => Err(err1(span)),
+							}?;
+							Ok(Self { item, module, name, ret_type })
+						},
+						_ => Err(err1(span)),
+					}
+				} else {
+					Err(err1(span))
+				}
+			},
+			_ => Err(err1(span)),
+		}
 	}
 }
-
 impl EnvDef {
-	pub fn try_from(input: EnvDefInput) -> syn::Result<Self> {
-		let item = &input.item;
+	pub fn try_from(item: syn::ItemMod) -> syn::Result<Self> {
 		let span = item.span();
 		let err = |msg| syn::Error::new(span.clone(), msg);
 		let items = &item
@@ -251,14 +305,13 @@ impl EnvDef {
 			.ok_or(err("Invalid environment definition, expected `mod` to be inlined."))?
 			.1;
 
-		let ident = input.ident;
 		let mut host_funcs = Vec::<HostFn>::default();
 
 		for i in items.iter() {
 			host_funcs.push(HostFn::try_from(i.clone())?);
 		}
 
-		Ok(Self { ident, host_funcs })
+		Ok(Self { item, host_funcs })
 	}
 }
 
@@ -270,10 +323,9 @@ impl EnvDef {
 fn expand_env(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let can_satisfy = expand_can_satisfy(def);
 	let impls = expand_impls(def);
-	let env = &def.ident;
 
 	quote! {
-		pub struct #env;
+		pub struct Env;
 		#can_satisfy
 		#impls
 	}
@@ -297,10 +349,9 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let satisfy_checks = quote! {
 		#( #checks )*
 	};
-	let env = &def.ident;
 
 	quote! {
-		impl crate::wasm::env_def::ImportSatisfyCheck for #env {
+		impl crate::wasm::env_def::ImportSatisfyCheck for Env {
 			fn can_satisfy(
 					module: &[u8],
 					name: &[u8],
@@ -322,41 +373,39 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// environment.
 fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let impls =  def.host_funcs.iter().map(|f| {
-	let params = &f.item.sig.inputs.iter().skip(1).map(|arg| {
-		match arg {
-			syn::FnArg::Typed(pt) => {
-				if let syn::Pat::Ident(ident) = &*pt.pat {
-					let p_type = &pt.ty;
-					let p_name = ident.ident.clone();
-					quote! {
-						let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
-						args.next()
-						.and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
-						.expect(
-							"precondition: all imports should be checked against the signatures of corresponding
-							functions defined by `#[define_env]` proc macro by the user of the macro;
-							thus this can never be `None`;
-							qed;"
-						);
-					}
-				} else { quote! { } }
-			},
-			_ => quote! { },
-		}
-	});
+	   let params = &f.item.sig.inputs.iter().skip(1).map(|arg| {
+		   match arg {
+			   syn::FnArg::Typed(pt) => {
+				   if let syn::Pat::Ident(ident) = &*pt.pat {
+					   let p_type = &pt.ty;
+					   let p_name = ident.ident.clone();
+					   quote! {
+						   let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
+						   args.next()
+						   .and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
+						   .expect(
+							   "precondition: all imports should be checked against the signatures of corresponding
+							   functions defined by `#[define_env]` proc macro by the user of the macro;
+							   thus this can never be `None`;
+							   qed;"
+						   );
+					   }
+				   } else { quote! { whoo } }
+			   },
+			   _ => quote! { beee },
+		   }
+	   });
 
-	let (outline, ret_ty) = match &f.item.sig.output {
-		syn::ReturnType::Default => (
-			quote! {
+	let outline = match &f.ret_type {
+	    HostFnReturn::Unit => quote! {
 				body().map_err(|reason| {
 					ctx.set_trap_reason(reason);
 					sp_sandbox::HostError
 				})?;
 				return Ok(sp_sandbox::ReturnValue::Unit);
 			},
-			quote! {()}),
-		syn::ReturnType::Type(_,ty) => (
-			quote! {
+
+		_ => quote! {
 				let r = body().map_err(|reason| {
 						ctx.set_trap_reason(reason);
 						sp_sandbox::HostError
@@ -365,9 +414,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 						r.to_typed_value()
 					}));
 			},
-			quote! {#ty}),
 	};
-
 	let params = params.clone();
 	let (module, name, ident, body) = (&f.module, &f.name, &f.item.sig.ident, &f.item.block);
 	let unstable_feat = match module.as_str() {
@@ -375,7 +422,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 		_ => quote! { },
 	};
 	quote! {
-		#unstable_feat
+	    #unstable_feat
 		f(#module.as_bytes(), #name.as_bytes(), {
 			fn #ident<E: Ext>(
 				ctx: &mut crate::wasm::Runtime<E>,
@@ -387,23 +434,23 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 			{
 				#[allow(unused)]
 				let mut args = args.iter();
-				let body = crate::wasm::env_def::macros::constrain_closure::<#ret_ty, _>(|| {
+				let body = || {
 					#( #params )*
 					#body
-				});
+				};
 				#outline
 			}
 			#ident::<E>
 		});
 	}
 	});
+
 	let packed_impls = quote! {
-	#( #impls )*
+	   #( #impls )*
 	};
-	let env = &def.ident;
 
 	quote! {
-		impl<E: Ext> crate::wasm::env_def::FunctionImplProvider<E> for #env
+		impl<E: Ext> crate::wasm::env_def::FunctionImplProvider<E> for Env
 		where
 			<E::T as frame_system::Config>::AccountId:
 			sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
@@ -420,18 +467,15 @@ pub fn define_env(
 	attr: proc_macro::TokenStream,
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-	if attr.is_empty() {
-		let msg = "Invalid `define_env` attribute macro: expected enviroment identificator, \
-                         e.g. `#[define_env(Env)]`.";
+	if !attr.is_empty() {
+		let msg = "Invalid `define_env` attribute macro: expected no attributes: `#[define_env]`.";
 		let span = proc_macro2::TokenStream::from(attr).span();
 		return syn::Error::new(span, msg).to_compile_error().into()
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
-	let ident = syn::parse_macro_input!(attr as syn::Ident);
-	let input = EnvDefInput { item, ident };
 
-	match EnvDef::try_from(input) {
+	match EnvDef::try_from(item) {
 		Ok(mut def) => expand_env(&mut def).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
