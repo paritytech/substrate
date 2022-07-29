@@ -29,8 +29,8 @@ use codec::{Decode, Encode};
 use futures::{FutureExt, TryFutureExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	SubscriptionSink,
 	types::SubscriptionEmptyError,
+	SubscriptionSink,
 };
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
@@ -177,13 +177,17 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> std::result::Result<(), SubscriptionEmptyError> {
+	fn watch_extrinsic(
+		&self,
+		mut sink: SubscriptionSink,
+		xt: Bytes,
+	) -> std::result::Result<(), SubscriptionEmptyError> {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
 				sink.reject(JsonRpseeError::from(e));
-				return Ok(());
+				return Ok(())
 			},
 		};
 

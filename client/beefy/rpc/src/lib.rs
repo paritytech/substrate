@@ -135,13 +135,18 @@ impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash> f
 where
 	Block: BlockT,
 {
-	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_justifications(
+		&self,
+		mut sink: SubscriptionSink,
+	) -> Result<(), SubscriptionEmptyError> {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
 			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
-		let fut = async move { sink.pipe_from_stream(stream).await; };
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())

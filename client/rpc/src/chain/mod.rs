@@ -27,8 +27,7 @@ use std::sync::Arc;
 
 use crate::SubscriptionTaskExecutor;
 
-use jsonrpsee::{core::RpcResult, SubscriptionSink};
-use jsonrpsee::types::SubscriptionEmptyError;
+use jsonrpsee::{core::RpcResult, types::SubscriptionEmptyError, SubscriptionSink};
 use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
@@ -171,7 +170,10 @@ where
 		Ok(())
 	}
 
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_finalized_heads(
+		&self,
+		sink: SubscriptionSink,
+	) -> Result<(), SubscriptionEmptyError> {
 		self.backend.subscribe_finalized_heads(sink);
 		Ok(())
 	}

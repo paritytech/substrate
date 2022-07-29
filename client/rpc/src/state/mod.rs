@@ -29,8 +29,8 @@ use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
 	core::{Error as JsonRpseeError, RpcResult},
-	ws_server::SubscriptionSink,
 	types::SubscriptionEmptyError,
+	ws_server::SubscriptionSink,
 };
 
 use sc_rpc_api::{state::ReadProof, DenyUnsafe};
@@ -319,12 +319,19 @@ where
 			.map_err(Into::into)
 	}
 
-	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_runtime_version(
+		&self,
+		sink: SubscriptionSink,
+	) -> Result<(), SubscriptionEmptyError> {
 		self.backend.subscribe_runtime_version(sink);
 		Ok(())
 	}
 
-	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_storage(
+		&self,
+		mut sink: SubscriptionSink,
+		keys: Option<Vec<StorageKey>>,
+	) -> Result<(), SubscriptionEmptyError> {
 		if keys.is_none() {
 			if let Err(err) = self.deny_unsafe.check_if_safe() {
 				let _ = sink.reject(JsonRpseeError::from(err));

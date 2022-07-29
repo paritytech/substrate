@@ -142,7 +142,9 @@ fn subscribe_headers<Block, Client, F, G, S>(
 	// duplicates at the beginning of the stream though.
 	let stream = stream::iter(maybe_header).chain(stream());
 
-	let fut = async move { sink.pipe_from_stream(stream).await; };
+	let fut = async move {
+		sink.pipe_from_stream(stream).await;
+	};
 
 	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 }

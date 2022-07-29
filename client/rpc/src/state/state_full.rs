@@ -396,7 +396,9 @@ where
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
 
-		let fut = async move { sink.pipe_from_stream(stream).await; };
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
@@ -437,7 +439,9 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		let fut = async move { sink.pipe_from_stream(stream).await; };
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}

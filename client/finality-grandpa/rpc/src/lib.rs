@@ -26,8 +26,8 @@ use std::sync::Arc;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
-	SubscriptionSink,
 	types::SubscriptionEmptyError,
+	SubscriptionSink,
 };
 
 mod error;
@@ -103,14 +103,19 @@ where
 		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
 	}
 
-	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_justifications(
+		&self,
+		mut sink: SubscriptionSink,
+	) -> Result<(), SubscriptionEmptyError> {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
 			},
 		);
 
-		let fut = async move { sink.pipe_from_stream(stream).await; };
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
