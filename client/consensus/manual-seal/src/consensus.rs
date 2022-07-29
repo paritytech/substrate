@@ -33,7 +33,8 @@ pub trait ConsensusDataProvider<B: BlockT>: Send + Sync {
 	/// Block import transaction type
 	type Transaction;
 
-	type Proof: Send + Sync + 'static;
+	/// The proof type.
+	type Proof;
 
 	/// Attempt to create a consensus digest.
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error>;
