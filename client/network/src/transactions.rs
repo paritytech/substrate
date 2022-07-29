@@ -31,7 +31,7 @@ use crate::{
 	error,
 	protocol::message,
 	service::NetworkService,
-	utils::{interval, LruHashSet},
+	utils::{interval, legacy_protocol_name, standard_protocol_name, LruHashSet},
 	Event, ExHashT, ObservedRole,
 };
 
@@ -70,8 +70,8 @@ const MAX_TRANSACTIONS_SIZE: u64 = 16 * 1024 * 1024;
 /// Maximum number of transaction validation request we keep at any moment.
 const MAX_PENDING_TRANSACTIONS: usize = 8192;
 
-/// Transactions protocol name suffix (everything after /{genesis_hash}/{fork_id}...).
-const PROTOCOL_NAME_SUFFIX: &str = "/transactions/1";
+/// Transactions protocol short name (everything after /{genesis_hash}/{fork_id}...).
+const PROTOCOL_SHORT_NAME: &str = "/transactions/1";
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
@@ -141,27 +141,12 @@ impl TransactionsHandlerPrototype {
 		fork_id: Option<String>,
 	) -> Self {
 		Self {
-			protocol_name: Self::protocol_name(genesis_hash, fork_id),
-			fallback_protocol_names: Self::fallback_protocol_names(protocol_id),
+			protocol_name: standard_protocol_name(genesis_hash, &fork_id, PROTOCOL_SHORT_NAME),
+			fallback_protocol_names: std::iter::once(
+				legacy_protocol_name(&protocol_id, PROTOCOL_SHORT_NAME).into(),
+			)
+			.collect(),
 		}
-	}
-
-	/// Standard transactions protocol name.
-	fn protocol_name<Hash: AsRef<[u8]>>(
-		genesis_hash: Hash,
-		fork_id: Option<String>,
-	) -> Cow<'static, str> {
-		let chain_prefix = match fork_id {
-			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-			None => format!("/{}", hex::encode(genesis_hash)),
-		};
-		format!("{}{}", chain_prefix, PROTOCOL_NAME_SUFFIX).into()
-	}
-
-	/// Fallback (legacy) transactions protocol names.
-	fn fallback_protocol_names(protocol_id: ProtocolId) -> Vec<Cow<'static, str>> {
-		let fallback_name = format!("/{}/transactions/1", protocol_id.as_ref());
-		std::iter::once(fallback_name.into()).collect()
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
