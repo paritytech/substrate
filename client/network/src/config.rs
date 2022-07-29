@@ -87,8 +87,12 @@ where
 	/// the network.
 	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
 
-	/// Name of the protocol to use on the wire. Should be different for each chain.
+	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
+
+	/// Fork ID to distinguish protocols of different hard forks. Part of the standard protocol
+	/// name on the wire.
+	pub fork_id: Option<String>,
 
 	/// Import queue to use.
 	///

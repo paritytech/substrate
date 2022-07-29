@@ -795,6 +795,7 @@ where
 		chain: client.clone(),
 		transaction_pool: transaction_pool_adapter as _,
 		protocol_id,
+		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		create_chain_sync: Box::new(
 			move |sync_mode, chain, warp_sync_provider| match ChainSync::new(

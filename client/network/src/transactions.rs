@@ -70,6 +70,9 @@ const MAX_TRANSACTIONS_SIZE: u64 = 16 * 1024 * 1024;
 /// Maximum number of transaction validation request we keep at any moment.
 const MAX_PENDING_TRANSACTIONS: usize = 8192;
 
+/// Transactions protocol name suffix (everything after /{genesis_hash}/{fork_id}...).
+const PROTOCOL_NAME_SUFFIX: &str = "/transactions/1";
+
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when a peer sends us any transaction.
@@ -127,19 +130,45 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 /// Prototype for a [`TransactionsHandler`].
 pub struct TransactionsHandlerPrototype {
 	protocol_name: Cow<'static, str>,
+	fallback_protocol_names: Vec<Cow<'static, str>>,
 }
 
 impl TransactionsHandlerPrototype {
 	/// Create a new instance.
-	pub fn new(protocol_id: ProtocolId) -> Self {
-		Self { protocol_name: format!("/{}/transactions/1", protocol_id.as_ref()).into() }
+	pub fn new<Hash: AsRef<[u8]>>(
+		protocol_id: ProtocolId,
+		genesis_hash: Hash,
+		fork_id: Option<String>,
+	) -> Self {
+		Self {
+			protocol_name: Self::protocol_name(genesis_hash, fork_id),
+			fallback_protocol_names: Self::fallback_protocol_names(protocol_id),
+		}
+	}
+
+	/// Standard transactions protocol name.
+	fn protocol_name<Hash: AsRef<[u8]>>(
+		genesis_hash: Hash,
+		fork_id: Option<String>,
+	) -> Cow<'static, str> {
+		let chain_prefix = match fork_id {
+			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
+			None => format!("/{}", hex::encode(genesis_hash)),
+		};
+		format!("{}{}", chain_prefix, PROTOCOL_NAME_SUFFIX).into()
+	}
+
+	/// Fallback (legacy) transactions protocol names.
+	fn fallback_protocol_names(protocol_id: ProtocolId) -> Vec<Cow<'static, str>> {
+		let fallback_name = format!("/{}/transactions/1", protocol_id.as_ref());
+		std::iter::once(fallback_name.into()).collect()
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
 	pub fn set_config(&self) -> config::NonDefaultSetConfig {
 		config::NonDefaultSetConfig {
 			notifications_protocol: self.protocol_name.clone(),
-			fallback_names: Vec::new(),
+			fallback_names: self.fallback_protocol_names.clone(),
 			max_notification_size: MAX_TRANSACTIONS_SIZE,
 			set_config: config::SetConfig {
 				in_peers: 0,

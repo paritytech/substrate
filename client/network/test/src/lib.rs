@@ -805,6 +805,8 @@ where
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
+		let fork_id = Some(String::from("test-fork-id"));
+
 		let block_request_protocol_config = {
 			let (handler, protocol_config) =
 				BlockRequestHandler::new(&protocol_id, client.clone(), 50);
@@ -849,6 +851,7 @@ where
 			chain: client.clone(),
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
+			fork_id,
 			import_queue,
 			create_chain_sync: Box::new(move |sync_mode, chain, warp_sync_provider| {
 				match ChainSync::new(
