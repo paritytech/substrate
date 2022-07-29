@@ -33,7 +33,7 @@ use sc_consensus::{
 use sc_keystore::LocalKeystore;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
-	PeersFullClient, TestNetFactory,
+	TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
 
@@ -71,7 +71,6 @@ const BAD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0x42);
 type BeefyBlockImport = crate::BeefyBlockImport<
 	Block,
 	substrate_test_runtime_client::Backend,
-	PeersFullClient,
 	two_validators::TestApi,
 	BlockImportAdapter<PeersClient, sp_api::TransactionFor<two_validators::TestApi, Block>>,
 >;
@@ -193,7 +192,6 @@ impl TestNetFactory for BeefyTestNet {
 		let (block_import, voter_links, rpc_links) = beefy_block_import_and_links(
 			inner,
 			client.as_backend(),
-			client.as_client(),
 			Arc::new(two_validators::TestApi {}),
 		);
 		let peer_data = PeerData {

@@ -140,16 +140,14 @@ pub struct BeefyRPCLinks<B: Block> {
 }
 
 /// Make block importer and link half necessary to tie the background voter to it.
-pub fn beefy_block_import_and_links<B, BE, Client, RuntimeApi, I>(
+pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I>(
 	wrapped_block_import: I,
 	backend: Arc<BE>,
-	client: Arc<Client>,
 	runtime: Arc<RuntimeApi>,
-) -> (BeefyBlockImport<B, BE, Client, RuntimeApi, I>, BeefyVoterLinks<B>, BeefyRPCLinks<B>)
+) -> (BeefyBlockImport<B, BE, RuntimeApi, I>, BeefyVoterLinks<B>, BeefyRPCLinks<B>)
 where
 	B: Block,
 	BE: Backend<B>,
-	Client: HeaderBackend<B>,
 	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<RuntimeApi, B>>
 		+ Send
 		+ Sync,
@@ -167,13 +165,8 @@ where
 		notification::BeefySignedCommitmentStream::<B>::channel();
 
 	// BlockImport
-	let import = BeefyBlockImport::new(
-		backend,
-		client,
-		runtime,
-		wrapped_block_import,
-		to_voter_justif_sender,
-	);
+	let import =
+		BeefyBlockImport::new(backend, runtime, wrapped_block_import, to_voter_justif_sender);
 	let voter_links = BeefyVoterLinks {
 		from_block_import_justif_stream,
 		to_rpc_justif_sender,

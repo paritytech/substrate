@@ -43,42 +43,37 @@ use crate::{
 /// Wraps a `inner: BlockImport` and ultimately defers to it.
 ///
 /// When using BEEFY, the block import worker should be using this block import object.
-pub struct BeefyBlockImport<Block: BlockT, Backend, Client, RuntimeApi, I> {
+pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I> {
 	backend: Arc<Backend>,
-	client: Arc<Client>,
 	runtime: Arc<RuntimeApi>,
 	inner: I,
 	justification_sender: BeefySignedCommitmentSender<Block>,
 }
 
-impl<Block: BlockT, BE, Client, Runtime, I: Clone> Clone
-	for BeefyBlockImport<Block, BE, Client, Runtime, I>
-{
+impl<Block: BlockT, BE, Runtime, I: Clone> Clone for BeefyBlockImport<Block, BE, Runtime, I> {
 	fn clone(&self) -> Self {
 		BeefyBlockImport {
 			backend: self.backend.clone(),
 			runtime: self.runtime.clone(),
-			client: self.client.clone(),
 			inner: self.inner.clone(),
 			justification_sender: self.justification_sender.clone(),
 		}
 	}
 }
 
-impl<Block: BlockT, BE, Client, Runtime, I> BeefyBlockImport<Block, BE, Client, Runtime, I> {
+impl<Block: BlockT, BE, Runtime, I> BeefyBlockImport<Block, BE, Runtime, I> {
 	/// Create a new BeefyBlockImport.
 	pub fn new(
 		backend: Arc<BE>,
-		client: Arc<Client>,
 		runtime: Arc<Runtime>,
 		inner: I,
 		justification_sender: BeefySignedCommitmentSender<Block>,
-	) -> BeefyBlockImport<Block, BE, Client, Runtime, I> {
-		BeefyBlockImport { backend, client, runtime, inner, justification_sender }
+	) -> BeefyBlockImport<Block, BE, Runtime, I> {
+		BeefyBlockImport { backend, runtime, inner, justification_sender }
 	}
 }
 
-impl<Block, BE, Client, Runtime, I> BeefyBlockImport<Block, BE, Client, Runtime, I>
+impl<Block, BE, Runtime, I> BeefyBlockImport<Block, BE, Runtime, I>
 where
 	Block: BlockT,
 	BE: Backend<Block>,
@@ -132,12 +127,10 @@ where
 }
 
 #[async_trait::async_trait]
-impl<Block, BE, Client, Runtime, I> BlockImport<Block>
-	for BeefyBlockImport<Block, BE, Client, Runtime, I>
+impl<Block, BE, Runtime, I> BlockImport<Block> for BeefyBlockImport<Block, BE, Runtime, I>
 where
 	Block: BlockT,
 	BE: Backend<Block>,
-	Client: HeaderBackend<Block>,
 	I: BlockImport<
 			Block,
 			Error = ConsensusError,
@@ -178,10 +171,11 @@ where
 
 		match (beefy_proof, &inner_import_result) {
 			(Some(proof), ImportResult::Imported(_)) => {
-				let status = self.client.info();
+				let status = self.backend.blockchain().info();
 				if number <= status.finalized_number &&
 					Some(hash) ==
-						self.client
+						self.backend
+							.blockchain()
 							.hash(number)
 							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 				{
