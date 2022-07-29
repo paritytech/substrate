@@ -58,7 +58,7 @@ where
 	}
 }
 
-impl<B, C, PROOF> ConsensusDataProvider<B> for AuraConsensusDataProvider<B, C, PROOF>
+impl<B, C, P> ConsensusDataProvider<B> for AuraConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -67,10 +67,10 @@ where
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
 	C::Api: AuraApi<B, AuthorityId>,
-	PROOF: Send + Sync + 'static,
+	P: Send + Sync + 'static,
 {
 	type Transaction = TransactionFor<C, B>;
-	type Proof = PROOF;
+	type Proof = P;
 
 	fn create_digest(
 		&self,

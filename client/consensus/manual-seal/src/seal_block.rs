@@ -36,7 +36,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 pub const MAX_PROPOSAL_DURATION: u64 = 10;
 
 /// params for sealing a new block
-pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP, CIDP, PROOF> {
+pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP, CIDP, P> {
 	/// if true, empty blocks(without extrinsics) will be created.
 	/// otherwise, will return Error::EmptyTransactionPool.
 	pub create_empty: bool,
@@ -56,7 +56,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP
 	pub select_chain: &'a SC,
 	/// Digest provider for inclusion in blocks.
 	pub consensus_data_provider:
-		Option<&'a dyn ConsensusDataProvider<B, Proof = PROOF, Transaction = TransactionFor<C, B>>>,
+		Option<&'a dyn ConsensusDataProvider<B, Proof = P, Transaction = TransactionFor<C, B>>>,
 	/// block import object
 	pub block_import: &'a mut BI,
 	/// Something that can create the inherent data providers.
@@ -64,7 +64,7 @@ pub struct SealBlockParams<'a, B: BlockT, BI, SC, C: ProvideRuntimeApi<B>, E, TP
 }
 
 /// seals a new block with the given params
-pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, PROOF>(
+pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, P>(
 	SealBlockParams {
 		create_empty,
 		finalize,
@@ -77,7 +77,7 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, PROOF>(
 		create_inherent_data_providers,
 		consensus_data_provider: digest_provider,
 		mut sender,
-	}: SealBlockParams<'_, B, BI, SC, C, E, TP, CIDP, PROOF>,
+	}: SealBlockParams<'_, B, BI, SC, C, E, TP, CIDP, P>,
 ) where
 	B: BlockT,
 	BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
@@ -86,12 +86,12 @@ pub async fn seal_block<B, BI, SC, C, E, TP, CIDP, PROOF>(
 		+ 'static,
 	C: HeaderBackend<B> + ProvideRuntimeApi<B>,
 	E: Environment<B>,
-	E::Proposer: Proposer<B, Proof = PROOF, Transaction = TransactionFor<C, B>>,
+	E::Proposer: Proposer<B, Proof = P, Transaction = TransactionFor<C, B>>,
 	TP: TransactionPool<Block = B>,
 	SC: SelectChain<B>,
 	TransactionFor<C, B>: 'static,
 	CIDP: CreateInherentDataProviders<B, ()>,
-	PROOF: Send + Sync + 'static,
+	P: Send + Sync + 'static,
 {
 	let future = async {
 		if pool.status().ready == 0 && !create_empty {

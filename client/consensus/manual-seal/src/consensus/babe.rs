@@ -189,7 +189,7 @@ where
 	}
 }
 
-impl<B, C, PROOF> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C, PROOF>
+impl<B, C, P> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -198,10 +198,10 @@ where
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
 	C::Api: BabeApi<B>,
-	PROOF: Send + Sync + 'static,
+	P: Send + Sync + 'static,
 {
 	type Transaction = TransactionFor<C, B>;
-	type Proof = PROOF;
+	type Proof = P;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error> {
 		let slot = inherents
