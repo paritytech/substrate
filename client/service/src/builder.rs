@@ -779,7 +779,7 @@ where
 	};
 
 	let chain_sync = ChainSync::new(
-		match config.network.sync_mode.clone() {
+		match config.network.sync_mode {
 			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 			SyncMode::Fast { skip_proofs, storage_chain_mode } =>
 				sc_network_common::sync::SyncMode::LightState { skip_proofs, storage_chain_mode },

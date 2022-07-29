@@ -346,7 +346,7 @@ impl From<multiaddr::Error> for ParseErr {
 }
 
 /// Sync operation mode.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,

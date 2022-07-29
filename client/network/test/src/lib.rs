@@ -839,7 +839,7 @@ where
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
 		let chain_sync = ChainSync::new(
-			match network_config.sync_mode.clone() {
+			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
 					sc_network_common::sync::SyncMode::LightState {

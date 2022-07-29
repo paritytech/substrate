@@ -112,7 +112,7 @@ fn build_test_full_node(
 	};
 
 	let chain_sync = ChainSync::new(
-		match network_config.sync_mode.clone() {
+		match network_config.sync_mode {
 			config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 			config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
 				sc_network_common::sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
