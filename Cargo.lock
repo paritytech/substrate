@@ -430,6 +430,7 @@ dependencies = [
 name = "beefy-gadget"
 version = "4.0.0-dev"
 dependencies = [
+ "async-trait",
  "beefy-primitives",
  "fnv",
  "futures",
@@ -438,6 +439,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
+ "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
