@@ -28,7 +28,7 @@ use super::{
 use crate::SubscriptionTaskExecutor;
 
 use futures::{future, stream, FutureExt, StreamExt};
-use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
+use jsonrpsee::{core::Error as JsonRpseeError, SubscriptionSink};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -357,7 +357,7 @@ where
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(&self, pending: PendingSubscription) {
+	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) {
 		let client = self.client.clone();
 
 		let initial = match self
@@ -369,7 +369,7 @@ where
 		{
 			Ok(initial) => initial,
 			Err(e) => {
-				pending.reject(JsonRpseeError::from(e));
+				sink.reject(JsonRpseeError::from(e));
 				return
 			},
 		};
@@ -396,20 +396,16 @@ where
 
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
 
-		let fut = async move {
-			if let Some(mut sink) = pending.accept() {
-				sink.pipe_from_stream(stream).await;
-			}
-		};
+		let fut = async move { sink.pipe_from_stream(stream).await; };
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
-	fn subscribe_storage(&self, pending: PendingSubscription, keys: Option<Vec<StorageKey>>) {
+	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
-				pending.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
+				sink.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
 				return
 			},
 		};
@@ -441,11 +437,7 @@ where
 			.chain(storage_stream)
 			.filter(|storage| future::ready(!storage.changes.is_empty()));
 
-		let fut = async move {
-			if let Some(mut sink) = pending.accept() {
-				sink.pipe_from_stream(stream).await;
-			}
-		};
+		let fut = async move { sink.pipe_from_stream(stream).await; };
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
