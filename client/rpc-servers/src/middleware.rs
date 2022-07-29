@@ -18,11 +18,12 @@
 
 //! RPC middlware to collect prometheus metrics on RPC calls.
 
-use jsonrpsee::core::middleware::Middleware;
+use jsonrpsee::core::middleware::{Headers, HttpMiddleware, MethodKind, Params, WsMiddleware};
 use prometheus_endpoint::{
 	register, Counter, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry,
 	U64,
 };
+use std::net::SocketAddr;
 
 /// Metrics for RPC middleware storing information about the number of requests started/completed,
 /// calls started/completed and their timings.
@@ -136,10 +137,10 @@ impl RpcMiddleware {
 	}
 }
 
-impl Middleware for RpcMiddleware {
+impl WsMiddleware for RpcMiddleware {
 	type Instant = std::time::Instant;
 
-	fn on_connect(&self) {
+	fn on_connect(&self, _remote_addr: SocketAddr, _headers: &Headers) {
 		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
 	}
 
@@ -149,8 +150,15 @@ impl Middleware for RpcMiddleware {
 		now
 	}
 
-	fn on_call(&self, name: &str) {
-		log::trace!(target: "rpc_metrics", "[{}] on_call name={}", self.transport_label, name);
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		log::trace!(
+			target: "rpc_metrics",
+			"[{}] on_call name={} params={:?} kind={}",
+			self.transport_label,
+			name,
+			params,
+			kind,
+		);
 		self.metrics
 			.calls_started
 			.with_label_values(&[self.transport_label, name])
@@ -181,12 +189,66 @@ impl Middleware for RpcMiddleware {
 			.inc();
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
 		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
 		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
 	}
 
-	fn on_disconnect(&self) {
+	fn on_disconnect(&self, _remote_addr: SocketAddr) {
 		self.metrics.ws_sessions_closed.as_ref().map(|counter| counter.inc());
+	}
+}
+
+impl HttpMiddleware for RpcMiddleware {
+	type Instant = std::time::Instant;
+
+	fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Self::Instant {
+		let now = std::time::Instant::now();
+		self.metrics.requests_started.with_label_values(&[self.transport_label]).inc();
+		now
+	}
+
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		log::trace!(
+			target: "rpc_metrics",
+			"[{}] on_call name={} params={:?} kind={}",
+			self.transport_label,
+			name,
+			params,
+			kind,
+		);
+		self.metrics
+			.calls_started
+			.with_label_values(&[self.transport_label, name])
+			.inc();
+	}
+
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		let micros = started_at.elapsed().as_micros();
+		log::debug!(
+			target: "rpc_metrics",
+			"[{}] {} call took {} μs",
+			self.transport_label,
+			name,
+			micros,
+		);
+		self.metrics
+			.calls_time
+			.with_label_values(&[self.transport_label, name])
+			.observe(micros as _);
+
+		self.metrics
+			.calls_finished
+			.with_label_values(&[
+				self.transport_label,
+				name,
+				if success { "true" } else { "false" },
+			])
+			.inc();
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
+		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
 	}
 }
