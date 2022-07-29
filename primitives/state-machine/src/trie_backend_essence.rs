@@ -309,7 +309,8 @@ where
 		match child_info.child_type() {
 			ChildType::ParentKeyId => Err(format!("Not mmr child state",).into()),
 			ChildType::ParentSized => Err(format!("Not mmr child state",).into()),
-			ChildType::Mmr => unimplemented!(), // QUESTION needed
+			ChildType::Mmr =>
+				Ok(sp_trie::mmr::read_child_trie_value::<H, _>(self, &root, nb_element, at)),
 		}
 	}
 

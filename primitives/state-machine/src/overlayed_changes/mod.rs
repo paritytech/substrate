@@ -403,12 +403,9 @@ impl OverlayedChanges {
 		for (_, (changeset, _)) in self.children.iter_mut() {
 			changeset.start_transaction();
 		}
-
-		/* QUESTION TODO restore for transaction handling
 		for (_, (changeset, _)) in self.mmr.iter_mut() {
 			changeset.changes.start_transaction();
 		}
-		*/
 		self.offchain.overlay_mut().start_transaction();
 	}
 
@@ -424,7 +421,6 @@ impl OverlayedChanges {
 				.expect("Top and children changesets are started in lockstep; qed");
 			!changeset.is_empty()
 		});
-		/* QUESTION TODO restore for transaction handling
 		retain_map(&mut self.mmr, |_, (changeset, _)| {
 			changeset
 				.changes
@@ -432,7 +428,6 @@ impl OverlayedChanges {
 				.expect("Top and children changesets are started in lockstep; qed");
 			!changeset.changes.is_empty()
 		});
-		*/
 		self.offchain
 			.overlay_mut()
 			.rollback_transaction()
@@ -451,14 +446,12 @@ impl OverlayedChanges {
 				.commit_transaction()
 				.expect("Top and children changesets are started in lockstep; qed");
 		}
-		/* QUESTION TODO restore for transaction handling
 		for (_, (changeset, _)) in self.mmr.iter_mut() {
 			changeset
 				.changes
 				.commit_transaction()
 				.expect("Top and children changesets are started in lockstep; qed");
 		}
-		*/
 		self.offchain
 			.overlay_mut()
 			.commit_transaction()
@@ -477,14 +470,12 @@ impl OverlayedChanges {
 				.enter_runtime()
 				.expect("Top and children changesets are entering runtime in lockstep; qed")
 		}
-		/* QUESTION TODO uncomment for transaction implementatio
 		for (_, (changeset, _)) in self.mmr.iter_mut() {
 			changeset
 				.changes
 				.enter_runtime()
 				.expect("Top and children changesets are entering runtime in lockstep; qed")
 		}
-*/
 		self.offchain
 			.overlay_mut()
 			.enter_runtime()
@@ -503,15 +494,12 @@ impl OverlayedChanges {
 				.exit_runtime()
 				.expect("Top and children changesets are entering runtime in lockstep; qed");
 		}
-
-/* QUESTION TODO uncomment for transaction implementation
 		for (_, (changeset, _)) in self.mmr.iter_mut() {
 			changeset
 				.changes
 				.exit_runtime()
 				.expect("Top and children changesets are entering runtime in lockstep; qed");
 		}
-*/
 		self.offchain
 			.overlay_mut()
 			.exit_runtime()

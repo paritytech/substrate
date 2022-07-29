@@ -97,7 +97,8 @@ pub type OverlayedChangeSet = OverlayedMap<StorageKey, Option<StorageValue>>;
 #[derive(Debug, Clone)]
 pub struct OverlayedChangeSetMmr {
 	pub changes: OverlayedList<StorageValue>,
-	// QUESTION : there is an issue with this offset, hint could be solve by changing some prototype from &self to &mut self.
+	// QUESTION : there is an issue with this offset, hint could be solve by changing some
+	// prototype from &self to &mut self.
 	pub offset: u64,
 }
 
@@ -134,6 +135,8 @@ impl<K: Ord + Hash, V> Default for OverlayedMap<K, V> {
 pub struct OverlayedList<V> {
 	/// Stores the changes that this overlay constitutes.
 	pub changes: Vec<V>,
+	/// last transactions number of push.
+	indexes: Vec<usize>,
 	/// The number of how many transactions beginning from the first transactions are started
 	/// by the client. Those transactions are protected against close (commit, rollback)
 	/// when in runtime mode.
@@ -144,8 +147,11 @@ pub struct OverlayedList<V> {
 
 impl<V> Default for OverlayedList<V> {
 	fn default() -> Self {
+		let mut indexes = Vec::new();
+		indexes.push(0);
 		Self {
 			changes: Vec::new(),
+			indexes,
 			num_client_transactions: Default::default(),
 			execution_mode: Default::default(),
 		}
@@ -245,8 +251,10 @@ impl<K: Ord + Hash + Clone, V> OverlayedMap<K, V> {
 	/// This changeset might be created when there are already open transactions.
 	/// We need to catch up here so that the child is at the same transaction depth.
 	pub fn spawn_child_list<V2>(&self) -> OverlayedList<V2> {
+		use sp_std::iter::repeat;
 		OverlayedList {
 			changes: Default::default(),
+			indexes: repeat(0).take(self.transaction_depth()).collect(),
 			num_client_transactions: self.num_client_transactions,
 			execution_mode: self.execution_mode,
 		}
@@ -460,7 +468,7 @@ impl<V> OverlayedList<V> {
 	///
 	/// A value of zero means that no transaction is open and changes are committed on write.
 	pub fn transaction_depth(&self) -> usize {
-		unimplemented!()
+		self.indexes.len()
 	}
 
 	/// Call this before transfering control to the runtime.
@@ -506,7 +514,7 @@ impl<V> OverlayedList<V> {
 	///
 	/// Changes made without any open transaction are committed immediately.
 	pub fn start_transaction(&mut self) {
-		unimplemented!()
+		self.indexes.push(self.changes.len());
 	}
 
 	/// Rollback the last transaction started by `start_transaction`.
@@ -525,8 +533,23 @@ impl<V> OverlayedList<V> {
 		self.close_transaction(false)
 	}
 
-	fn close_transaction(&mut self, _rollback: bool) -> Result<(), NoOpenTransaction> {
-		unimplemented!()
+	fn close_transaction(&mut self, rollback: bool) -> Result<(), NoOpenTransaction> {
+		// runtime is not allowed to close transactions started by the client
+		if let ExecutionMode::Runtime = self.execution_mode {
+			if !self.has_open_runtime_transactions() {
+				return Err(NoOpenTransaction)
+			}
+		}
+
+		if rollback {
+			self.changes.truncate(self.indexes.pop().unwrap_or(0));
+		} else {
+			if let Some(_) = self.indexes.pop() {
+			} else {
+				return Err(NoOpenTransaction)
+			}
+		}
+		Ok(())
 	}
 
 	fn has_open_runtime_transactions(&self) -> bool {

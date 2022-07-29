@@ -70,9 +70,18 @@ pub fn get_at<T: Decode + Sized>(child_info: &ChildInfo, at: u64) -> Option<T> {
 		ChildType::ParentSized => None,
 		ChildType::Mmr => {
 			let storage_key = child_info.storage_key();
-			// QUESTION define a get sp_io function
-			// that also decode the fetched encoded value.
-			unimplemented!()
+			sp_io::mmr_child_storage::get(storage_key, at).and_then(|v| {
+				Decode::decode(&mut &v[..]).map(Some).unwrap_or_else(|_| {
+					// TODO #3700: error should be handleable.
+					log::error!(
+						target: "runtime::storage",
+						"Corrupted state in child mmr at {:?}/{:?}",
+						storage_key,
+						at,
+					);
+					None
+				})
+			})
 		},
 	}
 }

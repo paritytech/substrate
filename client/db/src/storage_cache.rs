@@ -616,8 +616,32 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		child_info: &ChildInfo,
 		at: u64,
 	) -> Result<Option<Vec<u8>>, Self::Error> {
-		// QUESTION could use cache.
-		self.state.child_storage_at(child_info, at)
+		let key = (child_info.storage_key().to_vec(), at.to_le_bytes().to_vec());
+		let local_cache = self.cache.local_cache.upgradable_read();
+		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
+			trace!("Found in local cache: {:?}", key);
+			return Ok(self.usage.tally_child_key_read(&key, entry, true))
+		}
+		{
+			let cache = self.cache.shared_cache.upgradable_read();
+			if Self::is_allowed(None, Some(&key), &self.cache.parent_hash, &cache.modifications) {
+				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+				if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
+					trace!("Found in shared cache: {:?}", key);
+					return Ok(self.usage.tally_child_key_read(&key, entry, true))
+				}
+			}
+		}
+		trace!("Cache miss: {:?}", key);
+		let value = self.state.child_storage_at(child_info, at)?;
+
+		// just pass it through the usage counter
+		let value = self.usage.tally_child_key_read(&key, value, false);
+
+		RwLockUpgradableReadGuard::upgrade(local_cache)
+			.child_storage
+			.insert(key, value.clone());
+		Ok(value)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {

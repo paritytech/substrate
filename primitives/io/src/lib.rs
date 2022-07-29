@@ -833,6 +833,39 @@ pub trait Trie {
 	}
 }
 
+/// Interface for accessing the child storage for mmr
+/// from within the runtime.
+#[runtime_interface]
+pub trait MmrChildStorage {
+	/// Get a default child storage value for a given index.
+	///
+	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the
+	/// parent trie. Result is `None` if the value for `key` in the child storage can not be found.
+	fn get(&self, storage_key: &[u8], at: u64) -> Option<Vec<u8>> {
+		let child_info = ChildInfo::new_mmr(storage_key);
+		self.child_storage_at(&child_info, at).map(|s| s.to_vec())
+	}
+
+	/// Push (append) a child storage value.
+	///
+	/// Set `key` to `value` in the child storage denoted by `storage_key`.
+	fn push(&mut self, storage_key: &[u8], value: &[u8]) {
+		let child_info = ChildInfo::new_mmr(storage_key);
+		self.push_storage(&child_info, value.to_vec());
+	}
+
+	/// Default child mrr root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
+		let child_info = ChildInfo::new_mmr(storage_key);
+		self.child_storage_root(&child_info, StateVersion::V1)
+	}
+}
+
 /// Interface that provides miscellaneous functions for communicating between the runtime and the
 /// node.
 #[runtime_interface]
