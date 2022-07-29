@@ -190,7 +190,13 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		claim: &Self::Claim,
 		slot_info: SlotInfo<B>,
 		proposing_remaining: Delay,
-	) -> Option<Proposal<B, <Self::Proposer as Proposer<B>>::Transaction, <Self::Proposer as Proposer<B>>::Proof>> {
+	) -> Option<
+		Proposal<
+			B,
+			<Self::Proposer as Proposer<B>>::Transaction,
+			<Self::Proposer as Proposer<B>>::Proof,
+		>,
+	> {
 		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
@@ -315,9 +321,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		debug!(
 			target: logging_target,
-			"Starting authorship at slot {}; timestamp = {}",
-			slot,
-			*timestamp,
+			"Starting authorship at slot {}; timestamp = {}", slot, *timestamp,
 		);
 
 		telemetry!(
