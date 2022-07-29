@@ -26,7 +26,6 @@
 extern crate alloc;
 
 use alloc::{
-	boxed::Box,
 	format,
 	string::{String, ToString},
 	vec::Vec,
@@ -152,7 +151,6 @@ fn format_default(field: &Ident) -> TokenStream {
 
 /// Parsed environment definition.
 struct EnvDef {
-	item: syn::ItemMod,
 	host_funcs: Vec<HostFn>,
 }
 
@@ -170,18 +168,6 @@ enum HostFnReturn {
 	ReturnCode,
 }
 
-impl syn::parse::Parse for HostFnReturn {
-	fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
-		// let lookahead = input.lookahead1();
-		// if lookahead.peek(syn::Ident) {
-		//     input.parse().map(HostFnReturn::Unit)
-		// } else {
-		//     Err(lookahead.error())
-		// }
-		input.parse::<syn::Ident>().map(|_| Self::Unit)
-	}
-}
-
 /// Helper trait to convert a host function definition into its wasm signature.
 trait ToWasmSig {
 	fn to_wasm_sig(&self) -> TokenStream;
@@ -193,9 +179,10 @@ impl ToWasmSig for HostFn {
 			syn::FnArg::Typed(pt) => Some(&pt.ty),
 			_ => None,
 		});
-		let returns = match &self.item.sig.output {
-			syn::ReturnType::Type(_, bt) => quote! { vec![ #bt::VALUE_TYPE ] },
-			_ => quote! { vec![] },
+		let returns = match &self.ret_type {
+			HostFnReturn::U32 => quote! { vec![ <u32>::VALUE_TYPE ] },
+			HostFnReturn::ReturnCode => quote! { vec![ <ReturnCode>::VALUE_TYPE ] },
+			HostFnReturn::Unit => quote! { vec![] },
 		};
 
 		quote! {
@@ -249,39 +236,81 @@ impl HostFn {
 			},
 			_ => return Err(err()),
 		}
+		// TODO: refactor errs
+		let err1 = |span| {
+			let msg = format!(
+				r#"Invalid host function definition.
+					     Should return one of the following: 
+							  - Result<(), TrapReason>,
+							  - Result<ReturnCode, TrapReason>,
+							  - Result<u32, TrapReason>"#
+			);
+			syn::Error::new(span, msg)
+		};
 
 		let ret_ty = match item.clone().sig.output {
 			syn::ReturnType::Type(_, ty) => Ok(ty.clone()),
-			_ => {
-				let msg = "Invalid host function definition, return val is expected.";
-				Err(syn::Error::new(span, msg))
-			},
+			_ => Err(err1(span)),
 		}?;
 
-		// TODO: refactor errs
-		let err1 = |span| {
-			let msg =
-				format!("Invalid host function definition: expected Result<...> return value");
-			syn::Error::new(span, msg)
-		};
+		// TODO: try sync::parse_from_str("Result<(), TrapReason") and then .eq()?
 		match *ret_ty {
 			syn::Type::Path(tp) => {
-				let tmp = &tp.path.segments.first().ok_or(err1(span))?;
-				let (id, span) = (tmp.ident.to_string(), tmp.ident.span());
+				let result = &tp.path.segments.first().ok_or(err1(span))?;
+				let (id, span) = (result.ident.to_string(), result.ident.span());
 				if id == "Result".to_string() {
-					match tmp.arguments {
+					match &result.arguments {
 						syn::PathArguments::AngleBracketed(group) => {
-						    (group.args.len() == 2).then_some(42).ok_or(err1(span))?;
-						    
-						    (group.args.last().ok_or(err1(span))?.to_string() == "TrapReason")
-								.then_some(42)
-								.ok_or(err1(span))?;
-							let ret_val = group.args.first().ok_or(err1(span))?.to_string();
-							let ret_type = match ret_val {
+							group.args.len().eq(&2).then_some(42).ok_or(err1(span))?;
+
+							let arg2 = group.args.last().ok_or(err1(span))?; // TrapReason
+
+							let err_ty = match arg2 {
+								syn::GenericArgument::Type(ty) => Ok(ty.clone()),
+								_ => Err(err1(arg2.span())),
+							}?;
+
+							match err_ty {
+								syn::Type::Path(tp) => Ok(tp
+									.path
+									.segments
+									.first()
+									.ok_or(err1(arg2.span()))?
+									.ident
+									.to_string()),
+								_ => Err(err1(tp.span())),
+							}?
+							.eq("TrapReason")
+							.then_some(())
+							.ok_or(err1(span))?;
+
+							let arg1 = group.args.first().ok_or(err1(span))?; // (), u32 or ReturnCode
+							let ok_ty = match arg1 {
+								syn::GenericArgument::Type(ty) => Ok(ty.clone()),
+								_ => Err(err1(arg1.span())),
+							}?;
+							let ok_ty_str = match ok_ty {
+								syn::Type::Path(tp) => Ok(tp
+									.path
+									.segments
+									.first()
+									.ok_or(err1(arg2.span()))?
+									.ident
+									.to_string()),
+								syn::Type::Tuple(tt) => {
+									if !tt.elems.is_empty() {
+										return Err(err1(arg1.span()))
+									};
+									Ok("()".to_string())
+								},
+								_ => Err(err1(ok_ty.span())),
+							}?;
+
+							let ret_type = match ok_ty_str.as_str() {
 								"()" => Ok(HostFnReturn::Unit),
 								"u32" => Ok(HostFnReturn::U32),
 								"ReturnCode" => Ok(HostFnReturn::ReturnCode),
-								_ => Err(err1(span)),
+								_ => Err(err1(arg1.span())),
 							}?;
 							Ok(Self { item, module, name, ret_type })
 						},
@@ -311,7 +340,7 @@ impl EnvDef {
 			host_funcs.push(HostFn::try_from(i.clone())?);
 		}
 
-		Ok(Self { item, host_funcs })
+		Ok(Self { host_funcs })
 	}
 }
 
@@ -390,9 +419,9 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 							   qed;"
 						   );
 					   }
-				   } else { quote! { whoo } }
+				   } else { quote! { let err = "whoo!"; } }
 			   },
-			   _ => quote! { beee },
+			   _ => quote! { let err = "beee"; },
 		   }
 	   });
 
@@ -434,7 +463,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 			{
 				#[allow(unused)]
 				let mut args = args.iter();
-				let body = || {
+				let mut body = || {
 					#( #params )*
 					#body
 				};

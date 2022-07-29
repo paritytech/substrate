@@ -533,24 +533,24 @@ mod tests {
 
 		// Define test environment for tests. We need ImportSatisfyCheck
 		// implementation from it. So actual implementations doesn't matter.
-		#[define_env(Test)]
-		pub mod env {
-			fn panic(_ctx: _) {
+		#[define_env]
+		pub mod test_env {
+			fn panic(_ctx: _) -> Result<(), TrapReason> {
 				unreachable!();
 			}
 
 			// gas is an implementation defined function and a contract can't import it.
-			fn gas(_ctx: _, _amount: u32) {
+			fn gas(_ctx: _, _amount: u32) -> Result<(), TrapReason> {
 				unreachable!();
 			}
 
-			fn nop(_ctx: _, _unused: u64) {
+			fn nop(_ctx: _, _unused: u64) -> Result<(), TrapReason> {
 				unreachable!();
 			}
 
 			// new version of nop with other data type for argumebt
 			#[version(1)]
-			fn nop(_ctx: _, _unused: i32) {
+			fn nop(_ctx: _, _unused: i32) -> Result<(), TrapReason> {
 				unreachable!();
 			}
 		}
@@ -572,7 +572,7 @@ mod tests {
 					},
 					.. Default::default()
 				};
-				let r = do_preparation::<env::Test, Test>(wasm, &schedule, ALICE);
+				let r = do_preparation::<env::Env, Test>(wasm, &schedule, ALICE);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
 			}
 		};
