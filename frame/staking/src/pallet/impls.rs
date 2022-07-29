@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
+	traits::{Bounded, Convert, One, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
 use sp_staking::{
@@ -599,20 +599,17 @@ impl<T: Config> Pallet<T> {
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
 	fn apply_unapplied_slashes(active_era: EraIndex) {
-		let slash_defer_duration = T::SlashDeferDuration::get();
-		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if let Some(ref mut earliest) = earliest {
-				let keep_from = active_era.saturating_sub(slash_defer_duration);
-				for era in (*earliest)..keep_from {
-					let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
-					for slash in era_slashes {
-						slashing::apply_slash::<T>(slash, era);
-					}
-				}
-
-				*earliest = (*earliest).max(keep_from)
-			}
-		})
+		let era_slashes = <Self as Store>::UnappliedSlashes::take(&active_era);
+		log!(
+			debug,
+			"found {} slashes scheduled to be executed in era {:?}",
+			era_slashes.len(),
+			active_era,
+		);
+		for slash in era_slashes {
+			let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
+			slashing::apply_slash::<T>(slash, slash_era);
+		}
 	}
 
 	/// Add reward points to validators using their stash account ID.
@@ -1209,11 +1206,6 @@ where
 			}
 		};
 
-		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if earliest.is_none() {
-				*earliest = Some(active_era)
-			}
-		});
 		add_db_reads_writes(1, 1);
 
 		let slash_defer_duration = T::SlashDeferDuration::get();
@@ -1263,9 +1255,18 @@ where
 					}
 				} else {
 					// Defer to end of some `slash_defer_duration` from now.
-					<Self as Store>::UnappliedSlashes::mutate(active_era, move |for_later| {
-						for_later.push(unapplied)
-					});
+					log!(
+						debug,
+						"deferring slash of {:?}% happened in {:?} (reported in {:?}) to {:?}",
+						slash_fraction,
+						slash_era,
+						active_era,
+						slash_era + slash_defer_duration + 1,
+					);
+					<Self as Store>::UnappliedSlashes::mutate(
+						slash_era.saturating_add(slash_defer_duration).saturating_add(One::one()),
+						move |for_later| for_later.push(unapplied),
+					);
 					add_db_reads_writes(1, 1);
 				}
 			} else {
@@ -1414,17 +1415,17 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::unbond(RawOrigin::Signed(controller).into(), value)
 	}
 
+	fn chill(controller: Self::AccountId) -> DispatchResult {
+		Self::chill(RawOrigin::Signed(controller).into())
+	}
+
 	fn withdraw_unbonded(
 		controller: Self::AccountId,
 		num_slashing_spans: u32,
-	) -> Result<u64, DispatchError> {
-		Self::withdraw_unbonded(RawOrigin::Signed(controller).into(), num_slashing_spans)
-			.map(|post_info| {
-				post_info
-					.actual_weight
-					.unwrap_or(T::WeightInfo::withdraw_unbonded_kill(num_slashing_spans))
-			})
-			.map_err(|err_with_post_info| err_with_post_info.error)
+	) -> Result<bool, DispatchError> {
+		Self::withdraw_unbonded(RawOrigin::Signed(controller.clone()).into(), num_slashing_spans)
+			.map(|_| !Ledger::<T>::contains_key(&controller))
+			.map_err(|with_post| with_post.error)
 	}
 
 	fn bond(
@@ -1444,5 +1445,10 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
 		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
 		Self::nominate(RawOrigin::Signed(controller).into(), targets)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
 }

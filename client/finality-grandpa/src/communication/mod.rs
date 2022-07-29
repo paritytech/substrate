@@ -320,7 +320,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		voters: Arc<VoterSet<AuthorityId>>,
 		has_voted: HasVoted<B>,
 	) -> (impl Stream<Item = SignedMessage<B>> + Unpin, OutgoingMessages<B>) {
-		self.note_round(round, set_id, &*voters);
+		self.note_round(round, set_id, &voters);
 
 		let keystore = keystore.and_then(|ks| {
 			let id = ks.local_id();
@@ -637,9 +637,9 @@ fn incoming_global<B: BlockT>(
 		.filter_map(move |(notification, msg)| {
 			future::ready(match msg {
 				GossipMessage::Commit(msg) =>
-					process_commit(msg, notification, &gossip_engine, &gossip_validator, &*voters),
+					process_commit(msg, notification, &gossip_engine, &gossip_validator, &voters),
 				GossipMessage::CatchUp(msg) =>
-					process_catch_up(msg, notification, &gossip_engine, &gossip_validator, &*voters),
+					process_catch_up(msg, notification, &gossip_engine, &gossip_validator, &voters),
 				_ => {
 					debug!(target: "afg", "Skipping unknown message type");
 					None

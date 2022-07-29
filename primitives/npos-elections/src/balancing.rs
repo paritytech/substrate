@@ -26,14 +26,15 @@
 //!
 //! See [`balance`] for more information.
 
-use crate::{Edge, ExtendedBalance, IdentifierT, Voter};
+use crate::{BalancingConfig, Edge, ExtendedBalance, IdentifierT, Voter};
 use sp_arithmetic::traits::Zero;
 use sp_std::prelude::*;
 
 /// Balance the weight distribution of a given `voters` at most `iterations` times, or up until the
 /// point where the biggest difference created per iteration of all stakes is `tolerance`. If this
 /// is called with `tolerance = 0`, then exactly `iterations` rounds will be executed, except if no
-/// change has been made (`difference = 0`).
+/// change has been made (`difference = 0`). `tolerance` and `iterations` are part of the
+/// [`BalancingConfig`] struct.
 ///
 /// In almost all cases, a balanced solution will have a better score than an unbalanced solution,
 /// yet this is not 100% guaranteed because the first element of a [`crate::ElectionScore`] does not
@@ -52,12 +53,13 @@ use sp_std::prelude::*;
 /// - [A new approach to the maximum flow problem](https://dl.acm.org/doi/10.1145/48014.61051).
 /// - [Validator election in nominated proof-of-stake](https://arxiv.org/abs/2004.12990) (Appendix
 ///   A.)
+/// - [Computing a balanced solution](https://research.web3.foundation/en/latest/polkadot/NPoS/3.%20Balancing.html),
+///   which contains the details of the algorithm implementation.
 pub fn balance<AccountId: IdentifierT>(
 	voters: &mut Vec<Voter<AccountId>>,
-	iterations: usize,
-	tolerance: ExtendedBalance,
+	config: &BalancingConfig,
 ) -> usize {
-	if iterations == 0 {
+	if config.iterations == 0 {
 		return 0
 	}
 
@@ -65,14 +67,14 @@ pub fn balance<AccountId: IdentifierT>(
 	loop {
 		let mut max_diff = 0;
 		for voter in voters.iter_mut() {
-			let diff = balance_voter(voter, tolerance);
+			let diff = balance_voter(voter, config.tolerance);
 			if diff > max_diff {
 				max_diff = diff;
 			}
 		}
 
 		iter += 1;
-		if max_diff <= tolerance || iter >= iterations {
+		if max_diff <= config.tolerance || iter >= config.iterations {
 			break iter
 		}
 	}
@@ -158,7 +160,7 @@ pub(crate) fn balance_voter<AccountId: IdentifierT>(
 		.get(last_index)
 		.expect(
 			"length of elected_edges is greater than or equal 2; last_index index is at the \
-			 minimum elected_edges.len() - 1; index is within range; qed",
+ 			 minimum elected_edges.len() - 1; index is within range; qed",
 		)
 		.candidate
 		.borrow()

@@ -284,7 +284,7 @@ where
 
 		impl<'a, H, N> InnerGuard<'a, H, N> {
 			fn as_mut(&mut self) -> &mut AuthoritySet<H, N> {
-				&mut **self.guard.as_mut().expect("only taken on deconstruction; qed")
+				self.guard.as_mut().expect("only taken on deconstruction; qed")
 			}
 
 			fn set_old(&mut self, old: AuthoritySet<H, N>) {

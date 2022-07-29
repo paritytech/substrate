@@ -311,33 +311,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn subscribe_and_unsubscribe_to_justifications() {
-		let (rpc, _) = setup_io_handler(TestVoterState);
-		// Subscribe call.
-		let sub = rpc
-			.subscribe("grandpa_subscribeJustifications", EmptyParams::new())
-			.await
-			.unwrap();
-
-		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
-
-		// Unsubscribe
-		let unsub_req = format!(
-			"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
-			ser_id
-		);
-		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
-
-		assert_eq!(response, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
-
-		// Unsubscribe again and fail
-		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
-		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
-
-		assert_eq!(response, expected);
-	}
-
-	#[tokio::test]
 	async fn subscribe_and_unsubscribe_with_wrong_id() {
 		let (rpc, _) = setup_io_handler(TestVoterState);
 		// Subscribe call.

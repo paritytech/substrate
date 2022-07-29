@@ -40,8 +40,9 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	log,
 	traits::{DisabledValidators, FindAuthor, Get, OnTimestampSet, OneSessionHandler},
-	BoundedSlice, ConsensusEngineId, Parameter, WeakBoundedVec,
+	BoundedSlice, BoundedVec, ConsensusEngineId, Parameter,
 };
 use sp_consensus_aura::{AuthorityIndex, ConsensusLog, Slot, AURA_ENGINE_ID};
 use sp_runtime::{
@@ -116,7 +117,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]
 	pub(super) type Authorities<T: Config> =
-		StorageValue<_, WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
+		StorageValue<_, BoundedVec<T::AuthorityId, T::MaxAuthorities>, ValueQuery>;
 
 	/// The current slot of this block.
 	///
@@ -150,7 +151,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// The storage will be applied immediately.
 	/// And aura consensus log will be appended to block's log.
-	pub fn change_authorities(new: WeakBoundedVec<T::AuthorityId, T::MaxAuthorities>) {
+	pub fn change_authorities(new: BoundedVec<T::AuthorityId, T::MaxAuthorities>) {
 		<Authorities<T>>::put(&new);
 
 		let log = DigestItem::Consensus(
@@ -219,10 +220,14 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			let next_authorities = validators.map(|(_, k)| k).collect::<Vec<_>>();
 			let last_authorities = Self::authorities();
 			if last_authorities != next_authorities {
-				let bounded = <WeakBoundedVec<_, T::MaxAuthorities>>::force_from(
-					next_authorities,
-					Some("AuRa new session"),
-				);
+				if next_authorities.len() as u32 > T::MaxAuthorities::get() {
+					log::warn!(
+						target: "runtime::aura",
+						"next authorities list larger than {}, truncating",
+						T::MaxAuthorities::get(),
+					);
+				}
+				let bounded = <BoundedVec<_, T::MaxAuthorities>>::truncate_from(next_authorities);
 				Self::change_authorities(bounded);
 			}
 		}
