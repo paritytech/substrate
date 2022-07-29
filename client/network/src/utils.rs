@@ -16,7 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::config::ProtocolId;
 use futures::{stream::unfold, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 use linked_hash_set::LinkedHashSet;
@@ -58,30 +57,6 @@ impl<T: Hash + Eq> LruHashSet<T> {
 	}
 }
 
-/// Standard protocol name on the wire based on `genesis_hash`, `fork_id`, and protocol-specific
-/// `short_name`.
-///
-/// `short_name` must include the leading slash, e.g.: "/transactions/1".
-pub fn standard_protocol_name<Hash: AsRef<[u8]>>(
-	genesis_hash: Hash,
-	fork_id: &Option<String>,
-	short_name: &str,
-) -> std::borrow::Cow<'static, str> {
-	let chain_prefix = match fork_id {
-		Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-		None => format!("/{}", hex::encode(genesis_hash)),
-	};
-	format!("{}{}", chain_prefix, short_name).into()
-}
-
-/// Legacy (fallback) protocol name on the wire based on [`ProtocolId`].
-pub fn legacy_protocol_name(
-	protocol_id: &ProtocolId,
-	short_name: &str,
-) -> std::borrow::Cow<'static, str> {
-	format!("/{}{}", protocol_id.as_ref(), short_name).into()
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -106,52 +81,5 @@ mod tests {
 		// We reached the limit. The next element forces the oldest one out.
 		assert!(set.insert(3));
 		assert_eq!(vec![&1, &3], set.set.iter().collect::<Vec<_>>());
-	}
-
-	#[test]
-	fn standard_protocol_name_test() {
-		const SHORT_NAME: &str = "/protocol/1";
-
-		// Create protocol name using random genesis hash and no fork id.
-		let genesis_hash = sp_core::H256::random();
-		let fork_id = None;
-		let expected = format!("/{}/protocol/1", hex::encode(genesis_hash));
-		let protocol_name = standard_protocol_name(genesis_hash, &fork_id, SHORT_NAME);
-		assert_eq!(protocol_name.to_string(), expected);
-
-		// Create protocol name with fork id.
-		let fork_id = Some("fork".to_string());
-		let expected = format!("/{}/fork/protocol/1", hex::encode(genesis_hash));
-		let protocol_name = standard_protocol_name(genesis_hash, &fork_id, SHORT_NAME);
-		assert_eq!(protocol_name.to_string(), expected);
-
-		// Create protocol name using hardcoded genesis hash. Verify exact representation.
-		let genesis_hash = [
-			53, 79, 112, 97, 119, 217, 39, 202, 147, 138, 225, 38, 88, 182, 215, 185, 110, 88, 8,
-			53, 125, 210, 158, 151, 50, 113, 102, 59, 245, 199, 221, 240,
-		];
-		let fork_id = None;
-		let expected =
-			"/354f706177d927ca938ae12658b6d7b96e5808357dd29e973271663bf5c7ddf0/protocol/1";
-		let protocol_name = standard_protocol_name(genesis_hash, &fork_id, SHORT_NAME);
-		assert_eq!(protocol_name.to_string(), expected.to_string());
-
-		// Create protocol name using hardcoded genesis hash and fork_id.
-		// Verify exact representation.
-		let fork_id = Some("fork".to_string());
-		let expected =
-			"/354f706177d927ca938ae12658b6d7b96e5808357dd29e973271663bf5c7ddf0/fork/protocol/1";
-		let protocol_name = standard_protocol_name(genesis_hash, &fork_id, SHORT_NAME);
-		assert_eq!(protocol_name.to_string(), expected.to_string());
-	}
-
-	#[test]
-	fn legacy_protocol_name_test() {
-		const SHORT_NAME: &str = "/protocol/1";
-
-		let protocol_id = ProtocolId::from("dot");
-		let expected = "/dot/protocol/1";
-		let legacy_name = legacy_protocol_name(&protocol_id, SHORT_NAME);
-		assert_eq!(legacy_name.to_string(), expected.to_string());
 	}
 }

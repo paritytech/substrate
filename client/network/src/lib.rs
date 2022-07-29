@@ -258,6 +258,7 @@ pub mod bitswap;
 pub mod config;
 pub mod error;
 pub mod network_state;
+pub mod protocol_name;
 pub mod transactions;
 
 #[doc(inline)]

@@ -30,8 +30,9 @@ use crate::{
 	config::{self, TransactionImport, TransactionImportFuture, TransactionPool},
 	error,
 	protocol::message,
+	protocol_name::{legacy_protocol_name, standard_protocol_name},
 	service::NetworkService,
-	utils::{interval, legacy_protocol_name, standard_protocol_name, LruHashSet},
+	utils::{interval, LruHashSet},
 	Event, ExHashT, ObservedRole,
 };
 
