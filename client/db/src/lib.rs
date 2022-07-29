@@ -2071,13 +2071,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		let finalized = info.finalized_number;
 
-		let (mut number_to_revert, mut hash_to_revert) = match highest_leaf {
-			Some((n, h)) if n > best_number => (n, h),
-			_ => (best_number, best_hash),
-		};
-
-		let revertible = number_to_revert - finalized;
+		let revertible = best_number - finalized;
 		let n = if !revert_finalized && revertible < n { revertible } else { n };
+
+		let (n, mut number_to_revert, mut hash_to_revert) = match highest_leaf {
+			Some((l_n, l_h)) => (n + (l_n - best_number), l_n, l_h),
+			None => (n, best_number, best_hash),
+		};
 
 		let mut revert_blocks = || -> ClientResult<NumberFor<Block>> {
 			for c in 0..n.saturated_into::<u64>() {
@@ -3493,28 +3493,12 @@ pub(crate) mod tests {
 		let block1 =
 			insert_block(&backend, 1, genesis, None, Default::default(), vec![], None).unwrap();
 
-		let block2 = {
-			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Number(1)).unwrap();
-			let header = Header {
-				number: 2,
-				parent_hash: block1,
-				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
-				digest: Default::default(),
-				extrinsics_root: Default::default(),
-			};
-
-			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
-				.unwrap();
-
-			backend.commit_operation(op).unwrap();
-
-			header.hash()
-		};
+		let block2 =
+			insert_block(&backend, 2, block1, None, Default::default(), vec![], None).unwrap();
 
 		let block3 = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Number(1)).unwrap();
 			let header = Header {
 				number: 3,
 				parent_hash: block2,
@@ -3531,14 +3515,35 @@ pub(crate) mod tests {
 			header.hash()
 		};
 
+		let block4 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			let header = Header {
+				number: 4,
+				parent_hash: block3,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
 		assert!(backend.have_state_at(&block1, 1));
 		assert!(backend.have_state_at(&block2, 2));
 		assert!(backend.have_state_at(&block3, 3));
+		assert!(backend.have_state_at(&block4, 4));
 
-		assert_eq!(3, backend.revert(10, false).unwrap().0);
+		assert_eq!(3, backend.revert(1, false).unwrap().0);
 
-		assert!(!backend.have_state_at(&block1, 1));
+		assert!(backend.have_state_at(&block1, 1));
 		assert!(!backend.have_state_at(&block2, 2));
 		assert!(!backend.have_state_at(&block3, 3));
+		assert!(!backend.have_state_at(&block4, 4));
 	}
 }
