@@ -462,6 +462,17 @@ impl frame_support::traits::OriginTrait for Origin {
 		unimplemented!("Not required in tests!")
 	}
 
+	fn add_named_filter<
+		Pallet: frame_support::traits::PalletInfoAccess,
+		F: Fn(&Self::Call) -> bool + 'static,
+	>(
+		&mut self,
+		_name: &'static str,
+		_filter: F,
+	) {
+		unimplemented!("Not required in tests!")
+	}
+
 	fn reset_filter(&mut self) {
 		unimplemented!("Not required in tests!")
 	}

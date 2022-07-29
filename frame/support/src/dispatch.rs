@@ -2591,7 +2591,7 @@ mod tests {
 		metadata::*,
 		traits::{
 			CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize,
-			OnRuntimeUpgrade, PalletInfo,
+			OnRuntimeUpgrade, PalletInfo, PalletInfoAccess,
 		},
 		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
 	};
@@ -2713,6 +2713,14 @@ mod tests {
 		type AccountId = <TraitImpl as system::Config>::AccountId;
 
 		fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn add_named_filter<Pallet: PalletInfoAccess, F: Fn(&Self::Call) -> bool + 'static>(
+			&mut self,
+			_name: &'static str,
+			_filter: F,
+		) {
 			unimplemented!("Not required in tests!")
 		}
 
