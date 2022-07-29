@@ -237,7 +237,7 @@ impl sp_runtime::traits::Dispatchable for Extrinsic {
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-		panic!("This implemention should not be used for actual dispatch.");
+		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
 
