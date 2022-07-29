@@ -155,7 +155,7 @@ pub fn clear_prefix(
 
 /// Get a Vec of bytes from storage.
 pub fn get_raw(key: &[u8]) -> Option<Vec<u8>> {
-	sp_io::storage::get(key)
+	sp_io::storage::get(key).map(|value| value.to_vec())
 }
 
 /// Put a raw byte slice into storage.
