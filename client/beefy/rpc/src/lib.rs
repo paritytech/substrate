@@ -30,8 +30,8 @@ use futures::{task::SpawnError, FutureExt, StreamExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::{error::CallError, ErrorObject},
-	PendingSubscription,
+	types::{error::CallError, ErrorObject, SubscriptionEmptyError},
+	SubscriptionSink,
 };
 use log::warn;
 
@@ -135,19 +135,16 @@ impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash> f
 where
 	Block: BlockT,
 {
-	fn subscribe_justifications(&self, pending: PendingSubscription) {
+	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> Result<(), SubscriptionEmptyError> {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
 			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
 
-		let fut = async move {
-			if let Some(mut sink) = pending.accept() {
-				sink.pipe_from_stream(stream).await;
-			}
-		};
+		let fut = async move { sink.pipe_from_stream(stream).await; };
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		Ok(())
 	}
 
 	async fn latest_finalized(&self) -> RpcResult<Block::Hash> {
