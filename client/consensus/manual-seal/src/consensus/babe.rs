@@ -132,7 +132,7 @@ where
 	}
 }
 
-impl<B, C, PROOF> BabeConsensusDataProvider<B, C, PROOF>
+impl<B, C, P> BabeConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
