@@ -198,9 +198,9 @@ mod tests {
 		let (rpc, _) = setup_io_handler();
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
-		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
+		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
 
-		assert_eq!(expected_response, result,);
+		assert_eq!(expected_response, response.result,);
 	}
 
 	#[tokio::test]
@@ -230,8 +230,8 @@ mod tests {
 		let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
 		while std::time::Instant::now() < deadline {
 			let (response, _) = io.raw_json_request(request).await.expect("RPC requests work");
-			if response != not_ready {
-				assert_eq!(response, expected);
+			if response.result != not_ready {
+				assert_eq!(response.result, expected);
 				// Success
 				return
 			}
@@ -261,7 +261,7 @@ mod tests {
 			.unwrap();
 		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
 
-		assert_eq!(response, expected);
+		assert_eq!(response.result, expected);
 	}
 
 	fn create_commitment() -> BeefySignedCommitment<Block> {
