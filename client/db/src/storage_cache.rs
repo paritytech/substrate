@@ -611,8 +611,51 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		Ok(value)
 	}
 
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		let key = (child_info.storage_key().to_vec(), at.to_le_bytes().to_vec());
+		let local_cache = self.cache.local_cache.upgradable_read();
+		if let Some(entry) = local_cache.child_storage.get(&key).cloned() {
+			trace!("Found in local cache: {:?}", key);
+			return Ok(self.usage.tally_child_key_read(&key, entry, true))
+		}
+		{
+			let cache = self.cache.shared_cache.upgradable_read();
+			if Self::is_allowed(None, Some(&key), &self.cache.parent_hash, &cache.modifications) {
+				let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+				if let Some(entry) = cache.lru_child_storage.get(&key).map(|a| a.clone()) {
+					trace!("Found in shared cache: {:?}", key);
+					return Ok(self.usage.tally_child_key_read(&key, entry, true))
+				}
+			}
+		}
+		trace!("Cache miss: {:?}", key);
+		let value = self.state.child_storage_at(child_info, at)?;
+
+		// just pass it through the usage counter
+		let value = self.usage.tally_child_key_read(&key, value, false);
+
+		RwLockUpgradableReadGuard::upgrade(local_cache)
+			.child_storage
+			.insert(key, value.clone());
+		Ok(value)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		// Note that when using storage cache we access value,
+		// this is not an issue as storage cache is not compatible
+		// with proof production.
 		Ok(self.storage(key)?.is_some())
+	}
+
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error> {
+		// Note that when using storage cache we access value,
+		// this is not an issue as storage cache is not compatible
+		// with proof production.
+		Ok(self.storage(key)?.map(|value| value.len() as u32))
 	}
 
 	fn exists_child_storage(
@@ -620,7 +663,21 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		self.state.exists_child_storage(child_info, key)
+		// Note that when using storage cache we access value,
+		// this is not an issue as storage cache is not compatible
+		// with proof production.
+		Ok(self.child_storage(child_info, key)?.is_some())
+	}
+
+	fn child_value_size(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<u32>, Self::Error> {
+		// Note that when using storage cache we access value,
+		// this is not an issue as storage cache is not compatible
+		// with proof production.
+		Ok(self.child_storage(child_info, key)?.map(|value| value.len() as u32))
 	}
 
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
@@ -690,11 +747,16 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (Vec<u8>, bool, Self::Transaction) {
 		self.state.child_storage_root(child_info, delta, state_version)
+	}
+
+	fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction) {
+		self.state.child_mmr_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -807,8 +869,20 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		self.caching_state().child_storage(child_info, key)
 	}
 
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.caching_state().child_storage_at(child_info, at)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		self.caching_state().exists_storage(key)
+	}
+
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error> {
+		self.caching_state().value_size(key)
 	}
 
 	fn exists_child_storage(
@@ -817,6 +891,14 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.caching_state().exists_child_storage(child_info, key)
+	}
+
+	fn child_value_size(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<u32>, Self::Error> {
+		self.caching_state().child_value_size(child_info, key)
 	}
 
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
@@ -891,11 +973,16 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (Vec<u8>, bool, Self::Transaction) {
 		self.caching_state().child_storage_root(child_info, delta, state_version)
+	}
+
+	fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction) {
+		self.caching_state().child_mmr_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

@@ -278,7 +278,7 @@ impl<T: Config> ProvingTrie<T> {
 
 	/// Prove the full verification data for a given key and key ID.
 	pub fn prove(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<Vec<Vec<u8>>> {
-		let trie = TrieDB::new(&self.db, &self.root).ok()?;
+		let trie = TrieDB::new(&self.db, &self.root);
 		let mut recorder = Recorder::new();
 		let val_idx = (key_id, key_data).using_encoded(|s| {
 			trie.get_with(s, &mut recorder)
@@ -303,7 +303,7 @@ impl<T: Config> ProvingTrie<T> {
 	// Check a proof contained within the current memory-db. Returns `None` if the
 	// nodes within the current `MemoryDB` are insufficient to query the item.
 	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<IdentificationTuple<T>> {
-		let trie = TrieDB::new(&self.db, &self.root).ok()?;
+		let trie = TrieDB::new(&self.db, &self.root);
 		let val_idx = (key_id, key_data)
 			.using_encoded(|s| trie.get(s))
 			.ok()?

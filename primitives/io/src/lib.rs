@@ -159,6 +159,11 @@ pub trait Storage {
 		self.exists_storage(key)
 	}
 
+	/// Check whether the given `key` exists in storage.
+	fn size(&self, key: &[u8]) -> Option<u32> {
+		self.value_size(key)
+	}
+
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		let _ = Externalities::clear_prefix(*self, prefix, None, None);
@@ -427,6 +432,12 @@ pub trait DefaultChildStorage {
 		self.exists_child_storage(&child_info, key)
 	}
 
+	/// Check whether the given `key` exists in child storage.
+	fn size(&self, storage_key: &[u8], key: &[u8]) -> Option<u32> {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.child_value_size(&child_info, key)
+	}
+
 	/// Clear child default key by prefix.
 	///
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
@@ -498,6 +509,192 @@ pub trait DefaultChildStorage {
 	/// Get the next key in storage after the given one in lexicographic order in child storage.
 	fn next_key(&mut self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		let child_info = ChildInfo::new_default(storage_key);
+		self.next_child_storage_key(&child_info, key)
+	}
+}
+
+/// Interface for accessing the child storage for child trie with size stored in parent node,
+/// from within the runtime.
+#[runtime_interface]
+pub trait ParentSizedChildStorage {
+	/// Get a parent sized child storage value for a given key.
+	///
+	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the
+	/// parent trie. Result is `None` if the value for `key` in the child storage can not be found.
+	fn get(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.child_storage(&child_info, key).map(|s| s.to_vec())
+	}
+
+	/// Allocation efficient variant of `get`.
+	///
+	/// Get `key` from child storage, placing the value into `value_out` and return the number
+	/// of bytes that the entry in storage has beyond the offset or `None` if the storage entry
+	/// doesn't exist at all.
+	/// If `value_out` length is smaller than the returned length, only `value_out` length bytes
+	/// are copied into `value_out`.
+	fn read(
+		&self,
+		storage_key: &[u8],
+		key: &[u8],
+		value_out: &mut [u8],
+		value_offset: u32,
+	) -> Option<u32> {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.child_storage(&child_info, key).map(|value| {
+			let value_offset = value_offset as usize;
+			let data = &value[value_offset.min(value.len())..];
+			let written = std::cmp::min(data.len(), value_out.len());
+			value_out[..written].copy_from_slice(&data[..written]);
+			data.len() as u32
+		})
+	}
+
+	/// Set a child storage value.
+	///
+	/// Set `key` to `value` in the child storage denoted by `storage_key`.
+	fn set(&mut self, storage_key: &[u8], key: &[u8], value: &[u8]) {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.set_child_storage(&child_info, key.to_vec(), value.to_vec());
+	}
+
+	/// Clear a child storage key.
+	///
+	/// For the default child storage at `storage_key`, clear value at `key`.
+	fn clear(&mut self, storage_key: &[u8], key: &[u8]) {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.clear_child_storage(&child_info, key);
+	}
+
+	/// Clear a child storage key.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	fn storage_kill(&mut self, storage_key: &[u8], _limit: Option<u32>) {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		let _ = self.kill_child_storage(&child_info, None, None);
+	}
+
+	/// Clear a child storage key.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(2)]
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		let r = self.kill_child_storage(&child_info, limit, None);
+		r.maybe_cursor.is_none()
+	}
+
+	/// Clear a child storage key.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(3)]
+	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.kill_child_storage(&child_info, limit, None).into()
+	}
+
+	/// Clear a child storage key.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(4, register_only)]
+	fn storage_kill(
+		&mut self,
+		storage_key: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<Vec<u8>>,
+	) -> MultiRemovalResults {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.kill_child_storage(&child_info, maybe_limit, maybe_cursor.as_ref().map(|x| &x[..]))
+			.into()
+	}
+
+	/// Check a child storage key.
+	///
+	/// Check whether the given `key` exists in parent sized child defined at `storage_key`.
+	fn exists(&self, storage_key: &[u8], key: &[u8]) -> bool {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.exists_child_storage(&child_info, key)
+	}
+
+	/// Check a child storage key.
+	///
+	/// Check size of value for the given `key` in parent sized child defined at `storage_key`.
+	fn size(&self, storage_key: &[u8], key: &[u8]) -> Option<u32> {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.child_value_size(&child_info, key)
+	}
+
+	/// Clear child default key by prefix.
+	///
+	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	fn clear_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		let _ = self.clear_child_prefix(&child_info, prefix, None, None);
+	}
+
+	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(2)]
+	fn clear_prefix(
+		&mut self,
+		storage_key: &[u8],
+		prefix: &[u8],
+		limit: Option<u32>,
+	) -> KillStorageResult {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.clear_child_prefix(&child_info, prefix, limit, None).into()
+	}
+
+	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(3, register_only)]
+	fn clear_prefix(
+		&mut self,
+		storage_key: &[u8],
+		prefix: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<Vec<u8>>,
+	) -> MultiRemovalResults {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.clear_child_prefix(
+			&child_info,
+			prefix,
+			maybe_limit,
+			maybe_cursor.as_ref().map(|x| &x[..]),
+		)
+		.into()
+	}
+
+	/// Default child root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.child_storage_root(&child_info, StateVersion::V0)
+	}
+
+	/// Default child root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	#[version(2)]
+	fn root(&mut self, storage_key: &[u8], version: StateVersion) -> Vec<u8> {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
+		self.child_storage_root(&child_info, version)
+	}
+
+	/// Child storage key iteration.
+	///
+	/// Get the next key in storage after the given one in lexicographic order in child storage.
+	fn next_key(&mut self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		let child_info = ChildInfo::new_parent_sized(storage_key);
 		self.next_child_storage_key(&child_info, key)
 	}
 }
@@ -633,6 +830,39 @@ pub trait Trie {
 			>(&root, proof, &[(key, Some(value))])
 			.is_ok(),
 		}
+	}
+}
+
+/// Interface for accessing the child storage for mmr
+/// from within the runtime.
+#[runtime_interface]
+pub trait MmrChildStorage {
+	/// Get a default child storage value for a given index.
+	///
+	/// Parameter `storage_key` is the unprefixed location of the root of the child trie in the
+	/// parent trie. Result is `None` if the value for `key` in the child storage can not be found.
+	fn get(&self, storage_key: &[u8], at: u64) -> Option<Vec<u8>> {
+		let child_info = ChildInfo::new_mmr(storage_key);
+		self.child_storage_at(&child_info, at).map(|s| s.to_vec())
+	}
+
+	/// Push (append) a child storage value.
+	///
+	/// Set `key` to `value` in the child storage denoted by `storage_key`.
+	fn push(&mut self, storage_key: &[u8], value: &[u8]) {
+		let child_info = ChildInfo::new_mmr(storage_key);
+		self.push_storage(&child_info, value.to_vec());
+	}
+
+	/// Default child mrr root calculation.
+	///
+	/// "Commit" all existing operations and compute the resulting child storage root.
+	/// The hashing algorithm is defined by the `Block`.
+	///
+	/// Returns a `Vec<u8>` that holds the SCALE encoded hash.
+	fn root(&mut self, storage_key: &[u8]) -> Vec<u8> {
+		let child_info = ChildInfo::new_mmr(storage_key);
+		self.child_storage_root(&child_info, StateVersion::V1)
 	}
 }
 
@@ -1756,6 +1986,8 @@ pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2
 pub type SubstrateHostFunctions = (
 	storage::HostFunctions,
 	default_child_storage::HostFunctions,
+	parent_sized_child_storage::HostFunctions,
+	mmr_child_storage::HostFunctions,
 	misc::HostFunctions,
 	wasm_tracing::HostFunctions,
 	offchain::HostFunctions,
@@ -1795,6 +2027,8 @@ mod tests {
 		t = BasicExternalities::new(Storage {
 			top: map![b"foo".to_vec() => b"bar".to_vec()],
 			children_default: map![],
+			children_sized: map![],
+			children_mmr: map![],
 		});
 
 		t.execute_with(|| {
@@ -1803,8 +2037,12 @@ mod tests {
 		});
 
 		let value = vec![7u8; 35];
-		let storage =
-			Storage { top: map![b"foo00".to_vec() => value.clone()], children_default: map![] };
+		let storage = Storage {
+			top: map![b"foo00".to_vec() => value.clone()],
+			children_default: map![],
+			children_sized: map![],
+			children_mmr: map![],
+		};
 		t = BasicExternalities::new(storage);
 
 		t.execute_with(|| {
@@ -1819,6 +2057,8 @@ mod tests {
 		let mut t = BasicExternalities::new(Storage {
 			top: map![b":test".to_vec() => value.clone()],
 			children_default: map![],
+			children_sized: map![],
+			children_mmr: map![],
 		});
 
 		t.execute_with(|| {
@@ -1841,6 +2081,8 @@ mod tests {
 				b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 			],
 			children_default: map![],
+			children_sized: map![],
+			children_mmr: map![],
 		});
 
 		t.execute_with(|| {

@@ -26,10 +26,11 @@ use parking_lot::RwLock;
 use sp_core::storage::{ChildInfo, ChildType, StateVersion};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
-	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
-	read_trie_value,
-	trie_types::{TrieDB, TrieError},
-	DBValue, KeySpacedDB, LayoutV1 as Layout, Trie, TrieDBIterator, TrieDBKeyIterator,
+	child_delta_trie_root, contains_child_trie, contains_trie, delta_trie_root,
+	read_child_trie_value, read_trie_value,
+	trie_types::{TrieDB, TrieDBParentSized, TrieError},
+	value_size_child_trie, value_size_trie, DBValue, KeySpacedDB, LayoutParentSized,
+	LayoutV1 as Layout, Trie, TrieDBIterator, TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;
@@ -153,6 +154,22 @@ where
 		Ok(result)
 	}
 
+	fn child_root_indexed(&self, child_info: &ChildInfo) -> Result<Option<(u64, H::Out)>> {
+		let result = self.storage(child_info.prefixed_storage_key().as_slice())?.map(|r| {
+			// TODO should be using Decode
+			let mut hash = H::Out::default();
+
+			// root is fetched from DB, not writable by runtime, so it's always valid.
+			hash.as_mut().copy_from_slice(&r[8..]);
+			let mut elt = [0u8; 8];
+			elt.copy_from_slice(&r[..8]);
+
+			(u64::from_le_bytes(elt), hash)
+		});
+
+		Ok(result)
+	}
+
 	/// Return the next key in the child trie i.e. the minimum key that is strictly superior to
 	/// `key` in lexicographic order.
 	pub fn next_child_storage_key(
@@ -184,8 +201,24 @@ where
 			dyn_eph = self;
 		}
 
-		let trie =
-			TrieDB::<H>::new(dyn_eph, root).map_err(|e| format!("TrieDB creation error: {}", e))?;
+		match child_info.as_ref().map(|info| info.child_type()) {
+			Some(ChildType::ParentKeyId) | None => {
+				let trie = TrieDB::<H>::new(dyn_eph, root);
+				self.next_storage_key_from_root_inner::<Layout<H>>(trie, key)
+			},
+			Some(ChildType::ParentSized) => {
+				let trie = TrieDBParentSized::<H>::new(dyn_eph, root);
+				self.next_storage_key_from_root_inner::<LayoutParentSized<H>>(trie, key)
+			},
+			Some(ChildType::Mmr) => return Err(format!("Invalid mmr for next_key",).into()),
+		}
+	}
+
+	fn next_storage_key_from_root_inner<L: sp_trie::TrieLayout>(
+		&self,
+		trie: sp_trie::TrieDB<L>,
+		key: &[u8],
+	) -> Result<Option<StorageKey>> {
 		let mut iter = trie.key_iter().map_err(|e| format!("TrieDB iteration error: {}", e))?;
 
 		// The key just after the one given in input, basically `key++0`.
@@ -219,6 +252,22 @@ where
 		read_trie_value::<Layout<H>, _>(self, &self.root, key).map_err(map_e)
 	}
 
+	/// Does storage contains a value. Depending on storage, this
+	/// may not access  the value.
+	pub fn exists_storage(&self, key: &[u8]) -> Result<bool> {
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		contains_trie::<Layout<H>, _>(self, &self.root, key).map_err(map_e)
+	}
+
+	/// Size of storage value if it exists. Depending on storage, this
+	/// may not access  the value.
+	pub fn value_size(&self, key: &[u8]) -> Result<Option<u32>> {
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		value_size_trie::<Layout<H>, _>(self, &self.root, key).map_err(map_e)
+	}
+
 	/// Get the value of child storage at given key.
 	pub fn child_storage(
 		&self,
@@ -232,8 +281,87 @@ where
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		read_child_trie_value::<Layout<H>, _>(child_info.keyspace(), self, &root, key)
-			.map_err(map_e)
+		match child_info.child_type() {
+			ChildType::ParentKeyId =>
+				read_child_trie_value::<Layout<H>, _>(child_info.keyspace(), self, &root, key)
+					.map_err(map_e),
+			ChildType::ParentSized => read_child_trie_value::<LayoutParentSized<H>, _>(
+				child_info.keyspace(),
+				self,
+				&root,
+				key,
+			)
+			.map_err(map_e),
+			ChildType::Mmr => return Err(format!("Not key indexed child state",).into()),
+		}
+	}
+
+	pub fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<StorageValue>> {
+		let (nb_element, root) = match self.child_root_indexed(child_info)? {
+			Some(root) => root,
+			None => return Ok(None),
+		};
+
+		match child_info.child_type() {
+			ChildType::ParentKeyId => Err(format!("Not mmr child state",).into()),
+			ChildType::ParentSized => Err(format!("Not mmr child state",).into()),
+			ChildType::Mmr =>
+				Ok(sp_trie::mmr::read_child_trie_value::<H, _>(self, &root, nb_element, at)),
+		}
+	}
+
+	/// Does storage contains a value. Depending on storage, this
+	/// may not access  the value.
+	pub fn exists_child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Result<bool> {
+		let root = match self.child_root(child_info)? {
+			Some(root) => root,
+			None => return Ok(false),
+		};
+
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		match child_info.child_type() {
+			ChildType::ParentKeyId =>
+				contains_child_trie::<Layout<H>, _>(child_info.keyspace(), self, &root, key)
+					.map_err(map_e),
+			ChildType::ParentSized => contains_child_trie::<LayoutParentSized<H>, _>(
+				child_info.keyspace(),
+				self,
+				&root,
+				key,
+			)
+			.map_err(map_e),
+			ChildType::Mmr => Err(format!("Not for mmr",).into()),
+		}
+	}
+
+	/// Size of storage value if it exists. Depending on storage, this
+	/// may not access  the value.
+	pub fn child_value_size(&self, child_info: &ChildInfo, key: &[u8]) -> Result<Option<u32>> {
+		let root = match self.child_root(child_info)? {
+			Some(root) => root,
+			None => return Ok(None),
+		};
+
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		match child_info.child_type() {
+			ChildType::ParentKeyId =>
+				value_size_child_trie::<Layout<H>, _>(child_info.keyspace(), self, &root, key)
+					.map_err(map_e),
+			ChildType::ParentSized => value_size_child_trie::<LayoutParentSized<H>, _>(
+				child_info.keyspace(),
+				self,
+				&root,
+				key,
+			)
+			.map_err(map_e),
+			ChildType::Mmr => Err(format!("Not for mmr",).into()),
+		}
 	}
 
 	/// Retrieve all entries keys of storage and call `f` for each of those keys.
@@ -333,12 +461,42 @@ where
 		&self,
 		root: &H::Out,
 		maybe_prefix: Option<&[u8]>,
-		mut f: F,
+		f: F,
 		child_info: Option<&ChildInfo>,
 		maybe_start_at: Option<&[u8]>,
 	) {
+		match child_info.as_ref().map(|info| info.child_type()) {
+			Some(ChildType::ParentKeyId) | None => self.trie_iter_key_inner2::<_, Layout<H>>(
+				root,
+				maybe_prefix,
+				f,
+				child_info,
+				maybe_start_at,
+			),
+			Some(ChildType::ParentSized) => self.trie_iter_key_inner2::<_, LayoutParentSized<H>>(
+				root,
+				maybe_prefix,
+				f,
+				child_info,
+				maybe_start_at,
+			),
+			Some(ChildType::Mmr) => (),
+		}
+	}
+
+	fn trie_iter_key_inner2<F, L>(
+		&self,
+		root: &H::Out,
+		maybe_prefix: Option<&[u8]>,
+		mut f: F,
+		child_info: Option<&ChildInfo>,
+		maybe_start_at: Option<&[u8]>,
+	) where
+		F: FnMut(&[u8]) -> bool,
+		L: sp_trie::TrieLayout<Hash = H>,
+	{
 		let mut iter = move |db| -> sp_std::result::Result<(), Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(db, root)?;
+			let trie = TrieDB::<H>::new(db, root);
 			let prefix = maybe_prefix.unwrap_or(&[]);
 			let iter = match maybe_start_at {
 				Some(start_at) =>
@@ -377,13 +535,47 @@ where
 		&self,
 		root: &H::Out,
 		prefix: Option<&[u8]>,
-		mut f: F,
+		f: F,
 		child_info: Option<&ChildInfo>,
 		start_at: Option<&[u8]>,
 		allow_missing_nodes: bool,
 	) -> Result<bool> {
-		let mut iter = move |db| -> sp_std::result::Result<bool, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(db, root)?;
+		match child_info.as_ref().map(|info| info.child_type()) {
+			Some(ChildType::ParentKeyId) | None => self.trie_iter_inner2::<F, Layout<H>>(
+				root,
+				prefix,
+				f,
+				child_info,
+				start_at,
+				allow_missing_nodes,
+			),
+			Some(ChildType::ParentSized) => self.trie_iter_inner2::<F, LayoutParentSized<H>>(
+				root,
+				prefix,
+				f,
+				child_info,
+				start_at,
+				allow_missing_nodes,
+			),
+			Some(ChildType::Mmr) => Err(format!("Not for mmr",).into()),
+		}
+	}
+
+	fn trie_iter_inner2<F, L>(
+		&self,
+		root: &H::Out,
+		prefix: Option<&[u8]>,
+		mut f: F,
+		child_info: Option<&ChildInfo>,
+		start_at: Option<&[u8]>,
+		allow_missing_nodes: bool,
+	) -> Result<bool>
+	where
+		F: FnMut(Vec<u8>, Vec<u8>) -> bool,
+		L: sp_trie::TrieLayout<Hash = H>,
+	{
+		let mut iter = move |db| -> sp_std::result::Result<bool, Box<sp_trie::TrieError<L>>> {
+			let trie = sp_trie::TrieDB::<L>::new(db, root);
 
 			let prefix = prefix.unwrap_or(&[]);
 			let iterator = if let Some(start_at) = start_at {
@@ -412,7 +604,9 @@ where
 		};
 		match result {
 			Ok(completed) => Ok(completed),
-			Err(e) if matches!(*e, TrieError::IncompleteDatabase(_)) && allow_missing_nodes =>
+			Err(e)
+				if matches!(*e, sp_trie::TrieError::<L>::IncompleteDatabase(_)) &&
+					allow_missing_nodes =>
 				Ok(false),
 			Err(e) => Err(format!("TrieDB iteration error: {}", e)),
 		}
@@ -436,7 +630,7 @@ where
 	/// Returns all `(key, value)` pairs in the trie.
 	pub fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
 		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
-			let trie = TrieDB::<H>::new(self, &self.root)?;
+			let trie = TrieDB::<H>::new(self, &self.root);
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, value) = x?;
@@ -503,9 +697,8 @@ where
 	where
 		H::Out: Ord,
 	{
-		let default_root = match child_info.child_type() {
-			ChildType::ParentKeyId => empty_child_trie_root::<sp_trie::LayoutV1<H>>(),
-		};
+		let default_root =
+			crate::trie_backend::empty_child_trie_root::<H>(child_info, state_version);
 		let mut write_overlay = S::Overlay::default();
 		let mut root = match self.child_root(child_info) {
 			Ok(Some(hash)) => hash,
@@ -518,16 +711,24 @@ where
 
 		{
 			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
-			match match state_version {
-				StateVersion::V0 =>
+			match match (state_version, child_info.child_type()) {
+				(_, ChildType::Mmr) => unimplemented!("should return error"),
+				(StateVersion::V0, ChildType::ParentKeyId) =>
 					child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
 						child_info.keyspace(),
 						&mut eph,
 						root,
 						delta,
 					),
-				StateVersion::V1 =>
+				(StateVersion::V1, ChildType::ParentKeyId) =>
 					child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
+						child_info.keyspace(),
+						&mut eph,
+						root,
+						delta,
+					),
+				(_, ChildType::ParentSized) =>
+					child_delta_trie_root::<sp_trie::LayoutParentSized<H>, _, _, _, _, _, _>(
 						child_info.keyspace(),
 						&mut eph,
 						root,
@@ -542,6 +743,46 @@ where
 		let is_default = root == default_root;
 
 		(root, is_default, write_overlay)
+	}
+
+	pub fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (u64, H::Out, bool, S::Overlay)
+	where
+		H::Out: Ord,
+	{
+		match child_info.child_type() {
+			ChildType::Mmr => (),
+			_ => unimplemented!("should return error"),
+		}
+
+		let default_root = sp_trie::mmr::empty_root::<H>();
+		let mut write_overlay = S::Overlay::default();
+		let (mut nb_elt, mut root) = match self.child_root_indexed(child_info) {
+			Ok(Some(root)) => root,
+			Ok(None) => (0, default_root),
+			Err(e) => {
+				warn!(target: "trie", "Failed to read child storage root: {}", e);
+				(0, default_root)
+			},
+		};
+
+		{
+			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
+			match sp_trie::mmr::child_delta_trie_root::<H, _, _, _>(&mut eph, root, nb_elt, delta) {
+				Ok((new_nb, new_root)) => {
+					root = new_root;
+					nb_elt = new_nb;
+				},
+				Err(e) => warn!(target: "trie", "Failed to write to mmr: {}", e),
+			}
+		}
+
+		let is_default = root == default_root;
+
+		(nb_elt, root, is_default, write_overlay)
 	}
 }
 

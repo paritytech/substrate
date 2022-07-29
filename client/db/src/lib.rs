@@ -174,8 +174,20 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.child_storage(child_info, key)
 	}
 
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.state.child_storage_at(child_info, at)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		self.state.exists_storage(key)
+	}
+
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error> {
+		self.state.value_size(key)
 	}
 
 	fn exists_child_storage(
@@ -184,6 +196,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
 		self.state.exists_child_storage(child_info, key)
+	}
+
+	fn child_value_size(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<u32>, Self::Error> {
+		self.state.child_value_size(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -253,11 +273,16 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (Vec<u8>, bool, Self::Transaction) {
 		self.state.child_storage_root(child_info, delta, state_version)
+	}
+
+	fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction) {
+		self.state.child_mmr_root(child_info, delta)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -779,16 +804,23 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			return Err(sp_blockchain::Error::InvalidState)
 		}
 
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
-			(
-				&child_content.child_info,
-				child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
-			)
+		let child_delta = storage.children_default.iter().chain(storage.children_sized.iter()).map(
+			|(_storage_key, child_content)| {
+				(
+					&child_content.child_info,
+					child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
+				)
+			},
+		);
+
+		let child_delta_mmr = storage.children_mmr.iter().map(|(_storage_key, child_content)| {
+			(&child_content.child_info, child_content.data.iter().map(|v| &v[..]))
 		});
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| (&k[..], Some(&v[..]))),
 			child_delta,
+			child_delta_mmr,
 			state_version,
 		);
 
@@ -2483,6 +2515,8 @@ pub(crate) mod tests {
 				Storage {
 					top: storage.into_iter().collect(),
 					children_default: Default::default(),
+					children_sized: Default::default(),
+					children_mmr: Default::default(),
 				},
 				state_version,
 			)
@@ -2560,7 +2594,12 @@ pub(crate) mod tests {
 			let hash = header.hash();
 
 			op.reset_storage(
-				Storage { top: Default::default(), children_default: Default::default() },
+				Storage {
+					top: Default::default(),
+					children_default: Default::default(),
+					children_sized: Default::default(),
+					children_mmr: Default::default(),
+				},
 				state_version,
 			)
 			.unwrap();
@@ -3031,6 +3070,8 @@ pub(crate) mod tests {
 				Storage {
 					top: storage.into_iter().collect(),
 					children_default: Default::default(),
+					children_sized: Default::default(),
+					children_mmr: Default::default(),
 				},
 				state_version,
 			)

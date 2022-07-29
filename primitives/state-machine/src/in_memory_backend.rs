@@ -72,11 +72,13 @@ where
 		state_version: StateVersion,
 	) {
 		let (top, child) = changes.into_iter().partition::<Vec<_>, _>(|v| v.0.is_none());
+		let mmrs: sp_std::iter::Empty<(_, sp_std::iter::Empty<_>)> = sp_std::iter::empty(); // TODO could push some mmr also.
 		let (root, transaction) = self.full_storage_root(
 			top.iter().flat_map(|(_, v)| v).map(|(k, v)| (&k[..], v.as_deref())),
 			child.iter().filter_map(|v| {
 				v.0.as_ref().map(|c| (c, v.1.iter().map(|(k, v)| (&k[..], v.as_deref()))))
 			}),
+			mmrs,
 			state_version,
 		);
 
@@ -157,6 +159,7 @@ where
 		let mut inner: HashMap<Option<ChildInfo>, BTreeMap<StorageKey, StorageValue>> = inners
 			.children_default
 			.into_iter()
+			.chain(inners.children_sized.into_iter())
 			.map(|(_k, c)| (Some(c.child_info), c.data))
 			.collect();
 		inner.insert(None, inners.top);

@@ -499,7 +499,10 @@ where
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
 						ChildInfo::new_default(storage_key),
-					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+					Some((ChildType::ParentSized, storage_key)) =>
+						ChildInfo::new_parent_sized(storage_key),
+					Some((ChildType::Mmr, _)) | None =>
+						return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client
 					.read_child_proof(
@@ -524,7 +527,10 @@ where
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
 						ChildInfo::new_default(storage_key),
-					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+					Some((ChildType::ParentSized, storage_key)) =>
+						ChildInfo::new_parent_sized(storage_key),
+					Some((ChildType::Mmr, _)) | None =>
+						return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage_keys(&BlockId::Hash(block), &child_info, &prefix)
 			})
@@ -544,7 +550,10 @@ where
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
 						ChildInfo::new_default(storage_key),
-					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+					Some((ChildType::ParentSized, storage_key)) =>
+						ChildInfo::new_parent_sized(storage_key),
+					Some((ChildType::Mmr, _)) | None =>
+						return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage_keys_iter(
 					&BlockId::Hash(block),
@@ -568,7 +577,10 @@ where
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
 						ChildInfo::new_default(storage_key),
-					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+					Some((ChildType::ParentSized, storage_key)) =>
+						ChildInfo::new_parent_sized(storage_key),
+					Some((ChildType::Mmr, _)) | None =>
+						return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage(&BlockId::Hash(block), &child_info, &key)
 			})
@@ -581,12 +593,13 @@ where
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
 	) -> std::result::Result<Vec<Option<StorageData>>, Error> {
-		let child_info = if let Some((ChildType::ParentKeyId, storage_key)) =
-			ChildType::from_prefixed_key(&storage_key)
-		{
-			Arc::new(ChildInfo::new_default(storage_key))
-		} else {
-			return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey))
+		let child_info = match ChildType::from_prefixed_key(&storage_key) {
+			Some((ChildType::ParentKeyId, storage_key)) =>
+				Arc::new(ChildInfo::new_default(storage_key)),
+			Some((ChildType::ParentSized, storage_key)) =>
+				Arc::new(ChildInfo::new_parent_sized(storage_key)),
+			Some((ChildType::Mmr, _)) | None =>
+				return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey)),
 		};
 		let block = self.block_or_best(block).map_err(client_err)?;
 		let client = self.client.clone();
@@ -612,7 +625,10 @@ where
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
 						ChildInfo::new_default(storage_key),
-					None => return Err(sp_blockchain::Error::InvalidChildStorageKey),
+					Some((ChildType::ParentSized, storage_key)) =>
+						ChildInfo::new_parent_sized(storage_key),
+					Some((ChildType::Mmr, _)) | None =>
+						return Err(sp_blockchain::Error::InvalidChildStorageKey),
 				};
 				self.client.child_storage_hash(&BlockId::Hash(block), &child_info, &key)
 			})

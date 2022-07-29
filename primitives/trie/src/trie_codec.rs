@@ -21,7 +21,8 @@
 //! it to substrate specific layout and child trie system.
 
 use crate::{CompactProof, HashDBT, StorageProof, TrieConfiguration, TrieHash, EMPTY_PREFIX};
-use sp_std::{boxed::Box, vec::Vec};
+use sp_core::storage::{well_known_keys, ChildType, PrefixedStorageKey};
+use sp_std::{boxed::Box, vec, vec::Vec};
 use trie_db::{CError, Trie};
 
 /// Error for trie node decoding.
@@ -40,6 +41,10 @@ pub enum Error<H, CodecError> {
 	InvalidChildRoot(Vec<u8>, Vec<u8>),
 	#[cfg_attr(feature = "std", error("Trie error: {0:?}"))]
 	TrieError(Box<trie_db::TrieError<H, CodecError>>),
+	#[cfg_attr(feature = "std", error("Parent sized trie error: {0:?}"))]
+	ParentSizedChildTrieError(Box<trie_db::TrieError<H, crate::error::Error>>),
+	#[cfg_attr(feature = "std", error("Mmr child state error: {0:?}"))]
+	MmrChildError(&'static str),
 }
 
 impl<H, CodecError> From<Box<trie_db::TrieError<H, CodecError>>> for Error<H, CodecError> {
@@ -76,26 +81,45 @@ where
 	}
 
 	let mut child_tries = Vec::new();
+	let mut mmrs = Vec::new();
 	{
 		// fetch child trie roots
-		let trie = crate::TrieDB::<L>::new(db, &top_root)?;
+		let trie = crate::TrieDB::<L>::new(db, &top_root);
 
 		let mut iter = trie.iter()?;
 
-		let childtrie_roots = sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
+		let childtrie_roots = well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 		if iter.seek(childtrie_roots).is_ok() {
 			loop {
 				match iter.next() {
-					Some(Ok((key, value))) if key.starts_with(childtrie_roots) => {
-						// we expect all default child trie root to be correctly encoded.
-						// see other child trie functions.
-						let mut root = TrieHash::<L>::default();
-						// still in a proof so prevent panic
-						if root.as_mut().len() != value.as_slice().len() {
-							return Err(Error::InvalidChildRoot(key, value))
+					Some(Ok((key, value))) => {
+						let prefixed_key = PrefixedStorageKey::new_ref(&key);
+						match ChildType::from_prefixed_key(prefixed_key) {
+							Some((ChildType::Mmr, _unprefixed)) => {
+								let mut root = TrieHash::<L>::default();
+								// still in a proof so prevent panic
+								if root.as_mut().len() + 8 != value.as_slice().len() {
+									return Err(Error::InvalidChildRoot(key, value))
+								}
+								root.as_mut().copy_from_slice(&value[8..]);
+								let mut nb_encoded = [0u8; 8];
+								nb_encoded.copy_from_slice(&value[..8]);
+								let nb_elt = u64::from_le_bytes(nb_encoded);
+								mmrs.push((root, nb_elt));
+							},
+							Some((child_type, _unprefixed)) => {
+								// we expect all default child trie root to be correctly encoded.
+								// see other child trie functions.
+								let mut root = TrieHash::<L>::default();
+								// still in a proof so prevent panic
+								if root.as_mut().len() != value.as_slice().len() {
+									return Err(Error::InvalidChildRoot(key, value))
+								}
+								root.as_mut().copy_from_slice(value.as_ref());
+								child_tries.push((root, child_type));
+							},
+							None => break,
 						}
-						root.as_mut().copy_from_slice(value.as_ref());
-						child_tries.push(root);
 					},
 					// allow incomplete database error: we only
 					// require access to data in the proof.
@@ -103,7 +127,7 @@ where
 						trie_db::TrieError::IncompleteDatabase(..) => (),
 						e => return Err(Box::new(e).into()),
 					},
-					_ => break,
+					None => break,
 				}
 			}
 		}
@@ -115,16 +139,65 @@ where
 
 	let mut previous_extracted_child_trie = None;
 	let mut nodes_iter = nodes_iter.peekable();
-	for child_root in child_tries.into_iter() {
-		if previous_extracted_child_trie.is_none() && nodes_iter.peek().is_some() {
-			let (top_root, _) = trie_db::decode_compact_from_iter::<L, _, _>(db, &mut nodes_iter)?;
-			previous_extracted_child_trie = Some(top_root);
+	let mut last_child_type = None;
+	let mut skip_till_new_type = false;
+	for (child_root, child_type) in child_tries.into_iter() {
+		let peek = nodes_iter.peek();
+		// child trie are not allowed to encode their root/first node
+		// to [trie_constants::ESCAPE_COMPACT_HEADER], otherwhise
+		// please escape it.
+		// TODO implement escape? : if double ESCAPE_COMPACT_HEADER
+		// at start, remove first.
+		if peek == Some(&&[crate::trie_constants::ESCAPE_COMPACT_HEADER][..]) {
+			skip_till_new_type = true;
+		}
+		if skip_till_new_type && last_child_type == Some(child_type) {
+			continue
+		}
+		skip_till_new_type = false;
+		last_child_type = Some(child_type);
+		if previous_extracted_child_trie.is_none() && peek.is_some() {
+			match child_type {
+				ChildType::ParentKeyId => {
+					let (top_root, _) =
+						trie_db::decode_compact_from_iter::<L, _, _>(db, &mut nodes_iter)?;
+					previous_extracted_child_trie = Some(top_root);
+				},
+				ChildType::ParentSized => {
+					let (top_root, _) = trie_db::decode_compact_from_iter::<
+						crate::LayoutParentSized<L::Hash>,
+						_,
+						_,
+					>(db, &mut nodes_iter)
+					.map_err(|e| Error::ParentSizedChildTrieError(e))?;
+					previous_extracted_child_trie = Some(top_root);
+				},
+				ChildType::Mmr => unreachable!("in mmrs"),
+			}
 		}
 
 		// we do not early exit on root mismatch but try the
 		// other read from proof (some child root may be
 		// in proof without actual child content).
+		// TODO this is not true anymore as we cannot mistake a child type.
+		// -> Should change code to not allow it.
 		if Some(child_root) == previous_extracted_child_trie {
+			previous_extracted_child_trie = None;
+		}
+	}
+
+	for (mmr_root, nb_elt) in mmrs.into_iter() {
+		if previous_extracted_child_trie.is_none() && nodes_iter.peek().is_some() {
+			previous_extracted_child_trie = Some(
+				crate::mmr::MmrDBMut::decode_compact(db, nb_elt, &mut nodes_iter)
+					.map_err(Error::MmrChildError)?,
+			);
+		}
+
+		// we do not early exit on root mismatch but try the
+		// other read from proof (some child root may be
+		// in proof without actual child content).
+		if Some(mmr_root) == previous_extracted_child_trie {
 			previous_extracted_child_trie = None;
 		}
 	}
@@ -157,24 +230,48 @@ where
 	L: TrieConfiguration,
 {
 	let mut child_tries = Vec::new();
-	let partial_db = proof.into_memory_db();
+	let mut mmrs = Vec::new();
+	let mut partial_db = proof.into_memory_db();
 	let mut compact_proof = {
-		let trie = crate::TrieDB::<L>::new(&partial_db, &root)?;
+		let trie = crate::TrieDB::<L>::new(&partial_db, &root);
 
 		let mut iter = trie.iter()?;
 
-		let childtrie_roots = sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX;
+		let childtrie_roots = well_known_keys::CHILD_STORAGE_KEY_PREFIX;
 		if iter.seek(childtrie_roots).is_ok() {
 			loop {
 				match iter.next() {
-					Some(Ok((key, value))) if key.starts_with(childtrie_roots) => {
-						let mut root = TrieHash::<L>::default();
-						if root.as_mut().len() != value.as_slice().len() {
-							// some child trie root in top trie are not an encoded hash.
-							return Err(Error::InvalidChildRoot(key.to_vec(), value.to_vec()))
+					Some(Ok((key, value))) => {
+						let prefixed_key = PrefixedStorageKey::new_ref(&key);
+						match ChildType::from_prefixed_key(prefixed_key) {
+							Some((ChildType::Mmr, _unprefixed)) => {
+								let mut root = TrieHash::<L>::default();
+								if root.as_mut().len() + 8 != value.as_slice().len() {
+									return Err(Error::InvalidChildRoot(
+										key.to_vec(),
+										value.to_vec(),
+									))
+								}
+								root.as_mut().copy_from_slice(&value[8..]);
+								let mut nb_encoded = [0u8; 8];
+								nb_encoded.copy_from_slice(&value[..8]);
+								let nb_elt = u64::from_le_bytes(nb_encoded);
+								mmrs.push((root, nb_elt));
+							},
+							Some((child_type, _unprefixed)) => {
+								let mut root = TrieHash::<L>::default();
+								if root.as_mut().len() != value.as_slice().len() {
+									// some child trie root in top trie are not an encoded hash.
+									return Err(Error::InvalidChildRoot(
+										key.to_vec(),
+										value.to_vec(),
+									))
+								}
+								root.as_mut().copy_from_slice(value.as_ref());
+								child_tries.push((root, child_type));
+							},
+							None => break,
 						}
-						root.as_mut().copy_from_slice(value.as_ref());
-						child_tries.push(root);
 					},
 					// allow incomplete database error: we only
 					// require access to data in the proof.
@@ -190,16 +287,54 @@ where
 		trie_db::encode_compact::<L>(&trie)?
 	};
 
-	for child_root in child_tries {
+	let mut last_child = None;
+	let mut last_skipped = false;
+	for (child_root, child_type) in child_tries {
+		if last_skipped && Some(child_type) != last_child {
+			compact_proof.push(vec![crate::trie_constants::ESCAPE_COMPACT_HEADER]);
+		}
+		last_child = Some(child_type);
 		if !HashDBT::<L::Hash, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
 			// child proof are allowed to be missing (unused root can be included
 			// due to trie structure modification).
+			last_skipped = true;
 			continue
 		}
+		last_skipped = false;
 
-		let trie = crate::TrieDB::<L>::new(&partial_db, &child_root)?;
-		let child_proof = trie_db::encode_compact::<L>(&trie)?;
+		match child_type {
+			ChildType::ParentKeyId => {
+				let trie = crate::TrieDB::<L>::new(&partial_db, &child_root);
+				let child_proof = trie_db::encode_compact::<L>(&trie)?;
 
+				compact_proof.extend(child_proof);
+			},
+			ChildType::ParentSized => {
+				let trie = crate::TrieDB::<crate::LayoutParentSized<L::Hash>>::new(
+					&partial_db,
+					&child_root,
+				);
+				let child_proof =
+					trie_db::encode_compact::<crate::LayoutParentSized<L::Hash>>(&trie)
+						.map_err(|e| Error::ParentSizedChildTrieError(e))?;
+
+				compact_proof.extend(child_proof);
+			},
+			ChildType::Mmr => unreachable!("in mmrs"),
+		}
+	}
+	for (mut mmr_root, number_element) in mmrs {
+		if !HashDBT::<L::Hash, _>::contains(&partial_db, &mmr_root, EMPTY_PREFIX) {
+			// just skip
+			continue
+		}
+		let mmr = crate::mmr::MmrDBMut {
+			peaks: Default::default(),
+			db: &mut partial_db,
+			root: &mut mmr_root,
+			number_element,
+		};
+		let child_proof = mmr.encode_compact().map_err(|e| Error::MmrChildError(e))?;
 		compact_proof.extend(child_proof);
 	}
 

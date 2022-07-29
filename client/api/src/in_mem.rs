@@ -516,16 +516,23 @@ where
 	) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
-			(
-				&child_content.child_info,
-				child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
-			)
+		let child_delta = storage.children_default.iter().chain(storage.children_sized.iter()).map(
+			|(_storage_key, child_content)| {
+				(
+					&child_content.child_info,
+					child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+				)
+			},
+		);
+
+		let child_delta_mmr = storage.children_mmr.iter().map(|(_storage_key, child_content)| {
+			(&child_content.child_info, child_content.data.iter().map(|v| v.as_ref()))
 		});
 
 		let (root, transaction) = self.old_state.full_storage_root(
 			storage.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 			child_delta,
+			child_delta_mmr,
 			state_version,
 		);
 
@@ -806,14 +813,6 @@ impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> where Block:
 /// Check that genesis storage is valid.
 pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 	if storage.top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
-		return Err(sp_blockchain::Error::InvalidState)
-	}
-
-	if storage
-		.children_default
-		.keys()
-		.any(|child_key| !well_known_keys::is_child_storage_key(child_key))
-	{
 		return Err(sp_blockchain::Error::InvalidState)
 	}
 

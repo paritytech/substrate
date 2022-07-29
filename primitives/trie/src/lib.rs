@@ -20,6 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod error;
+pub mod mmr;
 mod node_codec;
 mod node_header;
 mod storage_proof;
@@ -34,7 +35,7 @@ use hash_db::{Hasher, Prefix};
 /// Various re-exports from the `memory-db` crate.
 pub use memory_db::{prefixed_key, HashKey, KeyFunction, PrefixedKey};
 /// The Substrate format implementation of `NodeCodec`.
-pub use node_codec::NodeCodec;
+pub use node_codec::{NodeCodec, NodeCodecWithSize};
 use sp_std::{borrow::Borrow, boxed::Box, marker::PhantomData, vec::Vec};
 pub use storage_proof::{CompactProof, StorageProof};
 /// Trie codec reexport, mainly child trie support
@@ -57,6 +58,13 @@ pub struct LayoutV0<H>(sp_std::marker::PhantomData<H>);
 
 /// substrate trie layout, with external value nodes.
 pub struct LayoutV1<H>(sp_std::marker::PhantomData<H>);
+
+/// substrate trie layout, with external value nodes and size
+/// in parent.
+pub struct LayoutWithSize<H>(sp_std::marker::PhantomData<H>);
+
+/// substrate trie layout for value sized child trie.
+pub type LayoutParentSized<H> = LayoutWithSize<H>;
 
 impl<H> TrieLayout for LayoutV0<H>
 where
@@ -142,6 +150,48 @@ where
 	}
 }
 
+impl<H> TrieLayout for LayoutWithSize<H>
+where
+	H: Hasher,
+{
+	const USE_EXTENSION: bool = false;
+	const ALLOW_EMPTY: bool = true;
+	const MAX_INLINE_VALUE: Option<u32> = Some(sp_core::storage::TRIE_VALUE_NODE_THRESHOLD);
+
+	type Hash = H;
+	type Codec = NodeCodecWithSize<Self::Hash>;
+}
+
+impl<H> TrieConfiguration for LayoutWithSize<H>
+where
+	H: Hasher,
+{
+	fn trie_root<I, A, B>(input: I) -> <Self::Hash as Hasher>::Out
+	where
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>,
+	{
+		trie_root::trie_root_no_extension::<H, TrieStream, _, _, _>(input, Self::MAX_INLINE_VALUE)
+	}
+
+	fn trie_root_unhashed<I, A, B>(input: I) -> Vec<u8>
+	where
+		I: IntoIterator<Item = (A, B)>,
+		A: AsRef<[u8]> + Ord,
+		B: AsRef<[u8]>,
+	{
+		trie_root::unhashed_trie_no_extension::<H, TrieStream, _, _, _>(
+			input,
+			Self::MAX_INLINE_VALUE,
+		)
+	}
+
+	fn encode_index(input: u32) -> Vec<u8> {
+		codec::Encode::encode(&codec::Compact(input))
+	}
+}
+
 #[cfg(not(feature = "memory-tracker"))]
 type MemTracker = memory_db::NoopTracker<trie_db::DBValue>;
 #[cfg(feature = "memory-tracker")]
@@ -182,10 +232,15 @@ pub mod trie_types {
 	/// Persistent trie database read-access interface for the a given hasher.
 	/// Read only V1 and V0 are compatible, thus we always use V1.
 	pub type TrieDB<'a, H> = super::TrieDB<'a, LayoutV1<H>>;
+	/// Persistent trie database read-access interface for child with size child trie.
+	pub type TrieDBParentSized<'a, H> = super::TrieDB<'a, LayoutParentSized<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMutV0<'a, H> = super::TrieDBMut<'a, LayoutV0<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMutV1<'a, H> = super::TrieDBMut<'a, LayoutV1<H>>;
+	/// Persistent trie database write-access interface for the a given hasher
+	/// for dumym child trie.
+	pub type TrieDBMutParentSized<'a, H> = super::TrieDBMut<'a, LayoutParentSized<H>>;
 	/// Querying interface, as in `trie_db` but less generic.
 	pub type LookupV0<'a, H, Q> = trie_db::Lookup<'a, LayoutV0<H>, Q>;
 	/// Querying interface, as in `trie_db` but less generic.
@@ -214,7 +269,7 @@ where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
 	// Can use default layout (read only).
-	let trie = TrieDB::<L>::new(db, &root)?;
+	let trie = TrieDB::<L>::new(db, &root);
 	generate_proof(&trie, keys)
 }
 
@@ -254,7 +309,7 @@ where
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
+		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root);
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
@@ -280,7 +335,35 @@ where
 	L: TrieConfiguration,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+	TrieDB::<L>::new(&*db, root).get(key).map(|x| x.map(|val| val.to_vec()))
+}
+
+/// Does storage contains a value. Depending on storage, this
+/// may not access  the value.
+pub fn contains_trie<L, DB>(
+	db: &DB,
+	root: &TrieHash<L>,
+	key: &[u8],
+) -> Result<bool, Box<TrieError<L>>>
+where
+	L: TrieConfiguration,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+{
+	TrieDB::<L>::new(&*db, root).contains(key)
+}
+
+/// Size of storage value if it exists. Depending on storage, this
+/// may not access  the value.
+pub fn value_size_trie<L, DB>(
+	db: &DB,
+	root: &TrieHash<L>,
+	key: &[u8],
+) -> Result<Option<u32>, Box<TrieError<L>>>
+where
+	L: TrieConfiguration,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+{
+	Ok(TrieDB::<L>::new(&*db, root).get_size(key)?.map(|s| s as u32))
 }
 
 /// Read a value from the trie with given Query.
@@ -295,7 +378,7 @@ where
 	Q: Query<L::Hash, Item = DBValue>,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	TrieDB::<L>::new(&*db, root)?
+	TrieDB::<L>::new(&*db, root)
 		.get_with(key, query)
 		.map(|x| x.map(|val| val.to_vec()))
 }
@@ -354,7 +437,7 @@ pub fn record_all_keys<L: TrieConfiguration, DB>(
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let trie = TrieDB::<L>::new(&*db, root)?;
+	let trie = TrieDB::<L>::new(&*db, root);
 	let iter = trie.iter()?;
 
 	for x in iter {
@@ -370,17 +453,50 @@ where
 }
 
 /// Read a value from the child trie.
-pub fn read_child_trie_value<L: TrieConfiguration, DB>(
+pub fn read_child_trie_value<L, DB>(
 	keyspace: &[u8],
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 where
+	L: TrieConfiguration,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
 	let db = KeySpacedDB::new(&*db, keyspace);
-	TrieDB::<L>::new(&db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+	TrieDB::<L>::new(&db, root).get(key).map(|x| x.map(|val| val.to_vec()))
+}
+
+/// Does storage contains a value. Depending on storage, this
+/// may not access  the value.
+pub fn contains_child_trie<L, DB>(
+	keyspace: &[u8],
+	db: &DB,
+	root: &TrieHash<L>,
+	key: &[u8],
+) -> Result<bool, Box<TrieError<L>>>
+where
+	L: TrieConfiguration,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+{
+	let db = KeySpacedDB::new(&*db, keyspace);
+	TrieDB::<L>::new(&db, root).contains(key)
+}
+
+/// Size of storage value if it exists. Depending on storage, this
+/// may not access  the value.
+pub fn value_size_child_trie<L, DB>(
+	keyspace: &[u8],
+	db: &DB,
+	root: &TrieHash<L>,
+	key: &[u8],
+) -> Result<Option<u32>, Box<TrieError<L>>>
+where
+	L: TrieConfiguration,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+{
+	let db = KeySpacedDB::new(&*db, keyspace);
+	Ok(TrieDB::<L>::new(&db, root).get_size(key)?.map(|s| s as u32))
 }
 
 /// Read a value from the child trie with given query.
@@ -401,7 +517,7 @@ where
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	TrieDB::<L>::new(&db, &root)?
+	TrieDB::<L>::new(&db, &root)
 		.get_with(key, query)
 		.map(|x| x.map(|val| val.to_vec()))
 }
@@ -570,7 +686,7 @@ mod tests {
 			}
 		}
 		{
-			let t = TrieDB::<T>::new(&memdb, &root).unwrap();
+			let t = TrieDB::<T>::new(&memdb, &root);
 			assert_eq!(
 				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
 				t.iter()
@@ -841,7 +957,7 @@ mod tests {
 		let mut root = Default::default();
 		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs);
 
-		let trie = TrieDB::<Layout>::new(&mdb, &root).unwrap();
+		let trie = TrieDB::<Layout>::new(&mdb, &root);
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();

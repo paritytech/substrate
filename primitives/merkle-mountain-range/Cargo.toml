@@ -20,14 +20,18 @@ sp-core = { version = "6.0.0", default-features = false, path = "../core" }
 sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+hash-db = { default-features = false, version = "0.15.2"}
 
 [dev-dependencies]
 hex-literal = "0.3"
+memory-db = { default-features = false, version = "0.29.0"}
 
 [features]
 default = ["std"]
 std = [
 	"codec/std",
+	"hash-db/std",
+	"memory-db/std",
 	"log/std",
 	"serde",
 	"sp-api/std",

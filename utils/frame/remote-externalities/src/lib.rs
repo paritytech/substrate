@@ -604,15 +604,21 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				self.rpc_child_get_storage_paged(prefixed_top_key, child_keys, at).await?;
 
 			let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
-			let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
-				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
+			match ChildType::from_prefixed_key(&prefixed_top_key) {
+				Some((ChildType::ParentKeyId, storage_key)) => {
+					child_kv.push((ChildInfo::new_default(&storage_key), child_kv_inner));
+				},
+				Some((ChildType::ParentSized, storage_key)) => {
+					child_kv.push((ChildInfo::new_parent_sized(&storage_key), child_kv_inner));
+				},
+				Some((ChildType::Mmr, _storage_key)) => {
+					unimplemented!("No impl of mmr child storage for mmr");
+				},
 				None => {
 					log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
 					return Err("Invalid child key")
 				},
 			};
-
-			child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
 		}
 
 		Ok(child_kv)

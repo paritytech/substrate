@@ -130,16 +130,20 @@ impl<B: BlockT> BenchmarkingState<B> {
 		state.add_whitelist_to_tracker();
 
 		state.reopen()?;
-		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| {
-			(
-				&child_content.child_info,
-				child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
-			)
-		});
+		let child_delta = genesis.children_default.iter().chain(genesis.children_sized.iter()).map(
+			|(_storage_key, child_content)| {
+				(
+					&child_content.child_info,
+					child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
+				)
+			},
+		);
+		let child_delta_mmr: std::iter::Empty<(_, std::iter::Empty<_>)> = std::iter::empty();
 		let (root, transaction): (B::Hash, _) =
 			state.state.borrow_mut().as_mut().unwrap().full_storage_root(
 				genesis.top.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
 				child_delta,
+				child_delta_mmr,
 				state_version,
 			);
 		state.genesis = transaction.clone().drain();
@@ -324,9 +328,27 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			.child_storage(child_info, key)
 	}
 
+	fn child_storage_at(
+		&self,
+		child_info: &ChildInfo,
+		at: u64,
+	) -> Result<Option<Vec<u8>>, Self::Error> {
+		// TODO add accessed at??
+		self.state
+			.borrow()
+			.as_ref()
+			.ok_or_else(state_err)?
+			.child_storage_at(child_info, at)
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
 		self.add_read_key(None, key);
 		self.state.borrow().as_ref().ok_or_else(state_err)?.exists_storage(key)
+	}
+
+	fn value_size(&self, key: &[u8]) -> Result<Option<u32>, Self::Error> {
+		self.add_read_key(None, key);
+		self.state.borrow().as_ref().ok_or_else(state_err)?.value_size(key)
 	}
 
 	fn exists_child_storage(
@@ -340,6 +362,19 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			.as_ref()
 			.ok_or_else(state_err)?
 			.exists_child_storage(child_info, key)
+	}
+
+	fn child_value_size(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<u32>, Self::Error> {
+		self.add_read_key(Some(child_info.storage_key()), key);
+		self.state
+			.borrow()
+			.as_ref()
+			.ok_or_else(state_err)?
+			.child_value_size(child_info, key)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -431,14 +466,22 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (B::Hash, bool, Self::Transaction)
-	where
-		B::Hash: Ord,
-	{
+	) -> (Vec<u8>, bool, Self::Transaction) {
 		self.state
 			.borrow()
 			.as_ref()
 			.map_or(Default::default(), |s| s.child_storage_root(child_info, delta, state_version))
+	}
+
+	fn child_mmr_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = &'a [u8]>,
+	) -> (Vec<u8>, bool, Self::Transaction) {
+		self.state
+			.borrow()
+			.as_ref()
+			.map_or(Default::default(), |s| s.child_mmr_root(child_info, delta))
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
