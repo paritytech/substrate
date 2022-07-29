@@ -198,7 +198,7 @@ where
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
 	C::Api: BabeApi<B>,
-	P: Send + Sync + 'static,
+	P: Send + Sync,
 {
 	type Transaction = TransactionFor<C, B>;
 	type Proof = P;
