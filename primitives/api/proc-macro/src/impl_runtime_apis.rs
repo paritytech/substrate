@@ -613,7 +613,7 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
 			runtime_block,
 			runtime_mod_path: &runtime_mod_path,
-			runtime_type: &*runtime_type,
+			runtime_type,
 			trait_generic_arguments: &trait_generic_arguments,
 			impl_trait: &impl_trait.ident,
 		};

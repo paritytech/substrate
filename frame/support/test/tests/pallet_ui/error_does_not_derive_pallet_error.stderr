@@ -4,4 +4,14 @@ error[E0277]: the trait bound `MyError: PalletError` is not satisfied
 1 | #[frame_support::pallet]
   | ^^^^^^^^^^^^^^^^^^^^^^^^ the trait `PalletError` is not implemented for `MyError`
   |
+  = help: the following other types implement trait `PalletError`:
+            ()
+            (TupleElement0, TupleElement1)
+            (TupleElement0, TupleElement1, TupleElement2)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6)
+            (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6, TupleElement7)
+          and 36 others
   = note: this error originates in the derive macro `frame_support::PalletError` (in Nightly builds, run with -Z macro-backtrace for more info)

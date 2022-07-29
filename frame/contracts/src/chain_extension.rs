@@ -29,6 +29,22 @@
 //! required for this endeavour are defined or re-exported in this module. There is an
 //! implementation on `()` which can be used to signal that no chain extension is available.
 //!
+//! # Using multiple chain extensions
+//!
+//! Often there is a need for having multiple chain extensions. This is often the case when
+//! some generally useful off-the-shelf extensions should be included. To have multiple chain
+//! extensions they can be put into a tuple which is then passed to [`Config::ChainExtension`] like
+//! this `type Extensions = (ExtensionA, ExtensionB)`.
+//!
+//! However, only extensions implementing [`RegisteredChainExtension`] can be put into a tuple.
+//! This is because the [`RegisteredChainExtension::ID`] is used to decide which of those extensions
+//! should should be used when the contract calls a chain extensions. Extensions which are generally
+//! useful should claim their `ID` with [the registry](https://github.com/paritytech/chainextension-registry)
+//! so that no collisions with other vendors will occur.
+//!
+//! **Chain specific extensions must use the reserved `ID = 0` so that they can't be registered with
+//! the registry.**
+//!
 //! # Security
 //!
 //! The chain author alone is responsible for the security of the chain extension.
@@ -78,6 +94,12 @@ pub type Result<T> = sp_std::result::Result<T, DispatchError>;
 /// In order to create a custom chain extension this trait must be implemented and supplied
 /// to the pallet contracts configuration trait as the associated type of the same name.
 /// Consult the [module documentation](self) for a general explanation of chain extensions.
+///
+/// # Lifetime
+///
+/// The extension will be [`Default`] initialized at the beginning of each call
+/// (**not** per call stack) and dropped afterwards. Hence any value held inside the extension
+/// can be used as a per-call scratch buffer.
 pub trait ChainExtension<C: Config> {
 	/// Call the chain extension logic.
 	///
@@ -86,8 +108,6 @@ pub trait ChainExtension<C: Config> {
 	/// imported wasm function.
 	///
 	/// # Parameters
-	/// - `func_id`: The first argument to `seal_call_chain_extension`. Usually used to determine
-	///   which function to realize.
 	/// - `env`: Access to the remaining arguments and the execution environment.
 	///
 	/// # Return
@@ -95,7 +115,7 @@ pub trait ChainExtension<C: Config> {
 	/// In case of `Err` the contract execution is immediately suspended and the passed error
 	/// is returned to the caller. Otherwise the value of [`RetVal`] determines the exit
 	/// behaviour.
-	fn call<E>(func_id: u32, env: Environment<E, InitState>) -> Result<RetVal>
+	fn call<E>(&mut self, env: Environment<E, InitState>) -> Result<RetVal>
 	where
 		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>;
@@ -112,20 +132,51 @@ pub trait ChainExtension<C: Config> {
 	}
 }
 
-/// Implementation that indicates that no chain extension is available.
-impl<C: Config> ChainExtension<C> for () {
-	fn call<E>(_func_id: u32, mut _env: Environment<E, InitState>) -> Result<RetVal>
+/// A [`ChainExtension`] that can be composed with other extensions using a tuple.
+///
+/// An extension that implements this trait can be put in a tuple in order to have multiple
+/// extensions available. The tuple implementation routes requests based on the first two
+/// most significant bytes of the `id` passed to `call`.
+///
+/// If this extensions is to be used by multiple runtimes consider
+/// [registering it](https://github.com/paritytech/chainextension-registry) to ensure that there
+/// are no collisions with other vendors.
+///
+/// # Note
+///
+/// Currently, we support tuples of up to ten registred chain extensions. If more chain extensions
+/// are needed consider opening an issue.
+pub trait RegisteredChainExtension<C: Config>: ChainExtension<C> {
+	/// The extensions globally unique identifier.
+	const ID: u16;
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(10)]
+#[tuple_types_custom_trait_bound(RegisteredChainExtension<C>)]
+impl<C: Config> ChainExtension<C> for Tuple {
+	fn call<E>(&mut self, mut env: Environment<E, InitState>) -> Result<RetVal>
 	where
 		E: Ext<T = C>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
-		// Never called since [`Self::enabled()`] is set to `false`. Because we want to
-		// avoid panics at all costs we supply a sensible error value here instead
-		// of an `unimplemented!`.
+		for_tuples!(
+			#(
+				if (Tuple::ID == env.ext_id()) && Tuple::enabled() {
+					return Tuple.call(env);
+				}
+			)*
+		);
 		Err(Error::<E::T>::NoChainExtension.into())
 	}
 
 	fn enabled() -> bool {
+		for_tuples!(
+			#(
+				if Tuple::enabled() {
+					return true;
+				}
+			)*
+		);
 		false
 	}
 }
@@ -159,6 +210,22 @@ impl<'a, 'b, E: Ext, S: state::State> Environment<'a, 'b, E, S>
 where
 	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 {
+	/// The function id within the `id` passed by a contract.
+	///
+	/// It returns the two least significant bytes of the `id` passed by a contract as the other
+	/// two bytes represent the chain extension itself (the code which is calling this function).
+	pub fn func_id(&self) -> u16 {
+		(self.inner.id & 0x00FF) as u16
+	}
+
+	/// The chain extension id within the `id` passed by a contract.
+	///
+	/// It returns the two most significant bytes of the `id` passed by a contract which represent
+	/// the chain extension itself (the code which is calling this function).
+	pub fn ext_id(&self) -> u16 {
+		(self.inner.id >> 16) as u16
+	}
+
 	/// Charge the passed `amount` of weight from the overall limit.
 	///
 	/// It returns `Ok` when there the remaining weight budget is larger than the passed
@@ -204,13 +271,14 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, state::Init> {
 	/// ever create this type. Chain extensions merely consume it.
 	pub(crate) fn new(
 		runtime: &'a mut Runtime<'b, E>,
+		id: u32,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
 		output_len_ptr: u32,
 	) -> Self {
 		Environment {
-			inner: Inner { runtime, input_ptr, input_len, output_ptr, output_len_ptr },
+			inner: Inner { runtime, id, input_ptr, input_len, output_ptr, output_len_ptr },
 			phantom: PhantomData,
 		}
 	}
@@ -358,6 +426,8 @@ where
 struct Inner<'a, 'b, E: Ext> {
 	/// The runtime contains all necessary functions to interact with the running contract.
 	runtime: &'a mut Runtime<'b, E>,
+	/// Verbatim argument passed to `seal_call_chain_extension`.
+	id: u32,
 	/// Verbatim argument passed to `seal_call_chain_extension`.
 	input_ptr: u32,
 	/// Verbatim argument passed to `seal_call_chain_extension`.
