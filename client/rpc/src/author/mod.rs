@@ -29,7 +29,8 @@ use codec::{Decode, Encode};
 use futures::{FutureExt, TryFutureExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	PendingSubscription,
+	SubscriptionSink,
+	types::SubscriptionEmptyError,
 };
 use sc_rpc_api::DenyUnsafe;
 use sc_transaction_pool_api::{
@@ -176,13 +177,13 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(&self, pending: PendingSubscription, xt: Bytes) {
+	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> std::result::Result<(), SubscriptionEmptyError> {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				pending.reject(JsonRpseeError::from(e));
-				return
+				sink.reject(JsonRpseeError::from(e));
+				return Ok(());
 			},
 		};
 
@@ -199,19 +200,16 @@ where
 			let stream = match submit.await {
 				Ok(stream) => stream,
 				Err(err) => {
-					pending.reject(JsonRpseeError::from(err));
+					sink.reject(JsonRpseeError::from(err));
 					return
 				},
 			};
 
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
+			// NOTE: the sink is accepted under the hood for ergonomic purposes.
 			sink.pipe_from_stream(stream).await;
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		Ok(())
 	}
 }
