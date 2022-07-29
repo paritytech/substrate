@@ -711,8 +711,8 @@ pub mod pallet {
 		pub fn join_alliance(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			// We don't want anyone to join as an Ally before the Founders/Fellows have been
-			// initialized via Root call. The reasons are two-fold:
+			// We don't want anyone to join as an Ally before the Alliance has been initialized via
+			// Root call. The reasons are two-fold:
 			//
 			// 1. There is no `Rule` or admission criteria, so the joiner would be an ally to
 			//    nought, and
