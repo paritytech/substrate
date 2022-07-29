@@ -186,7 +186,7 @@ where
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
 			Err(e) => {
-				sink.reject(JsonRpseeError::from(e));
+				let _ = sink.reject(JsonRpseeError::from(e));
 				return Ok(())
 			},
 		};
@@ -204,7 +204,7 @@ where
 			let stream = match submit.await {
 				Ok(stream) => stream,
 				Err(err) => {
-					sink.reject(JsonRpseeError::from(err));
+					let _ = sink.reject(JsonRpseeError::from(err));
 					return
 				},
 			};

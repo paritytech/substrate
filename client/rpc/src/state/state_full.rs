@@ -369,7 +369,7 @@ where
 		{
 			Ok(initial) => initial,
 			Err(e) => {
-				sink.reject(JsonRpseeError::from(e));
+				let _ = sink.reject(JsonRpseeError::from(e));
 				return
 			},
 		};
@@ -407,7 +407,7 @@ where
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(blockchain_err) => {
-				sink.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
+				let _ = sink.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
 				return
 			},
 		};
