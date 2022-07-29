@@ -439,7 +439,7 @@ where
 		let commitment = Commitment { payload, block_number: target_number, validator_set_id };
 		let encoded_commitment = commitment.encode();
 
-		let signature = match self.key_store.sign(&authority_id, &*encoded_commitment) {
+		let signature = match self.key_store.sign(&authority_id, &encoded_commitment) {
 			Ok(sig) => sig,
 			Err(err) => {
 				warn!(target: "beefy", "🥩 Error signing commitment: {:?}", err);
@@ -451,7 +451,7 @@ where
 			target: "beefy",
 			"🥩 Produced signature using {:?}, is_valid: {:?}",
 			authority_id,
-			BeefyKeystore::verify(&authority_id, &signature, &*encoded_commitment)
+			BeefyKeystore::verify(&authority_id, &signature, &encoded_commitment)
 		);
 
 		let message = VoteMessage { commitment, id: authority_id, signature };
