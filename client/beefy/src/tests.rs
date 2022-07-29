@@ -21,12 +21,15 @@
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::{sync::Arc, task::Poll};
+use std::{collections::HashMap, sync::Arc, task::Poll};
 use tokio::{runtime::Runtime, time::Duration};
 
 use sc_chain_spec::{ChainSpec, GenericChainSpec};
 use sc_client_api::HeaderBackend;
-use sc_consensus::BoxJustificationImport;
+use sc_consensus::{
+	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
+	ImportedAux,
+};
 use sc_keystore::LocalKeystore;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
@@ -35,7 +38,8 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
-	crypto::AuthorityId, BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, BEEFY_ENGINE_ID,
+	crypto::{AuthorityId, Signature},
+	BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, VersionedFinalityProof, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
 };
 use sp_mmr_primitives::{
@@ -47,19 +51,32 @@ use sp_consensus::BlockOrigin;
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
-	codec::Encode, generic::BlockId, traits::Header as HeaderT, BuildStorage, DigestItem, Storage,
+	codec::Encode,
+	generic::BlockId,
+	traits::{Header as HeaderT, NumberFor},
+	BuildStorage, DigestItem, Justifications, Storage,
 };
 
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 
-use crate::{beefy_protocol_name, keystore::tests::Keyring as BeefyKeyring, notification::*};
+use crate::{
+	beefy_block_import_and_links, beefy_protocol_name, justification::*,
+	keystore::tests::Keyring as BeefyKeyring, BeefyRPCLinks, BeefyVoterLinks,
+};
 
 pub(crate) const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
 const GOOD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0xbf);
 const BAD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0x42);
 
+type BeefyBlockImport = crate::BeefyBlockImport<
+	Block,
+	substrate_test_runtime_client::Backend,
+	two_validators::TestApi,
+	BlockImportAdapter<PeersClient, sp_api::TransactionFor<two_validators::TestApi, Block>>,
+>;
+
 pub(crate) type BeefyValidatorSet = ValidatorSet<AuthorityId>;
-pub(crate) type BeefyPeer = Peer<PeerData, PeersClient>;
+pub(crate) type BeefyPeer = Peer<PeerData, BeefyBlockImport>;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Genesis(std::collections::BTreeMap<String, String>);
@@ -97,17 +114,10 @@ fn beefy_protocol_name() {
 	assert_eq!(proto_name.to_string(), expected);
 }
 
-// TODO: compiler warns us about unused `signed_commitment_stream`, will use in later tests
-#[allow(dead_code)]
-#[derive(Clone)]
-pub(crate) struct BeefyLinkHalf {
-	pub signed_commitment_stream: BeefySignedCommitmentStream<Block>,
-	pub beefy_best_block_stream: BeefyBestBlockStream<Block>,
-}
-
 #[derive(Default)]
 pub(crate) struct PeerData {
-	pub(crate) beefy_link_half: Mutex<Option<BeefyLinkHalf>>,
+	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block>>>,
+	pub(crate) beefy_voter_links: Mutex<Option<BeefyVoterLinks<Block>>>,
 }
 
 #[derive(Default)]
@@ -163,7 +173,7 @@ impl BeefyTestNet {
 
 impl TestNetFactory for BeefyTestNet {
 	type Verifier = PassThroughVerifier;
-	type BlockImport = PeersClient;
+	type BlockImport = BeefyBlockImport;
 	type PeerData = PeerData;
 
 	fn make_verifier(&self, _client: PeersClient, _: &PeerData) -> Self::Verifier {
@@ -178,7 +188,17 @@ impl TestNetFactory for BeefyTestNet {
 		Option<BoxJustificationImport<Block>>,
 		Self::PeerData,
 	) {
-		(client.as_block_import(), None, PeerData::default())
+		let inner = BlockImportAdapter::new(client.clone());
+		let (block_import, voter_links, rpc_links) = beefy_block_import_and_links(
+			inner,
+			client.as_backend(),
+			Arc::new(two_validators::TestApi {}),
+		);
+		let peer_data = PeerData {
+			beefy_rpc_links: Mutex::new(Some(rpc_links)),
+			beefy_voter_links: Mutex::new(Some(voter_links)),
+		};
+		(BlockImportAdapter::new(block_import), None, peer_data)
 	}
 
 	fn peer(&mut self, i: usize) -> &mut BeefyPeer {
@@ -333,12 +353,12 @@ where
 
 		let keystore = create_beefy_keystore(*key);
 
-		let (signed_commitment_sender, signed_commitment_stream) =
-			BeefySignedCommitmentStream::<Block>::channel();
-		let (beefy_best_block_sender, beefy_best_block_stream) =
-			BeefyBestBlockStream::<Block>::channel();
-		let beefy_link_half = BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream };
-		*peer.data.beefy_link_half.lock() = Some(beefy_link_half);
+		let (_, _, peer_data) = net.make_block_import(peer.client().clone());
+		let PeerData { beefy_rpc_links, beefy_voter_links } = peer_data;
+
+		let beefy_voter_links = beefy_voter_links.lock().take();
+		*peer.data.beefy_rpc_links.lock() = beefy_rpc_links.lock().take();
+		*peer.data.beefy_voter_links.lock() = beefy_voter_links.clone();
 
 		let beefy_params = crate::BeefyParams {
 			client: peer.client().as_client(),
@@ -346,8 +366,7 @@ where
 			runtime: api.clone(),
 			key_store: Some(keystore),
 			network: peer.network_service().clone(),
-			signed_commitment_sender,
-			beefy_best_block_sender,
+			links: beefy_voter_links.unwrap(),
 			min_block_delta,
 			prometheus_registry: None,
 			protocol_name: BEEFY_PROTOCOL_NAME.into(),
@@ -382,11 +401,11 @@ pub(crate) fn get_beefy_streams(
 	let mut best_block_streams = Vec::new();
 	let mut signed_commitment_streams = Vec::new();
 	for peer_id in 0..peers.len() {
-		let beefy_link_half =
-			net.peer(peer_id).data.beefy_link_half.lock().as_ref().unwrap().clone();
-		let BeefyLinkHalf { signed_commitment_stream, beefy_best_block_stream } = beefy_link_half;
-		best_block_streams.push(beefy_best_block_stream.subscribe());
-		signed_commitment_streams.push(signed_commitment_stream.subscribe());
+		let beefy_rpc_links = net.peer(peer_id).data.beefy_rpc_links.lock().clone().unwrap();
+		let BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream } =
+			beefy_rpc_links;
+		best_block_streams.push(from_voter_best_beefy_stream.subscribe());
+		signed_commitment_streams.push(from_voter_justif_stream.subscribe());
 	}
 	(best_block_streams, signed_commitment_streams)
 }
@@ -669,4 +688,124 @@ fn correct_beefy_payload() {
 	// verify consensus is reached
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[11]);
 	wait_for_beefy_signed_commitments(signed_commitments, &net, &mut runtime, &[11]);
+}
+
+#[test]
+fn beefy_importing_blocks() {
+	use futures::{executor::block_on, future::poll_fn, task::Poll};
+	use sc_block_builder::BlockBuilderProvider;
+	use sc_client_api::BlockBackend;
+
+	sp_tracing::try_init_simple();
+
+	let mut net = BeefyTestNet::new(2, 0);
+
+	let client = net.peer(0).client().clone();
+	let (mut block_import, _, peer_data) = net.make_block_import(client.clone());
+	let PeerData { beefy_rpc_links: _, beefy_voter_links } = peer_data;
+	let justif_stream = beefy_voter_links.lock().take().unwrap().from_block_import_justif_stream;
+
+	let params = |block: Block, justifications: Option<Justifications>| {
+		let mut import = BlockImportParams::new(BlockOrigin::File, block.header);
+		import.justifications = justifications;
+		import.body = Some(block.extrinsics);
+		import.finalized = true;
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		import
+	};
+
+	let full_client = client.as_client();
+	let parent_id = BlockId::Number(0);
+	let block_id = BlockId::Number(1);
+	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let block = builder.build().unwrap().block;
+
+	// Import without justifications.
+	let mut justif_recv = justif_stream.subscribe();
+	assert_eq!(
+		block_on(block_import.import_block(params(block.clone(), None), HashMap::new())).unwrap(),
+		ImportResult::Imported(ImportedAux { is_new_best: true, ..Default::default() }),
+	);
+	assert_eq!(
+		block_on(block_import.import_block(params(block, None), HashMap::new())).unwrap(),
+		ImportResult::AlreadyInChain
+	);
+	// Verify no justifications present:
+	{
+		// none in backend,
+		assert!(full_client.justifications(&block_id).unwrap().is_none());
+		// and none sent to BEEFY worker.
+		block_on(poll_fn(move |cx| {
+			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);
+			Poll::Ready(())
+		}));
+	}
+
+	// Import with valid justification.
+	let parent_id = BlockId::Number(1);
+	let block_num = 2;
+	let keys = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+	let proof = crate::justification::tests::new_signed_commitment(block_num, &validator_set, keys);
+	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
+	let encoded = versioned_proof.encode();
+	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
+
+	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let block = builder.build().unwrap().block;
+	let mut justif_recv = justif_stream.subscribe();
+	assert_eq!(
+		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
+		ImportResult::Imported(ImportedAux {
+			bad_justification: false,
+			is_new_best: true,
+			..Default::default()
+		}),
+	);
+	// Verify justification successfully imported:
+	{
+		// available in backend,
+		assert!(full_client.justifications(&BlockId::Number(block_num)).unwrap().is_some());
+		// and also sent to BEEFY worker.
+		block_on(poll_fn(move |cx| {
+			match justif_recv.poll_next_unpin(cx) {
+				Poll::Ready(Some(_justification)) => (),
+				v => panic!("unexpected value: {:?}", v),
+			}
+			Poll::Ready(())
+		}));
+	}
+
+	// Import with invalid justification (incorrect validator set).
+	let parent_id = BlockId::Number(2);
+	let block_num = 3;
+	let keys = &[BeefyKeyring::Alice];
+	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
+	let proof = crate::justification::tests::new_signed_commitment(block_num, &validator_set, keys);
+	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
+	let encoded = versioned_proof.encode();
+	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
+
+	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
+	let block = builder.build().unwrap().block;
+	let mut justif_recv = justif_stream.subscribe();
+	assert_eq!(
+		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
+		ImportResult::Imported(ImportedAux {
+			// Still `false` because we don't want to fail import on bad BEEFY justifications.
+			bad_justification: false,
+			is_new_best: true,
+			..Default::default()
+		}),
+	);
+	// Verify bad justifications was not imported:
+	{
+		// none in backend,
+		assert!(full_client.justifications(&block_id).unwrap().is_none());
+		// and none sent to BEEFY worker.
+		block_on(poll_fn(move |cx| {
+			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);
+			Poll::Ready(())
+		}));
+	}
 }

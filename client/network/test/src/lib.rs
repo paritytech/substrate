@@ -25,6 +25,7 @@ mod sync;
 use std::{
 	borrow::Cow,
 	collections::HashMap,
+	marker::PhantomData,
 	pin::Pin,
 	sync::Arc,
 	task::{Context as FutureContext, Poll},
@@ -567,25 +568,27 @@ impl<T> BlockImportAdapterFull for T where
 /// This is required as the `TestNetFactory` trait does not distinguish between
 /// full and light nodes.
 #[derive(Clone)]
-pub struct BlockImportAdapter<I> {
+pub struct BlockImportAdapter<I, Transaction = ()> {
 	inner: I,
+	_phantom: PhantomData<Transaction>,
 }
 
-impl<I> BlockImportAdapter<I> {
+impl<I, Transaction> BlockImportAdapter<I, Transaction> {
 	/// Create a new instance of `Self::Full`.
 	pub fn new(inner: I) -> Self {
-		Self { inner }
+		Self { inner, _phantom: PhantomData }
 	}
 }
 
 #[async_trait::async_trait]
-impl<I> BlockImport<Block> for BlockImportAdapter<I>
+impl<I, Transaction> BlockImport<Block> for BlockImportAdapter<I, Transaction>
 where
 	I: BlockImport<Block, Error = ConsensusError> + Send + Sync,
 	I::Transaction: Send,
+	Transaction: Send + 'static,
 {
 	type Error = ConsensusError;
-	type Transaction = ();
+	type Transaction = Transaction;
 
 	async fn check_block(
 		&mut self,
@@ -596,7 +599,7 @@ where
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<Block, ()>,
+		block: BlockImportParams<Block, Self::Transaction>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		self.inner.import_block(block.clear_storage_changes_and_mutate(), cache).await
