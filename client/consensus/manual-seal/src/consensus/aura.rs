@@ -67,7 +67,7 @@ where
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
 	C::Api: AuraApi<B, AuthorityId>,
-	P: Send + Sync + 'static,
+	P: Send + Sync,
 {
 	type Transaction = TransactionFor<C, B>;
 	type Proof = P;
