@@ -125,8 +125,8 @@ impl From<MultiRemovalResults> for KillStorageResult {
 #[runtime_interface]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
-	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage(key).map(|s| s.to_vec())
+	fn get(&self, key: &[u8]) -> Option<bytes::Bytes> {
+		self.storage(key).map(|s| bytes::Bytes::from(s.to_vec()))
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
@@ -1787,7 +1787,7 @@ mod tests {
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
 			storage::set(b"hello", b"world");
-			assert_eq!(storage::get(b"hello"), Some(b"world".to_vec()));
+			assert_eq!(storage::get(b"hello"), Some(b"world".to_vec().into()));
 			assert_eq!(storage::get(b"foo"), None);
 			storage::set(b"foo", &[1, 2, 3][..]);
 		});
@@ -1799,7 +1799,7 @@ mod tests {
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
-			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec()));
+			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec().into()));
 		});
 
 		let value = vec![7u8; 35];
@@ -1809,7 +1809,7 @@ mod tests {
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
-			assert_eq!(storage::get(b"foo00"), Some(value.clone()));
+			assert_eq!(storage::get(b"foo00"), Some(value.clone().into()));
 		});
 	}
 

@@ -237,7 +237,7 @@ impl sp_runtime::traits::Dispatchable for Extrinsic {
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-		panic!("This implemention should not be used for actual dispatch.");
+		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
 
@@ -944,6 +944,16 @@ cfg_if! {
 			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
+				}
+			}
+
+			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for RuntimeApi {
+				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
+					Default::default()
+				}
+
+				fn next_authority_set_proof() -> beefy_primitives::mmr::BeefyNextAuthoritySet<beefy_primitives::MmrRootHash> {
+					Default::default()
 				}
 			}
 

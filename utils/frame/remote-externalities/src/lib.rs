@@ -130,7 +130,7 @@ pub enum Transport {
 impl Transport {
 	fn as_client(&self) -> Option<&WsClient> {
 		match self {
-			Self::RemoteClient(client) => Some(&*client),
+			Self::RemoteClient(client) => Some(client),
 			_ => None,
 		}
 	}

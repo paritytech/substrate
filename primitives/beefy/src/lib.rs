@@ -154,6 +154,20 @@ pub struct VoteMessage<Number, Id, Signature> {
 	pub signature: Signature,
 }
 
+/// New BEEFY validator set notification hook.
+pub trait OnNewValidatorSet<AuthorityId> {
+	/// Function called by the pallet when BEEFY validator set changes.
+	fn on_new_validator_set(
+		validator_set: &ValidatorSet<AuthorityId>,
+		next_validator_set: &ValidatorSet<AuthorityId>,
+	);
+}
+
+/// No-op implementation of [OnNewValidatorSet].
+impl<AuthorityId> OnNewValidatorSet<AuthorityId> for () {
+	fn on_new_validator_set(_: &ValidatorSet<AuthorityId>, _: &ValidatorSet<AuthorityId>) {}
+}
+
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
 	pub trait BeefyApi

@@ -91,8 +91,8 @@ use frame_support::{
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
-		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
-		Weight,
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		PerDispatchClass, RuntimeDbWeight, Weight,
 	},
 	Parameter,
 };
@@ -197,6 +197,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
+	use sp_runtime::DispatchErrorWithPostInfo;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -371,8 +372,16 @@ pub mod pallet {
 		// that's not possible at present (since it's within the pallet macro).
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			Ok(().into())
+			match ensure_root(origin) {
+				Ok(_) => Ok(().into()),
+				Err(_) => {
+					// roughly same as a 4 byte remark since perbill is u32.
+					Err(DispatchErrorWithPostInfo {
+						post_info: Some(T::SystemWeightInfo::remark(4u32)).into(),
+						error: DispatchError::BadOrigin,
+					})
+				},
+			}
 		}
 
 		/// Make some on-chain remark.
@@ -1491,6 +1500,7 @@ impl<T: Config> Pallet<T> {
 	/// To be called immediately after an extrinsic has been applied.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
 		info.weight = extract_actual_weight(r, &info);
+		info.pays_fee = extract_actual_pays_fee(r, &info);
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {

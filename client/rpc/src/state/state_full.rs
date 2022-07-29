@@ -199,7 +199,7 @@ where
 					.call(
 						&BlockId::Hash(block),
 						&method,
-						&*call_data,
+						&call_data,
 						self.client.execution_extensions().strategies().other,
 						None,
 					)
