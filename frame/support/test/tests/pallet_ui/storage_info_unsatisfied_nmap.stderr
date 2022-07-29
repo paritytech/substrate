@@ -4,5 +4,15 @@ error[E0277]: the trait bound `Bar: MaxEncodedLen` is not satisfied
 12 |     #[pallet::pallet]
    |               ^^^^^^ the trait `MaxEncodedLen` is not implemented for `Bar`
    |
+   = help: the following other types implement trait `MaxEncodedLen`:
+             ()
+             (TupleElement0, TupleElement1)
+             (TupleElement0, TupleElement1, TupleElement2)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6)
+             (TupleElement0, TupleElement1, TupleElement2, TupleElement3, TupleElement4, TupleElement5, TupleElement6, TupleElement7)
+           and 70 others
    = note: required because of the requirements on the impl of `KeyGeneratorMaxEncodedLen` for `Key<frame_support::Twox64Concat, Bar>`
    = note: required because of the requirements on the impl of `StorageInfoTrait` for `frame_support::pallet_prelude::StorageNMap<_GeneratedPrefixForStorageFoo<T>, Key<frame_support::Twox64Concat, Bar>, u32>`

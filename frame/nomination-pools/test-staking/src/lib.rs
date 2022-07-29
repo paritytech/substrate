@@ -95,8 +95,8 @@ fn pool_lifecycle_e2e() {
 			pool_events_since_last_call(),
 			vec![
 				PoolsEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-				PoolsEvent::Unbonded { member: 20, pool_id: 1, points: 10, balance: 10 },
-				PoolsEvent::Unbonded { member: 21, pool_id: 1, points: 10, balance: 10 },
+				PoolsEvent::Unbonded { member: 20, pool_id: 1, points: 10, balance: 10, era: 3 },
+				PoolsEvent::Unbonded { member: 21, pool_id: 1, points: 10, balance: 10, era: 3 },
 			]
 		);
 
@@ -159,7 +159,7 @@ fn pool_lifecycle_e2e() {
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 50, balance: 50 }]
+			vec![PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 50, balance: 50, era: 6 }]
 		);
 
 		// waiting another bonding duration:
@@ -237,8 +237,8 @@ fn pool_slash_e2e() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				PoolsEvent::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10 },
-				PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10 }
+				PoolsEvent::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10, era: 4 },
+				PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10, era: 4 }
 			]
 		);
 
@@ -262,9 +262,9 @@ fn pool_slash_e2e() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				PoolsEvent::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10 },
-				PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10 },
-				PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 10, points: 10 },
+				PoolsEvent::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10, era: 5 },
+				PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10, era: 5 },
+				PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 10, points: 10, era: 5 },
 			]
 		);
 
@@ -305,7 +305,7 @@ fn pool_slash_e2e() {
 		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Unbonded(POOL1_BONDED, 5)]);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 5, points: 5 }]
+			vec![PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 5, points: 5, era: 6 }]
 		);
 
 		// now we start withdrawing. we do it all at once, at era 6 where 20 and 21 are fully free.
@@ -342,7 +342,7 @@ fn pool_slash_e2e() {
 			pool_events_since_last_call(),
 			vec![
 				PoolsEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-				PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10 }
+				PoolsEvent::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10, era: 9 }
 			]
 		);
 
@@ -432,7 +432,13 @@ fn pool_slash_proportional() {
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: bond, points: bond }]
+			vec![PoolsEvent::Unbonded {
+				member: 20,
+				pool_id: 1,
+				balance: bond,
+				points: bond,
+				era: 127
+			}]
 		);
 
 		CurrentEra::<T>::set(Some(100));
@@ -443,7 +449,13 @@ fn pool_slash_proportional() {
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: bond, points: bond }]
+			vec![PoolsEvent::Unbonded {
+				member: 21,
+				pool_id: 1,
+				balance: bond,
+				points: bond,
+				era: 128
+			}]
 		);
 
 		CurrentEra::<T>::set(Some(101));
@@ -454,7 +466,13 @@ fn pool_slash_proportional() {
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 22, pool_id: 1, balance: bond, points: bond }]
+			vec![PoolsEvent::Unbonded {
+				member: 22,
+				pool_id: 1,
+				balance: bond,
+				points: bond,
+				era: 129
+			}]
 		);
 
 		// Apply a slash that happened in era 100. This is typically applied with a delay.
@@ -531,7 +549,13 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: bond, points: bond }]
+			vec![PoolsEvent::Unbonded {
+				member: 20,
+				pool_id: 1,
+				balance: bond,
+				points: bond,
+				era: 127
+			}]
 		);
 
 		// slash for 30. This will be deducted only from the bonded pool.
@@ -598,7 +622,13 @@ fn pool_slash_non_proportional_bonded_pool_and_chunks() {
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
-			vec![PoolsEvent::Unbonded { member: 20, pool_id: 1, balance: bond, points: bond }]
+			vec![PoolsEvent::Unbonded {
+				member: 20,
+				pool_id: 1,
+				balance: bond,
+				points: bond,
+				era: 127
+			}]
 		);
 
 		// slash 50. This will be deducted only from the bonded pool and one of the unbonding pools.

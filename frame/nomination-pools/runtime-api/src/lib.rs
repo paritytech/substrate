@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,15 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Collection of allocator implementations.
-//!
-//! This crate provides the following allocator implementations:
-//! - A freeing-bump allocator: [`FreeingBumpHeapAllocator`](freeing_bump::FreeingBumpHeapAllocator)
+//! Runtime API definition for nomination-pools pallet.
+//! Currently supports only one rpc endpoint.
 
-#![warn(missing_docs)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-mod error;
-mod freeing_bump;
+use codec::Codec;
 
-pub use error::Error;
-pub use freeing_bump::{AllocationStats, FreeingBumpHeapAllocator};
+sp_api::decl_runtime_apis! {
+	/// Runtime api for accessing information about nomination pools.
+	pub trait NominationPoolsApi<AccountId, Balance>
+		where AccountId: Codec, Balance: Codec
+	{
+		/// Returns the pending rewards for the member that the AccountId was given for.
+		fn pending_rewards(member: AccountId) -> Balance;
+	}
+}
