@@ -271,6 +271,8 @@ pub mod pallet {
 		NoSuitableScheduleFound,
 		/// Sudo is not allowed to unlock tokens
 		SudoUnlockIsDisallowed,
+		/// The provided vesting index exceeds the current number of vesting schedules
+		InvalidVestingIndex, 
 		/// An overflow or underflow has occured
 		MathError,
 	}
@@ -675,6 +677,17 @@ pub trait MultiTokenVestingLocks<AccountId> {
 		unlock_amount: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
 	) -> Result<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, DispatchError>;
 
+	/// Finds the vesting schedule with the provided index
+	/// Removes that old vesting schedule, adds a new one with new_locked and new_per_block
+	/// reflecting old locked_at - unlock_amount, to be unlocked by old ending block.
+	/// This does not transfer funds
+	fn unlock_tokens_by_vesting_index(
+		who: &AccountId,
+		token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId,
+		vesting_index: u32,
+		unlock_some_amount_or_all: Option<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance>,
+	) -> Result<(<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, <Self::Currency as MultiTokenCurrency<AccountId>>::Balance), DispatchError>;
+
 	/// Constructs a vesting schedule based on the given data starting from now
 	/// And places it into the appropriate (who, token_id) storage
 	/// This does not transfer funds
@@ -794,6 +807,106 @@ where
 		Self::write_lock(who, locked_now, token_id);
 
 		Ok(selected_schedule.3)
+	}
+
+	fn unlock_tokens_by_vesting_index(
+		who: &T::AccountId,
+		token_id: TokenIdOf<T>,
+		vesting_index: u32,
+		unlock_some_amount_or_all: Option<BalanceOf<T>>,
+	) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError>{
+		let now = <frame_system::Pallet<T>>::block_number();
+
+		// First we get the schedules of who
+		let schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>> =
+			Self::vesting(who, token_id).ok_or(Error::<T>::NotVesting)?.into();
+
+		// Then we enumerate and iterate through them
+		// and select the one which has atleast the `unlock_amount` as `locked_at` in the schedule
+		// Amongst the ones that satisfy the above condition we pick the one with least ending_block
+		// number index of the schedule to be removed, the schedule, locked_at of the schedule,
+		// ending_block_as_balance of the schedule
+		let mut selected_schedule: Option<(
+			usize,
+			VestingInfo<BalanceOf<T>, T::BlockNumber>,
+			BalanceOf<T>,
+			BalanceOf<T>,
+		)> = None;
+
+		for (i, schedule) in schedules.clone().into_iter().enumerate() {
+			let schedule_locked_at = schedule.locked_at::<T::BlockNumberToBalance>(now);
+			let schedule_locked_at_satisfied: bool = if let Some(unlock_amount) = unlock_some_amount_or_all{
+				schedule_locked_at >= unlock_amount
+			} else {
+				true
+			};
+
+			match (i == vesting_index as usize && schedule_locked_at_satisfied, selected_schedule) {
+				(true, None) => {
+					selected_schedule = Some((
+						i,
+						schedule,
+						schedule_locked_at,
+						schedule.ending_block_as_balance::<T::BlockNumberToBalance>(),
+					))
+				},
+				_ => (),
+			}
+		}
+
+		// Attempt to unwrap selected_schedule
+		// If it is still none that means the suitable vesting schedule was not found
+		let selected_schedule = selected_schedule.ok_or(Error::<T>::NoSuitableScheduleFound)?;
+
+		// Remove selected_schedule
+		let mut updated_schedules = schedules
+			.into_iter()
+			.enumerate()
+			.filter_map(
+				move |(index, schedule)| {
+					if index == selected_schedule.0 {
+						None
+					} else {
+						Some(schedule)
+					}
+				},
+			)
+			.collect::<Vec<_>>();
+
+		let new_locked = if let Some(unlock_amount) = unlock_some_amount_or_all {
+			selected_schedule.2.checked_sub(&unlock_amount).ok_or(Error::<T>::MathError)?
+		} else {
+			BalanceOf::<T>::zero()
+		};
+
+		let unlocked_amount = unlock_some_amount_or_all.unwrap_or(selected_schedule.2);
+
+		if !new_locked.is_zero() {
+			let length_as_balance = selected_schedule
+				.3
+				.saturating_sub(T::BlockNumberToBalance::convert(now))
+				.max(One::one());
+
+			// .max in length_as_balance computation protects against unsafe div
+			let new_per_block = (new_locked / length_as_balance).max(One::one());
+
+			let vesting_schedule = VestingInfo::new(new_locked, new_per_block, now);
+
+			ensure!(vesting_schedule.is_valid(), Error::<T>::InvalidScheduleParams);
+
+			// We just removed an element so this raw push shouldn't fail
+			updated_schedules.push(vesting_schedule);
+		}
+
+		// This is mostly to calculate locked_now
+		// It also removes schedules that represent 0 value locked
+		let (updated_schedules, locked_now) =
+			Self::exec_action(updated_schedules.to_vec(), VestingAction::Passive)?;
+
+		Self::write_vesting(&who, updated_schedules, token_id)?;
+		Self::write_lock(who, locked_now, token_id);
+
+		Ok((unlocked_amount, selected_schedule.3))
 	}
 
 	fn lock_tokens(
