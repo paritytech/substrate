@@ -218,7 +218,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// ```rust
 /// sp_api::decl_runtime_apis! {
 ///     /// Declare the api trait.
-/// 	#[api_version(2)]
+ ///      #[api_version(2)]
 ///     pub trait Balance {
 ///         /// Get the balance.
 ///         fn get_balance() -> u64;
@@ -227,9 +227,9 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 ///         /// Transfer the balance to another user id
 ///         #[api_version(3)]
 ///         fn transfer_balance(uid: u64);
-/// 		/// Clears the balance
-/// 		#[api_version(4)]
-/// 		fn clear_balance();
+///         /// Clears the balance
+///         #[api_version(4)]
+///         fn clear_balance();
 ///     }
 /// }
 ///
