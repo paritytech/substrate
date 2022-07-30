@@ -377,16 +377,22 @@ pub trait MinerConfig {
 		+ TypeInfo;
 	/// Maximum number of votes per voter in the snapshots.
 	type MaxVotesPerVoter;
+
 	/// Maximum length of the solution that the miner is allowed to generate.
 	///
 	/// Solutions are trimmed to respect this.
 	type MaxLength: Get<u32>;
+
 	/// Maximum weight of the solution that the miner is allowed to generate.
 	///
 	/// Solutions are trimmed to respect this.
 	///
 	/// The weight is computed using `solution_weight`.
 	type MaxWeight: Get<Weight>;
+
+	/// Maximum number of backers per each winner that this miner is going to allow.
+	type MaxBackersPerWinner: Get<u32>;
+
 	/// Something that can compute the weight of a solution.
 	///
 	/// This weight estimate is then used to trim the solution, based on [`MinerConfig::MaxWeight`].
@@ -456,6 +462,35 @@ impl<T: MinerConfig> Miner<T> {
 			// accidentally change the sort order
 			sp_npos_elections::reduce(&mut staked);
 
+			// ensure that this assignment is respecting `MaxBackersPerWinner`. Unfortunately, for
+			// now we do this by migrating everything to 'supports' and back.
+			let mut staked = {
+				let limit = T::MaxBackersPerWinner::get() as usize;
+				let mut supports = sp_npos_elections::to_supports(&staked);
+				// the old one should not be used anymore.
+				drop(staked);
+				supports
+					.iter_mut()
+					.filter_map(
+						|(_, support)| {
+							if support.voters.len() > limit {
+								Some(support)
+							} else {
+								None
+							}
+						},
+					)
+					.for_each(|support| {
+						support.voters.sort_unstable_by(|(_, b1), (_, b2)| b1.cmp(&b2).reverse());
+						support.voters.truncate(limit);
+						support.total =
+							support.voters.iter().fold(0, |acc, (_, x)| acc.saturating_add(*x));
+					});
+
+				use sp_npos_elections::helpers::supports_to_staked_assignment;
+				supports_to_staked_assignment(supports)
+			};
+
 			// Sort the assignments by reversed voter stake. This ensures that we can efficiently
 			// truncate the list.
 			staked.sort_by_key(
@@ -464,7 +499,7 @@ impl<T: MinerConfig> Miner<T> {
 					// still need to iterate over all votes in order to actually compute the total
 					// stake. it should be faster to look it up from the cache.
 					let stake = cache
-						.get(who)
+						.get(&who)
 						.map(|idx| {
 							let (_, stake, _) = voters[*idx];
 							stake

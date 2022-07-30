@@ -231,7 +231,7 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	BoundedSupport, BoundedSupports, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
+	BoundedSupports, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
 	InstantElectionProvider, NposSolution,
 };
 use frame_support::{
@@ -251,7 +251,6 @@ use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
 };
 use sp_runtime::{
-	traits::Convert,
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
@@ -293,6 +292,9 @@ pub type SolutionAccuracyOf<T> =
 	<SolutionOf<<T as crate::Config>::MinerConfig> as NposSolution>::Accuracy;
 /// The fallback election type.
 pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider>::Error;
+/// The maximum backers per winner, as defined in the configurations of the inner miner.
+pub type MaxBackersPerWinnerOf<T> =
+	<<T as crate::Config>::MinerConfig as unsigned::MinerConfig>::MaxBackersPerWinner;
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -320,7 +322,7 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
-	type MaxBackersPerWinner = T::MaxBackersPerWinner;
+	type MaxBackersPerWinner = MaxBackersPerWinnerOf<T>;
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
@@ -713,7 +715,7 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
-			MaxBackersPerWinner = Self::MaxBackersPerWinner,
+			MaxBackersPerWinner = MaxBackersPerWinnerOf<Self>,
 		>;
 
 		/// Configuration of the governance-only fallback.
@@ -724,15 +726,11 @@ pub mod pallet {
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Self::DataProvider,
-			MaxBackersPerWinner = Self::MaxBackersPerWinner,
+			MaxBackersPerWinner = MaxBackersPerWinnerOf<Self>,
 		>;
 
 		/// OCW election solution miner algorithm implementation.
 		type Solver: NposSolver<AccountId = Self::AccountId>;
-
-		/// Maximum number of backers per winner that this pallet should, as its implementation of
-		/// `ElectionProvider` return.
-		type MaxBackersPerWinner: Get<u32>;
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
@@ -1611,7 +1609,7 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
-	type MaxBackersPerWinner = T::MaxBackersPerWinner;
+	type MaxBackersPerWinner = MaxBackersPerWinnerOf<T>;
 	type DataProvider = T::DataProvider;
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {

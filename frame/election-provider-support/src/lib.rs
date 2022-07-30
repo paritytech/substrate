@@ -694,7 +694,7 @@ pub struct SortIntoBoundedSupports<T>(sp_std::marker::PhantomData<T>);
 impl<E: ElectionProvider> Convert<sp_npos_elections::Supports<E::AccountId>, BoundedSupportsOf<E>>
 	for SortIntoBoundedSupports<E>
 {
-	fn convert(a: sp_npos_elections::Supports<E::AccountId>) -> BoundedSupportsOf<E> {
+	fn convert(_: sp_npos_elections::Supports<E::AccountId>) -> BoundedSupportsOf<E> {
 		todo!();
 	}
 }
