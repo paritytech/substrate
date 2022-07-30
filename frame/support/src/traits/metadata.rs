@@ -19,6 +19,7 @@
 
 use codec::{Decode, Encode};
 use sp_runtime::RuntimeDebug;
+use impl_trait_for_tuples::impl_for_tuples;
 use sp_std::prelude::*;
 
 /// Provides information about the pallet itself and its setup in the runtime.
@@ -82,7 +83,9 @@ pub trait PalletsInfoAccess {
 // all we need is:
 // Impl<T: PalletInfoAccess> PalletsInfoAccess for (T) {}
 // Impl<T: PalletInfoAccess, T1> PalletsInfoAccess for (T, T1) {}
-#[impl_trait_for_tuples::impl_for_tuples(100)]
+#[impl_for_tuples(64)]
+#[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl PalletsInfoAccess for Tuple {
 	fn infos() -> Vec<PalletInfoData> {
 		let mut res = vec![];

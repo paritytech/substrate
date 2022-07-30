@@ -18,6 +18,7 @@
 //! Traits for dealing with the idea of membership.
 
 use sp_std::{marker::PhantomData, prelude::*};
+use impl_trait_for_tuples::impl_for_tuples;
 
 /// A trait for querying whether a type can be said to "contain" a value.
 pub trait Contains<T> {
@@ -25,7 +26,9 @@ pub trait Contains<T> {
 	fn contains(t: &T) -> bool;
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(1, 30)]
+#[impl_for_tuples(1, 64)]
+#[cfg_attr(feature = "tuples-96", impl_for_tuples(1, 96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(1, 128))]
 impl<T> Contains<T> for Tuple {
 	fn contains(t: &T) -> bool {
 		for_tuples!( #(
@@ -41,7 +44,9 @@ pub trait ContainsPair<A, B> {
 	fn contains(a: &A, b: &B) -> bool;
 }
 
-#[impl_trait_for_tuples::impl_for_tuples(0, 30)]
+#[impl_for_tuples(0, 64)]
+#[cfg_attr(feature = "tuples-96", impl_for_tuples(0, 96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(0, 128))]
 impl<A, B> ContainsPair<A, B> for Tuple {
 	fn contains(a: &A, b: &B) -> bool {
 		for_tuples!( #(
