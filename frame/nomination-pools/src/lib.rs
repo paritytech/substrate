@@ -2471,8 +2471,8 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_slash(
 		pool_account: &T::AccountId,
-		// Bonded balance is always read directly from staking, therefore we need not update
-		// anything here.
+		// Bonded balance is always read directly from staking, therefore we
+		// don't need to update anything here.
 		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,
 	) {
