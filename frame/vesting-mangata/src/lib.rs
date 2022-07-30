@@ -500,6 +500,8 @@ impl<T: Config> Pallet<T> {
 			token_id,
 		)?;
 
+		T::Tokens::ensure_can_withdraw(token_id, &source, schedule.locked(), WithdrawReasons::all(), Default::default())?;
+
 		T::Tokens::transfer(
 			token_id,
 			&source,
@@ -801,6 +803,8 @@ where
 		ending_block_as_balance: BalanceOf<T>,
 	) -> DispatchResult {
 		let now = <frame_system::Pallet<T>>::block_number();
+
+		T::Tokens::ensure_can_withdraw(token_id, who, lock_amount, WithdrawReasons::all(), Default::default())?;
 
 		let length_as_balance = ending_block_as_balance
 			.saturating_sub(T::BlockNumberToBalance::convert(now))
