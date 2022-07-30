@@ -314,27 +314,50 @@ impl IndexMut<Order> for FreeLists {
 	}
 }
 
+/// Memory allocation stats gathered during the lifetime of the allocator.
+#[derive(Clone, Debug, Default)]
+#[non_exhaustive]
+pub struct AllocationStats {
+	/// The current number of bytes allocated.
+	///
+	/// This represents how many bytes are allocated *right now*.
+	pub bytes_allocated: u32,
+
+	/// The peak number of bytes ever allocated.
+	///
+	/// This is the maximum the `bytes_allocated` ever reached.
+	pub bytes_allocated_peak: u32,
+
+	/// The sum of every allocation ever made.
+	///
+	/// This increases every time a new allocation is made.
+	pub bytes_allocated_sum: u32,
+
+	/// The amount of address space (in bytes) used by the allocator.
+	///
+	/// This is calculated as the difference between the allocator's bumper
+	/// and the heap base.
+	///
+	/// Currently the bumper's only ever incremented, so this is simultaneously
+	/// the current value as well as the peak value.
+	pub address_space_used: u32,
+}
+
 /// An implementation of freeing bump allocator.
 ///
 /// Refer to the module-level documentation for further details.
 pub struct FreeingBumpHeapAllocator {
+	original_heap_base: u32,
 	bumper: u32,
 	free_lists: FreeLists,
-	total_size: u32,
 	poisoned: bool,
-	max_total_size: u32,
-	max_bumper: u32,
 	last_observed_memory_size: u32,
+	stats: AllocationStats,
 }
 
 impl Drop for FreeingBumpHeapAllocator {
 	fn drop(&mut self) {
-		log::debug!(
-			target: LOG_TARGET,
-			"allocator being destroyed, max_total_size {}, max_bumper {}",
-			self.max_total_size,
-			self.max_bumper,
-		)
+		log::debug!(target: LOG_TARGET, "allocator dropped: {:?}", self.stats)
 	}
 }
 
@@ -348,13 +371,12 @@ impl FreeingBumpHeapAllocator {
 		let aligned_heap_base = (heap_base + ALIGNMENT - 1) / ALIGNMENT * ALIGNMENT;
 
 		FreeingBumpHeapAllocator {
+			original_heap_base: aligned_heap_base,
 			bumper: aligned_heap_base,
 			free_lists: FreeLists::new(),
-			total_size: 0,
 			poisoned: false,
-			max_total_size: 0,
-			max_bumper: aligned_heap_base,
 			last_observed_memory_size: 0,
+			stats: AllocationStats::default(),
 		}
 	}
 
@@ -412,22 +434,13 @@ impl FreeingBumpHeapAllocator {
 		// Write the order in the occupied header.
 		Header::Occupied(order).write_into(mem, header_ptr)?;
 
-		self.total_size += order.size() + HEADER_SIZE;
+		self.stats.bytes_allocated += order.size() + HEADER_SIZE;
+		self.stats.bytes_allocated_sum += order.size() + HEADER_SIZE;
+		self.stats.bytes_allocated_peak =
+			std::cmp::max(self.stats.bytes_allocated_peak, self.stats.bytes_allocated);
+		self.stats.address_space_used = self.bumper - self.original_heap_base;
 
-		log::trace!(
-			target: LOG_TARGET,
-			"after allocation, total_size = {}, bumper = {}.",
-			self.total_size,
-			self.bumper,
-		);
-
-		// update trackers if needed.
-		if self.total_size > self.max_total_size {
-			self.max_total_size = self.total_size;
-		}
-		if self.bumper > self.max_bumper {
-			self.max_bumper = self.bumper;
-		}
+		log::trace!(target: LOG_TARGET, "after allocation: {:?}", self.stats);
 
 		bomb.disarm();
 		Ok(Pointer::new(header_ptr + HEADER_SIZE))
@@ -469,19 +482,21 @@ impl FreeingBumpHeapAllocator {
 		let prev_head = self.free_lists.replace(order, Link::Ptr(header_ptr));
 		Header::Free(prev_head).write_into(mem, header_ptr)?;
 
-		// Do the total_size book keeping.
-		self.total_size = self
-			.total_size
+		self.stats.bytes_allocated = self
+			.stats
+			.bytes_allocated
 			.checked_sub(order.size() + HEADER_SIZE)
-			.ok_or_else(|| error("Unable to subtract from total heap size without overflow"))?;
-		log::trace!(
-			"after deallocation, total_size = {}, bumper = {}.",
-			self.total_size,
-			self.bumper,
-		);
+			.ok_or_else(|| error("underflow of the currently allocated bytes count"))?;
+
+		log::trace!("after deallocation: {:?}", self.stats);
 
 		bomb.disarm();
 		Ok(())
+	}
+
+	/// Returns the allocation stats for this allocator.
+	pub fn stats(&self) -> AllocationStats {
+		self.stats.clone()
 	}
 
 	/// Increases the `bumper` by `size`.
@@ -791,13 +806,13 @@ mod tests {
 		let ptr1 = heap.allocate(&mut mem[..], 32).unwrap();
 		assert_eq!(ptr1, to_pointer(HEADER_SIZE));
 		heap.deallocate(&mut mem[..], ptr1).expect("failed freeing ptr1");
-		assert_eq!(heap.total_size, 0);
+		assert_eq!(heap.stats.bytes_allocated, 0);
 		assert_eq!(heap.bumper, 40);
 
 		let ptr2 = heap.allocate(&mut mem[..], 16).unwrap();
 		assert_eq!(ptr2, to_pointer(48));
 		heap.deallocate(&mut mem[..], ptr2).expect("failed freeing ptr2");
-		assert_eq!(heap.total_size, 0);
+		assert_eq!(heap.stats.bytes_allocated, 0);
 		assert_eq!(heap.bumper, 64);
 
 		// when
@@ -825,7 +840,7 @@ mod tests {
 		heap.allocate(&mut mem[..], 9).unwrap();
 
 		// then
-		assert_eq!(heap.total_size, HEADER_SIZE + 16);
+		assert_eq!(heap.stats.bytes_allocated, HEADER_SIZE + 16);
 	}
 
 	#[test]
@@ -840,7 +855,7 @@ mod tests {
 		heap.deallocate(&mut mem[..], ptr).unwrap();
 
 		// then
-		assert_eq!(heap.total_size, 0);
+		assert_eq!(heap.stats.bytes_allocated, 0);
 	}
 
 	#[test]
@@ -856,7 +871,7 @@ mod tests {
 		}
 
 		// then
-		assert_eq!(heap.total_size, 0);
+		assert_eq!(heap.stats.bytes_allocated, 0);
 	}
 
 	#[test]

@@ -760,13 +760,15 @@ where
 		protocol_config
 	};
 
-	let warp_sync_params = warp_sync.map(|provider| {
-		// Allow both outgoing and incoming requests.
-		let (handler, protocol_config) =
-			WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
-		spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
-		(provider, protocol_config)
-	});
+	let (warp_sync_provider, warp_sync_protocol_config) = warp_sync
+		.map(|provider| {
+			// Allow both outgoing and incoming requests.
+			let (handler, protocol_config) =
+				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
+			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
+			(Some(provider), Some(protocol_config))
+		})
+		.unwrap_or_default();
 
 	let light_client_request_protocol_config = {
 		// Allow both outgoing and incoming requests.
@@ -776,7 +778,18 @@ where
 		protocol_config
 	};
 
-	let max_parallel_downloads = config.network.max_parallel_downloads;
+	let chain_sync = ChainSync::new(
+		match config.network.sync_mode {
+			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
+			SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+				sc_network_common::sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
+			SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
+		},
+		client.clone(),
+		block_announce_validator,
+		config.network.max_parallel_downloads,
+		warp_sync_provider,
+	)?;
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -796,22 +809,11 @@ where
 		transaction_pool: transaction_pool_adapter as _,
 		protocol_id,
 		import_queue: Box::new(import_queue),
-		create_chain_sync: Box::new(
-			move |sync_mode, chain, warp_sync_provider| match ChainSync::new(
-				sync_mode,
-				chain,
-				block_announce_validator,
-				max_parallel_downloads,
-				warp_sync_provider,
-			) {
-				Ok(chain_sync) => Ok(Box::new(chain_sync)),
-				Err(error) => Err(Box::new(error).into()),
-			},
-		),
+		chain_sync: Box::new(chain_sync),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,
-		warp_sync: warp_sync_params,
+		warp_sync_protocol_config,
 		light_client_request_protocol_config,
 	};
 
