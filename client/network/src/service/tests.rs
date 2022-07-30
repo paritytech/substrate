@@ -16,15 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{
-	config, state_request_handler::StateRequestHandler, Event, NetworkService, NetworkWorker,
-};
+use crate::{config, Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::PeerId;
 use sc_network_common::config::ProtocolId;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
-use sc_network_sync::block_request_handler::BlockRequestHandler;
+use sc_network_sync::{
+	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
+	ChainSync,
+};
+use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{borrow::Cow, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
@@ -40,7 +42,7 @@ type TestNetworkService = NetworkService<
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
 fn build_test_full_node(
-	config: config::NetworkConfiguration,
+	network_config: config::NetworkConfiguration,
 ) -> (Arc<TestNetworkService>, impl Stream<Item = Event>) {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 
@@ -109,25 +111,36 @@ fn build_test_full_node(
 		protocol_config
 	};
 
+	let chain_sync = ChainSync::new(
+		match network_config.sync_mode {
+			config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
+			config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+				sc_network_common::sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
+			config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
+		},
+		client.clone(),
+		Box::new(DefaultBlockAnnounceValidator),
+		network_config.max_parallel_downloads,
+		None,
+	)
+	.unwrap();
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
 		transactions_handler_executor: Box::new(|task| {
 			async_std::task::spawn(task);
 		}),
-		network_config: config,
+		network_config,
 		chain: client.clone(),
-		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
+		transaction_pool: Arc::new(config::EmptyTransactionPool),
 		protocol_id,
 		import_queue,
-		block_announce_validator: Box::new(
-			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
-		),
+		chain_sync: Box::new(chain_sync),
 		metrics_registry: None,
 		block_request_protocol_config,
 		state_request_protocol_config,
 		light_client_request_protocol_config,
-		warp_sync: None,
+		warp_sync_protocol_config: None,
 	})
 	.unwrap();
 

@@ -56,6 +56,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
+pub mod weights;
 
 const LOG_TARGET: &str = "runtime::state-trie-migration";
 
@@ -71,6 +72,9 @@ macro_rules! log {
 
 #[frame_support::pallet]
 pub mod pallet {
+
+	pub use crate::weights::WeightInfo;
+
 	use frame_support::{
 		dispatch::{DispatchErrorWithPostInfo, PostDispatchInfo},
 		ensure,
@@ -89,41 +93,6 @@ pub mod pallet {
 
 	pub(crate) type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-	/// The weight information of this pallet.
-	pub trait WeightInfo {
-		fn process_top_key(x: u32) -> Weight;
-		fn continue_migrate() -> Weight;
-		fn continue_migrate_wrong_witness() -> Weight;
-		fn migrate_custom_top_fail() -> Weight;
-		fn migrate_custom_top_success() -> Weight;
-		fn migrate_custom_child_fail() -> Weight;
-		fn migrate_custom_child_success() -> Weight;
-	}
-
-	impl WeightInfo for () {
-		fn process_top_key(_: u32) -> Weight {
-			1000000
-		}
-		fn continue_migrate() -> Weight {
-			1000000
-		}
-		fn continue_migrate_wrong_witness() -> Weight {
-			1000000
-		}
-		fn migrate_custom_top_fail() -> Weight {
-			1000000
-		}
-		fn migrate_custom_top_success() -> Weight {
-			1000000
-		}
-		fn migrate_custom_child_fail() -> Weight {
-			1000000
-		}
-		fn migrate_custom_child_success() -> Weight {
-			1000000
-		}
-	}
 
 	/// The progress of either the top or child keys.
 	#[derive(
@@ -1072,6 +1041,7 @@ mod mock {
 	use frame_support::{
 		parameter_types,
 		traits::{ConstU32, ConstU64, Hooks},
+		weights::Weight,
 	};
 	use frame_system::{EnsureRoot, EnsureSigned};
 	use sp_core::{
@@ -1148,6 +1118,33 @@ mod mock {
 		type WeightInfo = ();
 	}
 
+	/// Test only Weights for state migration.
+	pub struct StateMigrationTestWeight;
+
+	impl WeightInfo for StateMigrationTestWeight {
+		fn process_top_key(_: u32) -> Weight {
+			1000000
+		}
+		fn continue_migrate() -> Weight {
+			1000000
+		}
+		fn continue_migrate_wrong_witness() -> Weight {
+			1000000
+		}
+		fn migrate_custom_top_fail() -> Weight {
+			1000000
+		}
+		fn migrate_custom_top_success() -> Weight {
+			1000000
+		}
+		fn migrate_custom_child_fail() -> Weight {
+			1000000
+		}
+		fn migrate_custom_child_success() -> Weight {
+			1000000
+		}
+	}
+
 	impl pallet_state_trie_migration::Config for Test {
 		type Event = Event;
 		type ControlOrigin = EnsureRoot<u64>;
@@ -1156,7 +1153,7 @@ mod mock {
 		type SignedDepositPerItem = SignedDepositPerItem;
 		type SignedDepositBase = SignedDepositBase;
 		type SignedFilter = EnsureSigned<Self::AccountId>;
-		type WeightInfo = ();
+		type WeightInfo = StateMigrationTestWeight;
 	}
 
 	pub fn new_test_ext(

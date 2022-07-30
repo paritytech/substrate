@@ -30,7 +30,7 @@ use sc_consensus_epochs::{
 	descendent_query, EpochHeader, SharedEpochChanges, ViableEpochDescriptor,
 };
 use sp_keystore::SyncCryptoStorePtr;
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -52,7 +52,7 @@ use sp_timestamp::TimestampInherentData;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
-pub struct BabeConsensusDataProvider<B: BlockT, C> {
+pub struct BabeConsensusDataProvider<B: BlockT, C, P> {
 	/// shared reference to keystore
 	keystore: SyncCryptoStorePtr,
 
@@ -70,6 +70,7 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 
 	/// Authorities to be used for this babe chain.
 	authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	_phantom: PhantomData<P>,
 }
 
 /// Verifier to be used for babe chains
@@ -133,7 +134,7 @@ where
 	}
 }
 
-impl<B, C> BabeConsensusDataProvider<B, C>
+impl<B, C, P> BabeConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -155,7 +156,14 @@ where
 
 		let config = sc_consensus_babe::configuration(&*client)?;
 
-		Ok(Self { config, client, keystore, epoch_changes, authorities })
+		Ok(Self {
+			config,
+			client,
+			keystore,
+			epoch_changes,
+			authorities,
+			_phantom: Default::default(),
+		})
 	}
 
 	fn epoch(&self, parent: &B::Header, slot: Slot) -> Result<Epoch, Error> {
@@ -181,7 +189,7 @@ where
 	}
 }
 
-impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
+impl<B, C, P> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -190,8 +198,10 @@ where
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
 	C::Api: BabeApi<B>,
+	P: Send + Sync,
 {
 	type Transaction = TransactionFor<C, B>;
+	type Proof = P;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error> {
 		let slot = inherents
@@ -259,6 +269,7 @@ where
 		parent: &B::Header,
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData,
+		_proof: Self::Proof,
 	) -> Result<(), Error> {
 		let slot = inherents
 			.babe_inherent_data()?

@@ -280,7 +280,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Type that allows the runtime authors to add new host functions for a contract to call.
-		type ChainExtension: chain_extension::ChainExtension<Self>;
+		type ChainExtension: chain_extension::ChainExtension<Self> + Default;
 
 		/// Cost schedule and limits.
 		#[pallet::constant]

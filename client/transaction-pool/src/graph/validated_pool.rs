@@ -24,7 +24,6 @@ use std::{
 
 use futures::channel::mpsc::{channel, Sender};
 use parking_lot::{Mutex, RwLock};
-use retain_mut::RetainMut;
 use sc_transaction_pool_api::{error, PoolStatus, ReadyTransactions};
 use serde::Serialize;
 use sp_runtime::{
@@ -125,6 +124,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: Options, is_validator: IsValidator, api: Arc<B>) -> Self {
 		let base_pool = base::BasePool::new(options.reject_future_transactions);
+		let ban_time = options.ban_time;
 		Self {
 			is_validator,
 			options,
@@ -132,7 +132,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 			api,
 			pool: RwLock::new(base_pool),
 			import_notification_sinks: Default::default(),
-			rotator: Default::default(),
+			rotator: PoolRotator::new(ban_time),
 		}
 	}
 
@@ -203,21 +203,20 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
-					RetainMut::retain_mut(&mut *self.import_notification_sinks.lock(), |sink| {
-						match sink.try_send(*hash) {
-							Ok(()) => true,
-							Err(e) =>
-								if e.is_full() {
-									log::warn!(
-										target: "txpool",
-										"[{:?}] Trying to notify an import but the channel is full",
-										hash,
-									);
-									true
-								} else {
-									false
-								},
-						}
+					let sinks = &mut self.import_notification_sinks.lock();
+					sinks.retain_mut(|sink| match sink.try_send(*hash) {
+						Ok(()) => true,
+						Err(e) =>
+							if e.is_full() {
+								log::warn!(
+									target: "txpool",
+									"[{:?}] Trying to notify an import but the channel is full",
+									hash,
+								);
+								true
+							} else {
+								false
+							},
 					});
 				}
 

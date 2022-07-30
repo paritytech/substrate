@@ -17,10 +17,7 @@
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::{
-	message::BlockAttributes,
-	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
-};
+use crate::schema::v1::{block_request::FromBlock, BlockResponse, Direction};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
@@ -34,6 +31,7 @@ use sc_client_api::BlockBackend;
 use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	sync::message::BlockAttributes,
 };
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -228,16 +226,13 @@ where
 
 		debug!(
 			target: LOG_TARGET,
-			"Handling block request from {}: Starting at `{:?}` with maximum blocks \
-			 of `{}`, direction `{:?}` and attributes `{:?}`.",
-			peer,
-			from_block_id,
-			max_blocks,
-			direction,
-			attributes,
+			"Handling block request from {peer}: Starting at `{from_block_id:?}` with \
+			maximum blocks of `{max_blocks}`, reputation_change: `{reputation_change:?}`, \
+			small_request `{small_request:?}`, direction `{direction:?}` and \
+			attributes `{attributes:?}`.",
 		);
 
-		let result = if reputation_change.is_none() || small_request {
+		let maybe_block_response = if reputation_change.is_none() || small_request {
 			let block_response = self.get_block_response(
 				attributes,
 				from_block_id,
@@ -261,9 +256,22 @@ where
 				}
 			}
 
+			Some(block_response)
+		} else {
+			None
+		};
+
+		debug!(
+			target: LOG_TARGET,
+			"Sending result of block request from {peer} starting at `{from_block_id:?}`: \
+			blocks: {:?}, data: {:?}",
+			maybe_block_response.as_ref().map(|res| res.blocks.len()),
+			maybe_block_response.as_ref().map(|res| res.encoded_len()),
+		);
+
+		let result = if let Some(block_response) = maybe_block_response {
 			let mut data = Vec::with_capacity(block_response.encoded_len());
 			block_response.encode(&mut data)?;
-
 			Ok(data)
 		} else {
 			Err(())
