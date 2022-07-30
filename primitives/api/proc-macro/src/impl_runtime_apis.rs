@@ -29,7 +29,7 @@ use crate::attribute_names::API_VERSION_ATTRIBUTE;
 
 use proc_macro2::{Span, TokenStream};
 
-use quote::{quote, ToTokens};
+use quote::quote;
 
 use syn::{
 	fold::{self, Fold},
@@ -670,12 +670,12 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 	Ok(quote!( #( #result )* ))
 }
 
-fn populate_runtime_api_versions<T: ToTokens>(
+fn populate_runtime_api_versions(
 	result: &mut Vec<TokenStream>,
 	sections: &mut Vec<TokenStream>,
 	attrs: Vec<Attribute>,
 	id: Path,
-	version: T,
+	version: TokenStream,
 	crate_access: &TokenStream,
 ) {
 	result.push(quote!(
@@ -704,7 +704,7 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 	for impl_ in impls {
-		let api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
+		let api_ver = extract_api_version(&impl_.attrs, impl_.span())?.map(|a| a as u32);
 
 		let mut path = extend_with_runtime_decl_path(
 			extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?.clone(),
@@ -728,21 +728,11 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 		}
 
 		let id: Path = parse_quote!( #path ID );
-		let version: Path = parse_quote!( #path VERSION );
+		let version = quote!( #path VERSION );
 		let attrs = filter_cfg_attrs(&impl_.attrs);
 
-		match api_ver {
-			Some(version) => populate_runtime_api_versions(
-				&mut result,
-				&mut sections,
-				attrs,
-				id,
-				version as u32,
-				&c,
-			),
-			None =>
-				populate_runtime_api_versions(&mut result, &mut sections, attrs, id, version, &c),
-		}
+		let api_ver = api_ver.map(|a| quote!( #a )).unwrap_or_else(|| version);
+		populate_runtime_api_versions(&mut result, &mut sections, attrs, id, api_ver, &c)
 	}
 
 	Ok(quote!(

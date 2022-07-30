@@ -218,7 +218,7 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// ```rust
 /// sp_api::decl_runtime_apis! {
 ///     /// Declare the api trait.
- ///      #[api_version(2)]
+///     #[api_version(2)]
 ///     pub trait Balance {
 ///         /// Get the balance.
 ///         fn get_balance() -> u64;
@@ -235,7 +235,8 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 ///
 /// # fn main() {}
 /// ```
-/// Note that the latest version (4 in our example above) always contains all methods from all the versions before.
+/// Note that the latest version (4 in our example above) always contains all methods from all
+/// the versions before.
 pub use sp_api_proc_macro::decl_runtime_apis;
 
 /// Tags given trait implementations as runtime apis.
