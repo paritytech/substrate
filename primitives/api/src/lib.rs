@@ -191,9 +191,9 @@ pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
 /// # Declaring multiple api versions
 ///
 /// Optionally multiple versions of the same api can be declared. This is useful for
-/// development purposes. For example if you want to have a testing version of the api which
-/// is available only on a testnet (for example) you can define one stable and one development
-/// version. This can be done like this:
+/// development purposes. For example you want to have a testing version of the api which is
+/// available only on a testnet. You can define one stable and one development version. This
+/// can be done like this:
 /// ```rust
 /// sp_api::decl_runtime_apis! {
 ///     /// Declare the api trait.

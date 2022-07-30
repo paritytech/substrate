@@ -316,7 +316,7 @@ fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
 fn generate_versioned_api_traits(
 	api: ItemTrait,
 	methods: BTreeMap<u64, Vec<TraitItemMethod>>,
-) -> Result<Vec<ItemTrait>> {
+) -> Vec<ItemTrait> {
 	let process_method = |mut m: TraitItemMethod| {
 		m.default = None;
 		TraitItem::Method(m)
@@ -327,19 +327,16 @@ fn generate_versioned_api_traits(
 		let mut dummy_trait = api.clone();
 		dummy_trait.ident = dummy_trait_name(&dummy_trait.ident, *version);
 		dummy_trait.items = Vec::new();
-		for (v, m) in methods.iter() {
-			// Add the methods from the current version and all previous one. Versions are sorted so
-			// it's safe to break early.
-			if v > version {
-				break
-			}
-			dummy_trait.items.extend(m.clone().into_iter().map(process_method));
+		// Add the methods from the current version and all previous one. Versions are sorted so
+		// it's safe to stop early.
+		for (_, m) in methods.iter().take_while(|(v, _)| v <= &version) {
+			dummy_trait.items.extend(m.iter().cloned().map(process_method));
 		}
 
 		result.push(dummy_trait);
 	}
 
-	Ok(result)
+	result
 }
 
 /// Try to parse the given `Attribute` as `renamed` attribute.
@@ -562,7 +559,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 			})
 			.collect();
 
-		let versioned_api_traits = generate_versioned_api_traits(decl.clone(), methods_by_version)?;
+		let versioned_api_traits = generate_versioned_api_traits(decl.clone(), methods_by_version);
 		let native_call_generators = generate_native_call_generators(&decl)?;
 
 		result.push(quote!(
@@ -702,7 +699,7 @@ impl<'a> ToClientSideDecl<'a> {
 		let block_id = self.block_id;
 		let crate_ = self.crate_;
 
-		let mut result: Option<TraitItemMethod> = Some(parse_quote! {
+		let mut result: TraitItemMethod = parse_quote! {
 			#[doc(hidden)]
 			fn #name(
 				&self,
@@ -711,14 +708,13 @@ impl<'a> ToClientSideDecl<'a> {
 				params: Option<( #( #param_types ),* )>,
 				params_encoded: Vec<u8>,
 			) -> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>;
-		});
+		};
 
 		if is_versioned_method {
-			let r = result.as_mut().expect("result is initialised on the above line. qed");
-			attach_default_method_implementation(r);
+			attach_default_method_implementation(&mut result);
 		}
 
-		result
+		Some(result)
 	}
 
 	/// Takes the method declared by the user and creates the declaration we require for the runtime

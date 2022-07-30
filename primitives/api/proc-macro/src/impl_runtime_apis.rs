@@ -804,27 +804,24 @@ fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
 // - None if the version is not set (this is valid).
 fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>> {
 	// First fetch all `API_VERSION_ATTRIBUTE` values (should be only one)
-	let mut api_ver = Vec::new();
-	for v in attrs {
-		if v.path.is_ident(API_VERSION_ATTRIBUTE) {
-			api_ver.push(v.clone());
-		}
+	let api_ver = attrs
+		.iter()
+		.filter(|a| a.path.is_ident(API_VERSION_ATTRIBUTE))
+		.collect::<Vec<_>>();
+
+	if api_ver.len() > 1 {
+		return Err(Error::new(
+			span,
+			format!(
+				"Found multiple #[{}] attributes for an API implementation. \
+				Each runtime API can have only one version.",
+				API_VERSION_ATTRIBUTE
+			),
+		))
 	}
 
-	// and process it
-	match api_ver.len() {
-		0 => Ok(None), // no version is set
-		1 => Ok(Some(parse_runtime_api_version(api_ver.get(0).unwrap())?)),
-		_ =>
-			return Err(Error::new(
-				span,
-				format!(
-					"Found multiple #[{}] attributes for an API implementation. \
-					Each runtime API can have only one version.",
-					API_VERSION_ATTRIBUTE
-				),
-			)),
-	}
+	// Parse the runtime version if there exists one.
+	api_ver.first().map(|v| parse_runtime_api_version(v)).transpose()
 }
 
 #[cfg(test)]
