@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::utils::{
-	attach_default_method_implementation, dummy_trait_name,
+	attach_default_method_implementation, versioned_trait_name,
 	extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side,
 	generate_call_api_at_fn_name, generate_crate_access, generate_hidden_includes,
 	generate_method_runtime_api_impl_name, generate_native_call_generator_fn_name,
@@ -324,16 +324,16 @@ fn generate_versioned_api_traits(
 
 	let mut result = Vec::<ItemTrait>::new();
 	for (version, _) in &methods {
-		let mut dummy_trait = api.clone();
-		dummy_trait.ident = dummy_trait_name(&dummy_trait.ident, *version);
-		dummy_trait.items = Vec::new();
+		let mut versioned_trait = api.clone();
+		versioned_trait.ident = versioned_trait_name(&versioned_trait.ident, *version);
+		versioned_trait.items = Vec::new();
 		// Add the methods from the current version and all previous one. Versions are sorted so
 		// it's safe to stop early.
 		for (_, m) in methods.iter().take_while(|(v, _)| v <= &version) {
-			dummy_trait.items.extend(m.iter().cloned().map(process_method));
+			versioned_trait.items.extend(m.iter().cloned().map(process_method));
 		}
 
-		result.push(dummy_trait);
+		result.push(versioned_trait);
 	}
 
 	result

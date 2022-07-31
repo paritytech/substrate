@@ -296,8 +296,8 @@ pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 	}
 }
 
-// Each dummy trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
-pub fn dummy_trait_name(trait_ident: &Ident, version: u64) -> Ident {
+// Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
+pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
 	format_ident!("{}V{}", trait_ident, version.to_string())
 }
 

@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::utils::{
-	attach_default_method_implementation, dummy_trait_name, extract_all_signature_types,
+	attach_default_method_implementation, versioned_trait_name, extract_all_signature_types,
 	extract_block_type_from_trait_path, extract_impl_trait,
 	extract_parameter_names_types_and_borrows, generate_call_api_at_fn_name, generate_crate_access,
 	generate_hidden_includes, generate_method_runtime_api_impl_name,
@@ -421,7 +421,7 @@ fn generate_dummy_trait_impl(initial: &ItemImpl, trait_api_ver: u64) -> ItemImpl
 		.expect("Trait path should always contain at least one item; qed")
 		.clone();
 
-	trait_path_segment.ident = dummy_trait_name(&trait_path_segment.ident, trait_api_ver);
+	trait_path_segment.ident = versioned_trait_name(&trait_path_segment.ident, trait_api_ver);
 
 	dummy_trait.1.segments.pop();
 	let pos = dummy_trait.1.segments.len();
