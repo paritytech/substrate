@@ -965,6 +965,7 @@ impl<T: Config> RewardPool<T> {
 		id: PoolId,
 		bonded_points: BalanceOf<T>,
 	) -> Result<T::RewardCounter, Error<T>> {
+		dbg!(&self, &bonded_points);
 		let balance = Self::current_balance(id);
 		let payouts_since_last_record = balance
 			.saturating_add(self.total_rewards_claimed)
@@ -2379,7 +2380,7 @@ impl<T: Config> Pallet<T> {
 	/// To cater for tests that want to escape parts of these checks, this function is split into
 	/// multiple `level`s, where the higher the level, the more checks we performs. So,
 	/// `sanity_check(255)` is the strongest sanity check, and `0` performs no checks.
-	#[cfg(any(test, debug_assertions))]
+	#[cfg(any(feature = "std", test, debug_assertions))]
 	pub fn sanity_checks(level: u8) -> Result<(), &'static str> {
 		if level.is_zero() {
 			return Ok(())
@@ -2401,12 +2402,30 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let mut pools_members = BTreeMap::<PoolId, u32>::new();
+		let mut pools_members_pending_rewards = BTreeMap::<PoolId, BalanceOf<T>>::new();
 		let mut all_members = 0u32;
 		PoolMembers::<T>::iter().for_each(|(_, d)| {
-			assert!(BondedPools::<T>::contains_key(d.pool_id));
+			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
 			assert!(!d.total_points().is_zero(), "no member should have zero points: {:?}", d);
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
+
+			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
+			if !bonded_pool.points.is_zero() {
+				let current_rc =
+					reward_pool.current_reward_counter(d.pool_id, bonded_pool.points).unwrap();
+				*pools_members_pending_rewards.entry(d.pool_id).or_default() +=
+					d.pending_rewards(current_rc).unwrap();
+			} // else this pool has been heavily slashed and cannot have any rewards anymore.
+		});
+
+		RewardPools::<T>::iter_keys().for_each(|id| {
+			// the sum of the pending rewards must be less than the leftover balance. Since the
+			// reward math rounds down, we might accumulate some dust here.
+			assert!(
+				RewardPool::<T>::current_balance(id) >=
+					pools_members_pending_rewards.get(&id).map(|x| *x).unwrap_or_default()
+			)
 		});
 
 		BondedPools::<T>::iter().for_each(|(id, inner)| {

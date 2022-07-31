@@ -1721,6 +1721,54 @@ mod claim_payout {
 	}
 
 	#[test]
+	fn bond_extra_pending_rewards_works() {
+		ExtBuilder::default().add_members(vec![(20, 20)]).build_and_execute(|| {
+			MaxPoolMembers::<Runtime>::set(None);
+			MaxPoolMembersPerPool::<Runtime>::set(None);
+
+			// pool receives some rewards.
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			System::reset_events();
+
+			// 10 cashes it out, and bonds it.
+			{
+				assert_ok!(Pools::claim_payout(Origin::signed(10)));
+				let (member, _, reward_pool) = Pools::get_member_with_pools(&10).unwrap();
+				// there is 30 points and 30 reward points in the system RC is 1.
+				assert_eq!(member.last_recorded_reward_counter, 1.into());
+				assert_eq!(reward_pool.total_rewards_claimed, 10);
+				// these two are not updated -- only updated when the points change.
+				assert_eq!(reward_pool.last_recorded_total_payouts, 0);
+				assert_eq!(reward_pool.last_recorded_reward_counter, 0.into());
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10 }]
+				);
+			}
+
+			// 20 re-bonds it.
+			{
+				assert_ok!(Pools::bond_extra(Origin::signed(20), BondExtra::Rewards));
+				let (member, _, reward_pool) = Pools::get_member_with_pools(&10).unwrap();
+				assert_eq!(member.last_recorded_reward_counter, 1.into());
+				assert_eq!(reward_pool.total_rewards_claimed, 30);
+				// since points change, these two are updated.
+				assert_eq!(reward_pool.last_recorded_total_payouts, 30);
+				assert_eq!(reward_pool.last_recorded_reward_counter, 1.into());
+
+				assert_eq!(
+					pool_events_since_last_call(),
+					vec![
+						Event::PaidOut { member: 20, pool_id: 1, payout: 20 },
+						Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: false }
+					]
+				);
+			}
+		})
+	}
+
+	#[test]
 	fn unbond_updates_recorded_data() {
 		ExtBuilder::default()
 			.add_members(vec![(20, 20), (30, 20)])
