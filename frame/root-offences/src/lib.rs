@@ -54,6 +54,11 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
+	pub type IdentificationTuple<T: Config> = (
+		T::AccountId,
+		pallet_staking::Exposure<T::AccountId, <T as pallet_staking::Config>::CurrencyBalance>,
+	);
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(10_000)]
@@ -73,7 +78,7 @@ pub mod pallet {
 			let now = Staking::<T>::active_era().unwrap().index;
 
 			let offs: Vec<
-				OffenceDetails<T::AccountId, pallet_session::historical::IdentificationTuple<T>>,
+				OffenceDetails<T::AccountId, IdentificationTuple<T>>,
 			> = offenders
 				.into_iter()
 				.map(|(o, _)| {
@@ -84,9 +89,9 @@ pub mod pallet {
 					};
 					OffenceDetails::<
 						T::AccountId,
-						pallet_session::historical::IdentificationTuple<T>,
+						IdentificationTuple<T>,
 					> {
-						offender: (validator_id, (1, 2)),
+						offender: (o, Staking::<T>::eras_stakers(now, o)),
 						reporters: vec![],
 					}
 				})
