@@ -54,9 +54,12 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	pub type IdentificationTuple<T: Config> = (
-		T::AccountId,
-		pallet_staking::Exposure<T::AccountId, <T as pallet_staking::Config>::CurrencyBalance>,
+	pub type IdentificationTuple<T> = (
+		<T as frame_system::Config>::AccountId,
+		pallet_staking::Exposure<
+			<T as frame_system::Config>::AccountId,
+			<T as pallet_staking::Config>::CurrencyBalance,
+		>,
 	);
 
 	#[pallet::call]
@@ -77,25 +80,14 @@ pub mod pallet {
 			// FIX don't use unwrap!!
 			let now = Staking::<T>::active_era().unwrap().index;
 
-			let offs: Vec<
-				OffenceDetails<T::AccountId, IdentificationTuple<T>>,
-			> = offenders
+			// TODO come up with a better name for this.
+			let offs: &[OffenceDetails<T::AccountId, IdentificationTuple<T>>] = &(offenders
 				.into_iter()
-				.map(|(o, _)| {
-					let validator_id = match <T as pallet_session::Config>::ValidatorId::try_from(o)
-					{
-						Ok(id) => id,
-						Err(_) => panic!("FIX need to add actual error here!"),
-					};
-					OffenceDetails::<
-						T::AccountId,
-						IdentificationTuple<T>,
-					> {
-						offender: (o, Staking::<T>::eras_stakers(now, o)),
-						reporters: vec![],
-					}
+				.map(|(o, _)| OffenceDetails::<T::AccountId, IdentificationTuple<T>> {
+					offender: (o.clone(), Staking::<T>::eras_stakers(now, o)),
+					reporters: vec![],
 				})
-				.collect();
+				.collect::<Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>>>());
 
 			<T as pallet::Config>::OnOffenceHandler::on_offence(
 				&[],
@@ -113,7 +105,5 @@ pub mod pallet {
 	pub enum Event<T: Config> {}
 
 	#[pallet::error]
-	pub enum Error<T> {
-		CantGetValidatorId
-	}
+	pub enum Error<T> {}
 }
