@@ -88,6 +88,7 @@ members = [
 	"frame/contracts/rpc/runtime-api",
 	"frame/conviction-voting",
 	"frame/democracy",
+	"frame/fast-unstake",
 	"frame/try-runtime",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
