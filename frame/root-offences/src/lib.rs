@@ -20,7 +20,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use pallet_session::Pallet as Session;
 use pallet_staking::Pallet as Staking;
 use sp_runtime::Perbill;
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
@@ -64,8 +63,10 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+
+		/// Allows the `root` to create an offence.
 		#[pallet::weight(10_000)]
-		pub fn slash(
+		pub fn create_offence(
 			origin: OriginFor<T>,
 			offenders: Vec<(T::AccountId, Perbill)>,
 		) -> DispatchResult {
@@ -77,8 +78,8 @@ pub mod pallet {
 				.map(|(_, fraction)| fraction)
 				.collect::<Vec<Perbill>>());
 
-			// FIX don't use unwrap!!
-			let now = Staking::<T>::active_era().unwrap().index;
+			let active_era = Staking::<T>::active_era().ok_or(Error::<T>::FailedToGetActiveEra)?;
+			let now = active_era.index;
 
 			// TODO come up with a better name for this.
 			let offs: &[OffenceDetails<T::AccountId, IdentificationTuple<T>>] = &(offenders
@@ -101,9 +102,10 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {}
 
 	#[pallet::error]
-	pub enum Error<T> {}
+	pub enum Error<T> {
+		FailedToGetActiveEra,
+	}
 }
