@@ -542,7 +542,7 @@ mod tests {
 			// gas is an implementation defined function and a contract can't import it.
 			fn gas(_ctx: crate::wasm::Runtime<E>, _amount: u32) -> Result<(), TrapReason> {
 				Ok(())
- 			}
+			}
 
 			fn nop(_ctx: crate::wasm::Runtime<E>, _unused: u64) -> Result<(), TrapReason> {
 				Ok(())

@@ -15,11 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Proc macros used in the contracts module.
-//! The #[define_env] attribute macro hides boilerplate of defining external environment
-//! for a wasm module.
+//! Procedural macroses used in the contracts module.
 //!
-//! Most likely you should use the `define_env` macro.
+//! Most likely you should use the [`#[define_env]`][`macro@define_env`] attribute macro which hides
+//! boilerplate of defining external environment for a wasm module.
 
 #![no_std]
 
@@ -159,7 +158,7 @@ struct HostFn {
 	item: syn::ItemFn,
 	module: String,
 	name: String,
-	ret_type: HostFnReturn,
+	returns: HostFnReturn,
 }
 
 enum HostFnReturn {
@@ -179,7 +178,7 @@ impl ToWasmSig for HostFn {
 			syn::FnArg::Typed(pt) => Some(&pt.ty),
 			_ => None,
 		});
-		let returns = match &self.ret_type {
+		let returns = match &self.returns {
 			HostFnReturn::U32 => quote! { vec![ <u32>::VALUE_TYPE ] },
 			HostFnReturn::ReturnCode => quote! { vec![ <ReturnCode>::VALUE_TYPE ] },
 			HostFnReturn::Unit => quote! { vec![] },
@@ -202,15 +201,15 @@ impl ToTokens for HostFn {
 
 impl HostFn {
 	pub fn try_from(item: syn::Item) -> syn::Result<Self> {
-		let span = item.span();
-		let err = || {
-			let msg = "Invalid host function definition, only #[version(<u8>)] or #[unstable] attribute is allowed.";
+		let err = |span, msg| {
+			let msg = format!("Invalid host function definition. {}", msg);
 			syn::Error::new(span, msg)
 		};
-
+		let msg = "only #[version(<u8>)] or #[unstable] attribute is allowed.";
+		let span = item.span();
 		let item = match item {
 			syn::Item::Fn(i_fn) => Ok(i_fn),
-			_ => Err(err()),
+			_ => Err(err(span, msg)),
 		}?;
 
 		let name = item.sig.ident.to_string();
@@ -222,105 +221,101 @@ impl HostFn {
 			0 => (),
 			1 => {
 				let attr = &attrs[0];
-				let ident = attr.path.get_ident().ok_or(err())?.to_string();
+				let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 				match ident.as_str() {
 					"version" => {
 						let ver: syn::LitInt = attr.parse_args()?;
-						module = format!("seal{}", ver.base10_parse::<u8>().map_err(|_| err())?);
+						module = format!(
+							"seal{}",
+							ver.base10_parse::<u8>().map_err(|_| err(span, msg))?
+						);
 					},
 					"unstable" => {
 						module = "__unstable__".to_string();
 					},
-					_ => return Err(err()),
+					_ => return Err(err(span, msg)),
 				}
 			},
-			_ => return Err(err()),
+			_ => return Err(err(span, msg)),
 		}
-		// TODO: refactor errs
-		let err1 = |span| {
-			let msg = format!(
-				r#"Invalid host function definition.
-					     Should return one of the following: 
-							  - Result<(), TrapReason>,
-							  - Result<ReturnCode, TrapReason>,
-							  - Result<u32, TrapReason>"#
-			);
-			syn::Error::new(span, msg)
-		};
+
+		let msg = format!(
+			r#"Should return one of the following: 
+								  - Result<(), TrapReason>,
+								  - Result<ReturnCode, TrapReason>,
+								  - Result<u32, TrapReason>"#
+		);
 
 		let ret_ty = match item.clone().sig.output {
 			syn::ReturnType::Type(_, ty) => Ok(ty.clone()),
-			_ => Err(err1(span)),
+			_ => Err(err(span, &msg)),
 		}?;
 
-		// TODO: try sync::parse_from_str("Result<(), TrapReason") and then .eq()?
 		match *ret_ty {
 			syn::Type::Path(tp) => {
-				let result = &tp.path.segments.first().ok_or(err1(span))?;
+				let result = &tp.path.segments.first().ok_or(err(span, &msg))?;
 				let (id, span) = (result.ident.to_string(), result.ident.span());
-				if id == "Result".to_string() {
-					match &result.arguments {
-						syn::PathArguments::AngleBracketed(group) => {
-							group.args.len().eq(&2).then_some(42).ok_or(err1(span))?;
+				id.eq(&"Result".to_string()).then_some(()).ok_or(err(span, &msg))?;
 
-							let arg2 = group.args.last().ok_or(err1(span))?; // TrapReason
+				match &result.arguments {
+					syn::PathArguments::AngleBracketed(group) => {
+						group.args.len().eq(&2).then_some(42).ok_or(err(span, &msg))?;
 
-							let err_ty = match arg2 {
-								syn::GenericArgument::Type(ty) => Ok(ty.clone()),
-								_ => Err(err1(arg2.span())),
-							}?;
+						let arg2 = group.args.last().ok_or(err(span, &msg))?;
 
-							match err_ty {
-								syn::Type::Path(tp) => Ok(tp
-									.path
-									.segments
-									.first()
-									.ok_or(err1(arg2.span()))?
-									.ident
-									.to_string()),
-								_ => Err(err1(tp.span())),
-							}?
-							.eq("TrapReason")
-							.then_some(())
-							.ok_or(err1(span))?;
+						let err_ty = match arg2 {
+							syn::GenericArgument::Type(ty) => Ok(ty.clone()),
+							_ => Err(err(arg2.span(), &msg)),
+						}?;
 
-							let arg1 = group.args.first().ok_or(err1(span))?; // (), u32 or ReturnCode
-							let ok_ty = match arg1 {
-								syn::GenericArgument::Type(ty) => Ok(ty.clone()),
-								_ => Err(err1(arg1.span())),
-							}?;
-							let ok_ty_str = match ok_ty {
-								syn::Type::Path(tp) => Ok(tp
-									.path
-									.segments
-									.first()
-									.ok_or(err1(arg2.span()))?
-									.ident
-									.to_string()),
-								syn::Type::Tuple(tt) => {
-									if !tt.elems.is_empty() {
-										return Err(err1(arg1.span()))
-									};
-									Ok("()".to_string())
-								},
-								_ => Err(err1(ok_ty.span())),
-							}?;
+						match err_ty {
+							syn::Type::Path(tp) => Ok(tp
+								.path
+								.segments
+								.first()
+								.ok_or(err(arg2.span(), &msg))?
+								.ident
+								.to_string()),
+							_ => Err(err(tp.span(), &msg)),
+						}?
+						.eq("TrapReason")
+						.then_some(())
+						.ok_or(err(span, &msg))?;
 
-							let ret_type = match ok_ty_str.as_str() {
-								"()" => Ok(HostFnReturn::Unit),
-								"u32" => Ok(HostFnReturn::U32),
-								"ReturnCode" => Ok(HostFnReturn::ReturnCode),
-								_ => Err(err1(arg1.span())),
-							}?;
-							Ok(Self { item, module, name, ret_type })
-						},
-						_ => Err(err1(span)),
-					}
-				} else {
-					Err(err1(span))
+						let arg1 = group.args.first().ok_or(err(span, &msg))?;
+						let ok_ty = match arg1 {
+							syn::GenericArgument::Type(ty) => Ok(ty.clone()),
+							_ => Err(err(arg1.span(), &msg)),
+						}?;
+						let ok_ty_str = match ok_ty {
+							syn::Type::Path(tp) => Ok(tp
+								.path
+								.segments
+								.first()
+								.ok_or(err(arg2.span(), &msg))?
+								.ident
+								.to_string()),
+							syn::Type::Tuple(tt) => {
+								if !tt.elems.is_empty() {
+									return Err(err(arg1.span(), &msg))
+								};
+								Ok("()".to_string())
+							},
+							_ => Err(err(ok_ty.span(), &msg)),
+						}?;
+
+						let returns = match ok_ty_str.as_str() {
+							"()" => Ok(HostFnReturn::Unit),
+							"u32" => Ok(HostFnReturn::U32),
+							"ReturnCode" => Ok(HostFnReturn::ReturnCode),
+							_ => Err(err(arg1.span(), &msg)),
+						}?;
+						Ok(Self { item, module, name, returns })
+					},
+					_ => Err(err(span, &msg)),
 				}
 			},
-			_ => Err(err1(span)),
+			_ => Err(err(span, &msg)),
 		}
 	}
 }
@@ -425,7 +420,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 		   }
 	   });
 
-	let outline = match &f.ret_type {
+	let outline = match &f.returns {
 	    HostFnReturn::Unit => quote! {
 				body().map_err(|reason| {
 					ctx.set_trap_reason(reason);
@@ -491,6 +486,53 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	}
 }
 
+/// Defines a host functions set that can be imported by contract wasm code.
+///
+/// **NB**: Be advised that all functions defined by this macro
+/// will panic if called with unexpected arguments.
+///
+/// It's up to you as the user of this macro to check signatures of wasm code to be executed
+/// and reject the code if any imported function has a mismatched signature.
+///
+/// ## Example
+///
+/// ```nocompile
+/// #[define_env]
+/// pub mod some_env {
+/// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<(), TrapReason> {
+/// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
+/// 	}
+/// }
+/// ```
+/// This example will expand to the `some_host_fn()` defined in the wasm module named `seal0`.
+/// To define a host function in `seal1` and `__unstable__` modules, it should be annotated with the
+/// appropriate attribute as follows:
+///
+/// ## Example
+///
+/// ```nocompile
+/// #[define_env]
+/// pub mod some_env {
+///     #[version(1)]
+/// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
+/// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
+/// 	}
+///
+///     #[unstable]
+/// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
+/// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
+/// 	}
+/// }
+/// ```
+///
+/// Only following return types are allowed for the host functions defined with the macro:
+/// - `Result<(), TrapReason>`,
+/// - `Result<ReturnCode, TrapReason>`,
+/// - `Result<u32, TrapReason>`.
+///
+/// The macro expands to `pub struct Env` declaration, with the following traits implementations:
+/// - `pallet_contracts::wasm::env_def::ImportSatisfyCheck`
+/// - `pallet_contracts::wasm::env_def::FunctionImplProvider`
 #[proc_macro_attribute]
 pub fn define_env(
 	attr: proc_macro::TokenStream,
