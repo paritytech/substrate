@@ -18,7 +18,6 @@
 
 use crate::{
 	config, error,
-	protocol_name::{legacy_protocol_name, standard_protocol_name},
 	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
@@ -93,9 +92,6 @@ const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
 /// Maximum size used for notifications in the block announce and transaction protocols.
 // Must be equal to `max(MAX_BLOCK_ANNOUNCE_SIZE, MAX_TRANSACTIONS_SIZE)`.
 pub(crate) const BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE: u64 = 16 * 1024 * 1024;
-
-/// On-the-wire block announces protocol short name (goes after "/{genesis_hash}/{fork_id}").
-const BLOCK_ANNOUNCES_PROTOCOL_SHORT_NAME: &str = "/block-announces/1";
 
 /// Identifier of the peerset for the block announces protocol.
 const HARDCODED_PEERSETS_SYNC: sc_peerset::SetId = sc_peerset::SetId::from(0);
@@ -361,15 +357,17 @@ where
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
-		let block_announces_protocol = standard_protocol_name(
-			chain.block_hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed"),
-			fork_id,
-			BLOCK_ANNOUNCES_PROTOCOL_SHORT_NAME,
-		);
+		let block_announces_protocol = {
+			let genesis_hash =
+				chain.block_hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
+			if let Some(fork_id) = fork_id {
+				format!("/{}/{}/block-announces/1", hex::encode(genesis_hash), fork_id)
+			} else {
+				format!("/{}/block-announces/1", hex::encode(genesis_hash))
+			}
+		};
 
-		let fallback_ba_protocol_names =
-			iter::once(legacy_protocol_name(&protocol_id, BLOCK_ANNOUNCES_PROTOCOL_SHORT_NAME))
-				.collect();
+		let legacy_ba_protocol_name = format!("/{}/block-announces/1", protocol_id.as_ref());
 
 		let behaviour = {
 			let best_number = info.best_number;
@@ -381,8 +379,8 @@ where
 					.encode();
 
 			let sync_protocol_config = notifications::ProtocolConfig {
-				name: block_announces_protocol,
-				fallback_names: fallback_ba_protocol_names,
+				name: block_announces_protocol.into(),
+				fallback_names: iter::once(legacy_ba_protocol_name.into()).collect(),
 				handshake: block_announces_handshake,
 				max_notification_size: MAX_BLOCK_ANNOUNCE_SIZE,
 			};

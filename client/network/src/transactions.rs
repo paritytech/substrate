@@ -30,7 +30,6 @@ use crate::{
 	config::{self, TransactionImport, TransactionImportFuture, TransactionPool},
 	error,
 	protocol::message,
-	protocol_name::{legacy_protocol_name, standard_protocol_name},
 	service::NetworkService,
 	utils::{interval, LruHashSet},
 	Event, ExHashT, ObservedRole,
@@ -70,9 +69,6 @@ const MAX_TRANSACTIONS_SIZE: u64 = 16 * 1024 * 1024;
 
 /// Maximum number of transaction validation request we keep at any moment.
 const MAX_PENDING_TRANSACTIONS: usize = 8192;
-
-/// Transactions protocol short name (everything after /{genesis_hash}/{fork_id}...).
-const PROTOCOL_SHORT_NAME: &str = "/transactions/1";
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
@@ -141,12 +137,16 @@ impl TransactionsHandlerPrototype {
 		genesis_hash: Hash,
 		fork_id: Option<String>,
 	) -> Self {
+		let protocol_name = if let Some(fork_id) = fork_id {
+			format!("/{}/{}/transactions/1", hex::encode(genesis_hash), fork_id)
+		} else {
+			format!("/{}/transactions/1", hex::encode(genesis_hash))
+		};
+		let legacy_protocol_name = format!("/{}/transactions/1", protocol_id.as_ref());
+
 		Self {
-			protocol_name: standard_protocol_name(genesis_hash, &fork_id, PROTOCOL_SHORT_NAME),
-			fallback_protocol_names: std::iter::once(
-				legacy_protocol_name(&protocol_id, PROTOCOL_SHORT_NAME).into(),
-			)
-			.collect(),
+			protocol_name: protocol_name.into(),
+			fallback_protocol_names: iter::once(legacy_protocol_name.into()).collect(),
 		}
 	}
 
