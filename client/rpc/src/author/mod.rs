@@ -209,7 +209,6 @@ where
 				},
 			};
 
-			// NOTE: the sink is accepted under the hood for ergonomic purposes.
 			sink.pipe_from_stream(stream).await;
 		};
 
