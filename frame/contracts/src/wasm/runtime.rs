@@ -2214,14 +2214,12 @@ pub mod env {
 		let env = Environment::new(ctx, id, input_ptr, input_len, output_ptr, output_len_ptr);
 		let ret = match chain_extension.call(env)? {
 			RetVal::Converging(val) => Ok(val),
-			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
-				flags: flags.bits(),
-				data,
-			})),
+			RetVal::Diverging { flags, data } =>
+				Err(TrapReason::Return(ReturnData { flags: flags.bits(), data })),
 		};
 		ctx.chain_extension = Some(chain_extension);
 		ret
-	},
+	}
 
 	/// Emit a custom debug message.
 	///
