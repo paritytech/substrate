@@ -958,7 +958,8 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		self.session_index
 	}
 
-	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
+	fn slash_fraction(&self, offenders: u32) -> Perbill {
+		let validator_set_count = self.validator_set_count;
 		// the formula is min((3 * (k - (n / 10 + 1))) / n, 1) * 0.07
 		// basically, 10% can be offline with no slash, but after that, it linearly climbs up to 7%
 		// when 13/30 are offline (around 5% when 1/3 are offline).
