@@ -98,10 +98,7 @@ pub mod weights;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
-use sp_runtime::{
-	traits::{StaticLookup, Zero},
-	RuntimeDebug,
-};
+use sp_runtime::{traits::StaticLookup, RuntimeDebug};
 use sp_std::{convert::TryInto, prelude::*};
 
 use frame_support::{
@@ -112,10 +109,7 @@ use frame_support::{
 	},
 	ensure,
 	scale_info::TypeInfo,
-	traits::{
-		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
-		ReservableCurrency,
-	},
+	traits::{tokens::fungible, ChangeMembers, Get, InitializeMembers, IsSubType, OnUnbalanced},
 	weights::Weight,
 };
 use pallet_identity::IdentityField;
@@ -129,11 +123,9 @@ pub type ProposalIndex = u32;
 
 type UrlOf<T, I> = BoundedVec<u8, <T as pallet::Config<I>>::MaxWebsiteUrlLength>;
 
-type BalanceOf<T, I> =
-	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
+type BalanceOf<T, I> = <<T as Config<I>>::Currency as fungible::Inspect<
 	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
+>>::Balance;
 
 /// Interface required for identity verification.
 pub trait IdentityVerifier<AccountId> {
@@ -242,10 +234,10 @@ pub mod pallet {
 		type AnnouncementOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The currency used for deposits.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: fungible::BalancedHold<Self::AccountId>;
 
 		/// What to do with slashed funds.
-		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
+		type Slashed: OnUnbalanced<fungible::CreditOf<Self::AccountId, Self::Currency>>;
 
 		/// What to do with initial voting members of the Alliance.
 		type InitializeMembers: InitializeMembers<Self::AccountId>;
@@ -709,6 +701,8 @@ pub mod pallet {
 		/// Submit oneself for candidacy. A fixed deposit is reserved.
 		#[pallet::weight(T::WeightInfo::join_alliance())]
 		pub fn join_alliance(origin: OriginFor<T>) -> DispatchResult {
+			use fungible::MutateHold;
+
 			let who = ensure_signed(origin)?;
 
 			// We don't want anyone to join as an Ally before the Alliance has been initialized via
@@ -728,7 +722,7 @@ pub mod pallet {
 			Self::has_identity(&who)?;
 
 			let deposit = T::AllyDeposit::get();
-			T::Currency::reserve(&who, deposit).map_err(|_| Error::<T, I>::InsufficientFunds)?;
+			T::Currency::hold(&who, deposit).map_err(|_| Error::<T, I>::InsufficientFunds)?;
 			<DepositOf<T, I>>::insert(&who, deposit);
 
 			Self::add_member(&who, MemberRole::Ally)?;
@@ -790,6 +784,8 @@ pub mod pallet {
 		/// As a member, retire from the alliance and unreserve the deposit.
 		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
+			use fungible::MutateHold;
+
 			let who = ensure_signed(origin)?;
 			// A member up for kicking cannot retire.
 			ensure!(!Self::is_up_for_kicking(&who), Error::<T, I>::UpForKicking);
@@ -798,8 +794,8 @@ pub mod pallet {
 			Self::remove_member(&who, role)?;
 			let deposit = DepositOf::<T, I>::take(&who);
 			if let Some(deposit) = deposit {
-				let err_amount = T::Currency::unreserve(&who, deposit);
-				debug_assert!(err_amount.is_zero());
+				let actual = T::Currency::release(&who, deposit, true)?;
+				debug_assert!(actual == deposit);
 			}
 			Self::deposit_event(Event::MemberRetired { member: who, unreserved: deposit });
 			Ok(())
@@ -811,6 +807,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			who: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
+			use fungible::BalancedHold;
+
 			T::MembershipManager::ensure_origin(origin)?;
 			let member = T::Lookup::lookup(who)?;
 
@@ -818,7 +816,7 @@ pub mod pallet {
 			Self::remove_member(&member, role)?;
 			let deposit = DepositOf::<T, I>::take(member.clone());
 			if let Some(deposit) = deposit {
-				T::Slashed::on_unbalanced(T::Currency::slash_reserved(&member, deposit).0);
+				T::Slashed::on_unbalanced(T::Currency::slash_held(&member, deposit).0);
 			}
 
 			<UpForKicking<T, I>>::remove(&member);
