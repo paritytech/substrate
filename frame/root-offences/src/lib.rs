@@ -74,6 +74,7 @@ pub mod pallet {
 
 			let offender_details: Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>> =
 				offenders
+					.clone()
 					.into_iter()
 					.map(|(o, _)| OffenceDetails::<T::AccountId, IdentificationTuple<T>> {
 						offender: (o.clone(), Staking::<T>::eras_stakers(now, o)),
@@ -91,12 +92,16 @@ pub mod pallet {
 				&offender_details, &slash_fractions, session_index, DisableStrategy::WhenSlashed
 			);
 
+			Self::deposit_event(Event::RootCreatedOffence { offenders });
 			Ok(())
 		}
 	}
 
 	#[pallet::event]
-	pub enum Event<T: Config> {}
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		RootCreatedOffence { offenders: Vec<(T::AccountId, Perbill)> },
+	}
 
 	#[pallet::error]
 	pub enum Error<T> {
