@@ -79,33 +79,32 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			let slash_fractions: &[Perbill] = &(offenders
+			let slash_fractions = offenders
 				.clone()
 				.into_iter()
 				.map(|(_, fraction)| fraction)
-				.collect::<Vec<Perbill>>());
+				.collect::<Vec<Perbill>>();
 
 			let active_era = Staking::<T>::active_era().ok_or(Error::<T>::FailedToGetActiveEra)?;
 			let now = active_era.index;
 
-			let offender_details: &[OffenceDetails<T::AccountId, IdentificationTuple<T>>] =
-				&(offenders
-					.into_iter()
-					.map(|(o, _)| {
-						let offender: IdentificationTuple<T> =
-							(o.clone(), Staking::<T>::eras_stakers(now, o));
-						OffenceDetails::<T::AccountId, IdentificationTuple<T>> {
-							offender,
-							reporters: vec![],
-						}
-					})
-					.collect::<Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>>>());
+			let offender_details = offenders
+				.into_iter()
+				.map(|(o, _)| {
+					let offender: IdentificationTuple<T> =
+						(o.clone(), Staking::<T>::eras_stakers(now, o));
+					OffenceDetails::<T::AccountId, IdentificationTuple<T>> {
+						offender,
+						reporters: vec![],
+					}
+				})
+				.collect::<Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>>>();
 
 			<pallet_staking::Pallet<T> as OnOffenceHandler<
 				T::AccountId,
 				IdentificationTuple<T>,
 				Weight,
-			>>::on_offence(offender_details, slash_fractions, now, DisableStrategy::WhenSlashed);
+			>>::on_offence(&offender_details, &slash_fractions, now, DisableStrategy::WhenSlashed);
 
 			Ok(())
 		}
