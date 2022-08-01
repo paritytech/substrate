@@ -327,7 +327,7 @@ impl HostFn {
 impl EnvDef {
 	pub fn try_from(item: syn::ItemMod) -> syn::Result<Self> {
 		let span = item.span();
-		let err = |msg| syn::Error::new(span.clone(), msg);
+		let err = |msg| syn::Error::new(span, msg);
 		let items = &item
 			.content
 			.as_ref()

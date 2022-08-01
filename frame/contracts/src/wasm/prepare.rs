@@ -535,23 +535,23 @@ mod tests {
 		// implementation from it. So actual implementations doesn't matter.
 		#[define_env]
 		pub mod test_env {
-			fn panic(_ctx: _) -> Result<(), TrapReason> {
-				unreachable!();
+			fn panic(_ctx: crate::wasm::Runtime<E>) -> Result<(), TrapReason> {
+				Ok(())
 			}
 
 			// gas is an implementation defined function and a contract can't import it.
-			fn gas(_ctx: _, _amount: u32) -> Result<(), TrapReason> {
-				unreachable!();
-			}
+			fn gas(_ctx: crate::wasm::Runtime<E>, _amount: u32) -> Result<(), TrapReason> {
+				Ok(())
+ 			}
 
-			fn nop(_ctx: _, _unused: u64) -> Result<(), TrapReason> {
-				unreachable!();
+			fn nop(_ctx: crate::wasm::Runtime<E>, _unused: u64) -> Result<(), TrapReason> {
+				Ok(())
 			}
 
 			// new version of nop with other data type for argumebt
 			#[version(1)]
-			fn nop(_ctx: _, _unused: i32) -> Result<(), TrapReason> {
-				unreachable!();
+			fn nop(_ctx: crate::wasm::Runtime<E>, _unused: i32) -> Result<(), TrapReason> {
+				Ok(())
 			}
 		}
 	}
