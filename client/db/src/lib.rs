@@ -2179,7 +2179,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			let mut transaction = Transaction::new();
 			let mut leaves = self.blockchain.leaves.write();
 
-			leaves.revert(best_hash, best_number);
+			leaves.revert(hash_to_revert, number_to_revert);
 			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 			self.storage.db.commit(transaction)?;
 
@@ -3545,5 +3545,7 @@ pub(crate) mod tests {
 		assert!(!backend.have_state_at(&block2, 2));
 		assert!(!backend.have_state_at(&block3, 3));
 		assert!(!backend.have_state_at(&block4, 4));
+
+		assert_eq!(1, backend.blockchain.leaves.read().highest_leaf().unwrap().0);
 	}
 }
