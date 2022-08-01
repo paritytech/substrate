@@ -20,7 +20,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use pallet_session::historical::IdentificationTuple;
 use pallet_staking::{BalanceOf, Exposure, ExposureOf, Pallet as Staking};
 use sp_runtime::{traits::Convert, Perbill};
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
@@ -36,10 +35,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config:
 		frame_system::Config
-		+ pallet_session::Config
 		+ pallet_staking::Config
-		+ pallet_offences::Config
-		+ pallet_session::historical::Config
 	{
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
