@@ -18,6 +18,7 @@
 
 use crate::{
 	config, error,
+	protocol_name::{legacy_protocol_name, standard_protocol_name},
 	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
@@ -92,6 +93,9 @@ const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
 /// Maximum size used for notifications in the block announce and transaction protocols.
 // Must be equal to `max(MAX_BLOCK_ANNOUNCE_SIZE, MAX_TRANSACTIONS_SIZE)`.
 pub(crate) const BLOCK_ANNOUNCES_TRANSACTIONS_SUBSTREAM_SIZE: u64 = 16 * 1024 * 1024;
+
+/// On-the-wire block announces protocol short name (goes after "/{genesis_hash}/{fork_id}").
+const BLOCK_ANNOUNCES_PROTOCOL_SHORT_NAME: &str = "/block-announces/1";
 
 /// Identifier of the peerset for the block announces protocol.
 const HARDCODED_PEERSETS_SYNC: sc_peerset::SetId = sc_peerset::SetId::from(0);
@@ -272,6 +276,7 @@ where
 		roles: Roles,
 		chain: Arc<Client>,
 		protocol_id: ProtocolId,
+		fork_id: &Option<String>,
 		network_config: &config::NetworkConfiguration,
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		metrics_registry: Option<&Registry>,
@@ -356,8 +361,15 @@ where
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
-		let block_announces_protocol: Cow<'static, str> =
-			format!("/{}/block-announces/1", protocol_id.as_ref()).into();
+		let block_announces_protocol = standard_protocol_name(
+			chain.block_hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed"),
+			fork_id,
+			BLOCK_ANNOUNCES_PROTOCOL_SHORT_NAME,
+		);
+
+		let fallback_ba_protocol_names =
+			iter::once(legacy_protocol_name(&protocol_id, BLOCK_ANNOUNCES_PROTOCOL_SHORT_NAME))
+				.collect();
 
 		let behaviour = {
 			let best_number = info.best_number;
@@ -370,7 +382,7 @@ where
 
 			let sync_protocol_config = notifications::ProtocolConfig {
 				name: block_announces_protocol,
-				fallback_names: Vec::new(),
+				fallback_names: fallback_ba_protocol_names,
 				handshake: block_announces_handshake,
 				max_notification_size: MAX_BLOCK_ANNOUNCE_SIZE,
 			};

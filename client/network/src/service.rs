@@ -266,6 +266,7 @@ where
 			From::from(&params.role),
 			params.chain.clone(),
 			params.protocol_id.clone(),
+			&params.fork_id,
 			&params.network_config,
 			iter::once(Vec::new())
 				.chain(
