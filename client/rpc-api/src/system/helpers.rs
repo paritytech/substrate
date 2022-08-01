@@ -76,8 +76,6 @@ pub struct PeerInfo<Hash, Number> {
 pub enum NodeRole {
 	/// The node is a full node
 	Full,
-	/// The node is a light client
-	LightClient,
 	/// The node is an authority
 	Authority,
 }

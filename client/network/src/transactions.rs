@@ -83,8 +83,6 @@ mod rep {
 	pub const GOOD_TRANSACTION: Rep = Rep::new(1 << 7, "Good transaction");
 	/// Reputation change when a peer sends us a bad transaction.
 	pub const BAD_TRANSACTION: Rep = Rep::new(-(1 << 12), "Bad transaction");
-	/// We received an unexpected transaction packet.
-	pub const UNEXPECTED_TRANSACTIONS: Rep = Rep::new_fatal("Unexpected transactions packet");
 }
 
 struct Metrics {
@@ -160,7 +158,6 @@ impl TransactionsHandlerPrototype {
 	pub fn build<B: BlockT + 'static, H: ExHashT>(
 		self,
 		service: Arc<NetworkService<B, H>>,
-		local_role: config::Role,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(TransactionsHandler<B, H>, TransactionsHandlerController<H>)> {
@@ -178,7 +175,6 @@ impl TransactionsHandlerPrototype {
 			event_stream,
 			peers: HashMap::new(),
 			transaction_pool,
-			local_role,
 			from_controller,
 			metrics: if let Some(r) = metrics_registry {
 				Some(Metrics::register(r)?)
@@ -247,7 +243,6 @@ pub struct TransactionsHandler<B: BlockT + 'static, H: ExHashT> {
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	gossip_enabled: Arc<AtomicBool>,
-	local_role: config::Role,
 	from_controller: mpsc::UnboundedReceiver<ToHandler<H>>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
@@ -360,14 +355,6 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	/// Called when peer sends us new transactions
 	fn on_transactions(&mut self, who: PeerId, transactions: message::Transactions<B::Extrinsic>) {
-		// sending transaction to light node is considered a bad behavior
-		if matches!(self.local_role, config::Role::Light) {
-			debug!(target: "sync", "Peer {} is trying to send transactions to the light node", who);
-			self.service.disconnect_peer(who, self.protocol_name.clone());
-			self.service.report_peer(who, rep::UNEXPECTED_TRANSACTIONS);
-			return
-		}
-
 		// Accept transactions only when enabled
 		if !self.gossip_enabled.load(Ordering::Relaxed) {
 			trace!(target: "sync", "{} Ignoring transactions while disabled", who);
