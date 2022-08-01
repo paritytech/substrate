@@ -288,7 +288,7 @@ mod tests {
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
 		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
 
-		assert_eq!(expected_response, response.result,);
+		assert_eq!(expected_response, response.result);
 	}
 
 	#[tokio::test]

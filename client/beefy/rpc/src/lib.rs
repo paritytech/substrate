@@ -201,7 +201,7 @@ mod tests {
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
 		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
 
-		assert_eq!(expected_response, response.result,);
+		assert_eq!(expected_response, response.result);
 	}
 
 	#[tokio::test]
