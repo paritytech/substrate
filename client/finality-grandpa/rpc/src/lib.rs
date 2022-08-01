@@ -103,10 +103,7 @@ where
 		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
 	}
 
-	fn subscribe_justifications(
-		&self,
-		mut sink: SubscriptionSink,
-	) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)

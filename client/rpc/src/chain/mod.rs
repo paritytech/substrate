@@ -160,20 +160,17 @@ where
 		self.backend.finalized_head().map_err(Into::into)
 	}
 
-	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
 		self.backend.subscribe_all_heads(sink);
 		Ok(())
 	}
 
-	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
 		self.backend.subscribe_new_heads(sink);
 		Ok(())
 	}
 
-	fn subscribe_finalized_heads(
-		&self,
-		sink: SubscriptionSink,
-	) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
 		self.backend.subscribe_finalized_heads(sink);
 		Ok(())
 	}

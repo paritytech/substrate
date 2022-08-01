@@ -319,10 +319,7 @@ where
 			.map_err(Into::into)
 	}
 
-	fn subscribe_runtime_version(
-		&self,
-		sink: SubscriptionSink,
-	) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> SubscriptionResult {
 		self.backend.subscribe_runtime_version(sink);
 		Ok(())
 	}
@@ -331,7 +328,7 @@ where
 		&self,
 		mut sink: SubscriptionSink,
 		keys: Option<Vec<StorageKey>>,
-	) -> Result<(), SubscriptionEmptyError> {
+	) -> SubscriptionResult {
 		if keys.is_none() {
 			if let Err(err) = self.deny_unsafe.check_if_safe() {
 				let _ = sink.reject(JsonRpseeError::from(err));

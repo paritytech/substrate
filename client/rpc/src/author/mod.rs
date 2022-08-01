@@ -181,7 +181,7 @@ where
 		&self,
 		mut sink: SubscriptionSink,
 		xt: Bytes,
-	) -> std::result::Result<(), SubscriptionEmptyError> {
+	) -> std::result::SubscriptionResult {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,

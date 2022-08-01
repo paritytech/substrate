@@ -135,10 +135,7 @@ impl<Block> BeefyApiServer<notification::EncodedSignedCommitment, Block::Hash> f
 where
 	Block: BlockT,
 {
-	fn subscribe_justifications(
-		&self,
-		mut sink: SubscriptionSink,
-	) -> Result<(), SubscriptionEmptyError> {
+	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 		let stream = self
 			.signed_commitment_stream
 			.subscribe()
