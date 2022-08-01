@@ -81,11 +81,15 @@ pub mod pallet {
 					})
 					.collect();
 
+			let session_index = <pallet_session::Pallet<T> as frame_support::traits::ValidatorSet<T::AccountId>>::session_index();
+
 			<pallet_staking::Pallet<T> as OnOffenceHandler<
 				T::AccountId,
 				IdentificationTuple<T>,
 				Weight,
-			>>::on_offence(&offender_details, &slash_fractions, now, DisableStrategy::WhenSlashed);
+			>>::on_offence(
+				&offender_details, &slash_fractions, session_index, DisableStrategy::WhenSlashed
+			);
 
 			Ok(())
 		}
