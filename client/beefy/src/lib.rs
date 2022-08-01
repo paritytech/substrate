@@ -50,7 +50,6 @@ pub use beefy_protocol_name::standard_name as protocol_standard_name;
 
 pub(crate) mod beefy_protocol_name {
 	use sc_chain_spec::ChainSpec;
-	use sc_network::protocol_name::standard_protocol_name;
 
 	const NAME: &str = "/beefy/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
@@ -63,7 +62,11 @@ pub(crate) mod beefy_protocol_name {
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> std::borrow::Cow<'static, str> {
-		standard_protocol_name(genesis_hash, &chain_spec.fork_id().map(ToOwned::to_owned), NAME)
+		let chain_prefix = match chain_spec.fork_id() {
+			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
+			None => format!("/{}", hex::encode(genesis_hash)),
+		};
+		format!("{}{}", chain_prefix, NAME).into()
 	}
 }
 
