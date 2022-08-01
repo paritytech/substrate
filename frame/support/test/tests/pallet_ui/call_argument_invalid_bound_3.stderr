@@ -8,3 +8,7 @@ error[E0277]: `Bar` doesn't implement `std::fmt::Debug`
    = note: add `#[derive(Debug)]` to `Bar` or manually `impl std::fmt::Debug for Bar`
    = note: required because of the requirements on the impl of `std::fmt::Debug` for `&Bar`
    = note: required for the cast to the object type `dyn std::fmt::Debug`
+help: consider annotating `Bar` with `#[derive(Debug)]`
+   |
+17 |     #[derive(Debug)]
+   |

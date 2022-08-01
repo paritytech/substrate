@@ -30,7 +30,7 @@
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	bitswap::Bitswap,
-	config::{self, parse_str_addr, Params, TransportConfig},
+	config::{parse_str_addr, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -60,7 +60,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
-use sc_network_common::sync::{SyncMode, SyncState, SyncStatus};
+use sc_network_common::sync::{SyncState, SyncStatus};
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -239,21 +239,6 @@ where
 
 		let default_notif_handshake_message = Roles::from(&params.role).encode();
 
-		let (warp_sync_provider, warp_sync_protocol_config) = match params.warp_sync {
-			Some((p, c)) => (Some(p), Some(c)),
-			None => (None, None),
-		};
-
-		let chain_sync = (params.create_chain_sync)(
-			match params.network_config.sync_mode {
-				config::SyncMode::Full => SyncMode::Full,
-				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-					SyncMode::LightState { skip_proofs, storage_chain_mode },
-				config::SyncMode::Warp => SyncMode::Warp,
-			},
-			params.chain.clone(),
-			warp_sync_provider,
-		)?;
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
 			params.chain.clone(),
@@ -266,7 +251,7 @@ where
 				)
 				.collect(),
 			params.metrics_registry.as_ref(),
-			chain_sync,
+			params.chain_sync,
 		)?;
 
 		// List of multiaddresses that we know in the network.
@@ -303,7 +288,6 @@ where
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
 		// Build the swarm.
-		let client = params.chain.clone();
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
 			let user_agent = format!(
 				"{} ({})",
@@ -389,7 +373,7 @@ where
 			};
 
 			let behaviour = {
-				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(client));
+				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(params.chain));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -397,7 +381,7 @@ where
 					discovery_config,
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
-					warp_sync_protocol_config,
+					params.warp_sync_protocol_config,
 					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,

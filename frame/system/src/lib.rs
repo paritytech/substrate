@@ -91,8 +91,8 @@ use frame_support::{
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
-		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
-		Weight,
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		PerDispatchClass, RuntimeDbWeight, Weight,
 	},
 	Parameter,
 };
@@ -1500,6 +1500,7 @@ impl<T: Config> Pallet<T> {
 	/// To be called immediately after an extrinsic has been applied.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
 		info.weight = extract_actual_weight(r, &info);
+		info.pays_fee = extract_actual_pays_fee(r, &info);
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
