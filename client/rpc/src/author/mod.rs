@@ -177,11 +177,7 @@ where
 			.collect())
 	}
 
-	fn watch_extrinsic(
-		&self,
-		mut sink: SubscriptionSink,
-		xt: Bytes,
-	) -> SubscriptionResult {
+	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> SubscriptionResult {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,
