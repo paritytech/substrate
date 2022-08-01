@@ -959,7 +959,7 @@ mod benchmarks {
 					frame_system::RawOrigin::Signed(caller.clone()).into(),
 					vec![b"foo".to_vec()],
 					1,
-				).is_err()
+				).is_ok()
 			)
 		}
 		verify {
@@ -1003,7 +1003,7 @@ mod benchmarks {
 					StateTrieMigration::<T>::childify("top"),
 					vec![b"foo".to_vec()],
 					1,
-				).is_err()
+				).is_ok()
 			)
 		}
 		verify {
