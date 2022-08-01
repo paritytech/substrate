@@ -440,6 +440,7 @@ dependencies = [
 name = "beefy-gadget"
 version = "4.0.0-dev"
 dependencies = [
+ "async-trait",
  "beefy-primitives",
  "fnv",
  "futures",
@@ -448,6 +449,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.0",
+ "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
@@ -5018,9 +5020,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
+checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
  "libm",
@@ -6516,6 +6518,7 @@ dependencies = [
  "arrayvec 0.7.2",
  "bitvec",
  "byte-slice-cast",
+ "bytes",
  "impl-trait-for-tuples",
  "parity-scale-codec-derive",
  "serde",
@@ -9733,6 +9736,7 @@ dependencies = [
 name = "sp-io"
 version = "6.0.0"
 dependencies = [
+ "bytes",
  "futures",
  "hash-db",
  "libsecp256k1",
@@ -9891,6 +9895,7 @@ dependencies = [
 name = "sp-runtime-interface"
 version = "6.0.0"
 dependencies = [
+ "bytes",
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "primitive-types",
@@ -9940,6 +9945,7 @@ dependencies = [
 name = "sp-runtime-interface-test-wasm"
 version = "2.0.0"
 dependencies = [
+ "bytes",
  "sp-core",
  "sp-io",
  "sp-runtime-interface",
