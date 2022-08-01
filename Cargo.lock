@@ -6378,6 +6378,7 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "sp-api",
+ "sp-core",
  "sp-runtime",
 ]
 

@@ -57,7 +57,7 @@ pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdj
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, Bytes, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::{
 	create_runtime_str,
@@ -69,6 +69,7 @@ use sp_runtime::{
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill,
+	RuntimeString,
 };
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
@@ -1952,31 +1953,24 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<
-		Block,
-		Balance,
-	> for Runtime {
+	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance> for Runtime {
 		fn query_info(uxt: <Block as BlockT>::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance> {
 			TransactionPayment::query_info(uxt, len)
 		}
 		fn query_fee_details(uxt: <Block as BlockT>::Extrinsic, len: u32) -> FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
 		}
-	}
-
-	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentCallApi<
-		Block,
-		Balance,
-		Call,
-	> for Runtime {
 		fn query_call_info(
-			call: Call,
+			encoded_call: Bytes,
 			len: u32,
-		) -> RuntimeDispatchInfo<Balance> {
-			TransactionPayment::query_call_info(call, len)
+		) -> Result<RuntimeDispatchInfo<Balance>, RuntimeString> {
+			TransactionPayment::query_call_info(encoded_call, len)
 		}
-		fn query_call_fee_details(call: Call, len: u32) -> FeeDetails<Balance> {
-			TransactionPayment::query_call_fee_details(call, len)
+		fn query_call_fee_details(
+			encoded_call: Bytes,
+			len: u32,
+		) -> Result<FeeDetails<Balance>, RuntimeString> {
+			TransactionPayment::query_call_fee_details(encoded_call, len)
 		}
 	}
 

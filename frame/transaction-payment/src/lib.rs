@@ -50,6 +50,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+use sp_core::Bytes;
 use sp_runtime::{
 	traits::{
 		Convert, DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SaturatedConversion,
@@ -58,7 +59,7 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	FixedPointNumber, FixedPointOperand, FixedU128, Perquintill, RuntimeDebug,
+	FixedPointNumber, FixedPointOperand, FixedU128, Perquintill, RuntimeDebug, RuntimeString,
 };
 use sp_std::prelude::*;
 
@@ -445,30 +446,42 @@ where
 		}
 	}
 
-	/// Query runtime dispatch info of a given `Call`.
-	pub fn query_call_info(call: T::Call, len: u32) -> RuntimeDispatchInfo<BalanceOf<T>>
+	/// Query runtime dispatch info of a given encoded `Call`.
+	pub fn query_call_info(
+		encoded_call: Bytes,
+		len: u32,
+	) -> Result<RuntimeDispatchInfo<BalanceOf<T>>, RuntimeString>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::Call: Dispatchable<Info = DispatchInfo> + Decode,
 	{
+		let call: T::Call = Decode::decode(&mut &*encoded_call)
+			.map_err(|_| -> RuntimeString { "Failed to decode Call.".into() })?;
+
 		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
 		let DispatchInfo { weight, class, .. } = dispatch_info;
 
-		RuntimeDispatchInfo {
+		Ok(RuntimeDispatchInfo {
 			weight,
 			class,
 			partial_fee: Self::compute_fee(len, &dispatch_info, 0u32.into()),
-		}
+		})
 	}
 
-	/// Query weight_to_fee of a given `Call`.
-	pub fn query_call_fee_details(call: T::Call, len: u32) -> FeeDetails<BalanceOf<T>>
+	/// Query weight_to_fee of a given encoded `Call`.
+	pub fn query_call_fee_details(
+		encoded_call: Bytes,
+		len: u32,
+	) -> Result<FeeDetails<BalanceOf<T>>, RuntimeString>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::Call: Dispatchable<Info = DispatchInfo> + Decode,
 	{
+		let call: T::Call = Decode::decode(&mut &*encoded_call)
+			.map_err(|_| -> RuntimeString { "Failed to decode Call.".into() })?;
+
 		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
 		let tip = 0u32.into();
 
-		Self::compute_fee_details(len, &dispatch_info, tip)
+		Ok(Self::compute_fee_details(len, &dispatch_info, tip))
 	}
 
 	/// Compute the final fee value for a particular transaction.
@@ -1239,24 +1252,36 @@ mod tests {
 		let encoded_call = call.encode();
 		let len = encoded_call.len() as u32;
 
+		let invalid_encoded_call: Vec<u8> = vec![1, 2, 3];
+
 		ExtBuilder::default().base_weight(5).weight_fee(2).build().execute_with(|| {
 			// all fees should be x1.5
 			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 
 			assert_eq!(
-				TransactionPayment::query_call_info(call.clone(), len),
-				RuntimeDispatchInfo {
+				TransactionPayment::query_call_info(invalid_encoded_call.clone().into(), len),
+				Err(RuntimeString::Borrowed("Failed to decode Call.")),
+			);
+
+			assert_eq!(
+				TransactionPayment::query_call_info(encoded_call.clone().into(), len),
+				Ok(RuntimeDispatchInfo {
 					weight: info.weight,
 					class: info.class,
 					partial_fee: 5 * 2 /* base * weight_fee */
 						+ len as u64  /* len * 1 */
 						+ info.weight.min(BlockWeights::get().max_block) as u64 * 2 * 3 / 2 /* weight */
-				},
+				}),
 			);
 
 			assert_eq!(
-				TransactionPayment::query_call_fee_details(call, len),
-				FeeDetails {
+				TransactionPayment::query_call_fee_details(invalid_encoded_call.into(), len),
+				Err(RuntimeString::Borrowed("Failed to decode Call.")),
+			);
+
+			assert_eq!(
+				TransactionPayment::query_call_fee_details(encoded_call.into(), len),
+				Ok(FeeDetails {
 					inclusion_fee: Some(InclusionFee {
 						base_fee: 5 * 2,     /* base * weight_fee */
 						len_fee: len as u64, /* len * 1 */
@@ -1264,7 +1289,7 @@ mod tests {
 							2 * 3 / 2  /* weight * weight_fee * multipler */
 					}),
 					tip: 0,
-				},
+				}),
 			);
 		});
 	}
