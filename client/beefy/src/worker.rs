@@ -314,9 +314,8 @@ where
 		new_session_start: NumberFor<B>,
 	) {
 		debug!(target: "beefy", "🥩 New active validator set: {:?}", validator_set);
-		metric_set!(self, beefy_validator_set_id, validator_set.id());
 
-		// BEEFY should produce the mandatory block of each session.
+		// BEEFY should finalize a mandatory block during each session.
 		if let Some(active_session) = self.voting_oracle.rounds_mut() {
 			if !active_session.mandatory_done() {
 				debug!(
@@ -335,7 +334,12 @@ where
 
 		let id = validator_set.id();
 		self.voting_oracle.add_session(Rounds::new(new_session_start, validator_set));
-		info!(target: "beefy", "🥩 New Rounds for validator set id: {:?} with session_start {:?}", id, new_session_start);
+		metric_set!(self, beefy_validator_set_id, id);
+		info!(
+			target: "beefy",
+			"🥩 New Rounds for validator set id: {:?} with session_start {:?}",
+			id, new_session_start
+		);
 	}
 
 	fn handle_finality_notification(&mut self, notification: &FinalityNotification<B>) {
@@ -346,11 +350,24 @@ where
 			// update best GRANDPA finalized block we have seen
 			self.best_grandpa_block_header = header.clone();
 
-			// Check for and enqueue potential new session.
-			if let Some(new_validator_set) = find_authorities_change::<B>(header) {
-				self.init_session_at(new_validator_set, *header.number());
-				// TODO: when adding SYNC protocol, fire up a request for justification for this
-				// mandatory block here.
+			// Check all (newly) finalized blocks for new session(s).
+			let backend = self.backend.clone();
+			for header in notification
+				.tree_route
+				.iter()
+				.map(|hash| {
+					backend
+						.blockchain()
+						.expect_header(BlockId::hash(*hash))
+						.expect("just finalized block should be available; qed.")
+				})
+				.chain(std::iter::once(header.clone()))
+			{
+				if let Some(new_validator_set) = find_authorities_change::<B>(&header) {
+					self.init_session_at(new_validator_set, *header.number());
+					// TODO: when adding SYNC protocol, fire up a request for justification
+					// for this mandatory block here.
+				}
 			}
 		}
 	}
