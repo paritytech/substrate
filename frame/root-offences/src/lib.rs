@@ -23,6 +23,8 @@
 use pallet_staking::Pallet as Staking;
 use sp_runtime::Perbill;
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use pallet_staking::{Exposure, ExposureOf, BalanceOf};
+use sp_runtime::traits::Convert;
 
 pub use pallet::*;
 
@@ -62,8 +64,19 @@ pub mod pallet {
 	);
 
 	#[pallet::call]
-	impl<T: Config> Pallet<T> {
-
+	impl<T: Config> Pallet<T> where
+		T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
+		T: pallet_session::historical::Config<
+			FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+			FullIdentificationOf = ExposureOf<T>,
+		>,
+		T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
+		T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
+		T::ValidatorIdOf: Convert<
+			<T as frame_system::Config>::AccountId,
+			Option<<T as frame_system::Config>::AccountId>,
+		>,
+	{
 		/// Allows the `root` to create an offence.
 		#[pallet::weight(10_000)]
 		pub fn create_offence(
@@ -81,17 +94,24 @@ pub mod pallet {
 			let active_era = Staking::<T>::active_era().ok_or(Error::<T>::FailedToGetActiveEra)?;
 			let now = active_era.index;
 
-			// TODO come up with a better name for this.
-			let offs: &[OffenceDetails<T::AccountId, IdentificationTuple<T>>] = &(offenders
-				.into_iter()
-				.map(|(o, _)| OffenceDetails::<T::AccountId, IdentificationTuple<T>> {
-					offender: (o.clone(), Staking::<T>::eras_stakers(now, o)),
-					reporters: vec![],
-				})
-				.collect::<Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>>>());
+			let offender_details: &[OffenceDetails<
+				T::AccountId,
+				pallet_session::historical::IdentificationTuple<T>
+			>] = &(
+				offenders.into_iter().map(|(o, _)| {
+					let offender: pallet_session::historical::IdentificationTuple<T> = (o.clone(), Staking::<T>::eras_stakers(now, o));
+					OffenceDetails::<T::AccountId, pallet_session::historical::IdentificationTuple<T>> {
+						offender,
+						reporters: vec![],
+					}
+				}).collect::<Vec<OffenceDetails<
+					T::AccountId,
+					pallet_session::historical::IdentificationTuple<T>
+				>>>()
+			);
 
-			<T as pallet::Config>::OnOffenceHandler::on_offence(
-				&[],
+			<pallet_staking::Pallet<T> as OnOffenceHandler<T::AccountId, pallet_session::historical::IdentificationTuple<T>, Weight>>::on_offence(
+				offender_details,
 				slash_fractions,
 				now,
 				DisableStrategy::WhenSlashed,
