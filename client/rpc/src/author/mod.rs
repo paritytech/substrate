@@ -29,7 +29,7 @@ use codec::{Decode, Encode};
 use futures::{FutureExt, TryFutureExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
-	types::SubscriptionEmptyError,
+	types::SubscriptionResult,
 	SubscriptionSink,
 };
 use sc_rpc_api::DenyUnsafe;
@@ -181,7 +181,7 @@ where
 		&self,
 		mut sink: SubscriptionSink,
 		xt: Bytes,
-	) -> std::result::SubscriptionResult {
+	) -> SubscriptionResult {
 		let best_block_hash = self.client.info().best_hash;
 		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
 			Ok(dxt) => dxt,

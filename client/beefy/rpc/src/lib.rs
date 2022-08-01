@@ -30,7 +30,7 @@ use futures::{task::SpawnError, FutureExt, StreamExt};
 use jsonrpsee::{
 	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
-	types::{error::CallError, ErrorObject, SubscriptionEmptyError},
+	types::{error::CallError, ErrorObject, SubscriptionResult},
 	SubscriptionSink,
 };
 use log::warn;

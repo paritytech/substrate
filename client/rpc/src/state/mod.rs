@@ -29,7 +29,7 @@ use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
 	core::{Error as JsonRpseeError, RpcResult},
-	types::SubscriptionEmptyError,
+	types::SubscriptionResult,
 	ws_server::SubscriptionSink,
 };
 

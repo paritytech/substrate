@@ -26,7 +26,7 @@ use std::sync::Arc;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
-	types::SubscriptionEmptyError,
+	types::SubscriptionResult,
 	SubscriptionSink,
 };
 
