@@ -27,7 +27,7 @@ use codec::{Codec, Decode, Encode};
 use futures::StreamExt;
 use log::{debug, error, info, log_enabled, trace, warn};
 
-use sc_client_api::{Backend, FinalityNotification};
+use sc_client_api::{Backend, FinalityNotification, HeaderBackend};
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
@@ -246,8 +246,9 @@ where
 			min_block_delta,
 		} = worker_params;
 
-		let last_finalized_header = client
-			.expect_header(BlockId::number(client.info().finalized_number))
+		let last_finalized_header = backend
+			.blockchain()
+			.expect_header(BlockId::number(backend.blockchain().info().finalized_number))
 			.expect("latest block always has header available; qed.");
 
 		BeefyWorker {
@@ -456,7 +457,7 @@ where
 			self.best_beefy_block = Some(block_num);
 			metric_set!(self, beefy_best_block, block_num);
 
-			self.client.hash(block_num).ok().flatten().map(|hash| {
+			self.backend.blockchain().hash(block_num).ok().flatten().map(|hash| {
 				self.links
 					.to_rpc_best_block_sender
 					.notify(|| Ok::<_, ()>(hash))
@@ -544,17 +545,20 @@ where
 		debug!(target: "beefy", "🥩 Try voting on {}", target_number);
 
 		// Most of the time we get here, `target` is actually `best_grandpa`,
-		// avoid asking `client` for header in that case.
+		// avoid getting header from backend in that case.
 		let target_header = if target_number == *self.best_grandpa_block_header.number() {
 			self.best_grandpa_block_header.clone()
 		} else {
-			self.client.expect_header(BlockId::Number(target_number)).map_err(|err| {
-				let err_msg = format!(
-					"Couldn't get header for block #{:?} (error: {:?}), skipping vote..",
-					target_number, err
-				);
-				Error::Backend(err_msg)
-			})?
+			self.backend
+				.blockchain()
+				.expect_header(BlockId::Number(target_number))
+				.map_err(|err| {
+					let err_msg = format!(
+						"Couldn't get header for block #{:?} (error: {:?}), skipping vote..",
+						target_number, err
+					);
+					Error::Backend(err_msg)
+				})?
 		};
 		let target_hash = target_header.hash();
 
@@ -632,25 +636,25 @@ where
 						None => break
 					};
 					let at = BlockId::hash(notif.header.hash());
-				if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
-					if active.id() == GENESIS_AUTHORITY_SET_ID {
-						// When starting from genesis, there is no session boundary digest.
-						// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
-						self.init_session_at(active, 1u32.into());
+					if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
+						if active.id() == GENESIS_AUTHORITY_SET_ID {
+							// When starting from genesis, there is no session boundary digest.
+							// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
+							self.init_session_at(active, 1u32.into());
+						}
+						// In all other cases, we just go without `rounds` initialized, meaning the
+						// worker won't vote until it witnesses a session change.
+						// Once we'll implement 'initial sync' (catch-up), the worker will be able to
+						// start voting right away.
+						self.handle_finality_notification(&notif);
+						if let Err(err) = self.try_to_vote() {
+							debug!(target: "beefy", "🥩 {}", err);
+						}
+						break
+					} else {
+						trace!(target: "beefy", "🥩 Finality notification: {:?}", notif);
+						debug!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
 					}
-					// In all other cases, we just go without `rounds` initialized, meaning the
-					// worker won't vote until it witnesses a session change.
-					// Once we'll implement 'initial sync' (catch-up), the worker will be able to
-					// start voting right away.
-					self.handle_finality_notification(&notif);
-					if let Err(err) = self.try_to_vote() {
-						debug!(target: "beefy", "🥩 {}", err);
-					}
-					break
-				} else {
-					trace!(target: "beefy", "🥩 Finality notification: {:?}", notif);
-					debug!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
-				}
 				},
 				_ = gossip_engine => {
 					break
