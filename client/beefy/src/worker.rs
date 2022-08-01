@@ -36,14 +36,14 @@ use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor},
+	traits::{Block, Header, NumberFor, Zero},
 	SaturatedConversion,
 };
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
 	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
-	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 
 use crate::{
@@ -635,21 +635,18 @@ where
 						Some(notif) => notif,
 						None => break
 					};
-					let at = BlockId::hash(notif.header.hash());
-					if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
-						if active.id() == GENESIS_AUTHORITY_SET_ID {
-							// When starting from genesis, there is no session boundary digest.
-							// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
-							self.init_session_at(active, 1u32.into());
-						}
-						// In all other cases, we just go without `rounds` initialized, meaning the
-						// worker won't vote until it witnesses a session change.
-						// Once we'll implement 'initial sync' (catch-up), the worker will be able to
-						// start voting right away.
+					// Try to get genesis authorities using BeefyApi.
+					let at = BlockId::Number(Zero::zero());
+					if let Some(genesis_auth) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
+						debug!(target: "beefy", "🥩 Genesis validator set: {:?}", genesis_auth);
+						// When starting from genesis, there is no session boundary digest.
+						// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
+						self.init_session_at(genesis_auth.clone(), 1u32.into());
 						self.handle_finality_notification(&notif);
 						if let Err(err) = self.try_to_vote() {
 							debug!(target: "beefy", "🥩 {}", err);
 						}
+						// Beefy pallet available and voter initialized.
 						break
 					} else {
 						trace!(target: "beefy", "🥩 Finality notification: {:?}", notif);
@@ -670,6 +667,7 @@ where
 	pub(crate) async fn run(mut self) {
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
 		self.wait_for_runtime_pallet().await;
+		trace!(target: "beefy", "🥩 BEEFY pallet available, starting voter.");
 
 		let mut finality_notifications = self.client.finality_notification_stream().fuse();
 		let mut votes = Box::pin(
@@ -1213,7 +1211,7 @@ pub(crate) mod tests {
 		// generate 2 blocks, try again expect success
 		let (mut best_block_streams, _) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		net.generate_blocks(2, 10, &validator_set, false);
+		net.peer(0).push_blocks(2, false);
 
 		let justif = create_signed_commitment(2);
 		worker.finalize(justif);
