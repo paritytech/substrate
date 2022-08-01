@@ -25,7 +25,7 @@ use prometheus_endpoint::{
 };
 
 /// Histogram time buckets in seconds.
-const HISTOGRAM_BUCKETS: [f64; 12] = [
+const HISTOGRAM_BUCKETS: [f64; 11] = [
 	5.0,
 	25.0,
 	100.0,
