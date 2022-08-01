@@ -36,9 +36,15 @@ const MAX_RESPONSE_SIZE: u64 = 16 * 1024 * 1024;
 
 /// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing
 /// incoming requests.
-pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestResponseConfig {
+pub fn generate_request_response_config<Hash: AsRef<[u8]>>(
+	protocol_id: ProtocolId,
+	genesis_hash: Hash,
+	fork_id: Option<&str>,
+) -> RequestResponseConfig {
 	RequestResponseConfig {
-		name: generate_protocol_name(protocol_id).into(),
+		name: generate_protocol_name(genesis_hash, fork_id).into(),
+		fallback_names: std::iter::once(generate_legacy_protocol_name(protocol_id).into())
+			.collect(),
 		max_request_size: 32,
 		max_response_size: MAX_RESPONSE_SIZE,
 		request_timeout: Duration::from_secs(10),
@@ -46,8 +52,17 @@ pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestRespo
 	}
 }
 
-/// Generate the grandpa warp sync protocol name from chain specific protocol identifier.
-fn generate_protocol_name(protocol_id: ProtocolId) -> String {
+/// Generate the grandpa warp sync protocol name from the genesi hash and fork id.
+fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {
+	if let Some(fork_id) = fork_id {
+		format!("/{}/{}/sync/warp", hex::encode(genesis_hash), fork_id)
+	} else {
+		format!("/{}/sync/warp", hex::encode(genesis_hash))
+	}
+}
+
+/// Generate the legacy grandpa warp sync protocol name from chain specific protocol identifier.
+fn generate_legacy_protocol_name(protocol_id: ProtocolId) -> String {
 	format!("/{}/sync/warp", protocol_id.as_ref())
 }
 
@@ -59,13 +74,16 @@ pub struct RequestHandler<TBlock: BlockT> {
 
 impl<TBlock: BlockT> RequestHandler<TBlock> {
 	/// Create a new [`RequestHandler`].
-	pub fn new(
+	pub fn new<Hash: AsRef<[u8]>>(
 		protocol_id: ProtocolId,
+		genesis_hash: Hash,
+		fork_id: Option<&str>,
 		backend: Arc<dyn WarpSyncProvider<TBlock>>,
 	) -> (Self, RequestResponseConfig) {
 		let (tx, request_receiver) = mpsc::channel(20);
 
-		let mut request_response_config = generate_request_response_config(protocol_id);
+		let mut request_response_config =
+			generate_request_response_config(protocol_id, genesis_hash, fork_id);
 		request_response_config.inbound_queue = Some(tx);
 
 		(Self { backend, request_receiver }, request_response_config)
