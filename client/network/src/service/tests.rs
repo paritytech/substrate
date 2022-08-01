@@ -42,7 +42,7 @@ type TestNetworkService = NetworkService<
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
 fn build_test_full_node(
-	config: config::NetworkConfiguration,
+	network_config: config::NetworkConfiguration,
 ) -> (Arc<TestNetworkService>, impl Stream<Item = Event>) {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 
@@ -111,35 +111,36 @@ fn build_test_full_node(
 		protocol_config
 	};
 
-	let max_parallel_downloads = config.max_parallel_downloads;
+	let chain_sync = ChainSync::new(
+		match network_config.sync_mode {
+			config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
+			config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+				sc_network_common::sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
+			config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
+		},
+		client.clone(),
+		Box::new(DefaultBlockAnnounceValidator),
+		network_config.max_parallel_downloads,
+		None,
+	)
+	.unwrap();
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
 		transactions_handler_executor: Box::new(|task| {
 			async_std::task::spawn(task);
 		}),
-		network_config: config,
+		network_config,
 		chain: client.clone(),
-		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
+		transaction_pool: Arc::new(config::EmptyTransactionPool),
 		protocol_id,
 		import_queue,
-		create_chain_sync: Box::new(
-			move |sync_mode, chain, warp_sync_provider| match ChainSync::new(
-				sync_mode,
-				chain,
-				Box::new(DefaultBlockAnnounceValidator),
-				max_parallel_downloads,
-				warp_sync_provider,
-			) {
-				Ok(chain_sync) => Ok(Box::new(chain_sync)),
-				Err(error) => Err(Box::new(error).into()),
-			},
-		),
+		chain_sync: Box::new(chain_sync),
 		metrics_registry: None,
 		block_request_protocol_config,
 		state_request_protocol_config,
 		light_client_request_protocol_config,
-		warp_sync: None,
+		warp_sync_protocol_config: None,
 	})
 	.unwrap();
 
