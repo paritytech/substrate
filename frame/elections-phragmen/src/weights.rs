@@ -54,7 +54,6 @@ pub trait WeightInfo {
 	fn renounce_candidacy_runners_up() -> Weight;
 	fn remove_member_without_replacement() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
-	fn remove_member_wrong_refund() -> Weight;
 	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight;
 	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight;
 }
@@ -153,11 +152,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(55_024_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
-	}
-	// Storage: Elections RunnersUp (r:1 w:0)
-	fn remove_member_wrong_refund() -> Weight {
-		(13_089_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 	}
 	// Storage: Elections Voting (r:251 w:250)
 	// Storage: Elections Members (r:1 w:0)
@@ -291,11 +285,6 @@ impl WeightInfo for () {
 		(55_024_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
-	}
-	// Storage: Elections RunnersUp (r:1 w:0)
-	fn remove_member_wrong_refund() -> Weight {
-		(13_089_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
 	// Storage: Elections Voting (r:251 w:250)
 	// Storage: Elections Members (r:1 w:0)
