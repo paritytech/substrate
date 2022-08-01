@@ -332,7 +332,6 @@ where
 		if keys.is_none() {
 			if let Err(err) = self.deny_unsafe.check_if_safe() {
 				let _ = sink.reject(JsonRpseeError::from(err));
-				// NOTE: `SubscriptionEmptyError` is introduced for ergonomic purposes.
 				return Ok(())
 			}
 		}
