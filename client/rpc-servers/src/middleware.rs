@@ -135,21 +135,15 @@ impl RpcMiddleware {
 	pub fn new(metrics: RpcMetrics, transport_label: &'static str) -> Self {
 		Self { metrics, transport_label }
 	}
-}
 
-impl WsMiddleware for RpcMiddleware {
-	type Instant = std::time::Instant;
-
-	fn on_connect(&self, _remote_addr: SocketAddr, _headers: &Headers) {
-		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
-	}
-
-	fn on_request(&self) -> Self::Instant {
+	/// Called when a new JSON-RPC request comes to the server.
+	fn on_request(&self) -> std::time::Instant {
 		let now = std::time::Instant::now();
 		self.metrics.requests_started.with_label_values(&[self.transport_label]).inc();
 		now
 	}
 
+	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
 	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
 		log::trace!(
 			target: "rpc_metrics",
@@ -165,7 +159,9 @@ impl WsMiddleware for RpcMiddleware {
 			.inc();
 	}
 
-	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple
+	/// times.
+	fn on_result(&self, name: &str, success: bool, started_at: std::time::Instant) {
 		let micros = started_at.elapsed().as_micros();
 		log::debug!(
 			target: "rpc_metrics",
@@ -189,9 +185,34 @@ impl WsMiddleware for RpcMiddleware {
 			.inc();
 	}
 
-	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
+	fn on_response(&self, _result: &str, started_at: std::time::Instant) {
 		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
 		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
+	}
+}
+
+impl WsMiddleware for RpcMiddleware {
+	type Instant = std::time::Instant;
+
+	fn on_connect(&self, _remote_addr: SocketAddr, _headers: &Headers) {
+		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
+	}
+
+	fn on_request(&self) -> Self::Instant {
+		self.on_request()
+	}
+
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		self.on_call(name, params, kind)
+	}
+
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		self.on_result(name, success, started_at)
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		self.on_response(_result, started_at)
 	}
 
 	fn on_disconnect(&self, _remote_addr: SocketAddr) {
@@ -203,52 +224,18 @@ impl HttpMiddleware for RpcMiddleware {
 	type Instant = std::time::Instant;
 
 	fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Self::Instant {
-		let now = std::time::Instant::now();
-		self.metrics.requests_started.with_label_values(&[self.transport_label]).inc();
-		now
+		self.on_request()
 	}
 
 	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
-		log::trace!(
-			target: "rpc_metrics",
-			"[{}] on_call name={} params={:?} kind={}",
-			self.transport_label,
-			name,
-			params,
-			kind,
-		);
-		self.metrics
-			.calls_started
-			.with_label_values(&[self.transport_label, name])
-			.inc();
+		self.on_call(name, params, kind)
 	}
 
 	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
-		let micros = started_at.elapsed().as_micros();
-		log::debug!(
-			target: "rpc_metrics",
-			"[{}] {} call took {} μs",
-			self.transport_label,
-			name,
-			micros,
-		);
-		self.metrics
-			.calls_time
-			.with_label_values(&[self.transport_label, name])
-			.observe(micros as _);
-
-		self.metrics
-			.calls_finished
-			.with_label_values(&[
-				self.transport_label,
-				name,
-				if success { "true" } else { "false" },
-			])
-			.inc();
+		self.on_result(name, success, started_at)
 	}
 
 	fn on_response(&self, _result: &str, started_at: Self::Instant) {
-		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
-		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
+		self.on_response(_result, started_at)
 	}
 }
