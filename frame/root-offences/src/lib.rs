@@ -64,8 +64,6 @@ pub mod pallet {
 			FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
 			FullIdentificationOf = ExposureOf<T>,
 		>,
-		T::SessionHandler: pallet_session::SessionHandler<<T as frame_system::Config>::AccountId>,
-		T::SessionManager: pallet_session::SessionManager<<T as frame_system::Config>::AccountId>,
 		T::ValidatorIdOf: Convert<
 			<T as frame_system::Config>::AccountId,
 			Option<<T as frame_system::Config>::AccountId>,
