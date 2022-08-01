@@ -176,7 +176,7 @@ impl Middleware for RpcMiddleware {
 			.with_label_values(&[
 				self.transport_label,
 				name,
-				// the label "is_error", so `success` should be regarded false
+				// the label "is_error", so `success` should be regarded as false
 				// and vice-versa to be registrered correctly.
 				if success { "false" } else { "true" },
 			])
