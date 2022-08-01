@@ -144,16 +144,6 @@ parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 }
 
-pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
-
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
-where
-	Call: From<C>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = Extrinsic;
-}
-
 pub struct OnChainSeqPhragmen;
 impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
