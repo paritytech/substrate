@@ -25,6 +25,7 @@ mod sync;
 use std::{
 	borrow::Cow,
 	collections::HashMap,
+	marker::PhantomData,
 	pin::Pin,
 	sync::Arc,
 	task::{Context as FutureContext, Poll},
@@ -567,25 +568,27 @@ impl<T> BlockImportAdapterFull for T where
 /// This is required as the `TestNetFactory` trait does not distinguish between
 /// full and light nodes.
 #[derive(Clone)]
-pub struct BlockImportAdapter<I> {
+pub struct BlockImportAdapter<I, Transaction = ()> {
 	inner: I,
+	_phantom: PhantomData<Transaction>,
 }
 
-impl<I> BlockImportAdapter<I> {
+impl<I, Transaction> BlockImportAdapter<I, Transaction> {
 	/// Create a new instance of `Self::Full`.
 	pub fn new(inner: I) -> Self {
-		Self { inner }
+		Self { inner, _phantom: PhantomData }
 	}
 }
 
 #[async_trait::async_trait]
-impl<I> BlockImport<Block> for BlockImportAdapter<I>
+impl<I, Transaction> BlockImport<Block> for BlockImportAdapter<I, Transaction>
 where
 	I: BlockImport<Block, Error = ConsensusError> + Send + Sync,
 	I::Transaction: Send,
+	Transaction: Send + 'static,
 {
 	type Error = ConsensusError;
-	type Transaction = ();
+	type Transaction = Transaction;
 
 	async fn check_block(
 		&mut self,
@@ -596,7 +599,7 @@ where
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<Block, ()>,
+		block: BlockImportParams<Block, Self::Transaction>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		self.inner.import_block(block.clear_storage_changes_and_mutate(), cache).await
@@ -835,10 +838,25 @@ where
 			protocol_config
 		};
 
-		let max_parallel_downloads = network_config.max_parallel_downloads;
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
+		let chain_sync = ChainSync::new(
+			match network_config.sync_mode {
+				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
+				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+					sc_network_common::sync::SyncMode::LightState {
+						skip_proofs,
+						storage_chain_mode,
+					},
+				SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
+			},
+			client.clone(),
+			block_announce_validator,
+			network_config.max_parallel_downloads,
+			Some(warp_sync),
+		)
+		.unwrap();
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
@@ -850,23 +868,12 @@ where
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
 			import_queue,
-			create_chain_sync: Box::new(move |sync_mode, chain, warp_sync_provider| {
-				match ChainSync::new(
-					sync_mode,
-					chain,
-					block_announce_validator,
-					max_parallel_downloads,
-					warp_sync_provider,
-				) {
-					Ok(chain_sync) => Ok(Box::new(chain_sync)),
-					Err(error) => Err(Box::new(error).into()),
-				}
-			}),
+			chain_sync: Box::new(chain_sync),
 			metrics_registry: None,
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
-			warp_sync: Some((warp_sync, warp_protocol_config)),
+			warp_sync_protocol_config: Some(warp_protocol_config),
 		})
 		.unwrap();
 
