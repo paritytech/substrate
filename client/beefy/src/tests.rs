@@ -397,7 +397,8 @@ fn run_for(duration: Duration, net: &Arc<Mutex<BeefyTestNet>>, runtime: &mut Run
 pub(crate) fn get_beefy_streams(
 	net: &mut BeefyTestNet,
 	peers: &[BeefyKeyring],
-) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block>>>) {
+) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block>>>)
+{
 	let mut best_block_streams = Vec::new();
 	let mut versioned_finality_proof_streams = Vec::new();
 	for peer_id in 0..peers.len() {
@@ -449,7 +450,7 @@ fn wait_for_beefy_signed_commitments(
 		wait_for.push(Box::pin(stream.take(len).for_each(move |versioned_finality_proof| {
 			let expected = expected.next();
 			async move {
-				let signed_commitment = match versioned_finality_proof{
+				let signed_commitment = match versioned_finality_proof {
 					beefy_primitives::VersionedFinalityProof::V1(sc) => sc,
 				};
 				let commitment_block_num = signed_commitment.commitment.block_number;

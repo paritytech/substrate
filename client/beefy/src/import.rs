@@ -34,7 +34,8 @@ use sc_client_api::backend::Backend;
 use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResult};
 
 use crate::{
-	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof}, notification::BeefyVersionedFinalityProofSender,
+	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	notification::BeefyVersionedFinalityProofSender,
 };
 
 /// A block-import handler for BEEFY.

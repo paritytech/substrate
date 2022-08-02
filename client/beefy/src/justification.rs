@@ -80,7 +80,9 @@ fn verify_with_validator_set<Block: BlockT>(
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use beefy_primitives::{known_payload_ids, Commitment, Payload, SignedCommitment,VersionedFinalityProof};
+	use beefy_primitives::{
+		known_payload_ids, Commitment, Payload, SignedCommitment, VersionedFinalityProof,
+	};
 	use substrate_test_runtime_client::runtime::Block;
 
 	use super::*;
@@ -132,8 +134,8 @@ pub(crate) mod tests {
 		// wrong signatures length -> should fail verification
 		let mut bad_proof = proof.clone();
 		// change length of signatures
-		let bad_signed_commitment=match bad_proof {
-			VersionedFinalityProof::V1(ref mut sc) => sc
+		let bad_signed_commitment = match bad_proof {
+			VersionedFinalityProof::V1(ref mut sc) => sc,
 		};
 		bad_signed_commitment.signatures.pop().flatten().unwrap();
 		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
@@ -143,8 +145,8 @@ pub(crate) mod tests {
 
 		// not enough signatures -> should fail verification
 		let mut bad_proof = proof.clone();
-		let bad_signed_commitment=match bad_proof {
-			VersionedFinalityProof::V1(ref mut sc) => sc
+		let bad_signed_commitment = match bad_proof {
+			VersionedFinalityProof::V1(ref mut sc) => sc,
 		};
 		// remove a signature (but same length)
 		*bad_signed_commitment.signatures.first_mut().unwrap() = None;
@@ -155,8 +157,8 @@ pub(crate) mod tests {
 
 		// not enough _correct_ signatures -> should fail verification
 		let mut bad_proof = proof.clone();
-		let bad_signed_commitment=match bad_proof {
-			VersionedFinalityProof::V1(ref mut sc) => sc
+		let bad_signed_commitment = match bad_proof {
+			VersionedFinalityProof::V1(ref mut sc) => sc,
 		};
 		// change a signature to a different key
 		*bad_signed_commitment.signatures.first_mut().unwrap() =

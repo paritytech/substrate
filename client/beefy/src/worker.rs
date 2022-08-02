@@ -383,8 +383,8 @@ where
 		&mut self,
 		justification: BeefyVersionedFinalityProof<B>,
 	) -> Result<(), Error> {
-		let signed_commitment=match justification {
-			VersionedFinalityProof::V1(ref sc) => sc
+		let signed_commitment = match justification {
+			VersionedFinalityProof::V1(ref sc) => sc,
 		};
 		let block_num = signed_commitment.commitment.block_number;
 		let best_grandpa = *self.best_grandpa_block_header.number();
@@ -420,7 +420,8 @@ where
 					validator_set_id: rounds.validator_set_id(),
 				};
 
-				let finality_proof = VersionedFinalityProof::V1(SignedCommitment { commitment, signatures });
+				let finality_proof =
+					VersionedFinalityProof::V1(SignedCommitment { commitment, signatures });
 
 				metric_set!(self, beefy_round_concluded, block_num);
 
@@ -428,10 +429,7 @@ where
 
 				if let Err(e) = self.backend.append_justification(
 					BlockId::Number(block_num),
-					(
-						BEEFY_ENGINE_ID,
-						finality_proof.clone().encode(),
-					),
+					(BEEFY_ENGINE_ID, finality_proof.clone().encode()),
 				) {
 					debug!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
 				}
@@ -453,7 +451,7 @@ where
 		// Prune any now "finalized" sessions from queue.
 		self.voting_oracle.try_prune();
 		let signed_commitment = match finality_roof {
-			VersionedFinalityProof::V1(ref sc) => sc
+			VersionedFinalityProof::V1(ref sc) => sc,
 		};
 		let block_num = signed_commitment.commitment.block_number;
 		if Some(block_num) > self.best_beefy_block {
@@ -867,7 +865,8 @@ pub(crate) mod tests {
 			BeefyVersionedFinalityProofStream::<Block>::channel();
 		let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
 			BeefyBestBlockStream::<Block>::channel();
-		let (_, from_block_import_justif_stream) = BeefyVersionedFinalityProofStream::<Block>::channel();
+		let (_, from_block_import_justif_stream) =
+			BeefyVersionedFinalityProofStream::<Block>::channel();
 
 		let beefy_rpc_links =
 			BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream };
