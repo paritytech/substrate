@@ -151,7 +151,7 @@ There are several files in the `node` directory - take special note of the follo
   there are references to consensus-related topics, such as the
   [block finalization and forks](https://docs.substrate.io/main-docs/fundamentals/consensus/#finalization-and-forks)
   and other [consensus mechanisms](https://docs.substrate.io/main-docs/fundamentals/consensus/#default-consensus-models)
-  such as Aura for block authoring GRANDPA for finality.
+  such as Aura for block authoring and GRANDPA for finality.
 
 After the node has been [built](#build), refer to the embedded documentation to learn more about the
 capabilities and configuration parameters that it exposes:
