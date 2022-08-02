@@ -465,10 +465,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::create())]
-		pub fn create(
-			origin: OriginFor<T>,
-			admin: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn create(origin: OriginFor<T>, admin: AccountIdLookupOf<T>) -> DispatchResult {
 			let collection = NextCollectionId::<T, I>::get();
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
