@@ -212,7 +212,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	/// Buffer holding votes for future processing.
 	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
 	/// Buffer holding justifications for future processing.
-	pending_justifications: BTreeMap<NumberFor<B>, Vec<BeefySignedCommitment<B>>>,
+	pending_justifications: BTreeMap<NumberFor<B>, BeefySignedCommitment<B>>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	voting_oracle: VoterOracle<B>,
 }
@@ -407,7 +407,7 @@ where
 			RoundAction::Process => self.finalize(justification)?,
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
-				self.pending_justifications.entry(block_num).or_default().push(justification)
+				self.pending_justifications.entry(block_num).or_insert(justification);
 			},
 			RoundAction::Drop => (),
 		};
@@ -497,10 +497,10 @@ where
 		let _ph = PhantomData::<B>::default();
 
 		fn to_process_for<B: Block, T>(
-			pending: &mut BTreeMap<NumberFor<B>, Vec<T>>,
+			pending: &mut BTreeMap<NumberFor<B>, T>,
 			(start, end): (NumberFor<B>, NumberFor<B>),
 			_: PhantomData<B>,
-		) -> BTreeMap<NumberFor<B>, Vec<T>> {
+		) -> BTreeMap<NumberFor<B>, T> {
 			// These are still pending.
 			let still_pending = pending.split_off(&end.saturating_add(1u32.into()));
 			// These can be processed.
@@ -515,12 +515,10 @@ where
 		let interval = self.voting_oracle.accepted_interval(best_grandpa)?;
 		if !self.pending_justifications.is_empty() {
 			let justifs_to_handle = to_process_for(&mut self.pending_justifications, interval, _ph);
-			for (num, justifications) in justifs_to_handle.into_iter() {
-				debug!(target: "beefy", "🥩 Handle buffered justifications for: {:?}.", num);
-				for justif in justifications.into_iter() {
-					if let Err(err) = self.finalize(justif) {
-						error!(target: "beefy", "🥩 Error finalizing block: {}", err);
-					}
+			for (num, justification) in justifs_to_handle.into_iter() {
+				debug!(target: "beefy", "🥩 Handle buffered justification for: {:?}.", num);
+				if let Err(err) = self.finalize(justification) {
+					error!(target: "beefy", "🥩 Error finalizing block: {}", err);
 				}
 			}
 		}
