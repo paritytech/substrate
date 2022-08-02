@@ -87,7 +87,7 @@ pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transa
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
 
 # node-specific dependencies
-node-runtime = { version = "3.0.0-dev", path = "../runtime" }
+kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
 node-rpc = { version = "3.0.0-dev", path = "../rpc" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-executor = { version = "3.0.0-dev", path = "../executor" }
@@ -159,10 +159,10 @@ cli = [
 	"substrate-build-script-utils",
 	"try-runtime-cli",
 ]
-runtime-benchmarks = ["node-runtime/runtime-benchmarks", "frame-benchmarking-cli"]
+runtime-benchmarks = ["kitchensink-runtime/runtime-benchmarks", "frame-benchmarking-cli"]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = ["node-runtime/try-runtime", "try-runtime-cli"]
+try-runtime = ["kitchensink-runtime/try-runtime", "try-runtime-cli"]
 
 [[bench]]
 name = "transaction_pool"
