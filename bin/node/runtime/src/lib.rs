@@ -22,7 +22,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 512.
 #![recursion_limit = "512"]
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
 	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
 };
@@ -31,6 +31,7 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
+		tokens::AssetId,
 		AsEnsureOriginWithArg, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
 		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
@@ -1976,6 +1977,17 @@ impl_runtime_apis! {
 		}
 		fn query_fee_details(uxt: <Block as BlockT>::Extrinsic, len: u32) -> FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
+		}
+	}
+
+	impl pallet_dex_rpc_runtime_api::DexApi<
+		Block,
+		AssetId,
+		Balance,
+	> for Runtime
+	{
+		fn quote_price(asset1: AssetId, asset2: AssetId) -> Option<Balance> {
+			Dex::quote_price(asset1, asset2)
 		}
 	}
 

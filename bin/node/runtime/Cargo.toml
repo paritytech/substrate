@@ -108,6 +108,7 @@ pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, 
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
 pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "../../../frame/whitelist" }
+pallet-dex-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/dex/rpc/runtime-api/" }
 pallet-dex = { version = "4.0.0-dev", default-features = false, path = "../../../frame/dex" }
 
 [build-dependencies]
@@ -192,6 +193,7 @@ std = [
 	"sp-io/std",
 	"pallet-child-bounties/std",
 	"pallet-alliance/std",
+	"pallet-dex-rpc-runtime-api/std",
 	"pallet-dex/std",
 ]
 runtime-benchmarks = [
@@ -294,6 +296,7 @@ try-runtime = [
 	"pallet-utility/try-runtime",
 	"pallet-vesting/try-runtime",
 	"pallet-whitelist/try-runtime",
+	"pallet-dex/try-runtime",
 ]
 # Make contract callable functions marked as __unstable__ available. Do not enable
 # on live chains as those are subject to change.

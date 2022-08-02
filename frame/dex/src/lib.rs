@@ -512,8 +512,27 @@ pub mod pallet {
 			}
 		}
 
+		pub fn quote_price(
+			asset1: AssetIdOf<T>,
+			asset2: AssetIdOf<T>,
+		) -> Option<AssetBalanceOf<T>> {
+			let pool_id = Self::get_pool_id(asset1, asset2);
+			let (pool_asset1, _) = pool_id;
+
+			if let Some(pool) = Pools::<T>::get(pool_id) {
+				let (reserve1, reserve2) = if asset1 == pool_asset1 {
+					(pool.balance1, pool.balance2)
+				} else {
+					(pool.balance2, pool.balance1)
+				};
+				return Self::quote(&One::one(), &reserve1, &reserve2).ok()
+			} else {
+				return None
+			}
+		}
+
 		// TODO: we should probably use u128 for calculations
-		/// Calculates an optimal amount from the reserves.
+		/// Calculates the optimal amount from the reserves.
 		pub fn quote(
 			amount: &AssetBalanceOf<T>,
 			reserve1: &AssetBalanceOf<T>,
