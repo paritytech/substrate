@@ -23,7 +23,7 @@ use super::{
 };
 use crate::dispatch::{DispatchError, DispatchResult};
 use sp_runtime::traits::Saturating;
-use sp_std::vec::Vec;
+use sp_std::prelude::*;
 
 pub mod approvals;
 mod balanced;
@@ -72,6 +72,12 @@ pub trait Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
+}
+
+/// Interface for enumerating assets in existence or owned by a given account.
+pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
+	/// Returns an iterator of the collections in existence.
+	fn assets() -> Box<dyn Iterator<Item = Self::AssetId>>;
 }
 
 /// Trait for reading metadata from a fungible asset.

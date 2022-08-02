@@ -263,3 +263,12 @@ impl<T: Config<I>, I: 'static> fungibles::approvals::Mutate<<T as SystemConfig>:
 		Self::do_transfer_approved(asset, owner, delegate, dest, amount)
 	}
 }
+
+impl<T: Config<I>, I: 'static> fungibles::InspectEnumerable<T::AccountId> for Pallet<T, I> {
+	/// Returns an iterator of the assets in existence.
+	///
+	/// NOTE: iterating this list invokes a storage read per item.
+	fn assets() -> Box<dyn Iterator<Item = Self::AssetId>> {
+		Box::new(Asset::<T, I>::iter_keys())
+	}
+}

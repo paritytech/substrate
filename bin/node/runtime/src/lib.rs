@@ -1416,6 +1416,19 @@ impl pallet_assets::Config for Runtime {
 }
 
 parameter_types! {
+	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
+}
+
+impl pallet_dex::Config for Runtime {
+	type Event = Event;
+	type Currency = Balances;
+	type AssetBalance = <Self as pallet_balances::Config>::Balance;
+	type Assets = Assets;
+	type AssetId = <Self as pallet_assets::Config>::AssetId;
+	type PalletId = DexPalletId;
+}
+
+parameter_types! {
 	pub IgnoredIssuance: Balance = Treasury::pot();
 	pub const QueueCount: u32 = 300;
 	pub const MaxQueueLen: u32 = 1000;
@@ -1637,6 +1650,7 @@ construct_runtime!(
 		NominationPools: pallet_nomination_pools,
 		RankedPolls: pallet_referenda::<Instance2>,
 		RankedCollective: pallet_ranked_collective,
+		Dex: pallet_dex,
 	}
 );
 
