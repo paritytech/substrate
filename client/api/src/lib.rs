@@ -78,7 +78,7 @@ pub mod utils {
 				}
 				if hash == current_hash {
 					if base == current_parent_hash {
-						return Ok(true)
+									return Ok(true)
 					} else {
 						hash = current_parent_hash;
 					}
