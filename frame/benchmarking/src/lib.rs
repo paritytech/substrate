@@ -1196,17 +1196,15 @@ macro_rules! impl_benchmark_test {
 						execute_benchmark(Default::default())?;
 					} else {
 						for (name, low, high) in components.clone().into_iter() {
-							// Test the lowest, highest and up to 4 more
-							// equidistant values in between. For 0 .. 10 this means:
-							// [0, 2, 4, 6, 8, 10]
+							// Test the lowest, highest (if its different from the lowest)
+							// and up to 4 more equidistant values in between.
+							// For 0 .. 10 this would mean: [0, 2, 4, 6, 8, 10]
 
-							assert!(high > low, "The upper component bound must be larger than the lower bound.");
-
-							let mut values = $crate::vec![];
+							let mut values = $crate::vec![low];
 							let diff = (high - low).min(5);
 							let slope = (high - low) as f32 / diff as f32;
 
-							for i in 0..=diff {
+							for i in 1..=diff {
 								let value = ((low as f32 + slope * i as f32) as u32)
 												.clamp(low, high);
 								values.push(value);
