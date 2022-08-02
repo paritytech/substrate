@@ -164,8 +164,9 @@ where
 mod tests {
 	use super::*;
 
-	use beefy_gadget::notification::{
-		BeefyBestBlockStream, BeefySignedCommitment, BeefySignedCommitmentSender,
+	use beefy_gadget::{
+		justification::BeefySignedCommitment,
+		notification::{BeefyBestBlockStream, BeefySignedCommitmentSender},
 	};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};

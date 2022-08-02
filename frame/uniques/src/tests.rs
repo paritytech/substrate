@@ -92,12 +92,12 @@ fn basic_setup_works() {
 #[test]
 fn basic_minting_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(items(), vec![(1, 0, 42)]);
 
-		assert_ok!(Uniques::force_create(Origin::root(), 1, 2, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 2, true));
 		assert_eq!(collections(), vec![(1, 0), (2, 1)]);
 		assert_ok!(Uniques::mint(Origin::signed(2), 1, 69, 1));
 		assert_eq!(items(), vec![(1, 0, 42), (1, 1, 69)]);
@@ -108,7 +108,7 @@ fn basic_minting_should_work() {
 fn lifecycle_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
+		assert_ok!(Uniques::create(Origin::signed(1), 1));
 		assert_eq!(Balances::reserved_balance(&1), 2);
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0, 0], false));
@@ -151,7 +151,7 @@ fn lifecycle_should_work() {
 fn destroy_with_bad_witness_should_not_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
+		assert_ok!(Uniques::create(Origin::signed(1), 1));
 
 		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
@@ -162,7 +162,7 @@ fn destroy_with_bad_witness_should_not_work() {
 #[test]
 fn mint_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_eq!(Uniques::owner(0, 42).unwrap(), 1);
 		assert_eq!(collections(), vec![(1, 0)]);
@@ -173,7 +173,7 @@ fn mint_should_work() {
 #[test]
 fn transfer_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 
 		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 42, 3));
@@ -188,7 +188,7 @@ fn transfer_should_work() {
 #[test]
 fn freezing_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_ok!(Uniques::freeze(Origin::signed(1), 0, 42));
 		assert_noop!(Uniques::transfer(Origin::signed(1), 0, 42, 2), Error::<Test>::Frozen);
@@ -205,7 +205,7 @@ fn freezing_should_work() {
 #[test]
 fn origin_guards_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 
 		Balances::make_free_balance_be(&2, 100);
@@ -230,7 +230,7 @@ fn transfer_owner_should_work() {
 		Balances::make_free_balance_be(&1, 100);
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 100);
-		assert_ok!(Uniques::create(Origin::signed(1), 0, 1));
+		assert_ok!(Uniques::create(Origin::signed(1), 1));
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_noop!(
 			Uniques::transfer_ownership(Origin::signed(1), 0, 2),
@@ -275,7 +275,7 @@ fn transfer_owner_should_work() {
 #[test]
 fn set_team_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::set_team(Origin::signed(1), 0, 2, 3, 4));
 
 		assert_ok!(Uniques::mint(Origin::signed(2), 0, 42, 2));
@@ -294,7 +294,7 @@ fn set_collection_metadata_should_work() {
 			Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 20], false),
 			Error::<Test>::UnknownCollection,
 		);
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, false));
 		// Cannot add metadata to unowned item
 		assert_noop!(
 			Uniques::set_collection_metadata(Origin::signed(2), 0, bvec![0u8; 20], false),
@@ -354,7 +354,7 @@ fn set_item_metadata_should_work() {
 		Balances::make_free_balance_be(&1, 30);
 
 		// Cannot add metadata to unknown item
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		// Cannot add metadata to unowned item
 		assert_noop!(
@@ -410,7 +410,7 @@ fn set_attribute_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, false));
 
 		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, None, bvec![0], bvec![0]));
 		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(0), bvec![0], bvec![0]));
@@ -455,7 +455,7 @@ fn set_attribute_should_respect_freeze() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, false));
 
 		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, None, bvec![0], bvec![0]));
 		assert_ok!(Uniques::set_attribute(Origin::signed(1), 0, Some(0), bvec![0], bvec![0]));
@@ -487,7 +487,7 @@ fn force_item_status_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, false));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 1));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 69, 2));
 		assert_ok!(Uniques::set_collection_metadata(Origin::signed(1), 0, bvec![0; 20], false));
@@ -521,7 +521,7 @@ fn force_item_status_should_work() {
 fn burn_works() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, false));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, false));
 		assert_ok!(Uniques::set_team(Origin::signed(1), 0, 2, 3, 4));
 
 		assert_noop!(
@@ -545,7 +545,7 @@ fn burn_works() {
 #[test]
 fn approval_lifecycle_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_ok!(Uniques::transfer(Origin::signed(3), 0, 42, 4));
@@ -560,7 +560,7 @@ fn approval_lifecycle_works() {
 #[test]
 fn cancel_approval_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
@@ -592,7 +592,7 @@ fn cancel_approval_works() {
 #[test]
 fn cancel_approval_works_with_admin() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
@@ -620,7 +620,7 @@ fn cancel_approval_works_with_admin() {
 #[test]
 fn cancel_approval_works_with_force() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
 		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
 
 		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
@@ -653,7 +653,7 @@ fn max_supply_should_work() {
 		let max_supply = 2;
 
 		// validate set_collection_max_supply
-		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
+		assert_ok!(Uniques::force_create(Origin::root(), user_id, true));
 		assert!(!CollectionMaxSupply::<Test>::contains_key(collection_id));
 
 		assert_ok!(Uniques::set_collection_max_supply(
@@ -696,14 +696,47 @@ fn max_supply_should_work() {
 }
 
 #[test]
+fn try_increment_id_works() {
+	new_test_ext().execute_with(|| {
+		// should fail because the next `CollectionId` is not being used.
+		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
+
+		// create two collections & check for events.
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
+		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
+		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
+		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 2 }));
+
+		// there are now two collections.
+		assert_eq!(Uniques::get_next_id(), 2);
+
+		// reset the collections counter to test if the `try_increment_id`
+		// works.
+		Uniques::set_next_id(0);
+		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));
+
+		// `try_increment_id` should emit an event when successful.
+		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
+
+		// because reset, the collections count should be now 1
+		assert_eq!(Uniques::get_next_id(), 1);
+
+		// increment the collections count again.
+		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));
+		// should fail because the next `CollectionId` is not being used.
+		assert_noop!(Uniques::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
+	});
+}
+
+#[test]
 fn set_price_should_work() {
 	new_test_ext().execute_with(|| {
 		let user_id = 1;
-		let collection_id = 0;
+		let collection_id: u32 = 0;
 		let item_1 = 1;
 		let item_2 = 2;
 
-		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
+		assert_ok!(Uniques::force_create(Origin::root(), user_id, true));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_1, user_id));
 		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_2, user_id));
@@ -755,7 +788,7 @@ fn buy_item_should_work() {
 		let user_1 = 1;
 		let user_2 = 2;
 		let user_3 = 3;
-		let collection_id = 0;
+		let collection_id: u32 = 0;
 		let item_1 = 1;
 		let item_2 = 2;
 		let item_3 = 3;
@@ -767,7 +800,7 @@ fn buy_item_should_work() {
 		Balances::make_free_balance_be(&user_2, initial_balance);
 		Balances::make_free_balance_be(&user_3, initial_balance);
 
-		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_1, true));
+		assert_ok!(Uniques::force_create(Origin::root(), user_1, true));
 
 		assert_ok!(Uniques::mint(Origin::signed(user_1), collection_id, item_1, user_1));
 		assert_ok!(Uniques::mint(Origin::signed(user_1), collection_id, item_2, user_1));

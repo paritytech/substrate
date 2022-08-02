@@ -180,14 +180,6 @@ impl pallet_nomination_pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 }
 
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
-where
-	Call: From<LocalCall>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = UncheckedExtrinsic;
-}
-
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
 

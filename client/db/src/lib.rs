@@ -2292,7 +2292,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn get_import_lock(&self) -> &RwLock<()> {
-		&*self.import_lock
+		&self.import_lock
 	}
 
 	fn requires_full_sync(&self) -> bool {

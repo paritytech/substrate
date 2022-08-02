@@ -113,6 +113,8 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + pallet_transaction_payment::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// The fungibles instance used to pay for transactions in assets.
 		type Fungibles: Balanced<Self::AccountId>;
 		/// The actual transaction charging logic that charges the fees.
@@ -122,6 +124,19 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee,
+		/// has been paid by `who` in an asset `asset_id`.
+		AssetTxFeePaid {
+			who: T::AccountId,
+			actual_fee: BalanceOf<T>,
+			tip: BalanceOf<T>,
+			asset_id: Option<ChargeAssetIdOf<T>>,
+		},
+	}
 }
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
@@ -213,6 +228,8 @@ where
 		Self::AccountId,
 		// imbalance resulting from withdrawing the fee
 		InitialPayment<T>,
+		// asset_id for the transaction payment
+		Option<ChargeAssetIdOf<T>>,
 	);
 
 	fn additional_signed(&self) -> sp_std::result::Result<(), TransactionValidityError> {
@@ -240,7 +257,7 @@ where
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
 		let (_fee, initial_payment) = self.withdraw_fee(who, call, info, len)?;
-		Ok((self.tip, who.clone(), initial_payment))
+		Ok((self.tip, who.clone(), initial_payment, self.asset_id))
 	}
 
 	fn post_dispatch(
@@ -250,7 +267,7 @@ where
 		len: usize,
 		result: &DispatchResult,
 	) -> Result<(), TransactionValidityError> {
-		if let Some((tip, who, initial_payment)) = pre {
+		if let Some((tip, who, initial_payment, asset_id)) = pre {
 			match initial_payment {
 				InitialPayment::Native(already_withdrawn) => {
 					pallet_transaction_payment::ChargeTransactionPayment::<T>::post_dispatch(
@@ -273,6 +290,12 @@ where
 						tip.into(),
 						already_withdrawn.into(),
 					)?;
+					Pallet::<T>::deposit_event(Event::<T>::AssetTxFeePaid {
+						who,
+						actual_fee,
+						tip,
+						asset_id,
+					});
 				},
 				InitialPayment::Nothing => {
 					// `actual_fee` should be zero here for any signed extrinsic. It would be
