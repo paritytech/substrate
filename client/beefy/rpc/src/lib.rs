@@ -35,7 +35,8 @@ use jsonrpsee::{
 };
 use log::warn;
 
-use beefy_gadget::notification::{BeefyBestBlockStream, BeefySignedCommitmentStream};
+use beefy_gadget::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream,};
+use beefy_primitives::VersionedFinalityProof;
 
 mod notification;
 
@@ -101,7 +102,7 @@ pub trait BeefyApi<Notification, Hash> {
 
 /// Implements the BeefyApi RPC trait for interacting with BEEFY.
 pub struct Beefy<Block: BlockT> {
-	signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+	finality_proof_stream: BeefyVersionedFinalityProofStream<Block>,
 	beefy_best_block: Arc<RwLock<Option<Block::Hash>>>,
 	executor: SubscriptionTaskExecutor,
 }
@@ -112,7 +113,7 @@ where
 {
 	/// Creates a new Beefy Rpc handler instance.
 	pub fn new(
-		signed_commitment_stream: BeefySignedCommitmentStream<Block>,
+		finality_proof_stream: BeefyVersionedFinalityProofStream<Block>,
 		best_block_stream: BeefyBestBlockStream<Block>,
 		executor: SubscriptionTaskExecutor,
 	) -> Result<Self, Error> {
@@ -126,7 +127,7 @@ where
 		});
 
 		executor.spawn("substrate-rpc-subscription", Some("rpc"), future.map(drop).boxed());
-		Ok(Self { signed_commitment_stream, beefy_best_block, executor })
+		Ok(Self { finality_proof_stream, beefy_best_block, executor })
 	}
 }
 
@@ -136,10 +137,10 @@ where
 	Block: BlockT,
 {
 	fn subscribe_justifications(&self, pending: PendingSubscription) {
-		let stream = self
-			.signed_commitment_stream
-			.subscribe()
-			.map(|sc| notification::EncodedSignedCommitment::new::<Block>(sc));
+		let stream = self.signed_commitment_stream.subscribe().map(|vfp| match vfp {
+			VersionedFinalityProof::V1(sc) =>
+				notification::EncodedSignedCommitment::new::<Block>(sc),
+		});
 
 		let fut = async move {
 			if let Some(mut sink) = pending.accept() {
@@ -166,7 +167,7 @@ mod tests {
 
 	use beefy_gadget::{
 		justification::BeefySignedCommitment,
-		notification::{BeefyBestBlockStream, BeefySignedCommitmentSender},
+		notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofSender},
 	};
 	use beefy_primitives::{known_payload_ids, Payload};
 	use codec::{Decode, Encode};
@@ -174,22 +175,22 @@ mod tests {
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 	use substrate_test_runtime_client::runtime::Block;
 
-	fn setup_io_handler() -> (RpcModule<Beefy<Block>>, BeefySignedCommitmentSender<Block>) {
+	fn setup_io_handler() -> (RpcModule<Beefy<Block>>, BeefyVersionedFinalityProofSender<Block>) {
 		let (_, stream) = BeefyBestBlockStream::<Block>::channel();
 		setup_io_handler_with_best_block_stream(stream)
 	}
 
 	fn setup_io_handler_with_best_block_stream(
 		best_block_stream: BeefyBestBlockStream<Block>,
-	) -> (RpcModule<Beefy<Block>>, BeefySignedCommitmentSender<Block>) {
-		let (commitment_sender, commitment_stream) =
-			BeefySignedCommitmentStream::<Block>::channel();
+	) -> (RpcModule<Beefy<Block>>, BeefyVersionedFinalityProofSender<Block>) {
+		let (finality_proof_sender, finality_proof_stream) =
+			BeefyVersionedFinalityProofStream::<Block>::channel();
 
 		let handler =
-			Beefy::new(commitment_stream, best_block_stream, sc_rpc::testing::test_executor())
+			Beefy::new(finality_proof_stream, best_block_stream, sc_rpc::testing::test_executor())
 				.expect("Setting up the BEEFY RPC handler works");
 
-		(handler.into_rpc(), commitment_sender)
+		(handler.into_rpc(), finality_proof_sender)
 	}
 
 	#[tokio::test]
