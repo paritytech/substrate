@@ -290,7 +290,7 @@ impl CallDef {
 				});
 			} else {
 				let msg = "Invalid pallet::call, only method accepted";
-				return Err(syn::Error::new(item_impl.span(), msg))
+				return Err(syn::Error::new(item.span(), msg))
 			}
 		}
 
