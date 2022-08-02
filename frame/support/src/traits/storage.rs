@@ -72,7 +72,7 @@ pub trait StorageInfoTrait {
 	fn storage_info() -> Vec<StorageInfo>;
 }
 
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl StorageInfoTrait for Tuple {

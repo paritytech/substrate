@@ -38,7 +38,7 @@ pub trait OnInitialize<BlockNumber> {
 	}
 }
 
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
@@ -52,7 +52,7 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 /// The block finalization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is ending.
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnFinalize<BlockNumber> {
@@ -83,7 +83,7 @@ pub trait OnIdle<BlockNumber> {
 	}
 }
 
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
@@ -111,7 +111,7 @@ impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 /// Implementing this trait for a pallet let's you express operations that should
 /// happen at genesis. It will be called in an externalities provided environment and
 /// will see the genesis state after all pallets have written their genesis state.
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnGenesis {
@@ -195,7 +195,7 @@ pub trait OnRuntimeUpgrade {
 	}
 }
 
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
@@ -223,7 +223,7 @@ impl OnRuntimeUpgrade for Tuple {
 /// Type that provide some integrity tests.
 ///
 /// This implemented for modules by `decl_module`.
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait IntegrityTest {
@@ -344,7 +344,7 @@ pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeD
 }
 
 /// A trait which is called when the timestamp is set in the runtime.
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnTimestampSet<Moment> {

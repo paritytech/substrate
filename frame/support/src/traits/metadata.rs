@@ -81,9 +81,9 @@ pub trait PalletsInfoAccess {
 
 // TODO: this and needing to implement `PalletsInfoAccess` for any individual pallet is kinda wrong.
 // all we need is:
-// Impl<T: PalletInfoAccess> PalletsInfoAccess for (T) {}
+// Impl<T: PalletInfoAccess> PalletsInfoAccess for (T,) {}
 // Impl<T: PalletInfoAccess, T1> PalletsInfoAccess for (T, T1) {}
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl PalletsInfoAccess for Tuple {

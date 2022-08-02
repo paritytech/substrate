@@ -468,7 +468,7 @@ impl<A, B> SameOrOther<A, B> {
 }
 
 /// Handler for when a new account has been created.
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnNewAccount<AccountId> {
@@ -477,7 +477,7 @@ pub trait OnNewAccount<AccountId> {
 }
 
 /// The account with the given id was reaped.
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnKilledAccount<AccountId> {
@@ -637,7 +637,7 @@ impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
 /// but cannot preform any alterations. More specifically alterations are
 /// not forbidden, but they are not persisted in any way after the worker
 /// has finished.
-#[impl_for_tuples(64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OffchainWorker<BlockNumber> {

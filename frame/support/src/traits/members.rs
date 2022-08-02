@@ -26,7 +26,7 @@ pub trait Contains<T> {
 	fn contains(t: &T) -> bool;
 }
 
-#[impl_for_tuples(1, 64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(1, 64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(1, 96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(1, 128))]
 impl<T> Contains<T> for Tuple {
@@ -44,7 +44,7 @@ pub trait ContainsPair<A, B> {
 	fn contains(a: &A, b: &B) -> bool;
 }
 
-#[impl_for_tuples(0, 64)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64) )]
 #[cfg_attr(feature = "tuples-96", impl_for_tuples(0, 96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(0, 128))]
 impl<A, B> ContainsPair<A, B> for Tuple {
