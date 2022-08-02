@@ -65,7 +65,7 @@ impl KeyType {
 /// This enum can be extended in the future: New codes can be added but existing codes
 /// will not be changed or removed. This means that any contract **must not** exhaustively
 /// match return codes. Instead, contracts should prepare for unknown variants and deal with
-/// those errors gracefuly in order to be forward compatible.
+/// those errors gracefully in order to be forward compatible.
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.
@@ -101,8 +101,9 @@ pub enum ReturnCode {
 }
 
 impl ConvertibleToWasm for ReturnCode {
-	type NativeType = Self;
 	const VALUE_TYPE: ValueType = ValueType::I32;
+	type NativeType = Self;
+
 	fn to_typed_value(self) -> sp_sandbox::Value {
 		sp_sandbox::Value::I32(self as i32)
 	}
@@ -439,6 +440,7 @@ pub struct Runtime<'a, E: Ext + 'a> {
 	input_data: Option<Vec<u8>>,
 	memory: sp_sandbox::default_executor::Memory,
 	trap_reason: Option<TrapReason>,
+	chain_extension: Option<Box<<E::T as Config>::ChainExtension>>,
 }
 
 impl<'a, E> Runtime<'a, E>
@@ -452,7 +454,13 @@ where
 		input_data: Vec<u8>,
 		memory: sp_sandbox::default_executor::Memory,
 	) -> Self {
-		Runtime { ext, input_data: Some(input_data), memory, trap_reason: None }
+		Runtime {
+			ext,
+			input_data: Some(input_data),
+			memory,
+			trap_reason: None,
+			chain_extension: Some(Box::new(Default::default())),
+		}
 	}
 
 	/// Converts the sandbox result and the runtime state into the execution outcome.
@@ -2006,7 +2014,7 @@ define_env!(Env, <E: Ext>,
 	// module error.
 	[seal0] seal_call_chain_extension(
 		ctx,
-		func_id: u32,
+		id: u32,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
@@ -2016,14 +2024,20 @@ define_env!(Env, <E: Ext>,
 		if !<E::T as Config>::ChainExtension::enabled() {
 			return Err(Error::<E::T>::NoChainExtension.into());
 		}
-		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
-		match <E::T as Config>::ChainExtension::call(func_id, env)? {
+		let mut chain_extension = ctx.chain_extension.take().expect(
+			"Constructor initializes with `Some`. This is the only place where it is set to `None`.\
+			It is always reset to `Some` afterwards. qed"
+		);
+		let env = Environment::new(ctx, id, input_ptr, input_len, output_ptr, output_len_ptr);
+		let ret = match chain_extension.call(env)? {
 			RetVal::Converging(val) => Ok(val),
 			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
 				flags: flags.bits(),
 				data,
 			})),
-		}
+		};
+		ctx.chain_extension = Some(chain_extension);
+		ret
 	},
 
 	// Emit a custom debug message.

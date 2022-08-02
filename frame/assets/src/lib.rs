@@ -79,8 +79,6 @@
 //! * `create`: Creates a new asset class, taking the required deposit.
 //! * `transfer`: Transfer sender's assets to another account.
 //! * `transfer_keep_alive`: Transfer sender's assets to another account, keeping the sender alive.
-//! * `set_metadata`: Set the metadata of an asset class.
-//! * `clear_metadata`: Remove the metadata of an asset class.
 //! * `approve_transfer`: Create or increase an delegated transfer.
 //! * `cancel_approval`: Rescind a previous approval.
 //! * `transfer_approved`: Transfer third-party's assets to another account.
@@ -103,6 +101,8 @@
 //! * `transfer_ownership`: Changes an asset class's Owner; called by the asset class's Owner.
 //! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
 //!   Owner.
+//! * `set_metadata`: Set the metadata of an asset class; called by the asset class's Owner.
+//! * `clear_metadata`: Remove the metadata of an asset class; called by the asset class's Owner.
 //!
 //! Please refer to the [`Call`] enum and its associated variants for documentation on each
 //! function.
