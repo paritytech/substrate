@@ -1195,16 +1195,30 @@ macro_rules! impl_benchmark_test {
 					if components.is_empty() {
 						execute_benchmark(Default::default())?;
 					} else {
-						for (name, low, high) in components.iter() {
-							// Test only the low and high value, assuming values in the middle
-							// won't break
-							for component_value in $crate::vec![low, high] {
+						for (name, low, high) in components.clone().into_iter() {
+							// Test the lowest, highest and up to 4 more
+							// equidistant values in between. For 0 .. 10 this means:
+							// [0, 2, 4, 6, 8, 10]
+
+							assert!(high > low, "The upper component bound must be larger than the lower bound.");
+
+							let mut values = $crate::vec![];
+							let diff = (high - low).min(5);
+							let slope = (high - low) as f32 / diff as f32;
+
+							for i in 0..=diff {
+								let value = ((low as f32 + slope * i as f32) as u32)
+												.clamp(low, high);
+								values.push(value);
+							}
+
+							for component_value in values {
 								// Select the max value for all the other components.
 								let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components
 									.iter()
 									.map(|(n, _, h)|
-										if n == name {
-											(*n, *component_value)
+										if *n == name {
+											(*n, component_value)
 										} else {
 											(*n, *h)
 										}
