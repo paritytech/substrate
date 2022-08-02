@@ -252,7 +252,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxCandidates: Get<u32>;
 
-		/// The maximum number of voters to allow.
+		/// The maximum number of voters to allow in a phragmen election.
 		#[pallet::constant]
 		type MaxVoters: Get<u32>;
 
