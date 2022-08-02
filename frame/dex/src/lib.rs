@@ -47,7 +47,7 @@ pub mod pallet {
 	};
 	use sp_runtime::traits::{
 		AccountIdConversion, AtLeast32BitUnsigned, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub,
-		IntegerSquareRoot, Zero, One,
+		IntegerSquareRoot, One, Zero,
 	};
 
 	#[pallet::pallet]
@@ -79,7 +79,6 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ MaxEncodedLen
 			+ PartialOrd
-			// + From<u32>
 			+ TypeInfo;
 
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
@@ -580,8 +579,10 @@ pub mod pallet {
 			// amountIn = (numerator / denominator).add(1);
 
 			let numerator = reserve_in
-				.checked_mul(amount_out).ok_or(Error::<T>::Overflow)?
-				.checked_mul(&1000u64.into()).ok_or(Error::<T>::Overflow)?;
+				.checked_mul(amount_out)
+				.ok_or(Error::<T>::Overflow)?
+				.checked_mul(&1000u64.into())
+				.ok_or(Error::<T>::Overflow)?;
 
 			let denominator = reserve_out
 				.checked_sub(amount_out)
@@ -589,12 +590,12 @@ pub mod pallet {
 				.checked_mul(&997u64.into())
 				.ok_or(Error::<T>::Overflow)?;
 
-			numerator.checked_div(&denominator)
+			numerator
+				.checked_div(&denominator)
 				.ok_or(Error::<T>::Overflow)?
 				.checked_add(&One::one())
 				.ok_or(Error::<T>::Overflow)
 		}
-
 
 		pub fn validate_swap(
 			asset_from: AssetIdOf<T>,
