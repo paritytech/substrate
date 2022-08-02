@@ -17,12 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use beefy_primitives::{crypto::Signature, BeefyApi, VersionedFinalityProof, BEEFY_ENGINE_ID};
-use codec::Encode;
-use log::error;
+use log::debug;
 use std::{collections::HashMap, sync::Arc};
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
-use sp_blockchain::{well_known_cache_keys, HeaderBackend};
+use sp_blockchain::well_known_cache_keys;
 use sp_consensus::Error as ConsensusError;
 use sp_runtime::{
 	generic::BlockId,
@@ -96,34 +95,6 @@ where
 
 		decode_and_verify_commitment::<Block>(&encoded[..], number, &validator_set)
 	}
-
-	/// Import BEEFY justification: Send it to worker for processing and also append it to backend.
-	///
-	/// This function assumes:
-	/// - `justification` is verified and valid,
-	/// - the block referred by `justification` has been imported _and_ finalized.
-	fn import_beefy_justification_unchecked(
-		&self,
-		number: NumberFor<Block>,
-		justification: VersionedFinalityProof<NumberFor<Block>, Signature>,
-	) {
-		// Append the justification to the block in the backend.
-		if let Err(e) = self.backend.append_justification(
-			BlockId::Number(number),
-			(BEEFY_ENGINE_ID, justification.encode()),
-		) {
-			error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, justification);
-		}
-		// Send the justification to the BEEFY voter for processing.
-		match justification {
-			// TODO #11838: Should not unpack, these channels should also use
-			// `VersionedFinalityProof`.
-			VersionedFinalityProof::V1(signed_commitment) => self
-				.justification_sender
-				.notify(|| Ok::<_, ()>(signed_commitment))
-				.expect("forwards closure result; the closure always returns Ok; qed."),
-		};
-	}
 }
 
 #[async_trait::async_trait]
@@ -151,42 +122,36 @@ where
 		let hash = block.post_hash();
 		let number = *block.header.number();
 
-		let beefy_proof = block
-			.justifications
-			.as_mut()
-			.and_then(|just| {
-				let decoded = just
-					.get(BEEFY_ENGINE_ID)
-					.map(|encoded| self.decode_and_verify(encoded, number, hash));
-				// Remove BEEFY justification from the list before giving to `inner`;
-				// we will append it to backend ourselves at the end if all goes well.
-				just.remove(BEEFY_ENGINE_ID);
-				decoded
-			})
-			.transpose()
-			.unwrap_or(None);
+		let beefy_encoded = block.justifications.as_mut().and_then(|just| {
+			let encoded = just.get(BEEFY_ENGINE_ID).cloned();
+			// Remove BEEFY justification from the list before giving to `inner`;
+			// we will append it to backend ourselves at the end if all goes well.
+			just.remove(BEEFY_ENGINE_ID);
+			encoded
+		});
 
 		// Run inner block import.
 		let inner_import_result = self.inner.import_block(block, new_cache).await?;
 
-		match (beefy_proof, &inner_import_result) {
-			(Some(proof), ImportResult::Imported(_)) => {
-				let status = self.backend.blockchain().info();
-				if number <= status.finalized_number &&
-					Some(hash) ==
-						self.backend
-							.blockchain()
-							.hash(number)
-							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-				{
+		match (beefy_encoded, &inner_import_result) {
+			(Some(encoded), ImportResult::Imported(_)) => {
+				if let Ok(proof) = self.decode_and_verify(&encoded, number, hash) {
 					// The proof is valid and the block is imported and final, we can import.
-					self.import_beefy_justification_unchecked(number, proof);
+					debug!(target: "beefy", "🥩 import justif {:?} for block number {:?}.", proof, number);
+					// Send the justification to the BEEFY voter for processing.
+					match proof {
+						// TODO #11838: Should not unpack, these channels should also use
+						// `VersionedFinalityProof`.
+						VersionedFinalityProof::V1(signed_commitment) => self
+							.justification_sender
+							.notify(|| Ok::<_, ()>(signed_commitment))
+							.expect("forwards closure result; the closure always returns Ok; qed."),
+					};
 				} else {
-					error!(
+					debug!(
 						target: "beefy",
-						"🥩 Cannot import justification: {:?} for, not yet final, block number {:?}",
-						proof,
-						number,
+						"🥩 error decoding justification: {:?} for imported block {:?}",
+						encoded, number,
 					);
 				}
 			},
