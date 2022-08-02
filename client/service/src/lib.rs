@@ -101,7 +101,10 @@ impl RpcHandlers {
 		&self,
 		json_query: &str,
 	) -> Result<(String, mpsc::UnboundedReceiver<String>), JsonRpseeError> {
-		self.0.raw_json_request(json_query).await
+		self.0
+			.raw_json_request(json_query)
+			.await
+			.map(|(method_res, recv)| (method_res.result, recv))
 	}
 
 	/// Provides access to the underlying `RpcModule`

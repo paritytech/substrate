@@ -18,11 +18,12 @@
 
 //! RPC middlware to collect prometheus metrics on RPC calls.
 
-use jsonrpsee::core::middleware::Middleware;
+use jsonrpsee::core::middleware::{Headers, HttpMiddleware, MethodKind, Params, WsMiddleware};
 use prometheus_endpoint::{
 	register, Counter, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry,
 	U64,
 };
+use std::net::SocketAddr;
 
 /// Metrics for RPC middleware storing information about the number of requests started/completed,
 /// calls started/completed and their timings.
@@ -134,30 +135,33 @@ impl RpcMiddleware {
 	pub fn new(metrics: RpcMetrics, transport_label: &'static str) -> Self {
 		Self { metrics, transport_label }
 	}
-}
 
-impl Middleware for RpcMiddleware {
-	type Instant = std::time::Instant;
-
-	fn on_connect(&self) {
-		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
-	}
-
-	fn on_request(&self) -> Self::Instant {
+	/// Called when a new JSON-RPC request comes to the server.
+	fn on_request(&self) -> std::time::Instant {
 		let now = std::time::Instant::now();
 		self.metrics.requests_started.with_label_values(&[self.transport_label]).inc();
 		now
 	}
 
-	fn on_call(&self, name: &str) {
-		log::trace!(target: "rpc_metrics", "[{}] on_call name={}", self.transport_label, name);
+	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		log::trace!(
+			target: "rpc_metrics",
+			"[{}] on_call name={} params={:?} kind={}",
+			self.transport_label,
+			name,
+			params,
+			kind,
+		);
 		self.metrics
 			.calls_started
 			.with_label_values(&[self.transport_label, name])
 			.inc();
 	}
 
-	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple
+	/// times.
+	fn on_result(&self, name: &str, success: bool, started_at: std::time::Instant) {
 		let micros = started_at.elapsed().as_micros();
 		log::debug!(
 			target: "rpc_metrics",
@@ -183,12 +187,57 @@ impl Middleware for RpcMiddleware {
 			.inc();
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
+	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
+	fn on_response(&self, _result: &str, started_at: std::time::Instant) {
 		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
 		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
 	}
+}
 
-	fn on_disconnect(&self) {
+impl WsMiddleware for RpcMiddleware {
+	type Instant = std::time::Instant;
+
+	fn on_connect(&self, _remote_addr: SocketAddr, _headers: &Headers) {
+		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
+	}
+
+	fn on_request(&self) -> Self::Instant {
+		self.on_request()
+	}
+
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		self.on_call(name, params, kind)
+	}
+
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		self.on_result(name, success, started_at)
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		self.on_response(_result, started_at)
+	}
+
+	fn on_disconnect(&self, _remote_addr: SocketAddr) {
 		self.metrics.ws_sessions_closed.as_ref().map(|counter| counter.inc());
+	}
+}
+
+impl HttpMiddleware for RpcMiddleware {
+	type Instant = std::time::Instant;
+
+	fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Self::Instant {
+		self.on_request()
+	}
+
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		self.on_call(name, params, kind)
+	}
+
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		self.on_result(name, success, started_at)
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		self.on_response(_result, started_at)
 	}
 }
