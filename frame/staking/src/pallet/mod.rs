@@ -27,7 +27,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
-use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
+use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	Perbill, Percent,
@@ -73,7 +73,7 @@ pub mod pallet {
 	}
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+	pub trait Config: frame_system::Config {
 		/// The staking balance.
 		type Currency: LockableCurrency<
 			Self::AccountId,

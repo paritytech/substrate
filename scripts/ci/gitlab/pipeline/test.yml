@@ -213,8 +213,6 @@ test-linux-stable:
   parallel: 3
   script:
     - rusty-cachier snapshot create
-    # TODO: remove when current paritytech/ci-linux:staging (with rust stable 1.62) is switched to production
-    - time cargo install cargo-nextest
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
     # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
@@ -373,8 +371,6 @@ test-wasmer-sandbox:
   parallel: 3
   script:
     - rusty-cachier snapshot create
-    # TODO: remove when current paritytech/ci-linux:staging (with rust stable 1.62) is switched to production
-    - cargo install cargo-nextest
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
     - time cargo nextest run --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
