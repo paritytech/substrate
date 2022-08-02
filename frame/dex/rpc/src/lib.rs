@@ -17,18 +17,16 @@
 
 //! RPC interface for the transaction payment pallet.
 
-use std::{convert::TryInto, marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 
-use codec::{Codec, Decode};
+use codec::Codec;
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{async_trait, RpcResult},
 	proc_macros::rpc,
-	types::error::{CallError, ErrorCode, ErrorObject},
+	types::error::{CallError, ErrorObject},
 };
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_core::Bytes;
-use sp_rpc::number::NumberOrHex;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, MaybeDisplay},
@@ -39,10 +37,10 @@ pub use pallet_dex_rpc_runtime_api::DexApi as DexRuntimeApi;
 #[rpc(client, server)]
 pub trait DexApi<Balance>
 where
-	Balance: Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
+	Balance: Copy,
 {
-	#[method(name = "dex_pairPrice")]
-	fn pair_price(&self, asset1: u32, asset2: u32) -> RpcResult<Option<Balance>>;
+	#[method(name = "dex_quotePrice")]
+	fn quote_price(&self, asset1: u32, asset2: u32) -> RpcResult<Option<Balance>>;
 }
 
 /// Dex RPC methods.
@@ -73,16 +71,16 @@ impl From<Error> for i32 {
 }
 
 #[async_trait]
-impl<Client, Block, Balance> DexApiServer<<Block as BlockT>::Hash, Balance> for Dex<Client, Block>
+impl<Client, Block, Balance> DexApiServer<Balance> for Dex<Client, Block>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-	Client::Api: DexRuntimeApi<Block, AssetId, Balance>,
-	Balance: Codec + MaybeDisplay + Copy + TryFrom<NumberOrHex> + TryInto<NumberOrHex>,
+	Client::Api: DexRuntimeApi<Block, Balance>,
+	Balance: Codec + MaybeDisplay + Copy,
 {
-	fn quote_price(&self, asset1: AssetId, asset2: AssetId) -> RpcResult<Option<Balance>> {
+	fn quote_price(&self, asset1: u32, asset2: u32) -> RpcResult<Option<Balance>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let at = BlockId::hash(self.client.info().best_hash);
 
 		api.quote_price(&at, asset1, asset2).map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
