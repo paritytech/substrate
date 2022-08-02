@@ -55,7 +55,7 @@ pub trait Lazy<T: ?Sized> {
 
 impl<'a> Lazy<[u8]> for &'a [u8] {
 	fn get(&mut self) -> &[u8] {
-		&**self
+		self
 	}
 }
 

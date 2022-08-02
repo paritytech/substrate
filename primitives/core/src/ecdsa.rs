@@ -499,7 +499,7 @@ impl TraitPair for Pair {
 impl Pair {
 	/// Get the seed for this key.
 	pub fn seed(&self) -> Seed {
-		self.secret.serialize_secret()
+		self.secret.secret_bytes()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32

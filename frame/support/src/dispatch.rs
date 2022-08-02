@@ -29,8 +29,7 @@ pub use crate::{
 		result,
 	},
 	traits::{
-		CallMetadata, DispatchableWithStorageLayer, GetCallMetadata, GetCallName,
-		GetStorageVersion, UnfilteredDispatchable,
+		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
 	},
 	weights::{
 		ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
@@ -1473,9 +1472,9 @@ macro_rules! decl_module {
 		$ignore:ident
 		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?> $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
-			// We execute all dispatchable in at least one storage layer, allowing them
+			// We execute all dispatchable in a new storage layer, allowing them
 			// to return an error at any point, and undoing any storage changes.
-			$crate::storage::in_storage_layer(|| {
+			$crate::storage::with_storage_layer(|| {
 				<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
 			})
 	};
