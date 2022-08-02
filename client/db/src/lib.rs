@@ -3534,10 +3534,16 @@ pub(crate) mod tests {
 			header.hash()
 		};
 
+		let block3_fork = insert_header_no_head(&backend, 3, block2, Default::default());
+
 		assert!(backend.have_state_at(&block1, 1));
 		assert!(backend.have_state_at(&block2, 2));
 		assert!(backend.have_state_at(&block3, 3));
 		assert!(backend.have_state_at(&block4, 4));
+		assert!(backend.have_state_at(&block3_fork, 3));
+
+		assert_eq!(backend.blockchain.leaves().unwrap(), vec![block4, block3_fork]);
+		assert_eq!(4, backend.blockchain.leaves.read().highest_leaf().unwrap().0);
 
 		assert_eq!(3, backend.revert(1, false).unwrap().0);
 
@@ -3545,7 +3551,9 @@ pub(crate) mod tests {
 		assert!(!backend.have_state_at(&block2, 2));
 		assert!(!backend.have_state_at(&block3, 3));
 		assert!(!backend.have_state_at(&block4, 4));
+		assert!(!backend.have_state_at(&block3_fork, 3));
 
+		assert_eq!(backend.blockchain.leaves().unwrap(), vec![block1]);
 		assert_eq!(1, backend.blockchain.leaves.read().highest_leaf().unwrap().0);
 	}
 }

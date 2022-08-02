@@ -39,7 +39,7 @@ where
 	if reverted.0.is_zero() {
 		info!("There aren't any non-finalized blocks to revert.");
 	} else {
-		info!("Reverted {} blocks. Best: #{} ({})", reverted.0, info.best_number, info.best_hash,);
+		info!("Reverted {} blocks. Best: #{} ({})", reverted.0, info.best_number, info.best_hash);
 
 		if reverted.0 > blocks {
 			info!(
