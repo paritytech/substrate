@@ -125,6 +125,7 @@ use frame_support::{
 	},
 	weights::Weight,
 	Parameter,
+	BoundedVec,
 };
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
@@ -412,6 +413,10 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		// Max number of validators
+		#[pallet::constant]
+		type ValidatorSet: Get<u32>;
 	}
 
 	#[pallet::genesis_config]
@@ -466,6 +471,7 @@ pub mod pallet {
 					);
 					self.keys.iter().map(|x| x.1.clone()).collect()
 				});
+			let initial_validators_bounded: BoundedVec<T::ValidatorId, T::ValidatorSet> = initial_validators_0.clone().try_into().expect("Too many current validators");
 			assert!(
 				!initial_validators_0.is_empty(),
 				"Empty validator set for session 0 in genesis block!"
@@ -492,7 +498,7 @@ pub mod pallet {
 			// Tell everyone about the genesis session keys
 			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
-			Validators::<T>::put(initial_validators_0);
+			Validators::<T>::put(initial_validators_bounded);
 			<QueuedKeys<T>>::put(queued_keys);
 
 			T::SessionManager::start_session(0);
@@ -502,7 +508,7 @@ pub mod pallet {
 	/// The current set of validators.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
-	pub type Validators<T: Config> = StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+	pub type Validators<T: Config> = StorageValue<_, BoundedVec<T::ValidatorId, T::ValidatorSet>, ValueQuery>;
 
 	/// Current index of the session.
 	#[pallet::storage]
@@ -527,7 +533,7 @@ pub mod pallet {
 	/// a new set of identities.
 	#[pallet::storage]
 	#[pallet::getter(fn disabled_validators)]
-	pub type DisabledValidators<T> = StorageValue<_, Vec<u32>, ValueQuery>;
+	pub type DisabledValidators<T: Config> = StorageValue<_, BoundedVec<u32, T::ValidatorSet>, ValueQuery>;
 
 	/// The next session keys for a validator.
 	#[pallet::storage]
@@ -647,7 +653,9 @@ impl<T: Config> Pallet<T> {
 		let session_keys = <QueuedKeys<T>>::get();
 		let validators =
 			session_keys.iter().map(|(validator, _)| validator.clone()).collect::<Vec<_>>();
-		Validators::<T>::put(&validators);
+
+		let validator2: BoundedVec<T::ValidatorId, T::ValidatorSet> = validators.clone().try_into().expect("Too many current validators");
+		Validators::<T>::put(&validator2);
 
 		if changed {
 			// reset disabled validators
@@ -669,7 +677,7 @@ impl<T: Config> Pallet<T> {
 				// same as before, as underlying economic conditions may have changed.
 				(validators, true)
 			} else {
-				(Validators::<T>::get(), false)
+				(Validators::<T>::get().to_vec(), false)
 			};
 
 		// Queue next session keys.
@@ -911,7 +919,7 @@ impl<T: Config> ValidatorSet<T::AccountId> for Pallet<T> {
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		Pallet::<T>::validators()
+		Pallet::<T>::validators().to_vec()
 	}
 }
 

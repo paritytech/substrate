@@ -130,7 +130,7 @@ impl<T: Config> ValidatorSet<T::AccountId> for Pallet<T> {
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		super::Pallet::<T>::validators()
+		super::Pallet::<T>::validators().to_vec()
 	}
 }
 
