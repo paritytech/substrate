@@ -467,7 +467,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
 			admin: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let collection = NextCollectionId::<T, I>::get();
@@ -504,7 +503,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
 			owner: AccountIdLookupOf<T>,
 			free_holding: bool,
 		) -> DispatchResult {
