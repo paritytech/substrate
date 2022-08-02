@@ -17,8 +17,8 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
-use sp_std::prelude::*;
 use impl_trait_for_tuples::impl_for_tuples;
+use sp_std::prelude::*;
 
 /// An instance of a pallet in the storage.
 ///
