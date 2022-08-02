@@ -23,10 +23,9 @@ use codec::Codec;
 use sp_runtime::traits::MaybeDisplay;
 
 sp_api::decl_runtime_apis! {
-	pub trait DexApi<AssetId, Balance> where
-		AssetId: Codec,
+	pub trait DexApi<Balance> where
 		Balance: Codec + MaybeDisplay,
 	{
-		fn quote_price(asset1: AssetId, asset2: AssetId) -> Option<Balance>;
+		fn quote_price(asset1: u32, asset2: u32) -> Option<Balance>;
 	}
 }

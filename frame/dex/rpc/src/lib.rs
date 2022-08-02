@@ -37,12 +37,12 @@ use sp_runtime::{
 pub use pallet_dex_rpc_runtime_api::DexApi as DexRuntimeApi;
 
 #[rpc(client, server)]
-pub trait DexApi<AssetId, Balance>
+pub trait DexApi<Balance>
 where
 	Balance: Copy + TryFrom<NumberOrHex> + Into<NumberOrHex>,
 {
 	#[method(name = "dex_pairPrice")]
-	fn pair_price(&self, asset1: AssetId, asset2: AssetId) -> RpcResult<Option<Balance>>;
+	fn pair_price(&self, asset1: u32, asset2: u32) -> RpcResult<Option<Balance>>;
 }
 
 /// Dex RPC methods.
@@ -73,13 +73,11 @@ impl From<Error> for i32 {
 }
 
 #[async_trait]
-impl<Client, Block, AssetId, Balance> DexApiServer<<Block as BlockT>::Hash, AssetId, Balance>
-	for Dex<Client, Block>
+impl<Client, Block, Balance> DexApiServer<<Block as BlockT>::Hash, Balance> for Dex<Client, Block>
 where
 	Block: BlockT,
 	Client: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	Client::Api: DexRuntimeApi<Block, AssetId, Balance>,
-	AssetId: Codec,
 	Balance: Codec + MaybeDisplay + Copy + TryFrom<NumberOrHex> + TryInto<NumberOrHex>,
 {
 	fn quote_price(&self, asset1: AssetId, asset2: AssetId) -> RpcResult<Option<Balance>> {
