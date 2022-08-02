@@ -282,6 +282,7 @@ impl<T: Config> Pallet<T> {
 	#[cfg(any(feature = "runtime-benchmarks", feature = "std"))]
 	pub fn set_timestamp(now: T::Moment) {
 		Now::<T>::put(now);
+		DidUpdate::<T>::put(true);
 	}
 }
 
