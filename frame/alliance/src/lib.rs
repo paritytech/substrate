@@ -60,6 +60,8 @@
 //!
 //! #### For Members (All)
 //!
+//! - `retirement_notice` - Give a retirement notice and start a retirement period required to pass
+//!   in order to retire.
 //! - `retire` - Retire from the Alliance and release the caller's deposit.
 //!
 //! #### For Members (Founders/Fellows)
@@ -198,6 +200,7 @@ pub enum MemberRole {
 	Founder,
 	Fellow,
 	Ally,
+	Retiring,
 }
 
 /// The type of item that may be deemed unscrupulous.
@@ -306,6 +309,10 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The period required to pass from retirement notice for a member to retire.
+		/// Supposed to be greater than time required to `kick_member`.
+		type RetirementPeriod: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::error]
@@ -322,8 +329,6 @@ pub mod pallet {
 		NotAlly,
 		/// Account is not a founder.
 		NotFounder,
-		/// This member is up for being kicked from the Alliance and cannot perform this operation.
-		UpForKicking,
 		/// Account does not have voting rights.
 		NoVotingRights,
 		/// Account is already an elevated (fellow) member.
@@ -355,6 +360,12 @@ pub mod pallet {
 		TooManyMembers,
 		/// Number of announcements exceeds `MaxAnnouncementsCount`.
 		TooManyAnnouncements,
+		/// Account is already gave retirement notice
+		AlreadyRetiring,
+		/// Account did not give a retirement notice required to retire.
+		RetirementNoticeNotGiven,
+		/// Retirement period is not passed.
+		RetirementPeriodNotPassed,
 	}
 
 	#[pallet::event]
@@ -380,6 +391,8 @@ pub mod pallet {
 		},
 		/// An ally has been elevated to Fellow.
 		AllyElevated { ally: T::AccountId },
+		/// A member gave retirement notice and retirement period started.
+		MemberRetirementPeriodStarted { member: T::AccountId },
 		/// A member has retired with its deposit unreserved.
 		MemberRetired { member: T::AccountId, unreserved: Option<BalanceOf<T, I>> },
 		/// A member has been kicked out with its deposit slashed.
@@ -483,12 +496,12 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// A set of members that are (potentially) being kicked out. They cannot retire until the
-	/// motion is settled.
+	/// A set of members who gave a retirement notice. They can retire after the end of retirement
+	/// period stored as a future block number.
 	#[pallet::storage]
-	#[pallet::getter(fn up_for_kicking)]
-	pub type UpForKicking<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, bool, ValueQuery>;
+	#[pallet::getter(fn retiring_members)]
+	pub type RetiringMembers<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, OptionQuery>;
 
 	/// The current list of accounts deemed unscrupulous. These accounts non grata cannot submit
 	/// candidacy.
@@ -522,11 +535,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let proposor = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&proposor), Error::<T, I>::NoVotingRights);
-
-			if let Some(Call::kick_member { who }) = proposal.is_sub_type() {
-				let strike = T::Lookup::lookup(who.clone())?;
-				<UpForKicking<T, I>>::insert(strike, true);
-			}
 
 			T::ProposalProvider::propose_proposal(proposor, threshold, proposal, length_bound)?;
 			Ok(())
@@ -787,15 +795,39 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// As a member, give a retirement notice and start a retirement period required to pass in
+		/// order to retire.
+		// TODO setup weight T::WeightInfo::retirement_notice()
+		#[pallet::weight(0)]
+		pub fn retirement_notice(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
+			ensure!(!role.eq(&MemberRole::Retiring), Error::<T, I>::AlreadyRetiring);
+
+			Self::remove_member(&who, role)?;
+			Self::add_member(&who, MemberRole::Retiring)?;
+			<RetiringMembers<T, I>>::insert(
+				&who,
+				frame_system::Pallet::<T>::block_number() + T::RetirementPeriod::get(),
+			);
+
+			Self::deposit_event(Event::MemberRetirementPeriodStarted { member: who });
+			Ok(())
+		}
+
 		/// As a member, retire from the alliance and unreserve the deposit.
 		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			// A member up for kicking cannot retire.
-			ensure!(!Self::is_up_for_kicking(&who), Error::<T, I>::UpForKicking);
+			let retirement_period_end = RetiringMembers::<T, I>::get(&who)
+				.ok_or(Error::<T, I>::RetirementNoticeNotGiven)?;
+			ensure!(
+				frame_system::Pallet::<T>::block_number() >= retirement_period_end,
+				Error::<T, I>::RetirementPeriodNotPassed
+			);
 
-			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
-			Self::remove_member(&who, role)?;
+			Self::remove_member(&who, MemberRole::Retiring)?;
+			<RetiringMembers<T, I>>::remove(&who);
 			let deposit = DepositOf::<T, I>::take(&who);
 			if let Some(deposit) = deposit {
 				let err_amount = T::Currency::unreserve(&who, deposit);
@@ -820,8 +852,6 @@ pub mod pallet {
 			if let Some(deposit) = deposit {
 				T::Slashed::on_unbalanced(T::Currency::slash_reserved(&member, deposit).0);
 			}
-
-			<UpForKicking<T, I>>::remove(&member);
 
 			Self::deposit_event(Event::MemberKicked { member, slashed: deposit });
 			Ok(())
@@ -935,11 +965,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		founders.append(&mut fellows);
 		founders.sort();
 		founders.into()
-	}
-
-	/// Check if an account's forced removal is up for consideration.
-	fn is_up_for_kicking(who: &T::AccountId) -> bool {
-		<UpForKicking<T, I>>::contains_key(&who)
 	}
 
 	/// Add a user to the sorted alliance member set.

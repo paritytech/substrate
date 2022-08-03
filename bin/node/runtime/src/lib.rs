@@ -1514,8 +1514,10 @@ impl pallet_state_trie_migration::Config for Runtime {
 	type WeightInfo = ();
 }
 
+const ALLIANCE_MOTION_DURATION: BlockNumber = 5 * DAYS;
+
 parameter_types! {
-	pub const AllianceMotionDuration: BlockNumber = 5 * DAYS;
+	pub const AllianceMotionDuration: BlockNumber = ALLIANCE_MOTION_DURATION;
 	pub const AllianceMaxProposals: u32 = 100;
 	pub const AllianceMaxMembers: u32 = 100;
 }
@@ -1537,6 +1539,7 @@ parameter_types! {
 	pub const MaxFellows: u32 = AllianceMaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: Balance = 10 * DOLLARS;
+	pub const RetirementPeriod: BlockNumber = ALLIANCE_MOTION_DURATION + (1 * DAYS);
 }
 
 impl pallet_alliance::Config for Runtime {
@@ -1573,6 +1576,7 @@ impl pallet_alliance::Config for Runtime {
 	type MaxMembersCount = AllianceMaxMembers;
 	type AllyDeposit = AllyDeposit;
 	type WeightInfo = pallet_alliance::weights::SubstrateWeight<Runtime>;
+	type RetirementPeriod = RetirementPeriod;
 }
 
 construct_runtime!(

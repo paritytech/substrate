@@ -83,8 +83,10 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+const MOTION_DURATION: u64 = 3;
+
 parameter_types! {
-	pub const MotionDuration: u64 = 3;
+	pub const MotionDuration: u64 = MOTION_DURATION;
 	pub const MaxProposals: u32 = 100;
 	pub const MaxMembers: u32 = 100;
 }
@@ -199,6 +201,7 @@ parameter_types! {
 	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: u64 = 25;
+	pub const RetirementPeriod: u64 = MOTION_DURATION + 1;
 }
 impl Config for Test {
 	type Event = Event;
@@ -225,6 +228,7 @@ impl Config for Test {
 	type MaxMembersCount = MaxMembers;
 	type AllyDeposit = AllyDeposit;
 	type WeightInfo = ();
+	type RetirementPeriod = RetirementPeriod;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -323,8 +327,4 @@ pub fn make_proposal(value: u64) -> Call {
 
 pub fn make_set_rule_proposal(rule: Cid) -> Call {
 	Call::Alliance(pallet_alliance::Call::set_rule { rule })
-}
-
-pub fn make_kick_member_proposal(who: u64) -> Call {
-	Call::Alliance(pallet_alliance::Call::kick_member { who })
 }

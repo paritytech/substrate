@@ -19,7 +19,7 @@
 
 use sp_runtime::traits::Hash;
 
-use frame_support::{assert_noop, assert_ok, Hashable};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin, Hashable};
 use frame_system::{EventRecord, Phase};
 
 use super::*;
@@ -396,42 +396,70 @@ fn elevate_ally_works() {
 }
 
 #[test]
-fn retire_works() {
+fn retirement_notice_work() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_kick_member_proposal(2);
-		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
-		assert_ok!(Alliance::propose(
-			Origin::signed(1),
-			3,
-			Box::new(proposal.clone()),
-			proposal_len
-		));
-		assert_noop!(Alliance::retire(Origin::signed(2)), Error::<Test, ()>::UpForKicking);
-
-		assert_noop!(Alliance::retire(Origin::signed(4)), Error::<Test, ()>::NotMember);
+		assert_noop!(Alliance::retirement_notice(Origin::signed(4)), Error::<Test, ()>::NotMember);
 
 		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
+		assert_ok!(Alliance::retirement_notice(Origin::signed(3)));
+		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
+		assert_eq!(Alliance::members(MemberRole::Retiring), vec![3]);
+		System::assert_last_event(mock::Event::Alliance(
+			crate::Event::MemberRetirementPeriodStarted { member: (3) },
+		));
+
+		assert_noop!(
+			Alliance::retirement_notice(Origin::signed(3)),
+			Error::<Test, ()>::AlreadyRetiring
+		);
+	});
+}
+
+#[test]
+fn retire_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Alliance::retire(Origin::signed(2)),
+			Error::<Test, ()>::RetirementNoticeNotGiven
+		);
+
+		assert_noop!(
+			Alliance::retire(Origin::signed(4)),
+			Error::<Test, ()>::RetirementNoticeNotGiven
+		);
+
+		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
+		assert_ok!(Alliance::retirement_notice(Origin::signed(3)));
+		assert_noop!(
+			Alliance::retire(Origin::signed(3)),
+			Error::<Test, ()>::RetirementPeriodNotPassed
+		);
+		System::set_block_number(System::block_number() + RetirementPeriod::get());
 		assert_ok!(Alliance::retire(Origin::signed(3)));
 		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
+		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberRetired {
+			member: (3),
+			unreserved: None,
+		}));
 	});
 }
 
 #[test]
 fn kick_member_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_kick_member_proposal(2);
-		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
-		assert_ok!(Alliance::propose(
-			Origin::signed(1),
-			3,
-			Box::new(proposal.clone()),
-			proposal_len
-		));
-		assert_eq!(Alliance::up_for_kicking(2), true);
-		assert_eq!(Alliance::members(MemberRole::Founder), vec![1, 2]);
+		assert_noop!(Alliance::kick_member(Origin::signed(4), 4), BadOrigin);
 
+		assert_noop!(Alliance::kick_member(Origin::signed(2), 4), Error::<Test, ()>::NotMember);
+
+		<DepositOf<Test, ()>>::insert(2, 25);
+		assert_eq!(Alliance::members(MemberRole::Founder), vec![1, 2]);
 		assert_ok!(Alliance::kick_member(Origin::signed(2), 2));
 		assert_eq!(Alliance::members(MemberRole::Founder), vec![1]);
+		assert_eq!(<DepositOf<Test, ()>>::get(2), None);
+		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberKicked {
+			member: (2),
+			slashed: Some(25),
+		}));
 	});
 }
 
