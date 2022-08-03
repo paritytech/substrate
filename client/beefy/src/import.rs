@@ -124,8 +124,8 @@ where
 
 		let beefy_encoded = block.justifications.as_mut().and_then(|just| {
 			let encoded = just.get(BEEFY_ENGINE_ID).cloned();
-			// Remove BEEFY justification from the list before giving to `inner`;
-			// we will append it to backend ourselves at the end if all goes well.
+			// Remove BEEFY justification from the list before giving to `inner`; we send it to the
+			// voter (beefy-gadget) and it will append it to the backend after block is finalized.
 			just.remove(BEEFY_ENGINE_ID);
 			encoded
 		});

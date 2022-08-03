@@ -510,9 +510,10 @@ where
 			// Return ones to process.
 			to_handle
 		}
+		// Interval of blocks for which we can process justifications and votes right now.
+		let mut interval = self.voting_oracle.accepted_interval(best_grandpa)?;
 
 		// Process pending justifications.
-		let interval = self.voting_oracle.accepted_interval(best_grandpa)?;
 		if !self.pending_justifications.is_empty() {
 			let justifs_to_handle = to_process_for(&mut self.pending_justifications, interval, _ph);
 			for (num, justification) in justifs_to_handle.into_iter() {
@@ -521,10 +522,11 @@ where
 					error!(target: "beefy", "🥩 Error finalizing block: {}", err);
 				}
 			}
+			// Possibly new interval after processing justifications.
+			interval = self.voting_oracle.accepted_interval(best_grandpa)?;
 		}
 
 		// Process pending votes.
-		let interval = self.voting_oracle.accepted_interval(best_grandpa)?;
 		if !self.pending_votes.is_empty() {
 			let votes_to_handle = to_process_for(&mut self.pending_votes, interval, _ph);
 			for (num, votes) in votes_to_handle.into_iter() {
@@ -746,13 +748,13 @@ where
 				}
 			}
 
-			// Don't bother acting on 'state' changes during major sync.
-			if !self.sync_oracle.is_major_syncing() {
-				// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
-				if let Err(err) = self.try_pending_justif_and_votes() {
-					debug!(target: "beefy", "🥩 {}", err);
-				}
+			// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
+			if let Err(err) = self.try_pending_justif_and_votes() {
+				debug!(target: "beefy", "🥩 {}", err);
+			}
 
+			// Don't bother voting during major sync.
+			if !self.sync_oracle.is_major_syncing() {
 				// There were external events, 'state' is changed, author a vote if needed/possible.
 				if let Err(err) = self.try_to_vote() {
 					debug!(target: "beefy", "🥩 {}", err);
