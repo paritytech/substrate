@@ -1987,8 +1987,8 @@ impl_runtime_apis! {
 		Balance,
 	> for Runtime
 	{
-		fn quote_price(asset1: u32, asset2: u32) -> Option<Balance> {
-			Dex::quote_price(asset1, asset2)
+		fn quote_price(asset1: u32, asset2: u32, amount: u64) -> Option<Balance> {
+			Dex::quote_price(asset1, asset2, amount)
 		}
 	}
 

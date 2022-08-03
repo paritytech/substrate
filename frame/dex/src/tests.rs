@@ -195,14 +195,14 @@ fn quote_price_should_work() {
 			Origin::signed(user),
 			token_1,
 			token_2,
-			20,
 			1000,
+			20,
 			1,
 			1,
 			user,
 			2
 		));
 
-		dbg!(Dex::quote_price(token_1, token_2));
+		assert_eq!(Dex::quote_price(token_1, token_2, 3000), Some(60));
 	});
 }

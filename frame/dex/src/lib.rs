@@ -553,9 +553,10 @@ pub mod pallet {
 			}
 		}
 
-		pub fn quote_price(asset1: u32, asset2: u32) -> Option<AssetBalanceOf<T>> {
+		pub fn quote_price(asset1: u32, asset2: u32, amount: u64) -> Option<AssetBalanceOf<T>> {
 			let asset1 = asset1.into();
 			let asset2 = asset2.into();
+			let amount = amount.into();
 			let pool_id = Self::get_pool_id(asset1, asset2);
 			let (pool_asset1, _) = pool_id;
 
@@ -565,7 +566,7 @@ pub mod pallet {
 				} else {
 					(pool.balance2, pool.balance1)
 				};
-				Self::quote(&One::one(), &reserve1, &reserve2).ok()
+				Self::quote(&amount, &reserve1, &reserve2).ok()
 			} else {
 				None
 			}
