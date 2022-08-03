@@ -585,14 +585,6 @@ pub mod pallet {
 				.ok_or(Error::<T>::Overflow)?
 				.checked_div(&reserve1)
 				.ok_or(Error::<T>::Overflow)
-
-			/*let amount2 = u128::from(amount)
-				.checked_mul(u128::from(reserve2))
-				.ok_or(Error::<T>::Overflow)?
-				.checked_div(u128::from(reserve1))
-				.ok_or(Error::<T>::Overflow)?;
-
-			u64::try_from(amount2).map(|x| x.into()).map_err(|_| Error::<T>::Overflow)*/
 		}
 
 		/// Calculates amount out
@@ -608,6 +600,7 @@ pub mod pallet {
 				return Err(Error::<T>::InsufficientLiquidity.into())
 			}
 
+			// TODO: extract 0.3% into config
 			let amount_in_with_fee =
 				amount_in.checked_mul(&997u64.into()).ok_or(Error::<T>::Overflow)?;
 			let numerator =
@@ -634,10 +627,7 @@ pub mod pallet {
 				return Err(Error::<T>::InsufficientLiquidity.into())
 			}
 
-			// uint numerator = reserveIn.mul(amountOut).mul(1000);
-			// uint denominator = reserveOut.sub(amountOut).mul(997);
-			// amountIn = (numerator / denominator).add(1);
-
+			// TODO: extract 0.3% into config
 			let numerator = reserve_in
 				.checked_mul(amount_out)
 				.ok_or(Error::<T>::Overflow)?
