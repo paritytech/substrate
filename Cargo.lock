@@ -4935,7 +4935,6 @@ dependencies = [
  "hex-literal",
  "pallet-balances",
  "pallet-grandpa",
- "pallet-randomness-collective-flip",
  "pallet-sassafras",
  "pallet-sudo",
  "pallet-timestamp",
