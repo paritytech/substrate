@@ -32,10 +32,11 @@ jobs:
           docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-      - name: Upload wasm artifact
+      - name: Copy wasm artifact from the image
         run: |
           container-id=$(docker create $image-id)
           docker cp "${container-id}:/home/cere/node-runtime-artifacts/node_runtime.compact.wasm" ./
+      - name: Upload wasm artifact
         uses: actions/upload-artifact@v3
         with:
           name: node_runtime.compact.wasm
