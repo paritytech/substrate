@@ -293,4 +293,4 @@ update-node-template:
       --repo-name "substrate-node-template"
       --template-path "bin/node-template"
       --github-api-token "$GITHUB_TOKEN"
-      --polkadot-branch "$CI_COMMIT_REF_NAME"
+      --polkadot-branch "polkadot-v0.9.27"
