@@ -283,6 +283,7 @@ impl<T: Config> Pallet<T> {
 	pub fn set_timestamp(now: T::Moment) {
 		Now::<T>::put(now);
 		DidUpdate::<T>::put(true);
+		<T::OnTimestampSet as OnTimestampSet<_>>::on_timestamp_set(now);
 	}
 }
 
