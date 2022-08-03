@@ -108,8 +108,10 @@ fn generate_impl_calls(
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
+		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
-		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
+		let mut impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
+		append_api_version(&mut impl_trait, trait_api_ver);
 		let impl_trait_ident = &impl_trait_path
 			.segments
 			.last()
@@ -401,6 +403,26 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 	trait_
 }
 
+// TODO: fix this not to mutate the input, similar to the rest of the code
+fn append_api_version(trait_: &mut Path, version: Option<u64>) {
+	if version.is_none() {
+		// nothing to do
+		return;
+	}
+
+	let version = version.unwrap();
+	let versioned_trait_ident = {
+		let trait_name = &trait_
+			.segments
+			.last()
+			.as_ref()
+			.expect("Trait path should always contain at least one item; qed")
+			.ident;
+
+		versioned_trait_name(trait_name, version)
+	};
+	trait_.segments.last_mut().as_mut().unwrap().ident = versioned_trait_ident;
+}
 // Dummy trait implementations are used to check if the versioned runtime implements all required
 // methods. `generate_versioned_api_traits` in `decl_runtime_apis.rs` generates a dummy trait for
 // each version containing all required methods that should be implemented. Here an implementation
@@ -451,13 +473,11 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 		let mut impl_ = impl_.clone();
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
-		let trait_ = extend_with_runtime_decl_path(trait_);
+		let mut trait_ = extend_with_runtime_decl_path(trait_);
+		append_api_version(&mut trait_, trait_api_ver);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
 		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
-		if let Some(api_ver) = trait_api_ver {
-			impls_prepared.push(generate_dummy_trait_impl(&impl_, api_ver));
-		}
 		impls_prepared.push(impl_);
 	}
 
