@@ -40,9 +40,13 @@ pub mod pallet {
 
 	use frame_support::{
 		traits::{
-			fungibles::{Create, Inspect, InspectEnumerable, Mutate, Transfer},
+			fungibles::{
+				metadata::Mutate as MutateMetadata, Create, Inspect, InspectEnumerable, Mutate,
+				Transfer,
+			},
 			Currency, ExistenceRequirement, ReservableCurrency,
 		},
+		transactional,
 		PalletId,
 	};
 	use sp_runtime::traits::{
@@ -86,6 +90,7 @@ pub mod pallet {
 			+ Create<Self::AccountId>
 			+ InspectEnumerable<Self::AccountId>
 			+ Mutate<Self::AccountId>
+			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
 
 		/// The dex's pallet id, used for deriving its sovereign account ID.
@@ -178,13 +183,31 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		pub fn topup(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+		#[transactional]
+		pub fn setup(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let pallet_account = Self::account_id();
-			T::Currency::transfer(&sender, &pallet_account, amount, ExistenceRequirement::KeepAlive)
+			T::Currency::transfer(
+				&sender,
+				&pallet_account,
+				amount,
+				ExistenceRequirement::KeepAlive,
+			)?;
+
+			T::Assets::create(1.into(), sender.clone(), true, 1u64.into())?;
+			T::Assets::set(1.into(), &sender, "DOT".into(), "DOT".into(), 0)?;
+
+			T::Assets::create(2.into(), sender.clone(), true, 1u64.into())?;
+			T::Assets::set(2.into(), &sender, "USDC".into(), "USDC".into(), 0)?;
+
+			T::Assets::mint_into(1.into(), &sender, 10000000000000000000u64.into())?;
+			T::Assets::mint_into(2.into(), &sender, 10000000000000000000u64.into())?;
+
+			Ok(())
 		}
 
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn create_pool(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>, // TODO: convert into MultiToken
@@ -199,10 +222,8 @@ pub mod pallet {
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
 			let pallet_account = Self::account_id();
-			T::Assets::create(lp_token, pallet_account, true, MIN_LIQUIDITY.into())?;
-
-			// TODO: set metadata
-			// T::Assets::set(lp_token, pallet_account, true, MIN_LIQUIDITY.into())?;
+			T::Assets::create(lp_token, pallet_account.clone(), true, MIN_LIQUIDITY.into())?;
+			T::Assets::set(lp_token, &pallet_account, "LP".into(), "LP".into(), 0)?;
 
 			let pool_info = PoolInfo {
 				owner: sender.clone(),
@@ -221,6 +242,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -329,6 +351,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -404,6 +427,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -416,7 +440,6 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			let pool_id = Self::get_pool_id(asset1, asset2);
-			let (pool_asset1, pool_asset2) = pool_id;
 
 			ensure!(
 				amount_in > Zero::zero() && amount_out_min > Zero::zero(),
@@ -445,14 +468,20 @@ pub mod pallet {
 
 				T::Assets::transfer(send_asset, &pallet_account, &send_to, send_amount, false)?;
 
-				pool.balance1 = T::Assets::balance(pool_asset1, &pallet_account);
-				pool.balance2 = T::Assets::balance(pool_asset2, &pallet_account);
+				if send_asset == pool.asset1 {
+					pool.balance1 -= send_amount;
+					pool.balance2 += amount1;
+				} else {
+					pool.balance2 -= send_amount;
+					pool.balance1 += amount1;
+				}
 
 				Ok(())
 			})
 		}
 
 		#[pallet::weight(0)]
+		#[transactional]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -465,7 +494,6 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			let pool_id = Self::get_pool_id(asset1, asset2);
-			let (pool_asset1, pool_asset2) = pool_id;
 
 			ensure!(
 				amount_out > Zero::zero() && amount_in_max > Zero::zero(),
@@ -493,8 +521,13 @@ pub mod pallet {
 
 				T::Assets::transfer(send_asset, &pallet_account, &send_to, send_amount, false)?;
 
-				pool.balance1 = T::Assets::balance(pool_asset1, &pallet_account);
-				pool.balance2 = T::Assets::balance(pool_asset2, &pallet_account);
+				if send_asset == pool.asset1 {
+					pool.balance1 -= send_amount;
+					pool.balance2 += amount1;
+				} else {
+					pool.balance2 -= send_amount;
+					pool.balance1 += amount1;
+				}
 
 				Ok(())
 			})
@@ -532,9 +565,9 @@ pub mod pallet {
 				} else {
 					(pool.balance2, pool.balance1)
 				};
-				return Self::quote(&One::one(), &reserve1, &reserve2).ok()
+				Self::quote(&One::one(), &reserve1, &reserve2).ok()
 			} else {
-				return None
+				None
 			}
 		}
 
