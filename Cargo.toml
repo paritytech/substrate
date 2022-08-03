@@ -90,6 +90,7 @@ members = [
 	"frame/democracy",
 	"frame/dex",
 	"frame/dex/rpc",
+	"frame/dex/rpc/runtime-api",
 	"frame/try-runtime",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",

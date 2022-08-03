@@ -24,6 +24,7 @@ node-primitives = { version = "2.0.0", path = "../primitives" }
 kitchensink-runtime = { version = "3.0.0-dev", path = "../runtime" }
 pallet-asset-tx-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment/asset-tx-payment" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
+pallet-dex = { version = "4.0.0-dev", path = "../../../frame/dex" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-client-db = { version = "0.10.0-dev", features = ["rocksdb"], path = "../../../client/db" }
