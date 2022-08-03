@@ -35,7 +35,7 @@ use jsonrpsee::{
 };
 use log::warn;
 
-use beefy_gadget::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream,};
+use beefy_gadget::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream};
 
 mod notification;
 
@@ -131,14 +131,16 @@ where
 }
 
 #[async_trait]
-impl<Block> BeefyApiServer<notification::EncodedVersionedFinalityProof, Block::Hash> for Beefy<Block>
+impl<Block> BeefyApiServer<notification::EncodedVersionedFinalityProof, Block::Hash>
+	for Beefy<Block>
 where
 	Block: BlockT,
 {
 	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-		let stream = self.finality_proof_stream.subscribe().map(|vfp| 
-			notification::EncodedVersionedFinalityProof::new::<Block>(vfp)
-		);
+		let stream = self
+			.finality_proof_stream
+			.subscribe()
+			.map(|vfp| notification::EncodedVersionedFinalityProof::new::<Block>(vfp));
 
 		let fut = async move {
 			sink.pipe_from_stream(stream).await;
