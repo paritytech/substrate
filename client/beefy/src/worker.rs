@@ -447,7 +447,7 @@ where
 	/// 3. Send best block hash and `finality_proof` to RPC worker.
 	///
 	/// Expects `signed commitment` to be valid.
-	fn finalize(&mut self, finality_roof: BeefyVersionedFinalityProof<B>) {
+	fn finalize(&mut self, finality_proof: BeefyVersionedFinalityProof<B>) {
 		// Prune any now "finalized" sessions from queue.
 		self.voting_oracle.try_prune();
 		let signed_commitment = match finality_roof {
