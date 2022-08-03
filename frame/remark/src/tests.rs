@@ -37,7 +37,7 @@ fn generates_event() {
 		}
 		.into();
 		// this one we actually go into the system pallet and get the last event
-		// because we know its there from block +1 
+		// because we know its there from block +1
 		let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
 		assert_eq!(event, &system_event);
 	});
