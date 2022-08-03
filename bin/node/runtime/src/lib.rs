@@ -495,6 +495,10 @@ impl_opaque_keys! {
 	}
 }
 
+parameter_types! {
+	pub const ValidatorSet: u32 = 3072;
+}
+
 impl pallet_session::Config for Runtime {
 	type Event = Event;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
@@ -505,6 +509,7 @@ impl pallet_session::Config for Runtime {
 	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = SessionKeys;
 	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
+	type ValidatorSet = ValidatorSet;
 }
 
 impl pallet_session::historical::Config for Runtime {

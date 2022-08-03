@@ -95,7 +95,7 @@
 //! use pallet_session as session;
 //!
 //! fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
-//! 	<pallet_session::Pallet<T>>::validators()
+//! 	<pallet_session::Pallet<T>>::validators().to_vec()
 //! }
 //! # fn main(){}
 //! ```
@@ -730,7 +730,7 @@ impl<T: Config> Pallet<T> {
 
 		<DisabledValidators<T>>::mutate(|disabled| {
 			if let Err(index) = disabled.binary_search(&i) {
-				disabled.insert(index, i);
+				disabled.try_insert(index, i).expect("Limit reached");
 				T::SessionHandler::on_disabled(i);
 				return true
 			}
@@ -901,6 +901,7 @@ impl<T: Config> Pallet<T> {
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
 		<KeyOwner<T>>::remove((id, key_data));
+
 	}
 }
 

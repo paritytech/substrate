@@ -288,6 +288,10 @@ impl Convert<u64, Option<u64>> for TestValidatorIdOf {
 	}
 }
 
+parameter_types! {
+	pub const ValidatorSet: u32 = 3072;
+}
+
 impl Config for Test {
 	type ShouldEndSession = TestShouldEndSession;
 	#[cfg(feature = "historical")]
@@ -301,6 +305,7 @@ impl Config for Test {
 	type Event = Event;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
+	type ValidatorSet = ValidatorSet;
 }
 
 #[cfg(feature = "historical")]
