@@ -32,138 +32,69 @@ use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, MaybeDisplay},
+	traits::{Block as BlockT, MaybeDisplay, MaybeFromStr},
 };
 
-pub use pallet_vesting_mangata_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
+pub use pallet_vesting_mangata_rpc_runtime_api::VestingMangataApi as VestingMangataRuntimeApi;
 
 #[rpc(client, server)]
-pub trait TransactionPaymentApi<BlockHash, ResponseType> {
-	#[method(name = "payment_queryInfo")]
-	fn query_info(&self, encoded_xt: Bytes, at: Option<BlockHash>) -> RpcResult<ResponseType>;
-
-	#[method(name = "payment_queryFeeDetails")]
-	fn query_fee_details(
-		&self,
-		encoded_xt: Bytes,
-		at: Option<BlockHash>,
-	) -> RpcResult<FeeDetails<NumberOrHex>>;
+pub trait VestingMangataApi<BlockHash, AccountId, TokenId, Balance, BlockNumber, ResponseTypeVestingInfosWithLockedAt> {
+	#[method(name = "vesting_getVestingLockedAt")]
+	fn get_vesting_locked_at(&self, who: AccountId, token_id: TokenId, at_block_number: Option<BlockNumber>, at: Option<BlockHash>) -> RpcResult<ResponseTypeVestingInfosWithLockedAt>;
 }
 
 /// Provides RPC methods to query a dispatchable's class, weight and fee.
-pub struct TransactionPayment<C, P> {
+pub struct VestingMangata<C, P> {
 	/// Shared reference to the client.
 	client: Arc<C>,
 	_marker: std::marker::PhantomData<P>,
 }
 
-impl<C, P> TransactionPayment<C, P> {
+impl<C, P> VestingMangata<C, P> {
 	/// Creates a new instance of the TransactionPayment Rpc helper.
 	pub fn new(client: Arc<C>) -> Self {
 		Self { client, _marker: Default::default() }
 	}
 }
 
-/// Error type of this RPC api.
-pub enum Error {
-	/// The transaction was not decodable.
-	DecodeError,
-	/// The call to runtime failed.
-	RuntimeError,
-}
-
-impl From<Error> for i32 {
-	fn from(e: Error) -> i32 {
-		match e {
-			Error::RuntimeError => 1,
-			Error::DecodeError => 2,
-		}
-	}
-}
-
 #[async_trait]
-impl<C, Block, Balance>
-	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
-	for TransactionPayment<C, Block>
+impl<C, Block, Balance, TokenId, AccountId, BlockNumber>
+	VestingMangataApiServer<
+		<Block as BlockT>::Hash,
+		AccountId,
+		TokenId,
+		Balance,
+		BlockNumber,
+		VestingInfosWithLockedAt<Balance, BlockNumber>>
+	for VestingMangata<C, Block>
 where
 	Block: BlockT,
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
-	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
-	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex> + Send + Sync + 'static,
+	C::Api: VestingMangataRuntimeApi<Block, AccountId, TokenId, Balance, BlockNumber>,
+	Balance: Codec + MaybeDisplay + MaybeFromStr + sp_std::fmt::Debug,
+	TokenId: Codec + MaybeDisplay + MaybeFromStr + sp_std::fmt::Debug,
+	BlockNumber: Codec + MaybeDisplay + MaybeFromStr + sp_std::fmt::Debug,
+	AccountId: Codec + MaybeDisplay + MaybeFromStr + sp_std::fmt::Debug,
 {
-	fn query_info(
-		&self,
-		encoded_xt: Bytes,
-		at: Option<Block::Hash>,
-	) -> RpcResult<RuntimeDispatchInfo<Balance>> {
+	fn get_vesting_locked_at(&self, who: AccountId, token_id: TokenId, at_block_number: Option<BlockNumber>, at: Option<<Block as BlockT>::Hash>)
+	 -> RpcResult<VestingInfosWithLockedAt<Balance, BlockNumber>> {
 		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
+		let at = BlockId::<Block>::hash(at.unwrap_or_else(||
+            // If the block hash is not supplied assume the best block.
+            self.client.info().best_hash));
 
-		let encoded_len = encoded_xt.len() as u32;
-
-		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::DecodeError.into(),
-				"Unable to query dispatch info.",
+		let runtime_api_result = api.get_vesting_locked_at(
+			&at,
+			who,
+			token_id,
+			at_block_number,
+		);
+		runtime_api_result.map_err(|e| {
+			JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+				1,
+				"Unable to serve the request",
 				Some(format!("{:?}", e)),
-			))
-		})?;
-		api.query_info(&at, uxt, encoded_len).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				"Unable to query dispatch info.",
-				Some(e.to_string()),
-			))
-			.into()
-		})
-	}
-
-	fn query_fee_details(
-		&self,
-		encoded_xt: Bytes,
-		at: Option<Block::Hash>,
-	) -> RpcResult<FeeDetails<NumberOrHex>> {
-		let api = self.client.runtime_api();
-		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-
-		let encoded_len = encoded_xt.len() as u32;
-
-		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::DecodeError.into(),
-				"Unable to query fee details.",
-				Some(format!("{:?}", e)),
-			))
-		})?;
-		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| {
-			CallError::Custom(ErrorObject::owned(
-				Error::RuntimeError.into(),
-				"Unable to query fee details.",
-				Some(e.to_string()),
-			))
-		})?;
-
-		let try_into_rpc_balance = |value: Balance| {
-			value.try_into().map_err(|_| {
-				JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
-					ErrorCode::InvalidParams.code(),
-					format!("{} doesn't fit in NumberOrHex representation", value),
-					None::<()>,
-				)))
-			})
-		};
-
-		Ok(FeeDetails {
-			inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {
-				Some(InclusionFee {
-					base_fee: try_into_rpc_balance(inclusion_fee.base_fee)?,
-					len_fee: try_into_rpc_balance(inclusion_fee.len_fee)?,
-					adjusted_weight_fee: try_into_rpc_balance(inclusion_fee.adjusted_weight_fee)?,
-				})
-			} else {
-				None
-			},
-			tip: Default::default(),
+			)))
 		})
 	}
 }

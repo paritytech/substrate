@@ -33,25 +33,25 @@ pub use pallet_vesting_mangata::{VestingInfo};
 
 sp_api::decl_runtime_apis! {
 	pub trait VestingMangataApi<AccountId, TokenId, Balance, BlockNumber> where
-		AccountId: Codec + MaybeDisplay,
-		Balance: Codec + MaybeDisplay,
-		TokenId: Codec + MaybeDisplay,
-		BlockNumber: Codec + MaybeDisplay,
+		AccountId: Codec + MaybeDisplay + sp_std::fmt::Debug,
+		Balance: Codec + MaybeDisplay + sp_std::fmt::Debug,
+		TokenId: Codec + MaybeDisplay + sp_std::fmt::Debug,
+		BlockNumber: Codec + MaybeDisplay + sp_std::fmt::Debug,
 	{
 		fn get_vesting_locked_at(who: AccountId, token_id: TokenId, at_block_number: Option<BlockNumber>) -> VestingInfosWithLockedAt<Balance, BlockNumber>;
 	}
 }
 
 #[cfg(feature = "std")]
-fn serialize_as_string<S: Serializer, T: std::fmt::Display>(
+fn serialize_as_debug<S: Serializer, T: std::fmt::Debug>(
 	t: &T,
 	serializer: S,
 ) -> Result<S::Ok, S::Error> {
-	serializer.serialize_str(&t.to_string())
+	serializer.serialize_str(&format!("{:?}", t))
 }
 
 #[cfg(feature = "std")]
-fn deserialize_from_string<'de, D: Deserializer<'de>, T: std::str::FromStr>(
+fn deserialize_from_debug<'de, D: Deserializer<'de>, T: std::str::FromStr>(
 	deserializer: D,
 ) -> Result<T, D::Error> {
 	let s = String::deserialize(deserializer)?;
@@ -62,11 +62,13 @@ fn deserialize_from_string<'de, D: Deserializer<'de>, T: std::str::FromStr>(
 #[derive(Eq, PartialEq, Encode, Decode, Default)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-pub struct VestingInfosWithLockedAt<Balance, BlockNumber> {
-	#[cfg_attr(feature = "std", serde(bound(serialize = "Vec<(VestingInfo<Balance, BlockNumber>, Balance)>: std::fmt::Display")))]
-	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_string"))]
+#[cfg_attr(feature = "std", serde(bound(serialize = "Balance: std::fmt::Display")))]
+#[cfg_attr(feature = "std", serde(bound(deserialize = "Balance: std::str::FromStr")))]
+pub struct VestingInfosWithLockedAt<Balance: sp_std::fmt::Debug, BlockNumber: sp_std::fmt::Debug> {
+	#[cfg_attr(feature = "std", serde(bound(serialize = "Vec<(VestingInfo<Balance, BlockNumber>, Balance)>:std::fmt::Debug")))]
+	#[cfg_attr(feature = "std", serde(serialize_with = "serialize_as_debug"))]
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "Vec<(VestingInfo<Balance, BlockNumber>, Balance)>: std::str::FromStr")))]
-	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_string"))]
+	#[cfg_attr(feature = "std", serde(deserialize_with = "deserialize_from_debug"))]
 	pub vesting_infos_with_locked_at: Vec<(VestingInfo<Balance, BlockNumber>, Balance)>,
 }
 
