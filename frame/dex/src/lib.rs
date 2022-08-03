@@ -47,8 +47,7 @@ pub mod pallet {
 			},
 			Currency, ExistenceRequirement, ReservableCurrency,
 		},
-		transactional,
-		PalletId,
+		transactional, PalletId,
 	};
 	use sp_runtime::traits::{
 		AccountIdConversion, AtLeast32BitUnsigned, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub,

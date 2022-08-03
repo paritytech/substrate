@@ -17,7 +17,10 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{assert_ok, traits::{Currency, fungibles::InspectEnumerable}};
+use frame_support::{
+	assert_ok,
+	traits::{fungibles::InspectEnumerable, Currency},
+};
 
 fn events() -> Vec<Event<Test>> {
 	let result = System::events()
@@ -249,7 +252,8 @@ fn swap_should_work() {
 			3
 		));
 
-		let expect_receive = Dex::get_amount_out(&exchange_amount, &liquidity2, &liquidity1).ok().unwrap();
+		let expect_receive =
+			Dex::get_amount_out(&exchange_amount, &liquidity2, &liquidity1).ok().unwrap();
 		let pallet_account = Dex::account_id();
 		assert_eq!(balance(user, token_1), expect_receive);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
