@@ -254,7 +254,7 @@ fn should_resubmit_from_retracted_during_maintenance() {
 	let header = api.push_block(1, vec![], true);
 	let fork_header = api.push_block(1, vec![], false);
 
-	let event = block_event_with_retracted(header, fork_header.hash(), &*pool.api());
+	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 
 	block_on(pool.maintain(event));
 	assert_eq!(pool.status().ready, 1);
@@ -272,7 +272,7 @@ fn should_not_resubmit_from_retracted_during_maintenance_if_tx_is_also_in_enacte
 	let header = api.push_block(1, vec![xt.clone()], true);
 	let fork_header = api.push_block(1, vec![xt], false);
 
-	let event = block_event_with_retracted(header, fork_header.hash(), &*pool.api());
+	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 
 	block_on(pool.maintain(event));
 	assert_eq!(pool.status().ready, 0);
@@ -292,7 +292,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	let fork_header = api.push_block(1, vec![xt.clone()], false);
 	api.add_invalid(&xt);
 
-	let event = block_event_with_retracted(header, fork_header.hash(), &*pool.api());
+	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 	block_on(pool.maintain(event));
 
 	assert_eq!(
@@ -533,7 +533,7 @@ fn fork_aware_finalization() {
 		let header = pool.api().push_block(3, vec![from_charlie.clone()], true);
 
 		canon_watchers.push((watcher, header.hash()));
-		let event = block_event_with_retracted(header.clone(), d2, &*pool.api());
+		let event = block_event_with_retracted(header.clone(), d2, pool.api());
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
 
@@ -633,7 +633,7 @@ fn prune_and_retract_tx_at_same_time() {
 		let header = pool.api().push_block(2, vec![from_alice.clone()], false);
 		assert_eq!(pool.status().ready, 0);
 
-		let event = block_event_with_retracted(header.clone(), b1, &*pool.api());
+		let event = block_event_with_retracted(header.clone(), b1, pool.api());
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 0);
 
@@ -708,7 +708,7 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 	// Block D2
 	{
 		let header = pool.api().push_block(2, vec![], false);
-		let event = block_event_with_retracted(header, d0, &*pool.api());
+		let event = block_event_with_retracted(header, d0, pool.api());
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
 	}
@@ -801,7 +801,7 @@ fn resubmit_from_retracted_fork() {
 	let expected_ready = vec![tx3, tx4, tx5].iter().map(Encode::encode).collect::<BTreeSet<_>>();
 	assert_eq!(expected_ready, ready);
 
-	let event = block_event_with_retracted(f1_header, f0, &*pool.api());
+	let event = block_event_with_retracted(f1_header, f0, pool.api());
 	block_on(pool.maintain(event));
 
 	assert_eq!(pool.status().ready, 3);
