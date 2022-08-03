@@ -27,8 +27,16 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          docker build . -t $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
+          image-id=$(docker build . -t $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA)
           echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA"
           docker image tag $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$GITHUB_SHA
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      - name: Upload wasm artifact
+        run: |
+          container-id=$(docker create $image-id)
+          docker cp "${container-id}:/home/cere/node-runtime-artifacts/node_runtime.compact.wasm" ./
+        uses: actions/upload-artifact@v3
+        with:
+          name: node_runtime.compact.wasm
+          path: ./node_runtime.compact.wasm
