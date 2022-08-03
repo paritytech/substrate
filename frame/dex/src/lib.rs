@@ -28,6 +28,7 @@ mod mock;
 pub use pallet::*;
 pub use types::*;
 
+// https://docs.uniswap.org/protocol/V2/concepts/protocol-overview/smart-contracts#minimum-liquidity
 // TODO: make it configurable
 pub const MIN_LIQUIDITY: u64 = 1;
 
@@ -143,6 +144,15 @@ pub mod pallet {
 			amount2: AssetBalanceOf<T>,
 			lp_token: AssetIdOf<T>,
 			liquidity: AssetBalanceOf<T>,
+		},
+		SwapExecuted {
+			who: T::AccountId,
+			send_to: T::AccountId,
+			asset1: AssetIdOf<T>,
+			asset2: AssetIdOf<T>,
+			pool_id: PoolIdOf<T>,
+			amount_in: AssetBalanceOf<T>,
+			amount_out: AssetBalanceOf<T>,
 		},
 	}
 
@@ -476,6 +486,16 @@ pub mod pallet {
 					pool.balance1 += amount1;
 				}
 
+				Self::deposit_event(Event::SwapExecuted {
+					who: sender,
+					send_to,
+					asset1,
+					asset2,
+					pool_id,
+					amount_in,
+					amount_out: amount2,
+				});
+
 				Ok(())
 			})
 		}
@@ -528,6 +548,16 @@ pub mod pallet {
 					pool.balance2 -= send_amount;
 					pool.balance1 += amount1;
 				}
+
+				Self::deposit_event(Event::SwapExecuted {
+					who: sender,
+					send_to,
+					asset1,
+					asset2,
+					pool_id,
+					amount_in: amount2,
+					amount_out,
+				});
 
 				Ok(())
 			})
@@ -603,8 +633,10 @@ pub mod pallet {
 			// TODO: extract 0.3% into config
 			let amount_in_with_fee =
 				amount_in.checked_mul(&997u64.into()).ok_or(Error::<T>::Overflow)?;
+
 			let numerator =
 				amount_in_with_fee.checked_mul(reserve_out).ok_or(Error::<T>::Overflow)?;
+
 			let denominator = reserve_in
 				.checked_mul(&1000u64.into())
 				.ok_or(Error::<T>::Overflow)?

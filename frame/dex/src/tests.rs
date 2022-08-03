@@ -206,3 +206,53 @@ fn quote_price_should_work() {
 		assert_eq!(Dex::quote_price(token_1, token_2, 3000), Some(60));
 	});
 }
+
+#[test]
+fn swap_should_work() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = 1;
+		let token_2 = 2;
+		let lp_token = 3;
+		topup_pallet();
+
+		create_tokens(user, vec![token_1, token_2]);
+		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
+
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
+
+		let liquidity1 = 1000;
+		let liquidity2 = 20;
+		assert_ok!(Dex::add_liquidity(
+			Origin::signed(user),
+			token_1,
+			token_2,
+			liquidity1,
+			liquidity2,
+			1,
+			1,
+			user,
+			2
+		));
+
+		assert_eq!(balance(user, token_1), 0);
+
+		let exchange_amount = 10;
+		assert_ok!(Dex::swap_exact_tokens_for_tokens(
+			Origin::signed(user),
+			token_2,
+			token_1,
+			exchange_amount,
+			1,
+			user,
+			3
+		));
+
+		let expect_receive = Dex::get_amount_out(&exchange_amount, &liquidity2, &liquidity1).ok().unwrap();
+		let pallet_account = Dex::account_id();
+		assert_eq!(balance(user, token_1), expect_receive);
+		assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
+		assert_eq!(balance(pallet_account, token_2), liquidity2 + exchange_amount);
+	});
+}
