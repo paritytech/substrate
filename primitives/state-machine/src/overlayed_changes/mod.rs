@@ -23,7 +23,7 @@ use crate::{
 	backend::Backend,
 	stats::StateMachineStats,
 };
-use sp_std::vec::Vec;
+use sp_std::{vec::Vec, any::{TypeId, Any}, boxed::Box};
 use self::changeset::OverlayedChangeSet;
 
 #[cfg(feature = "std")]
@@ -36,9 +36,9 @@ use crate::{
 };
 use crate::changes_trie::BlockNumber;
 #[cfg(feature = "std")]
-use std::collections::HashMap as Map;
+use std::collections::{HashMap as Map, hash_map::Entry as MapEntry};
 #[cfg(not(feature = "std"))]
-use sp_std::collections::btree_map::BTreeMap as Map;
+use sp_std::collections::btree_map::{BTreeMap as Map, Entry as MapEntry};
 use sp_std::collections::btree_set::BTreeSet;
 use codec::{Decode, Encode};
 use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
@@ -46,6 +46,7 @@ use sp_core::storage::{well_known_keys::EXTRINSIC_INDEX, ChildInfo};
 use sp_core::offchain::storage::OffchainOverlayedChanges;
 use hash_db::Hasher;
 use crate::DefaultError;
+use sp_externalities::{Extensions, Extension};
 
 pub use self::changeset::{OverlayedValue, NoOpenTransaction, AlreadyInRuntime, NotInRuntime};
 
@@ -638,7 +639,7 @@ fn retain_map<K, V, F>(map: &mut Map<K, V>, f: F)
 {
 	map.retain(f);
 }
- 
+
 #[cfg(not(feature = "std"))]
 fn retain_map<K, V, F>(map: &mut Map<K, V>, mut f: F)
 	where
@@ -652,7 +653,67 @@ fn retain_map<K, V, F>(map: &mut Map<K, V>, mut f: F)
 		}
 	}
 }
- 
+
+/// An overlayed extension is either a mutable reference
+/// or an owned extension.
+pub enum OverlayedExtension<'a> {
+	MutRef(&'a mut Box<dyn Extension>),
+	Owned(Box<dyn Extension>),
+}
+
+/// Overlayed extensions which are sourced from [`Extensions`].
+///
+/// The sourced extensions will be stored as mutable references,
+/// while extensions that are registered while execution are stored
+/// as owned references. After the execution of a runtime function, we
+/// can safely drop this object while not having modified the original
+/// list.
+pub struct OverlayedExtensions<'a> {
+	extensions: Map<TypeId, OverlayedExtension<'a>>,
+}
+
+impl<'a> OverlayedExtensions<'a> {
+	/// Create a new instance of overalyed extensions from the given extensions.
+	pub fn new(extensions: &'a mut Extensions) -> Self {
+		Self {
+			extensions: extensions
+				.iter_mut()
+				.map(|(k, v)| (*k, OverlayedExtension::MutRef(v)))
+				.collect(),
+		}
+	}
+
+	/// Return a mutable reference to the requested extension.
+	pub fn get_mut(&mut self, ext_type_id: TypeId) -> Option<&mut dyn Any> {
+		self.extensions.get_mut(&ext_type_id).map(|ext| match ext {
+			OverlayedExtension::MutRef(ext) => ext.as_mut_any(),
+			OverlayedExtension::Owned(ext) => ext.as_mut_any(),
+		})
+	}
+
+	/// Register extension `extension` with the given `type_id`.
+	pub fn register(
+		&mut self,
+		type_id: TypeId,
+		extension: Box<dyn Extension>,
+	) -> Result<(), sp_externalities::Error> {
+		match self.extensions.entry(type_id) {
+			MapEntry::Vacant(vacant) => {
+				vacant.insert(OverlayedExtension::Owned(extension));
+				Ok(())
+			},
+			MapEntry::Occupied(_) => Err(sp_externalities::Error::ExtensionAlreadyRegistered),
+		}
+	}
+
+	/// Deregister extension with the given `type_id`.
+	///
+	/// Returns `true` when there was an extension registered for the given `type_id`.
+	pub fn deregister(&mut self, type_id: TypeId) -> bool {
+		self.extensions.remove(&type_id).is_some()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use hex_literal::hex;

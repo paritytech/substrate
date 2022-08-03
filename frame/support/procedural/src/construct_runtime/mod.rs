@@ -169,6 +169,12 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let res = quote!(
 		#scrate_decl
 
+		// Prevent UncheckedExtrinsic to print unused warning.
+		const _: () = {
+			#[allow(unused)]
+			type __hidden_use_of_unchecked_extrinsic = #unchecked_extrinsic;
+		};
+
 		#[derive(Clone, Copy, PartialEq, Eq, #scrate::sp_runtime::RuntimeDebug)]
 		pub struct #name;
 		impl #scrate::sp_runtime::traits::GetNodeBlockType for #name {

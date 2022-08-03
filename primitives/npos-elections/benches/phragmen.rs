@@ -149,7 +149,10 @@ fn do_phragmen(
 		if eq_iters > 0 {
 			let staked = assignment_ratio_to_staked(assignments, &stake_of);
 			let winners = to_without_backing(winners);
-			let mut support = build_support_map(winners.as_ref(), staked.as_ref()).0;
+			let mut support = build_support_map(
+				winners.as_ref(),
+				staked.as_ref(),
+			).unwrap();
 
 			balance_solution(
 				staked.into_iter().map(|a| (a.clone(), stake_of(&a.who))).collect(),

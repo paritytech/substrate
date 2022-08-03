@@ -33,8 +33,8 @@ name = "per_thing_rational"
 path = "src/per_thing_rational.rs"
 
 [[bin]]
-name = "rational128"
-path = "src/rational128.rs"
+name = "multiply_by_rational"
+path = "src/multiply_by_rational.rs"
 
 [[bin]]
 name = "fixed_point"

@@ -24,3 +24,4 @@ rls*.log
 .cargo/
 frame/ddc-metrics-offchain-worker/src/tests/test_data/ddc.wasm
 frame/ddc-metrics-offchain-worker/src/tests/test_data/metadata.json
+.cargo-remote.toml

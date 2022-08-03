@@ -80,7 +80,7 @@ impl<'vicinity, T: Trait> BackendT for Backend<'vicinity, T> {
 
 	fn block_timestamp(&self) -> U256 {
 		let now: u128 = pallet_timestamp::Module::<T>::get().unique_saturated_into();
-		U256::from(now)
+		U256::from(now / 1000)
 	}
 
 	fn block_difficulty(&self) -> U256 {

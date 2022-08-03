@@ -86,7 +86,6 @@ pub fn build_transport(
 
 		// Legacy noise configurations for backward compatibility.
 		let mut noise_legacy = noise::LegacyConfig::default();
-		noise_legacy.send_legacy_handshake = true;
 		noise_legacy.recv_legacy_handshake = true;
 
 		let mut xx_config = noise::NoiseConfig::xx(noise_keypair_spec);

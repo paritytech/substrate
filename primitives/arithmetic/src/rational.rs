@@ -17,17 +17,104 @@
 
 use sp_std::{cmp::Ordering, prelude::*};
 use crate::helpers_128bit;
-use num_traits::Zero;
-use sp_debug_derive::RuntimeDebug;
+use num_traits::{Zero, One, Bounded};
+use crate::biguint::BigUint;
+
+/// A wrapper for any rational number with infinitely large numerator and denominator.
+///
+/// This type exists to facilitate `cmp` operation
+/// on values like `a/b < c/d` where `a, b, c, d` are all `BigUint`.
+#[derive(Clone, Default, Eq)]
+pub struct RationalInfinite(BigUint, BigUint);
+
+impl RationalInfinite {
+	/// Return the numerator reference.
+	pub fn n(&self) -> &BigUint {
+		&self.0
+	}
+
+	/// Return the denominator reference.
+	pub fn d(&self) -> &BigUint {
+		&self.1
+	}
+
+	/// Build from a raw `n/d`.
+	pub fn from(n: BigUint, d: BigUint) -> Self {
+		Self(n, d.max(BigUint::one()))
+	}
+
+	/// Zero.
+	pub fn zero() -> Self {
+		Self(BigUint::zero(), BigUint::one())
+	}
+
+	/// One.
+	pub fn one() -> Self {
+		Self(BigUint::one(), BigUint::one())
+	}
+}
+
+impl PartialOrd for RationalInfinite {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for RationalInfinite {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// handle some edge cases.
+		if self.d() == other.d() {
+			self.n().cmp(&other.n())
+		} else if self.d().is_zero() {
+			Ordering::Greater
+		} else if other.d().is_zero() {
+			Ordering::Less
+		} else {
+			// (a/b) cmp (c/d) => (a*d) cmp (c*b)
+			self.n().clone().mul(&other.d()).cmp(&other.n().clone().mul(&self.d()))
+		}
+	}
+}
+
+impl PartialEq for RationalInfinite {
+	fn eq(&self, other: &Self) -> bool {
+		self.cmp(other) == Ordering::Equal
+	}
+}
+
+impl From<Rational128> for RationalInfinite {
+	fn from(t: Rational128) -> Self {
+		Self(t.0.into(), t.1.into())
+	}
+}
 
 /// A wrapper for any rational number with a 128 bit numerator and denominator.
-#[derive(Clone, Copy, Default, Eq, RuntimeDebug)]
+#[derive(Clone, Copy, Default, Eq)]
 pub struct Rational128(u128, u128);
 
+#[cfg(feature = "std")]
+impl sp_std::fmt::Debug for Rational128 {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		write!(f, "Rational128({:.4})", self.0 as f32 / self.1 as f32)
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl sp_std::fmt::Debug for Rational128 {
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		write!(f, "Rational128(..)")
+	}
+}
+
 impl Rational128 {
-	/// Nothing.
+	/// Zero.
 	pub fn zero() -> Self {
 		Self(0, 1)
+	}
+
+	/// One
+	pub fn one() -> Self {
+		Self(1, 1)
 	}
 
 	/// If it is zero or not
@@ -119,6 +206,22 @@ impl Rational128 {
 		let n = self_scaled.0.checked_sub(other_scaled.0)
 			.ok_or("overflow while subtracting numerators")?;
 		Ok(Self(n, self_scaled.1))
+	}
+}
+
+impl Bounded for Rational128 {
+	fn min_value() -> Self {
+		Self(0, 1)
+	}
+
+	fn max_value() -> Self {
+		Self(Bounded::max_value(), 1)
+	}
+}
+
+impl<T: Into<u128>> From<T> for Rational128 {
+	fn from(t: T) -> Self {
+		Self::from(t.into(), 1)
 	}
 }
 

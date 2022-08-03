@@ -149,7 +149,7 @@ fn main() {
 				let w = u.div_unit(v.get(0));
 				let num_w = num_u / &num_v;
 				assert_biguints_eq(&w, &num_w);
-			} else if u.len() > v.len() && v.len() > 0 {
+			} else if u.len() > v.len() && v.len() > 1 {
 				let num_remainder = num_u.clone() % num_v.clone();
 
 				let (w, remainder) = u.div(&v, return_remainder).unwrap();

@@ -17,7 +17,9 @@
 
 //! Helper methods for npos-elections.
 
-use crate::{Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf, Error};
+use crate::{
+	Assignment, ExtendedBalance, VoteWeight, IdentifierT, StakedAssignment, WithApprovalOf, Error,
+};
 use sp_arithmetic::{PerThing, InnerOf};
 use sp_std::prelude::*;
 

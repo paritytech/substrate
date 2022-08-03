@@ -49,6 +49,8 @@ const NAY: Vote = Vote { aye: false, conviction: Conviction::None };
 const BIG_AYE: Vote = Vote { aye: true, conviction: Conviction::Locked1x };
 const BIG_NAY: Vote = Vote { aye: false, conviction: Conviction::Locked1x };
 
+const MAX_PROPOSALS: u32 = 100;
+
 impl_outer_origin! {
 	pub enum Origin for Test where system = frame_system {}
 }
@@ -151,6 +153,7 @@ parameter_types! {
 	pub const EnactmentPeriod: u64 = 2;
 	pub const CooloffPeriod: u64 = 2;
 	pub const MaxVotes: u32 = 100;
+	pub const MaxProposals: u32 = MAX_PROPOSALS;
 }
 ord_parameter_types! {
 	pub const One: u64 = 1;
@@ -194,6 +197,8 @@ impl super::Trait for Test {
 	type ExternalDefaultOrigin = EnsureSignedBy<One, u64>;
 	type FastTrackOrigin = EnsureSignedBy<Five, u64>;
 	type CancellationOrigin = EnsureSignedBy<Four, u64>;
+	type BlacklistOrigin = EnsureRoot<u64>;
+	type CancelProposalOrigin = EnsureRoot<u64>;
 	type VetoOrigin = EnsureSignedBy<OneToFive, u64>;
 	type CooloffPeriod = CooloffPeriod;
 	type PreimageByteDeposit = PreimageByteDeposit;
@@ -205,6 +210,7 @@ impl super::Trait for Test {
 	type OperationalPreimageOrigin = EnsureSignedBy<Six, u64>;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
+	type MaxProposals = MaxProposals;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

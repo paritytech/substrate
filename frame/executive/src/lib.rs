@@ -481,20 +481,25 @@ mod tests {
 	use sp_runtime::{
 		generic::Era, Perbill, DispatchError, testing::{Digest, Header, Block},
 		traits::{Header as HeaderT, BlakeTwo256, IdentityLookup},
-		transaction_validity::{InvalidTransaction, UnknownTransaction, TransactionValidityError},
+		transaction_validity::{
+			InvalidTransaction, ValidTransaction, TransactionValidityError, UnknownTransaction
+		},
 	};
 	use frame_support::{
-		impl_outer_event, impl_outer_origin, parameter_types, impl_outer_dispatch,
+		parameter_types,
 		weights::{Weight, RuntimeDbWeight, IdentityFee, WeightToFeePolynomial},
 		traits::{Currency, LockIdentifier, LockableCurrency, WithdrawReasons, WithdrawReason},
 	};
-	use frame_system::{self as system, Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
+	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use hex_literal::hex;
 	const TEST_KEY: &[u8] = &*b":test:key:";
 
 	mod custom {
 		use frame_support::weights::{Weight, DispatchClass};
+		use sp_runtime::transaction_validity::{
+			UnknownTransaction, TransactionSource, TransactionValidity
+		};
 
 		pub trait Trait: frame_system::Trait {}
 
@@ -514,6 +519,16 @@ mod tests {
 					let _ = frame_system::ensure_none(origin);
 				}
 
+				#[weight = 0]
+				fn allowed_unsigned(origin) {
+					let _ = frame_system::ensure_root(origin)?;
+				}
+
+				#[weight = 0]
+				fn unallowed_unsigned(origin) {
+					let _ = frame_system::ensure_root(origin)?;
+				}
+
 				// module hooks.
 				// one with block number arg and one without
 				fn on_initialize(n: T::BlockNumber) -> Weight {
@@ -531,33 +546,34 @@ mod tests {
 				}
 			}
 		}
-	}
 
-	type System = frame_system::Module<Runtime>;
-	type Balances = pallet_balances::Module<Runtime>;
-	type Custom = custom::Module<Runtime>;
+		impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
+			type Call = Call<T>;
 
-	use pallet_balances as balances;
-
-	impl_outer_origin! {
-		pub enum Origin for Runtime { }
-	}
-
-	impl_outer_event!{
-		pub enum MetaEvent for Runtime {
-			system<T>,
-			balances<T>,
-		}
-	}
-	impl_outer_dispatch! {
-		pub enum Call for Runtime where origin: Origin {
-			frame_system::System,
-			pallet_balances::Balances,
+			fn validate_unsigned(
+				_source: TransactionSource,
+				call: &Self::Call,
+			) -> TransactionValidity {
+				match call {
+					Call::allowed_unsigned(..) => Ok(Default::default()),
+					_ => UnknownTransaction::NoUnsignedValidator.into(),
+				}
+			}
 		}
 	}
 
-	#[derive(Clone, Eq, PartialEq)]
-	pub struct Runtime;
+	frame_support::construct_runtime!(
+		pub enum Runtime where
+			Block = TestBlock,
+			NodeBlock = TestBlock,
+			UncheckedExtrinsic = TestUncheckedExtrinsic
+		{
+			System: frame_system::{Module, Call, Config, Storage, Event<T>},
+			Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+			Custom: custom::{Module, Call, ValidateUnsigned},
+		}
+	);
+
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
 		pub const MaximumBlockWeight: Weight = 1024;
@@ -581,7 +597,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
-		type Event = MetaEvent;
+		type Event = Event;
 		type BlockHashCount = BlockHashCount;
 		type MaximumBlockWeight = MaximumBlockWeight;
 		type DbWeight = DbWeight;
@@ -591,7 +607,7 @@ mod tests {
 		type AvailableBlockRatio = AvailableBlockRatio;
 		type MaximumBlockLength = MaximumBlockLength;
 		type Version = RuntimeVersion;
-		type PalletInfo = ();
+		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<Balance>;
 		type OnNewAccount = ();
 		type OnKilledAccount = ();
@@ -604,7 +620,7 @@ mod tests {
 	}
 	impl pallet_balances::Trait for Runtime {
 		type Balance = Balance;
-		type Event = MetaEvent;
+		type Event = Event;
 		type DustRemoval = ();
 		type ExistentialDeposit = ExistentialDeposit;
 		type AccountStore = System;
@@ -624,24 +640,6 @@ mod tests {
 	}
 	impl custom::Trait for Runtime {}
 
-	impl ValidateUnsigned for Runtime {
-		type Call = Call;
-
-		fn pre_dispatch(_call: &Self::Call) -> Result<(), TransactionValidityError> {
-			Ok(())
-		}
-
-		fn validate_unsigned(
-			_source: TransactionSource,
-			call: &Self::Call,
-		) -> TransactionValidity {
-			match call {
-				Call::Balances(BalancesCall::set_balance(_, _, _)) => Ok(Default::default()),
-				_ => UnknownTransaction::NoUnsignedValidator.into(),
-			}
-		}
-	}
-
 	pub struct RuntimeVersion;
 	impl frame_support::traits::Get<sp_version::RuntimeVersion> for RuntimeVersion {
 		fn get() -> sp_version::RuntimeVersion {
@@ -660,8 +658,14 @@ mod tests {
 		frame_system::CheckWeight<Runtime>,
 		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 	);
-	type AllModules = (System, Balances, Custom);
 	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
+	type TestBlock = Block<TestXt>;
+	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
+		<Runtime as frame_system::Trait>::AccountId,
+		<Runtime as frame_system::Trait>::Call,
+		(),
+		SignedExtra,
+	>;
 
 	// Will contain `true` when the custom runtime logic was called.
 	const CUSTOM_ON_RUNTIME_KEY: &[u8] = &*b":custom:on_runtime";
@@ -895,15 +899,26 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let xt = TestXt::new(Call::Balances(BalancesCall::set_balance(33, 69, 69)), None);
+		let valid = TestXt::new(Call::Custom(custom::Call::allowed_unsigned()), None);
+		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned()), None);
 		let mut t = new_test_ext(1);
 
+		let mut default_with_prio_3 = ValidTransaction::default();
+		default_with_prio_3.priority = 3;
 		t.execute_with(|| {
 			assert_eq!(
-				Executive::validate_transaction(TransactionSource::InBlock, xt.clone()),
-				Ok(Default::default()),
+				Executive::validate_transaction(TransactionSource::InBlock, valid.clone()),
+				Ok(default_with_prio_3),
 			);
-			assert_eq!(Executive::apply_extrinsic(xt), Ok(Err(DispatchError::BadOrigin)));
+			assert_eq!(
+				Executive::validate_transaction(TransactionSource::InBlock, invalid.clone()),
+				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator)),
+			);
+			assert_eq!(Executive::apply_extrinsic(valid), Ok(Err(DispatchError::BadOrigin)));
+			assert_eq!(
+				Executive::apply_extrinsic(invalid),
+				Err(TransactionValidityError::Unknown(UnknownTransaction::NoUnsignedValidator))
+			);
 		});
 	}
 
