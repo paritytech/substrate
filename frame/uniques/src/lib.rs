@@ -45,7 +45,10 @@ pub mod weights;
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::{
-		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+		fungibles::{Inspect, Transfer},
+		tokens::Locker,
+		BalanceStatus::Reserved,
+		Currency, EnsureOriginWithArg, ExistenceRequirement, ReservableCurrency,
 	},
 	transactional,
 };
@@ -103,7 +106,29 @@ pub mod pallet {
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The currency mechanism, used for paying for reserves.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
+
+		type CurrencyBalance: AtLeast32BitUnsigned
+			+ codec::FullCodec
+			+ Copy
+			+ MaybeSerializeDeserialize
+			+ sp_std::fmt::Debug
+			+ Default
+			+ From<u64>
+			+ TypeInfo
+			+ MaxEncodedLen;
+
+		type AssetId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ codec::HasCompact
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
+			+ TypeInfo;
+
+		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::CurrencyBalance>
+			+ Transfer<Self::AccountId>;
 
 		/// The origin which may forcibly create or destroy an item or otherwise alter privileged
 		/// attributes.
@@ -431,6 +456,8 @@ pub mod pallet {
 		NotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
+		/// Wrong currency provided.
+		WrongCurrency,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1533,6 +1560,27 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_buy_item(collection, item, origin, bid_price)
+		}
+	}
+
+	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		pub fn currency_transfer(
+			source: &T::AccountId,
+			dest: &T::AccountId,
+			value: ItemPrice<T, I>,
+			existence_requirement: ExistenceRequirement,
+		) -> DispatchResult {
+			use BalanceOrAsset::*;
+
+			match value {
+				Balance { amount } => {
+					return T::Currency::transfer(&source, &dest, amount, existence_requirement)
+				},
+				Asset { id, amount } => {
+					let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
+					return T::Assets::transfer(id, &source, &dest, amount, keep_alive).map(|_| ())
+				},
+			}
 		}
 	}
 }
