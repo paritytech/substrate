@@ -139,136 +139,6 @@ fn return_type_replace_block_with_node_block(return_type: ReturnType) -> ReturnT
 	fold::fold_return_type(&mut replace, return_type)
 }
 
-/// Generate the functions that generate the native call closure for each trait method.
-fn generate_native_call_generators(decl: &ItemTrait) -> Result<TokenStream> {
-	let fns = decl.items.iter().filter_map(|i| match i {
-		TraitItem::Method(ref m) => Some(&m.sig),
-		_ => None,
-	});
-
-	let mut result = Vec::new();
-	let trait_ = &decl.ident;
-	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-
-	// Auxiliary function that is used to convert between types that use different block types.
-	// The function expects that both are convertible by encoding the one and decoding the other.
-	result.push(quote!(
-		#[cfg(any(feature = "std", test))]
-		fn convert_between_block_types
-			<I: #crate_::Encode, R: #crate_::Decode, F: FnOnce(#crate_::codec::Error) -> #crate_::ApiError>(
-				input: &I,
-				map_error: F,
-			) -> std::result::Result<R, #crate_::ApiError>
-		{
-			<R as #crate_::DecodeLimit>::decode_with_depth_limit(
-				#crate_::MAX_EXTRINSIC_DEPTH,
-				&mut &#crate_::Encode::encode(input)[..],
-			).map_err(map_error)
-		}
-	));
-
-	// Generate a native call generator for each function of the given trait.
-	for fn_ in fns {
-		let params = extract_parameter_names_types_and_borrows(fn_, AllowSelfRefInParameters::No)?;
-		let trait_fn_name = &fn_.ident;
-		let function_name_str = fn_.ident.to_string();
-		let fn_name = generate_native_call_generator_fn_name(&fn_.ident);
-		let output = return_type_replace_block_with_node_block(fn_.output.clone());
-		let output_ty = return_type_extract_type(&output);
-		let output = quote!( std::result::Result<#output_ty, #crate_::ApiError> );
-
-		// Every type that is using the `Block` generic parameter, we need to encode/decode,
-		// to make it compatible between the runtime/node.
-		let conversions = params.iter().filter(|v| type_is_using_block(&v.1)).map(|(n, t, _)| {
-			let param_name = quote!(#n).to_string();
-
-			quote!(
-				let #n: #t = convert_between_block_types(
-					&#n,
-					|e| #crate_::ApiError::FailedToConvertParameter {
-						function: #function_name_str,
-						parameter: #param_name,
-						error: e,
-					},
-				)?;
-			)
-		});
-		// Same as for the input types, we need to check if we also need to convert the output,
-		// before returning it.
-		let output_conversion = if return_type_is_using_block(&fn_.output) {
-			quote!(
-				convert_between_block_types(
-					&res,
-					|e| #crate_::ApiError::FailedToConvertReturnValue {
-						function: #function_name_str,
-						error: e,
-					},
-				)
-			)
-		} else {
-			quote!(Ok(res))
-		};
-
-		let input_names = params.iter().map(|v| &v.0);
-		// If the type is using the block generic type, we will encode/decode it to make it
-		// compatible. To ensure that we forward it by ref/value, we use the value given by the
-		// the user. Otherwise if it is not using the block, we don't need to add anything.
-		let input_borrows =
-			params.iter().map(|v| if type_is_using_block(&v.1) { v.2 } else { None });
-
-		// Replace all `Block` with `NodeBlock`, add `'a` lifetime to references and collect
-		// all the function inputs.
-		let fn_inputs = fn_
-			.inputs
-			.iter()
-			.map(|v| fn_arg_replace_block_with_node_block(v.clone()))
-			.map(|v| match v {
-				FnArg::Typed(ref arg) => {
-					let mut arg = arg.clone();
-					if let Type::Reference(ref mut r) = *arg.ty {
-						r.lifetime = Some(parse_quote!( 'a ));
-					}
-					FnArg::Typed(arg)
-				},
-				r => r,
-			});
-
-		let (impl_generics, ty_generics, where_clause) = decl.generics.split_for_impl();
-		// We need to parse them again, to get an easy access to the actual parameters.
-		let impl_generics: Generics = parse_quote!( #impl_generics );
-		let impl_generics_params = impl_generics.params.iter().map(|p| {
-			match p {
-				GenericParam::Type(ref ty) => {
-					let mut ty = ty.clone();
-					ty.bounds.push(parse_quote!( 'a ));
-					GenericParam::Type(ty)
-				},
-				// We should not see anything different than type params here.
-				r => r.clone(),
-			}
-		});
-
-		// Generate the generator function
-		result.push(quote!(
-			#[cfg(any(feature = "std", test))]
-			pub fn #fn_name<
-				'a, ApiImpl: #trait_ #ty_generics, NodeBlock: #crate_::BlockT
-				#(, #impl_generics_params)*
-			>(
-				#( #fn_inputs ),*
-			) -> impl FnOnce() -> #output + 'a #where_clause {
-				move || {
-					#( #conversions )*
-					let res = ApiImpl::#trait_fn_name(#( #input_borrows #input_names ),*);
-					#output_conversion
-				}
-			}
-		));
-	}
-
-	Ok(quote!( #( #result )* ))
-}
-
 /// Versioned API traits are used to catch missing methods when implementing a specific version of a
 /// versioned API. They contain all non-versioned methods (aka stable methods) from the main trait
 /// and all versioned methods for the specific version. This means that there is one trait for each
@@ -560,7 +430,6 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 			.collect();
 
 		let versioned_api_traits = generate_versioned_api_traits(decl.clone(), methods_by_version);
-		let native_call_generators = generate_native_call_generators(&decl)?;
 
 		result.push(quote!(
 			#[doc(hidden)]
@@ -576,8 +445,6 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 				pub #api_version
 
 				pub #id
-
-				#native_call_generators
 
 				#call_api_at_calls
 			}
