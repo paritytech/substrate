@@ -41,7 +41,7 @@ pub mod pallet {
 	use frame_support::{
 		traits::{
 			fungibles::{Create, Inspect, InspectEnumerable, Mutate, Transfer},
-			Currency, ReservableCurrency,
+			Currency, ExistenceRequirement, ReservableCurrency,
 		},
 		PalletId,
 	};
@@ -177,6 +177,13 @@ pub mod pallet {
 	// Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		#[pallet::weight(0)]
+		pub fn topup(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let pallet_account = Self::account_id();
+			T::Currency::transfer(&sender, &pallet_account, amount, ExistenceRequirement::KeepAlive)
+		}
+
 		#[pallet::weight(0)]
 		pub fn create_pool(
 			origin: OriginFor<T>,

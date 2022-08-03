@@ -17,7 +17,7 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{assert_noop, assert_ok, traits::fungibles::InspectEnumerable};
+use frame_support::{assert_ok, traits::fungibles::InspectEnumerable};
 
 fn events() -> Vec<Event<Test>> {
 	let result = System::events()
