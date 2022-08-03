@@ -1573,9 +1573,8 @@ pub mod pallet {
 			use BalanceOrAsset::*;
 
 			match value {
-				Balance { amount } => {
-					return T::Currency::transfer(&source, &dest, amount, existence_requirement)
-				},
+				Balance { amount } =>
+					return T::Currency::transfer(&source, &dest, amount, existence_requirement),
 				Asset { id, amount } => {
 					let keep_alive = existence_requirement == ExistenceRequirement::KeepAlive;
 					return T::Assets::transfer(id, &source, &dest, amount, keep_alive).map(|_| ())

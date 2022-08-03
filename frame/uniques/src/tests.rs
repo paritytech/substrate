@@ -829,7 +829,12 @@ fn buy_item_should_work() {
 		);
 
 		// pass the higher price to validate it will still deduct correctly
-		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, (price_1 + 1).into()));
+		assert_ok!(Uniques::buy_item(
+			Origin::signed(user_2),
+			collection_id,
+			item_1,
+			(price_1 + 1).into()
+		));
 
 		// validate the new owner & balances
 		let item = Item::<Test>::get(collection_id, item_1).unwrap();
@@ -850,7 +855,12 @@ fn buy_item_should_work() {
 		);
 
 		// can buy when I'm a whitelisted buyer
-		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2.into()));
+		assert_ok!(Uniques::buy_item(
+			Origin::signed(user_3),
+			collection_id,
+			item_2,
+			price_2.into()
+		));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection: collection_id,
