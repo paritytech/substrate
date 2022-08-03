@@ -116,12 +116,9 @@ where
 			error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, justification);
 		}
 		// Send the justification to the BEEFY voter for processing.
-		match justification {
-			BeefyVersionedFinalityProof::<Block>::V1(signed_commitment) => self
-				.justification_sender
-				.notify(|| Ok::<_, ()>(BeefyVersionedFinalityProof::<Block>::V1(signed_commitment)))
-				.expect("forwards closure result; the closure always returns Ok; qed."),
-		};
+		self.justification_sender
+			.notify(|| Ok::<_, ()>(justification))
+			.expect("forwards closure result; the closure always returns Ok; qed.");
 	}
 }
 

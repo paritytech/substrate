@@ -441,16 +441,16 @@ where
 		Ok(())
 	}
 
-	/// Provide BEEFY finality for block based on `finality_roof`:
+	/// Provide BEEFY finality for block based on `finality_proof`:
 	/// 1. Prune irrelevant past sessions from the oracle,
 	/// 2. Set BEEFY best block,
-	/// 3. Send best block hash and `finality_roof` to RPC worker.
+	/// 3. Send best block hash and `finality_proof` to RPC worker.
 	///
-	/// Expects `signed commitment` to be valid.
-	fn finalize(&mut self, finality_roof: BeefyVersionedFinalityProof<B>) {
+	/// Expects `finality proof` to be valid.
+	fn finalize(&mut self, finality_proof: BeefyVersionedFinalityProof<B>) {
 		// Prune any now "finalized" sessions from queue.
 		self.voting_oracle.try_prune();
-		let signed_commitment = match finality_roof {
+		let signed_commitment = match finality_proof {
 			VersionedFinalityProof::V1(ref sc) => sc,
 		};
 		let block_num = signed_commitment.commitment.block_number;
@@ -468,7 +468,7 @@ where
 
 			self.links
 				.to_rpc_justif_sender
-				.notify(|| Ok::<_, ()>(finality_roof))
+				.notify(|| Ok::<_, ()>(finality_proof))
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
 			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
