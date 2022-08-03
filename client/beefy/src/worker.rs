@@ -441,7 +441,7 @@ where
 		Ok(())
 	}
 
-	/// Provide BEEFY finality for block based on `finality_roof`:
+	/// Provide BEEFY finality for block based on `finality_proof`:
 	/// 1. Prune irrelevant past sessions from the oracle,
 	/// 2. Set BEEFY best block,
 	/// 3. Send best block hash and `finality_roof` to RPC worker.
