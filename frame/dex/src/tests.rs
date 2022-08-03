@@ -17,7 +17,7 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{assert_ok, traits::fungibles::InspectEnumerable};
+use frame_support::{assert_ok, traits::{Currency, fungibles::InspectEnumerable}};
 
 fn events() -> Vec<Event<Test>> {
 	let result = System::events()
@@ -51,6 +51,11 @@ fn create_tokens(owner: u64, tokens: Vec<u32>) {
 	}
 }
 
+fn topup_pallet() {
+	let pallet_account = Dex::account_id();
+	Balances::make_free_balance_be(&pallet_account, 10000);
+}
+
 fn balance(owner: u64, token_id: u32) -> u64 {
 	<<Test as Config>::Assets>::balance(token_id, owner)
 }
@@ -63,6 +68,7 @@ fn create_pool_should_work() {
 		let token_2 = 2;
 		let lp_token = 3;
 		let pool_id = (token_1, token_2);
+		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
 
@@ -82,6 +88,7 @@ fn add_liquidity_should_work() {
 		let token_2 = 2;
 		let lp_token = 3;
 		let pool_id = (token_1, token_2);
+		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
 		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
@@ -126,6 +133,7 @@ fn remove_liquidity_should_work() {
 		let token_2 = 2;
 		let lp_token = 3;
 		let pool_id = (token_1, token_2);
+		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
 		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
@@ -165,5 +173,36 @@ fn remove_liquidity_should_work() {
 		assert_eq!(balance(user, token_1), 999);
 		assert_eq!(balance(user, token_2), 999);
 		assert_eq!(balance(user, lp_token), 0);
+	});
+}
+
+#[test]
+fn quote_price_should_work() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = 1;
+		let token_2 = 2;
+		let lp_token = 3;
+		topup_pallet();
+
+		create_tokens(user, vec![token_1, token_2]);
+		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
+
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
+
+		assert_ok!(Dex::add_liquidity(
+			Origin::signed(user),
+			token_1,
+			token_2,
+			20,
+			1000,
+			1,
+			1,
+			user,
+			2
+		));
+
+		dbg!(Dex::quote_price(token_1, token_2));
 	});
 }
