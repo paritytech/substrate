@@ -264,10 +264,12 @@ async fn build_network_future<
 					sc_rpc::system::Request::SyncState(sender) => {
 						use sc_rpc::system::SyncState;
 
+						let best_number = client.info().best_number;
+
 						let _ = sender.send(SyncState {
 							starting_block,
-							current_block: client.info().best_number,
-							highest_block: network.best_seen_block(),
+							current_block: best_number,
+							highest_block: network.best_seen_block().unwrap_or(best_number),
 						});
 					}
 				}
