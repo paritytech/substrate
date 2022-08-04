@@ -17,6 +17,7 @@
 
 //! Offences pallet benchmarking.
 
+#![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod mock;

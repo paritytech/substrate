@@ -520,7 +520,7 @@ pub trait SortedListProvider<AccountId> {
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
-		Self::Score::max_value()
+		unimplemented!()
 	}
 }
 

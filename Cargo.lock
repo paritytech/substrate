@@ -5304,6 +5304,10 @@ dependencies = [
  "frame-election-provider-support",
  "honggfuzz",
  "pallet-bags-list",
+ "pallet-collective",
+ "pallet-conviction-voting",
+ "pallet-ranked-collective",
+ "pallet-referenda",
  "rand 0.8.4",
 ]
 

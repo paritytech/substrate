@@ -31,8 +31,6 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 
 [features]
-runtime-benchmarks = []
-try-runtime = []
 default = ["std"]
 std = [
 	"codec/std",
@@ -46,3 +44,7 @@ std = [
 	"sp-core/std",
 	"log/std",
 ]
+runtime-benchmarks = [
+	"sp-staking/runtime-benchmarks",
+]
+try-runtime = []

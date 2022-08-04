@@ -1,3 +1,22 @@
+// This file is part of Substrate.
+
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+#[allow(unused)] // @ggwpez FIXME
 use crate::{
 	benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder},
 	chain_spec,
@@ -128,12 +147,23 @@ pub fn run() -> sc_cli::Result<()> {
 						cmd.run(client)
 					},
 					BenchmarkCmd::Storage(cmd) => {
-						let PartialComponents { client, backend, .. } =
-							service::new_partial(&config)?;
-						let db = backend.expose_db();
-						let storage = backend.expose_storage();
+						#[cfg(not(feature = "runtime-benchmarks"))]
+						return Err("Storage benchmarking can be enabled with `--features runtime-benchmarks`.".into());
 
-						cmd.run(config, client, db, storage)
+						// NOTE: This is needed since `expose_db` is only enabled in
+						// `runtime-benchmarks`. The cleaner fix would be to introduce an
+						// `offchain-benchmarks` flag and use that instead.
+						// However it has been the case forever because of transitive feature
+						// bleeding.
+						#[cfg(feature = "runtime-benchmarks")]
+						{
+							let PartialComponents { client, backend, .. } =
+								service::new_partial(&config)?;
+							let db = backend.expose_db();
+							let storage = backend.expose_storage();
+
+							cmd.run(config, client, db, storage)
+						}
 					},
 					BenchmarkCmd::Overhead(cmd) => {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;
