@@ -169,11 +169,6 @@ pub fn extract_parameter_names_types_and_borrows(
 	Ok(result)
 }
 
-/// Generates the name for the native call generator function.
-pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_native_call_generator", fn_name), Span::call_site())
-}
-
 /// Generates the name for the call api at function.
 pub fn generate_call_api_at_fn_name(fn_name: &Ident) -> Ident {
 	Ident::new(&format!("{}_call_api_at", fn_name), Span::call_site())

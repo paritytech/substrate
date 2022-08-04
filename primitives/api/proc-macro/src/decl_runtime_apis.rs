@@ -19,9 +19,9 @@ use crate::utils::{
 	attach_default_method_implementation, extract_parameter_names_types_and_borrows,
 	fold_fn_decl_for_client_side, generate_call_api_at_fn_name, generate_crate_access,
 	generate_hidden_includes, generate_method_runtime_api_impl_name,
-	generate_native_call_generator_fn_name, generate_runtime_mod_name_for_trait,
-	parse_runtime_api_version, prefix_function_with_trait, replace_wild_card_parameter_names,
-	return_type_extract_type, versioned_trait_name, AllowSelfRefInParameters,
+	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
+	replace_wild_card_parameter_names, return_type_extract_type, versioned_trait_name,
+	AllowSelfRefInParameters,
 };
 
 use crate::attribute_names::{
@@ -39,8 +39,8 @@ use syn::{
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
 	visit::{self, Visit},
-	Attribute, FnArg, GenericParam, Generics, Ident, ItemTrait, Lit, Meta, NestedMeta, ReturnType,
-	TraitBound, TraitItem, TraitItemMethod, Type,
+	Attribute, FnArg, GenericParam, Generics, Ident, ItemTrait, Lit, Meta, NestedMeta, TraitBound,
+	TraitItem, TraitItemMethod,
 };
 
 use std::collections::{BTreeMap, HashMap};
@@ -100,20 +100,6 @@ impl<'ast> Visit<'ast> for IsUsingBlock {
 	}
 }
 
-/// Visits the ast and checks if `Block` ident is used somewhere.
-fn type_is_using_block(ty: &Type) -> bool {
-	let mut visitor = IsUsingBlock { result: false };
-	visitor.visit_type(ty);
-	visitor.result
-}
-
-/// Visits the ast and checks if `Block` ident is used somewhere.
-fn return_type_is_using_block(ty: &ReturnType) -> bool {
-	let mut visitor = IsUsingBlock { result: false };
-	visitor.visit_return_type(ty);
-	visitor.result
-}
-
 /// Replace all occurrences of `Block` with `NodeBlock`
 struct ReplaceBlockWithNodeBlock {}
 
@@ -125,18 +111,6 @@ impl Fold for ReplaceBlockWithNodeBlock {
 			input
 		}
 	}
-}
-
-/// Replace all occurrences of `Block` with `NodeBlock`
-fn fn_arg_replace_block_with_node_block(fn_arg: FnArg) -> FnArg {
-	let mut replace = ReplaceBlockWithNodeBlock {};
-	fold::fold_fn_arg(&mut replace, fn_arg)
-}
-
-/// Replace all occurrences of `Block` with `NodeBlock`
-fn return_type_replace_block_with_node_block(return_type: ReturnType) -> ReturnType {
-	let mut replace = ReplaceBlockWithNodeBlock {};
-	fold::fold_return_type(&mut replace, return_type)
 }
 
 /// Versioned API traits are used to catch missing methods when implementing a specific version of a
