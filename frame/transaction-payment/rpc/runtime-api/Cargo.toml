@@ -18,6 +18,7 @@ pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, 
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../../../primitives/core" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../../primitives/std" }
 
 [features]
 default = ["std"]
@@ -27,4 +28,5 @@ std = [
 	"sp-api/std",
 	"sp-core/std",
 	"sp-runtime/std",
+	"sp-std/std",
 ]

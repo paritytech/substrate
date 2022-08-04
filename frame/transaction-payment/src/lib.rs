@@ -50,7 +50,6 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-use sp_core::Bytes;
 use sp_runtime::{
 	traits::{
 		Convert, DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SaturatedConversion,
@@ -446,42 +445,42 @@ where
 		}
 	}
 
-	/// Query runtime dispatch info of a given encoded `Call`.
+	/// Query information of a dispatch class, weight, and fee of a given encoded `Call`.
 	pub fn query_call_info(
-		encoded_call: Bytes,
-		len: u32,
+		encoded_call: Vec<u8>,
 	) -> Result<RuntimeDispatchInfo<BalanceOf<T>>, RuntimeString>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo> + Decode,
+		T::Call: Dispatchable<Info = DispatchInfo> + Decode + GetDispatchInfo,
 	{
 		let call: T::Call = Decode::decode(&mut &*encoded_call)
 			.map_err(|_| -> RuntimeString { "Failed to decode Call.".into() })?;
 
 		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
 		let DispatchInfo { weight, class, .. } = dispatch_info;
+		let encoded_len = encoded_call.len() as u32;
 
 		Ok(RuntimeDispatchInfo {
 			weight,
 			class,
-			partial_fee: Self::compute_fee(len, &dispatch_info, 0u32.into()),
+			partial_fee: Self::compute_fee(encoded_len, &dispatch_info, 0u32.into()),
 		})
 	}
 
-	/// Query weight_to_fee of a given encoded `Call`.
+	/// Query fee details of a given encoded `Call`.
 	pub fn query_call_fee_details(
-		encoded_call: Bytes,
-		len: u32,
+		encoded_call: Vec<u8>,
 	) -> Result<FeeDetails<BalanceOf<T>>, RuntimeString>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo> + Decode,
+		T::Call: Dispatchable<Info = DispatchInfo> + Decode + GetDispatchInfo,
 	{
 		let call: T::Call = Decode::decode(&mut &*encoded_call)
 			.map_err(|_| -> RuntimeString { "Failed to decode Call.".into() })?;
 
 		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
 		let tip = 0u32.into();
+		let encoded_len = encoded_call.len() as u32;
 
-		Ok(Self::compute_fee_details(len, &dispatch_info, tip))
+		Ok(Self::compute_fee_details(encoded_len, &dispatch_info, tip))
 	}
 
 	/// Compute the final fee value for a particular transaction.
@@ -1259,12 +1258,12 @@ mod tests {
 			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 
 			assert_eq!(
-				TransactionPayment::query_call_info(invalid_encoded_call.clone().into(), len),
+				TransactionPayment::query_call_info(invalid_encoded_call.clone().into()),
 				Err(RuntimeString::Borrowed("Failed to decode Call.")),
 			);
 
 			assert_eq!(
-				TransactionPayment::query_call_info(encoded_call.clone().into(), len),
+				TransactionPayment::query_call_info(encoded_call.clone().into()),
 				Ok(RuntimeDispatchInfo {
 					weight: info.weight,
 					class: info.class,
@@ -1275,12 +1274,12 @@ mod tests {
 			);
 
 			assert_eq!(
-				TransactionPayment::query_call_fee_details(invalid_encoded_call.into(), len),
+				TransactionPayment::query_call_fee_details(invalid_encoded_call.into()),
 				Err(RuntimeString::Borrowed("Failed to decode Call.")),
 			);
 
 			assert_eq!(
-				TransactionPayment::query_call_fee_details(encoded_call.into(), len),
+				TransactionPayment::query_call_fee_details(encoded_call.into()),
 				Ok(FeeDetails {
 					inclusion_fee: Some(InclusionFee {
 						base_fee: 5 * 2,     /* base * weight_fee */

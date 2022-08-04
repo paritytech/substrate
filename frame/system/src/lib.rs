@@ -91,8 +91,8 @@ use frame_support::{
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
-		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo, GetDispatchInfo, PerDispatchClass,
-		RuntimeDbWeight, Weight,
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		PerDispatchClass, RuntimeDbWeight, Weight,
 	},
 	Parameter,
 };
@@ -222,7 +222,7 @@ pub mod pallet {
 			+ OriginTrait<Call = Self::Call>;
 
 		/// The aggregated `Call` type.
-		type Call: Dispatchable + Debug + GetDispatchInfo;
+		type Call: Dispatchable + Debug;
 
 		/// Account index (aka nonce) type. This stores the number of previous transactions
 		/// associated with a sender account.

@@ -20,18 +20,35 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Codec;
-use sp_core::Bytes;
 use sp_runtime::{traits::MaybeDisplay, RuntimeString};
+use sp_std::prelude::*;
 
 pub use pallet_transaction_payment::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 sp_api::decl_runtime_apis! {
-	pub trait TransactionPaymentApi<Balance> where
+	pub trait TransactionPaymentApi<Balance>
+	where
 		Balance: Codec + MaybeDisplay,
 	{
 		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
 		fn query_fee_details(uxt: Block::Extrinsic, len: u32) -> FeeDetails<Balance>;
-		fn query_call_info(encoded_call: Bytes, len: u32) -> Result<RuntimeDispatchInfo<Balance>, RuntimeString>;
-		fn query_call_fee_details(encoded_call: Bytes, len: u32) -> Result<FeeDetails<Balance>, RuntimeString>;
+
+		/// Query information of a dispatch class, weight, and fee of a given encoded `Call`.
+		///
+		/// # Panics
+		///
+		/// Panics if the `encoded_call` can not be decoded as runtime `Call`.
+		fn query_call_info(
+			encoded_call: Vec<u8>,
+		) -> Result<RuntimeDispatchInfo<Balance>, RuntimeString>;
+
+		/// Query fee details of a given encoded `Call`.
+		///
+		/// # Panics
+		///
+		/// Panics if the `encoded_call` can not be decoded as runtime `Call`.
+		fn query_call_fee_details(
+			encoded_call: Vec<u8>,
+		) -> Result<FeeDetails<Balance>, RuntimeString>;
 	}
 }
