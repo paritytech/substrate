@@ -42,14 +42,14 @@ use sp_runtime::{
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, ValidatorSet,
-	VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
+	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
+	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
 
 use crate::{
 	error::Error,
 	gossip::{topic, GossipValidator},
-	justification::BeefySignedCommitment,
+	justification::BeefyVersionedFinalityProof,
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
@@ -212,7 +212,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	/// Buffer holding votes for future processing.
 	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
 	/// Buffer holding justifications for future processing.
-	pending_justifications: BTreeMap<NumberFor<B>, BeefySignedCommitment<B>>,
+	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	voting_oracle: VoterOracle<B>,
 }
@@ -399,9 +399,12 @@ where
 	/// Expects `justification` to be valid.
 	fn triage_incoming_justif(
 		&mut self,
-		justification: BeefySignedCommitment<B>,
+		justification: BeefyVersionedFinalityProof<B>,
 	) -> Result<(), Error> {
-		let block_num = justification.commitment.block_number;
+		let signed_commitment = match justification {
+			VersionedFinalityProof::V1(ref sc) => sc,
+		};
+		let block_num = signed_commitment.commitment.block_number;
 		let best_grandpa = *self.best_grandpa_block_header.number();
 		match self.voting_oracle.triage_round(block_num, best_grandpa)? {
 			RoundAction::Process => self.finalize(justification)?,
@@ -435,27 +438,30 @@ where
 					validator_set_id: rounds.validator_set_id(),
 				};
 
-				let signed_commitment = BeefySignedCommitment::<B> { commitment, signatures };
+				let finality_proof =
+					VersionedFinalityProof::V1(SignedCommitment { commitment, signatures });
 
 				metric_set!(self, beefy_round_concluded, block_num);
 
-				info!(target: "beefy", "🥩 Round #{} concluded, committed: {:?}.", round.1, signed_commitment);
+				info!(target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.", round.1, finality_proof);
 
-				// We created the `signed_commitment` and know to be valid.
-				self.finalize(signed_commitment)?;
+				// We created the `finality_proof` and know to be valid.
+				self.finalize(finality_proof)?;
 			}
 		}
 		Ok(())
 	}
 
-	/// Provide BEEFY finality for block based on `signed_commitment`:
+	/// Provide BEEFY finality for block based on `finality_proof`:
 	/// 1. Prune irrelevant past sessions from the oracle,
 	/// 2. Set BEEFY best block,
-	/// 3. Send best block hash and `signed_commitment` to RPC worker.
+	/// 3. Send best block hash and `finality_proof` to RPC worker.
 	///
-	/// Expects `signed commitment` to be valid.
-	fn finalize(&mut self, signed_commitment: BeefySignedCommitment<B>) -> Result<(), Error> {
-		let block_num = signed_commitment.commitment.block_number;
+	/// Expects `finality proof` to be valid.
+	fn finalize(&mut self, finality_proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
+		let block_num = match finality_proof {
+			VersionedFinalityProof::V1(ref sc) => sc.commitment.block_number,
+		};
 
 		// Conclude voting round for this block.
 		self.voting_oracle.rounds_mut().ok_or(Error::UninitSession)?.conclude(block_num);
@@ -469,9 +475,9 @@ where
 
 			if let Err(e) = self.backend.append_justification(
 				BlockId::Number(block_num),
-				(BEEFY_ENGINE_ID, VersionedFinalityProof::V1(signed_commitment.clone()).encode()),
+				(BEEFY_ENGINE_ID, finality_proof.clone().encode()),
 			) {
-				debug!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, signed_commitment);
+				debug!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
 			}
 
 			self.backend.blockchain().hash(block_num).ok().flatten().map(|hash| {
@@ -483,7 +489,7 @@ where
 
 			self.links
 				.to_rpc_justif_sender
-				.notify(|| Ok::<_, ()>(signed_commitment))
+				.notify(|| Ok::<_, ()>(finality_proof))
 				.expect("forwards closure result; the closure always returns Ok; qed.");
 		} else {
 			debug!(target: "beefy", "🥩 Can't set best beefy to older: {}", block_num);
@@ -857,7 +863,7 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{
 		keystore::tests::Keyring,
-		notification::{BeefyBestBlockStream, BeefySignedCommitmentStream},
+		notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 		tests::{
 			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
 			BeefyPeer, BeefyTestNet, BEEFY_PROTOCOL_NAME,
@@ -885,10 +891,11 @@ pub(crate) mod tests {
 		let keystore = create_beefy_keystore(*key);
 
 		let (to_rpc_justif_sender, from_voter_justif_stream) =
-			BeefySignedCommitmentStream::<Block>::channel();
+			BeefyVersionedFinalityProofStream::<Block>::channel();
 		let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
 			BeefyBestBlockStream::<Block>::channel();
-		let (_, from_block_import_justif_stream) = BeefySignedCommitmentStream::<Block>::channel();
+		let (_, from_block_import_justif_stream) =
+			BeefyVersionedFinalityProofStream::<Block>::channel();
 
 		let beefy_rpc_links =
 			BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream };
@@ -1195,32 +1202,32 @@ pub(crate) mod tests {
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
-		let (mut best_block_streams, mut signed_commitments) = get_beefy_streams(&mut net, keys);
+		let (mut best_block_streams, mut finality_proofs) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		let mut signed_commitments = signed_commitments.drain(..).next().unwrap();
+		let mut finality_proof = finality_proofs.drain(..).next().unwrap();
 
-		let create_signed_commitment = |block_num: NumberFor<Block>| {
+		let create_finality_proof = |block_num: NumberFor<Block>| {
 			let commitment = Commitment {
 				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
 				block_number: block_num,
 				validator_set_id: validator_set.id(),
 			};
-			BeefySignedCommitment::<Block> { commitment, signatures: vec![None] }
+			VersionedFinalityProof::V1(SignedCommitment { commitment, signatures: vec![None] })
 		};
 
-		// no 'best beefy block' or signed commitments
+		// no 'best beefy block' or finality proofs
 		assert_eq!(worker.best_beefy_block, None);
 		block_on(poll_fn(move |cx| {
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
-			assert_eq!(signed_commitments.poll_next_unpin(cx), Poll::Pending);
+			assert_eq!(finality_proof.poll_next_unpin(cx), Poll::Pending);
 			Poll::Ready(())
 		}));
 
 		// unknown hash for block #1
-		let (mut best_block_streams, mut signed_commitments) = get_beefy_streams(&mut net, keys);
+		let (mut best_block_streams, mut finality_proofs) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
-		let mut signed_commitments = signed_commitments.drain(..).next().unwrap();
-		let justif = create_signed_commitment(1);
+		let mut finality_proof = finality_proofs.drain(..).next().unwrap();
+		let justif = create_finality_proof(1);
 		// create new session at block #1
 		worker.voting_oracle.add_session(Rounds::new(1, validator_set.clone()));
 		// try to finalize block #1
@@ -1231,7 +1238,7 @@ pub(crate) mod tests {
 			// unknown hash -> nothing streamed
 			assert_eq!(best_block_stream.poll_next_unpin(cx), Poll::Pending);
 			// commitment streamed
-			match signed_commitments.poll_next_unpin(cx) {
+			match finality_proof.poll_next_unpin(cx) {
 				// expect justification
 				Poll::Ready(Some(received)) => assert_eq!(received, justif),
 				v => panic!("unexpected value: {:?}", v),
@@ -1247,7 +1254,7 @@ pub(crate) mod tests {
 		backend.finalize_block(BlockId::number(1), None).unwrap();
 		backend.finalize_block(BlockId::number(2), None).unwrap();
 
-		let justif = create_signed_commitment(2);
+		let justif = create_finality_proof(2);
 		// create new session at block #2
 		worker.voting_oracle.add_session(Rounds::new(2, validator_set));
 		worker.finalize(justif).unwrap();
