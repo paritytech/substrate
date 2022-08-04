@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Tests for Sassafras consensus.
+//! Tests for Sassafras pallet.
 
 // TODO-SASS-P2 remove
 #![allow(unused_imports)]
@@ -25,14 +25,50 @@ use mock::*;
 
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
-	traits::{Currency, EstimateNextSessionRotation, OnFinalize, OnInitialize},
+	dispatch::EncodeLike,
+	traits::{ConstU32, Currency, EstimateNextSessionRotation, OnFinalize, OnInitialize},
 	weights::{GetDispatchInfo, Pays},
+	BoundedBTreeSet,
 };
 use hex_literal::hex;
 use pallet_session::ShouldEndSession;
 use sp_consensus_sassafras::{SassafrasEpochConfiguration, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::crypto::Pair;
+use sp_runtime::traits::Get;
+use std::collections::BTreeSet;
+
+#[test]
+fn slot_ticket_fetch() {
+	let max_tickets: u32 = <Test as crate::Config>::MaxTickets::get();
+
+	let tickets: Vec<Ticket> = (0..max_tickets as u8)
+		.into_iter()
+		.map(|i| [i; 32].try_into().unwrap())
+		.collect();
+	let tickets =
+		BoundedVec::<_, _>::try_from(tickets).expect("vector has been eventually truncated; qed");
+
+	new_test_ext(4).execute_with(|| {
+		Tickets::<Test>::put(tickets.clone());
+
+		assert_eq!(Sassafras::slot_ticket(0.into()), Some(tickets[1]));
+		assert_eq!(Sassafras::slot_ticket(1.into()), Some(tickets[3]));
+		assert_eq!(Sassafras::slot_ticket(2.into()), Some(tickets[5]));
+		assert_eq!(Sassafras::slot_ticket(3.into()), None);
+		assert_eq!(Sassafras::slot_ticket(4.into()), None);
+		assert_eq!(Sassafras::slot_ticket(5.into()), None);
+		assert_eq!(Sassafras::slot_ticket(6.into()), None);
+		assert_eq!(Sassafras::slot_ticket(7.into()), Some(tickets[4]));
+		assert_eq!(Sassafras::slot_ticket(8.into()), Some(tickets[2]));
+		assert_eq!(Sassafras::slot_ticket(9.into()), Some(tickets[0]));
+
+		// TODO-SASS-P2: test next epoch tickets fetch
+		assert_eq!(Sassafras::slot_ticket(10.into()), None);
+
+		assert_eq!(Sassafras::slot_ticket(42.into()), None);
+	});
+}
 
 #[test]
 fn genesis_values() {
@@ -47,19 +83,20 @@ fn on_first_after_genesis_block() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
 	ext.execute_with(|| {
-		let genesis_slot = Slot::from(100);
-		let digest = make_wrapped_pre_digest(0, genesis_slot, &pairs[0]);
+		let start_slot = Slot::from(100);
+		let start_block = 1;
 
-		System::initialize(&1, &Default::default(), &digest);
-		Sassafras::on_initialize(1);
+		let digest = make_wrapped_pre_digest(0, start_slot, &pairs[0]);
+		System::initialize(&start_block, &Default::default(), &digest);
+		Sassafras::on_initialize(start_block);
 
 		// Post-initialization status
 
 		assert!(Initialized::<Test>::get().is_some());
-		assert_eq!(Sassafras::genesis_slot(), genesis_slot);
-		assert_eq!(Sassafras::current_slot(), genesis_slot);
+		assert_eq!(Sassafras::genesis_slot(), start_slot);
+		assert_eq!(Sassafras::current_slot(), start_slot);
 		assert_eq!(Sassafras::epoch_index(), 0);
-		assert_eq!(Sassafras::current_epoch_start(), genesis_slot);
+		assert_eq!(Sassafras::current_epoch_start(), start_slot);
 		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
@@ -71,10 +108,10 @@ fn on_first_after_genesis_block() {
 		// Post-finalization status
 
 		assert!(Initialized::<Test>::get().is_none());
-		assert_eq!(Sassafras::genesis_slot(), genesis_slot);
-		assert_eq!(Sassafras::current_slot(), genesis_slot);
+		assert_eq!(Sassafras::genesis_slot(), start_slot);
+		assert_eq!(Sassafras::current_slot(), start_slot);
 		assert_eq!(Sassafras::epoch_index(), 0);
-		assert_eq!(Sassafras::current_epoch_start(), genesis_slot);
+		assert_eq!(Sassafras::current_epoch_start(), start_slot);
 		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
@@ -105,11 +142,12 @@ fn on_normal_block() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
 	ext.execute_with(|| {
-		let genesis_slot = Slot::from(100);
+		let start_slot = Slot::from(100);
+		let start_block = 1;
 
-		let digest = make_wrapped_pre_digest(0, genesis_slot, &pairs[0]);
-		System::initialize(&1, &Default::default(), &digest);
-		Sassafras::on_initialize(1);
+		let digest = make_wrapped_pre_digest(0, start_slot, &pairs[0]);
+		System::initialize(&start_block, &Default::default(), &digest);
+		Sassafras::on_initialize(start_block);
 
 		// We don't want to trigger an epoch change in this test.
 		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
@@ -119,10 +157,10 @@ fn on_normal_block() {
 		// Post-initialization status
 
 		assert!(Initialized::<Test>::get().is_some());
-		assert_eq!(Sassafras::genesis_slot(), genesis_slot);
-		assert_eq!(Sassafras::current_slot(), genesis_slot + 1);
+		assert_eq!(Sassafras::genesis_slot(), start_slot);
+		assert_eq!(Sassafras::current_slot(), start_slot + 1);
 		assert_eq!(Sassafras::epoch_index(), 0);
-		assert_eq!(Sassafras::current_epoch_start(), genesis_slot);
+		assert_eq!(Sassafras::current_epoch_start(), start_slot);
 		assert_eq!(Sassafras::current_slot_epoch_index(), 1);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
@@ -131,16 +169,16 @@ fn on_normal_block() {
 			hex!("98dc63bd10704f60016011be269a02ec780e9b870222d12457ea7e8a05065028"),
 		);
 
-		Sassafras::on_finalize(1);
+		Sassafras::on_finalize(2);
 		let header = System::finalize();
 
 		// Post-finalization status
 
 		assert!(Initialized::<Test>::get().is_none());
-		assert_eq!(Sassafras::genesis_slot(), genesis_slot);
-		assert_eq!(Sassafras::current_slot(), genesis_slot + 1);
+		assert_eq!(Sassafras::genesis_slot(), start_slot);
+		assert_eq!(Sassafras::current_slot(), start_slot + 1);
 		assert_eq!(Sassafras::epoch_index(), 0);
-		assert_eq!(Sassafras::current_epoch_start(), genesis_slot);
+		assert_eq!(Sassafras::current_epoch_start(), start_slot);
 		assert_eq!(Sassafras::current_slot_epoch_index(), 1);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
@@ -153,31 +191,32 @@ fn on_normal_block() {
 
 		assert_eq!(header.digest.logs.len(), 1);
 		assert_eq!(header.digest.logs[0], digest.logs[0]);
-	})
+	});
 }
 
 #[test]
-fn on_epoch_change_block() {
+fn epoch_change_block() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
 	ext.execute_with(|| {
-		let genesis_slot = Slot::from(100);
+		let start_slot = Slot::from(100);
+		let start_block = 1;
 
-		let digest = make_wrapped_pre_digest(0, genesis_slot, &pairs[0]);
-		System::initialize(&1, &Default::default(), &digest);
-		Sassafras::on_initialize(1);
+		let digest = make_wrapped_pre_digest(0, start_slot, &pairs[0]);
+		System::initialize(&start_block, &Default::default(), &digest);
+		Sassafras::on_initialize(start_block);
 
 		// We want to trigger an epoch change in this test.
 		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
-		let digest = progress_to_block(1 + epoch_duration, &pairs[0]).unwrap();
+		let digest = progress_to_block(start_block + epoch_duration, &pairs[0]).unwrap();
 
 		// Post-initialization status
 
 		assert!(Initialized::<Test>::get().is_some());
-		assert_eq!(Sassafras::genesis_slot(), genesis_slot);
-		assert_eq!(Sassafras::current_slot(), genesis_slot + epoch_duration);
+		assert_eq!(Sassafras::genesis_slot(), start_slot);
+		assert_eq!(Sassafras::current_slot(), start_slot + epoch_duration);
 		assert_eq!(Sassafras::epoch_index(), 1);
-		assert_eq!(Sassafras::current_epoch_start(), genesis_slot + epoch_duration);
+		assert_eq!(Sassafras::current_epoch_start(), start_slot + epoch_duration);
 		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32],);
 		assert_eq!(
@@ -189,16 +228,16 @@ fn on_epoch_change_block() {
 			hex!("4cfa0840c842f6095155b35bad7f0bf8113c11a12a8ab3e3d116d91b0e8f31f9"),
 		);
 
-		Sassafras::on_finalize(1);
+		Sassafras::on_finalize(start_block + epoch_duration);
 		let header = System::finalize();
 
 		// Post-finalization status
 
 		assert!(Initialized::<Test>::get().is_none());
-		assert_eq!(Sassafras::genesis_slot(), genesis_slot);
-		assert_eq!(Sassafras::current_slot(), genesis_slot + epoch_duration);
+		assert_eq!(Sassafras::genesis_slot(), start_slot);
+		assert_eq!(Sassafras::current_slot(), start_slot + epoch_duration);
 		assert_eq!(Sassafras::epoch_index(), 1);
-		assert_eq!(Sassafras::current_epoch_start(), genesis_slot + epoch_duration);
+		assert_eq!(Sassafras::current_epoch_start(), start_slot + epoch_duration);
 		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(
@@ -227,22 +266,16 @@ fn on_epoch_change_block() {
 }
 
 #[test]
-fn enact_epoch_change() {
-	// TODO-SASS-P2
-	// Check NextRandomness and RandomnessAccumulator enactment
-	// DO this here, in a specific test for readability
-}
-
-#[test]
 fn submit_enact_claim_tickets() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
 	ext.execute_with(|| {
-		let genesis_slot = Slot::from(100);
+		let start_slot = Slot::from(100);
+		let start_block = 1;
 
-		let digest = make_wrapped_pre_digest(0, genesis_slot, &pairs[0]);
-		System::initialize(&1, &Default::default(), &digest);
-		Sassafras::on_initialize(1);
+		let digest = make_wrapped_pre_digest(0, start_slot, &pairs[0]);
+		System::initialize(&start_block, &Default::default(), &digest);
+		Sassafras::on_initialize(start_block);
 
 		// We don't want to trigger an epoch change in this test.
 		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
@@ -254,7 +287,7 @@ fn submit_enact_claim_tickets() {
 		assert!(NextTickets::<Test>::get().is_empty());
 
 		// Submit authoring tickets.
-		let mut tickets: Vec<Ticket> = make_tickets(genesis_slot + 1, 30, &pairs[0])
+		let mut tickets: Vec<Ticket> = make_tickets(start_slot + 1, 30, &pairs[0])
 			.into_iter()
 			.map(|(output, _)| output)
 			.collect();
@@ -280,10 +313,10 @@ fn submit_enact_claim_tickets() {
 		assert_eq!(expected_tickets, next_tickets);
 
 		// Check if we can claim next epoch tickets in outside-in fashion.
+		//
 		// This is to allow native code to eventually fetch the first ticket for a new epoch,
 		// before the epoch data is effectivelly enacted by the runtime
-		// (authors tries to claim a ticket before block construction).
-		// TODO-SASS-P2 BETTER EXPLANATION
+		// (block authors tries to claim a ticket before block construction).
 		let slot = Sassafras::current_slot();
 		assert_eq!(Sassafras::slot_ticket(slot + 1).unwrap(), expected_tickets[1]);
 		assert_eq!(Sassafras::slot_ticket(slot + 2).unwrap(), expected_tickets[3]);
@@ -296,6 +329,7 @@ fn submit_enact_claim_tickets() {
 		assert!(Sassafras::slot_ticket(slot + 11).is_none());
 
 		// Enact epoch tickets by progressing one more block
+
 		let _digest = progress_to_block(epoch_duration + 1, &pairs[0]).unwrap();
 		let curr_tickets = Tickets::<Test>::get().into_iter().collect::<Vec<Ticket>>();
 		assert_eq!(expected_tickets, curr_tickets);
@@ -311,5 +345,48 @@ fn submit_enact_claim_tickets() {
 		assert_eq!(Sassafras::slot_ticket(slot + 8).unwrap(), expected_tickets[2]);
 		assert_eq!(Sassafras::slot_ticket(slot + 9).unwrap(), expected_tickets[0]);
 		assert!(Sassafras::slot_ticket(slot + 10).is_none());
-	})
+	});
+}
+
+#[test]
+fn block_skips_epochs() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(4);
+
+	ext.execute_with(|| {
+		let start_slot = Slot::from(100);
+		let start_block = 1;
+
+		let digest = make_wrapped_pre_digest(0, start_slot, &pairs[0]);
+		System::initialize(&start_block, &Default::default(), &digest);
+		Sassafras::on_initialize(start_block);
+
+		let tickets: Vec<Ticket> = make_tickets(start_slot + 1, 30, &pairs[0])
+			.into_iter()
+			.map(|(output, _)| output)
+			.collect();
+		Sassafras::submit_tickets(Origin::none(), tickets.clone()).unwrap();
+
+		assert!(Tickets::<Test>::get().is_empty());
+		assert!(!NextTickets::<Test>::get().is_empty());
+		let next_random = NextRandomness::<Test>::get();
+
+		// We want to trigger an skip epoch in this test.
+		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
+		let offset = 3 * epoch_duration;
+		let _digest = go_to_block(start_block + offset, start_slot + offset, &pairs[0]);
+
+		// Post-initialization status
+
+		assert!(Initialized::<Test>::get().is_some());
+		assert_eq!(Sassafras::genesis_slot(), start_slot);
+		assert_eq!(Sassafras::current_slot(), start_slot + offset);
+		assert_eq!(Sassafras::epoch_index(), 3);
+		assert_eq!(Sassafras::current_epoch_start(), start_slot + offset);
+		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
+		// Tickets were discarded
+		assert!(Tickets::<Test>::get().is_empty());
+		assert!(NextTickets::<Test>::get().is_empty());
+		// We've used the last known next epoch randomness as a fallback
+		assert_eq!(next_random, Sassafras::randomness());
+	});
 }

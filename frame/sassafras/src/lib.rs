@@ -67,13 +67,12 @@ pub use sp_consensus_sassafras::{
 	PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
 };
 
-// TODO-SASS-P2: tests and benches
-#[cfg(test)]
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+#[cfg(all(feature = "std", test))]
 mod mock;
-#[cfg(test)]
+#[cfg(all(feature = "std", test))]
 mod tests;
-//#[cfg(feature = "runtime-benchmarks")]
-//mod benchmarking;
 
 pub use pallet::*;
 
@@ -286,11 +285,8 @@ pub mod pallet {
 
 			log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ received {} tickets", tickets.len());
 
-			// We have to traverse the tickets list one by one to verify the SNARK proofs.
 			let mut next_tickets = NextTickets::<T>::get();
 
-			// 1. validate proof
-			// 2. append to sorted list
 			// TODO-SASS-P2: use a scattered structure for tickets
 			next_tickets = next_tickets.try_mutate(|tree| {
                 for ticket in tickets.iter() {
@@ -338,6 +334,10 @@ pub mod pallet {
 					// submit our tickets if we don't have enough authoring slots.
 					// If we have 0 slots => we have zero chances.
 					// Maybe this is one valid reason to introduce proxies.
+					// In short the question is >>> WHO HAS THE RIGHT TO SUBMIT A TICKET? <<<
+					//  A) The current epoch validators
+					//  B) The next epoch validators
+					//  C) Doesn't matter as far as the tickets are good (i.e. RVRF verify is ok)
 					log::warn!(
 						target: "sassafras::runtime",
 						"🌳 Rejecting unsigned transaction from external sources.",
@@ -355,6 +355,7 @@ pub mod pallet {
 				}
 
 				// TODO-SASS-P2 more validation steps:
+				// 0. validate the proof
 				// 1. epoch index
 				// 2. signed by an authority for current epoch
 				// 3. single submission attempt from validator?
@@ -410,9 +411,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn slot_epoch_index(slot: Slot) -> u64 {
-		if *GenesisSlot::<T>::get() == 0 {
-			return 0
-		}
+		// if *GenesisSlot::<T>::get() == 0 {
+		// 	return 0
+		// }
 		*slot.saturating_sub(Self::current_epoch_start())
 	}
 
@@ -421,6 +422,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set
 	/// manager logic like `pallet-session`.
+	///
+	/// TODO-SASS-P3:
+	/// If we detect one or more skipped epochs the policy is to use the authorities and values
+	/// from the first skipped epoch.
+	/// Should the tickets be invalidated? Currently they are... see the `get-ticket` method.
 	pub fn enact_epoch_change(
 		authorities: WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<
@@ -428,37 +434,40 @@ impl<T: Config> Pallet<T> {
 			T::MaxAuthorities,
 		>,
 	) {
-		// TODO-SASS-P2: we don't depend on session module...
-
-		// PRECONDITION: caller has done initialization and is guaranteed by the session module to
-		// be called before this.
+		// PRECONDITION: caller has done initialization.
+		// If using the internal trigger or the session pallet then this is guaranteed.
 		debug_assert!(Self::initialized().is_some());
-
-		// Update epoch index
-		let epoch_index = EpochIndex::<T>::get()
-			.checked_add(1)
-			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
-		EpochIndex::<T>::put(epoch_index);
 
 		// Update authorities
 		Authorities::<T>::put(authorities);
 		NextAuthorities::<T>::put(&next_authorities);
 
-		// Update epoch randomness.
+		// Update epoch index
+		// TODO-SASS-P2: fix this to allow epoch skip
+		let mut epoch_index = EpochIndex::<T>::get()
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
+		// TODO-SASS-P2: Test this, we also have to properly set the epoch index
+		let slot_idx = CurrentSlot::<T>::get().saturating_sub(Self::epoch_start(epoch_index));
+		if slot_idx >= T::EpochDuration::get() {
+			// Detected one or more skipped epochs, kill tickets and recompute the `epoch_index`.
+			NextTickets::<T>::kill();
+			// TODO-SASS-P2: adjust epoch index (TEST ME)
+			let idx: u64 = slot_idx.into();
+			epoch_index += idx / T::EpochDuration::get();
+		}
+		EpochIndex::<T>::put(epoch_index);
+
 		let next_epoch_index = epoch_index
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
-		// Returns randomness for the current epoch and computes the *next*
-		// epoch randomness.
-		let randomness = Self::randomness_change_epoch(next_epoch_index);
-		Randomness::<T>::put(randomness);
+		// Updates current epoch randomness and computes the *next* epoch randomness.
+		let next_randomness = Self::update_randomness(next_epoch_index);
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
-
-		let next_randomness = NextRandomness::<T>::get();
-
 		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities.to_vec(),
 			randomness: next_randomness,
@@ -476,28 +485,41 @@ impl<T: Config> Pallet<T> {
 		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		// }
 
-		Self::enact_tickets();
+		Self::update_tickets();
 	}
 
-	/// Enact next epoch tickets list.
-	/// To work properly this should be done as the last action of the last epoch slot.
-	/// (i.e. current tickets list is not used at this point)
-	fn enact_tickets() {
-		// TODO-SASS-P2: manage skipped epoch by killing both Tickets and NextTickets
-
-		let mut tickets = NextTickets::<T>::get().into_iter().collect::<Vec<_>>();
+	/// Call this fuction on epoch change to update tickets.
+	/// Enact next epoch tickets.
+	fn update_tickets() {
+		let mut tickets = NextTickets::<T>::take().into_iter().collect::<Vec<_>>();
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@ Enacting {} tickets", tickets.len());
 
 		if tickets.len() > T::MaxTickets::get() as usize {
 			log::error!(target: "sassafras", "🌳 should never happen...");
-			let max = T::MaxTickets::get() as usize;
-			tickets.truncate(max);
+			tickets.truncate(T::MaxTickets::get() as usize);
 		}
+
 		let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
 			.expect("vector has been eventually truncated; qed");
-
 		Tickets::<T>::put(tickets);
-		NextTickets::<T>::kill();
+	}
+
+	/// Call this function on epoch change to update the randomness.
+	/// Returns the next epoch randomness.
+	fn update_randomness(next_epoch_index: u64) -> schnorrkel::Randomness {
+		let curr_randomness = NextRandomness::<T>::get();
+		Randomness::<T>::put(curr_randomness);
+
+		let accumulator = RandomnessAccumulator::<T>::get();
+		let mut s = Vec::with_capacity(2 * curr_randomness.len() + 8);
+		s.extend_from_slice(&curr_randomness);
+		s.extend_from_slice(&next_epoch_index.to_le_bytes());
+		s.extend_from_slice(&accumulator);
+
+		let next_randomness = sp_io::hashing::blake2_256(&s);
+		NextRandomness::<T>::put(&next_randomness);
+
+		next_randomness
 	}
 
 	/// Finds the start slot of the current epoch. Only guaranteed to give correct results after
@@ -531,14 +553,13 @@ impl<T: Config> Pallet<T> {
 	// TODO-SASS-P2: temporary fix to make the compiler happy
 	#[allow(dead_code)]
 	fn initialize_genesis_authorities(authorities: &[(AuthorityId, SassafrasAuthorityWeight)]) {
-		//if !authorities.is_empty() {
+		assert!(!authorities.is_empty());
 		assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
 		let bounded_authorities =
 			WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
 				.expect("Initial number of authorities should be lower than T::MaxAuthorities");
 		Authorities::<T>::put(&bounded_authorities);
 		NextAuthorities::<T>::put(&bounded_authorities);
-		//}
 	}
 
 	fn initialize_genesis_epoch(genesis_slot: Slot) {
@@ -590,32 +611,33 @@ impl<T: Config> Pallet<T> {
 		T::EpochChangeTrigger::trigger::<T>(now);
 	}
 
-	/// Call this function exactly once when an epoch changes, to update the randomness.
-	/// Returns the new randomness.
-	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
-		let this_randomness = NextRandomness::<T>::get();
-		let accumulator = RandomnessAccumulator::<T>::get();
-
-		let mut s = Vec::with_capacity(2 * this_randomness.len() + 8);
-		s.extend_from_slice(&this_randomness);
-		s.extend_from_slice(&next_epoch_index.to_le_bytes());
-		s.extend_from_slice(&accumulator);
-
-		let next_randomness = sp_io::hashing::blake2_256(&s);
-		NextRandomness::<T>::put(&next_randomness);
-
-		this_randomness
-	}
-
-	/// Fetch expected ticket for the given slot.
+	/// Fetch expected ticket for the given slot according to an "outside-in" sorting strategy.
+	///
+	/// Given an ordered sequence of tickets [t0, t1, t2, ..., tk] to be assigned to n slots,
+	/// with n >= k, then the tickets are assigned to the slots according to the following
+	/// strategy:
+	///
+	/// slot-index  : [ 0,  1,  2, ............ , n ]
+	/// tickets     : [ t1, t3, t5, ... , t4, t2, t0 ].
+	///
+	/// With slot-index computed as `epoch_start() - slot`.
+	///
+	/// If `slot` value falls within the current epoch then we fetch tickets from the `Tickets`
+	/// list.
+	///
+	/// If `slot` value falls within the next epoch then we fetch tickets from the `NextTickets`
+	/// list. Note that in this case we may have not finished receiving all the tickets for that
+	/// epoch yet. The next epoch tickets should be considered "stable" only after the current
+	/// epoch first half (see the [`submit_tickers_unsigned_extrinsic`]).
+	///
+	/// Returns `None` if, according to the sorting strategy, there is no ticket associated to the
+	/// specified slot-index (happend if a ticket falls in the middle of an epoch and n > k),
+	/// or if the slot falls beyond the next epoch.
 	// TODO-SASS-P2: This is a very inefficient and temporary solution.
 	// On refactory we will come up with a better solution (like a scattered vector).
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
 		let duration = T::EpochDuration::get();
 		let slot_idx = Self::slot_epoch_index(slot); // % duration;
-
-		// Given a list of ordered tickets: t0, t1, t2, ..., tk to be assigned to N slots (N>k)
-		// The tickets are assigned to the slots in the following order: t1, t3, ..., t4, t2, t0.
 
 		let ticket_index = |slot_idx| {
 			let ticket_idx = if slot_idx < duration / 2 {
@@ -635,7 +657,7 @@ impl<T: Config> Pallet<T> {
 		} else if slot_idx < 2 * duration {
 			// Get a ticket for the next epoch. Since its state values were not enacted yet, we
 			// have to fetch it from the `NextTickets` list. This may happen when an author request
-			// the first ticket of a new epoch.
+			// the first ticket for an epoch.
 			let tickets = NextTickets::<T>::get();
 			let idx = ticket_index(slot_idx - duration);
 			tickets.iter().nth(idx).cloned()
@@ -646,6 +668,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Submit next epoch validator tickets via an unsigned extrinsic.
+	/// The submitted tickets are added to the `NextTickets` list as long as the extrinsic has
+	/// is called within the first half of the epoch. That is, tickets received within the
+	/// second half are dropped.
+	// TODO-SASS-P2:
+	// 1. we have to add the epoch and slot index to the call parameters.
+	// 2. maybe we have to drop tickets SUBMITTED after the first half.
 	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool {
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
 		let call = Call::submit_tickets { tickets };

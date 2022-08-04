@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test utilities for Sassafras consensus.
+//! Test utilities for Sassafras pallet.
 
 // TODO-SASS-P2 remove
 #![allow(unused_imports)]
@@ -29,7 +29,9 @@ use frame_support::{
 	},
 };
 use scale_codec::Encode;
-use sp_consensus_sassafras::{AuthorityId, AuthorityPair, Slot};
+use sp_consensus_sassafras::{
+	digests::PreDigest, AuthorityId, AuthorityIndex, AuthorityPair, Slot,
+};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{
 	crypto::{IsWrappedBy, KeyTypeId, Pair},
@@ -141,22 +143,20 @@ pub fn new_test_ext_with_pairs(
 	(pairs, t.into())
 }
 
-fn make_ticket_vrf(
-	slot: Slot,
-	attempt: u64,
-	pair: &sp_consensus_sassafras::AuthorityPair,
-) -> (VRFOutput, VRFProof) {
+fn make_ticket_vrf(slot: Slot, attempt: u64, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
 
 	let mut epoch = Sassafras::epoch_index();
+	let mut randomness = Sassafras::randomness();
+
+	// Check if epoch is going to change on initialization
 	let epoch_start = Sassafras::current_epoch_start();
-	// Check if epoch index is going to change on initialization
 	if epoch_start != 0_u64 && slot >= epoch_start + EPOCH_DURATION {
-		epoch += 1;
+		epoch += slot.saturating_sub(epoch_start).saturating_div(EPOCH_DURATION);
+		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let transcript =
-		sp_consensus_sassafras::make_ticket_transcript(&Sassafras::randomness(), attempt, epoch);
+	let transcript = sp_consensus_sassafras::make_ticket_transcript(&randomness, attempt, epoch);
 	let inout = pair.vrf_sign(transcript);
 	let output = VRFOutput(inout.0.to_output());
 	let proof = VRFProof(inout.1);
@@ -164,32 +164,27 @@ fn make_ticket_vrf(
 	(output, proof)
 }
 
-pub fn make_tickets(
-	slot: Slot,
-	attempts: u64,
-	pair: &sp_consensus_sassafras::AuthorityPair,
-) -> Vec<(VRFOutput, VRFProof)> {
+pub fn make_tickets(slot: Slot, attempts: u64, pair: &AuthorityPair) -> Vec<(VRFOutput, VRFProof)> {
 	(0..attempts)
 		.into_iter()
 		.map(|attempt| make_ticket_vrf(slot, attempt, pair))
 		.collect()
 }
 
-fn make_slot_vrf(
-	slot: Slot,
-	pair: &sp_consensus_sassafras::AuthorityPair,
-) -> (VRFOutput, VRFProof) {
+fn make_slot_vrf(slot: Slot, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
 
 	let mut epoch = Sassafras::epoch_index();
+	let mut randomness = Sassafras::randomness();
+
+	// Check if epoch is going to change on initialization
 	let epoch_start = Sassafras::current_epoch_start();
-	// Check if epoch index is going to change on initialization
 	if epoch_start != 0_u64 && slot >= epoch_start + EPOCH_DURATION {
-		epoch += 1;
+		epoch += slot.saturating_sub(epoch_start).saturating_div(EPOCH_DURATION);
+		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let transcript =
-		sp_consensus_sassafras::make_slot_transcript(&Sassafras::randomness(), slot, epoch);
+	let transcript = sp_consensus_sassafras::make_slot_transcript(&randomness, slot, epoch);
 	let inout = pair.vrf_sign(transcript);
 	let output = VRFOutput(inout.0.to_output());
 	let proof = VRFProof(inout.1);
@@ -198,24 +193,18 @@ fn make_slot_vrf(
 }
 
 pub fn make_pre_digest(
-	authority_index: sp_consensus_sassafras::AuthorityIndex,
-	slot: sp_consensus_sassafras::Slot,
-	pair: &sp_consensus_sassafras::AuthorityPair,
-) -> sp_consensus_sassafras::digests::PreDigest {
+	authority_index: AuthorityIndex,
+	slot: Slot,
+	pair: &AuthorityPair,
+) -> PreDigest {
 	let (vrf_output, vrf_proof) = make_slot_vrf(slot, pair);
-	sp_consensus_sassafras::digests::PreDigest {
-		authority_index,
-		slot,
-		vrf_output,
-		vrf_proof,
-		ticket_info: None,
-	}
+	PreDigest { authority_index, slot, vrf_output, vrf_proof, ticket_info: None }
 }
 
 pub fn make_wrapped_pre_digest(
-	authority_index: sp_consensus_sassafras::AuthorityIndex,
-	slot: sp_consensus_sassafras::Slot,
-	pair: &sp_consensus_sassafras::AuthorityPair,
+	authority_index: AuthorityIndex,
+	slot: Slot,
+	pair: &AuthorityPair,
 ) -> Digest {
 	let pre_digest = make_pre_digest(authority_index, slot, pair);
 	let log =
@@ -223,11 +212,11 @@ pub fn make_wrapped_pre_digest(
 	Digest { logs: vec![log] }
 }
 
-pub fn go_to_block(number: u64, slot: u64, pair: &sp_consensus_sassafras::AuthorityPair) -> Digest {
+pub fn go_to_block(number: u64, slot: Slot, pair: &AuthorityPair) -> Digest {
 	Sassafras::on_finalize(System::block_number());
 	let parent_hash = System::finalize().hash();
 
-	let digest = make_wrapped_pre_digest(0, slot.into(), pair);
+	let digest = make_wrapped_pre_digest(0, slot, pair);
 
 	System::reset_events();
 	System::initialize(&number, &parent_hash, &digest);
@@ -237,16 +226,13 @@ pub fn go_to_block(number: u64, slot: u64, pair: &sp_consensus_sassafras::Author
 }
 
 /// Slots will grow accordingly to blocks
-pub fn progress_to_block(
-	number: u64,
-	pair: &sp_consensus_sassafras::AuthorityPair,
-) -> Option<Digest> {
-	let mut slot = u64::from(Sassafras::current_slot()) + 1;
+pub fn progress_to_block(number: u64, pair: &AuthorityPair) -> Option<Digest> {
+	let mut slot = Sassafras::current_slot() + 1;
 	let mut digest = None;
 	for i in System::block_number() + 1..=number {
 		let dig = go_to_block(i, slot, pair);
 		digest = Some(dig);
-		slot += 1;
+		slot = slot + 1;
 	}
 	digest
 }
