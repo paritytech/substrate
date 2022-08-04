@@ -23,7 +23,7 @@ use crate::utils::{
 	return_type_extract_type, versioned_trait_name, AllowSelfRefInParameters,
 };
 
-use crate::attribute_names::{
+use crate::common::{
 	API_VERSION_ATTRIBUTE, BLOCK_GENERIC_IDENT, CHANGED_IN_ATTRIBUTE, CORE_TRAIT_ATTRIBUTE,
 	HIDDEN_INCLUDES_ID, RENAMED_ATTRIBUTE, SUPPORTED_ATTRIBUTE_NAMES,
 };

@@ -28,7 +28,7 @@ use std::env;
 
 use proc_macro_crate::{crate_name, FoundCrate};
 
-use crate::attribute_names::API_VERSION_ATTRIBUTE;
+use crate::common::API_VERSION_ATTRIBUTE;
 
 fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
 	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())

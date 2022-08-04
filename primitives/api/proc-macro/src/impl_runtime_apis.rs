@@ -24,7 +24,7 @@ use crate::utils::{
 	RequireQualifiedTraitPath,
 };
 
-use crate::attribute_names::API_VERSION_ATTRIBUTE;
+use crate::common::API_VERSION_ATTRIBUTE;
 
 use proc_macro2::{Span, TokenStream};
 
