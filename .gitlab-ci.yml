@@ -186,37 +186,59 @@ skip-if-draft:
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
      - ./scripts/ci/gitlab/skip_if_draft.sh
 
-include:
-  # check jobs
-  - scripts/ci/gitlab/pipeline/check.yml
-  # tests jobs
-  - scripts/ci/gitlab/pipeline/test.yml
-  # build jobs
-  - scripts/ci/gitlab/pipeline/build.yml
-  # publish jobs
-  - scripts/ci/gitlab/pipeline/publish.yml
+# include:
+#   # check jobs
+#   - scripts/ci/gitlab/pipeline/check.yml
+#   # tests jobs
+#   - scripts/ci/gitlab/pipeline/test.yml
+#   # build jobs
+#   - scripts/ci/gitlab/pipeline/build.yml
+#   # publish jobs
+#   - scripts/ci/gitlab/pipeline/publish.yml
+
+test-linux-stable:
+  stage:                           test
+  extends:
+    - .docker-env
+    - .test-refs
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                1
+    WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+    # Ensure we run the UI tests.
+    RUN_UI_TESTS:                  1
+    # needed for rusty-cachier to keep cache in test-linux-stable folder and not in test-linux-stable-1/3
+    CI_JOB_NAME:                   "test-linux-stable"
+  script:
+    - rusty-cachier snapshot create
+    - sleep 3600
+    # we need to update cache only from one job
+    - rusty-cachier cache upload
 
 #### stage:                        deploy
 
-deploy-prometheus-alerting-rules:
-  stage:                           deploy
-  needs:
-    - job:                         test-prometheus-alerting-rules
-      artifacts:                   false
-  allow_failure:                   true
-  trigger:
-    project:  parity/infrastructure/cloud-infra
-  variables:
-    SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
-    SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
-    UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
-      when: never
-    - if: $CI_COMMIT_REF_NAME == "master"
-      changes:
-        - .gitlab-ci.yml
-        - ./scripts/ci/monitoring/**/*
+# deploy-prometheus-alerting-rules:
+#   stage:                           deploy
+#   needs:
+#     - job:                         test-prometheus-alerting-rules
+#       artifacts:                   false
+#   allow_failure:                   true
+#   trigger:
+#     project:  parity/infrastructure/cloud-infra
+#   variables:
+#     SUBSTRATE_CI_COMMIT_NAME:       "${CI_COMMIT_REF_NAME}"
+#     SUBSTRATE_CI_COMMIT_REF:        "${CI_COMMIT_SHORT_SHA}"
+#     UPSTREAM_TRIGGER_PROJECT:       "${CI_PROJECT_PATH}"
+#   rules:
+#     - if: $CI_PIPELINE_SOURCE == "pipeline"
+#       when: never
+#     - if: $CI_COMMIT_REF_NAME == "master"
+#       changes:
+#         - .gitlab-ci.yml
+#         - ./scripts/ci/monitoring/**/*
 
 #### stage:                        notify
 
@@ -239,42 +261,42 @@ rusty-cachier-notify:
 # This job cancels the whole pipeline if any of provided jobs fail.
 # In a DAG, every jobs chain is executed independently of others. The `fail_fast` principle suggests
 # to fail the pipeline as soon as possible to shorten the feedback loop.
-.cancel-pipeline-template:
-  stage:                           .post
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-      when: on_failure
-  variables:
-    PROJECT_ID:                    "${CI_PROJECT_ID}"
-    PIPELINE_ID:                   "${CI_PIPELINE_ID}"
-  trigger:                         "parity/infrastructure/ci_cd/pipeline-stopper"
+# .cancel-pipeline-template:
+#   stage:                           .post
+#   rules:
+#     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+#       when: on_failure
+#   variables:
+#     PROJECT_ID:                    "${CI_PROJECT_ID}"
+#     PIPELINE_ID:                   "${CI_PIPELINE_ID}"
+#   trigger:                         "parity/infrastructure/ci_cd/pipeline-stopper"
 
-cancel-pipeline-test-linux-stable:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
+# cancel-pipeline-test-linux-stable:
+#   extends:                         .cancel-pipeline-template
+#   needs:
+#     - job:                         test-linux-stable
+#       artifacts:                   false
 
-cancel-pipeline-test-linux-stable-int:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
+# cancel-pipeline-test-linux-stable-int:
+#   extends:                         .cancel-pipeline-template
+#   needs:
+#     - job:                         test-linux-stable-int
+#       artifacts:                   false
 
-cancel-pipeline-cargo-check-subkey:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         cargo-check-subkey
-      artifacts:                   false
+# cancel-pipeline-cargo-check-subkey:
+#   extends:                         .cancel-pipeline-template
+#   needs:
+#     - job:                         cargo-check-subkey
+#       artifacts:                   false
 
-cancel-pipeline-cargo-check-benches:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         cargo-check-benches
-      artifacts:                   false
+# cancel-pipeline-cargo-check-benches:
+#   extends:                         .cancel-pipeline-template
+#   needs:
+#     - job:                         cargo-check-benches
+#       artifacts:                   false
 
-cancel-pipeline-check-tracing:
-  extends:                         .cancel-pipeline-template
-  needs:
-    - job:                         check-tracing
-      artifacts:                   false
+# cancel-pipeline-check-tracing:
+#   extends:                         .cancel-pipeline-template
+#   needs:
+#     - job:                         check-tracing
+#       artifacts:                   false
