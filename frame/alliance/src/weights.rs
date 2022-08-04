@@ -80,11 +80,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `y` is `[0, 90]`.
 	/// The range of component `p` is `[1, 100]`.
 	fn propose_proposed(_b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
-		(47_061_000 as Weight)
+		(45_021_000 as Weight)
 			// Standard Error: 3_000
-			.saturating_add((33_000 as Weight).saturating_mul(y as Weight))
-			// Standard Error: 3_000
-			.saturating_add((109_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((51_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 2_000
+			.saturating_add((120_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -92,10 +92,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Voting (r:1 w:1)
 	/// The range of component `x` is `[3, 10]`.
 	/// The range of component `y` is `[2, 90]`.
-	fn vote(_x: u32, y: u32, ) -> Weight {
-		(42_746_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((25_000 as Weight).saturating_mul(y as Weight))
+	fn vote(x: u32, y: u32, ) -> Weight {
+		(32_677_000 as Weight)
+			// Standard Error: 51_000
+			.saturating_add((219_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 4_000
+			.saturating_add((72_000 as Weight).saturating_mul(y as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -105,9 +107,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Voting (r:0 w:1)
 	/// The range of component `p` is `[1, 100]`.
 	fn veto(p: u32, ) -> Weight {
-		(28_937_000 as Weight)
+		(28_950_000 as Weight)
 			// Standard Error: 2_000
-			.saturating_add((111_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((113_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -120,11 +122,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `y` is `[2, 90]`.
 	/// The range of component `p` is `[1, 100]`.
 	fn close_early_disapproved(_x: u32, y: u32, p: u32, ) -> Weight {
-		(45_044_000 as Weight)
+		(39_407_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((38_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((53_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 3_000
-			.saturating_add((69_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((81_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -137,14 +139,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `x` is `[2, 10]`.
 	/// The range of component `y` is `[2, 90]`.
 	/// The range of component `p` is `[1, 100]`.
-	fn close_early_approved(_b: u32, x: u32, y: u32, p: u32, ) -> Weight {
-		(51_296_000 as Weight)
-			// Standard Error: 41_000
-			.saturating_add((29_000 as Weight).saturating_mul(x as Weight))
+	fn close_early_approved(_b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
+		(51_269_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((51_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((38_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 3_000
-			.saturating_add((95_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((91_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -158,11 +158,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `y` is `[2, 90]`.
 	/// The range of component `p` is `[1, 100]`.
 	fn close_disapproved(_x: u32, y: u32, p: u32, ) -> Weight {
-		(45_174_000 as Weight)
+		(43_301_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((42_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((40_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 3_000
-			.saturating_add((85_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((74_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -176,14 +176,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `x` is `[2, 10]`.
 	/// The range of component `y` is `[2, 90]`.
 	/// The range of component `p` is `[1, 100]`.
-	fn close_approved(b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
-		(40_548_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((1_000 as Weight).saturating_mul(b as Weight))
+	fn close_approved(_b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
+		(46_796_000 as Weight)
 			// Standard Error: 3_000
-			.saturating_add((57_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((27_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 3_000
-			.saturating_add((80_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((70_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
@@ -193,28 +191,28 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `y` is `[0, 90]`.
 	/// The range of component `z` is `[0, 100]`.
 	fn init_members(_x: u32, y: u32, z: u32, ) -> Weight {
-		(37_098_000 as Weight)
+		(35_328_000 as Weight)
 			// Standard Error: 2_000
-			.saturating_add((107_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((111_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 2_000
-			.saturating_add((74_000 as Weight).saturating_mul(z as Weight))
+			.saturating_add((97_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Alliance Rule (r:0 w:1)
 	fn set_rule() -> Weight {
-		(15_246_000 as Weight)
+		(15_105_000 as Weight)
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Announcements (r:1 w:1)
 	fn announce() -> Weight {
-		(17_206_000 as Weight)
+		(17_237_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Announcements (r:1 w:1)
 	fn remove_announcement() -> Weight {
-		(17_668_000 as Weight)
+		(17_851_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -223,14 +221,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System Account (r:1 w:1)
 	// Storage: Alliance DepositOf (r:0 w:1)
 	fn join_alliance() -> Weight {
-		(49_167_000 as Weight)
+		(49_135_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Alliance Members (r:4 w:1)
 	// Storage: Alliance UnscrupulousAccounts (r:1 w:0)
 	fn nominate_ally() -> Weight {
-		(37_971_000 as Weight)
+		(36_990_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -239,7 +237,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn elevate_ally() -> Weight {
-		(31_995_000 as Weight)
+		(31_254_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -249,7 +247,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	// Storage: Alliance RetiringMembers (r:0 w:1)
 	fn retirement_notice() -> Weight {
-		(36_210_000 as Weight)
+		(35_563_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -258,7 +256,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Alliance DepositOf (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn retire() -> Weight {
-		(38_039_000 as Weight)
+		(36_821_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
@@ -269,7 +267,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn kick_member() -> Weight {
-		(55_209_000 as Weight)
+		(54_118_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(6 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -280,9 +278,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn add_unscrupulous_items(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 2_000
-			.saturating_add((1_299_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((1_288_000 as Weight).saturating_mul(n as Weight))
 			// Standard Error: 1_000
-			.saturating_add((120_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add((123_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -292,10 +290,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `l` is `[1, 255]`.
 	fn remove_unscrupulous_items(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 150_000
-			.saturating_add((21_271_000 as Weight).saturating_mul(n as Weight))
+			// Standard Error: 149_000
+			.saturating_add((21_129_000 as Weight).saturating_mul(n as Weight))
 			// Standard Error: 58_000
-			.saturating_add((3_761_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add((3_751_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -313,11 +311,11 @@ impl WeightInfo for () {
 	/// The range of component `y` is `[0, 90]`.
 	/// The range of component `p` is `[1, 100]`.
 	fn propose_proposed(_b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
-		(47_061_000 as Weight)
+		(45_021_000 as Weight)
 			// Standard Error: 3_000
-			.saturating_add((33_000 as Weight).saturating_mul(y as Weight))
-			// Standard Error: 3_000
-			.saturating_add((109_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((51_000 as Weight).saturating_mul(y as Weight))
+			// Standard Error: 2_000
+			.saturating_add((120_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
@@ -325,10 +323,12 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Voting (r:1 w:1)
 	/// The range of component `x` is `[3, 10]`.
 	/// The range of component `y` is `[2, 90]`.
-	fn vote(_x: u32, y: u32, ) -> Weight {
-		(42_746_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((25_000 as Weight).saturating_mul(y as Weight))
+	fn vote(x: u32, y: u32, ) -> Weight {
+		(32_677_000 as Weight)
+			// Standard Error: 51_000
+			.saturating_add((219_000 as Weight).saturating_mul(x as Weight))
+			// Standard Error: 4_000
+			.saturating_add((72_000 as Weight).saturating_mul(y as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -338,9 +338,9 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Voting (r:0 w:1)
 	/// The range of component `p` is `[1, 100]`.
 	fn veto(p: u32, ) -> Weight {
-		(28_937_000 as Weight)
+		(28_950_000 as Weight)
 			// Standard Error: 2_000
-			.saturating_add((111_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((113_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -353,11 +353,11 @@ impl WeightInfo for () {
 	/// The range of component `y` is `[2, 90]`.
 	/// The range of component `p` is `[1, 100]`.
 	fn close_early_disapproved(_x: u32, y: u32, p: u32, ) -> Weight {
-		(45_044_000 as Weight)
+		(39_407_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((38_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((53_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 3_000
-			.saturating_add((69_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((81_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -370,14 +370,12 @@ impl WeightInfo for () {
 	/// The range of component `x` is `[2, 10]`.
 	/// The range of component `y` is `[2, 90]`.
 	/// The range of component `p` is `[1, 100]`.
-	fn close_early_approved(_b: u32, x: u32, y: u32, p: u32, ) -> Weight {
-		(51_296_000 as Weight)
-			// Standard Error: 41_000
-			.saturating_add((29_000 as Weight).saturating_mul(x as Weight))
+	fn close_early_approved(_b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
+		(51_269_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((51_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((38_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 3_000
-			.saturating_add((95_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((91_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -391,11 +389,11 @@ impl WeightInfo for () {
 	/// The range of component `y` is `[2, 90]`.
 	/// The range of component `p` is `[1, 100]`.
 	fn close_disapproved(_x: u32, y: u32, p: u32, ) -> Weight {
-		(45_174_000 as Weight)
+		(43_301_000 as Weight)
 			// Standard Error: 4_000
-			.saturating_add((42_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((40_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 3_000
-			.saturating_add((85_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((74_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -409,14 +407,12 @@ impl WeightInfo for () {
 	/// The range of component `x` is `[2, 10]`.
 	/// The range of component `y` is `[2, 90]`.
 	/// The range of component `p` is `[1, 100]`.
-	fn close_approved(b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
-		(40_548_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((1_000 as Weight).saturating_mul(b as Weight))
+	fn close_approved(_b: u32, _x: u32, y: u32, p: u32, ) -> Weight {
+		(46_796_000 as Weight)
 			// Standard Error: 3_000
-			.saturating_add((57_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((27_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 3_000
-			.saturating_add((80_000 as Weight).saturating_mul(p as Weight))
+			.saturating_add((70_000 as Weight).saturating_mul(p as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
@@ -426,28 +422,28 @@ impl WeightInfo for () {
 	/// The range of component `y` is `[0, 90]`.
 	/// The range of component `z` is `[0, 100]`.
 	fn init_members(_x: u32, y: u32, z: u32, ) -> Weight {
-		(37_098_000 as Weight)
+		(35_328_000 as Weight)
 			// Standard Error: 2_000
-			.saturating_add((107_000 as Weight).saturating_mul(y as Weight))
+			.saturating_add((111_000 as Weight).saturating_mul(y as Weight))
 			// Standard Error: 2_000
-			.saturating_add((74_000 as Weight).saturating_mul(z as Weight))
+			.saturating_add((97_000 as Weight).saturating_mul(z as Weight))
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
 	// Storage: Alliance Rule (r:0 w:1)
 	fn set_rule() -> Weight {
-		(15_246_000 as Weight)
+		(15_105_000 as Weight)
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Announcements (r:1 w:1)
 	fn announce() -> Weight {
-		(17_206_000 as Weight)
+		(17_237_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Alliance Announcements (r:1 w:1)
 	fn remove_announcement() -> Weight {
-		(17_668_000 as Weight)
+		(17_851_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -456,14 +452,14 @@ impl WeightInfo for () {
 	// Storage: System Account (r:1 w:1)
 	// Storage: Alliance DepositOf (r:0 w:1)
 	fn join_alliance() -> Weight {
-		(49_167_000 as Weight)
+		(49_135_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
 	}
 	// Storage: Alliance Members (r:4 w:1)
 	// Storage: Alliance UnscrupulousAccounts (r:1 w:0)
 	fn nominate_ally() -> Weight {
-		(37_971_000 as Weight)
+		(36_990_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -472,7 +468,7 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn elevate_ally() -> Weight {
-		(31_995_000 as Weight)
+		(31_254_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
@@ -482,7 +478,7 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	// Storage: Alliance RetiringMembers (r:0 w:1)
 	fn retirement_notice() -> Weight {
-		(36_210_000 as Weight)
+		(35_563_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
@@ -491,7 +487,7 @@ impl WeightInfo for () {
 	// Storage: Alliance DepositOf (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn retire() -> Weight {
-		(38_039_000 as Weight)
+		(36_821_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
 	}
@@ -502,7 +498,7 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	fn kick_member() -> Weight {
-		(55_209_000 as Weight)
+		(54_118_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
@@ -513,9 +509,9 @@ impl WeightInfo for () {
 	fn add_unscrupulous_items(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
 			// Standard Error: 2_000
-			.saturating_add((1_299_000 as Weight).saturating_mul(n as Weight))
+			.saturating_add((1_288_000 as Weight).saturating_mul(n as Weight))
 			// Standard Error: 1_000
-			.saturating_add((120_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add((123_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -525,10 +521,10 @@ impl WeightInfo for () {
 	/// The range of component `l` is `[1, 255]`.
 	fn remove_unscrupulous_items(n: u32, l: u32, ) -> Weight {
 		(0 as Weight)
-			// Standard Error: 150_000
-			.saturating_add((21_271_000 as Weight).saturating_mul(n as Weight))
+			// Standard Error: 149_000
+			.saturating_add((21_129_000 as Weight).saturating_mul(n as Weight))
 			// Standard Error: 58_000
-			.saturating_add((3_761_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add((3_751_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
