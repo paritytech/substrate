@@ -11873,6 +11873,10 @@ version = "0.9.24"
 source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.24#221e92dad377731be57817a0c414c511e7e055c6"
 
 [[patch.unused]]
+name = "sc-finality-grandpa-rpc"
+version = "0.10.0-dev"
+
+[[patch.unused]]
 name = "pallet-xcm"
 version = "0.9.24"
 source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.24#221e92dad377731be57817a0c414c511e7e055c6"
@@ -12111,10 +12115,6 @@ source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0
 name = "xcm-executor"
 version = "0.9.24"
 source = "git+https://github.com/mangata-finance//polkadot?branch=mangata-dev-v0.9.24#221e92dad377731be57817a0c414c511e7e055c6"
-
-[[patch.unused]]
-name = "sc-finality-grandpa-rpc"
-version = "0.10.0-dev"
 
 [[patch.unused]]
 name = "sc-finality-grandpa-rpc"

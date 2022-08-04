@@ -70,7 +70,7 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use sp_std::{convert::TryInto, fmt::Debug, prelude::*};
+use sp_std::{convert::{TryInto}, fmt::Debug, prelude::*};
 pub use vesting_info::*;
 pub use weights::WeightInfo;
 
@@ -671,7 +671,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-pub trait MultiTokenVestingLocks<AccountId> {
+pub trait MultiTokenVestingLocks<AccountId, BlockNumber> {
 	/// The quantity used to denote time; usually just a `BlockNumber`.
 	type Moment;
 
@@ -686,7 +686,7 @@ pub trait MultiTokenVestingLocks<AccountId> {
 		who: &AccountId,
 		token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId,
 		unlock_amount: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
-	) -> Result<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, DispatchError>;
+	) -> Result<(BlockNumber, <Self::Currency as MultiTokenCurrency<AccountId>>::Balance), DispatchError>;
 
 	/// Finds the vesting schedule with the provided index
 	/// Removes that old vesting schedule, adds a new one with new_locked and new_per_block
@@ -697,7 +697,7 @@ pub trait MultiTokenVestingLocks<AccountId> {
 		token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId,
 		vesting_index: u32,
 		unlock_some_amount_or_all: Option<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance>,
-	) -> Result<(<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, <Self::Currency as MultiTokenCurrency<AccountId>>::Balance), DispatchError>;
+	) -> Result<(<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, BlockNumber, <Self::Currency as MultiTokenCurrency<AccountId>>::Balance), DispatchError>;
 
 	/// Constructs a vesting schedule based on the given data starting from now
 	/// And places it into the appropriate (who, token_id) storage
@@ -706,11 +706,12 @@ pub trait MultiTokenVestingLocks<AccountId> {
 		who: &AccountId,
 		token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId,
 		lock_amount: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
+		starting_block_as_balance: Option<BlockNumber>,
 		ending_block_as_balance: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
 	) -> DispatchResult;
 }
 
-impl<T: Config> MultiTokenVestingLocks<T::AccountId> for Pallet<T>
+impl<T: Config> MultiTokenVestingLocks<T::AccountId, T::BlockNumber> for Pallet<T>
 where
 	BalanceOf<T>: MaybeSerializeDeserialize + Debug,
 	TokenIdOf<T>: MaybeSerializeDeserialize + Debug,
@@ -722,7 +723,7 @@ where
 		who: &T::AccountId,
 		token_id: TokenIdOf<T>,
 		unlock_amount: BalanceOf<T>,
-	) -> Result<BalanceOf<T>, DispatchError> {
+	) -> Result<(T::BlockNumber, BalanceOf<T>), DispatchError> {
 		let now = <frame_system::Pallet<T>>::block_number();
 		// First we get the schedules of who
 		let schedules: Vec<VestingInfo<BalanceOf<T>, T::BlockNumber>> =
@@ -817,7 +818,8 @@ where
 		Self::write_vesting(&who, updated_schedules, token_id)?;
 		Self::write_lock(who, locked_now, token_id);
 
-		Ok(selected_schedule.3)
+		// Start block, end block
+		Ok((now, selected_schedule.3))
 	}
 
 	fn unlock_tokens_by_vesting_index(
@@ -825,7 +827,7 @@ where
 		token_id: TokenIdOf<T>,
 		vesting_index: u32,
 		unlock_some_amount_or_all: Option<BalanceOf<T>>,
-	) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError>{
+	) -> Result<(BalanceOf<T>, T::BlockNumber, BalanceOf<T>), DispatchError>{
 		let now = <frame_system::Pallet<T>>::block_number();
 
 		// First we get the schedules of who
@@ -917,25 +919,27 @@ where
 		Self::write_vesting(&who, updated_schedules, token_id)?;
 		Self::write_lock(who, locked_now, token_id);
 
-		Ok((unlocked_amount, selected_schedule.3))
+		// Unlocked amount, start block, end block
+		Ok((unlocked_amount, now, selected_schedule.3))
 	}
 
 	fn lock_tokens(
 		who: &T::AccountId,
 		token_id: TokenIdOf<T>,
 		lock_amount: BalanceOf<T>,
+		starting_block: Option<T::BlockNumber>,
 		ending_block_as_balance: BalanceOf<T>,
 	) -> DispatchResult {
-		let now = <frame_system::Pallet<T>>::block_number();
+		let starting_block: T::BlockNumber = starting_block.unwrap_or(<frame_system::Pallet<T>>::block_number());
 
 		T::Tokens::ensure_can_withdraw(token_id, who, lock_amount, WithdrawReasons::all(), Default::default())?;
 
 		let length_as_balance = ending_block_as_balance
-			.saturating_sub(T::BlockNumberToBalance::convert(now))
+			.saturating_sub(T::BlockNumberToBalance::convert(starting_block))
 			.max(One::one());
 		let per_block = (lock_amount / length_as_balance).max(One::one());
 
-		let vesting_schedule = VestingInfo::new(lock_amount, per_block, now);
+		let vesting_schedule = VestingInfo::new(lock_amount, per_block, starting_block);
 		ensure!(vesting_schedule.is_valid(), Error::<T>::InvalidScheduleParams);
 
 		let mut schedules = Self::vesting(who, token_id).unwrap_or_default();
