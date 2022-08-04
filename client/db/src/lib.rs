@@ -3543,7 +3543,7 @@ pub(crate) mod tests {
 
 		let block3_fork = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Number(1)).unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
 			let header = Header {
 				number: 3,
 				parent_hash: block2,
