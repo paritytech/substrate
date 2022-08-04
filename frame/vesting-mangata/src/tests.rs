@@ -1286,7 +1286,7 @@ fn lock_tokens_works() {
 
 		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<
 			<Test as frame_system::Config>::AccountId,
-		>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, 11));
+		>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 11));
 
 		assert_noop!(
 			orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(
@@ -1314,7 +1314,7 @@ fn lock_tokens_works() {
 
 		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<
 			<Test as frame_system::Config>::AccountId,
-		>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, 21));
+		>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 21));
 
 		assert_noop!(
 			orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(
@@ -1347,7 +1347,7 @@ fn unlock_tokens_works() {
 		let now = <frame_system::Pallet<Test>>::block_number();
 		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(NATIVE_CURRENCY_ID, &999, 10000));
 
-		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, 11));
+		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 11));
 
 		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 1, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
 		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
@@ -1358,7 +1358,7 @@ fn unlock_tokens_works() {
 
 		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(NATIVE_CURRENCY_ID, &999, 10000));
 
-		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, 21));
+		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 21));
 
 		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 1, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
 
@@ -1372,7 +1372,7 @@ fn unlock_tokens_works() {
 		let cur_block = 6;
 		System::set_block_number(cur_block);
 
-		assert_eq!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::unlock_tokens(&999, NATIVE_CURRENCY_ID, 6000).unwrap(), 21);
+		assert_eq!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId>>::unlock_tokens(&999, NATIVE_CURRENCY_ID, 6000).unwrap().1, 21);
 
 		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
 			vec![
