@@ -16,12 +16,12 @@
 // limitations under the License.
 
 use crate::utils::{
-	attach_default_method_implementation, versioned_trait_name,
-	extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side,
-	generate_call_api_at_fn_name, generate_crate_access, generate_hidden_includes,
-	generate_method_runtime_api_impl_name, generate_native_call_generator_fn_name,
-	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
-	replace_wild_card_parameter_names, return_type_extract_type, AllowSelfRefInParameters,
+	attach_default_method_implementation, extract_parameter_names_types_and_borrows,
+	fold_fn_decl_for_client_side, generate_call_api_at_fn_name, generate_crate_access,
+	generate_hidden_includes, generate_method_runtime_api_impl_name,
+	generate_native_call_generator_fn_name, generate_runtime_mod_name_for_trait,
+	parse_runtime_api_version, prefix_function_with_trait, replace_wild_card_parameter_names,
+	return_type_extract_type, versioned_trait_name, AllowSelfRefInParameters,
 };
 
 use crate::attribute_names::{

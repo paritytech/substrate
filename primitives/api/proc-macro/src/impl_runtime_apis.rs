@@ -16,13 +16,13 @@
 // limitations under the License.
 
 use crate::utils::{
-	attach_default_method_implementation, versioned_trait_name, extract_all_signature_types,
+	attach_default_method_implementation, extract_all_signature_types,
 	extract_block_type_from_trait_path, extract_impl_trait,
 	extract_parameter_names_types_and_borrows, generate_call_api_at_fn_name, generate_crate_access,
 	generate_hidden_includes, generate_method_runtime_api_impl_name,
 	generate_native_call_generator_fn_name, generate_runtime_mod_name_for_trait,
 	parse_runtime_api_version, prefix_function_with_trait, return_type_extract_type,
-	AllowSelfRefInParameters, RequireQualifiedTraitPath,
+	versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 
 use crate::attribute_names::API_VERSION_ATTRIBUTE;
@@ -407,7 +407,7 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 fn append_api_version(trait_: &mut Path, version: Option<u64>) {
 	if version.is_none() {
 		// nothing to do
-		return;
+		return
 	}
 
 	let version = version.unwrap();
