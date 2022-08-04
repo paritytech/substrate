@@ -47,6 +47,12 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 [features]
 default = ["std"]
 std = [
+	"sp-tracing/std",
+	"sp-io/std",
+	"sp-core/std",
+	"scale-info/std",
+	"pallet-balances/std",
+	"frame-benchmarking/std",
 	"codec/std",
 	"sp-runtime/std",
 	"sp-std/std",

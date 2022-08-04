@@ -33,6 +33,7 @@ test-pallet = { package = "frame-support-test-pallet", default-features = false,
 [features]
 default = ["std"]
 std = [
+	"test-pallet/std",
 	"serde/std",
 	"codec/std",
 	"scale-info/std",

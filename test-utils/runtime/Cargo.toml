@@ -67,6 +67,7 @@ default = [
 	"std",
 ]
 std = [
+	"parity-util-mem/std",
 	"beefy-primitives/std",
 	"beefy-merkle-tree/std",
 	"sp-application-crypto/std",

@@ -26,6 +26,8 @@ debug = ["hex", "hex/std", "log"]
 default = ["debug", "keccak", "std"]
 keccak = ["tiny-keccak"]
 std = [
+	"log/std",
+	"hex/std",
 	"beefy-primitives/std",
 	"sp-api/std"
 ]

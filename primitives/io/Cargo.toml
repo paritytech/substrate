@@ -38,6 +38,7 @@ tracing-core = { version = "0.1.28", default-features = false}
 [features]
 default = ["std"]
 std = [
+	"bytes/std",
 	"sp-externalities/std",
 	"sp-core/std",
 	"sp-keystore",

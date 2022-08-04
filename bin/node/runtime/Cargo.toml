@@ -116,6 +116,15 @@ substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-bu
 default = ["std"]
 with-tracing = ["frame-executive/with-tracing"]
 std = [
+	"sp-sandbox/std",
+	"pallet-whitelist/std",
+	"pallet-session-benchmarking/std",
+	"pallet-offences-benchmarking/std",
+	"pallet-nomination-pools-benchmarking/std",
+	"pallet-election-provider-support-benchmarking/std",
+	"pallet-asset-tx-payment/std",
+	"frame-system-benchmarking/std",
+	"frame-election-provider-support/std",
 	"sp-authority-discovery/std",
 	"pallet-assets/std",
 	"pallet-authority-discovery/std",

@@ -47,6 +47,8 @@ parity-util-mem = { version = "0.11.0", default-features = false, features = ["p
 [features]
 default = ["std"]
 std = [
+	"sp-core/std",
+	"k256/std",
 	"once_cell",
 	"serde",
 	"sp-io/std",

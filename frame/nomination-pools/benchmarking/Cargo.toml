@@ -41,6 +41,8 @@ sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 [features]
 default = ["std"]
 std = [
+	"scale-info/std",
+	"codec/std",
 	"frame-benchmarking/std",
 	"frame-election-provider-support/std",
 	"frame-support/std",
