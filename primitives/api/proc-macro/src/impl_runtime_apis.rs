@@ -579,13 +579,12 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 							storage_transaction_cache,
 							recorder
 						| {
-							#runtime_mod_path #call_api_at_call :: <#runtime, fn() -> std::result::Result<sp_core::NeverNativeValue, sp_api::ApiError>, __SR_API_BLOCK__ #(, #trait_generic_arguments )*>(
+							#runtime_mod_path #call_api_at_call(
 								call_runtime_at,
 								at,
 								params_encoded,
 								changes,
 								storage_transaction_cache,
-								None,
 								context,
 								recorder,
 							)

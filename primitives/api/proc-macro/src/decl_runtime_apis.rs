@@ -300,7 +300,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 			#[allow(clippy::too_many_arguments)]
 			pub fn #fn_name<
 				R: #crate_::Encode + #crate_::Decode + std::cmp::PartialEq,
-				NC: FnOnce() -> std::result::Result<R, #crate_::ApiError> + std::panic::UnwindSafe,
 				Block: #crate_::BlockT,
 				T: #crate_::CallApiAt<Block>,
 			>(
@@ -311,7 +310,6 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 				storage_transaction_cache: &std::cell::RefCell<
 					#crate_::StorageTransactionCache<Block, T::StateBackend>
 				>,
-				native_call: std::option::Option<NC>,
 				context: #crate_::ExecutionContext,
 				recorder: &std::option::Option<#crate_::ProofRecorder<Block>>,
 			) -> std::result::Result<#crate_::NativeOrEncoded<R>, #crate_::ApiError> {
@@ -339,10 +337,10 @@ fn generate_call_api_at_calls(decl: &ItemTrait) -> Result<TokenStream> {
 					}
 				)*
 
-				let params = #crate_::CallApiAtParams {
+				let params = #crate_::CallApiAtParams::<_, fn() -> _, _> {
 					at,
 					function: #trait_fn_name,
-					native_call,
+					native_call: None,
 					arguments: args,
 					overlayed_changes: changes,
 					storage_transaction_cache,
