@@ -18,9 +18,8 @@
 use proc_macro2::{Span, TokenStream};
 
 use syn::{
-	parse_quote, spanned::Spanned, token::And, Attribute, Block, Error, FnArg, GenericArgument,
-	Ident, ImplItem, ImplItemMethod, ItemImpl, Lit, Meta, NestedMeta, Pat, Path, PathArguments,
-	Result, ReturnType, Signature, TraitItemMethod, Type, TypePath,
+	parse_quote, spanned::Spanned, token::And, Attribute, Error, FnArg, GenericArgument, Ident,
+	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
 
 use quote::{format_ident, quote};
@@ -284,37 +283,4 @@ pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
 // Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
 pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
 	format_ident!("{}V{}", trait_ident, version.to_string())
-}
-
-/// This trait represents a method to which a default implementation can be added. It exists only to
-/// keep the logic for default implementations at a single place.
-pub trait DummyDefaultableMethod {
-	fn set_relevant_fields(&mut self, block: Block, attr: Attribute);
-
-	fn attach_default_impl(&mut self) {
-		let block: Block = parse_quote!({ unimplemented!() });
-		let attr: Attribute = parse_quote!(#[allow(unused_variables)]);
-
-		self.set_relevant_fields(block, attr)
-	}
-}
-
-impl DummyDefaultableMethod for TraitItemMethod {
-	fn set_relevant_fields(&mut self, block: Block, attr: Attribute) {
-		self.default = Some(block);
-		self.attrs.push(attr);
-	}
-}
-impl DummyDefaultableMethod for ImplItemMethod {
-	fn set_relevant_fields(&mut self, block: Block, attr: Attribute) {
-		self.block = block;
-		self.attrs.push(attr);
-	}
-}
-
-/// This functions uses `trait DummyDefaultableMethod` to attach a default implementation for a
-/// method. It serves as an entrypoint to the logic in the trait - converts the input to
-/// `DummyDefaultableMethod`.
-pub fn attach_default_method_implementation<T: DummyDefaultableMethod>(method: &mut T) {
-	method.attach_default_impl();
 }

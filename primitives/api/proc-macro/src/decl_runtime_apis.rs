@@ -16,12 +16,11 @@
 // limitations under the License.
 
 use crate::utils::{
-	attach_default_method_implementation, extract_parameter_names_types_and_borrows,
-	fold_fn_decl_for_client_side, generate_call_api_at_fn_name, generate_crate_access,
-	generate_hidden_includes, generate_method_runtime_api_impl_name,
-	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
-	replace_wild_card_parameter_names, return_type_extract_type, versioned_trait_name,
-	AllowSelfRefInParameters,
+	extract_parameter_names_types_and_borrows, fold_fn_decl_for_client_side,
+	generate_call_api_at_fn_name, generate_crate_access, generate_hidden_includes,
+	generate_method_runtime_api_impl_name, generate_runtime_mod_name_for_trait,
+	parse_runtime_api_version, prefix_function_with_trait, replace_wild_card_parameter_names,
+	return_type_extract_type, versioned_trait_name, AllowSelfRefInParameters,
 };
 
 use crate::attribute_names::{
@@ -377,9 +376,6 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 						} else {
 							// save method version
 							method_version = method_api_ver;
-
-							// Generate default implementations for versioned methods.
-							attach_default_method_implementation(method);
 						}
 					}
 
@@ -550,7 +546,9 @@ impl<'a> ToClientSideDecl<'a> {
 		};
 
 		if is_versioned_method {
-			attach_default_method_implementation(&mut result);
+			// Generate default implementation calling `unimplemented!()` for versioned methods
+			result.default = Some(parse_quote!({ unimplemented!() }));
+			result.attrs.push(parse_quote!(#[allow(unused_variables)]));
 		}
 
 		Some(result)
