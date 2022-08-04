@@ -268,27 +268,17 @@ pub fn extract_impl_trait(impl_: &ItemImpl, require: RequireQualifiedTraitPath) 
 
 /// Parse the given attribute as `API_VERSION_ATTRIBUTE`.
 pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
-	let meta = version.parse_meta()?;
+	let version = version.parse_args::<syn::LitInt>().map_err(|_| {
+		Error::new(
+			version.span(),
+			&format!(
+				"Unexpected `{api_version}` attribute. The supported format is `{api_version}(1)`",
+				api_version = API_VERSION_ATTRIBUTE
+			),
+		)
+	})?;
 
-	let err = Err(Error::new(
-		meta.span(),
-		&format!(
-			"Unexpected `{api_version}` attribute. The supported format is `{api_version}(1)`",
-			api_version = API_VERSION_ATTRIBUTE
-		),
-	));
-
-	match meta {
-		Meta::List(list) =>
-			if list.nested.len() != 1 {
-				err
-			} else if let Some(NestedMeta::Lit(Lit::Int(i))) = list.nested.first() {
-				i.base10_parse()
-			} else {
-				err
-			},
-		_ => err,
-	}
+	version.base10_parse()
 }
 
 // Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
