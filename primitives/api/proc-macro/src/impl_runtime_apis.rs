@@ -35,8 +35,7 @@ use syn::{
 	parse::{Error, Parse, ParseStream, Result},
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
-	Attribute, GenericArgument, Ident, ImplItem, ItemImpl, Path, PathArguments, Signature, Type,
-	TypePath,
+	Attribute, Ident, ImplItem, ItemImpl, Path, Signature, Type, TypePath,
 };
 
 use std::collections::HashSet;
@@ -453,8 +452,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	runtime_block: &'a TypePath,
 	runtime_mod_path: &'a Path,
-	runtime_type: &'a Type,
-	trait_generic_arguments: &'a [GenericArgument],
 	impl_trait: &'a Ident,
 }
 
@@ -469,9 +466,7 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
 		let block = {
 			let runtime_mod_path = self.runtime_mod_path;
-			let runtime = self.runtime_type;
 			let call_api_at_call = generate_call_api_at_fn_name(&input.sig.ident);
-			let trait_generic_arguments = self.trait_generic_arguments;
 			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 			let (param_types, error) = match extract_parameter_names_types_and_borrows(
@@ -604,21 +599,13 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
 			.clone();
 		let runtime_block = extract_block_type_from_trait_path(impl_trait_path)?;
-		let runtime_type = &impl_.self_ty;
 		let mut runtime_mod_path = extend_with_runtime_decl_path(impl_trait_path.clone());
 		// remove the trait to get just the module path
 		runtime_mod_path.segments.pop();
 
-		let trait_generic_arguments = match impl_trait.arguments {
-			PathArguments::Parenthesized(_) | PathArguments::None => vec![],
-			PathArguments::AngleBracketed(ref b) => b.args.iter().cloned().collect(),
-		};
-
 		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
 			runtime_block,
 			runtime_mod_path: &runtime_mod_path,
-			runtime_type,
-			trait_generic_arguments: &trait_generic_arguments,
 			impl_trait: &impl_trait.ident,
 		};
 
