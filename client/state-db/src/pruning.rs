@@ -252,7 +252,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 						// because `cache` is a queue of successive `DeathRow`
 						// NOTE: this branch should not be entered because blocks are visited
 						// in successive increasing order, just keeping it for robustness
-						return Ok(load_death_row_from_db(db, base + index as u64)?)
+						return load_death_row_from_db(db, base + index as u64)
 					}
 				}
 				Ok(cache.get(index).cloned())
