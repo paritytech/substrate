@@ -257,6 +257,20 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		}
 	}
 
+	/// Get the hash of the block at the given `index` of the queue  
+	fn get_hash(&self, index: usize) -> Option<BlockHash> {
+		match self {
+			DeathRowQueue::DbBackedQueue { cache, hashs, .. } =>
+				if index < cache.len() {
+					cache.get(index).map(|r| r.hash.clone())
+				} else {
+					hashs.get(index - cache.len()).cloned()
+				},
+			DeathRowQueue::MemQueue { death_rows, .. } =>
+				death_rows.get(index).map(|r| r.hash.clone()),
+		}
+	}
+
 	/// Return the number of block in the pruning window
 	fn len(&self) -> usize {
 		match self {
@@ -353,11 +367,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		(self.death_rows_queue.len() - self.pending_prunings) as u64
 	}
 
-	pub fn next_hash(&mut self) -> Result<Option<BlockHash>, Error<D::Error>> {
-		Ok(self
-			.death_rows_queue
-			.get(self.pending_number, self.pending_prunings)?
-			.map(|r| r.hash))
+	pub fn next_hash(&self) -> Option<BlockHash> {
+		self.death_rows_queue.get_hash(self.pending_prunings)
 	}
 
 	pub fn mem_used(&self) -> usize {

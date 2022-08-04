@@ -375,7 +375,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 				}
 
 				let pinned = &self.pinned;
-				if pruning.next_hash()?.map_or(false, |h| pinned.contains_key(&h)) {
+				if pruning.next_hash().map_or(false, |h| pinned.contains_key(&h)) {
 					break
 				}
 				pruning.prune_one(commit)?;
@@ -464,7 +464,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		trace!(
 			target: "forks",
 			"First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
-			self.pruning.as_mut().and_then(|p| p.next_hash().ok()),
+			self.pruning.as_ref().and_then(|p| p.next_hash()),
 			self.pruning.as_ref().map(|p| p.pending()).unwrap_or(0),
 			self.non_canonical.last_canonicalized_hash(),
 			self.non_canonical.last_canonicalized_block_number().unwrap_or(0),
