@@ -360,7 +360,7 @@ pub mod pallet {
 		TooManyMembers,
 		/// Number of announcements exceeds `MaxAnnouncementsCount`.
 		TooManyAnnouncements,
-		/// Account is already gave retirement notice
+		/// Account already gave retirement notice
 		AlreadyRetiring,
 		/// Account did not give a retirement notice required to retire.
 		RetirementNoticeNotGiven,
