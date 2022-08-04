@@ -327,6 +327,9 @@ impl DummyDefaultableMethod for ImplItemMethod {
 	}
 }
 
+/// This functions uses `trait DummyDefaultableMethod` to attach a default implementation for a
+/// method. It serves as an entrypoint to the logic in the trait - converts the input to
+/// `DummyDefaultableMethod`.
 pub fn attach_default_method_implementation<T: DummyDefaultableMethod>(method: &mut T) {
 	method.attach_default_impl();
 }
