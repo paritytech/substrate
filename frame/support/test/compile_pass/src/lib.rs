@@ -70,7 +70,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = AccountId;
 	type Event = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type DbWeight = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -82,6 +82,7 @@ impl frame_system::Config for Runtime {
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+pub type Call = RuntimeCall;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 construct_runtime!(
