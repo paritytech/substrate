@@ -34,7 +34,7 @@ where
 {
 	let mut pending_func_imports = HashMap::new();
 	for import_ty in module.imports() {
-		let name = import_name(&import_ty)?;
+		let name = import_ty.name();
 
 		if import_ty.module() != "env" {
 			return Err(WasmError::Other(format!(
@@ -112,7 +112,7 @@ impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
 		if self.pending_func_imports.remove(fn_name).is_some() {
 			self.linker.func_wrap("env", fn_name, func).map_err(|error| {
 				WasmError::Other(format!(
-					"failed to register host function '{}' with the WASM linker: {}",
+					"failed to register host function '{}' with the WASM linker: {:#}",
 					fn_name, error
 				))
 			})?;
@@ -120,14 +120,4 @@ impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
 
 		Ok(())
 	}
-}
-
-/// When the module linking proposal is supported the import's name can be `None`.
-/// Because we are not using this proposal we could safely unwrap the name.
-/// However, we opt for an error in order to avoid panics at all costs.
-fn import_name<'a, 'b: 'a>(import: &'a ImportType<'b>) -> Result<&'a str, WasmError> {
-	let name = import.name().ok_or_else(|| {
-		WasmError::Other("The module linking proposal is not supported.".to_owned())
-	})?;
-	Ok(name)
 }

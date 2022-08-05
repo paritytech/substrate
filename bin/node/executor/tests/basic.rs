@@ -26,12 +26,12 @@ use sp_runtime::{
 	traits::Hash as HashT, transaction_validity::InvalidTransaction, ApplyExtrinsicResult,
 };
 
-use node_primitives::{Balance, Hash};
-use node_runtime::{
+use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, Call, CheckedExtrinsic, Event, Header, Runtime, System, TransactionPayment,
 	UncheckedExtrinsic,
 };
+use node_primitives::{Balance, Hash};
 use node_testing::keyring::*;
 use wat;
 
@@ -44,7 +44,7 @@ use self::common::{sign, *};
 /// have to execute provided wasm code instead of the native equivalent. This trick is used to
 /// test code paths that differ between native and wasm versions.
 pub fn bloaty_code_unwrap() -> &'static [u8] {
-	node_runtime::WASM_BINARY_BLOATY.expect(
+	kitchensink_runtime::WASM_BINARY_BLOATY.expect(
 		"Development wasm binary is not available. \
 											 Testing is only supported with the flag disabled.",
 	)
@@ -764,7 +764,11 @@ fn deploying_wasm_contract_should_work() {
 	t.execute_with(|| {
 		// Verify that the contract does exist by querying some of its storage items
 		// It does not matter that the storage item itself does not exist.
-		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(addr, Default::default()).is_ok());
+		assert!(&pallet_contracts::Pallet::<Runtime>::get_storage(
+			addr,
+			pallet_contracts::StorageKey::<Runtime>::default().to_vec()
+		)
+		.is_ok());
 	});
 }
 

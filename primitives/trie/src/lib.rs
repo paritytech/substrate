@@ -496,7 +496,7 @@ where
 	T: Default + PartialEq<T> + for<'b> From<&'b [u8]> + Clone + Send + Sync,
 {
 	fn as_hash_db(&self) -> &dyn hash_db::HashDB<H, T> {
-		&*self
+		self
 	}
 
 	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn hash_db::HashDB<H, T> + 'b) {

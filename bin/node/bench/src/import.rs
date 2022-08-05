@@ -148,13 +148,13 @@ impl core::Benchmark for ImportBenchmark {
 						//      the transaction fee into the treasury
 						//    - extrinsic success
 						assert_eq!(
-							node_runtime::System::events().len(),
+							kitchensink_runtime::System::events().len(),
 							(self.block.extrinsics.len() - 1) * 8 + 1,
 						);
 					},
 					BlockType::Noop => {
 						assert_eq!(
-							node_runtime::System::events().len(),
+							kitchensink_runtime::System::events().len(),
 							// should be 2 per signed extrinsic + 1 per unsigned
 							// we have 1 unsigned and the rest are signed in the block
 							// those 2 events per signed are:

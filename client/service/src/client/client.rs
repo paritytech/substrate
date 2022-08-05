@@ -1614,11 +1614,11 @@ where
 	RA: Send + Sync,
 {
 	fn header(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Block::Header>> {
-		(**self).backend.blockchain().header(id)
+		self.backend.blockchain().header(id)
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
-		(**self).backend.blockchain().info()
+		self.backend.blockchain().info()
 	}
 
 	fn status(&self, id: BlockId<Block>) -> sp_blockchain::Result<blockchain::BlockStatus> {

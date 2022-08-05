@@ -745,7 +745,7 @@ impl<T: Encode> Encode for WrapperOpaque<T> {
 
 impl<T: Decode> Decode for WrapperOpaque<T> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Ok(Self(T::decode(&mut &<Vec<u8>>::decode(input)?[..])?))
+		Ok(Self(T::decode_all(&mut &<Vec<u8>>::decode(input)?[..])?))
 	}
 
 	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -763,7 +763,7 @@ impl<T: MaxEncodedLen> MaxEncodedLen for WrapperOpaque<T> {
 	fn max_encoded_len() -> usize {
 		let t_max_len = T::max_encoded_len();
 
-		// See scale encoding https://docs.substrate.io/v3/advanced/scale-codec
+		// See scale encoding: https://docs.substrate.io/reference/scale-codec/
 		if t_max_len < 64 {
 			t_max_len + 1
 		} else if t_max_len < 2usize.pow(14) {
@@ -967,6 +967,10 @@ mod test {
 			2usize.pow(14) - 1 + 2
 		);
 		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
+
+		let data = 4u64;
+		// Ensure that we check that the `Vec<u8>` is consumed completly on decode.
+		assert!(WrapperOpaque::<u32>::decode(&mut &data.encode().encode()[..]).is_err());
 	}
 
 	#[test]

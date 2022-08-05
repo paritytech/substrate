@@ -38,7 +38,7 @@ use log::{debug, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SyncOracle};
+use sp_consensus::{CanAuthorWith, Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
@@ -103,7 +103,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Proposer: Proposer<B> + Send;
 
 	/// Data associated with a slot claim.
-	type Claim: Send + 'static;
+	type Claim: Send + Sync + 'static;
 
 	/// Epoch data necessary for authoring.
 	type EpochData: Send + Sync + 'static;
@@ -183,6 +183,70 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Remaining duration for proposing.
 	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration;
 
+	/// Propose a block by `Proposer`.
+	async fn propose(
+		&mut self,
+		proposer: Self::Proposer,
+		claim: &Self::Claim,
+		slot_info: SlotInfo<B>,
+		proposing_remaining: Delay,
+	) -> Option<
+		Proposal<
+			B,
+			<Self::Proposer as Proposer<B>>::Transaction,
+			<Self::Proposer as Proposer<B>>::Proof,
+		>,
+	> {
+		let slot = slot_info.slot;
+		let telemetry = self.telemetry();
+		let logging_target = self.logging_target();
+		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		let logs = self.pre_digest_data(slot, claim);
+
+		// deadline our production to 98% of the total time left for proposing. As we deadline
+		// the proposing below to the same total time left, the 2% margin should be enough for
+		// the result to be returned.
+		let proposing = proposer
+			.propose(
+				slot_info.inherent_data,
+				sp_runtime::generic::Digest { logs },
+				proposing_remaining_duration.mul_f32(0.98),
+				None,
+			)
+			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
+
+		let proposal = match futures::future::select(proposing, proposing_remaining).await {
+			Either::Left((Ok(p), _)) => p,
+			Either::Left((Err(err), _)) => {
+				warn!(target: logging_target, "Proposing failed: {}", err);
+
+				return None
+			},
+			Either::Right(_) => {
+				info!(
+					target: logging_target,
+					"⌛️ Discarding proposal for slot {}; block production took too long", slot,
+				);
+				// If the node was compiled with debug, tell the user to use release optimizations.
+				#[cfg(build_type = "debug")]
+				info!(
+					target: logging_target,
+					"👉 Recompile your node in `--release` mode to mitigate this problem.",
+				);
+				telemetry!(
+					telemetry;
+					CONSENSUS_INFO;
+					"slots.discarding_proposal_took_too_long";
+					"slot" => *slot,
+				);
+
+				return None
+			},
+		};
+
+		Some(proposal)
+	}
+
 	/// Implements [`SlotWorker::on_slot`].
 	async fn on_slot(
 		&mut self,
@@ -256,10 +320,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		}
 
 		debug!(
-			target: self.logging_target(),
-			"Starting authorship at slot {}; timestamp = {}",
-			slot,
-			*timestamp,
+			target: logging_target,
+			"Starting authorship at slot {}; timestamp = {}", slot, *timestamp,
 		);
 
 		telemetry!(
@@ -287,48 +349,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
-		let logs = self.pre_digest_data(slot, &claim);
-
-		// deadline our production to 98% of the total time left for proposing. As we deadline
-		// the proposing below to the same total time left, the 2% margin should be enough for
-		// the result to be returned.
-		let proposing = proposer
-			.propose(
-				slot_info.inherent_data,
-				sp_runtime::generic::Digest { logs },
-				proposing_remaining_duration.mul_f32(0.98),
-				None,
-			)
-			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
-
-		let proposal = match futures::future::select(proposing, proposing_remaining).await {
-			Either::Left((Ok(p), _)) => p,
-			Either::Left((Err(err), _)) => {
-				warn!(target: logging_target, "Proposing failed: {}", err);
-
-				return None
-			},
-			Either::Right(_) => {
-				info!(
-					target: logging_target,
-					"⌛️ Discarding proposal for slot {}; block production took too long", slot,
-				);
-				// If the node was compiled with debug, tell the user to use release optimizations.
-				#[cfg(build_type = "debug")]
-				info!(
-					target: logging_target,
-					"👉 Recompile your node in `--release` mode to mitigate this problem.",
-				);
-				telemetry!(
-					telemetry;
-					CONSENSUS_INFO;
-					"slots.discarding_proposal_took_too_long";
-					"slot" => *slot,
-				);
-
-				return None
-			},
-		};
+		let proposal = self.propose(proposer, &claim, slot_info, proposing_remaining).await?;
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
