@@ -156,7 +156,7 @@ impl frame_system::Config for Runtime {
 	/// The identifier used to distinguish between accounts.
 	type AccountId = AccountId;
 	/// The aggregated dispatch type that is available for extrinsics.
-	type Call = Call;
+	type Call = RuntimeCall;
 	/// The lookup mechanism to get account ID from whatever is passed in dispatchers.
 	type Lookup = AccountIdLookup<AccountId, ()>;
 	/// The index type for storing how many extrinsics an account has signed.
@@ -208,7 +208,7 @@ impl pallet_aura::Config for Runtime {
 
 impl pallet_grandpa::Config for Runtime {
 	type Event = RuntimeEvent;
-	type Call = Call;
+	type Call = RuntimeCall;
 
 	type KeyOwnerProofSystem = ();
 
@@ -262,7 +262,7 @@ impl pallet_transaction_payment::Config for Runtime {
 
 impl pallet_sudo::Config for Runtime {
 	type Event = RuntimeEvent;
-	type Call = Call;
+	type Call = RuntimeCall;
 }
 
 /// Configure the pallet-template in pallets/template.
@@ -307,6 +307,7 @@ pub type SignedExtra = (
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 );
+type Call = RuntimeCall;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
 /// The payload being signed in transactions.
