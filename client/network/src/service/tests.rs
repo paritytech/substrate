@@ -92,21 +92,25 @@ fn build_test_full_node(
 
 	let protocol_id = ProtocolId::from("/test-protocol-name");
 
+	let fork_id = Some(String::from("test-fork-id"));
+
 	let block_request_protocol_config = {
-		let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), 50);
+		let (handler, protocol_config) =
+			BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
 	let state_request_protocol_config = {
-		let (handler, protocol_config) = StateRequestHandler::new(&protocol_id, client.clone(), 50);
+		let (handler, protocol_config) =
+			StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
 	let light_client_request_protocol_config = {
 		let (handler, protocol_config) =
-			LightClientRequestHandler::new(&protocol_id, client.clone());
+			LightClientRequestHandler::new(&protocol_id, None, client.clone());
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
@@ -134,6 +138,7 @@ fn build_test_full_node(
 		chain: client.clone(),
 		transaction_pool: Arc::new(config::EmptyTransactionPool),
 		protocol_id,
+		fork_id,
 		import_queue,
 		chain_sync: Box::new(chain_sync),
 		metrics_registry: None,
