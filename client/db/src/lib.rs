@@ -1345,8 +1345,15 @@ impl<Block: BlockT> Backend<Block> {
 
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = *pending_block.header.number();
+			let highest_leaf = self
+				.blockchain
+				.leaves
+				.read()
+				.highest_leaf()
+				.map(|(n, _)| n)
+				.unwrap_or(Zero::zero());
 			let existing_header =
-				number <= best_num && self.blockchain.header(BlockId::hash(hash))?.is_some();
+				number <= highest_leaf && self.blockchain.header(BlockId::hash(hash))?.is_some();
 
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
@@ -3534,7 +3541,24 @@ pub(crate) mod tests {
 			header.hash()
 		};
 
-		let block3_fork = insert_header_no_head(&backend, 3, block2, Default::default());
+		let block3_fork = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			let header = Header {
+				number: 3,
+				parent_hash: block2,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: H256::from_low_u64_le(42),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
 
 		assert!(backend.have_state_at(&block1, 1));
 		assert!(backend.have_state_at(&block2, 2));
@@ -3555,5 +3579,21 @@ pub(crate) mod tests {
 
 		assert_eq!(backend.blockchain.leaves().unwrap(), vec![block1]);
 		assert_eq!(1, backend.blockchain.leaves.read().highest_leaf().unwrap().0);
+	}
+
+	#[test]
+	fn test_no_duplicated_leaves_allowed() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		// Add block 2 not as the best block
+		let block2 = insert_header_no_head(&backend, 2, block1, Default::default());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
+		assert_eq!(backend.blockchain().info().best_hash, block1);
+
+		// Add block 2 as the best block
+		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
+		assert_eq!(backend.blockchain().info().best_hash, block2);
 	}
 }
