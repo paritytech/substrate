@@ -306,10 +306,3 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
-
-[patch.crates-io]
-trie-db = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
-hash-db = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
-memory-db = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
-trie-root = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }
-trie-bench = { git = "https://github.com/paritytech/trie", branch = "bkchr-funny-branch" }

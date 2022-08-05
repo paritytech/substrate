@@ -293,7 +293,7 @@ impl<T: Config> ProvingTrie<T> {
 			})?;
 		}
 
-		Some(recorder.drain().into_iter().map(|r| r.1).collect())
+		Some(recorder.drain().into_iter().map(|r| r.data).collect())
 	}
 
 	/// Access the underlying trie root.

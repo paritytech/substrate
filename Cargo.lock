@@ -746,9 +746,9 @@ checksum = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
 
 [[package]]
 name = "bytecheck"
-version = "0.6.8"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a31f923c2db9513e4298b72df143e6e655a759b3d6a0966df18f81223fff54f"
+checksum = "314889ea31cda264cb7c3d6e6e5c9415a987ecb0e72c17c00d36fbb881d34abe"
 dependencies = [
  "bytecheck_derive",
  "ptr_meta",
@@ -756,9 +756,9 @@ dependencies = [
 
 [[package]]
 name = "bytecheck_derive"
-version = "0.6.8"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edb17c862a905d912174daa27ae002326fff56dc8b8ada50a0a5f0976cb174f0"
+checksum = "4a2b3b92c135dae665a6f760205b89187638e83bed17ef3e44e83c712cf30600"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2759,21 +2759,14 @@ dependencies = [
 [[package]]
 name = "hash-db"
 version = "0.15.2"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#b41b01ebe3e7ec76787464398c9e44de66593875"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d23bd4e7b5eda0d0f3a307e8b381fdc8ba9000f26fbe912250c0a4cc3956364a"
 
 [[package]]
 name = "hash256-std-hasher"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92c171d55b98633f4ed3860808f004099b36c1cc29c42cfc53aa8591b21efcf2"
-dependencies = [
- "crunchy",
-]
-
-[[package]]
-name = "hash256-std-hasher"
-version = "0.15.2"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#b41b01ebe3e7ec76787464398c9e44de66593875"
 dependencies = [
  "crunchy",
 ]
@@ -3308,17 +3301,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711adba9940a039f4374fc5724c0a5eaca84a2d558cce62256bfe26f0dbef05e"
 dependencies = [
  "hash-db",
- "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "tiny-keccak",
-]
-
-[[package]]
-name = "keccak-hasher"
-version = "0.15.3"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#b41b01ebe3e7ec76787464398c9e44de66593875"
-dependencies = [
- "hash-db",
- "hash256-std-hasher 0.15.2 (git+https://github.com/paritytech/trie?branch=bkchr-funny-branch)",
+ "hash256-std-hasher",
  "tiny-keccak",
 ]
 
@@ -3670,15 +3653,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-gossipsub"
-<<<<<<< HEAD
-version = "0.38.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43e064ba4d7832e01c738626c6b274ae100baba05f5ffcc7b265c2a3ed398108"
-=======
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74b4b888cfbeb1f5551acd3aa1366e01bf88ede26cc3c4645d0d2d004d5ca7b0"
->>>>>>> origin/master
 dependencies = [
  "asynchronous-codec",
  "base64",
@@ -3774,15 +3751,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-metrics"
-<<<<<<< HEAD
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "564a7e5284d7d9b3140fdfc3cb6567bc32555e86a21de5604c2ec85da05cf384"
-=======
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef8aff4a1abef42328fbb30b17c853fff9be986dc39af17ee39f9c5f755c5e0c"
->>>>>>> origin/master
 dependencies = [
  "libp2p-core",
  "libp2p-gossipsub",
@@ -4361,7 +4332,8 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.29.0"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#b41b01ebe3e7ec76787464398c9e44de66593875"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6566c70c1016f525ced45d7b7f97730a2bafb037c788211d0c186ef5b2189f0a"
 dependencies = [
  "hash-db",
  "hashbrown 0.12.0",
@@ -6545,9 +6517,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "3.1.5"
+version = "3.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9182e4a71cae089267ab03e67c99368db7cd877baf50f931e5d6d4b71e195ac0"
+checksum = "04bc9583b5e01cc8c70d89acc9af14ef9b1c29ee3a0074b2a9eea8c0fa396690"
 dependencies = [
  "arrayvec 0.7.2",
  "bitvec",
@@ -6994,9 +6966,9 @@ checksum = "dbf0c48bc1d91375ae5c3cd81e3722dff1abcf81a30960240640d223f59fe0e5"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.40"
+version = "1.0.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd96a1e8ed2596c337f8eae5f24924ec83f5ad5ab21ea8e455d3566c69fbcaf7"
+checksum = "c54b25569025b7fc9651de43004ae593a75ad88543b17178aa5e1b9c4f15f56f"
 dependencies = [
  "unicode-ident",
 ]
@@ -7897,12 +7869,12 @@ version = "0.10.0-dev"
 dependencies = [
  "criterion",
  "hash-db",
+ "kitchensink-runtime",
  "kvdb",
  "kvdb-memorydb",
  "kvdb-rocksdb",
  "linked-hash-map",
  "log",
- "node-runtime",
  "parity-db",
  "parity-scale-codec",
  "parking_lot 0.12.0",
@@ -9652,7 +9624,7 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "hash-db",
- "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256-std-hasher",
  "hex",
  "hex-literal",
  "impl-serde",
@@ -9907,7 +9879,7 @@ name = "sp-runtime"
 version = "6.0.0"
 dependencies = [
  "either",
- "hash256-std-hasher 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256-std-hasher",
  "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
@@ -10070,7 +10042,7 @@ dependencies = [
  "sp-trie",
  "thiserror",
  "tracing",
- "trie-db",
+ "trie-db 0.24.0",
  "trie-root",
 ]
 
@@ -10185,9 +10157,9 @@ dependencies = [
  "thiserror",
  "tracing",
  "trie-bench",
- "trie-db",
+ "trie-db 0.24.0",
  "trie-root",
- "trie-standardmap 0.15.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-standardmap",
 ]
 
 [[package]]
@@ -10414,7 +10386,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-trie",
- "trie-db",
+ "trie-db 0.24.0",
 ]
 
 [[package]]
@@ -10487,7 +10459,7 @@ dependencies = [
  "sp-version",
  "substrate-test-runtime-client",
  "substrate-wasm-builder",
- "trie-db",
+ "trie-db 0.24.0",
 ]
 
 [[package]]
@@ -10981,22 +10953,37 @@ checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
 [[package]]
 name = "trie-bench"
 version = "0.30.0"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#b41b01ebe3e7ec76787464398c9e44de66593875"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57ecec5d10427b35e9ae374b059dccc0801d02d832617c04c78afc7a8c5c4a34"
 dependencies = [
  "criterion",
  "hash-db",
- "keccak-hasher 0.15.3 (git+https://github.com/paritytech/trie?branch=bkchr-funny-branch)",
+ "keccak-hasher",
  "memory-db",
  "parity-scale-codec",
- "trie-db",
+ "trie-db 0.23.1",
  "trie-root",
- "trie-standardmap 0.15.2 (git+https://github.com/paritytech/trie?branch=bkchr-funny-branch)",
+ "trie-standardmap",
 ]
 
 [[package]]
 name = "trie-db"
 version = "0.23.1"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#b41b01ebe3e7ec76787464398c9e44de66593875"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d32d034c0d3db64b43c31de38e945f15b40cd4ca6d2dcfc26d4798ce8de4ab83"
+dependencies = [
+ "hash-db",
+ "hashbrown 0.12.0",
+ "log",
+ "rustc-hex",
+ "smallvec",
+]
+
+[[package]]
+name = "trie-db"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "004e1e8f92535694b4cb1444dc5a8073ecf0815e3357f729638b9f8fc4062908"
 dependencies = [
  "hash-db",
  "hashbrown 0.12.0",
@@ -11008,7 +10995,8 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.17.0"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#b41b01ebe3e7ec76787464398c9e44de66593875"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a36c5ca3911ed3c9a5416ee6c679042064b93fc637ded67e25f92e68d783891"
 dependencies = [
  "hash-db",
 ]
@@ -11020,16 +11008,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3161ba520ab28cd8e6b68e1126f1009f6e335339d1a73b978139011703264c8"
 dependencies = [
  "hash-db",
- "keccak-hasher 0.15.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "trie-standardmap"
-version = "0.15.2"
-source = "git+https://github.com/paritytech/trie?branch=bkchr-funny-branch#b41b01ebe3e7ec76787464398c9e44de66593875"
-dependencies = [
- "hash-db",
- "keccak-hasher 0.15.3 (git+https://github.com/paritytech/trie?branch=bkchr-funny-branch)",
+ "keccak-hasher",
 ]
 
 [[package]]

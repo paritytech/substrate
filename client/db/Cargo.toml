@@ -40,7 +40,7 @@ kvdb-rocksdb = "0.15.1"
 rand = "0.8.4"
 tempfile = "3.1.0"
 quickcheck = { version = "1.0.3", default-features = false }
-node-runtime = { path = "../../bin/node/runtime" }
+kitchensink-runtime = { path = "../../bin/node/runtime" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
