@@ -46,6 +46,7 @@ impl PruningParams {
 			.as_ref()
 			.map(|s| match s.as_str() {
 				"archive" => Ok(PruningMode::ArchiveAll),
+				"canonical" => Ok(PruningMode::ArchiveCanonical),
 				bc => bc
 					.parse()
 					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))
