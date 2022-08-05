@@ -287,7 +287,7 @@ pub mod pallet {
 
 			let mut next_tickets = NextTickets::<T>::get();
 
-			// TODO-SASS-P2: use a scattered structure for tickets
+			// TODO-SASS-P2: temporary code
 			next_tickets = next_tickets.try_mutate(|tree| {
                 for ticket in tickets.iter() {
                     tree.insert(*ticket);
@@ -295,7 +295,7 @@ pub mod pallet {
                 let max_tickets = T::MaxTickets::get() as usize;
                 if tree.len() > max_tickets {
                     // Remove the mid values
-                    // TODO-SASS-P2: with the new structure this will be reimplemented...
+                    // TODO-SASS-P2: don't judge me, this will be reimplemented :-)
                     let diff = tree.len() - max_tickets;
                     let off = max_tickets / 2;
                     let val = tree.iter().nth(off).cloned().unwrap();
@@ -354,12 +354,6 @@ pub mod pallet {
 					return InvalidTransaction::Stale.into()
 				}
 
-				// TODO-SASS-P2 more validation steps:
-				// 0. validate the proof
-				// 1. epoch index
-				// 2. signed by an authority for current epoch
-				// 3. single submission attempt from validator?
-
 				ValidTransaction::with_tag_prefix("Sassafras")
 					// We assign the maximum priority for any equivocation report.
 					.priority(TransactionPriority::max_value())
@@ -411,9 +405,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn slot_epoch_index(slot: Slot) -> u64 {
-		// if *GenesisSlot::<T>::get() == 0 {
-		// 	return 0
-		// }
+		if *GenesisSlot::<T>::get() == 0 {
+			return 0
+		}
 		*slot.saturating_sub(Self::current_epoch_start())
 	}
 
@@ -443,7 +437,6 @@ impl<T: Config> Pallet<T> {
 		NextAuthorities::<T>::put(&next_authorities);
 
 		// Update epoch index
-		// TODO-SASS-P2: fix this to allow epoch skip
 		let mut epoch_index = EpochIndex::<T>::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
@@ -628,7 +621,7 @@ impl<T: Config> Pallet<T> {
 	/// If `slot` value falls within the next epoch then we fetch tickets from the `NextTickets`
 	/// list. Note that in this case we may have not finished receiving all the tickets for that
 	/// epoch yet. The next epoch tickets should be considered "stable" only after the current
-	/// epoch first half (see the [`submit_tickers_unsigned_extrinsic`]).
+	/// epoch first half (see the [`submit_tickets_unsigned_extrinsic`]).
 	///
 	/// Returns `None` if, according to the sorting strategy, there is no ticket associated to the
 	/// specified slot-index (happend if a ticket falls in the middle of an epoch and n > k),

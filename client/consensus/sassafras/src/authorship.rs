@@ -70,19 +70,16 @@ pub fn claim_slot(
 		transcript_data,
 	);
 
-	match result {
-		Ok(Some(signature)) => {
-			let pre_digest = PreDigest {
-				authority_index: authority_index as u32,
-				slot,
-				vrf_output: VRFOutput(signature.output),
-				vrf_proof: VRFProof(signature.proof.clone()),
-				ticket_info,
-			};
-			Some((pre_digest, authority_id.clone()))
-		},
-		_ => None,
-	}
+	result.ok().flatten().map(|signature| {
+		let pre_digest = PreDigest {
+			authority_index: authority_index as u32,
+			slot,
+			vrf_output: VRFOutput(signature.output),
+			vrf_proof: VRFProof(signature.proof.clone()),
+			ticket_info,
+		};
+		(pre_digest, authority_id.clone())
+	})
 }
 
 /// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
