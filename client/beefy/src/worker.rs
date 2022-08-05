@@ -947,7 +947,7 @@ pub(crate) mod tests {
 	use sp_blockchain::Backend as BlockchainBackendT;
 	use substrate_test_runtime_client::{
 		runtime::{Block, Digest, DigestItem, Header, H256},
-		Backend,
+		Backend, ClientExt,
 	};
 
 	fn create_beefy_worker(
@@ -1262,7 +1262,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn test_finalize() {
+	fn should_finalize_correctly() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
@@ -1441,5 +1441,110 @@ pub(crate) mod tests {
 		let mut votes = worker.pending_votes.values();
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 21);
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 22);
+	}
+
+	#[test]
+	fn should_initialize_correct_voter() {
+		let keys = &[Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
+		let mut net = BeefyTestNet::new(1, 0);
+		let backend = net.peer(0).client().as_backend();
+
+		// push 15 blocks with `AuthorityChange` digests every 10 blocks
+		net.generate_blocks_and_sync(15, 10, &validator_set, false);
+		// finalize 13 without justifications
+		net.peer(0)
+			.client()
+			.as_client()
+			.finalize_block(BlockId::number(13), None)
+			.unwrap();
+
+		// Test initialization at session boundary.
+		{
+			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+
+			// initialize voter at block 13, expect rounds initialized at session_start = 10
+			let header = backend.blockchain().header(BlockId::number(13)).unwrap().unwrap();
+			worker.initialize_voter(&header, validator_set.clone());
+
+			// verify voter initialized with single session starting at block 10
+			assert_eq!(worker.voting_oracle.sessions.len(), 1);
+			let rounds = worker.voting_oracle.rounds_mut().unwrap();
+			assert_eq!(rounds.session_start(), 10);
+			assert_eq!(rounds.validator_set_id(), validator_set.id());
+
+			// verify next vote target is mandatory block 10
+			assert_eq!(worker.best_beefy_block, None);
+			assert_eq!(*worker.best_grandpa_block_header.number(), 13);
+			assert_eq!(worker.voting_oracle.voting_target(worker.best_beefy_block, 13), Some(10));
+		}
+
+		// Test corner-case where session boundary == last beefy finalized.
+		{
+			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+
+			// import/append BEEFY justification for session boundary block 10
+			let commitment = Commitment {
+				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				block_number: 10,
+				validator_set_id: validator_set.id(),
+			};
+			let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
+				commitment,
+				signatures: vec![None],
+			});
+			backend
+				.append_justification(BlockId::Number(10), (BEEFY_ENGINE_ID, justif.encode()))
+				.unwrap();
+
+			// initialize voter at block 13, expect rounds initialized at last beefy finalized 10
+			let header = backend.blockchain().header(BlockId::number(13)).unwrap().unwrap();
+			worker.initialize_voter(&header, validator_set.clone());
+
+			// verify voter initialized with single session starting at block 10
+			assert_eq!(worker.voting_oracle.sessions.len(), 1);
+			let rounds = worker.voting_oracle.rounds_mut().unwrap();
+			assert_eq!(rounds.session_start(), 10);
+			assert_eq!(rounds.validator_set_id(), validator_set.id());
+
+			// verify next vote target is mandatory block 10
+			assert_eq!(worker.best_beefy_block, Some(10));
+			assert_eq!(*worker.best_grandpa_block_header.number(), 13);
+			assert_eq!(worker.voting_oracle.voting_target(worker.best_beefy_block, 13), Some(12));
+		}
+
+		// Test initialization at last BEEFY finalized.
+		{
+			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+
+			// import/append BEEFY justification for block 12
+			let commitment = Commitment {
+				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				block_number: 12,
+				validator_set_id: validator_set.id(),
+			};
+			let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
+				commitment,
+				signatures: vec![None],
+			});
+			backend
+				.append_justification(BlockId::Number(12), (BEEFY_ENGINE_ID, justif.encode()))
+				.unwrap();
+
+			// initialize voter at block 13, expect rounds initialized at last beefy finalized 12
+			let header = backend.blockchain().header(BlockId::number(13)).unwrap().unwrap();
+			worker.initialize_voter(&header, validator_set.clone());
+
+			// verify voter initialized with single session starting at block 12
+			assert_eq!(worker.voting_oracle.sessions.len(), 1);
+			let rounds = worker.voting_oracle.rounds_mut().unwrap();
+			assert_eq!(rounds.session_start(), 12);
+			assert_eq!(rounds.validator_set_id(), validator_set.id());
+
+			// verify next vote target is 13
+			assert_eq!(worker.best_beefy_block, Some(12));
+			assert_eq!(*worker.best_grandpa_block_header.number(), 13);
+			assert_eq!(worker.voting_oracle.voting_target(worker.best_beefy_block, 13), Some(13));
+		}
 	}
 }
