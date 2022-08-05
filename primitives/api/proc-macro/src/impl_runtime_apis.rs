@@ -108,8 +108,8 @@ fn generate_impl_calls(
 	for impl_ in impls {
 		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
-		let mut impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
-		append_api_version(&mut impl_trait, trait_api_ver);
+		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
+		let impl_trait = extend_with_api_version(impl_trait, trait_api_ver);
 		let impl_trait_ident = &impl_trait_path
 			.segments
 			.last()
@@ -402,10 +402,10 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 }
 
 // TODO: fix this not to mutate the input, similar to the rest of the code
-fn append_api_version(trait_: &mut Path, version: Option<u64>) {
+fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 	if version.is_none() {
 		// nothing to do
-		return
+		return trait_
 	}
 
 	let version = version.unwrap();
@@ -420,6 +420,8 @@ fn append_api_version(trait_: &mut Path, version: Option<u64>) {
 		versioned_trait_name(trait_name, version)
 	};
 	trait_.segments.last_mut().as_mut().unwrap().ident = versioned_trait_ident;
+
+	trait_
 }
 
 /// Generates the implementations of the apis for the runtime.
@@ -433,8 +435,8 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 
 		let mut impl_ = impl_.clone();
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
-		let mut trait_ = extend_with_runtime_decl_path(trait_);
-		append_api_version(&mut trait_, trait_api_ver);
+		let trait_ = extend_with_runtime_decl_path(trait_);
+		let trait_ = extend_with_api_version(trait_, trait_api_ver);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
 		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
