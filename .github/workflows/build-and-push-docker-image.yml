@@ -37,7 +37,7 @@ jobs:
         run: |
           container_id=$(docker create ${{ env.IMAGE_ID }})
           docker cp $container_id:/home/cere/node-runtime-artifacts/node_runtime.compact.wasm ./
-          short_github_sha=${GITHUB_SHA:0:9}
+          short_github_sha=${GITHUB_SHA:0:7}
           echo "ARTIFACT_NAME=node_runtime.compact.$short_github_sha.wasm" >> $GITHUB_ENV
       - name: Upload wasm artifact
         uses: actions/upload-artifact@v3
