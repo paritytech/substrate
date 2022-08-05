@@ -2256,7 +2256,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 						block
 					)))
 				}
-				if let Ok(()) = self.storage.state_db.pin(&hash) {
+				if let Ok(()) = self.storage.state_db.pin(&hash, hdr.number.saturated_into::<u64>())
+				{
 					let root = hdr.state_root;
 					let db_state = DbState::<Block>::new(self.storage.clone(), root);
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash));

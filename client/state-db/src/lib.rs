@@ -353,9 +353,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
 					!self.non_canonical.have_block(hash)
 				} else {
-					self.pruning.as_ref().map_or(false, |pruning| {
-						number < pruning.pending() || !pruning.have_block(hash)
-					})
+					self.pruning.as_ref().map_or(false, |pruning| !pruning.have_block(number))
 				}
 			},
 		}
@@ -403,12 +401,12 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		}
 	}
 
-	fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
+	fn pin(&mut self, hash: &BlockHash, number: u64) -> Result<(), PinError> {
 		match self.mode {
 			PruningMode::ArchiveAll => Ok(()),
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 				if self.non_canonical.have_block(hash) ||
-					self.pruning.as_ref().map_or(false, |pruning| pruning.have_block(hash))
+					self.pruning.as_ref().map_or(false, |pruning| pruning.have_block(number))
 				{
 					let refs = self.pinned.entry(hash.clone()).or_default();
 					if *refs == 0 {
@@ -563,8 +561,8 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	/// Prevents pruning of specified block and its descendants.
-	pub fn pin(&self, hash: &BlockHash) -> Result<(), PinError> {
-		self.db.write().pin(hash)
+	pub fn pin(&self, hash: &BlockHash, number: u64) -> Result<(), PinError> {
+		self.db.write().pin(hash, number)
 	}
 
 	/// Allows pruning of specified block.

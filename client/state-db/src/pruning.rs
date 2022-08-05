@@ -390,12 +390,14 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		0
 	}
 
+	// Return the block number of the first block that not been pending pruned
 	pub fn pending(&self) -> u64 {
 		self.pending_number + self.pending_prunings as u64
 	}
 
-	pub fn have_block(&self, hash: &BlockHash) -> bool {
-		self.queue.has_block(hash, self.pending_prunings)
+	// Return true if a canonicalized block is in the window and not be pruned yet 
+	pub fn have_block(&self, number: u64) -> bool {
+		number >= self.pending() && number < self.pending_number + self.queue.len() as u64
 	}
 
 	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
