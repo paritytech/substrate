@@ -797,8 +797,7 @@ pub mod pallet {
 
 		/// As a member, give a retirement notice and start a retirement period required to pass in
 		/// order to retire.
-		// TODO setup weight T::WeightInfo::retirement_notice()
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::retirement_notice())]
 		pub fn retirement_notice(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
