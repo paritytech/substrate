@@ -68,7 +68,7 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();
