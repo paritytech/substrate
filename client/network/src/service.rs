@@ -224,8 +224,16 @@ where
 			fs::create_dir_all(path)?;
 		}
 
-		let transactions_handler_proto =
-			transactions::TransactionsHandlerPrototype::new(params.protocol_id.clone());
+		let transactions_handler_proto = transactions::TransactionsHandlerPrototype::new(
+			params.protocol_id.clone(),
+			params
+				.chain
+				.block_hash(0u32.into())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+			params.fork_id.clone(),
+		);
 		params
 			.network_config
 			.extra_sets
@@ -243,6 +251,7 @@ where
 			From::from(&params.role),
 			params.chain.clone(),
 			params.protocol_id.clone(),
+			&params.fork_id,
 			&params.network_config,
 			iter::once(Vec::new())
 				.chain(
