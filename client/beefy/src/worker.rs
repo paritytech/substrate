@@ -32,18 +32,19 @@ use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
+use sp_blockchain::Backend as BlockchainBackend;
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
+	traits::{Block, Header, NumberFor},
 	SaturatedConversion,
 };
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
 	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
-	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
+	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 use crate::{
@@ -365,8 +366,8 @@ where
 			{
 				if let Some(new_validator_set) = find_authorities_change::<B>(&header) {
 					self.init_session_at(new_validator_set, *header.number());
-					// TODO: when adding SYNC protocol, fire up a request for justification
-					// for this mandatory block here.
+					// TODO (grandpa-bridge-gadget/issues/20): when adding SYNC protocol,
+					// fire up a request for justification for this mandatory block here.
 				}
 			}
 		}
@@ -650,7 +651,78 @@ where
 		Ok(())
 	}
 
+	/// Initialize BEEFY voter state.
+	///
+	/// Should be called only once during worker initialization with latest GRANDPA finalized
+	/// `header` and the validator set `active` at that point.
+	fn initialize_voter(&mut self, header: &B::Header, active: ValidatorSet<AuthorityId>) {
+		// just a sanity check.
+		if let Some(rounds) = self.voting_oracle.rounds_mut() {
+			error!(
+				target: "beefy",
+				"🥩 Voting session already initialized at: {:?}, validator set id {}.",
+				rounds.session_start(),
+				rounds.validator_set_id(),
+			);
+			return
+		}
+
+		self.best_grandpa_block_header = header.clone();
+		if active.id() == GENESIS_AUTHORITY_SET_ID {
+			// When starting from genesis, there is no session boundary digest.
+			// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
+			info!(target: "beefy", "🥩 Initialize voting session at genesis, block 1.");
+			self.init_session_at(active, 1u32.into());
+		} else {
+			// TODO (issue #11837): persist local progress to avoid following look-up during init.
+			let blockchain = self.backend.blockchain();
+			let mut header = header.clone();
+
+			// Walk back the imported blocks and initialize voter either, at the last block with
+			// a BEEFY justification, or at this session's boundary; voter will resume from there.
+			loop {
+				if let Some(true) = blockchain
+					.justifications(BlockId::hash(header.hash()))
+					.ok()
+					.flatten()
+					.map(|justifs| justifs.get(BEEFY_ENGINE_ID).is_some())
+				{
+					info!(
+						target: "beefy",
+						"🥩 Initialize voting session at last BEEFY finalized block: {:?}.",
+						*header.number()
+					);
+					self.init_session_at(active, *header.number());
+					// Mark the round as already finalized.
+					if let Some(round) = self.voting_oracle.rounds_mut() {
+						round.conclude(*header.number());
+					}
+					self.best_beefy_block = Some(*header.number());
+					break
+				}
+
+				if let Some(validator_set) = find_authorities_change::<B>(&header) {
+					info!(
+						target: "beefy",
+						"🥩 Initialize voting session at current session boundary: {:?}.",
+						*header.number()
+					);
+					self.init_session_at(validator_set, *header.number());
+					break
+				}
+
+				// Move up the chain.
+				header = self
+					.client
+					.expect_header(BlockId::Hash(*header.parent_hash()))
+					// in case of db failure here we want to kill the worker
+					.expect("db failure, voter going down.");
+			}
+		}
+	}
+
 	/// Wait for BEEFY runtime pallet to be available.
+	/// Should be called only once during worker initialization.
 	async fn wait_for_runtime_pallet(&mut self) {
 		let mut gossip_engine = &mut self.gossip_engine;
 		let mut finality_stream = self.client.finality_notification_stream().fuse();
@@ -661,14 +733,9 @@ where
 						Some(notif) => notif,
 						None => break
 					};
-					// Try to get genesis authorities using BeefyApi.
-					let at = BlockId::Number(Zero::zero());
-					if let Some(genesis_auth) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
-						debug!(target: "beefy", "🥩 Genesis validator set: {:?}", genesis_auth);
-						// When starting from genesis, there is no session boundary digest.
-						// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
-						self.init_session_at(genesis_auth.clone(), 1u32.into());
-						self.handle_finality_notification(&notif);
+					let at = BlockId::hash(notif.header.hash());
+					if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
+						self.initialize_voter(&notif.header, active);
 						if let Err(err) = self.try_to_vote() {
 							debug!(target: "beefy", "🥩 {}", err);
 						}
