@@ -248,11 +248,18 @@ pub mod pallet {
 		#[pallet::constant]
 		type TermDuration: Get<Self::BlockNumber>;
 
-		/// The maximum number of candidates in a phragmen election.
+		/// The maximum number of candidates in a phragmen election. 
+		///
+		/// Warning: The election happens onchain, and this value will determine
+		/// the size of the election. When this limit is reached no more
+		/// candidates are accepted in the election.
 		#[pallet::constant]
 		type MaxCandidates: Get<u32>;
 
 		/// The maximum number of voters to allow in a phragmen election.
+		///
+		/// Warning: This impacts the size of the election which is run onchain.
+		/// When the limit is reached the new voters are ignored.
 		#[pallet::constant]
 		type MaxVoters: Get<u32>;
 
