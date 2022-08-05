@@ -167,6 +167,7 @@ impl<AccountId> IdentityVerifier<AccountId> for () {
 /// The provider of a collective action interface, for example an instance of `pallet-collective`.
 pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	/// Add a new proposal.
+	/// Returns a proposal length and active proposals count if successful.
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
@@ -175,6 +176,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	) -> Result<(u32, u32), DispatchError>;
 
 	/// Add an aye or nay vote for the sender to the given proposal.
+	/// Returns true if the sender votes first time if successful.
 	fn vote_proposal(
 		who: AccountId,
 		proposal: Hash,
@@ -183,6 +185,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	) -> Result<bool, DispatchError>;
 
 	/// Veto a proposal, close, and remove it from the system, regardless of its current state.
+	/// Returns an active proposals count which includes removed proposal.
 	fn veto_proposal(proposal_hash: Hash) -> u32;
 
 	/// Close a proposal that is either approved, disapproved or whose voting period has ended.
