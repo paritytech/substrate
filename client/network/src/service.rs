@@ -137,7 +137,6 @@ where
 	Client: HeaderBackend<B>
 		+ BlockBackend<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -1495,7 +1494,6 @@ where
 	Client: HeaderBackend<B>
 		+ BlockBackend<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -1534,7 +1532,6 @@ where
 	Client: HeaderBackend<B>
 		+ BlockBackend<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -2186,7 +2183,6 @@ where
 	Client: HeaderBackend<B>
 		+ BlockBackend<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -2200,7 +2196,6 @@ where
 	Client: HeaderBackend<B>
 		+ BlockBackend<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -2214,7 +2209,6 @@ where
 	Client: HeaderBackend<B>
 		+ BlockBackend<B>
 		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
 		+ Send
 		+ Sync
 		+ 'static,
