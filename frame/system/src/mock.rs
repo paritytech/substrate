@@ -95,7 +95,7 @@ impl Config for Test {
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
