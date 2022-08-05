@@ -69,7 +69,6 @@ use sp_runtime::{
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill,
-	RuntimeString,
 };
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
@@ -1960,14 +1959,10 @@ impl_runtime_apis! {
 		fn query_fee_details(uxt: <Block as BlockT>::Extrinsic, len: u32) -> FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
 		}
-		fn query_call_info(
-			encoded_call: Vec<u8>,
-		) -> Result<RuntimeDispatchInfo<Balance>, RuntimeString> {
+		fn query_call_info(encoded_call: Vec<u8>) -> RuntimeDispatchInfo<Balance> {
 			TransactionPayment::query_call_info(encoded_call)
 		}
-		fn query_call_fee_details(
-			encoded_call: Vec<u8>,
-		) -> Result<FeeDetails<Balance>, RuntimeString> {
+		fn query_call_fee_details(encoded_call: Vec<u8>) -> FeeDetails<Balance> {
 			TransactionPayment::query_call_fee_details(encoded_call)
 		}
 	}

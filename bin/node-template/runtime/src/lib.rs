@@ -16,7 +16,7 @@ use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, MultiSignature, RuntimeString,
+	ApplyExtrinsicResult, MultiSignature,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -458,14 +458,10 @@ impl_runtime_apis! {
 		fn query_fee_details(uxt: <Block as BlockT>::Extrinsic, len: u32) -> FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
 		}
-		fn query_call_info(
-			encoded_call: Vec<u8>,
-		) -> Result<RuntimeDispatchInfo<Balance>, RuntimeString> {
+		fn query_call_info(encoded_call: Vec<u8>) -> RuntimeDispatchInfo<Balance> {
 			TransactionPayment::query_call_info(encoded_call)
 		}
-		fn query_call_fee_details(
-			encoded_call: Vec<u8>,
-		) -> Result<FeeDetails<Balance>, RuntimeString> {
+		fn query_call_fee_details(encoded_call: Vec<u8>) -> FeeDetails<Balance> {
 			TransactionPayment::query_call_fee_details(encoded_call)
 		}
 	}
