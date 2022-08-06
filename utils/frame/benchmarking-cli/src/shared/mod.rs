@@ -25,7 +25,10 @@ pub use record::BenchRecord;
 pub use stats::{StatSelect, Stats};
 pub use weight_params::WeightParams;
 
+use clap::Args;
 use rand::prelude::*;
+use sc_sysinfo::gather_sysinfo;
+use serde::Serialize;
 
 /// A Handlebars helper to add an underscore after every 3rd character,
 /// i.e. a separator for large numbers.
@@ -87,5 +90,45 @@ pub fn check_build_profile() -> Result<(), String> {
 		Err("The optimization level is not set to 3".into())
 	} else {
 		Ok(())
+	}
+}
+
+/// Parameters to configure how the host info will be determined.
+#[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
+#[clap(rename_all = "kebab-case")]
+pub struct HostInfoParams {
+	/// Manually override the hostname to use.
+	#[clap(long)]
+	pub hostname_override: Option<String>,
+
+	/// Specify a fallback hostname if no-one could be detected automatically.
+	///
+	/// Note: This only exists to make the `hostname` function infallible.
+	#[clap(long, default_value = "<UNKNOWN>")]
+	pub hostname_fallback: String,
+
+	/// Specify a fallback CPU name if no-one could be detected automatically.
+	///
+	/// Note: This only exists to make the `cpuname` function infallible.
+	#[clap(long, default_value = "<UNKNOWN>")]
+	pub cpuname_fallback: String,
+}
+
+impl HostInfoParams {
+	/// Returns the hostname of the machine.
+	///
+	/// Can be used to track on which machine a benchmark was run.
+	pub fn hostname(&self) -> String {
+		self.hostname_override
+			.clone()
+			.or(gethostname::gethostname().into_string().ok())
+			.unwrap_or(self.hostname_fallback.clone())
+	}
+
+	/// Returns the CPU name of the current machine.
+	///
+	/// Can be used to track on which machine a benchmark was run.
+	pub fn cpuname(&self) -> String {
+		gather_sysinfo().cpu.unwrap_or(self.cpuname_fallback.clone())
 	}
 }

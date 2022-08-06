@@ -429,7 +429,7 @@ pub fn generate_equivocation_proof(
 		System::reset_events();
 		System::initialize(&current_block, &parent_hash, &pre_digest);
 		System::set_block_number(current_block);
-		Timestamp::set_timestamp(current_block);
+		Timestamp::set_timestamp(*current_slot * Babe::slot_duration());
 		System::finalize()
 	};
 

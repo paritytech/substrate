@@ -28,9 +28,9 @@ use sp_core::storage::{PrefixedStorageKey, StorageData, StorageKey};
 #[rpc(client, server)]
 pub trait ChildStateApi<Hash> {
 	/// Returns the keys with prefix from a child storage, leave empty to get all the keys
-	#[method(name = "childstate_getKeys")]
+	#[method(name = "childstate_getKeys", blocking)]
 	#[deprecated(since = "2.0.0", note = "Please use `getKeysPaged` with proper paging support")]
-	async fn storage_keys(
+	fn storage_keys(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
@@ -40,8 +40,8 @@ pub trait ChildStateApi<Hash> {
 	/// Returns the keys with prefix from a child storage with pagination support.
 	/// Up to `count` keys will be returned.
 	/// If `start_key` is passed, return next keys in storage in lexicographic order.
-	#[method(name = "childstate_getKeysPaged", aliases = ["childstate_getKeysPagedAt"])]
-	async fn storage_keys_paged(
+	#[method(name = "childstate_getKeysPaged", aliases = ["childstate_getKeysPagedAt"], blocking)]
+	fn storage_keys_paged(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		prefix: Option<StorageKey>,
@@ -51,8 +51,8 @@ pub trait ChildStateApi<Hash> {
 	) -> RpcResult<Vec<StorageKey>>;
 
 	/// Returns a child storage entry at a specific block's state.
-	#[method(name = "childstate_getStorage")]
-	async fn storage(
+	#[method(name = "childstate_getStorage", blocking)]
+	fn storage(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
@@ -60,8 +60,8 @@ pub trait ChildStateApi<Hash> {
 	) -> RpcResult<Option<StorageData>>;
 
 	/// Returns child storage entries for multiple keys at a specific block's state.
-	#[method(name = "childstate_getStorageEntries")]
-	async fn storage_entries(
+	#[method(name = "childstate_getStorageEntries", blocking)]
+	fn storage_entries(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
@@ -69,8 +69,8 @@ pub trait ChildStateApi<Hash> {
 	) -> RpcResult<Vec<Option<StorageData>>>;
 
 	/// Returns the hash of a child storage entry at a block's state.
-	#[method(name = "childstate_getStorageHash")]
-	async fn storage_hash(
+	#[method(name = "childstate_getStorageHash", blocking)]
+	fn storage_hash(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
@@ -78,8 +78,8 @@ pub trait ChildStateApi<Hash> {
 	) -> RpcResult<Option<Hash>>;
 
 	/// Returns the size of a child storage entry at a block's state.
-	#[method(name = "childstate_getStorageSize")]
-	async fn storage_size(
+	#[method(name = "childstate_getStorageSize", blocking)]
+	fn storage_size(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		key: StorageKey,
@@ -87,8 +87,8 @@ pub trait ChildStateApi<Hash> {
 	) -> RpcResult<Option<u64>>;
 
 	/// Returns proof of storage for child key entries at a specific block's state.
-	#[method(name = "state_getChildReadProof")]
-	async fn read_child_proof(
+	#[method(name = "state_getChildReadProof", blocking)]
+	fn read_child_proof(
 		&self,
 		child_storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,

@@ -89,7 +89,7 @@ where
 /// can prioritize shorter chains over longer ones, the vote may be
 /// closer to the best block than N.
 #[derive(Clone)]
-pub struct BeforeBestBlockBy<N>(N);
+pub struct BeforeBestBlockBy<N>(pub N);
 impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>>
 where
 	Block: BlockT,

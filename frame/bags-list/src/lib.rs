@@ -82,7 +82,10 @@ macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
 			target: crate::LOG_TARGET,
-			concat!("[{:?}] 👜", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+			concat!("[{:?}] 👜 [{}]", $patter),
+			<frame_system::Pallet<T>>::block_number(),
+			<crate::Pallet::<T, I> as frame_support::traits::PalletInfoAccess>::name()
+			$(, $values)*
 		)
 	};
 }
@@ -189,6 +192,8 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Moved an account from one bag to another.
 		Rebagged { who: T::AccountId, from: T::Score, to: T::Score },
+		/// Updated the score of some account to the given amount.
+		ScoreUpdated { who: T::AccountId, new_score: T::Score },
 	}
 
 	#[pallet::error]
@@ -212,13 +217,16 @@ pub mod pallet {
 		///
 		/// Anyone can call this function about any potentially dislocated account.
 		///
-		/// Will never return an error; if `dislocated` does not exist or doesn't need a rebag, then
-		/// it is a noop and fees are still collected from `origin`.
+		/// Will always update the stored score of `dislocated` to the correct score, based on
+		/// `ScoreProvider`.
+		///
+		/// If `dislocated` does not exists, it returns an error.
 		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
 		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
 			let current_score = T::ScoreProvider::score(&dislocated);
-			let _ = Pallet::<T, I>::do_rebag(&dislocated, current_score);
+			let _ = Pallet::<T, I>::do_rebag(&dislocated, current_score)
+				.map_err::<Error<T, I>, _>(Into::into)?;
 			Ok(())
 		}
 
@@ -265,6 +273,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
 		};
+		Self::deposit_event(Event::<T, I>::ScoreUpdated { who: account.clone(), new_score });
 		Ok(maybe_movement)
 	}
 
@@ -300,6 +309,10 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 
 	fn on_insert(id: T::AccountId, score: T::Score) -> Result<(), ListError> {
 		List::<T, I>::insert(id, score)
+	}
+
+	fn get_score(id: &T::AccountId) -> Result<T::Score, ListError> {
+		List::<T, I>::get_score(id)
 	}
 
 	fn on_update(id: &T::AccountId, new_score: T::Score) -> Result<(), ListError> {
@@ -357,5 +370,24 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 			let prev_threshold_idx = current_bag_idx - 1;
 			thresholds[prev_threshold_idx]
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> ScoreProvider<T::AccountId> for Pallet<T, I> {
+	type Score = <Pallet<T, I> as SortedListProvider<T::AccountId>>::Score;
+
+	fn score(id: &T::AccountId) -> T::Score {
+		Node::<T, I>::get(id).map(|node| node.score()).unwrap_or_default()
+	}
+
+	#[cfg(any(feature = "runtime-benchmarks", test))]
+	fn set_score_of(id: &T::AccountId, new_score: T::Score) {
+		ListNodes::<T, I>::mutate(id, |maybe_node| {
+			if let Some(node) = maybe_node.as_mut() {
+				node.set_score(new_score)
+			} else {
+				panic!("trying to mutate {:?} which does not exists", id);
+			}
+		})
 	}
 }

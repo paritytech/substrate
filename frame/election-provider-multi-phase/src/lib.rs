@@ -51,7 +51,7 @@
 //! In the signed phase, solutions (of type [`RawSolution`]) are submitted and queued on chain. A
 //! deposit is reserved, based on the size of the solution, for the cost of keeping this solution
 //! on-chain for a number of blocks, and the potential weight of the solution upon being checked. A
-//! maximum of `pallet::Config::MaxSignedSubmissions` solutions are stored. The queue is always
+//! maximum of `pallet::Config::SignedMaxSubmissions` solutions are stored. The queue is always
 //! sorted based on score (worse to best).
 //!
 //! Upon arrival of a new solution:
@@ -948,6 +948,11 @@ pub mod pallet {
 				compute: ElectionCompute::Emergency,
 			};
 
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Emergency,
+				prev_ejected: QueuedSolution::<T>::exists(),
+			});
+
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
 		}
@@ -1056,6 +1061,11 @@ pub mod pallet {
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
 			};
+
+			Self::deposit_event(Event::SolutionStored {
+				election_compute: ElectionCompute::Fallback,
+				prev_ejected: QueuedSolution::<T>::exists(),
+			});
 
 			<QueuedSolution<T>>::put(solution);
 			Ok(())
@@ -1792,13 +1802,13 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MockedWeightInfo,
-			MultiPhase, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
+			MultiPhase, Origin, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
 	use frame_election_provider_support::ElectionProvider;
 	use frame_support::{assert_noop, assert_ok};
-	use sp_npos_elections::Support;
+	use sp_npos_elections::{BalancingConfig, Support};
 
 	#[test]
 	fn phase_rotation_works() {
@@ -2039,6 +2049,50 @@ mod tests {
 	}
 
 	#[test]
+	fn governance_fallback_works() {
+		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
+			roll_to(25);
+			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
+
+			// Zilch solutions thus far.
+			assert!(MultiPhase::queued_solution().is_none());
+			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+
+			// phase is now emergency.
+			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+			assert!(MultiPhase::queued_solution().is_none());
+
+			// no single account can trigger this
+			assert_noop!(
+				MultiPhase::governance_fallback(Origin::signed(99), None, None),
+				DispatchError::BadOrigin
+			);
+
+			// only root can
+			assert_ok!(MultiPhase::governance_fallback(Origin::root(), None, None));
+			// something is queued now
+			assert!(MultiPhase::queued_solution().is_some());
+			// next election call with fix everything.;
+			assert!(MultiPhase::elect().is_ok());
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized { election_compute: None },
+					Event::SolutionStored {
+						election_compute: ElectionCompute::Fallback,
+						prev_ejected: false
+					},
+					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
+				]
+			);
+		})
+	}
+
+	#[test]
 	fn snapshot_too_big_failure_onchain_fallback() {
 		// the `MockStaking` is designed such that if it has too many targets, it simply fails.
 		ExtBuilder::default().build_and_execute(|| {
@@ -2109,7 +2163,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			// set the solution balancing to get the desired score.
-			crate::mock::Balancing::set(Some((2, 0)));
+			crate::mock::Balancing::set(Some(BalancingConfig { iterations: 2, tolerance: 0 }));
 
 			let (solution, _) = MultiPhase::mine_solution().unwrap();
 			// Default solution's score.

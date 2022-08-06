@@ -29,6 +29,7 @@ use wasmi::{
 	TableRef,
 };
 use codec::{Decode, Encode};
+use sc_allocator::AllocationStats;
 use sc_executor_common::{
 	error::{Error, MessageWithBacktrace, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
@@ -530,6 +531,7 @@ fn call_in_wasm_module(
 	host_functions: Arc<Vec<&'static dyn Function>>,
 	allow_missing_func_imports: bool,
 	missing_functions: Arc<Vec<String>>,
+	allocation_stats: &mut Option<AllocationStats>,
 ) -> Result<Vec<u8>, Error> {
 	// Initialize FunctionExecutor.
 	let table: Option<TableRef> = module_instance
@@ -601,6 +603,8 @@ fn call_in_wasm_module(
 			.map_err(|trap| convert_trap(&mut function_executor, trap))
 		},
 	};
+
+	*allocation_stats = Some(function_executor.heap.borrow().stats());
 
 	match result {
 		Ok(Some(I64(r))) => {
@@ -826,8 +830,13 @@ pub struct WasmiInstance {
 // `self.instance`
 unsafe impl Send for WasmiInstance {}
 
-impl WasmInstance for WasmiInstance {
-	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error> {
+impl WasmiInstance {
+	fn call_impl(
+		&mut self,
+		method: InvokeMethod,
+		data: &[u8],
+		allocation_stats: &mut Option<AllocationStats>,
+	) -> Result<Vec<u8>, Error> {
 		// We reuse a single wasm instance for multiple calls and a previous call (if any)
 		// altered the state. Therefore, we need to restore the instance to original state.
 
@@ -855,15 +864,20 @@ impl WasmInstance for WasmiInstance {
 			self.host_functions.clone(),
 			self.allow_missing_func_imports,
 			self.missing_functions.clone(),
-		);
+			allocation_stats,
+		)
+	}
+}
 
-		// Erase the memory to let the OS reclaim it.
-		//
-		// We are not interested in the result here, if this failed, we will retry it in the next
-		// call to the runtime again.
-		let _ = self.memory.erase();
-
-		res
+impl WasmInstance for WasmiInstance {
+	fn call_with_allocation_stats(
+		&mut self,
+		method: InvokeMethod,
+		data: &[u8],
+	) -> (Result<Vec<u8>, Error>, Option<AllocationStats>) {
+		let mut allocation_stats = None;
+		let result = self.call_impl(method, data, &mut allocation_stats);
+		(result, allocation_stats)
 	}
 
 	fn get_global_const(&mut self, name: &str) -> Result<Option<sp_wasm_interface::Value>, Error> {

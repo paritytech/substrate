@@ -26,24 +26,24 @@ pub mod error;
 #[rpc(client, server)]
 pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 	/// Get header.
-	#[method(name = "chain_getHeader")]
-	async fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
+	#[method(name = "chain_getHeader", blocking)]
+	fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
 
 	/// Get header and body of a relay chain block.
-	#[method(name = "chain_getBlock")]
-	async fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
+	#[method(name = "chain_getBlock", blocking)]
+	fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	#[method(name = "chain_getBlockHash", aliases = ["chain_getHead"])]
+	#[method(name = "chain_getBlockHash", aliases = ["chain_getHead"], blocking)]
 	fn block_hash(
 		&self,
 		hash: Option<ListOrValue<NumberOrHex>>,
 	) -> RpcResult<ListOrValue<Option<Hash>>>;
 
 	/// Get hash of the last finalized block in the canon chain.
-	#[method(name = "chain_getFinalizedHead", aliases = ["chain_getFinalisedHead"])]
+	#[method(name = "chain_getFinalizedHead", aliases = ["chain_getFinalisedHead"], blocking)]
 	fn finalized_head(&self) -> RpcResult<Hash>;
 
 	/// All head subscription.

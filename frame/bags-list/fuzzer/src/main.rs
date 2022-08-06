@@ -70,13 +70,20 @@ fn main() {
 				},
 				Action::Update => {
 					let already_contains = BagsList::contains(&id);
-					BagsList::on_update(&id, vote_weight).unwrap();
 					if already_contains {
+						BagsList::on_update(&id, vote_weight).unwrap();
 						assert!(BagsList::contains(&id));
+					} else {
+						BagsList::on_update(&id, vote_weight).unwrap_err();
 					}
 				},
 				Action::Remove => {
-					BagsList::on_remove(&id).unwrap();
+					let already_contains = BagsList::contains(&id);
+					if already_contains {
+						BagsList::on_remove(&id).unwrap();
+					} else {
+						BagsList::on_remove(&id).unwrap_err();
+					}
 					assert!(!BagsList::contains(&id));
 				},
 			}

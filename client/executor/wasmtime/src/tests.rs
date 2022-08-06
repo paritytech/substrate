@@ -24,6 +24,54 @@ use crate::InstantiationStrategy;
 
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
+#[macro_export]
+macro_rules! test_wasm_execution {
+	(@no_legacy_instance_reuse $method_name:ident) => {
+		paste::item! {
+			#[test]
+			fn [<$method_name _recreate_instance_cow>]() {
+				$method_name(
+					InstantiationStrategy::RecreateInstanceCopyOnWrite
+				);
+			}
+
+			#[test]
+			fn [<$method_name _recreate_instance_vanilla>]() {
+				$method_name(
+					InstantiationStrategy::RecreateInstance
+				);
+			}
+
+			#[test]
+			fn [<$method_name _pooling_cow>]() {
+				$method_name(
+					InstantiationStrategy::PoolingCopyOnWrite
+				);
+			}
+
+			#[test]
+			fn [<$method_name _pooling_vanilla>]() {
+				$method_name(
+					InstantiationStrategy::Pooling
+				);
+			}
+		}
+	};
+
+	($method_name:ident) => {
+		test_wasm_execution!(@no_legacy_instance_reuse $method_name);
+
+		paste::item! {
+			#[test]
+			fn [<$method_name _legacy_instance_reuse>]() {
+				$method_name(
+					InstantiationStrategy::LegacyInstanceReuse
+				);
+			}
+		}
+	};
+}
+
 struct RuntimeBuilder {
 	code: Option<String>,
 	instantiation_strategy: InstantiationStrategy,
@@ -36,12 +84,10 @@ struct RuntimeBuilder {
 }
 
 impl RuntimeBuilder {
-	/// Returns a new builder that won't use the fast instance reuse mechanism, but instead will
-	/// create a new runtime instance each time.
-	fn new_on_demand() -> Self {
+	fn new(instantiation_strategy: InstantiationStrategy) -> Self {
 		Self {
 			code: None,
-			instantiation_strategy: InstantiationStrategy::RecreateInstance,
+			instantiation_strategy,
 			canonicalize_nans: false,
 			deterministic_stack: false,
 			extra_heap_pages: 1024,
@@ -128,9 +174,9 @@ impl RuntimeBuilder {
 	}
 }
 
-#[test]
-fn test_nan_canonicalization() {
-	let mut builder = RuntimeBuilder::new_on_demand().canonicalize_nans(true);
+test_wasm_execution!(test_nan_canonicalization);
+fn test_nan_canonicalization(instantiation_strategy: InstantiationStrategy) {
+	let mut builder = RuntimeBuilder::new(instantiation_strategy).canonicalize_nans(true);
 	let runtime = builder.build();
 
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
@@ -166,11 +212,11 @@ fn test_nan_canonicalization() {
 	assert_eq!(res, CANONICAL_NAN_BITS);
 }
 
-#[test]
-fn test_stack_depth_reaching() {
+test_wasm_execution!(test_stack_depth_reaching);
+fn test_stack_depth_reaching(instantiation_strategy: InstantiationStrategy) {
 	const TEST_GUARD_PAGE_SKIP: &str = include_str!("test-guard-page-skip.wat");
 
-	let mut builder = RuntimeBuilder::new_on_demand()
+	let mut builder = RuntimeBuilder::new(instantiation_strategy)
 		.use_wat(TEST_GUARD_PAGE_SKIP.to_string())
 		.deterministic_stack(true);
 
@@ -186,33 +232,46 @@ fn test_stack_depth_reaching() {
 	}
 }
 
-#[test]
-fn test_max_memory_pages_imported_memory_without_precompilation() {
-	test_max_memory_pages(true, false);
+test_wasm_execution!(test_max_memory_pages_imported_memory_without_precompilation);
+fn test_max_memory_pages_imported_memory_without_precompilation(
+	instantiation_strategy: InstantiationStrategy,
+) {
+	test_max_memory_pages(instantiation_strategy, true, false);
 }
 
-#[test]
-fn test_max_memory_pages_exported_memory_without_precompilation() {
-	test_max_memory_pages(false, false);
+test_wasm_execution!(test_max_memory_pages_exported_memory_without_precompilation);
+fn test_max_memory_pages_exported_memory_without_precompilation(
+	instantiation_strategy: InstantiationStrategy,
+) {
+	test_max_memory_pages(instantiation_strategy, false, false);
 }
 
-#[test]
-fn test_max_memory_pages_imported_memory_with_precompilation() {
-	test_max_memory_pages(true, true);
+test_wasm_execution!(@no_legacy_instance_reuse test_max_memory_pages_imported_memory_with_precompilation);
+fn test_max_memory_pages_imported_memory_with_precompilation(
+	instantiation_strategy: InstantiationStrategy,
+) {
+	test_max_memory_pages(instantiation_strategy, true, true);
 }
 
-#[test]
-fn test_max_memory_pages_exported_memory_with_precompilation() {
-	test_max_memory_pages(false, true);
+test_wasm_execution!(@no_legacy_instance_reuse test_max_memory_pages_exported_memory_with_precompilation);
+fn test_max_memory_pages_exported_memory_with_precompilation(
+	instantiation_strategy: InstantiationStrategy,
+) {
+	test_max_memory_pages(instantiation_strategy, false, true);
 }
 
-fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
+fn test_max_memory_pages(
+	instantiation_strategy: InstantiationStrategy,
+	import_memory: bool,
+	precompile_runtime: bool,
+) {
 	fn try_instantiate(
 		max_memory_size: Option<usize>,
 		wat: String,
+		instantiation_strategy: InstantiationStrategy,
 		precompile_runtime: bool,
 	) -> Result<(), Box<dyn std::error::Error>> {
-		let mut builder = RuntimeBuilder::new_on_demand()
+		let mut builder = RuntimeBuilder::new(instantiation_strategy)
 			.use_wat(wat)
 			.max_memory_size(max_memory_size)
 			.precompile_runtime(precompile_runtime);
@@ -265,6 +324,7 @@ fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 			*/
 			memory(64511, None, import_memory)
 		),
+		instantiation_strategy,
 		precompile_runtime,
 	)
 	.unwrap();
@@ -288,6 +348,7 @@ fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 			// 1 initial, max is not specified.
 			memory(1, None, import_memory)
 		),
+		instantiation_strategy,
 		precompile_runtime,
 	)
 	.unwrap();
@@ -309,6 +370,7 @@ fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 			// Max is 2048.
 			memory(1, Some(2048), import_memory)
 		),
+		instantiation_strategy,
 		precompile_runtime,
 	)
 	.unwrap();
@@ -342,6 +404,7 @@ fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 			// Zero starting pages.
 			memory(0, None, import_memory)
 		),
+		instantiation_strategy,
 		precompile_runtime,
 	)
 	.unwrap();
@@ -375,6 +438,7 @@ fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 			// Initial=1, meaning after heap pages mount the total will be already 1025.
 			memory(1, None, import_memory)
 		),
+		instantiation_strategy,
 		precompile_runtime,
 	)
 	.unwrap();

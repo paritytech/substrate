@@ -3,6 +3,7 @@
 //!
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {{version}}
 //! DATE: {{date}}, STEPS: `{{cmd.steps}}`, REPEAT: {{cmd.repeat}}, LOW RANGE: `{{cmd.lowest_range_values}}`, HIGH RANGE: `{{cmd.highest_range_values}}`
+//! HOSTNAME: `{{hostname}}`, CPU: `{{cpuname}}`
 //! EXECUTION: {{cmd.execution}}, WASM-EXECUTION: {{cmd.wasm_execution}}, CHAIN: {{cmd.chain}}, DB CACHE: {{cmd.db_cache}}
 
 // Executed Command:
@@ -23,6 +24,9 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 	{{#each benchmarks as |benchmark|}}
 	{{#each benchmark.comments as |comment|}}
 	// {{comment}}
+	{{/each}}
+	{{#each benchmark.component_ranges as |range|}}
+	/// The range of component `{{range.name}}` is `[{{range.min}}, {{range.max}}]`.
 	{{/each}}
 	fn {{benchmark.name~}}
 	(

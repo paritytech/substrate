@@ -471,11 +471,11 @@ fn batch_all_revert() {
 
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 10);
+		let batch_all_calls = Call::Utility(crate::Call::<Test>::batch_all {
+			calls: vec![call_transfer(2, 5), call_transfer(2, 10), call_transfer(2, 5)],
+		});
 		assert_noop!(
-			Utility::batch_all(
-				Origin::signed(1),
-				vec![call_transfer(2, 5), call_transfer(2, 10), call_transfer(2, 5),]
-			),
+			batch_all_calls.dispatch(Origin::signed(1)),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(

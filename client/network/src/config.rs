@@ -26,15 +26,10 @@ pub use sc_network_common::{
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	sync::warp::WarpSyncProvider,
 };
-pub use sc_network_sync::warp_request_handler::WarpSyncProvider;
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
-
-// Note: this re-export shouldn't be part of the public API of the crate and will be removed in
-// the future.
-#[doc(hidden)]
-pub use crate::protocol::ProtocolConfig;
 
 use crate::ExHashT;
 
@@ -46,7 +41,7 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
-use sp_consensus::block_validation::BlockAnnounceValidator;
+use sc_network_common::sync::ChainSync;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
@@ -92,8 +87,12 @@ where
 	/// the network.
 	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
 
-	/// Name of the protocol to use on the wire. Should be different for each chain.
+	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
+
+	/// Fork ID to distinguish protocols of different hard forks. Part of the standard protocol
+	/// name on the wire.
+	pub fork_id: Option<String>,
 
 	/// Import queue to use.
 	///
@@ -101,8 +100,8 @@ where
 	/// valid.
 	pub import_queue: Box<dyn ImportQueue<B>>,
 
-	/// Type to check incoming block announcements.
-	pub block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
+	/// Instance of chain sync implementation.
+	pub chain_sync: Box<dyn ChainSync<B>>,
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
@@ -114,31 +113,31 @@ where
 	/// block requests, if enabled.
 	///
 	/// Can be constructed either via
-	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
-	/// not incoming requests, or constructed via [`sc_network_sync::block_request_handler::
-	/// BlockRequestHandler::new`] allowing both outgoing and incoming requests.
+	/// `sc_network_sync::block_request_handler::generate_protocol_config` allowing outgoing but
+	/// not incoming requests, or constructed via `sc_network_sync::block_request_handler::
+	/// BlockRequestHandler::new` allowing both outgoing and incoming requests.
 	pub block_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the light client request protocol.
 	///
 	/// Can be constructed either via
-	/// [`sc_network_light::light_client_requests::generate_protocol_config`] allowing outgoing but
+	/// `sc_network_light::light_client_requests::generate_protocol_config` allowing outgoing but
 	/// not incoming requests, or constructed via
-	/// [`sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`]
+	/// `sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`
 	/// allowing both outgoing and incoming requests.
 	pub light_client_request_protocol_config: RequestResponseConfig,
 
 	/// Request response configuration for the state request protocol.
 	///
 	/// Can be constructed either via
-	/// [`sc_network_sync::block_request_handler::generate_protocol_config`] allowing outgoing but
+	/// `sc_network_sync::state_request_handler::generate_protocol_config` allowing outgoing but
 	/// not incoming requests, or constructed via
-	/// [`crate::state_request_handler::StateRequestHandler::new`] allowing
+	/// `sc_network_sync::state_request_handler::StateRequestHandler::new` allowing
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,
 
-	/// Optional warp sync protocol support. Include protocol config and sync provider.
-	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
+	/// Optional warp sync protocol config.
+	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
 }
 
 /// Role of the local node.
@@ -146,8 +145,6 @@ where
 pub enum Role {
 	/// Regular full node.
 	Full,
-	/// Regular light node.
-	Light,
 	/// Actual authority.
 	Authority,
 }
@@ -157,18 +154,12 @@ impl Role {
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Self::Authority { .. })
 	}
-
-	/// True for [`Role::Light`].
-	pub fn is_light(&self) -> bool {
-		matches!(self, Self::Light { .. })
-	}
 }
 
 impl fmt::Display for Role {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Full => write!(f, "FULL"),
-			Self::Light => write!(f, "LIGHT"),
 			Self::Authority { .. } => write!(f, "AUTHORITY"),
 		}
 	}
@@ -359,7 +350,7 @@ impl From<multiaddr::Error> for ParseErr {
 }
 
 /// Sync operation mode.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,

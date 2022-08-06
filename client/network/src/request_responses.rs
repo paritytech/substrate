@@ -40,10 +40,7 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{
-		connection::{ConnectionId, ListenerId},
-		ConnectedPoint, Multiaddr, PeerId,
-	},
+	core::{connection::ConnectionId, transport::ListenerId, ConnectedPoint, Multiaddr, PeerId},
 	request_response::{
 		handler::RequestResponseHandler, ProtocolSupport, RequestResponse, RequestResponseCodec,
 		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
@@ -223,7 +220,9 @@ impl RequestResponsesBehaviour {
 					max_request_size: protocol.max_request_size,
 					max_response_size: protocol.max_response_size,
 				},
-				iter::once((protocol.name.as_bytes().to_vec(), protocol_support)),
+				iter::once(protocol.name.as_bytes().to_vec())
+					.chain(protocol.fallback_names.iter().map(|name| name.as_bytes().to_vec()))
+					.zip(iter::repeat(protocol_support)),
 				cfg,
 			);
 
@@ -968,7 +967,7 @@ mod tests {
 		let noise_keys =
 			noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
 
-		let transport = MemoryTransport
+		let transport = MemoryTransport::new()
 			.upgrade(upgrade::Version::V1)
 			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
 			.multiplex(libp2p::yamux::YamuxConfig::default())
@@ -1030,6 +1029,7 @@ mod tests {
 
 				let protocol_config = ProtocolConfig {
 					name: From::from(protocol_name),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1130,6 +1130,7 @@ mod tests {
 
 				let protocol_config = ProtocolConfig {
 					name: From::from(protocol_name),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 8, // <-- important for the test
 					request_timeout: Duration::from_secs(30),
@@ -1226,6 +1227,7 @@ mod tests {
 			let protocol_configs = vec![
 				ProtocolConfig {
 					name: From::from(protocol_name_1),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1233,6 +1235,7 @@ mod tests {
 				},
 				ProtocolConfig {
 					name: From::from(protocol_name_2),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1250,6 +1253,7 @@ mod tests {
 			let protocol_configs = vec![
 				ProtocolConfig {
 					name: From::from(protocol_name_1),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1257,6 +1261,7 @@ mod tests {
 				},
 				ProtocolConfig {
 					name: From::from(protocol_name_2),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),

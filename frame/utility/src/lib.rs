@@ -60,7 +60,6 @@ use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::PostDispatchInfo,
 	traits::{IsSubType, OriginTrait, UnfilteredDispatchable},
-	transactional,
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use sp_core::TypeId;
@@ -316,7 +315,6 @@ pub mod pallet {
 			};
 			(dispatch_weight, dispatch_class)
 		})]
-		#[transactional]
 		pub fn batch_all(
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,

@@ -70,14 +70,14 @@ impl From<Error> for i32 {
 }
 
 /// An implementation of System-specific RPC methods on full client.
-pub struct SystemRpc<P: TransactionPool, C, B> {
+pub struct System<P: TransactionPool, C, B> {
 	client: Arc<C>,
 	pool: Arc<P>,
 	deny_unsafe: DenyUnsafe,
 	_marker: std::marker::PhantomData<B>,
 }
 
-impl<P: TransactionPool, C, B> SystemRpc<P, C, B> {
+impl<P: TransactionPool, C, B> System<P, C, B> {
 	/// Create new `FullSystem` given client and transaction pool.
 	pub fn new(client: Arc<C>, pool: Arc<P>, deny_unsafe: DenyUnsafe) -> Self {
 		Self { client, pool, deny_unsafe, _marker: Default::default() }
@@ -86,7 +86,7 @@ impl<P: TransactionPool, C, B> SystemRpc<P, C, B> {
 
 #[async_trait]
 impl<P, C, Block, AccountId, Index>
-	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index> for SystemRpc<P, C, Block>
+	SystemApiServer<<Block as traits::Block>::Hash, AccountId, Index> for System<P, C, Block>
 where
 	C: sp_api::ProvideRuntimeApi<Block>,
 	C: HeaderBackend<Block>,
@@ -251,7 +251,7 @@ mod tests {
 		let ext1 = new_transaction(1);
 		block_on(pool.submit_one(&BlockId::number(0), source, ext1)).unwrap();
 
-		let accounts = SystemRpc::new(client, pool, DenyUnsafe::Yes);
+		let accounts = System::new(client, pool, DenyUnsafe::Yes);
 
 		// when
 		let nonce = accounts.nonce(AccountKeyring::Alice.into()).await;
@@ -270,7 +270,7 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = SystemRpc::new(client, pool, DenyUnsafe::Yes);
+		let accounts = System::new(client, pool, DenyUnsafe::Yes);
 
 		// when
 		let res = accounts.dry_run(vec![].into(), None).await;
@@ -289,7 +289,7 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = SystemRpc::new(client, pool, DenyUnsafe::No);
+		let accounts = System::new(client, pool, DenyUnsafe::No);
 
 		let tx = Transfer {
 			from: AccountKeyring::Alice.into(),
@@ -317,7 +317,7 @@ mod tests {
 		let pool =
 			BasicPool::new_full(Default::default(), true.into(), None, spawner, client.clone());
 
-		let accounts = SystemRpc::new(client, pool, DenyUnsafe::No);
+		let accounts = System::new(client, pool, DenyUnsafe::No);
 
 		let tx = Transfer {
 			from: AccountKeyring::Alice.into(),

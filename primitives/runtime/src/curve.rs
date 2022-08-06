@@ -24,12 +24,42 @@ use crate::{
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
-#[derive(PartialEq, Eq, sp_core::RuntimeDebug, scale_info::TypeInfo)]
+#[derive(PartialEq, Eq, sp_core::RuntimeDebug)]
 pub struct PiecewiseLinear<'a> {
 	/// Array of points. Must be in order from the lowest abscissas to the highest.
 	pub points: &'a [(Perbill, Perbill)],
 	/// The maximum value that can be returned.
 	pub maximum: Perbill,
+}
+
+// This can be replaced with
+// #[derive(scale_info::TypeInfo)]
+// #[scale_info(skip_type_params(S))]
+// again once this issue is fixed in the rust compiler: https://github.com/rust-lang/rust/issues/96956
+// Tracking issues: https://github.com/paritytech/substrate/issues/11915
+impl scale_info::TypeInfo for PiecewiseLinear<'static> {
+	type Identity = Self;
+	fn type_info() -> ::scale_info::Type {
+		scale_info::Type::builder()
+			.path(scale_info::Path::new("PiecewiseLinear", "sp_runtime::curve"))
+			.type_params(crate::Vec::new())
+			.docs(&["Piecewise Linear function in [0, 1] -> [0, 1]."])
+			.composite(
+				scale_info::build::Fields::named()
+					.field(|f| {
+						f.ty::<&'static[(Perbill, Perbill)]>()
+							  .name("points")
+							  .type_name("&'static[(Perbill, Perbill)]")
+							  .docs(&["Array of points. Must be in order from the lowest abscissas to the highest."])
+					})
+					.field(|f| {
+						f.ty::<Perbill>()
+							.name("maximum")
+							.type_name("Perbill")
+							.docs(&["The maximum value that can be returned."])
+					}),
+			)
+	}
 }
 
 fn abs_sub<N: Ord + Sub<Output = N> + Clone>(a: N, b: N) -> N where {

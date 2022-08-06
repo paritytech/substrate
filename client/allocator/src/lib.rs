@@ -26,7 +26,7 @@ mod error;
 mod freeing_bump;
 
 pub use error::Error;
-pub use freeing_bump::FreeingBumpHeapAllocator;
+pub use freeing_bump::{AllocationStats, FreeingBumpHeapAllocator};
 
 pub trait Memory {
 	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R;

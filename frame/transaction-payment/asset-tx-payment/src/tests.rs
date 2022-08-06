@@ -21,22 +21,17 @@ use frame_support::{
 	pallet_prelude::*,
 	parameter_types,
 	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
-	weights::{
-		DispatchClass, DispatchInfo, PostDispatchInfo, Weight, WeightToFeeCoefficient,
-		WeightToFeeCoefficients, WeightToFeePolynomial,
-	},
+	weights::{DispatchClass, DispatchInfo, PostDispatchInfo, Weight, WeightToFee as WeightToFeeT},
 	ConsensusEngineId,
 };
 use frame_system as system;
 use frame_system::EnsureRoot;
 use pallet_balances::Call as BalancesCall;
 use pallet_transaction_payment::CurrencyAdapter;
-use smallvec::smallvec;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, ConvertInto, IdentityLookup, StaticLookup},
-	Perbill,
+	traits::{BlakeTwo256, ConvertInto, IdentityLookup, SaturatedConversion, StaticLookup},
 };
 use std::cell::RefCell;
 
@@ -53,10 +48,10 @@ frame_support::construct_runtime!(
 	{
 		System: system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Authorship: pallet_authorship::{Pallet, Call, Storage},
-		AssetTxPayment: pallet_asset_tx_payment::{Pallet},
+		AssetTxPayment: pallet_asset_tx_payment::{Pallet, Event<T>},
 	}
 );
 
@@ -83,8 +78,8 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 }
 
 parameter_types! {
-	pub static TransactionByteFee: u64 = 1;
 	pub static WeightToFee: u64 = 1;
+	pub static TransactionByteFee: u64 = 1;
 }
 
 impl frame_system::Config for Runtime {
@@ -130,23 +125,28 @@ impl pallet_balances::Config for Runtime {
 	type ReserveIdentifier = [u8; 8];
 }
 
-impl WeightToFeePolynomial for WeightToFee {
+impl WeightToFeeT for WeightToFee {
 	type Balance = u64;
 
-	fn polynomial() -> WeightToFeeCoefficients<Self::Balance> {
-		smallvec![WeightToFeeCoefficient {
-			degree: 1,
-			coeff_frac: Perbill::zero(),
-			coeff_integer: WEIGHT_TO_FEE.with(|v| *v.borrow()),
-			negative: false,
-		}]
+	fn weight_to_fee(weight: &Weight) -> Self::Balance {
+		Self::Balance::saturated_from(*weight).saturating_mul(WEIGHT_TO_FEE.with(|v| *v.borrow()))
+	}
+}
+
+impl WeightToFeeT for TransactionByteFee {
+	type Balance = u64;
+
+	fn weight_to_fee(weight: &Weight) -> Self::Balance {
+		Self::Balance::saturated_from(*weight)
+			.saturating_mul(TRANSACTION_BYTE_FEE.with(|v| *v.borrow()))
 	}
 }
 
 impl pallet_transaction_payment::Config for Runtime {
+	type Event = Event;
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 	type WeightToFee = WeightToFee;
-	type LengthToFee = WeightToFee;
+	type LengthToFee = TransactionByteFee;
 	type FeeMultiplierUpdate = ();
 	type OperationalFeeMultiplier = ConstU8<5>;
 }
@@ -198,6 +198,7 @@ impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
 }
 
 impl Config for Runtime {
+	type Event = Event;
 	type Fungibles = Assets;
 	type OnChargeAssetTransaction = FungiblesAdapter<
 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
@@ -663,7 +664,7 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 				.unwrap();
 			// `Pays::No` implies no pre-dispatch fees
 			assert_eq!(Assets::balance(asset_id, caller), balance);
-			let (_tip, _who, initial_payment) = &pre;
+			let (_tip, _who, initial_payment, _asset_id) = &pre;
 			let not_paying = match initial_payment {
 				&InitialPayment::Nothing => true,
 				_ => false,

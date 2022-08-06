@@ -163,7 +163,7 @@ impl NetworkParams {
 		let port = self.port.unwrap_or(default_listen_port);
 
 		let listen_addresses = if self.listen_addr.is_empty() {
-			if is_validator {
+			if is_validator || is_dev {
 				vec![
 					Multiaddr::empty()
 						.with(Protocol::Ip6([0, 0, 0, 0, 0, 0, 0, 0].into()))
