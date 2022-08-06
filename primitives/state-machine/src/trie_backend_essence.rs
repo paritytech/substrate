@@ -26,6 +26,8 @@ use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
 use sp_core::storage::{ChildInfo, ChildType, StateVersion};
+#[cfg(not(feature = "std"))]
+use sp_std::marker::PhantomData;
 use sp_std::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use sp_trie::recorder::Recorder;
@@ -36,8 +38,6 @@ use sp_trie::{
 	DBValue, KeySpacedDB, NodeCodec, Trie, TrieCache, TrieDBIterator, TrieDBKeyIterator,
 	TrieRecorder,
 };
-#[cfg(not(feature = "std"))]
-use sp_std::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::{collections::HashMap, sync::Arc};
 

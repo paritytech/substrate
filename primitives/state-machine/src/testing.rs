@@ -215,9 +215,7 @@ where
 		);
 
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
-		let proof = proving_backend
-			.extract_proof()
-			.expect("Failed to extract storage proof");
+		let proof = proving_backend.extract_proof().expect("Failed to extract storage proof");
 
 		(outcome, proof)
 	}
