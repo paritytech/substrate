@@ -115,9 +115,7 @@ impl<H: Hasher> Recorder<H> {
 	/// Returns the estimated encoded size of the proof.
 	///
 	/// The estimation is based on all the nodes that were accessed until now while
-	/// accessing the trie. When it comes to the [`TrieAccess::Key`] the estimation
-	/// gets inaccurate because we may not have recorded all the required trie nodes
-	/// yet.
+	/// accessing the trie.
 	pub fn estimate_encoded_size(&self) -> usize {
 		self.encoded_size_estimation.load(Ordering::Relaxed)
 	}

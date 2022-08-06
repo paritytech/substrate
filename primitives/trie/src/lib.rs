@@ -294,7 +294,7 @@ pub fn read_trie_value<L: TrieLayout, DB: hash_db::HashDBRef<L::Hash, trie_db::D
 	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
 	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDBBuilder::<L>::new(&*db, root)
+	TrieDBBuilder::<L>::new(db, root)
 		.with_optional_cache(cache)
 		.with_optional_recorder(recorder)
 		.build()
@@ -312,7 +312,7 @@ pub fn read_trie_value_with<
 	key: &[u8],
 	query: Q,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	TrieDBBuilder::<L>::new(&*db, root).build().get_with(key, query)
+	TrieDBBuilder::<L>::new(db, root).build().get_with(key, query)
 }
 
 /// Determine the empty trie root.
@@ -358,7 +358,7 @@ where
 	// root is fetched from DB, not writable by runtime, so it's always valid.
 	root.as_mut().copy_from_slice(root_data.as_ref());
 
-	let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
+	let mut db = KeySpacedDBMut::new(db, keyspace);
 	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta, recorder, cache)
 }
 
@@ -374,7 +374,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	let db = KeySpacedDB::new(&*db, keyspace);
+	let db = KeySpacedDB::new(db, keyspace);
 	TrieDBBuilder::<L>::new(&db, &root)
 		.with_optional_recorder(recorder)
 		.with_optional_cache(cache)
@@ -400,7 +400,7 @@ where
 	// root is fetched from DB, not writable by runtime, so it's always valid.
 	root.as_mut().copy_from_slice(root_slice);
 
-	let db = KeySpacedDB::new(&*db, keyspace);
+	let db = KeySpacedDB::new(db, keyspace);
 	TrieDBBuilder::<L>::new(&db, &root)
 		.build()
 		.get_with(key, query)
