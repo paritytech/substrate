@@ -59,7 +59,7 @@ impl<H: Hasher> AsLocalTrieCache<H> for LocalTrieCache<H> {
 #[cfg(feature = "std")]
 impl<H: Hasher> AsLocalTrieCache<H> for &LocalTrieCache<H> {
 	fn as_local_trie_cache(&self) -> &LocalTrieCache<H> {
-		*self
+		self
 	}
 }
 
