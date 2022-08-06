@@ -61,7 +61,7 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -79,7 +79,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<10>;
 	type AccountStore = System;
@@ -125,7 +125,7 @@ impl pallet_session::Config for Test {
 	type ShouldEndSession = pallet_session::PeriodicSessions<(), ()>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<(), ()>;
 	type SessionHandler = TestSessionHandler;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type WeightInfo = ();
@@ -159,7 +159,7 @@ impl pallet_staking::Config for Test {
 	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = ();

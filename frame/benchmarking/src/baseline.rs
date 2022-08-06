@@ -185,7 +185,7 @@ pub mod mock {
 		type AccountId = AccountId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::testing::Header;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type BlockHashCount = ();
 		type Version = ();
 		type PalletInfo = PalletInfo;

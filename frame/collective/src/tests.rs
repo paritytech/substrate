@@ -105,7 +105,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -120,7 +120,7 @@ impl frame_system::Config for Test {
 impl Config<Instance1> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
@@ -130,7 +130,7 @@ impl Config<Instance1> for Test {
 impl Config<Instance2> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
@@ -138,13 +138,13 @@ impl Config<Instance2> for Test {
 	type WeightInfo = ();
 }
 impl mock_democracy::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ExternalMajorityOrigin = EnsureProportionAtLeast<u64, Instance1, 3, 4>;
 }
 impl Config for Test {
 	type Origin = Origin;
 	type Proposal = Call;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;

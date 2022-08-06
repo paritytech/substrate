@@ -258,7 +258,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -274,20 +274,20 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance1> for Runtime {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet2::Config for Runtime {
-	type Event = Event;
+	type Event = RuntimeEvent;
 }
 impl pallet2::Config<pallet::Instance1> for Runtime {
-	type Event = Event;
+	type Event = RuntimeEvent;
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;

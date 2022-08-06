@@ -592,7 +592,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<2400>;
 	type DbWeight = ();
 	type Version = ();

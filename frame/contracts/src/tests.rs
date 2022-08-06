@@ -281,7 +281,7 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId32;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -299,7 +299,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -313,7 +313,7 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 impl pallet_utility::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Call = Call;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
@@ -359,7 +359,7 @@ impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
 	type Currency = Balances;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Call = Call;
 	type CallFilter = TestFilter;
 	type CallStack = [Frame<Self>; 31];

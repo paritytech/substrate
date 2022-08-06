@@ -291,7 +291,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -309,7 +309,7 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type Balance = u64;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -320,7 +320,7 @@ mod tests {
 		pub const One: u64 = 1;
 	}
 	impl Config for Test {
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type Currency = Balances;
 		type ReservationFee = ConstU64<2>;
 		type Slashed = ();

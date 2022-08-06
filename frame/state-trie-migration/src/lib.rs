@@ -1086,7 +1086,7 @@ mod mock {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();
 		type Version = ();
@@ -1108,7 +1108,7 @@ mod mock {
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -1146,7 +1146,7 @@ mod mock {
 	}
 
 	impl pallet_state_trie_migration::Config for Test {
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type ControlOrigin = EnsureRoot<u64>;
 		type Currency = Balances;
 		type MaxKeyLen = MigrationMaxKeyLen;

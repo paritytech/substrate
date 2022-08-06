@@ -133,7 +133,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -148,12 +148,12 @@ impl frame_system::Config for Test {
 
 // Implement the logger module's `Config` on the Test runtime.
 impl logger::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 }
 
 // Implement the sudo module's `Config` on the Test runtime.
 impl Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Call = Call;
 }
 

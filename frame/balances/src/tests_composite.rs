@@ -63,7 +63,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -77,7 +77,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_transaction_payment::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<u64>;
@@ -88,7 +88,7 @@ impl pallet_transaction_payment::Config for Test {
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();

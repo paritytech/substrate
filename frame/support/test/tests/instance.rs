@@ -233,35 +233,35 @@ mod module3 {
 }
 
 impl module1::Config<module1::Instance1> for Runtime {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Origin = Origin;
 	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module1::Config<module1::Instance2> for Runtime {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Origin = Origin;
 	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module2::Config for Runtime {
 	type Amount = u16;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Origin = Origin;
 }
 impl module2::Config<module2::Instance1> for Runtime {
 	type Amount = u32;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Origin = Origin;
 }
 impl module2::Config<module2::Instance2> for Runtime {
 	type Amount = u32;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Origin = Origin;
 }
 impl module2::Config<module2::Instance3> for Runtime {
 	type Amount = u64;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Origin = Origin;
 }
 impl module3::Config for Runtime {
@@ -280,7 +280,7 @@ impl system::Config for Runtime {
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();

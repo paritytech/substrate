@@ -78,7 +78,7 @@ impl frame_system::Config for Test {
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -96,7 +96,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -117,7 +117,7 @@ impl pallet_treasury::Config for Test {
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ConstU64<1>;
@@ -136,7 +136,7 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ConstU64<1>;
@@ -159,7 +159,7 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<20>;
@@ -174,7 +174,7 @@ impl Config for Test {
 }
 
 impl Config<Instance1> for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<20>;

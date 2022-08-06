@@ -100,7 +100,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -114,7 +114,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_test::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type LowerBound = ConstU32<1>;
 	type UpperBound = ConstU32<100>;
 }

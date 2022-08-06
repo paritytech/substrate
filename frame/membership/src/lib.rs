@@ -535,7 +535,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -584,7 +584,7 @@ mod tests {
 	}
 
 	impl Config for Test {
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type AddOrigin = EnsureSignedBy<One, u64>;
 		type RemoveOrigin = EnsureSignedBy<Two, u64>;
 		type SwapOrigin = EnsureSignedBy<Three, u64>;

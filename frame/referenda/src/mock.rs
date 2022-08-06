@@ -78,7 +78,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -91,7 +91,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet_preimage::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<u64>;
@@ -100,7 +100,7 @@ impl pallet_preimage::Config for Test {
 	type ByteDeposit = ();
 }
 impl pallet_scheduler::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
@@ -117,7 +117,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -212,7 +212,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 impl Config for Test {
 	type WeightInfo = ();
 	type Call = Call;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
 	type SubmitOrigin = frame_system::EnsureSigned<u64>;

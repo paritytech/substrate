@@ -141,7 +141,7 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -158,7 +158,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -175,7 +175,7 @@ impl pallet_session::Config for Test {
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = (OtherSessionHandler,);
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
@@ -242,7 +242,7 @@ parameter_types! {
 }
 
 impl pallet_bags_list::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type WeightInfo = ();
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
@@ -282,7 +282,7 @@ impl crate::pallet::pallet::Config for Test {
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Slash = ();
 	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;

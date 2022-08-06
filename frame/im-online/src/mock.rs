@@ -140,7 +140,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -166,7 +166,7 @@ impl pallet_session::Config for Runtime {
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
@@ -220,7 +220,7 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 
 impl Config for Runtime {
 	type AuthorityId = UintAuthorityId;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ValidatorSet = Historical;
 	type NextSessionRotation = TestNextSessionRotation;
 	type ReportUnresponsiveness = OffenceHandler;

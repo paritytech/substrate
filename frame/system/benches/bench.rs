@@ -82,7 +82,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -96,7 +96,7 @@ impl frame_system::Config for Runtime {
 }
 
 impl module::Config for Runtime {
-	type Event = Event;
+	type Event = RuntimeEvent;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {

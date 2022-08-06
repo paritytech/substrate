@@ -68,7 +68,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -91,7 +91,7 @@ impl OnUnbalanced<NegativeImbalance<Test>> for OnDustRemoval {
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = OnDustRemoval;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore =
 		StorageMapShim<super::Account<Test>, system::Provider<Test>, u64, super::AccountData<u64>>;

@@ -103,7 +103,7 @@ impl Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<10>;
 	type DbWeight = DbWeight;
 	type Version = Version;

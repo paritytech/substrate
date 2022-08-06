@@ -53,7 +53,7 @@ impl frame_system::Config for Test {
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type BlockWeights = ();

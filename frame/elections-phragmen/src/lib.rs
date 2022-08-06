@@ -1184,7 +1184,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -1199,7 +1199,7 @@ mod tests {
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = frame_system::Pallet<Test>;
@@ -1270,7 +1270,7 @@ mod tests {
 
 	impl Config for Test {
 		type PalletId = ElectionsPhragmenPalletId;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type Currency = Balances;
 		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 		type ChangeMembers = TestChangeMembers;

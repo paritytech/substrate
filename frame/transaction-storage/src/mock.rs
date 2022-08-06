@@ -60,7 +60,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -77,7 +77,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -87,7 +87,7 @@ impl pallet_balances::Config for Test {
 }
 
 impl pallet_transaction_storage::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Call = Call;
 	type Currency = Balances;
 	type FeeDestination = ();

@@ -81,7 +81,7 @@ impl frame_system::Config for Test {
 	type AccountId = u128;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -99,7 +99,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -119,7 +119,7 @@ impl pallet_treasury::Config for Test {
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ConstU64<1>;
@@ -140,7 +140,7 @@ parameter_types! {
 
 }
 impl pallet_bounties::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<10>;
@@ -154,7 +154,7 @@ impl pallet_bounties::Config for Test {
 	type ChildBountyManager = ChildBounties;
 }
 impl pallet_child_bounties::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type MaxActiveChildBountyCount = ConstU32<2>;
 	type ChildBountyValueMinimum = ConstU64<1>;
 	type WeightInfo = ();

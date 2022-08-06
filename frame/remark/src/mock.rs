@@ -54,7 +54,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -69,7 +69,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_remark::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type WeightInfo = ();
 }
 

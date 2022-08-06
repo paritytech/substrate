@@ -57,7 +57,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type Call = Call;
 	type DbWeight = ();
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type Header = Header;
@@ -78,7 +78,7 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type MaxLocks = ConstU32<10>;
 	type MaxReserves = ();
@@ -92,7 +92,7 @@ parameter_types! {
 impl Config for Test {
 	type BlockNumberToBalance = Identity;
 	type Currency = Balances;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	const MAX_VESTING_SCHEDULES: u32 = 3;
 	type MinVestedTransfer = MinVestedTransfer;
 	type WeightInfo = ();

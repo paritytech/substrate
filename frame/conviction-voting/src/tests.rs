@@ -73,7 +73,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -91,7 +91,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -186,7 +186,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 }
 
 impl Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Currency = pallet_balances::Pallet<Self>;
 	type VoteLockingPeriod = ConstU64<3>;
 	type MaxVotes = ConstU32<3>;

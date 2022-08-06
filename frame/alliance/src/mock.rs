@@ -53,7 +53,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
 	type Version = ();
@@ -74,7 +74,7 @@ parameter_types! {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -92,7 +92,7 @@ type AllianceCollective = pallet_collective::Instance1;
 impl pallet_collective::Config<AllianceCollective> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type MotionDuration = MotionDuration;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
@@ -119,7 +119,7 @@ type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>
 type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 
 impl pallet_identity::Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Currency = Balances;
 	type BasicDeposit = BasicDeposit;
 	type FieldDeposit = FieldDeposit;
@@ -201,7 +201,7 @@ parameter_types! {
 	pub const AllyDeposit: u64 = 25;
 }
 impl Config for Test {
-	type Event = Event;
+	type Event = RuntimeEvent;
 	type Proposal = Call;
 	type AdminOrigin = EnsureSignedBy<One, u64>;
 	type MembershipManager = EnsureSignedBy<Two, u64>;

@@ -209,7 +209,7 @@ mod tests {
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
@@ -244,7 +244,7 @@ mod tests {
 		type AccountId = AuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type Event = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
