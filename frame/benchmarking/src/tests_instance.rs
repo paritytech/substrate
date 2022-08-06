@@ -120,7 +120,7 @@ impl pallet_test::Config for Test {
 }
 
 impl pallet_test::OtherConfig for Test {
-	type OtherEvent = Event;
+	type OtherEvent = RuntimeEvent;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
