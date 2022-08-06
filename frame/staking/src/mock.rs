@@ -305,7 +305,7 @@ impl crate::pallet::pallet::Config for Test {
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;
-pub(crate) type TestRuntimeCall = <Test as frame_system::Config>::Call;
+pub(crate) type TestCall = <Test as frame_system::Config>::Call;
 
 pub struct ExtBuilder {
 	nominate: bool,

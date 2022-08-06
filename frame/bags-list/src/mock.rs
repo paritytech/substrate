@@ -52,7 +52,7 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = RuntimeCall;
+	type Call = Call;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
