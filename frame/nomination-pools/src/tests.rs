@@ -4093,6 +4093,7 @@ mod set_configs {
 mod bond_extra {
 	use super::*;
 	use crate::Event;
+	use sp_runtime::FixedU128;
 
 	#[test]
 	fn bond_extra_from_free_balance_creator() {
@@ -4228,6 +4229,39 @@ mod bond_extra {
 					Event::PaidOut { member: default_bonded_account(), pool_id: 1, payout: 2 },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 2, joined: false }
 				]
+			);
+		})
+	}
+
+	#[test]
+	fn calculate_rewards_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// give some balance.
+			Balances::make_free_balance_be(&10, 100);
+
+			// given
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
+			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10);
+			assert_eq!(Balances::free_balance(10), 100);
+
+			let (member, bonded_pool, reward_pool) = Pools::get_member_with_pools(&10).unwrap();
+
+			// then
+			assert_eq!(
+				Pools::calculate_rewards(&member, &bonded_pool, &reward_pool).unwrap(),
+				(0, FixedU128::from(0))
+			);
+
+			// given some free balance.
+			Balances::make_free_balance_be(&default_reward_account(), 7);
+
+			let claimable_reward = 7 - ExistentialDeposit::get();
+			let current_reward_counter = default_pool_reward_counter();
+
+			// this should hold true.
+			assert_eq!(
+				Pools::calculate_rewards(&member, &bonded_pool, &reward_pool).unwrap(),
+				(claimable_reward, current_reward_counter)
 			);
 		})
 	}
@@ -4420,13 +4454,6 @@ mod reward_counter_precision {
 			i += 1
 		}
 		start
-	}
-
-	fn default_pool_reward_counter() -> FixedU128 {
-		RewardPools::<T>::get(1)
-			.unwrap()
-			.current_reward_counter(1, BondedPools::<T>::get(1).unwrap().points)
-			.unwrap()
 	}
 
 	fn pending_rewards(of: AccountId) -> Option<BalanceOf<T>> {

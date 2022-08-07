@@ -21,6 +21,13 @@ pub fn default_reward_account() -> AccountId {
 	Pools::create_reward_account(1)
 }
 
+pub fn default_pool_reward_counter() -> FixedU128 {
+	RewardPools::<T>::get(1)
+		.unwrap()
+		.current_reward_counter(1, BondedPools::<T>::get(1).unwrap().points)
+		.unwrap()
+}
+
 parameter_types! {
 	pub static MinJoinBondConfig: Balance = 2;
 	pub static CurrentEra: EraIndex = 0;
