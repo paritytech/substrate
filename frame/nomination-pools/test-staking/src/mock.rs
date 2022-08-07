@@ -248,7 +248,7 @@ pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Even
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Pools(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = ObservedEventsPools::get();
 	ObservedEventsPools::set(events.len());
@@ -259,7 +259,7 @@ pub(crate) fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runt
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = ObservedEventsStaking::get();
 	ObservedEventsStaking::set(events.len());

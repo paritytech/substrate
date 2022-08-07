@@ -52,7 +52,7 @@ fn propose_works() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				event: mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
@@ -82,13 +82,13 @@ fn vote_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash.clone(),
 					threshold: 3
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 2,
 					proposal_hash: hash.clone(),
 					voted: true,
@@ -140,19 +140,19 @@ fn veto_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash.clone(),
 					threshold: 3
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 1,
 					proposal_hash: vetoable_hash.clone(),
 					threshold: 3
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Disapproved {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Disapproved {
 					proposal_hash: vetoable_hash.clone()
 				})),
 			]
@@ -188,42 +188,42 @@ fn close_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash.clone(),
 					threshold: 3
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 1,
 					proposal_hash: hash.clone(),
 					voted: true,
 					yes: 1,
 					no: 0,
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 2,
 					proposal_hash: hash.clone(),
 					voted: true,
 					yes: 2,
 					no: 0,
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 3,
 					proposal_hash: hash.clone(),
 					voted: true,
 					yes: 3,
 					no: 0,
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Closed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Closed {
 					proposal_hash: hash.clone(),
 					yes: 3,
 					no: 0,
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Approved {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Approved {
 					proposal_hash: hash.clone()
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Executed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Executed {
 					proposal_hash: hash.clone(),
 					result: Err(DispatchError::BadOrigin),
 				}))
@@ -239,7 +239,7 @@ fn set_rule_works() {
 		assert_ok!(Alliance::set_rule(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::rule(), Some(cid.clone()));
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewRuleSet { rule: cid }));
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::NewRuleSet { rule: cid }));
 	});
 }
 
@@ -250,7 +250,7 @@ fn announce_works() {
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::Announced {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::Announced {
 			announcement: cid,
 		}));
 	});
@@ -262,7 +262,7 @@ fn remove_announcement_works() {
 		let cid = test_cid();
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::Announced {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::Announced {
 			announcement: cid.clone(),
 		}));
 
@@ -270,7 +270,7 @@ fn remove_announcement_works() {
 
 		assert_ok!(Alliance::remove_announcement(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![]);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::AnnouncementRemoved {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::AnnouncementRemoved {
 			announcement: cid,
 		}));
 	});

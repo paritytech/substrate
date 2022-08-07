@@ -74,7 +74,7 @@ fn events() -> Vec<Event<Test>> {
 	let result = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let mock::Event::Uniques(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let mock::RuntimeEvent::Uniques(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 
 	System::reset_events();

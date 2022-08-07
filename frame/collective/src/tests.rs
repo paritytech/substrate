@@ -175,7 +175,7 @@ fn make_proposal(value: u64) -> Call {
 	Call::System(frame_system::Call::remark_with_event { remark: value.to_be_bytes().to_vec() })
 }
 
-fn record(event: Event) -> EventRecord<Event, H256> {
+fn record(event: RuntimeEvent) -> EventRecord<RuntimeEvent, H256> {
 	EventRecord { phase: Phase::Initialization, event, topics: vec![] }
 }
 
@@ -216,32 +216,32 @@ fn close_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 3
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Closed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Closed {
 					proposal_hash: hash,
 					yes: 2,
 					no: 1
 				})),
-				record(Event::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
 			]
 		);
 	});
@@ -336,32 +336,32 @@ fn close_with_prime_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 3
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Closed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Closed {
 					proposal_hash: hash,
 					yes: 2,
 					no: 1
 				})),
-				record(Event::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
 			]
 		);
 	});
@@ -396,33 +396,33 @@ fn close_with_voting_prime_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 3
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Closed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Closed {
 					proposal_hash: hash,
 					yes: 3,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
-				record(Event::Collective(CollectiveEvent::Executed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Executed {
 					proposal_hash: hash,
 					result: Err(DispatchError::BadOrigin)
 				}))
@@ -467,42 +467,42 @@ fn close_with_no_prime_but_majority_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::CollectiveMajority(CollectiveEvent::Proposed {
+				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 5
 				})),
-				record(Event::CollectiveMajority(CollectiveEvent::Voted {
+				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::CollectiveMajority(CollectiveEvent::Voted {
+				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::CollectiveMajority(CollectiveEvent::Voted {
+				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::Voted {
 					account: 3,
 					proposal_hash: hash,
 					voted: true,
 					yes: 3,
 					no: 0
 				})),
-				record(Event::CollectiveMajority(CollectiveEvent::Closed {
+				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::Closed {
 					proposal_hash: hash,
 					yes: 5,
 					no: 0
 				})),
-				record(Event::CollectiveMajority(CollectiveEvent::Approved {
+				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::Approved {
 					proposal_hash: hash
 				})),
-				record(Event::CollectiveMajority(CollectiveEvent::Executed {
+				record(RuntimeEvent::CollectiveMajority(CollectiveEvent::Executed {
 					proposal_hash: hash,
 					result: Err(DispatchError::BadOrigin)
 				}))
@@ -629,7 +629,7 @@ fn propose_works() {
 
 		assert_eq!(
 			System::events(),
-			vec![record(Event::Collective(CollectiveEvent::Proposed {
+			vec![record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 				account: 1,
 				proposal_index: 0,
 				proposal_hash: hash,
@@ -793,20 +793,20 @@ fn motions_vote_after_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 2
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: false,
@@ -926,33 +926,33 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 2
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Closed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Closed {
 					proposal_hash: hash,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
-				record(Event::Collective(CollectiveEvent::Executed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Executed {
 					proposal_hash: hash,
 					result: Err(DispatchError::BadOrigin)
 				})),
@@ -975,41 +975,41 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 1,
 					proposal_hash: hash,
 					threshold: 2
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 3,
 					proposal_hash: hash,
 					voted: true,
 					yes: 3,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Closed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Closed {
 					proposal_hash: hash,
 					yes: 3,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
-				record(Event::Democracy(mock_democracy::pallet::Event::<Test>::ExternalProposed)),
-				record(Event::Collective(CollectiveEvent::Executed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
+				record(RuntimeEvent::Democracy(mock_democracy::pallet::Event::<Test>::ExternalProposed)),
+				record(RuntimeEvent::Collective(CollectiveEvent::Executed {
 					proposal_hash: hash,
 					result: Ok(())
 				})),
@@ -1038,32 +1038,32 @@ fn motions_disapproval_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 3
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: false,
 					yes: 1,
 					no: 1
 				})),
-				record(Event::Collective(CollectiveEvent::Closed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Closed {
 					proposal_hash: hash,
 					yes: 1,
 					no: 1
 				})),
-				record(Event::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
 			]
 		);
 	});
@@ -1089,33 +1089,33 @@ fn motions_approval_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 2
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Closed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Closed {
 					proposal_hash: hash,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
-				record(Event::Collective(CollectiveEvent::Executed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Executed {
 					proposal_hash: hash,
 					result: Err(DispatchError::BadOrigin)
 				})),
@@ -1139,7 +1139,7 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		));
 		assert_eq!(
 			System::events()[0],
-			record(Event::Collective(CollectiveEvent::Proposed {
+			record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 				account: 1,
 				proposal_index: 0,
 				proposal_hash: hash,
@@ -1163,7 +1163,7 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		// Events show that the close ended in a disapproval.
 		assert_eq!(
 			System::events()[1],
-			record(Event::Collective(CollectiveEvent::Closed {
+			record(RuntimeEvent::Collective(CollectiveEvent::Closed {
 				proposal_hash: hash,
 				yes: 0,
 				no: 3
@@ -1171,7 +1171,7 @@ fn motion_with_no_votes_closes_with_disapproval() {
 		);
 		assert_eq!(
 			System::events()[2],
-			record(Event::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
+			record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
 		);
 	})
 }
@@ -1231,27 +1231,27 @@ fn disapprove_proposal_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(Event::Collective(CollectiveEvent::Proposed {
+				record(RuntimeEvent::Collective(CollectiveEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 2
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Voted {
+				record(RuntimeEvent::Collective(CollectiveEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0
 				})),
-				record(Event::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
 			]
 		);
 	})

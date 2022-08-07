@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::mock::{
-	new_test_ext, offence_reports, report_id, with_on_offence_fractions, Event, Offence, Offences,
+	new_test_ext, offence_reports, report_id, with_on_offence_fractions, RuntimeEvent, Offence, Offences,
 	System, KIND,
 };
 use frame_system::{EventRecord, Phase};
@@ -114,7 +114,7 @@ fn should_deposit_event() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: Event::Offences(crate::Event::Offence {
+				event: RuntimeEvent::Offences(crate::Event::Offence {
 					kind: KIND,
 					timeslot: time_slot.encode()
 				}),
@@ -148,7 +148,7 @@ fn doesnt_deposit_event_for_dups() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: Event::Offences(crate::Event::Offence {
+				event: RuntimeEvent::Offences(crate::Event::Offence {
 					kind: KIND,
 					timeslot: time_slot.encode()
 				}),

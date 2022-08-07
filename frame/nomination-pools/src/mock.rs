@@ -328,7 +328,7 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Pools(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = PoolsEvents::get();
 	PoolsEvents::set(&(events.len() as u32));
@@ -340,7 +340,7 @@ pub(crate) fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Ru
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Balances(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Balances(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = BalancesEvents::get();
 	BalancesEvents::set(&(events.len() as u32));

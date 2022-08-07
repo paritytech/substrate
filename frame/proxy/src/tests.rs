@@ -183,7 +183,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn last_events(n: usize) -> Vec<Event> {
+fn last_events(n: usize) -> Vec<RuntimeEvent> {
 	system::Pallet::<Test>::events()
 		.into_iter()
 		.rev()
@@ -193,7 +193,7 @@ fn last_events(n: usize) -> Vec<Event> {
 		.collect()
 }
 
-fn expect_events(e: Vec<Event>) {
+fn expect_events(e: Vec<RuntimeEvent>) {
 	assert_eq!(last_events(e.len()), e);
 }
 

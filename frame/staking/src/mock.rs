@@ -872,7 +872,7 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
 		.collect()
 }
 
@@ -883,7 +883,7 @@ parameter_types! {
 pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 	let all: Vec<_> = System::events()
 		.into_iter()
-		.filter_map(|r| if let Event::Staking(inner) = r.event { Some(inner) } else { None })
+		.filter_map(|r| if let RuntimeEvent::Staking(inner) = r.event { Some(inner) } else { None })
 		.collect();
 	let seen = StakingEventsIndex::get();
 	StakingEventsIndex::set(all.len());

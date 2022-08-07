@@ -418,37 +418,37 @@ fn event_codec() {
 	use codec::Encode;
 
 	let event = system::Event::<Runtime>::ExtrinsicSuccess;
-	assert_eq!(Event::from(event).encode()[0], 30);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 30);
 
 	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 31);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 31);
 
 	let event = module2::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 32);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 32);
 
 	let event = module1::Event::<Runtime, module1::Instance2>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 33);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 33);
 
 	let event = nested::module3::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 34);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 34);
 
 	let event = module3::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 35);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 35);
 
 	let event = module1::Event::<Runtime, module1::Instance5>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 4);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 4);
 
 	let event = module1::Event::<Runtime, module1::Instance6>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 1);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 1);
 
 	let event = module1::Event::<Runtime, module1::Instance7>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 2);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 2);
 
 	let event = module1::Event::<Runtime, module1::Instance8>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 12);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 12);
 
 	let event = module1::Event::<Runtime, module1::Instance9>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 13);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 13);
 }
 
 #[test]

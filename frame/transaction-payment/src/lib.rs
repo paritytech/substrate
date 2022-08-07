@@ -1359,13 +1359,13 @@ mod tests {
 				));
 				assert_eq!(Balances::free_balance(2), 0);
 				// Transfer Event
-				System::assert_has_event(Event::Balances(pallet_balances::Event::Transfer {
+				System::assert_has_event(RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 					from: 2,
 					to: 3,
 					amount: 80,
 				}));
 				// Killed Event
-				System::assert_has_event(Event::System(system::Event::KilledAccount {
+				System::assert_has_event(RuntimeEvent::System(system::Event::KilledAccount {
 					account: 2,
 				}));
 			});
@@ -1421,7 +1421,7 @@ mod tests {
 				));
 				assert_eq!(Balances::total_balance(&user), 0);
 				// TransactionFeePaid Event
-				System::assert_has_event(Event::TransactionPayment(
+				System::assert_has_event(RuntimeEvent::TransactionPayment(
 					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: user,
 						actual_fee: 0,
