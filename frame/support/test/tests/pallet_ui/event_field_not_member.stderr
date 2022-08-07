@@ -9,11 +9,6 @@ error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Co
    |
 23 |         B { b: T::Bar },
    |             ^
-   |
-help: consider further restricting this bound
-   |
-22 |     pub enum Event<T: Config + std::cmp::PartialEq> {
-   |                              +++++++++++++++++++++
 
 error[E0277]: `<T as pallet::Config>::Bar` doesn't implement `std::fmt::Debug`
   --> tests/pallet_ui/event_field_not_member.rs:23:7

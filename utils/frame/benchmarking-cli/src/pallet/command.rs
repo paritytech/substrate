@@ -236,14 +236,22 @@ impl PalletCmd {
 					let lowest = self.lowest_range_values.get(idx).cloned().unwrap_or(*low);
 					let highest = self.highest_range_values.get(idx).cloned().unwrap_or(*high);
 
-					let diff = highest - lowest;
+					let diff =
+						highest.checked_sub(lowest).ok_or("`low` cannot be higher than `high`")?;
 
-					// Create up to `STEPS` steps for that component between high and low.
-					let step_size = (diff / self.steps).max(1);
-					let num_of_steps = diff / step_size + 1;
-					for s in 0..num_of_steps {
+					// The slope logic needs at least two points
+					// to compute a slope.
+					if self.steps < 2 {
+						return Err("`steps` must be at least 2.".into())
+					}
+
+					let step_size = (diff as f32 / (self.steps - 1) as f32).max(0.0);
+
+					for s in 0..self.steps {
 						// This is the value we will be testing for component `name`
-						let component_value = lowest + step_size * s;
+						let component_value = ((lowest as f32 + step_size * s as f32) as u32)
+							.min(highest)
+							.max(lowest);
 
 						// Select the max value for all the other components.
 						let c: Vec<(BenchmarkParameter, u32)> = components
@@ -364,13 +372,14 @@ impl PalletCmd {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
 							log::info!(
-								"Running Benchmark: {}.{} {}/{} {}/{}",
+								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
 								String::from_utf8(extrinsic.clone())
 									.expect("Encoded from String; qed"),
-								s + 1, // s starts at 0. todo show step
-								self.steps,
+								components.len(),
+								s + 1, // s starts at 0.
+								all_components.len(),
 								r + 1,
 								self.external_repeat,
 							);

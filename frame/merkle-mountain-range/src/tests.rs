@@ -347,28 +347,64 @@ fn should_verify() {
 }
 
 #[test]
-fn should_verify_batch_proof() {
+fn should_verify_batch_proofs() {
+	fn generate_and_verify_batch_proof(
+		ext: &mut sp_io::TestExternalities,
+		leaves: &Vec<u64>,
+		blocks_to_add: usize,
+	) {
+		let (leaves, proof) = ext
+			.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(leaves.to_vec()).unwrap());
+
+		ext.execute_with(|| {
+			add_blocks(blocks_to_add);
+			// then
+			assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
+		})
+	}
+
 	let _ = env_logger::try_init();
 
-	// Start off with chain initialisation and storing indexing data off-chain
-	// (MMR Leafs)
+	use itertools::Itertools;
+
 	let mut ext = new_test_ext();
-	ext.execute_with(|| add_blocks(7));
-	ext.persist_offchain_overlay();
-
-	// Try to generate proof now. This requires the offchain extensions to be present
-	// to retrieve full leaf data.
+	// require the offchain extensions to be present
+	// to retrieve full leaf data when generating proofs
 	register_offchain_ext(&mut ext);
-	let (leaves, proof) = ext.execute_with(|| {
-		// when
-		crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap()
-	});
 
-	ext.execute_with(|| {
-		add_blocks(7);
-		// then
-		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
-	});
+	// verify that up to n=10, valid proofs are generated for all possible leaf combinations
+	for n in 0..10 {
+		ext.execute_with(|| new_block());
+		ext.persist_offchain_overlay();
+
+		// generate powerset (skipping empty set) of all possible leaf combinations for mmr size n
+		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
+
+		leaves_set.iter().for_each(|leaves_subset| {
+			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
+			ext.persist_offchain_overlay();
+		});
+	}
+
+	// verify that up to n=15, valid proofs are generated for all possible 2-leaf combinations
+	for n in 10..15 {
+		// (MMR Leafs)
+		ext.execute_with(|| new_block());
+		ext.persist_offchain_overlay();
+
+		// generate all possible 2-leaf combinations for mmr size n
+		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
+
+		leaves_set.iter().for_each(|leaves_subset| {
+			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
+			ext.persist_offchain_overlay();
+		});
+	}
+
+	generate_and_verify_batch_proof(&mut ext, &vec![7, 11], 20);
+	ext.execute_with(|| add_blocks(1000));
+	ext.persist_offchain_overlay();
+	generate_and_verify_batch_proof(&mut ext, &vec![7, 11, 100, 800], 100);
 }
 
 #[test]

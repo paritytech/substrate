@@ -20,11 +20,11 @@ use frame_support::{
 	traits::Currency,
 	weights::{constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFee},
 };
-use node_primitives::Balance;
-use node_runtime::{
+use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, Call, CheckedExtrinsic, Multiplier, Runtime, TransactionByteFee, TransactionPayment,
 };
+use node_primitives::Balance;
 use node_testing::keyring::*;
 use sp_core::NeverNativeValue;
 use sp_runtime::{traits::One, Perbill};
