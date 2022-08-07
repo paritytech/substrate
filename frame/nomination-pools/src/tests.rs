@@ -4291,6 +4291,45 @@ mod bond_extra {
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10);
 		})
 	}
+
+	#[test]
+	fn payout_rewards_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given some free balance.
+			Balances::make_free_balance_be(&default_reward_account(), 7);
+
+			// given
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
+			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10);
+			assert_eq!(Balances::free_balance(10), 35);
+
+			let (mut member, mut bonded_pool, mut reward_pool) =
+				Pools::get_member_with_pools(&10).unwrap();
+
+			let claimable_reward = 7 - ExistentialDeposit::get();
+			let current_reward_counter = default_pool_reward_counter();
+
+			// when
+			assert_ok!(Pools::payout_rewards(
+				&mut member,
+				&mut bonded_pool,
+				&mut reward_pool,
+				claimable_reward,
+				current_reward_counter,
+				PayoutRecipient::MemberAccount(10)
+			));
+
+			// then
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 2 }
+				]
+			);
+		})
+	}
 }
 
 mod update_roles {

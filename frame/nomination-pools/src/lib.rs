@@ -361,7 +361,7 @@ enum AccountType {
 /// Indicates whether the the member account or the bonded accound is going
 /// to receive the payout.
 #[derive(Encode, Decode)]
-enum PayoutRecipient<T: Config> {
+pub enum PayoutRecipient<T: Config> {
 	/// Stores the `AccountId` of the member account.
 	MemberAccount(T::AccountId),
 	/// Stores the `AccountId` of the bonded account.
