@@ -4265,6 +4265,32 @@ mod bond_extra {
 			);
 		})
 	}
+
+	#[test]
+	fn try_bond_funds_from_rewards_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given some free balance.
+			Balances::make_free_balance_be(&default_reward_account(), 7);
+
+			// given
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
+			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10);
+			assert_eq!(Balances::free_balance(10), 35);
+
+			let (mut member, mut bonded_pool, mut reward_pool) =
+				Pools::get_member_with_pools(&10).unwrap();
+
+			// when
+			assert_ok!(bonded_pool.try_bond_funds_from_rewards(&mut member, &mut reward_pool));
+
+			// then
+			assert_eq!(Balances::free_balance(10), 35);
+			// The points are still not updated. They are updated in the later
+			// part of the `bond_extra` function, which is not called here.
+			assert_eq!(PoolMembers::<Runtime>::get(10).unwrap().points, 10);
+			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 10);
+		})
+	}
 }
 
 mod update_roles {
@@ -4439,8 +4465,6 @@ mod update_roles {
 }
 
 mod reward_counter_precision {
-	use sp_runtime::FixedU128;
-
 	use super::*;
 
 	const DOT: Balance = 10u128.pow(10u32);
