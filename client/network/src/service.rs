@@ -296,6 +296,9 @@ where
 
 			let discovery_config = {
 				let mut config = DiscoveryConfig::new(local_public.clone());
+				if let Some(net_config_dir) = params.network_config.net_config_path.as_ref() && params.network_config.persist_peers {
+					config.with_persist_addresses_dir(net_config_dir);
+				}
 				config.with_permanent_addresses(known_addresses);
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,

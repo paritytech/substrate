@@ -1057,7 +1057,7 @@ impl NetworkBehaviour for Notifications {
 		NotifsHandlerProto::new(self.notif_protocols.clone())
 	}
 
-	fn addresses_of_peer(&mut self, _: &PeerId) -> Vec<Multiaddr> {
+	fn addresses_of_peer(&mut self, _peer_id: &PeerId) -> Vec<Multiaddr> {
 		Vec::new()
 	}
 

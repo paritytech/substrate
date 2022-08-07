@@ -46,7 +46,11 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
-use crate::utils::LruHashSet;
+use crate::{
+	persist_peers::{self, PersistPeerAddrs},
+	utils::LruHashSet,
+};
+
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -79,6 +83,7 @@ use std::{
 	collections::{HashMap, HashSet, VecDeque},
 	io,
 	num::NonZeroUsize,
+	path::{Path, PathBuf},
 	task::{Context, Poll},
 	time::Duration,
 };
@@ -102,6 +107,7 @@ pub struct DiscoveryConfig {
 	enable_mdns: bool,
 	kademlia_disjoint_query_paths: bool,
 	protocol_ids: HashSet<ProtocolId>,
+	persist_addresses_dir: Option<PathBuf>,
 }
 
 impl DiscoveryConfig {
@@ -117,12 +123,21 @@ impl DiscoveryConfig {
 			enable_mdns: false,
 			kademlia_disjoint_query_paths: false,
 			protocol_ids: HashSet::new(),
+			persist_addresses_dir: None,
 		}
 	}
 
 	/// Set the number of active connections at which we pause discovery.
 	pub fn discovery_limit(&mut self, limit: u64) -> &mut Self {
 		self.discovery_only_if_under_num = limit;
+		self
+	}
+
+	pub fn with_persist_addresses_dir(
+		&mut self,
+		persist_addresses_dir: impl AsRef<Path>,
+	) -> &mut Self {
+		self.persist_addresses_dir = Some(persist_addresses_dir.as_ref().to_owned());
 		self
 	}
 
@@ -191,6 +206,7 @@ impl DiscoveryConfig {
 			enable_mdns,
 			kademlia_disjoint_query_paths,
 			protocol_ids,
+			persist_addresses_dir,
 		} = self;
 
 		let kademlias = protocol_ids
@@ -217,6 +233,8 @@ impl DiscoveryConfig {
 			})
 			.collect();
 
+		let persist_peer_addrs = persist_addresses_dir.map(PersistPeerAddrs::load);
+
 		DiscoveryBehaviour {
 			permanent_addresses,
 			ephemeral_addresses: HashMap::new(),
@@ -242,6 +260,7 @@ impl DiscoveryConfig {
 				NonZeroUsize::new(MAX_KNOWN_EXTERNAL_ADDRESSES)
 					.expect("value is a constant; constant is non-zero; qed."),
 			),
+			persist_peer_addrs,
 		}
 	}
 }
@@ -278,6 +297,9 @@ pub struct DiscoveryBehaviour {
 	allow_non_globals_in_dht: bool,
 	/// A cache of discovered external addresses. Only used for logging purposes.
 	known_external_addresses: LruHashSet<Multiaddr>,
+
+	/// A persistent cache of addresses of peers.
+	persist_peer_addrs: Option<PersistPeerAddrs>,
 }
 
 impl DiscoveryBehaviour {
@@ -324,7 +346,11 @@ impl DiscoveryBehaviour {
 		supported_protocols: impl Iterator<Item = impl AsRef<[u8]>>,
 		addr: Multiaddr,
 	) {
-		if !self.allow_non_globals_in_dht && !self.can_add_to_dht(&addr) {
+		if let Some(persist_peer_addrs) = self.persist_peer_addrs.as_mut() {
+			persist_peer_addrs.report_peer_addr(peer_id, &addr);
+		}
+
+		if !self.can_add_to_dht(&addr) {
 			trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
 			return
 		}
@@ -427,7 +453,7 @@ impl DiscoveryBehaviour {
 				return true,
 			_ => return false,
 		};
-		ip.is_global()
+		ip.is_global() || self.allow_non_globals_in_dht
 	}
 
 	fn new_handler_with_replacement(
@@ -544,6 +570,18 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			}
 
 			list.extend(list_to_filter);
+		}
+
+		let last_resort_resolutions = self
+			.persist_peer_addrs
+			.as_mut()
+			.map(|persist_peer_addrs| persist_peer_addrs.peer_addrs(peer_id))
+			.into_iter()
+			.flatten();
+
+		if list.is_empty() {
+			warn!(target: "sub-libp2p", "Used last-resort-resolutions for {:?}", peer_id);
+			list.extend(last_resort_resolutions.cloned());
 		}
 
 		trace!(target: "sub-libp2p", "Addresses of {:?}: {:?}", peer_id, list);
@@ -712,6 +750,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		cx: &mut Context,
 		params: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+		if let Some(persist_peer_addrs) = self.persist_peer_addrs.as_mut() {
+			let _ = persist_peer_addrs.poll(cx);
+		}
+
 		// Immediately process the content of `discovered`.
 		if let Some(ev) = self.pending_events.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))

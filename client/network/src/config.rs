@@ -448,6 +448,9 @@ pub struct NetworkConfiguration {
 	/// a modification of the way the implementation works. Different nodes with different
 	/// configured values remain compatible with each other.
 	pub yamux_window_size: Option<u32>,
+
+	/// Enable persisting peers between the node restarts.
+	pub persist_peers: bool,
 }
 
 impl NetworkConfiguration {
@@ -479,6 +482,7 @@ impl NetworkConfiguration {
 			kademlia_disjoint_query_paths: false,
 			yamux_window_size: None,
 			ipfs_server: false,
+			persist_peers: false,
 		}
 	}
 

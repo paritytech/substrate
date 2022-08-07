@@ -623,7 +623,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							self.pending_responses_arrival_time
 								.insert((protocol.clone(), request_id).into(), Instant::now());
 
-							let get_peer_reputation = self.peerset.clone().peer_reputation(peer);
+							let get_peer_reputation = self.peerset.peer_reputation(peer);
 							let get_peer_reputation = Box::pin(get_peer_reputation);
 
 							// Save the Future-like state with params to poll `get_peer_reputation`

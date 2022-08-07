@@ -18,6 +18,7 @@
 
 use crate::{
 	config, error,
+	persist_peers::{self, PersistPeersets},
 	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
@@ -206,6 +207,8 @@ pub struct Protocol<B: BlockT, Client> {
 	boot_node_ids: HashSet<PeerId>,
 	/// A cache for the data that was associated to a block announcement.
 	block_announce_data_cache: lru::LruCache<B::Hash, Vec<u8>>,
+
+	persist_peersets: Option<PersistPeersets>,
 }
 
 #[derive(Debug)]
@@ -321,7 +324,7 @@ where
 
 		let mut known_addresses = Vec::new();
 
-		let (peerset, peerset_handle) = {
+		let (mut peerset, peerset_handle) = {
 			let mut sets =
 				Vec::with_capacity(NUM_HARDCODED_PEERSETS + network_config.extra_sets.len());
 
@@ -371,6 +374,34 @@ where
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
+		if let Some(loaded_peerinfo) = network_config
+			.net_config_path
+			.as_ref()
+			.map(persist_peers::peersets_load)
+			.transpose()?
+		{
+			use sc_peerset::ReputationChange;
+			use sc_peerset::SetId;
+
+			for (peer_id, reputation, sets) in loaded_peerinfo {
+				eprintln!(
+					"Restoring {:?} with sets: {:?}, reputation: {:?}",
+					peer_id, sets, reputation
+				);
+				peerset.report_peer(
+					peer_id,
+					ReputationChange {
+						value: reputation,
+						reason: "Restoring from previous node incrnatation",
+					},
+				);
+				
+				for set_id in sets {
+					peerset.add_to_peers_set(SetId::from(set_id), peer_id.to_owned());
+				}
+			}
+		}
+
 		let block_announces_protocol: Cow<'static, str> =
 			format!("/{}/block-announces/1", protocol_id.as_ref()).into();
 
@@ -410,6 +441,12 @@ where
 				network_config.default_peers_set.out_peers as usize,
 		);
 
+		let persist_peersets = network_config
+			.net_config_path
+			.as_ref()
+			.filter(|_| network_config.persist_peers)
+			.map(|p| PersistPeersets::new(p, peerset_handle.to_owned()));
+
 		let protocol = Self {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
 			pending_messages: VecDeque::new(),
@@ -442,6 +479,7 @@ where
 			},
 			boot_node_ids,
 			block_announce_data_cache,
+			persist_peersets,
 		};
 
 		Ok((protocol, peerset_handle, known_addresses))
@@ -1376,6 +1414,10 @@ where
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
+		if let Some(persist_peersets) = self.persist_peersets.as_mut() {
+			let _ = persist_peersets.poll(cx);
+		}
+
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}

@@ -56,6 +56,8 @@ const DISCONNECT_REPUTATION_CHANGE: i32 = -256;
 /// the list.
 const FORGET_AFTER: Duration = Duration::from_secs(3600);
 
+pub type DumpedState = Vec<(PeerId, i32, Vec<usize>)>;
+
 #[derive(Debug)]
 enum Action {
 	AddReservedPeer(SetId, PeerId),
@@ -66,6 +68,7 @@ enum Action {
 	AddToPeersSet(SetId, PeerId),
 	RemoveFromPeersSet(SetId, PeerId),
 	PeerReputation(PeerId, oneshot::Sender<i32>),
+	DumpState(oneshot::Sender<DumpedState>),
 }
 
 /// Identifier of a set in the peerset.
@@ -168,13 +171,21 @@ impl PeersetHandle {
 	}
 
 	/// Returns the reputation value of the peer.
-	pub async fn peer_reputation(self, peer_id: PeerId) -> Result<i32, ()> {
+	pub fn peer_reputation(&self, peer_id: PeerId) -> impl Future<Output = Result<i32, ()>> {
 		let (tx, rx) = oneshot::channel();
 
 		let _ = self.tx.unbounded_send(Action::PeerReputation(peer_id, tx));
 
 		// The channel can only be closed if the peerset no longer exists.
-		rx.await.map_err(|_| ())
+		async move { rx.await.map_err(|_| ()) }
+	}
+
+	pub fn dump_state(&self) -> impl Future<Output = Result<DumpedState, ()>> {
+		let (tx, rx) = oneshot::channel();
+
+		let _ = self.tx.unbounded_send(Action::DumpState(tx));
+
+		async move { rx.await.map_err(|_| ()) }
 	}
 }
 
@@ -469,6 +480,15 @@ impl Peerset {
 		let _ = pending_response.send(reputation.reputation());
 	}
 
+	fn on_dump_state(&self, reply_to: oneshot::Sender<DumpedState>) {
+		let _ = reply_to.send(
+			self.data
+				.peer_reputations()
+				.map(|(peer_id, rep, sets)| (peer_id.to_owned(), rep, sets))
+				.collect(),
+		);
+	}
+
 	/// Updates the value of `self.latest_time_update` and performs all the updates that happen
 	/// over time, such as reputation increases for staying connected.
 	fn update_time(&mut self) {
@@ -758,6 +778,7 @@ impl Stream for Peerset {
 					self.on_remove_from_peers_set(sets_name, peer_id),
 				Action::PeerReputation(peer_id, pending_response) =>
 					self.on_peer_reputation(peer_id, pending_response),
+				Action::DumpState(reply_to) => self.on_dump_state(reply_to),
 			}
 		}
 	}
