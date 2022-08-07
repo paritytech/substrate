@@ -101,7 +101,10 @@ impl RpcHandlers {
 		&self,
 		json_query: &str,
 	) -> Result<(String, mpsc::UnboundedReceiver<String>), JsonRpseeError> {
-		self.0.raw_json_request(json_query).await
+		self.0
+			.raw_json_request(json_query)
+			.await
+			.map(|(method_res, recv)| (method_res.result, recv))
 	}
 
 	/// Provides access to the underlying `RpcModule`
@@ -261,10 +264,12 @@ async fn build_network_future<
 					sc_rpc::system::Request::SyncState(sender) => {
 						use sc_rpc::system::SyncState;
 
+						let best_number = client.info().best_number;
+
 						let _ = sender.send(SyncState {
 							starting_block,
-							current_block: client.info().best_number,
-							highest_block: network.best_seen_block(),
+							current_block: best_number,
+							highest_block: network.best_seen_block().unwrap_or(best_number),
 						});
 					}
 				}

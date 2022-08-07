@@ -741,6 +741,7 @@ where
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
+			config.chain_spec.fork_id(),
 			client.clone(),
 			config.network.default_peers_set.in_peers as usize +
 				config.network.default_peers_set.out_peers as usize,
@@ -753,6 +754,7 @@ where
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = StateRequestHandler::new(
 			&protocol_id,
+			config.chain_spec.fork_id(),
 			client.clone(),
 			config.network.default_peers_set_num_full as usize,
 		);
@@ -763,8 +765,16 @@ where
 	let (warp_sync_provider, warp_sync_protocol_config) = warp_sync
 		.map(|provider| {
 			// Allow both outgoing and incoming requests.
-			let (handler, protocol_config) =
-				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
+			let (handler, protocol_config) = WarpSyncRequestHandler::new(
+				protocol_id.clone(),
+				client
+					.block_hash(0u32.into())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed"),
+				config.chain_spec.fork_id(),
+				provider.clone(),
+			);
 			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
 			(Some(provider), Some(protocol_config))
 		})
@@ -772,8 +782,11 @@ where
 
 	let light_client_request_protocol_config = {
 		// Allow both outgoing and incoming requests.
-		let (handler, protocol_config) =
-			LightClientRequestHandler::new(&protocol_id, client.clone());
+		let (handler, protocol_config) = LightClientRequestHandler::new(
+			&protocol_id,
+			config.chain_spec.fork_id(),
+			client.clone(),
+		);
 		spawn_handle.spawn("light-client-request-handler", Some("networking"), handler.run());
 		protocol_config
 	};
@@ -808,6 +821,7 @@ where
 		chain: client.clone(),
 		transaction_pool: transaction_pool_adapter as _,
 		protocol_id,
+		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),

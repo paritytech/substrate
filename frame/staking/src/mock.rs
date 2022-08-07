@@ -33,7 +33,7 @@ use sp_core::H256;
 use sp_io;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::{Header, TestXt, UintAuthorityId},
+	testing::{Header, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
@@ -304,15 +304,6 @@ impl crate::pallet::pallet::Config for Test {
 	type WeightInfo = ();
 }
 
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
-where
-	Call: From<LocalCall>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = Extrinsic;
-}
-
-pub type Extrinsic = TestXt<Call, ()>;
 pub(crate) type StakingCall = crate::Call<Test>;
 pub(crate) type TestRuntimeCall = <Test as frame_system::Config>::Call;
 

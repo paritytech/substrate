@@ -29,6 +29,9 @@ pub struct ProtocolConfig {
 	/// Name of the protocol on the wire. Should be something like `/foo/bar`.
 	pub name: Cow<'static, str>,
 
+	/// Fallback on the wire protocol names to support.
+	pub fallback_names: Vec<Cow<'static, str>>,
+
 	/// Maximum allowed size, in bytes, of a request.
 	///
 	/// Any request larger than this value will be declined as a way to avoid allocating too
