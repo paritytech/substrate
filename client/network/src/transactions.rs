@@ -127,19 +127,34 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 /// Prototype for a [`TransactionsHandler`].
 pub struct TransactionsHandlerPrototype {
 	protocol_name: Cow<'static, str>,
+	fallback_protocol_names: Vec<Cow<'static, str>>,
 }
 
 impl TransactionsHandlerPrototype {
 	/// Create a new instance.
-	pub fn new(protocol_id: ProtocolId) -> Self {
-		Self { protocol_name: format!("/{}/transactions/1", protocol_id.as_ref()).into() }
+	pub fn new<Hash: AsRef<[u8]>>(
+		protocol_id: ProtocolId,
+		genesis_hash: Hash,
+		fork_id: Option<String>,
+	) -> Self {
+		let protocol_name = if let Some(fork_id) = fork_id {
+			format!("/{}/{}/transactions/1", hex::encode(genesis_hash), fork_id)
+		} else {
+			format!("/{}/transactions/1", hex::encode(genesis_hash))
+		};
+		let legacy_protocol_name = format!("/{}/transactions/1", protocol_id.as_ref());
+
+		Self {
+			protocol_name: protocol_name.into(),
+			fallback_protocol_names: iter::once(legacy_protocol_name.into()).collect(),
+		}
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
 	pub fn set_config(&self) -> config::NonDefaultSetConfig {
 		config::NonDefaultSetConfig {
 			notifications_protocol: self.protocol_name.clone(),
-			fallback_names: Vec::new(),
+			fallback_names: self.fallback_protocol_names.clone(),
 			max_notification_size: MAX_TRANSACTIONS_SIZE,
 			set_config: config::SetConfig {
 				in_peers: 0,

@@ -23,7 +23,7 @@ use frame_support::assert_ok;
 #[test]
 fn timestamp_works() {
 	new_test_ext().execute_with(|| {
-		Timestamp::set_timestamp(42);
+		crate::Now::<Test>::put(46);
 		assert_ok!(Timestamp::set(Origin::none(), 69));
 		assert_eq!(Timestamp::now(), 69);
 		assert_eq!(Some(69), get_captured_moment());
@@ -36,7 +36,6 @@ fn double_timestamp_should_fail() {
 	new_test_ext().execute_with(|| {
 		Timestamp::set_timestamp(42);
 		assert_ok!(Timestamp::set(Origin::none(), 69));
-		let _ = Timestamp::set(Origin::none(), 70);
 	});
 }
 
@@ -46,7 +45,7 @@ fn double_timestamp_should_fail() {
 )]
 fn block_period_minimum_enforced() {
 	new_test_ext().execute_with(|| {
-		Timestamp::set_timestamp(42);
+		crate::Now::<Test>::put(44);
 		let _ = Timestamp::set(Origin::none(), 46);
 	});
 }
