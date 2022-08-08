@@ -401,14 +401,14 @@ where
 		can_author_with,
 	);
 
-	let ticket_worker = tickets_worker(
+	let tickets_worker = tickets_worker(
 		client.clone(),
 		keystore,
 		sassafras_link.epoch_changes.clone(),
 		select_chain,
 	);
 
-	let inner = future::select(Box::pin(slot_worker), Box::pin(ticket_worker));
+	let inner = future::select(Box::pin(slot_worker), Box::pin(tickets_worker));
 
 	Ok(SassafrasWorker { inner: Box::pin(inner.map(|_| ())), slot_notification_sinks })
 }
@@ -437,28 +437,19 @@ async fn tickets_worker<B, C, SC>(
 
 		debug!(target: "sassafras", "🌳 New epoch annouced {:x?}", epoch_desc);
 
-		let tickets = {
-			let mut epoch_changes = epoch_changes.shared_data();
-
-			let number = *notification.header.number();
-			let position = if number == One::one() {
-				EpochIdentifierPosition::Genesis1
-			} else {
-				EpochIdentifierPosition::Regular
-			};
-			let mut epoch_identifier =
-				EpochIdentifier { position, hash: notification.hash, number };
-
-			let epoch = match epoch_changes.epoch_mut(&mut epoch_identifier) {
-				Some(epoch) => epoch,
-				None => {
-					warn!(target: "sassafras", "🌳 Unexpected missing epoch data for {}", notification.hash);
-					continue
-				},
-			};
-
-			authorship::generate_epoch_tickets(epoch, 30, 1, &keystore)
+		let number = *notification.header.number();
+		let position = if number == One::one() {
+			EpochIdentifierPosition::Genesis1
+		} else {
+			EpochIdentifierPosition::Regular
 		};
+		let epoch_identifier = EpochIdentifier { position, hash: notification.hash, number };
+
+		let tickets = epoch_changes
+			.shared_data()
+			.epoch_mut(&epoch_identifier)
+			.map(|epoch| authorship::generate_epoch_tickets(epoch, 30, 1, &keystore))
+			.unwrap_or_default();
 
 		if tickets.is_empty() {
 			continue
@@ -480,7 +471,11 @@ async fn tickets_worker<B, C, SC>(
 		};
 		if let Some(err) = err {
 			error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err);
-			// TODO-SASS-P2: on error remove tickets from epoch...
+			// Remove tickets from epoch tree node.
+			epoch_changes
+				.shared_data()
+				.epoch_mut(&epoch_identifier)
+				.map(|epoch| epoch.tickets_info.clear());
 		}
 	}
 }

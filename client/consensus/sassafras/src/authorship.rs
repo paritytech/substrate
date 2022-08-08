@@ -141,7 +141,7 @@ pub fn generate_epoch_tickets(
 			Err(_) => continue,
 		};
 
-		let get_ticket = |attempt| {
+		let make_ticket = |attempt| {
 			let transcript_data =
 				make_ticket_transcript_data(&epoch.randomness, attempt as u64, epoch.epoch_index);
 
@@ -172,7 +172,7 @@ pub fn generate_epoch_tickets(
 		};
 
 		for attempt in 0..max_attempts {
-			if let Some((ticket, ticket_info)) = get_ticket(attempt) {
+			if let Some((ticket, ticket_info)) = make_ticket(attempt) {
 				tickets.push(ticket);
 				epoch.tickets_info.insert(ticket, ticket_info);
 			}

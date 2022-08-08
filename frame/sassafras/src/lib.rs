@@ -589,6 +589,7 @@ impl<T: Config> Pallet<T> {
 			.next();
 
 		let pre_digest = pre_digest.expect("Valid Sassafras block should have a pre-digest. qed"); // let Some(ref pre_digest) = pre_digest {
+																						   //
 		let current_slot = pre_digest.slot;
 		CurrentSlot::<T>::put(current_slot);
 
@@ -632,7 +633,7 @@ impl<T: Config> Pallet<T> {
 		let duration = T::EpochDuration::get();
 		let slot_idx = Self::slot_epoch_index(slot); // % duration;
 
-		let ticket_index = |slot_idx| {
+		let get_ticket_idx = |slot_idx| {
 			let ticket_idx = if slot_idx < duration / 2 {
 				2 * slot_idx + 1
 			} else {
@@ -645,15 +646,15 @@ impl<T: Config> Pallet<T> {
 		if slot_idx < duration {
 			// Get a ticket for the current epoch.
 			let tickets = Tickets::<T>::get();
-			let idx = ticket_index(slot_idx);
-			tickets.get(idx).cloned()
+			let ticket_idx = get_ticket_idx(slot_idx);
+			tickets.get(ticket_idx).cloned()
 		} else if slot_idx < 2 * duration {
 			// Get a ticket for the next epoch. Since its state values were not enacted yet, we
 			// have to fetch it from the `NextTickets` list. This may happen when an author request
 			// the first ticket for an epoch.
 			let tickets = NextTickets::<T>::get();
-			let idx = ticket_index(slot_idx - duration);
-			tickets.iter().nth(idx).cloned()
+			let ticket_idx = get_ticket_idx(slot_idx - duration);
+			tickets.iter().nth(ticket_idx).cloned()
 		} else {
 			// We have no tickets for the requested slot yet.
 			None
