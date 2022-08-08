@@ -836,12 +836,12 @@ mod tests {
 	fn pruning_mode_compatibility() {
 		for (created, reopened, expected) in [
 			(None, None, Ok(PruningMode::ArchiveCanonical)),
-			(None, Some(PruningMode::keep_blocks(256)), Err(())),
-			(None, Some(PruningMode::keep_blocks(128)), Err(())),
-			(None, Some(PruningMode::keep_blocks(512)), Err(())),
+			(None, Some(PruningMode::blocks_pruning(256)), Err(())),
+			(None, Some(PruningMode::blocks_pruning(128)), Err(())),
+			(None, Some(PruningMode::blocks_pruning(512)), Err(())),
 			(None, Some(PruningMode::ArchiveAll), Err(())),
 			(None, Some(PruningMode::ArchiveCanonical), Ok(PruningMode::ArchiveCanonical)),
-			(Some(PruningMode::keep_blocks(256)), None, Ok(PruningMode::keep_blocks(256))),
+			(Some(PruningMode::blocks_pruning(256)), None, Ok(PruningMode::blocks_pruning(256))),
 			(
 				Some(PruningMode::blocks_pruning(256)),
 				Some(PruningMode::blocks_pruning(256)),
