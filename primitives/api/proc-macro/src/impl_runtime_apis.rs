@@ -408,17 +408,12 @@ fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 		// nothing to do
 		return trait_
 	};
-	let versioned_trait_ident = {
-		let trait_name = &trait_
-			.segments
-			.last()
-			.as_ref()
-			.expect("Trait path should always contain at least one item; qed")
-			.ident;
-
-		versioned_trait_name(trait_name, version)
-	};
-	trait_.segments.last_mut().as_mut().unwrap().ident = versioned_trait_ident;
+	let trait_name = &mut trait_
+		.segments
+		.last_mut()
+		.expect("Trait path should always contain at least one item; qed")
+		.ident;
+	*trait_name = versioned_trait_name(trait_name, version);
 
 	trait_
 }
