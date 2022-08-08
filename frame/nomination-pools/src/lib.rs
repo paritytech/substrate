@@ -965,7 +965,6 @@ impl<T: Config> RewardPool<T> {
 		id: PoolId,
 		bonded_points: BalanceOf<T>,
 	) -> Result<T::RewardCounter, Error<T>> {
-		dbg!(&self, &bonded_points);
 		let balance = Self::current_balance(id);
 		let payouts_since_last_record = balance
 			.saturating_add(self.total_rewards_claimed)
@@ -1106,7 +1105,7 @@ impl<T: Config> SubPools<T> {
 	}
 
 	/// The sum of all unbonding balance, regardless of whether they are actually unlocked or not.
-	#[cfg(any(test, debug_assertions))]
+	#[cfg(any(feature = "std", test, debug_assertions))]
 	fn sum_unbonding_balance(&self) -> BalanceOf<T> {
 		self.no_era.balance.saturating_add(
 			self.with_era
@@ -2470,6 +2469,7 @@ impl<T: Config> Pallet<T> {
 				sum_unbonding_balance
 			);
 		}
+
 		Ok(())
 	}
 
