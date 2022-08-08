@@ -500,9 +500,9 @@ impl frame_support::traits::OriginTrait for Origin {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct Event;
+pub struct RuntimeEvent;
 
-impl From<frame_system::Event<Runtime>> for Event {
+impl From<frame_system::Event<Runtime>> for RuntimeEvent {
 	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
@@ -592,7 +592,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<2400>;
 	type DbWeight = ();
 	type Version = ();

@@ -43,7 +43,7 @@ frame_support::decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	pub fn deposit_event(_event: impl Into<T::Event>) {}
+	pub fn deposit_event(_event: impl Into<T::RuntimeEvent>) {}
 }
 
 frame_support::decl_event!(

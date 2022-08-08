@@ -1497,7 +1497,7 @@ macro_rules! decl_module {
 		{
 			/// Deposits an event using `frame_system::Pallet::deposit_event`.
 			$vis fn deposit_event(
-				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
+				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::RuntimeEvent>
 			) {
 				<$system::Pallet<$trait_instance>>::deposit_event(event.into())
 			}
