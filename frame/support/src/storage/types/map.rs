@@ -504,6 +504,27 @@ mod test {
 	}
 
 	#[test]
+	fn keylenof_works() {
+		// Works with Blake2_128Concat.
+		type A = StorageMap<Prefix, Blake2_128Concat, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 16 + 4; // Blake2_128Concat = hash + key
+		assert_eq!(KeyLenOf::<A>::get(), size);
+
+		// Works with Blake2_256.
+		type B = StorageMap<Prefix, Blake2_256, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 32; // Blake2_256
+		assert_eq!(KeyLenOf::<B>::get(), size);
+
+		// Works with Twox64Concat.
+		type C = StorageMap<Prefix, Twox64Concat, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 8 + 4; // Twox64Concat = hash + key
+		assert_eq!(KeyLenOf::<C>::get(), size);
+	}
+
+	#[test]
 	fn test() {
 		type A = StorageMap<Prefix, Blake2_128Concat, u16, u32, OptionQuery>;
 		type AValueQueryWithAnOnEmpty =

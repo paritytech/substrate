@@ -757,6 +757,16 @@ mod test {
 	}
 
 	#[test]
+	fn keylenof_works() {
+		// Works with Blake2_128Concat and Twox64Concat.
+		type A = StorageDoubleMap<Prefix, Blake2_128Concat, u64, Twox64Concat, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 16 + 8 // Blake2_128Concat = hash + key
+			+ 8 + 4; // Twox64Concat = hash + key
+		assert_eq!(KeyLenOf::<A>::get(), size);
+	}
+
+	#[test]
 	fn test() {
 		type A =
 			StorageDoubleMap<Prefix, Blake2_128Concat, u16, Twox64Concat, u8, u32, OptionQuery>;
