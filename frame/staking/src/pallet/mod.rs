@@ -200,6 +200,10 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		// Max number of validators
+		#[pallet::constant]
+		type ValidatorSet: Get<u32>;
 	}
 
 	#[pallet::type_value]
@@ -233,7 +237,7 @@ pub mod pallet {
 	/// invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
-	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+	pub type Invulnerables<T: Config> = StorageValue<_, BoundedVec<T::AccountId, T::ValidatorSet>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
 	#[pallet::storage]
@@ -515,7 +519,7 @@ pub mod pallet {
 		pub history_depth: u32,
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
-		pub invulnerables: Vec<T::AccountId>,
+		pub invulnerables: BoundedVec<T::AccountId, T::ValidatorSet>,
 		pub force_era: Forcing,
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
@@ -1292,7 +1296,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_invulnerables(invulnerables.len() as u32))]
 		pub fn set_invulnerables(
 			origin: OriginFor<T>,
-			invulnerables: Vec<T::AccountId>,
+			invulnerables: BoundedVec<T::AccountId, T::ValidatorSet>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			<Invulnerables<T>>::put(invulnerables);

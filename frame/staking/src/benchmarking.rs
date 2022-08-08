@@ -501,7 +501,8 @@ benchmarks! {
 		for i in 0 .. v {
 			invulnerables.push(account("invulnerable", i, SEED));
 		}
-	}: _(RawOrigin::Root, invulnerables)
+		let invulnerables2: BoundedVec<T::AccountId, T::ValidatorSet> = invulnerables.clone().try_into().expect("Too many validators");
+	}: _(RawOrigin::Root, invulnerables2)
 	verify {
 		assert_eq!(Invulnerables::<T>::get().len(), v as usize);
 	}
