@@ -125,7 +125,7 @@ pub mod pallet {
 
 		type Balance: Parameter + Default + TypeInfo;
 
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::extra_constants]
@@ -452,7 +452,7 @@ pub mod pallet2 {
 	where
 		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
-		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -558,7 +558,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -574,7 +574,7 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type MyGetParam = ConstU32<10>;
 	type MyGetParam2 = ConstU32<11>;
 	type MyGetParam3 = MyGetParam3;
@@ -582,7 +582,7 @@ impl pallet::Config for Runtime {
 }
 
 impl pallet2::Config for Runtime {
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 }
 
 impl pallet4::Config for Runtime {}

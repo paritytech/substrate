@@ -52,7 +52,7 @@ impl frame_system::Config for Test {
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;

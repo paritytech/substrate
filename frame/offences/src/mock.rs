@@ -102,7 +102,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -116,7 +116,7 @@ impl frame_system::Config for Runtime {
 }
 
 impl Config for Runtime {
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type IdentificationTuple = u64;
 	type OnOffenceHandler = OnOffenceHandler;
 }

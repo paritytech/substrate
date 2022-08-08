@@ -50,7 +50,7 @@ mod module1 {
 	where
 		<Self as system::Config>::BlockNumber: From<u32>,
 	{
-		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
 		type GenericType: Default + Clone + Codec + EncodeLike + TypeInfo;
@@ -154,7 +154,7 @@ mod module2 {
 
 	pub trait Config<I = DefaultInstance>: system::Config {
 		type Amount: Parameter + Default;
-		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
 		type Origin: From<Origin<Self, I>>;
 	}
 
@@ -233,35 +233,35 @@ mod module3 {
 }
 
 impl module1::Config<module1::Instance1> for Runtime {
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module1::Config<module1::Instance2> for Runtime {
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module2::Config for Runtime {
 	type Amount = u16;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 }
 impl module2::Config<module2::Instance1> for Runtime {
 	type Amount = u32;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 }
 impl module2::Config<module2::Instance2> for Runtime {
 	type Amount = u32;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 }
 impl module2::Config<module2::Instance3> for Runtime {
 	type Amount = u64;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 }
 impl module3::Config for Runtime {
@@ -280,7 +280,7 @@ impl system::Config for Runtime {
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();

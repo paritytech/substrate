@@ -370,7 +370,7 @@ pub mod pallet {
 		type MagicNumber: Get<Self::Balance>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;

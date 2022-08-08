@@ -149,7 +149,7 @@ impl system::Config for RuntimeOriginTest {
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = u32;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();

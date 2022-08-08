@@ -250,7 +250,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for withdrawing, refunding and depositing the transaction fee.
 		/// Transaction fees are withdrawn before the transaction is executed.
@@ -848,7 +848,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = RuntimeEvent;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -863,7 +863,7 @@ mod tests {
 
 	impl pallet_balances::Config for Runtime {
 		type Balance = u64;
-		type Event = RuntimeEvent;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -911,7 +911,7 @@ mod tests {
 	}
 
 	impl Config for Runtime {
-		type Event = RuntimeEvent;
+		type RuntimeEvent = RuntimeEvent;
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;

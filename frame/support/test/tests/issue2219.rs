@@ -163,7 +163,7 @@ impl system::Config for Runtime {
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();

@@ -21,7 +21,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();

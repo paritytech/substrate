@@ -61,7 +61,8 @@ mod mock_democracy {
 
 		#[pallet::config]
 		pub trait Config: frame_system::Config + Sized {
-			type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+			type RuntimeEvent: From<Event<Self>>
+				+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 			type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
 		}
 
@@ -105,7 +106,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -120,7 +121,7 @@ impl frame_system::Config for Test {
 impl Config<Instance1> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
@@ -130,7 +131,7 @@ impl Config<Instance1> for Test {
 impl Config<Instance2> for Test {
 	type Origin = Origin;
 	type Proposal = Call;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
@@ -138,13 +139,13 @@ impl Config<Instance2> for Test {
 	type WeightInfo = ();
 }
 impl mock_democracy::Config for Test {
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type ExternalMajorityOrigin = EnsureProportionAtLeast<u64, Instance1, 3, 4>;
 }
 impl Config for Test {
 	type Origin = Origin;
 	type Proposal = Call;
-	type Event = RuntimeEvent;
+	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;

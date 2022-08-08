@@ -124,7 +124,8 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
 		type Call: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self, I>>;
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.

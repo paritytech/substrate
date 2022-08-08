@@ -744,7 +744,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
-		type Event = RuntimeEvent;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = RuntimeVersion;
 		type PalletInfo = PalletInfo;
@@ -760,7 +760,7 @@ mod tests {
 	type Balance = u64;
 	impl pallet_balances::Config for Runtime {
 		type Balance = Balance;
-		type Event = RuntimeEvent;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -774,7 +774,7 @@ mod tests {
 		pub const TransactionByteFee: Balance = 0;
 	}
 	impl pallet_transaction_payment::Config for Runtime {
-		type Event = RuntimeEvent;
+		type RuntimeEvent = RuntimeEvent;
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type OperationalFeeMultiplier = ConstU8<5>;
 		type WeightToFee = IdentityFee<Balance>;

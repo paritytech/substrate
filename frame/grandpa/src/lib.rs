@@ -87,9 +87,9 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The event type of this module.
-		type Event: From<Event>
-			+ Into<<Self as frame_system::Config>::Event>
-			+ IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event>
+			+ Into<<Self as frame_system::Config>::RuntimeEvent>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The function call.
 		type Call: From<Call<Self>>;

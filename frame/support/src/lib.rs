@@ -2028,7 +2028,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant] // put the constant in metadata
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+/// 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 /// 	}
 ///
 /// 	// Define some additional constant to put into the constant metadata.
@@ -2217,7 +2217,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant]
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+/// 		type RuntimeEvent: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 /// 	}
 ///
 /// 	#[pallet::extra_constants]
