@@ -2783,7 +2783,7 @@ mod unbond {
 
 			// when: unbonding more than our active: error
 			assert_noop!(
-				frame_support::storage::in_storage_layer(|| Pools::unbond(
+				frame_support::storage::with_storage_layer(|| Pools::unbond(
 					Origin::signed(10),
 					10,
 					5
@@ -2835,7 +2835,7 @@ mod unbond {
 			// when
 			CurrentEra::set(2);
 			assert_noop!(
-				frame_support::storage::in_storage_layer(|| Pools::unbond(
+				frame_support::storage::with_storage_layer(|| Pools::unbond(
 					Origin::signed(20),
 					20,
 					4

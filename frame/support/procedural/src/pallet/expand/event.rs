@@ -98,7 +98,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	if get_doc_literals(&event_item.attrs).is_empty() {
 		event_item.attrs.push(syn::parse_quote!(
 			#[doc = r"
-			The [event](https://docs.substrate.io/v3/runtime/events-and-errors) emitted
+			The [event](https://docs.substrate.io/main-docs/build/events-errors/) emitted
 			by this pallet.
 			"]
 		));
