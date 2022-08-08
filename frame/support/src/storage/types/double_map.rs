@@ -25,6 +25,7 @@ use crate::{
 		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
+	StorageHasher, Twox128,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -91,10 +92,10 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 	Key2: MaxEncodedLen,
 {
 	fn get() -> u32 {
-		let z = Hasher1::max_len::<Key1>() +
-			Hasher2::max_len::<Key2>() +
-			Prefix::pallet_prefix().len() +
-			Prefix::STORAGE_PREFIX.len();
+		// The `max_len` of both key hashes plus the pallet prefix and storage prefix (which both
+		// are hashed with `Twox128`).
+		let z =
+			Hasher1::max_len::<Key1>() + Hasher2::max_len::<Key2>() + Twox128::max_len::<()>() * 2;
 		z as u32
 	}
 }
