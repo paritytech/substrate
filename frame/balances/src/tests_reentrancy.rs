@@ -166,7 +166,10 @@ fn transfer_dust_removal_tst1_should_work() {
 			account: 2,
 			amount: 50,
 		}));
-		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit {
+			who: 1,
+			amount: 50,
+		}));
 	});
 }
 
@@ -201,7 +204,10 @@ fn transfer_dust_removal_tst2_should_work() {
 			account: 2,
 			amount: 50,
 		}));
-		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit {
+			who: 1,
+			amount: 50,
+		}));
 	});
 }
 
@@ -248,6 +254,9 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 			amount: 50,
 		}));
 
-		System::assert_last_event(RuntimeEvent::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
+		System::assert_last_event(RuntimeEvent::Balances(crate::Event::Deposit {
+			who: 1,
+			amount: 50,
+		}));
 	});
 }

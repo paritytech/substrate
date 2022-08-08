@@ -239,7 +239,9 @@ fn set_rule_works() {
 		assert_ok!(Alliance::set_rule(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::rule(), Some(cid.clone()));
 
-		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::NewRuleSet { rule: cid }));
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::NewRuleSet {
+			rule: cid,
+		}));
 	});
 }
 
@@ -270,9 +272,9 @@ fn remove_announcement_works() {
 
 		assert_ok!(Alliance::remove_announcement(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![]);
-		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::AnnouncementRemoved {
-			announcement: cid,
-		}));
+		System::assert_last_event(mock::RuntimeEvent::Alliance(
+			crate::Event::AnnouncementRemoved { announcement: cid },
+		));
 	});
 }
 

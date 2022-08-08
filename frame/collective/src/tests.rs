@@ -241,7 +241,9 @@ fn close_works() {
 					yes: 2,
 					no: 1
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				}))
 			]
 		);
 	});
@@ -361,7 +363,9 @@ fn close_with_prime_works() {
 					yes: 2,
 					no: 1
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash }))
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				}))
 			]
 		);
 	});
@@ -1008,7 +1012,9 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 					no: 0
 				})),
 				record(RuntimeEvent::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
-				record(RuntimeEvent::Democracy(mock_democracy::pallet::Event::<Test>::ExternalProposed)),
+				record(RuntimeEvent::Democracy(
+					mock_democracy::pallet::Event::<Test>::ExternalProposed
+				)),
 				record(RuntimeEvent::Collective(CollectiveEvent::Executed {
 					proposal_hash: hash,
 					result: Ok(())
@@ -1063,7 +1069,9 @@ fn motions_disapproval_works() {
 					yes: 1,
 					no: 1
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				})),
 			]
 		);
 	});
@@ -1251,7 +1259,9 @@ fn disapprove_proposal_works() {
 					yes: 2,
 					no: 0
 				})),
-				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved { proposal_hash: hash })),
+				record(RuntimeEvent::Collective(CollectiveEvent::Disapproved {
+					proposal_hash: hash
+				})),
 			]
 		);
 	})

@@ -1359,11 +1359,9 @@ mod tests {
 				));
 				assert_eq!(Balances::free_balance(2), 0);
 				// Transfer Event
-				System::assert_has_event(RuntimeEvent::Balances(pallet_balances::Event::Transfer {
-					from: 2,
-					to: 3,
-					amount: 80,
-				}));
+				System::assert_has_event(RuntimeEvent::Balances(
+					pallet_balances::Event::Transfer { from: 2, to: 3, amount: 80 },
+				));
 				// Killed Event
 				System::assert_has_event(RuntimeEvent::System(system::Event::KilledAccount {
 					account: 2,

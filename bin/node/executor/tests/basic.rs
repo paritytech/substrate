@@ -28,7 +28,7 @@ use sp_runtime::{
 
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
-	Balances, Call, CheckedExtrinsic, RuntimeEvent, Header, Runtime, System, TransactionPayment,
+	Balances, Call, CheckedExtrinsic, Header, Runtime, RuntimeEvent, System, TransactionPayment,
 	UncheckedExtrinsic,
 };
 use node_primitives::{Balance, Hash};
@@ -414,7 +414,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit {
+					value: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
@@ -496,7 +498,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit {
+					value: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
@@ -544,7 +548,9 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit {
+					value: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {

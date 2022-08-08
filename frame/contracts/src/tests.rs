@@ -516,7 +516,9 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -2842,7 +2844,9 @@ fn instantiate_with_zero_balance_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -2933,7 +2937,9 @@ fn instantiate_with_below_existential_deposit_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
@@ -3281,7 +3287,9 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
