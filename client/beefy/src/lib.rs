@@ -46,8 +46,8 @@ mod tests;
 use crate::{
 	import::BeefyBlockImport,
 	notification::{
-		BeefyBestBlockSender, BeefyBestBlockStream, BeefySignedCommitmentSender,
-		BeefySignedCommitmentStream,
+		BeefyBestBlockSender, BeefyBestBlockStream, BeefyVersionedFinalityProofSender,
+		BeefyVersionedFinalityProofStream,
 	},
 };
 
@@ -121,11 +121,11 @@ where
 pub struct BeefyVoterLinks<B: Block> {
 	// BlockImport -> Voter links
 	/// Stream of BEEFY signed commitments from block import to voter.
-	pub from_block_import_justif_stream: BeefySignedCommitmentStream<B>,
+	pub from_block_import_justif_stream: BeefyVersionedFinalityProofStream<B>,
 
 	// Voter -> RPC links
 	/// Sends BEEFY signed commitments from voter to RPC.
-	pub to_rpc_justif_sender: BeefySignedCommitmentSender<B>,
+	pub to_rpc_justif_sender: BeefyVersionedFinalityProofSender<B>,
 	/// Sends BEEFY best block hashes from voter to RPC.
 	pub to_rpc_best_block_sender: BeefyBestBlockSender<B>,
 }
@@ -134,7 +134,7 @@ pub struct BeefyVoterLinks<B: Block> {
 #[derive(Clone)]
 pub struct BeefyRPCLinks<B: Block> {
 	/// Stream of signed commitments coming from the voter.
-	pub from_voter_justif_stream: BeefySignedCommitmentStream<B>,
+	pub from_voter_justif_stream: BeefyVersionedFinalityProofStream<B>,
 	/// Stream of BEEFY best block hashes coming from the voter.
 	pub from_voter_best_beefy_stream: BeefyBestBlockStream<B>,
 }
@@ -156,13 +156,13 @@ where
 {
 	// Voter -> RPC links
 	let (to_rpc_justif_sender, from_voter_justif_stream) =
-		notification::BeefySignedCommitmentStream::<B>::channel();
+		notification::BeefyVersionedFinalityProofStream::<B>::channel();
 	let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
 		notification::BeefyBestBlockStream::<B>::channel();
 
 	// BlockImport -> Voter links
 	let (to_voter_justif_sender, from_block_import_justif_stream) =
-		notification::BeefySignedCommitmentStream::<B>::channel();
+		notification::BeefyVersionedFinalityProofStream::<B>::channel();
 
 	// BlockImport
 	let import =

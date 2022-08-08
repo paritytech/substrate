@@ -676,7 +676,7 @@ pub struct FullPeerConfig {
 	/// Pruning window size.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	pub keep_blocks: Option<u32>,
+	pub blocks_pruning: Option<u32>,
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
@@ -742,10 +742,10 @@ where
 
 	/// Add a full peer.
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
-		let mut test_client_builder = match (config.keep_blocks, config.storage_chain) {
-			(Some(keep_blocks), true) => TestClientBuilder::with_tx_storage(keep_blocks),
+		let mut test_client_builder = match (config.blocks_pruning, config.storage_chain) {
+			(Some(blocks_pruning), true) => TestClientBuilder::with_tx_storage(blocks_pruning),
 			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX),
-			(Some(keep_blocks), false) => TestClientBuilder::with_pruning_window(keep_blocks),
+			(Some(blocks_pruning), false) => TestClientBuilder::with_pruning_window(blocks_pruning),
 			(None, false) => TestClientBuilder::with_default_backend(),
 		};
 		if let Some(storage) = config.extra_storage {
@@ -808,23 +808,25 @@ where
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
+		let fork_id = Some(String::from("test-fork-id"));
+
 		let block_request_protocol_config = {
 			let (handler, protocol_config) =
-				BlockRequestHandler::new(&protocol_id, client.clone(), 50);
+				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
 
 		let state_request_protocol_config = {
 			let (handler, protocol_config) =
-				StateRequestHandler::new(&protocol_id, client.clone(), 50);
+				StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
 
 		let light_client_request_protocol_config = {
 			let (handler, protocol_config) =
-				LightClientRequestHandler::new(&protocol_id, client.clone());
+				LightClientRequestHandler::new(&protocol_id, None, client.clone());
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -832,8 +834,16 @@ where
 		let warp_sync = Arc::new(TestWarpSyncProvider(client.clone()));
 
 		let warp_protocol_config = {
-			let (handler, protocol_config) =
-				warp_request_handler::RequestHandler::new(protocol_id.clone(), warp_sync.clone());
+			let (handler, protocol_config) = warp_request_handler::RequestHandler::new(
+				protocol_id.clone(),
+				client
+					.block_hash(0u32.into())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed"),
+				None,
+				warp_sync.clone(),
+			);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -867,6 +877,7 @@ where
 			chain: client.clone(),
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
+			fork_id,
 			import_queue,
 			chain_sync: Box::new(chain_sync),
 			metrics_registry: None,

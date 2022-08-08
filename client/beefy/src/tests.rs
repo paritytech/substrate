@@ -397,17 +397,18 @@ fn run_for(duration: Duration, net: &Arc<Mutex<BeefyTestNet>>, runtime: &mut Run
 pub(crate) fn get_beefy_streams(
 	net: &mut BeefyTestNet,
 	peers: &[BeefyKeyring],
-) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefySignedCommitment<Block>>>) {
+) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block>>>)
+{
 	let mut best_block_streams = Vec::new();
-	let mut signed_commitment_streams = Vec::new();
+	let mut versioned_finality_proof_streams = Vec::new();
 	for peer_id in 0..peers.len() {
 		let beefy_rpc_links = net.peer(peer_id).data.beefy_rpc_links.lock().clone().unwrap();
 		let BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream } =
 			beefy_rpc_links;
 		best_block_streams.push(from_voter_best_beefy_stream.subscribe());
-		signed_commitment_streams.push(from_voter_justif_stream.subscribe());
+		versioned_finality_proof_streams.push(from_voter_justif_stream.subscribe());
 	}
-	(best_block_streams, signed_commitment_streams)
+	(best_block_streams, versioned_finality_proof_streams)
 }
 
 fn wait_for_best_beefy_blocks(
@@ -437,7 +438,7 @@ fn wait_for_best_beefy_blocks(
 }
 
 fn wait_for_beefy_signed_commitments(
-	streams: Vec<NotificationReceiver<BeefySignedCommitment<Block>>>,
+	streams: Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block>>>,
 	net: &Arc<Mutex<BeefyTestNet>>,
 	runtime: &mut Runtime,
 	expected_commitment_block_nums: &[u64],
@@ -446,9 +447,12 @@ fn wait_for_beefy_signed_commitments(
 	let len = expected_commitment_block_nums.len();
 	streams.into_iter().for_each(|stream| {
 		let mut expected = expected_commitment_block_nums.iter();
-		wait_for.push(Box::pin(stream.take(len).for_each(move |signed_commitment| {
+		wait_for.push(Box::pin(stream.take(len).for_each(move |versioned_finality_proof| {
 			let expected = expected.next();
 			async move {
+				let signed_commitment = match versioned_finality_proof {
+					beefy_primitives::VersionedFinalityProof::V1(sc) => sc,
+				};
 				let commitment_block_num = signed_commitment.commitment.block_number;
 				assert_eq!(expected, Some(commitment_block_num).as_ref());
 				// TODO: also verify commitment payload, validator set id, and signatures.
@@ -486,7 +490,7 @@ fn finalize_block_and_wait_for_beefy(
 	finalize_targets: &[u64],
 	expected_beefy: &[u64],
 ) {
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
 
 	for block in finalize_targets {
 		let finalize = BlockId::number(*block);
@@ -499,11 +503,11 @@ fn finalize_block_and_wait_for_beefy(
 		// run for quarter second then verify no new best beefy block available
 		let timeout = Some(Duration::from_millis(250));
 		streams_empty_after_timeout(best_blocks, &net, runtime, timeout);
-		streams_empty_after_timeout(signed_commitments, &net, runtime, None);
+		streams_empty_after_timeout(versioned_finality_proof, &net, runtime, None);
 	} else {
 		// run until expected beefy blocks are received
 		wait_for_best_beefy_blocks(best_blocks, &net, runtime, expected_beefy);
-		wait_for_beefy_signed_commitments(signed_commitments, &net, runtime, expected_beefy);
+		wait_for_beefy_signed_commitments(versioned_finality_proof, &net, runtime, expected_beefy);
 	}
 }
 
@@ -574,19 +578,19 @@ fn lagging_validators() {
 
 	// Alice finalizes #25, Bob lags behind
 	let finalize = BlockId::number(25);
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
-	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
+	streams_empty_after_timeout(versioned_finality_proof, &net, &mut runtime, None);
 
 	// Bob catches up and also finalizes #25
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
 	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// expected beefy finalizes block #17 from diff-power-of-two
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[23, 24, 25]);
-	wait_for_beefy_signed_commitments(signed_commitments, &net, &mut runtime, &[23, 24, 25]);
+	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[23, 24, 25]);
 
 	// Both finalize #30 (mandatory session) and #32 -> BEEFY finalize #30 (mandatory), #31, #32
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[30, 32], &[30, 31, 32]);
@@ -596,20 +600,20 @@ fn lagging_validators() {
 	// validator set).
 
 	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
 	let finalize = BlockId::number(60);
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
-	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
+	streams_empty_after_timeout(versioned_finality_proof, &net, &mut runtime, None);
 
 	// Bob catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
-	let (best_blocks, signed_commitments) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
 	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #40
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[60]);
-	wait_for_beefy_signed_commitments(signed_commitments, &net, &mut runtime, &[60]);
+	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[60]);
 }
 
 #[test]
@@ -647,7 +651,7 @@ fn correct_beefy_payload() {
 	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[1, 9]);
 
-	let (best_blocks, signed_commitments) =
+	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), &[BeefyKeyring::Alice]);
 
 	// now 2 good validators and 1 bad one are voting
@@ -673,10 +677,10 @@ fn correct_beefy_payload() {
 	// verify consensus is _not_ reached
 	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
-	streams_empty_after_timeout(signed_commitments, &net, &mut runtime, None);
+	streams_empty_after_timeout(versioned_finality_proof, &net, &mut runtime, None);
 
 	// 3rd good validator catches up and votes as well
-	let (best_blocks, signed_commitments) =
+	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), &[BeefyKeyring::Alice]);
 	net.lock()
 		.peer(2)
@@ -687,7 +691,7 @@ fn correct_beefy_payload() {
 
 	// verify consensus is reached
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[11]);
-	wait_for_beefy_signed_commitments(signed_commitments, &net, &mut runtime, &[11]);
+	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[11]);
 }
 
 #[test]
@@ -746,7 +750,7 @@ fn beefy_importing_blocks() {
 	let block_num = 2;
 	let keys = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-	let proof = crate::justification::tests::new_signed_commitment(block_num, &validator_set, keys);
+	let proof = crate::justification::tests::new_finality_proof(block_num, &validator_set, keys);
 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
@@ -781,7 +785,7 @@ fn beefy_importing_blocks() {
 	let block_num = 3;
 	let keys = &[BeefyKeyring::Alice];
 	let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
-	let proof = crate::justification::tests::new_signed_commitment(block_num, &validator_set, keys);
+	let proof = crate::justification::tests::new_finality_proof(block_num, &validator_set, keys);
 	let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
 	let encoded = versioned_proof.encode();
 	let justif = Some(Justifications::from((BEEFY_ENGINE_ID, encoded)));
