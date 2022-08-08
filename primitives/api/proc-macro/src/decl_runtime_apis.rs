@@ -160,11 +160,6 @@ fn generate_versioned_api_traits(
 	api: ItemTrait,
 	methods: BTreeMap<u64, Vec<TraitItemMethod>>,
 ) -> Vec<ItemTrait> {
-	let process_method = |mut m: TraitItemMethod| {
-		m.default = None;
-		TraitItem::Method(m)
-	};
-
 	let mut result = Vec::<ItemTrait>::new();
 	for (version, _) in &methods {
 		let mut versioned_trait = api.clone();
@@ -173,7 +168,7 @@ fn generate_versioned_api_traits(
 		// Add the methods from the current version and all previous one. Versions are sorted so
 		// it's safe to stop early.
 		for (_, m) in methods.iter().take_while(|(v, _)| v <= &version) {
-			versioned_trait.items.extend(m.iter().cloned().map(process_method));
+			versioned_trait.items.extend(m.iter().cloned().map(|m| TraitItem::Method(m)));
 		}
 
 		result.push(versioned_trait);
@@ -344,7 +339,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 		let call_api_at_calls = generate_call_api_at_calls(&decl)?;
 
-		let trait_api_version = get_api_version(&found_attributes).unwrap_or(1);
+		let trait_api_version = get_api_version(&found_attributes)?;
 
 		let mut methods_by_version: BTreeMap<u64, Vec<TraitItemMethod>> = BTreeMap::new();
 
