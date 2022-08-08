@@ -41,7 +41,7 @@ use message::{
 };
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
-use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
+use sc_client_api::HeaderBackend;
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
@@ -263,12 +263,8 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 impl<B, Client> Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client:
+		HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + Send + Sync + 'static,
 {
 	/// Create a new instance.
 	pub fn new(
@@ -1308,12 +1304,8 @@ pub enum CustomMessageOutcome<B: BlockT> {
 impl<B, Client> NetworkBehaviour for Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client:
+		HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + Send + Sync + 'static,
 {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;

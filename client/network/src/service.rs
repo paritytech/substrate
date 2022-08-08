@@ -29,7 +29,6 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	bitswap::Bitswap,
 	config::{parse_str_addr, Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
@@ -58,7 +57,6 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::sync::{SyncState, SyncStatus};
 use sc_peerset::PeersetHandle;
@@ -134,12 +132,8 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client:
+		HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + Send + Sync + 'static,
 {
 	/// Creates the network service.
 	///
@@ -372,7 +366,6 @@ where
 			};
 
 			let behaviour = {
-				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(params.chain));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -381,7 +374,7 @@ where
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
 					params.warp_sync_protocol_config,
-					bitswap,
+					params.bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
@@ -1491,12 +1484,8 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client:
+		HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + Send + Sync + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1529,12 +1518,8 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client:
+		HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + Send + Sync + 'static,
 {
 	type Output = ();
 
@@ -2180,12 +2165,8 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client:
+		HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + Send + Sync + 'static,
 {
 }
 
@@ -2193,12 +2174,8 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client:
+		HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + Send + Sync + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -2206,12 +2183,8 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client:
+		HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + Send + Sync + 'static,
 {
 	fn blocks_processed(
 		&mut self,

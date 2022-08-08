@@ -178,6 +178,19 @@ impl Prefix {
 	}
 }
 
+pub trait BitswapT<B: BlockT> {
+	/// Get single indexed transaction by content hash.
+	///
+	/// Note that this will only fetch transactions
+	/// that are indexed by the runtime with `storage_index_transaction`.
+	fn indexed_transaction(
+		&self,
+		hash: <B as BlockT>::Hash,
+	) -> sp_blockchain::Result<Option<Vec<u8>>>;
+
+	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)>;
+}
+
 /// Network behaviour that handles sending and receiving IPFS blocks.
 pub struct Bitswap<B, Client> {
 	client: Arc<Client>,
@@ -192,10 +205,75 @@ impl<B, Client> Bitswap<B, Client> {
 	}
 }
 
-impl<B, Client> NetworkBehaviour for Bitswap<B, Client>
+impl<Block, Client> BitswapT<Block> for Bitswap<Block, Client>
+where
+	Block: BlockT,
+	Client: BlockBackend<Block>,
+{
+	fn indexed_transaction(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.client.indexed_transaction(&hash)
+	}
+
+	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)> {
+		&mut self.ready_blocks
+	}
+}
+
+pub struct BitswapWrapper<Block: BlockT> {
+	bitswap: Box<dyn BitswapT<Block> + Sync + Send>,
+}
+
+impl<B, Client> From<Bitswap<B, Client>> for BitswapWrapper<B>
 where
 	B: BlockT,
 	Client: BlockBackend<B> + Send + Sync + 'static,
+{
+	fn from(bitswap: Bitswap<B, Client>) -> Self {
+		Self { bitswap: Box::new(bitswap) as Box<_> }
+	}
+}
+
+impl<B: BlockT> BitswapWrapper<B> {
+	pub fn new(bs: Box<dyn BitswapT<B> + Sync + Send>) -> Self {
+		Self { bitswap: bs }
+	}
+}
+
+impl<Block: BlockT> BitswapT<Block> for BitswapWrapper<Block> {
+	fn indexed_transaction(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.bitswap.indexed_transaction(hash)
+	}
+
+	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)> {
+		self.bitswap.ready_blocks()
+	}
+}
+
+impl<Block: BlockT, T> BitswapT<Block> for Box<T>
+where
+	T: BitswapT<Block>,
+{
+	fn indexed_transaction(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.indexed_transaction(hash)
+	}
+
+	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)> {
+		self.ready_blocks()
+	}
+}
+
+impl<B> NetworkBehaviour for BitswapWrapper<B>
+where
+	B: BlockT,
 {
 	type ConnectionHandler = OneShotHandler<BitswapConfig, BitswapMessage, HandlerEvent>;
 	type OutEvent = void::Void;
@@ -214,7 +292,7 @@ where
 			HandlerEvent::Request(msg) => msg,
 		};
 		trace!(target: LOG_TARGET, "Received request: {:?} from {}", request, peer);
-		if self.ready_blocks.len() > MAX_RESPONSE_QUEUE {
+		if self.ready_blocks().len() > MAX_RESPONSE_QUEUE {
 			debug!(target: LOG_TARGET, "Ignored request: queue is full");
 			return
 		}
@@ -253,7 +331,7 @@ where
 			}
 			let mut hash = B::Hash::default();
 			hash.as_mut().copy_from_slice(&cid.hash().digest()[0..32]);
-			let transaction = match self.client.indexed_transaction(&hash) {
+			let transaction = match self.indexed_transaction(hash) {
 				Ok(ex) => ex,
 				Err(e) => {
 					error!(target: LOG_TARGET, "Error retrieving transaction {}: {}", hash, e);
@@ -292,7 +370,7 @@ where
 			}
 		}
 		trace!(target: LOG_TARGET, "Response: {:?}", response);
-		self.ready_blocks.push_back((peer, response));
+		self.ready_blocks().push_back((peer, response));
 	}
 
 	fn poll(
@@ -300,7 +378,7 @@ where
 		_ctx: &mut Context,
 		_: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
+		if let Some((peer_id, message)) = self.ready_blocks().pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 				peer_id,
 				handler: NotifyHandler::Any,

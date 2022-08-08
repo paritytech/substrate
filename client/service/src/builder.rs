@@ -37,7 +37,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{config::SyncMode, NetworkService};
+use sc_network::{bitswap::Bitswap, config::SyncMode, NetworkService};
 use sc_network_common::sync::warp::WarpSyncProvider;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -809,6 +809,7 @@ where
 		protocol_id,
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
+		bitswap: config.network.ipfs_server.then(|| Bitswap::new(client.clone()).into()),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,

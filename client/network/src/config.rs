@@ -31,7 +31,7 @@ pub use sc_network_common::{
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
-use crate::ExHashT;
+use crate::{bitswap::BitswapWrapper, ExHashT};
 
 use core::{fmt, iter};
 use futures::future;
@@ -80,6 +80,8 @@ where
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<Client>,
+
+	pub bitswap: Option<BitswapWrapper<B>>,
 
 	/// Pool of transactions.
 	///
