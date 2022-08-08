@@ -28,6 +28,7 @@ mod keyword {
 	syn::custom_keyword!(I);
 	syn::custom_keyword!(config);
 	syn::custom_keyword!(IsType);
+	syn::custom_keyword!(RuntimeEvent);
 	syn::custom_keyword!(Event);
 	syn::custom_keyword!(constant);
 	syn::custom_keyword!(frame_system);
@@ -159,7 +160,7 @@ impl syn::parse::Parse for ConfigBoundParse {
 	}
 }
 
-/// Parse for `IsType<<Sef as $ident::Config>::Event>` and retrieve `$ident`
+/// Parse for `IsType<<Sef as $ident::Config>::RuntimeEvent>` and retrieve `$ident`
 pub struct IsTypeBoundEventParse(syn::Ident);
 
 impl syn::parse::Parse for IsTypeBoundEventParse {
@@ -174,7 +175,7 @@ impl syn::parse::Parse for IsTypeBoundEventParse {
 		input.parse::<keyword::Config>()?;
 		input.parse::<syn::Token![>]>()?;
 		input.parse::<syn::Token![::]>()?;
-		input.parse::<keyword::Event>()?;
+		input.parse::<keyword::RuntimeEvent>()?;
 		input.parse::<syn::Token![>]>()?;
 
 		Ok(Self(ident))
@@ -220,10 +221,10 @@ fn check_event_type(
 	trait_has_instance: bool,
 ) -> syn::Result<bool> {
 	if let syn::TraitItem::Type(type_) = trait_item {
-		if type_.ident == "Event" {
+		if type_.ident == "RuntimeEvent" {
 			// Check event has no generics
 			if !type_.generics.params.is_empty() || type_.generics.where_clause.is_some() {
-				let msg = "Invalid `type Event`, associated type `Event` is reserved and must have\
+				let msg = "Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must have\
 					no generics nor where_clause";
 				return Err(syn::Error::new(trait_item.span(), msg))
 			}
@@ -236,8 +237,8 @@ fn check_event_type(
 
 			if !has_is_type_bound {
 				let msg = format!(
-					"Invalid `type Event`, associated type `Event` is reserved and must \
-					bound: `IsType<<Self as {}::Config>::Event>`",
+					"Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must \
+					bound: `IsType<<Self as {}::Config>::RuntimeEvent>`",
 					frame_system,
 				);
 				return Err(syn::Error::new(type_.span(), msg))
@@ -251,7 +252,7 @@ fn check_event_type(
 			let from_event_bound = if let Some(b) = from_event_bound {
 				b
 			} else {
-				let msg = "Invalid `type Event`, associated type `Event` is reserved and must \
+				let msg = "Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must \
 					bound: `From<Event>` or `From<Event<Self>>` or `From<Event<Self, I>>`";
 				return Err(syn::Error::new(type_.span(), msg))
 			};

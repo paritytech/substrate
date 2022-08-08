@@ -109,7 +109,7 @@ impl Def {
 					call = Some(call::CallDef::try_from(span, index, item)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
-				Some(PalletAttr::Event(span)) if event.is_none() =>
+				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
 					event = Some(event::EventDef::try_from(span, index, item)?),
 				Some(PalletAttr::GenesisConfig(_)) if genesis_config.is_none() => {
 					let g = genesis_config::GenesisConfigDef::try_from(index, item)?;
@@ -186,15 +186,15 @@ impl Def {
 	fn check_event_usage(&self) -> syn::Result<()> {
 		match (self.config.has_event_type, self.event.is_some()) {
 			(true, false) => {
-				let msg = "Invalid usage of Event, `Config` contains associated type `Event`, \
-					but enum `Event` is not declared (i.e. no use of `#[pallet::event]`). \
-					Note that type `Event` in trait is reserved to work alongside pallet event.";
+				let msg = "Invalid usage of RuntimeEvent, `Config` contains associated type `RuntimeEvent`, \
+					but enum `RuntimeEvent` is not declared (i.e. no use of `#[pallet::event]`). \
+					Note that type `RuntimeEvent` in trait is reserved to work alongside pallet event.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
 			(false, true) => {
-				let msg = "Invalid usage of Event, `Config` contains no associated type \
-					`Event`, but enum `Event` is declared (in use of `#[pallet::event]`). \
-					An Event associated type must be declare on trait `Config`.";
+				let msg = "Invalid usage of RuntimeEvent, `Config` contains no associated type \
+					`RuntimeEvent`, but enum `RuntimeEvent` is declared (in use of `#[pallet::event]`). \
+					An RuntimeEvent associated type must be declare on trait `Config`.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
 			_ => Ok(()),
@@ -393,7 +393,7 @@ enum PalletAttr {
 	Hooks(proc_macro2::Span),
 	Call(proc_macro2::Span),
 	Error(proc_macro2::Span),
-	Event(proc_macro2::Span),
+	RuntimeEvent(proc_macro2::Span),
 	Origin(proc_macro2::Span),
 	Inherent(proc_macro2::Span),
 	Storage(proc_macro2::Span),
@@ -412,7 +412,7 @@ impl PalletAttr {
 			Self::Hooks(span) => *span,
 			Self::Call(span) => *span,
 			Self::Error(span) => *span,
-			Self::Event(span) => *span,
+			Self::RuntimeEvent(span) => *span,
 			Self::Origin(span) => *span,
 			Self::Inherent(span) => *span,
 			Self::Storage(span) => *span,
@@ -445,7 +445,7 @@ impl syn::parse::Parse for PalletAttr {
 		} else if lookahead.peek(keyword::error) {
 			Ok(PalletAttr::Error(content.parse::<keyword::error>()?.span()))
 		} else if lookahead.peek(keyword::event) {
-			Ok(PalletAttr::Event(content.parse::<keyword::event>()?.span()))
+			Ok(PalletAttr::RuntimeEvent(content.parse::<keyword::event>()?.span()))
 		} else if lookahead.peek(keyword::origin) {
 			Ok(PalletAttr::Origin(content.parse::<keyword::origin>()?.span()))
 		} else if lookahead.peek(keyword::inherent) {
