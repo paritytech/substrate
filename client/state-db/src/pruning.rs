@@ -32,7 +32,7 @@ use std::{
 	collections::{HashMap, HashSet, VecDeque},
 };
 
-const LAST_PRUNED: &[u8] = b"last_pruned";
+pub const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
 // Default pruning window size plus a magic number keep most common ops in cache
 const CACHE_BATCH_SIZE: usize = 256 + 10;
@@ -334,7 +334,7 @@ struct DeathRow<BlockHash: Hash, Key: Hash> {
 	deleted: HashSet<Key>,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Encode, Decode, Default)]
 struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	inserted: Vec<Key>,
@@ -350,7 +350,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		db: &D,
 		count_insertions: bool,
 	) -> Result<RefWindow<BlockHash, Key, D>, Error<D::Error>> {
-		// the block number of the first block in the queue
+		// the block number of the first block in the queue or the next block number if the queue is
+		// empty
 		let pending_number = match db.get_meta(&to_meta_key(LAST_PRUNED, &())).map_err(Error::Db)? {
 			Some(buffer) => u64::decode(&mut buffer.as_slice())? + 1,
 			None => 0,
@@ -367,8 +368,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		} else {
 			let unload = match last_canonicalized_number {
 				Some(last_canonicalized_number) => {
-					debug_assert!(last_canonicalized_number >= pending_number);
-					last_canonicalized_number - pending_number + 1
+					debug_assert!(last_canonicalized_number + 1 >= pending_number);
+					last_canonicalized_number + 1 - pending_number
 				},
 				// None means `LAST_CANONICAL` is never been wrote, since the pruning journals are
 				// in the same `CommitSet` as `LAST_CANONICAL`, it means no pruning journal have
@@ -466,7 +467,9 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 
 #[cfg(test)]
 mod tests {
-	use super::{DeathRowQueue, RefWindow, CACHE_BATCH_SIZE};
+	use super::{
+		to_journal_key, DeathRowQueue, JournalRecord, RefWindow, CACHE_BATCH_SIZE, LAST_PRUNED,
+	};
 	use crate::{
 		noncanonical::LAST_CANONICAL,
 		test::{make_commit, make_db, TestDb},
@@ -679,6 +682,66 @@ mod tests {
 			.meta
 			.inserted
 			.push((to_meta_key(LAST_CANONICAL, &()), (block, block).encode()));
+	}
+
+	fn push_last_pruned<H: Hash>(block: u64, commit: &mut CommitSet<H>) {
+		commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), block.encode()));
+	}
+
+	#[test]
+	fn init_db_backed_queue() {
+		let mut db = make_db(&[]);
+		let mut commit = CommitSet::default();
+
+		fn load_pruning_from_db(db: &TestDb) -> (usize, u64) {
+			let pruning: RefWindow<u64, H256, TestDb> = RefWindow::new(db, false).unwrap();
+			let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
+			(cache.len(), pruning.pending_number)
+		}
+
+		fn push_record(block: u64, commit: &mut CommitSet<H256>) {
+			commit
+				.meta
+				.inserted
+				.push((to_journal_key(block), JournalRecord::<u64, H256>::default().encode()));
+		}
+
+		// empty database
+		let (loaded_blocks, pending_number) = load_pruning_from_db(&db);
+		assert_eq!(loaded_blocks, 0);
+		assert_eq!(pending_number, 0);
+
+		// canonicalized the genesis block but no pruning
+		push_last_canonicalized(0, &mut commit);
+		push_record(0, &mut commit);
+		db.commit(&commit);
+		let (loaded_blocks, pending_number) = load_pruning_from_db(&db);
+		assert_eq!(loaded_blocks, 1);
+		assert_eq!(pending_number, 0);
+
+		// pruned the genesis block
+		push_last_pruned(0, &mut commit);
+		db.commit(&commit);
+		let (loaded_blocks, pending_number) = load_pruning_from_db(&db);
+		assert_eq!(loaded_blocks, 0);
+		assert_eq!(pending_number, 1);
+
+		// canonicalize more blocks
+		push_last_canonicalized(10, &mut commit);
+		for i in 1..=10 {
+			push_record(i, &mut commit);
+		}
+		db.commit(&commit);
+		let (loaded_blocks, pending_number) = load_pruning_from_db(&db);
+		assert_eq!(loaded_blocks, 10);
+		assert_eq!(pending_number, 1);
+
+		// pruned all blocks
+		push_last_pruned(10, &mut commit);
+		db.commit(&commit);
+		let (loaded_blocks, pending_number) = load_pruning_from_db(&db);
+		assert_eq!(loaded_blocks, 0);
+		assert_eq!(pending_number, 11);
 	}
 
 	#[test]
