@@ -401,14 +401,13 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 	trait_
 }
 
-// TODO: fix this not to mutate the input, similar to the rest of the code
 fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
-	if version.is_none() {
+	let version = if let Some(v) = version {
+		v
+	} else {
 		// nothing to do
 		return trait_
-	}
-
-	let version = version.unwrap();
+	};
 	let versioned_trait_ident = {
 		let trait_name = &trait_
 			.segments
