@@ -565,6 +565,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	/// Prevents pruning of specified block and its descendants.
+	/// NOTE: `pin` should only be called for blocks with existing headers
 	pub fn pin(&self, hash: &BlockHash, number: u64) -> Result<(), PinError> {
 		self.db.write().pin(hash, number)
 	}
@@ -607,6 +608,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	/// Check if block is pruned away.
+	/// NOTE: `is_pruned` should only be called for blocks with existing headers
 	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
 		return self.db.read().is_pruned(hash, number)
 	}

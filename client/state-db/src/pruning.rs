@@ -57,8 +57,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash, D: MetaDb> {
 /// - `Mem`, used when the backend database do not supports reference counting, keep all
 /// 	blocks in memory, and keep track of re-inserted keys to not delete them when pruning
 /// - `DbBacked`, used when the backend database supports reference counting, only keep
-/// 	a few number of blocks in memory and load more blocks on demand, it also keep all the
-/// 	block's hash in memory for checking block existence
+/// 	a few number of blocks in memory and load more blocks on demand
 #[derive(parity_util_mem_derive::MallocSizeOf)]
 enum DeathRowQueue<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	Mem {
@@ -186,7 +185,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 					*unload_blocks -= amout;
 					return
 				}
-				// clear `hashs` and remove remain blocks from `cache`
+				// reset `unload_blocks` and remove remain blocks from `cache`
 				let remain = amout - *unload_blocks;
 				*unload_blocks = 0;
 				cache.truncate(cache.len() - remain);
