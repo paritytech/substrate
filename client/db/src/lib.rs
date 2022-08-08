@@ -2293,7 +2293,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				_ => false,
 			}
 		} else {
-			!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
+			self.blockchain.header_metadata(*hash).is_ok() &&
+				!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
 		}
 	}
 
