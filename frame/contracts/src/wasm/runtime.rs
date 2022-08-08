@@ -26,7 +26,7 @@ use crate::{
 };
 
 use bitflags::bitflags;
-use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeLimit, Encode, MaxEncodedLen};
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use sp_core::{crypto::UncheckedFrom, Bytes};
@@ -35,6 +35,9 @@ use sp_runtime::traits::{Bounded, Zero};
 use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::ValueType;
+
+/// The maximum nesting depth a contract can use when encoding types.
+const MAX_DECODE_NESTING: u32 = 256;
 
 /// Type of a storage key.
 #[allow(dead_code)]
@@ -575,7 +578,7 @@ where
 		ptr: u32,
 	) -> Result<D, DispatchError> {
 		let buf = self.read_sandbox_memory(ptr, D::max_encoded_len() as u32)?;
-		let decoded = D::decode_all(&mut &buf[..])
+		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
 		Ok(decoded)
 	}
@@ -597,7 +600,7 @@ where
 		len: u32,
 	) -> Result<D, DispatchError> {
 		let buf = self.read_sandbox_memory(ptr, len)?;
-		let decoded = D::decode_all(&mut &buf[..])
+		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
 		Ok(decoded)
 	}
