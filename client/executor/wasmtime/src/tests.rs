@@ -174,6 +174,66 @@ impl RuntimeBuilder {
 	}
 }
 
+fn deep_call_stack_wat(depth: usize) -> String {
+	format!(
+		r#"
+			(module
+			  (memory $0 32)
+			  (export "memory" (memory $0))
+			  (global (export "__heap_base") i32 (i32.const 0))
+			  (func (export "overflow") call 0)
+
+			  (func $overflow (param $0 i32)
+			    (block $label$1
+			      (br_if $label$1
+			        (i32.ge_u
+			          (local.get $0)
+			          (i32.const {depth})
+			        )
+			      )
+			      (call $overflow
+			        (i32.add
+			          (local.get $0)
+			          (i32.const 1)
+			        )
+			      )
+			    )
+			  )
+
+			  (func (export "main")
+			    (param i32 i32) (result i64)
+			    (call $overflow (i32.const 0))
+			    (i64.const 0)
+			  )
+			)
+		"#
+	)
+}
+
+test_wasm_execution!(test_consume_under_1mb_of_stack_does_not_trap);
+fn test_consume_under_1mb_of_stack_does_not_trap(instantiation_strategy: InstantiationStrategy) {
+	let wat = deep_call_stack_wat(65478);
+	let mut builder = RuntimeBuilder::new(instantiation_strategy).use_wat(wat);
+	let runtime = builder.build();
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	instance.call_export("main", &[]).unwrap();
+}
+
+test_wasm_execution!(test_consume_over_1mb_of_stack_does_trap);
+fn test_consume_over_1mb_of_stack_does_trap(instantiation_strategy: InstantiationStrategy) {
+	let wat = deep_call_stack_wat(65479);
+	let mut builder = RuntimeBuilder::new(instantiation_strategy).use_wat(wat);
+	let runtime = builder.build();
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	match instance.call_export("main", &[]).unwrap_err() {
+		Error::AbortedDueToTrap(error) => {
+			let expected = "wasm trap: call stack exhausted";
+			assert_eq!(error.message, expected);
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
+}
+
 test_wasm_execution!(test_nan_canonicalization);
 fn test_nan_canonicalization(instantiation_strategy: InstantiationStrategy) {
 	let mut builder = RuntimeBuilder::new(instantiation_strategy).canonicalize_nans(true);

@@ -324,13 +324,14 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 		.profiler(profiler)
 		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {:#}", e)))?;
 
-	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
-		semantics.deterministic_stack_limit
-	{
-		config
-			.max_wasm_stack(native_stack_max as usize)
-			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {:#}", e)))?;
-	}
+	let native_stack_max = match semantics.deterministic_stack_limit {
+		Some(DeterministicStackLimit { native_stack_max, .. }) => native_stack_max,
+		None => 1024 * 1024,
+	};
+
+	config
+		.max_wasm_stack(native_stack_max as usize)
+		.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {:#}", e)))?;
 
 	config.parallel_compilation(semantics.parallel_compilation);
 
