@@ -445,10 +445,12 @@ async fn tickets_worker<B, C, SC>(
 		};
 		let epoch_identifier = EpochIdentifier { position, hash: notification.hash, number };
 
+		let attempts = sp_consensus_sassafras::TICKET_MAX_ATTEMPTS;
+		let redundancy = sp_consensus_sassafras::TICKET_REDUNDANCY_FACTOR;
 		let tickets = epoch_changes
 			.shared_data()
 			.epoch_mut(&epoch_identifier)
-			.map(|epoch| authorship::generate_epoch_tickets(epoch, 30, 1, &keystore))
+			.map(|epoch| authorship::generate_epoch_tickets(epoch, attempts, redundancy, &keystore))
 			.unwrap_or_default();
 
 		if tickets.is_empty() {

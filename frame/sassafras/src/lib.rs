@@ -280,7 +280,10 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Submit next epoch tickets.
 		#[pallet::weight(10_000)]
-		pub fn submit_tickets(origin: OriginFor<T>, tickets: Vec<Ticket>) -> DispatchResult {
+		pub fn submit_tickets(
+			origin: OriginFor<T>,
+			tickets: BoundedVec<Ticket, T::MaxTickets>,
+		) -> DispatchResult {
 			ensure_none(origin)?;
 
 			log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ received {} tickets", tickets.len());
@@ -346,12 +349,33 @@ pub mod pallet {
 				}
 
 				// Current slot should be less than half of epoch duration.
-				if Self::current_slot_epoch_index() >= T::EpochDuration::get() / 2 {
+				let epoch_duration = T::EpochDuration::get();
+
+				if Self::current_slot_epoch_index() >= epoch_duration / 2 {
 					log::warn!(
 						target: "sassafras::runtime",
 						"🌳 Timeout to propose tickets, bailing out.",
 					);
 					return InvalidTransaction::Stale.into()
+				}
+
+				// Check tickets are below threshold
+
+				let next_auth = NextAuthorities::<T>::get();
+				let threshold = sp_consensus_sassafras::compute_threshold(
+					sp_consensus_sassafras::TICKET_REDUNDANCY_FACTOR,
+					epoch_duration as u32,
+					sp_consensus_sassafras::TICKET_MAX_ATTEMPTS,
+					next_auth.len() as u32,
+				);
+
+				// TODO-SASS-P2: if we move this in the function above we can drop only
+				// the invalid tickets.
+				if !tickets
+					.iter()
+					.all(|ticket| sp_consensus_sassafras::check_threshold(ticket, threshold))
+				{
+					return InvalidTransaction::Custom(0).into()
 				}
 
 				ValidTransaction::with_tag_prefix("Sassafras")
@@ -665,11 +689,11 @@ impl<T: Config> Pallet<T> {
 	/// The submitted tickets are added to the `NextTickets` list as long as the extrinsic has
 	/// is called within the first half of the epoch. That is, tickets received within the
 	/// second half are dropped.
-	// TODO-SASS-P2:
-	// 1. we have to add the epoch and slot index to the call parameters.
-	// 2. maybe we have to drop tickets SUBMITTED after the first half.
-	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool {
+	/// TODO-SASS-P3: we have to add the zk validity proofs
+	pub fn submit_tickets_unsigned_extrinsic(mut tickets: Vec<Ticket>) -> bool {
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
+		tickets.sort_unstable();
+		let tickets = BoundedVec::truncate_from(tickets);
 		let call = Call::submit_tickets { tickets };
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()).is_ok()
 	}

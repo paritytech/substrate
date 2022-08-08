@@ -24,11 +24,11 @@ use scale_codec::Encode;
 use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
 	digests::PreDigest, make_slot_transcript_data, make_ticket_transcript_data, AuthorityId, Slot,
-	Ticket, TicketInfo, SASSAFRAS_TICKET_VRF_PREFIX,
+	Ticket, TicketInfo,
 };
-use sp_consensus_vrf::schnorrkel::{PublicKey, VRFInOut, VRFOutput, VRFProof};
+use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{twox_64, ByteArray};
-use sp_keystore::{vrf::make_transcript, SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 /// Get secondary authority index for the given epoch and slot.
 #[inline]
@@ -82,34 +82,6 @@ pub fn claim_slot(
 	})
 }
 
-/// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
-/// - x: redundancy factor;
-/// - s: number of slots in epoch;
-/// - a: max number of attempts;
-/// - v: number of validator in epoch.
-/// The parameters should be chosen such that T <= 1.
-/// If `attempts * validators` is zero then we fallback to T = 0
-// TODO-SASS-P3: this formula must be double-checked...
-#[inline]
-fn calculate_threshold(redundancy: u32, slots: u32, attempts: u32, validators: u32) -> u128 {
-	let den = attempts as u128 * validators as u128;
-	let num = redundancy as u128 * slots as u128;
-	let res = u128::MAX.checked_div(den).unwrap_or(0).saturating_mul(num);
-
-	// TODO-SASS-P4 remove me
-	log::debug!(
-		target: "sassafras",
-		"🌳 Tickets threshold: {} {:016x}", num as f64 / den as f64, res,
-	);
-	res
-}
-
-/// Returns true if the given VRF output is lower than the given threshold, false otherwise.
-#[inline]
-pub fn check_threshold(inout: &VRFInOut, threshold: u128) -> bool {
-	u128::from_le_bytes(inout.make_bytes::<[u8; 16]>(SASSAFRAS_TICKET_VRF_PREFIX)) < threshold
-}
-
 /// Generate the tickets for the given epoch.
 /// Tickets additional information (i.e. `TicketInfo`) will be stored within the `Epoch`
 /// structure. The additional information will be used during epoch to claim slots.
@@ -121,25 +93,21 @@ pub fn generate_epoch_tickets(
 ) -> Vec<Ticket> {
 	let mut tickets = vec![];
 
-	let threshold = calculate_threshold(
+	let threshold = sp_consensus_sassafras::compute_threshold(
 		redundancy_factor,
 		epoch.duration as u32,
 		max_attempts,
 		epoch.authorities.len() as u32,
 	);
+	// TODO-SASS-P4 remove me
+	log::debug!(target: "sassafras", "🌳 Tickets threshold: {:032x}", threshold);
 
 	let authorities = epoch.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
 	for (authority_index, authority_id) in authorities {
-		let raw_key = authority_id.to_raw_vec();
-
-		if !SyncCryptoStore::has_keys(&**keystore, &[(raw_key.clone(), AuthorityId::ID)]) {
+		if !SyncCryptoStore::has_keys(&**keystore, &[(authority_id.to_raw_vec(), AuthorityId::ID)])
+		{
 			continue
 		}
-
-		let public = match PublicKey::from_bytes(&raw_key) {
-			Ok(public) => public,
-			Err(_) => continue,
-		};
 
 		let make_ticket = |attempt| {
 			let transcript_data =
@@ -155,13 +123,11 @@ pub fn generate_epoch_tickets(
 			)
 			.ok()??;
 
-			let transcript = make_transcript(transcript_data);
-			let inout = signature.output.attach_input_hash(&public, transcript).ok()?;
-			if !check_threshold(&inout, threshold) {
+			let ticket = VRFOutput(signature.output);
+			if !sp_consensus_sassafras::check_threshold(&ticket, threshold) {
 				return None
 			}
 
-			let ticket = VRFOutput(signature.output);
 			let ticket_info = TicketInfo {
 				attempt: attempt as u32,
 				authority_index: authority_index as u32,

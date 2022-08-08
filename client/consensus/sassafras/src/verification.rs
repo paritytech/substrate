@@ -128,7 +128,7 @@ pub fn check_header<B: BlockT + Sized>(
 		},
 	}
 
-	// Check block-vrf proof
+	// Check slot-vrf proof
 
 	let transcript = make_slot_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
 	schnorrkel::PublicKey::from_bytes(author.as_slice())
