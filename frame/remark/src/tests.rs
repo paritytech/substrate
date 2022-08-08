@@ -30,11 +30,14 @@ fn generates_event() {
 		System::set_block_number(System::block_number() + 1); //otherwise event won't be registered.
 		assert_ok!(Remark::<Test>::store(RawOrigin::Signed(caller.clone()).into(), data.clone(),));
 		let events = System::events();
+		// this one we create as we expect it
 		let system_event: <Test as frame_system::Config>::Event = Event::Stored {
 			content_hash: sp_io::hashing::blake2_256(&data).into(),
 			sender: caller,
 		}
 		.into();
+		// this one we actually go into the system pallet and get the last event
+		// because we know its there from block +1
 		let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
 		assert_eq!(event, &system_event);
 	});
