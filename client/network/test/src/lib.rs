@@ -676,7 +676,7 @@ pub struct FullPeerConfig {
 	/// Pruning window size.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	pub keep_blocks: Option<u32>,
+	pub blocks_pruning: Option<u32>,
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
@@ -742,10 +742,10 @@ where
 
 	/// Add a full peer.
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
-		let mut test_client_builder = match (config.keep_blocks, config.storage_chain) {
-			(Some(keep_blocks), true) => TestClientBuilder::with_tx_storage(keep_blocks),
+		let mut test_client_builder = match (config.blocks_pruning, config.storage_chain) {
+			(Some(blocks_pruning), true) => TestClientBuilder::with_tx_storage(blocks_pruning),
 			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX),
-			(Some(keep_blocks), false) => TestClientBuilder::with_pruning_window(keep_blocks),
+			(Some(blocks_pruning), false) => TestClientBuilder::with_pruning_window(blocks_pruning),
 			(None, false) => TestClientBuilder::with_default_backend(),
 		};
 		if let Some(storage) = config.extra_storage {
