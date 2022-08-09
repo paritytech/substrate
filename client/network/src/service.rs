@@ -65,7 +65,7 @@ use sc_network_common::{
 	protocol::event::{DhtEvent, Event},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
-		NetworkEventStream, NetworkKVProvider, NetworkNotification, NetworkPeers, NetworkSigner,
+		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkSigner,
 		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
@@ -817,7 +817,7 @@ where
 	}
 }
 
-impl<B, H> NetworkKVProvider for NetworkService<B, H>
+impl<B, H> NetworkDHTProvider for NetworkService<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
@@ -1030,7 +1030,7 @@ where
 		}
 	}
 
-	fn num_connected(&self) -> usize {
+	fn sync_num_connected(&self) -> usize {
 		self.num_connected.load(Ordering::Relaxed)
 	}
 }

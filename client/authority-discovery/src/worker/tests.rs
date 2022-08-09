@@ -158,7 +158,7 @@ impl NetworkSigner for TestNetwork {
 	}
 }
 
-impl NetworkKVProvider for TestNetwork {
+impl NetworkDHTProvider for TestNetwork {
 	fn put_value(&self, key: KademliaKey, value: Vec<u8>) {
 		self.put_value_call.lock().unwrap().push((key.clone(), value.clone()));
 		self.event_sender

@@ -267,7 +267,7 @@ pub use sc_network_common::{
 	protocol::event::{DhtEvent, Event, ObservedRole},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
-		KademliaKey, NetworkBlock, NetworkKVProvider, NetworkRequest, NetworkSigner,
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
 		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
 		NetworkTransaction, Signature, SigningError,
 	},

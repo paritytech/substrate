@@ -405,7 +405,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn num_connected(&self) -> usize {
+		fn sync_num_connected(&self) -> usize {
 			unimplemented!();
 		}
 	}

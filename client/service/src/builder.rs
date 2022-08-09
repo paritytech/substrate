@@ -322,6 +322,7 @@ where
 	)
 }
 
+/// Shared network instance implementing a set of mandatory traits.
 pub trait SpawnTaskNetwork<Block: BlockT>:
 	sc_offchain::NetworkProvider
 	+ NetworkStateInfo

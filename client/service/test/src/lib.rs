@@ -388,7 +388,7 @@ where
 			}
 
 			network.run_until_all_full(move |_index, service| {
-				let connected = service.network().num_connected();
+				let connected = service.network().sync_num_connected();
 				debug!("Got {}/{} full connections...", connected, expected_full_connections);
 				connected == expected_full_connections
 			});
@@ -423,7 +423,7 @@ where
 			}
 
 			network.run_until_all_full(move |_index, service| {
-				let connected = service.network().num_connected();
+				let connected = service.network().sync_num_connected();
 				debug!("Got {}/{} full connections...", connected, expected_full_connections);
 				connected == expected_full_connections
 			});

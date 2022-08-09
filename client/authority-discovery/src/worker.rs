@@ -46,7 +46,7 @@ use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network_common::{
 	protocol::event::DhtEvent,
-	service::{KademliaKey, NetworkKVProvider, NetworkSigner, NetworkStateInfo, Signature},
+	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
 };
 use sp_api::ProvideRuntimeApi;
 use sp_authority_discovery::{
@@ -593,9 +593,9 @@ where
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
 /// underlying Substrate networking. Using this trait abstraction instead of
 /// `sc_network::NetworkService` directly is necessary to unit test [`Worker`].
-pub trait NetworkProvider: NetworkKVProvider + NetworkStateInfo + NetworkSigner {}
+pub trait NetworkProvider: NetworkDHTProvider + NetworkStateInfo + NetworkSigner {}
 
-impl<T> NetworkProvider for T where T: NetworkKVProvider + NetworkStateInfo + NetworkSigner {}
+impl<T> NetworkProvider for T where T: NetworkDHTProvider + NetworkStateInfo + NetworkSigner {}
 
 fn hash_authority_id(id: &[u8]) -> KademliaKey {
 	KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())

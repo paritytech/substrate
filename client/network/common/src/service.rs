@@ -35,7 +35,7 @@ mod signature;
 
 /// Signer with network identity
 pub trait NetworkSigner {
-	/// Signs the message with the `KeyPair` that defined the local `PeerId`.
+	/// Signs the message with the `KeyPair` that defines the local [`PeerId`].
 	fn sign_with_local_identity(&self, msg: impl AsRef<[u8]>) -> Result<Signature, SigningError>;
 }
 
@@ -49,8 +49,8 @@ where
 	}
 }
 
-/// Get value network provider.
-pub trait NetworkKVProvider {
+/// Provides access to the networking DHT.
+pub trait NetworkDHTProvider {
 	/// Start getting a value from the DHT.
 	fn get_value(&self, key: &KademliaKey);
 
@@ -58,10 +58,10 @@ pub trait NetworkKVProvider {
 	fn put_value(&self, key: KademliaKey, value: Vec<u8>);
 }
 
-impl<T> NetworkKVProvider for Arc<T>
+impl<T> NetworkDHTProvider for Arc<T>
 where
 	T: ?Sized,
-	T: NetworkKVProvider,
+	T: NetworkDHTProvider,
 {
 	fn get_value(&self, key: &KademliaKey) {
 		T::get_value(self, key)
@@ -247,8 +247,8 @@ pub trait NetworkPeers {
 	/// If we currently have an open substream with this peer, it will soon be closed.
 	fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>);
 
-	/// Returns the number of peers we're connected to.
-	fn num_connected(&self) -> usize;
+	/// Returns the number of peers in the sync peer set we're connected to.
+	fn sync_num_connected(&self) -> usize;
 }
 
 // Manual implementation to avoid extra boxing here
@@ -325,8 +325,8 @@ where
 		T::remove_from_peers_set(self, protocol, peers)
 	}
 
-	fn num_connected(&self) -> usize {
-		T::num_connected(self)
+	fn sync_num_connected(&self) -> usize {
+		T::sync_num_connected(self)
 	}
 }
 
