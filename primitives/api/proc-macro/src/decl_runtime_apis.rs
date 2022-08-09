@@ -399,9 +399,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let versioned_api_traits = generate_versioned_api_traits(decl.clone(), methods_by_version);
 
 		let main_api_ident = decl.ident.clone();
-		let main_api_generics = decl.generics.clone();
-		let versioned_ident = versioned_api_traits.first().expect("There should always be at least one version.").ident.clone();
-		let versioned_generics = versioned_api_traits.first().expect("There should always be at least one version.").generics.clone();
+		let versioned_ident = &versioned_api_traits.first().expect("There should always be at least one version.").ident;
 
 		result.push(quote!(
 			#[doc(hidden)]
@@ -412,7 +410,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 				#( #versioned_api_traits )*
 
-				pub type #main_api_ident #main_api_generics = #versioned_ident #versioned_generics;
+				pub use #versioned_ident as #main_api_ident;
 
 				pub #api_version
 
