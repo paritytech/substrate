@@ -4925,7 +4925,7 @@ mod fuzz_test {
 	use super::*;
 	use crate::pallet::{Call as PoolsCall, Event as PoolsEvents};
 	use frame_support::traits::UnfilteredDispatchable;
-	use rand::{rngs::SmallRng, seq::SliceRandom, thread_rng, Rng, SeedableRng};
+	use rand::{seq::SliceRandom, thread_rng, Rng};
 	use sp_runtime::{assert_eq_error_rate, Perquintill};
 
 	const ERA: BlockNumber = 1000;
@@ -5099,6 +5099,8 @@ mod fuzz_test {
 	fn fuzz_test() {
 		let mut reward_agent = RewardAgent::new(42);
 		sp_tracing::try_init_simple();
+		// NOTE: use this to get predictable (non)randomness:
+		// use::{rngs::SmallRng, SeedableRng};
 		// let mut rng = SmallRng::from_seed([0u8; 32]);
 		let mut rng = thread_rng();
 		let mut ext = sp_io::TestExternalities::new_empty();
@@ -5182,7 +5184,7 @@ mod fuzz_test {
 				System::reset_events();
 
 				if iteration % ERA == 0 {
-					CurrentEra::set(CurrentEra::get() + 1);
+					CurrentEra::mutate(|c| *c += 1);
 					BondedPools::<T>::iter().for_each(|(id, _)| {
 						let amount = random_ed_multiple(&mut rng);
 						let _ =
