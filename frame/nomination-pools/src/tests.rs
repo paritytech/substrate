@@ -4925,12 +4925,15 @@ mod fuzz_test {
 	use super::*;
 	use crate::pallet::{Call as PoolsCall, Event as PoolsEvents};
 	use frame_support::traits::UnfilteredDispatchable;
-	use rand::{seq::SliceRandom, thread_rng, Rng};
+	use rand::{rngs::SmallRng, seq::SliceRandom, thread_rng, Rng, SeedableRng};
 	use sp_runtime::{assert_eq_error_rate, Perquintill};
 
 	const ERA: BlockNumber = 1000;
-	const MAX_ED_MULTIPLE: Balance = 1000;
+	const MAX_ED_MULTIPLE: Balance = 10_000;
 	const MIN_ED_MULTIPLE: Balance = 10;
+
+	// not quite elegant, just to make it available in random_signed_origin.
+	const REWARD_AGENT_ACCOUNT: AccountId = 42;
 
 	/// Grab random accounts, either known ones, or new ones.
 	fn random_signed_origin<R: Rng>(rng: &mut R) -> (Origin, AccountId) {
@@ -4938,7 +4941,14 @@ mod fuzz_test {
 		if rng.gen::<bool>() && count > 0 {
 			// take an existing account.
 			let skip = rng.gen_range(0..count as usize);
-			let acc = PoolMembers::<T>::iter_keys().skip(skip).take(1).next().unwrap();
+
+			// this is tricky: the account might be our reward agent, which we never want to be
+			// randomly chosen here. Try another one, or, if it is only our agent, return a random
+			// one nonetheless.
+			let candidate = PoolMembers::<T>::iter_keys().skip(skip).take(1).next().unwrap();
+			let acc =
+				if candidate == REWARD_AGENT_ACCOUNT { rng.gen::<AccountId>() } else { candidate };
+
 			(Origin::signed(acc), acc)
 		} else {
 			// create a new account
@@ -5043,17 +5053,22 @@ mod fuzz_test {
 		expected_reward: Balance,
 	}
 
+	// TODO: inject some slashes into the game.
 	impl RewardAgent {
 		fn new(who: AccountId) -> Self {
 			Self { who, ..Default::default() }
 		}
 
 		fn join(&mut self) {
+			if self.pool_id.is_some() {
+				return
+			}
 			let pool_id = LastPoolId::<T>::get();
 			let amount = 10 * ExistentialDeposit::get();
 			let origin = Origin::signed(self.who);
 			let _ = Balances::deposit_creating(&self.who, 10 * amount);
 			self.pool_id = Some(pool_id);
+			log::info!(target: "reward-agent", "🤖 reward agent joining in {} with {}", pool_id, amount);
 			assert_ok!(PoolsCall::join::<T> { amount, pool_id }.dispatch_bypass_filter(origin));
 		}
 
@@ -5070,15 +5085,12 @@ mod fuzz_test {
 			let post = Balances::free_balance(&42);
 
 			let income = post - pre;
-			log!(
-				info,
-				"CLAIM: actual: {}, expected: {}, {:?} ({:?})",
+			log::info!(
+				target: "reward-agent", "🤖 CLAIM: actual: {}, expected: {}",
 				income,
 				self.expected_reward,
-				System::events(),
-				BondedPool::<T>::get(self.pool_id.unwrap())
 			);
-			assert_eq!(income, self.expected_reward);
+			assert_eq_error_rate!(income, self.expected_reward, 10);
 			self.expected_reward = 0;
 		}
 	}
@@ -5086,8 +5098,8 @@ mod fuzz_test {
 	#[test]
 	fn fuzz_test() {
 		let mut reward_agent = RewardAgent::new(42);
-
 		sp_tracing::try_init_simple();
+		// let mut rng = SmallRng::from_seed([0u8; 32]);
 		let mut rng = thread_rng();
 		let mut ext = sp_io::TestExternalities::new_empty();
 		// NOTE: sadly events don't fulfill the requirements of hashmap or btreemap.
@@ -5105,7 +5117,8 @@ mod fuzz_test {
 			MinJoinBond::<T>::set(5 * ExistentialDeposit::get());
 			System::set_block_number(1);
 		});
-		ExistentialDeposit::set(10u128.pow(1u32));
+
+		ExistentialDeposit::set(10u128.pow(12u32));
 		BondingDuration::set(8);
 
 		loop {
@@ -5131,13 +5144,12 @@ mod fuzz_test {
 				);
 
 				// possibly join the reward_agent
-				if iteration == ERA / 2 {
-					log!(info, "reward agent joining in");
+				if iteration > ERA / 2 && BondedPools::<T>::count() > 0 {
 					reward_agent.join();
 				}
-				// and possibly roughly every era, trigger payout for the agent. Doing this more
+				// and possibly roughly every 4 era, trigger payout for the agent. Doing this more
 				// frequent is also harmless.
-				if rng.gen_range(0..ERA) == 0 {
+				if rng.gen_range(0..(4 * ERA)) == 0 {
 					reward_agent.claim_payout();
 				}
 
@@ -5182,13 +5194,12 @@ mod fuzz_test {
 							let member_points =
 								PoolMembers::<T>::get(reward_agent.who).map(|m| m.points).unwrap();
 							let agent_share = Perquintill::from_rational(member_points, all_points);
-							log!(
-								info,
-								"REWARD = amount = {:?}, ratio: {:?}, share {:?}, ({:?})",
+							log::info!(
+								target: "reward-agent",
+								"🤖 REWARD = amount = {:?}, ratio: {:?}, share {:?}",
 								amount,
 								agent_share,
 								agent_share * amount,
-								BondedPool::<T>::get(id).unwrap()
 							);
 							reward_agent.expected_reward += agent_share * amount;
 						}
