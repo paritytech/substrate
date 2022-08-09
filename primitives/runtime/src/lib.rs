@@ -36,6 +36,8 @@ pub use sp_std;
 
 #[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
+pub use sp_arithmetic::traits::Saturating;
 
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
@@ -825,7 +827,7 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			($x >= $crate::Saturating::saturating_sub($y, $error)) && ($x <= $crate::Saturating::saturating_add($y, $error)),
 			"{:?} != {:?} (with error rate {:?})",
 			$x,
 			$y,
