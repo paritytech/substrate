@@ -115,6 +115,20 @@ fn raw_linear_regression(
 	with_intercept: bool,
 ) -> Option<(f64, Vec<f64>, Vec<f64>)> {
 	let mut data: Vec<f64> = Vec::new();
+
+	// Here we build a raw matrix of linear equations for the `linregress` crate to solve for us
+	// and build a linear regression model around it.
+	//
+	// Each row of the matrix contains as the first column the actual value which we want
+	// the model to predict for us (the `y`), and the rest of the columns contain the input
+	// parameters on which the model will base its predictions on (the `xs`).
+	//
+	// In machine learning terms this is essentially the training data for the model.
+	//
+	// As a special case the very first input parameter represents the constant factor
+	// of the linear equation: the so called "intercept value". Since it's supposed to
+	// be constant we can just put a dummy input parameter of either a `1` (in case we want it)
+	// or a `0` (in case we do not).
 	for (&y, xs) in ys.iter().zip(xs.chunks_exact(x_vars)) {
 		data.push(y);
 		if with_intercept {
