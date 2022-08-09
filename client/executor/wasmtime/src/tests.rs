@@ -174,6 +174,85 @@ impl RuntimeBuilder {
 	}
 }
 
+fn deep_call_stack_wat(depth: usize) -> String {
+	format!(
+		r#"
+			(module
+			  (memory $0 32)
+			  (export "memory" (memory $0))
+			  (global (export "__heap_base") i32 (i32.const 0))
+			  (func (export "overflow") call 0)
+
+			  (func $overflow (param $0 i32)
+			    (block $label$1
+			      (br_if $label$1
+			        (i32.ge_u
+			          (local.get $0)
+			          (i32.const {depth})
+			        )
+			      )
+			      (call $overflow
+			        (i32.add
+			          (local.get $0)
+			          (i32.const 1)
+			        )
+			      )
+			    )
+			  )
+
+			  (func (export "main")
+			    (param i32 i32) (result i64)
+			    (call $overflow (i32.const 0))
+			    (i64.const 0)
+			  )
+			)
+		"#
+	)
+}
+
+// These two tests ensure that the `wasmtime`'s stack size limit and the amount of
+// stack space used by a single stack frame doesn't suddenly change without us noticing.
+//
+// If they do (e.g. because we've pulled in a new version of `wasmtime`) we want to know
+// that it did, regardless of how small the change was.
+//
+// If these tests starting failing it doesn't necessarily mean that something is broken;
+// what it means is that one (or multiple) of the following has to be done:
+//   a) the tests may need to be updated for the new call depth,
+//   b) the stack limit may need to be changed to maintain backwards compatibility,
+//   c) the root cause of the new call depth limit determined, and potentially fixed,
+//   d) the new call depth limit may need to be validated to ensure it doesn't prevent any
+//      existing chain from syncing (if it was effectively decreased)
+
+// We need two limits here since depending on whether the code is compiled in debug
+// or in release mode the maximum call depth is slightly different.
+const CALL_DEPTH_LOWER_LIMIT: usize = 65478;
+const CALL_DEPTH_UPPER_LIMIT: usize = 65514;
+
+test_wasm_execution!(test_consume_under_1mb_of_stack_does_not_trap);
+fn test_consume_under_1mb_of_stack_does_not_trap(instantiation_strategy: InstantiationStrategy) {
+	let wat = deep_call_stack_wat(CALL_DEPTH_LOWER_LIMIT);
+	let mut builder = RuntimeBuilder::new(instantiation_strategy).use_wat(wat);
+	let runtime = builder.build();
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	instance.call_export("main", &[]).unwrap();
+}
+
+test_wasm_execution!(test_consume_over_1mb_of_stack_does_trap);
+fn test_consume_over_1mb_of_stack_does_trap(instantiation_strategy: InstantiationStrategy) {
+	let wat = deep_call_stack_wat(CALL_DEPTH_UPPER_LIMIT + 1);
+	let mut builder = RuntimeBuilder::new(instantiation_strategy).use_wat(wat);
+	let runtime = builder.build();
+	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
+	match instance.call_export("main", &[]).unwrap_err() {
+		Error::AbortedDueToTrap(error) => {
+			let expected = "wasm trap: call stack exhausted";
+			assert_eq!(error.message, expected);
+		},
+		error => panic!("unexpected error: {:?}", error),
+	}
+}
+
 test_wasm_execution!(test_nan_canonicalization);
 fn test_nan_canonicalization(instantiation_strategy: InstantiationStrategy) {
 	let mut builder = RuntimeBuilder::new(instantiation_strategy).canonicalize_nans(true);
