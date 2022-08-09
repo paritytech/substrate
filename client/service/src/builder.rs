@@ -38,7 +38,10 @@ use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{config::SyncMode, NetworkService};
-use sc_network_common::sync::warp::WarpSyncProvider;
+use sc_network_common::{
+	service::{NetworkStateInfo, NetworkStatusProvider, NetworkTransaction},
+	sync::warp::WarpSyncProvider,
+};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
@@ -319,6 +322,31 @@ where
 	)
 }
 
+/// Shared network instance implementing a set of mandatory traits.
+pub trait SpawnTaskNetwork<Block: BlockT>:
+	sc_offchain::NetworkProvider
+	+ NetworkStateInfo
+	+ NetworkTransaction<Block::Hash>
+	+ NetworkStatusProvider<Block>
+	+ Send
+	+ Sync
+	+ 'static
+{
+}
+
+impl<T, Block> SpawnTaskNetwork<Block> for T
+where
+	Block: BlockT,
+	T: sc_offchain::NetworkProvider
+		+ NetworkStateInfo
+		+ NetworkTransaction<Block::Hash>
+		+ NetworkStatusProvider<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+{
+}
+
 /// Parameters to pass into `build`.
 pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// The service configuration.
@@ -337,7 +365,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub rpc_builder:
 		Box<dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>>,
 	/// A shared network instance.
-	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	pub network: Arc<dyn SpawnTaskNetwork<TBl>>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Telemetry instance for this node.
@@ -349,7 +377,7 @@ pub fn build_offchain_workers<TBl, TCl>(
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	network: Arc<dyn sc_offchain::NetworkProvider + Send + Sync>,
 ) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBl>>>
 where
 	TBl: BlockT,
@@ -516,13 +544,14 @@ where
 	Ok(rpc_handlers)
 }
 
-async fn transaction_notifications<TBl, TExPool>(
-	transaction_pool: Arc<TExPool>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+async fn transaction_notifications<Block, ExPool, Network>(
+	transaction_pool: Arc<ExPool>,
+	network: Network,
 	telemetry: Option<TelemetryHandle>,
 ) where
-	TBl: BlockT,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>,
+	Block: BlockT,
+	ExPool: MaintainedTransactionPool<Block = Block, Hash = <Block as BlockT>::Hash>,
+	Network: NetworkTransaction<<Block as BlockT>::Hash> + Send + Sync,
 {
 	// transaction notifications
 	transaction_pool
@@ -542,13 +571,18 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
+fn init_telemetry<Block, Client, Network>(
 	config: &mut Configuration,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	client: Arc<TCl>,
+	network: Network,
+	client: Arc<Client>,
 	telemetry: &mut Telemetry,
 	sysinfo: Option<sc_telemetry::SysInfo>,
-) -> sc_telemetry::Result<TelemetryHandle> {
+) -> sc_telemetry::Result<TelemetryHandle>
+where
+	Block: BlockT,
+	Client: BlockBackend<Block>,
+	Network: NetworkStateInfo,
+{
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
