@@ -659,7 +659,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		equivocation_proof.second_header = equivocation_proof.first_header.clone();
 		assert_invalid_equivocation(equivocation_proof);
 
-		// missing preruntime digest from one header
+		// missing pre-runtime digest from one header
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,

@@ -288,15 +288,13 @@ benchmarks! {
 		let (offenders, raw_offenders) = make_offenders_im_online::<T>(o, n)?;
 		let keys =  ImOnline::<T>::keys();
 		let validator_set_count = keys.len() as u32;
-
-		let slash_fraction = UnresponsivenessOffence::<T::AccountId>::slash_fraction(
-			offenders.len() as u32, validator_set_count,
-		);
+		let offenders_count = offenders.len() as u32;
 		let offence = UnresponsivenessOffence {
 			session_index: 0,
 			validator_set_count,
 			offenders,
 		};
+		let slash_fraction = offence.slash_fraction(offenders_count);
 		assert_eq!(System::<T>::event_count(), 0);
 	}: {
 		let _ = <T as ImOnlineConfig>::ReportUnresponsiveness::report_offence(

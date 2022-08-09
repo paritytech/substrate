@@ -87,8 +87,12 @@ where
 	/// the network.
 	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
 
-	/// Name of the protocol to use on the wire. Should be different for each chain.
+	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
+
+	/// Fork ID to distinguish protocols of different hard forks. Part of the standard protocol
+	/// name on the wire.
+	pub fork_id: Option<String>,
 
 	/// Import queue to use.
 	///
@@ -96,14 +100,8 @@ where
 	/// valid.
 	pub import_queue: Box<dyn ImportQueue<B>>,
 
-	/// Factory function that creates a new instance of chain sync.
-	pub create_chain_sync: Box<
-		dyn FnOnce(
-			sc_network_common::sync::SyncMode,
-			Arc<Client>,
-			Option<Arc<dyn WarpSyncProvider<B>>>,
-		) -> crate::error::Result<Box<dyn ChainSync<B>>>,
-	>,
+	/// Instance of chain sync implementation.
+	pub chain_sync: Box<dyn ChainSync<B>>,
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
@@ -138,8 +136,8 @@ where
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,
 
-	/// Optional warp sync protocol support. Include protocol config and sync provider.
-	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
+	/// Optional warp sync protocol config.
+	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
 }
 
 /// Role of the local node.
@@ -352,7 +350,7 @@ impl From<multiaddr::Error> for ParseErr {
 }
 
 /// Sync operation mode.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,

@@ -25,6 +25,7 @@ mod sync;
 use std::{
 	borrow::Cow,
 	collections::HashMap,
+	marker::PhantomData,
 	pin::Pin,
 	sync::Arc,
 	task::{Context as FutureContext, Poll},
@@ -567,25 +568,27 @@ impl<T> BlockImportAdapterFull for T where
 /// This is required as the `TestNetFactory` trait does not distinguish between
 /// full and light nodes.
 #[derive(Clone)]
-pub struct BlockImportAdapter<I> {
+pub struct BlockImportAdapter<I, Transaction = ()> {
 	inner: I,
+	_phantom: PhantomData<Transaction>,
 }
 
-impl<I> BlockImportAdapter<I> {
+impl<I, Transaction> BlockImportAdapter<I, Transaction> {
 	/// Create a new instance of `Self::Full`.
 	pub fn new(inner: I) -> Self {
-		Self { inner }
+		Self { inner, _phantom: PhantomData }
 	}
 }
 
 #[async_trait::async_trait]
-impl<I> BlockImport<Block> for BlockImportAdapter<I>
+impl<I, Transaction> BlockImport<Block> for BlockImportAdapter<I, Transaction>
 where
 	I: BlockImport<Block, Error = ConsensusError> + Send + Sync,
 	I::Transaction: Send,
+	Transaction: Send + 'static,
 {
 	type Error = ConsensusError;
-	type Transaction = ();
+	type Transaction = Transaction;
 
 	async fn check_block(
 		&mut self,
@@ -596,7 +599,7 @@ where
 
 	async fn import_block(
 		&mut self,
-		block: BlockImportParams<Block, ()>,
+		block: BlockImportParams<Block, Self::Transaction>,
 		cache: HashMap<well_known_cache_keys::Id, Vec<u8>>,
 	) -> Result<ImportResult, Self::Error> {
 		self.inner.import_block(block.clear_storage_changes_and_mutate(), cache).await
@@ -673,7 +676,7 @@ pub struct FullPeerConfig {
 	/// Pruning window size.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	pub keep_blocks: Option<u32>,
+	pub blocks_pruning: Option<u32>,
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
@@ -739,10 +742,10 @@ where
 
 	/// Add a full peer.
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
-		let mut test_client_builder = match (config.keep_blocks, config.storage_chain) {
-			(Some(keep_blocks), true) => TestClientBuilder::with_tx_storage(keep_blocks),
+		let mut test_client_builder = match (config.blocks_pruning, config.storage_chain) {
+			(Some(blocks_pruning), true) => TestClientBuilder::with_tx_storage(blocks_pruning),
 			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX),
-			(Some(keep_blocks), false) => TestClientBuilder::with_pruning_window(keep_blocks),
+			(Some(blocks_pruning), false) => TestClientBuilder::with_pruning_window(blocks_pruning),
 			(None, false) => TestClientBuilder::with_default_backend(),
 		};
 		if let Some(storage) = config.extra_storage {
@@ -805,23 +808,25 @@ where
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
+		let fork_id = Some(String::from("test-fork-id"));
+
 		let block_request_protocol_config = {
 			let (handler, protocol_config) =
-				BlockRequestHandler::new(&protocol_id, client.clone(), 50);
+				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
 
 		let state_request_protocol_config = {
 			let (handler, protocol_config) =
-				StateRequestHandler::new(&protocol_id, client.clone(), 50);
+				StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
 
 		let light_client_request_protocol_config = {
 			let (handler, protocol_config) =
-				LightClientRequestHandler::new(&protocol_id, client.clone());
+				LightClientRequestHandler::new(&protocol_id, None, client.clone());
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -829,16 +834,39 @@ where
 		let warp_sync = Arc::new(TestWarpSyncProvider(client.clone()));
 
 		let warp_protocol_config = {
-			let (handler, protocol_config) =
-				warp_request_handler::RequestHandler::new(protocol_id.clone(), warp_sync.clone());
+			let (handler, protocol_config) = warp_request_handler::RequestHandler::new(
+				protocol_id.clone(),
+				client
+					.block_hash(0u32.into())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed"),
+				None,
+				warp_sync.clone(),
+			);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
 
-		let max_parallel_downloads = network_config.max_parallel_downloads;
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
+		let chain_sync = ChainSync::new(
+			match network_config.sync_mode {
+				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
+				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+					sc_network_common::sync::SyncMode::LightState {
+						skip_proofs,
+						storage_chain_mode,
+					},
+				SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
+			},
+			client.clone(),
+			block_announce_validator,
+			network_config.max_parallel_downloads,
+			Some(warp_sync),
+		)
+		.unwrap();
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
@@ -849,24 +877,14 @@ where
 			chain: client.clone(),
 			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
+			fork_id,
 			import_queue,
-			create_chain_sync: Box::new(move |sync_mode, chain, warp_sync_provider| {
-				match ChainSync::new(
-					sync_mode,
-					chain,
-					block_announce_validator,
-					max_parallel_downloads,
-					warp_sync_provider,
-				) {
-					Ok(chain_sync) => Ok(Box::new(chain_sync)),
-					Err(error) => Err(Box::new(error).into()),
-				}
-			}),
+			chain_sync: Box::new(chain_sync),
 			metrics_registry: None,
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
-			warp_sync: Some((warp_sync, warp_protocol_config)),
+			warp_sync_protocol_config: Some(warp_protocol_config),
 		})
 		.unwrap();
 
