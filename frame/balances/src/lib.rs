@@ -185,7 +185,7 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, RuntimeDebug,
+	ArithmeticError, DispatchError, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
@@ -212,7 +212,8 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ Debug
 			+ MaxEncodedLen
-			+ TypeInfo;
+			+ TypeInfo
+			+ FixedPointOperand;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
