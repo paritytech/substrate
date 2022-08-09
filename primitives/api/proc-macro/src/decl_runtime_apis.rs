@@ -398,6 +398,11 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 		let versioned_api_traits = generate_versioned_api_traits(decl.clone(), methods_by_version);
 
+		let main_api_ident = decl.ident.clone();
+		let main_api_generics = decl.generics.clone();
+		let versioned_ident = versioned_api_traits.first().expect("There should always be at least one version.").ident.clone();
+		let versioned_generics = versioned_api_traits.first().expect("There should always be at least one version.").generics.clone();
+
 		result.push(quote!(
 			#[doc(hidden)]
 			#[allow(dead_code)]
@@ -405,9 +410,9 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 			pub mod #mod_name {
 				use super::*;
 
-				#decl
-
 				#( #versioned_api_traits )*
+
+				pub type #main_api_ident #main_api_generics = #versioned_ident #versioned_generics;
 
 				pub #api_version
 
@@ -489,40 +494,6 @@ impl<'a> ToClientSideDecl<'a> {
 		let fn_sig = &method.sig;
 		let ret_type = return_type_extract_type(&fn_sig.output);
 
-		// Check for versioned method and validate its version - it shouldn't be older than the
-		// trait version
-		let is_versioned_method = match method_attrs.get(API_VERSION_ATTRIBUTE) {
-			Some(version_attribute) => {
-				let method_api_ver = parse_runtime_api_version(version_attribute);
-				if let Err(err) = &method_api_ver {
-					self.errors.push(err.to_compile_error());
-				}
-
-				let trait_api_version = get_api_version(&self.found_attributes);
-				if let Err(err) = &trait_api_version {
-					self.errors.push(err.to_compile_error());
-				}
-
-				if let (Ok(method_api_ver), Ok(trait_api_version)) = (method_api_ver, trait_api_version) {
-					if method_api_ver < trait_api_version {
-						let span = method.span();
-						let method_ver = method_api_ver.to_string();
-						let trait_ver = trait_api_version.to_string();
-						self.errors.push(quote_spanned! {
-							span => compile_error!(concat!("Method version `",
-							#method_ver,
-							"` is older than (or equal to) trait version `",
-							#trait_ver,
-							"`. Methods can't define versions older than the trait version."));
-						});
-					}
-				}
-
-				true
-			},
-			None => false,
-		};
-
 		// Get types and if the value is borrowed from all parameters.
 		// If there is an error, we push it as the block to the user.
 		let param_types =
@@ -544,7 +515,7 @@ impl<'a> ToClientSideDecl<'a> {
 		let block_id = self.block_id;
 		let crate_ = self.crate_;
 
-		let mut result: TraitItemMethod = parse_quote! {
+		let result: TraitItemMethod = parse_quote! {
 			#[doc(hidden)]
 			fn #name(
 				&self,
@@ -554,12 +525,6 @@ impl<'a> ToClientSideDecl<'a> {
 				params_encoded: Vec<u8>,
 			) -> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>;
 		};
-
-		if is_versioned_method {
-			// Generate default implementation calling `unimplemented!()` for versioned methods
-			result.default = Some(parse_quote!({ unimplemented!() }));
-			result.attrs.push(parse_quote!(#[allow(unused_variables)]));
-		}
 
 		Some(result)
 	}
