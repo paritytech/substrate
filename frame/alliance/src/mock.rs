@@ -18,6 +18,7 @@
 //! Test utilities
 
 pub use sp_core::H256;
+use sp_runtime::traits::Hash;
 pub use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -192,6 +193,10 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 	fn proposal_of(proposal_hash: H256) -> Option<Call> {
 		AllianceMotion::proposal_of(proposal_hash)
 	}
+
+	fn proposals() -> Vec<H256> {
+		AllianceMotion::proposals().into_inner()
+	}
 }
 
 parameter_types! {
@@ -248,7 +253,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 50), (2, 50), (3, 50), (4, 50), (5, 30), (6, 50), (7, 50)],
+		balances: vec![(1, 50), (2, 50), (3, 50), (4, 50), (5, 30), (6, 50), (7, 50), (8, 50)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
@@ -290,6 +295,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		assert_ok!(Identity::set_identity(Origin::signed(5), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 5, Judgement::KnownGood));
 		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(Origin::signed(8), Box::new(info.clone())));
+		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 8, Judgement::KnownGood));
 
 		// Joining before init should fail.
 		assert_noop!(
@@ -297,7 +304,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			Error::<Test, ()>::AllianceNotYetInitialized
 		);
 
-		assert_ok!(Alliance::init_members(Origin::root(), vec![1, 2], vec![3], vec![]));
+		assert_ok!(Alliance::force_set_members(Origin::root(), vec![1, 2], vec![3], vec![]));
 
 		System::set_block_number(1);
 	});
@@ -317,14 +324,20 @@ pub fn test_cid() -> Cid {
 	Cid::new_v0(&*result)
 }
 
-pub fn make_proposal(value: u64) -> Call {
-	Call::System(frame_system::Call::remark { remark: value.encode() })
+pub fn make_remark_proposal(value: u64) -> (Call, u32, H256) {
+	make_proposal(Call::System(frame_system::Call::remark { remark: value.encode() }))
 }
 
-pub fn make_set_rule_proposal(rule: Cid) -> Call {
-	Call::Alliance(pallet_alliance::Call::set_rule { rule })
+pub fn make_set_rule_proposal(rule: Cid) -> (Call, u32, H256) {
+	make_proposal(Call::Alliance(pallet_alliance::Call::set_rule { rule }))
 }
 
-pub fn make_kick_member_proposal(who: u64) -> Call {
-	Call::Alliance(pallet_alliance::Call::kick_member { who })
+pub fn make_kick_member_proposal(who: u64) -> (Call, u32, H256) {
+	make_proposal(Call::Alliance(pallet_alliance::Call::kick_member { who }))
+}
+
+pub fn make_proposal(proposal: Call) -> (Call, u32, H256) {
+	let len: u32 = proposal.using_encoded(|p| p.len() as u32);
+	let hash = BlakeTwo256::hash_of(&proposal);
+	(proposal, len, hash)
 }

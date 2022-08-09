@@ -112,6 +112,10 @@ impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
 	fn proposal_of(proposal_hash: Hash) -> Option<Call> {
 		AllianceMotion::proposal_of(proposal_hash)
 	}
+
+	fn proposals() -> Vec<Hash> {
+		AllianceMotion::proposals().into_inner()
+	}
 }
 
 #[cfg(test)]
