@@ -573,7 +573,7 @@ mod tests {
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment::CurrencyAdapter;
 
-	const TEST_KEY: &[u8] = &*b":test:key:";
+	const TEST_KEY: &[u8] = b":test:key:";
 
 	#[frame_support::pallet]
 	mod custom {
@@ -806,7 +806,7 @@ mod tests {
 	type TestUncheckedExtrinsic = TestXt;
 
 	// Will contain `true` when the custom runtime logic was called.
-	const CUSTOM_ON_RUNTIME_KEY: &[u8] = &*b":custom:on_runtime";
+	const CUSTOM_ON_RUNTIME_KEY: &[u8] = b":custom:on_runtime";
 
 	struct CustomOnRuntimeUpgrade;
 	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {

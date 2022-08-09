@@ -23,7 +23,7 @@ use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, StorageProvider,
 };
-use sc_client_db::{Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode};
+use sc_client_db::{Backend, BlocksPruning, DatabaseSettings, DatabaseSource, PruningMode};
 use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
 };
@@ -1200,7 +1200,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
 				state_pruning: Some(PruningMode::ArchiveAll),
-				keep_blocks: KeepBlocks::All,
+				blocks_pruning: BlocksPruning::All,
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
@@ -1426,8 +1426,8 @@ fn returns_status_for_pruned_blocks() {
 			DatabaseSettings {
 				state_cache_size: 1 << 20,
 				state_cache_child_ratio: None,
-				state_pruning: Some(PruningMode::keep_blocks(1)),
-				keep_blocks: KeepBlocks::All,
+				state_pruning: Some(PruningMode::blocks_pruning(1)),
+				blocks_pruning: BlocksPruning::All,
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,

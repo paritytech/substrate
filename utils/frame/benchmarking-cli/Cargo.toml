@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 chrono = "0.4"
 clap = { version = "3.1.18", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-comfy-table = { version = "5.0.1", default-features = false }
+comfy-table = { version = "6.0.0", default-features = false }
 handlebars = "4.2.2"
 hash-db = "0.15.2"
 hex = "0.4.3"
