@@ -5078,7 +5078,7 @@ mod fuzz_test {
 				System::events(),
 				BondedPool::<T>::get(self.pool_id.unwrap())
 			);
-			assert_eq_error_rate!(income, self.expected_reward, 100);
+			assert_eq!(income, self.expected_reward);
 			self.expected_reward = 0;
 		}
 	}
