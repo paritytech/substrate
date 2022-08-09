@@ -372,12 +372,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 							},
 							Ok(method_api_ver) => method_api_ver,
 							Err(e) => {
-								let span = method.span();
-								let err_msg = e.to_string();
-								result.push(quote_spanned! {
-									span => compile_error!(concat!("Found invalid method version. ", #err_msg));
-								});
-
+								result.push(e.to_compile_error());
 								trait_api_version
 							}
 						};
@@ -498,20 +493,31 @@ impl<'a> ToClientSideDecl<'a> {
 		// trait version
 		let is_versioned_method = match method_attrs.get(API_VERSION_ATTRIBUTE) {
 			Some(version_attribute) => {
-				let method_api_ver = parse_runtime_api_version(version_attribute).unwrap_or(1);
-				let trait_api_version = get_api_version(&self.found_attributes).unwrap_or(1);
-				if method_api_ver < trait_api_version {
-					let span = method.span();
-					let method_ver = method_api_ver.to_string();
-					let trait_ver = trait_api_version.to_string();
-					self.errors.push(quote_spanned! {
-						span => compile_error!(concat!("Method version `",
-						#method_ver,
-						"` is older than (or equal to) trait version `",
-						#trait_ver,
-						"`. Methods can't define versions older than the trait version."));
-					});
+				let method_api_ver = parse_runtime_api_version(version_attribute);
+				if let Err(err) = &method_api_ver {
+					self.errors.push(err.to_compile_error());
 				}
+
+				let trait_api_version = get_api_version(&self.found_attributes);
+				if let Err(err) = &trait_api_version {
+					self.errors.push(err.to_compile_error());
+				}
+
+				if let (Ok(method_api_ver), Ok(trait_api_version)) = (method_api_ver, trait_api_version) {
+					if method_api_ver < trait_api_version {
+						let span = method.span();
+						let method_ver = method_api_ver.to_string();
+						let trait_ver = trait_api_version.to_string();
+						self.errors.push(quote_spanned! {
+							span => compile_error!(concat!("Method version `",
+							#method_ver,
+							"` is older than (or equal to) trait version `",
+							#trait_ver,
+							"`. Methods can't define versions older than the trait version."));
+						});
+					}
+				}
+
 				true
 			},
 			None => false,
