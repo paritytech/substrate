@@ -177,13 +177,13 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		self.overlay.iter_after(key).find_map(|v| v.1.value().map(|_| v.0.to_vec()))
+		self.overlay.iter_after(key).find_map(|(k, v)| v.value().map(|_| k.to_vec()))
 	}
 
 	fn next_child_storage_key(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageKey> {
 		self.overlay
 			.child_iter_after(child_info.storage_key(), key)
-			.find_map(|v| v.1.value().map(|_| v.0.to_vec()))
+			.find_map(|(k, v)| v.value().map(|_| k.to_vec()))
 	}
 
 	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
