@@ -355,23 +355,32 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 					// validate the api version for the method (if any) and generate default
 					// implementation for versioned methods
 					if let Some(version_attribute) = method_attrs.get(API_VERSION_ATTRIBUTE) {
-						let method_api_ver =
-							parse_runtime_api_version(version_attribute).unwrap_or(1);
-						if method_api_ver < trait_api_version {
-							let span = method.span();
-							let method_ver = method_api_ver.to_string();
-							let trait_ver = trait_api_version.to_string();
-							result.push(quote_spanned! {
-								span => compile_error!(concat!("Method version `",
-								#method_ver,
-								"` is older than (or equal to) trait version `",
-								#trait_ver,
-								"`. Methods can't define versions older than the trait version."));
-							});
-						} else {
-							// save method version
-							method_version = method_api_ver;
-						}
+						method_version = match parse_runtime_api_version(version_attribute) {
+							Ok(method_api_ver) if method_api_ver < trait_api_version => {
+								let span = method.span();
+								let method_ver = method_api_ver.to_string();
+								let trait_ver = trait_api_version.to_string();
+								result.push(quote_spanned! {
+									span => compile_error!(concat!("Method version `",
+									#method_ver,
+									"` is older than (or equal to) trait version `",
+									#trait_ver,
+									"`. Methods can't define versions older than the trait version."));
+								});
+
+								trait_api_version
+							},
+							Ok(method_api_ver) => method_api_ver,
+							Err(e) => {
+								let span = method.span();
+								let err_msg = e.to_string();
+								result.push(quote_spanned! {
+									span => compile_error!(concat!("Found invalid method version. ", #err_msg));
+								});
+
+								trait_api_version
+							}
+						};
 					}
 
 					// Remove methods that have the `changed_in` attribute as they are not required

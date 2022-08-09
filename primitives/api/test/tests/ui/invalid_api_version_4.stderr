@@ -1,0 +1,5 @@
+error: Found invalid method version. Unexpected `api_version` attribute. The supported format is `api_version(1)`
+ --> tests/ui/invalid_api_version_4.rs:4:3
+  |
+4 |         fn test(data: u64);
+  |         ^^
