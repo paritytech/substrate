@@ -135,7 +135,7 @@ mod tests {
 		type AccountId = u64;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = TestHeader;
-		type Event = ();
+		type RuntimeEvent = ();
 		type BlockHashCount = ConstU64<250>;
 		type DbWeight = ();
 		type BlockWeights = ();
@@ -153,6 +153,6 @@ mod tests {
 
 	impl pallet_test::Trait for Runtime {
 		type Balance = u32;
-		type Event = ();
+		type RuntimeEvent = ();
 	}
 }

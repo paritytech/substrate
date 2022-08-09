@@ -61,7 +61,7 @@ fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 

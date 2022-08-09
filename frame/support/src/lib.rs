@@ -1420,7 +1420,7 @@ pub mod pallet_prelude {
 /// optionally other supertrait and where clause.
 ///
 /// The associated type `Event` is reserved, if defined it must bounds `From<Event>` and
-/// `IsType<<Self as frame_system::Config>::Event>`, see `#[pallet::event]` for more
+/// `IsType<<Self as frame_system::Config>::RuntimeEvent>`, see `#[pallet::event]` for more
 /// information.
 ///
 /// To put `Get` associated type into metadatas, use the attribute `#[pallet::constant]`, e.g.:
@@ -2373,7 +2373,7 @@ pub mod pallet_prelude {
 /// 	```
 /// 5. **migrate Config**: move trait into the module with
 /// 	* all const in decl_module to `#[pallet::constant]`
-/// 	* add bound `IsType<<Self as frame_system::Config>::Event>` to `type Event`
+/// 	* add bound `IsType<<Self as frame_system::Config>::RuntimeEvent>` to `type Event`
 /// 7. **migrate decl_module**: write:
 /// 	```ignore
 /// 	#[pallet::hooks]

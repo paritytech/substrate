@@ -44,7 +44,7 @@ pub struct ConfigDef {
 	/// Const associated type.
 	pub consts_metadata: Vec<ConstMetadataDef>,
 	/// Whether the trait has the associated type `Event`, note that those bounds are checked:
-	/// * `IsType<Self as frame_system::Config>::Event`
+	/// * `IsType<Self as frame_system::Config>::RuntimeEvent`
 	/// * `From<Event>` or `From<Event<T>>` or `From<Event<T, I>>`
 	pub has_event_type: bool,
 	/// The where clause on trait definition but modified so `Self` is `T`.

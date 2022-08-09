@@ -145,7 +145,7 @@ pub mod pallet {
 		/// One of the members' keys changed.
 		KeyChanged,
 		/// Phantom member, never used.
-		Dummy { _phantom_data: PhantomData<(T::AccountId, <T as Config<I>>::Event)> },
+		Dummy { _phantom_data: PhantomData<(T::AccountId, <T as Config<I>>::RuntimeEvent)> },
 	}
 
 	#[pallet::error]

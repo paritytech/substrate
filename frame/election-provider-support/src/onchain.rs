@@ -220,7 +220,7 @@ mod tests {
 		type AccountId = AccountId;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::testing::Header;
-		type Event = ();
+		type RuntimeEvent = ();
 		type BlockHashCount = ();
 		type DbWeight = ();
 		type BlockLength = ();
