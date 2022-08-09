@@ -110,7 +110,7 @@ pub struct ImportParams {
 impl ImportParams {
 	/// Specify the trie cache maximum size.
 	pub fn trie_cache_maximum_size(&self) -> Option<usize> {
-		if state_cache_size.is_some() {
+		if self.state_cache_size.is_some() {
 			eprintln!("`--state-cache-size` was deprecated. Please switch to `--trie-cache-size`.");
 		}
 
