@@ -73,7 +73,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		{{/each}}
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
-			/// Standard Error: `{{underscore cw.error}}`
+			// Standard Error: `{{underscore cw.error}}`
 			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
@@ -114,7 +114,7 @@ impl WeightInfo for () {
 		{{/each}}
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
-			/// Standard Error: `{{underscore cw.error}}`
+			// Standard Error: `{{underscore cw.error}}`
 			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}

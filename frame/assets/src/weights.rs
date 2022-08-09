@@ -116,11 +116,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		///     PoV component: `s * 240` with slope stddev `0`.
 		///     PoV component: `a * 122` with slope stddev `0`.
 		(0 as Weight)
-			/// Standard Error: `36_000`
+			// Standard Error: `36_000`
 			.saturating_add((17_579_000 as Weight).saturating_mul(c as Weight))
-			/// Standard Error: `36_000`
+			// Standard Error: `36_000`
 			.saturating_add((20_074_000 as Weight).saturating_mul(s as Weight))
-			/// Standard Error: `363_000`
+			// Standard Error: `363_000`
 			.saturating_add((18_244_000 as Weight).saturating_mul(a as Weight))
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().reads((2 as Weight).saturating_mul(c as Weight)))
@@ -422,11 +422,11 @@ impl WeightInfo for () {
 		///     PoV component: `s * 240` with slope stddev `0`.
 		///     PoV component: `a * 122` with slope stddev `0`.
 		(0 as Weight)
-			/// Standard Error: `36_000`
+			// Standard Error: `36_000`
 			.saturating_add((17_579_000 as Weight).saturating_mul(c as Weight))
-			/// Standard Error: `36_000`
+			// Standard Error: `36_000`
 			.saturating_add((20_074_000 as Weight).saturating_mul(s as Weight))
-			/// Standard Error: `363_000`
+			// Standard Error: `363_000`
 			.saturating_add((18_244_000 as Weight).saturating_mul(a as Weight))
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((2 as Weight).saturating_mul(c as Weight)))
