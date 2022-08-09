@@ -224,9 +224,15 @@ fn deep_call_stack_wat(depth: usize) -> String {
 //   d) the new call depth limit may need to be validated to ensure it doesn't prevent any
 //      existing chain from syncing (if it was effectively decreased)
 
+#[cfg(debug_assertions)]
+const CALL_DEPTH_LIMIT: usize = 65478;
+
+#[cfg(not(debug_assertions))]
+const CALL_DEPTH_LIMIT: usize = 65514;
+
 test_wasm_execution!(test_consume_under_1mb_of_stack_does_not_trap);
 fn test_consume_under_1mb_of_stack_does_not_trap(instantiation_strategy: InstantiationStrategy) {
-	let wat = deep_call_stack_wat(65478);
+	let wat = deep_call_stack_wat(CALL_DEPTH_LIMIT);
 	let mut builder = RuntimeBuilder::new(instantiation_strategy).use_wat(wat);
 	let runtime = builder.build();
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
@@ -235,7 +241,7 @@ fn test_consume_under_1mb_of_stack_does_not_trap(instantiation_strategy: Instant
 
 test_wasm_execution!(test_consume_over_1mb_of_stack_does_trap);
 fn test_consume_over_1mb_of_stack_does_trap(instantiation_strategy: InstantiationStrategy) {
-	let wat = deep_call_stack_wat(65479);
+	let wat = deep_call_stack_wat(CALL_DEPTH_LIMIT + 1);
 	let mut builder = RuntimeBuilder::new(instantiation_strategy).use_wat(wat);
 	let runtime = builder.build();
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
