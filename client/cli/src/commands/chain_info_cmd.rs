@@ -77,7 +77,7 @@ impl ChainInfoCmd {
 			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
-			keep_blocks: config.keep_blocks.clone(),
+			blocks_pruning: config.blocks_pruning.clone(),
 		};
 		let backend = sc_service::new_db_backend::<B>(db_config)?;
 		let info: ChainInfo<B> = backend.blockchain().info().into();

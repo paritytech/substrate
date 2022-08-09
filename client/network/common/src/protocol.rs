@@ -16,11 +16,4 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Common data structures of the networking layer.
-
-pub mod config;
-pub mod message;
-pub mod protocol;
-pub mod request_responses;
-pub mod service;
-pub mod sync;
+pub mod event;

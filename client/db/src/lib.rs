@@ -300,12 +300,12 @@ pub struct DatabaseSettings {
 	/// Block pruning mode.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	pub keep_blocks: KeepBlocks,
+	pub blocks_pruning: BlocksPruning,
 }
 
 /// Block pruning settings.
 #[derive(Debug, Clone, Copy)]
-pub enum KeepBlocks {
+pub enum BlocksPruning {
 	/// Keep full block history.
 	All,
 	/// Keep N recent finalized blocks.
@@ -1012,7 +1012,7 @@ pub struct Backend<Block: BlockT> {
 	shared_cache: SharedCache<Block>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
-	keep_blocks: KeepBlocks,
+	blocks_pruning: BlocksPruning,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
@@ -1043,21 +1043,21 @@ impl<Block: BlockT> Backend<Block> {
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
-		Self::new_test_with_tx_storage(keep_blocks, canonicalization_delay)
+	pub fn new_test(blocks_pruning: u32, canonicalization_delay: u64) -> Self {
+		Self::new_test_with_tx_storage(blocks_pruning, canonicalization_delay)
 	}
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_with_tx_storage(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+	pub fn new_test_with_tx_storage(blocks_pruning: u32, canonicalization_delay: u64) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			state_pruning: Some(PruningMode::keep_blocks(keep_blocks)),
+			state_pruning: Some(PruningMode::blocks_pruning(blocks_pruning)),
 			source: DatabaseSource::Custom { db, require_create_flag: true },
-			keep_blocks: KeepBlocks::Some(keep_blocks),
+			blocks_pruning: BlocksPruning::Some(blocks_pruning),
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -1124,7 +1124,7 @@ impl<Block: BlockT> Backend<Block> {
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
-			keep_blocks: config.keep_blocks,
+			blocks_pruning: config.blocks_pruning,
 			genesis_state: RwLock::new(None),
 		};
 
@@ -1698,9 +1698,9 @@ impl<Block: BlockT> Backend<Block> {
 		finalized: NumberFor<Block>,
 		displaced: &FinalizationDisplaced<Block::Hash, NumberFor<Block>>,
 	) -> ClientResult<()> {
-		if let KeepBlocks::Some(keep_blocks) = self.keep_blocks {
+		if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
 			// Always keep the last finalized block
-			let keep = std::cmp::max(keep_blocks, 1);
+			let keep = std::cmp::max(blocks_pruning, 1);
 			if finalized >= keep.into() {
 				let number = finalized.saturating_sub(keep.into());
 				self.prune_block(transaction, BlockId::<Block>::number(number))?;
@@ -2465,9 +2465,9 @@ pub(crate) mod tests {
 			DatabaseSettings {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
-				state_pruning: Some(PruningMode::keep_blocks(1)),
+				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
-				keep_blocks: KeepBlocks::All,
+				blocks_pruning: BlocksPruning::All,
 			},
 			0,
 		)
