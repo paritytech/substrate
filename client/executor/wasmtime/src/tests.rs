@@ -210,6 +210,20 @@ fn deep_call_stack_wat(depth: usize) -> String {
 	)
 }
 
+// These two tests ensure that the `wasmtime`'s stack size limit and the amount of
+// stack space used by a single stack frame doesn't suddenly change without us noticing.
+//
+// If they do (e.g. because we've pulled in a new version of `wasmtime`) we want to know
+// that it did, regardless of how small the change was.
+//
+// If these tests starting failing it doesn't necessarily mean that something is broken;
+// what it means is that one (or multiple) of the following has to be done:
+//   a) the tests may need to be updated for the new call depth,
+//   b) the stack limit may need to be changed to maintain backwards compatibility,
+//   c) the root cause of the new call depth limit determined, and potentially fixed,
+//   d) the new call depth limit may need to be validated to ensure it doesn't prevent any
+//      existing chain from syncing (if it was effectively decreased)
+
 test_wasm_execution!(test_consume_under_1mb_of_stack_does_not_trap);
 fn test_consume_under_1mb_of_stack_does_not_trap(instantiation_strategy: InstantiationStrategy) {
 	let wat = deep_call_stack_wat(65478);

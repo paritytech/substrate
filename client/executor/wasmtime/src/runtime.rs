@@ -326,6 +326,11 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 	let native_stack_max = match semantics.deterministic_stack_limit {
 		Some(DeterministicStackLimit { native_stack_max, .. }) => native_stack_max,
+
+		// In `wasmtime` 0.35 the default stack size limit was changed from 1MB to 512KB.
+		//
+		// This broke at least one parachain which depended on the original 1MB limit,
+		// so here we restore it to what it was originally.
 		None => 1024 * 1024,
 	};
 
