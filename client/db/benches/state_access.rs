@@ -19,7 +19,7 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use rand::{distributions::Uniform, rngs::StdRng, Rng, SeedableRng};
 use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBackend};
-use sc_client_db::{Backend, DatabaseSettings, DatabaseSource, KeepBlocks, PruningMode};
+use sc_client_db::{Backend, BlocksPruning, DatabaseSettings, DatabaseSource, PruningMode};
 use sp_core::H256;
 use sp_runtime::{
 	generic::BlockId,
@@ -122,7 +122,7 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 		trie_cache_maximum_size,
 		state_pruning: Some(PruningMode::ArchiveAll),
 		source: DatabaseSource::ParityDb { path },
-		keep_blocks: KeepBlocks::All,
+		blocks_pruning: BlocksPruning::All,
 	};
 
 	Backend::new(settings, 100).expect("Creates backend")

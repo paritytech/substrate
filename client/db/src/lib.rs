@@ -2446,7 +2446,7 @@ pub(crate) mod tests {
 		let backend = Backend::<Block>::new(
 			DatabaseSettings {
 				trie_cache_maximum_size: Some(16 * 1024 * 1024),
-				state_pruning: Some(PruningMode::keep_blocks(1)),
+				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
 				blocks_pruning: BlocksPruning::All,
 			},
