@@ -638,9 +638,7 @@ pub mod pallet {
 
 			MigrationProcess::<T>::put(task);
 			let post_info = PostDispatchInfo { actual_weight, pays_fee: Pays::No };
-			match migration {
-				Ok(_) => Ok(post_info),
-				Err(error) => {
+			if let Err(error) = migration {
 					Self::halt(error);
 					Ok(().into())
 				},
