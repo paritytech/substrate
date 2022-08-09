@@ -278,6 +278,23 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		}
 	}
 
+	/// Check if the block at the given `index` of the queue exist
+	/// it is the caller's responsibility to ensure `index` won't be out of bound
+	fn have_block(&self, hash: &BlockHash, index: usize) -> HaveBlock {
+		match self {
+			DeathRowQueue::DbBacked { cache, .. } => {
+				if cache.len() > index {
+					(cache[index].hash == *hash).into()
+				} else {
+					// the block not exist in `cache`, but it may exist in the unload
+					// blocks
+					HaveBlock::MayHave
+				}
+			},
+			DeathRowQueue::Mem { death_rows, .. } => (death_rows[index].hash == *hash).into(),
+		}
+	}
+
 	/// Return the number of block in the pruning window
 	fn len(&self) -> usize {
 		match self {
@@ -344,6 +361,27 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 	to_meta_key(PRUNING_JOURNAL, &block)
 }
 
+/// The result return by `RefWindow::have_block`
+#[derive(Debug, PartialEq, Eq)]
+pub enum HaveBlock {
+	/// Definitely not having this block
+	NotHave,
+	/// May or may not have this block, need futher checking
+	MayHave,
+	/// Definitely having this block
+	Have,
+}
+
+impl From<bool> for HaveBlock {
+	fn from(have: bool) -> Self {
+		if have {
+			HaveBlock::Have
+		} else {
+			HaveBlock::NotHave
+		}
+	}
+}
+
 impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 	pub fn new(
 		db: &D,
@@ -398,9 +436,20 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		self.pending_number + self.pending_prunings as u64
 	}
 
-	// Return true if a canonicalized block is in the window and not be pruned yet
-	pub fn have_block(&self, number: u64) -> bool {
-		number >= self.pending() && number < self.pending_number + self.queue.len() as u64
+	fn is_empty(&self) -> bool {
+		self.queue.len() <= self.pending_prunings
+	}
+
+	// Check if a block is in the pruning window and not be pruned yet
+	pub fn have_block(&self, hash: &BlockHash, number: u64) -> HaveBlock {
+		// if the queue is empty or the block number exceed the pruning window, we definitely
+		// do not have this block
+		if self.is_empty() ||
+			!(number >= self.pending() && number < self.pending_number + self.queue.len() as u64)
+		{
+			return HaveBlock::NotHave
+		}
+		self.queue.have_block(hash, (number - self.pending_number) as usize)
 	}
 
 	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
@@ -467,7 +516,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 #[cfg(test)]
 mod tests {
 	use super::{
-		to_journal_key, DeathRowQueue, JournalRecord, RefWindow, CACHE_BATCH_SIZE, LAST_PRUNED,
+		to_journal_key, DeathRowQueue, HaveBlock, JournalRecord, RefWindow, CACHE_BATCH_SIZE,
+		LAST_PRUNED,
 	};
 	use crate::{
 		noncanonical::LAST_CANONICAL,
@@ -513,11 +563,12 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(&db, true).unwrap();
 		let mut commit = make_commit(&[4, 5], &[1, 3]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		let hash = H256::random();
+		pruning.note_canonical(&hash, &mut commit);
 		db.commit(&commit);
-		assert!(pruning.have_block(0));
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Have);
 		pruning.apply_pending();
-		assert!(pruning.have_block(0));
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Have);
 		assert!(commit.data.deleted.is_empty());
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert_eq!(death_rows.len(), 1);
@@ -527,10 +578,10 @@ mod tests {
 
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
-		assert!(!pruning.have_block(0));
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::NotHave);
 		db.commit(&commit);
 		pruning.apply_pending();
-		assert!(!pruning.have_block(0));
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::NotHave);
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert!(death_rows.is_empty());

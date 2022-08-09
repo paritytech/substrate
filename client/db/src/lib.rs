@@ -63,7 +63,7 @@ use sc_client_api::{
 	utils::is_descendent_of,
 	IoInfo, MemoryInfo, MemorySize, UsageInfo,
 };
-use sc_state_db::StateDb;
+use sc_state_db::{IsPruned, StateDb, StateDbSync};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{
 	well_known_cache_keys, Backend as _, CachedHeaderMetadata, Error as ClientError, HeaderBackend,
@@ -2250,13 +2250,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		match self.blockchain.header_metadata(hash) {
 			Ok(ref hdr) => {
-				if !self.have_state_at(&hash, hdr.number) {
-					return Err(sp_blockchain::Error::UnknownBlock(format!(
-						"State already discarded for {:?}",
-						block
-					)))
-				}
-				if let Ok(()) = self.storage.state_db.pin(&hash, hdr.number.saturated_into::<u64>())
+				// NOTE: similar to `sp_state_machine::Storage::get` but we can't use
+				// `sp_state_machine::Storage::get` directly in order to avoid dead lock
+				let hint = |state_db: &StateDbSync<_, _, _>| {
+					state_db
+						.get(hdr.state_root.as_ref(), self.storage.as_ref())
+						.unwrap_or(None)
+						.is_some()
+				};
+				if let Ok(()) =
+					self.storage.state_db.pin(&hash, hdr.number.saturated_into::<u64>(), hint)
 				{
 					let root = hdr.state_root;
 					let db_state = DbState::<Block>::new(self.storage.clone(), root);
@@ -2293,8 +2296,20 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				_ => false,
 			}
 		} else {
-			self.blockchain.header_metadata(*hash).is_ok() &&
-				!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
+			match self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>()) {
+				IsPruned::Pruned => false,
+				IsPruned::NotPruned => true,
+				IsPruned::MaybePruned => match self.blockchain.header_metadata(*hash) {
+					Ok(header) => sp_state_machine::Storage::get(
+						self.storage.as_ref(),
+						&header.state_root,
+						(&[], None),
+					)
+					.unwrap_or(None)
+					.is_some(),
+					_ => false,
+				},
+			}
 		}
 	}
 

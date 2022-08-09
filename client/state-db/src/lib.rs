@@ -51,7 +51,7 @@ use log::trace;
 use noncanonical::NonCanonicalOverlay;
 use parity_util_mem::{malloc_size, MallocSizeOf};
 use parking_lot::RwLock;
-use pruning::RefWindow;
+use pruning::{HaveBlock, RefWindow};
 use sc_client_api::{MemorySize, StateDbMemoryInfo};
 use std::{
 	collections::{hash_map::Entry, HashMap},
@@ -276,7 +276,7 @@ fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 	buffer
 }
 
-struct StateDbSync<BlockHash: Hash, Key: Hash, D: MetaDb> {
+pub struct StateDbSync<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	mode: PruningMode,
 	non_canonical: NonCanonicalOverlay<BlockHash, Key>,
 	pruning: Option<RefWindow<BlockHash, Key, D>>,
@@ -350,17 +350,28 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		self.non_canonical.last_canonicalized_block_number()
 	}
 
-	fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
-		match self.mode {
+	fn is_pruned(&self, hash: &BlockHash, number: u64) -> IsPruned {
+		let is_pruned = match self.mode {
 			PruningMode::ArchiveAll => false,
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
 					!self.non_canonical.have_block(hash)
 				} else {
-					self.pruning.as_ref().map_or(false, |pruning| !pruning.have_block(number))
+					match self.pruning.as_ref() {
+						None => false,
+						Some(pruning) => {
+							let have_block = match pruning.have_block(hash, number) {
+								HaveBlock::NotHave => false,
+								HaveBlock::Have => true,
+								HaveBlock::MayHave => return IsPruned::MaybePruned,
+							};
+							!have_block
+						},
+					}
 				}
 			},
-		}
+		};
+		is_pruned.into()
 	}
 
 	fn prune(&mut self, commit: &mut CommitSet<Key>) -> Result<(), Error<D::Error>> {
@@ -405,13 +416,22 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		}
 	}
 
-	fn pin(&mut self, hash: &BlockHash, number: u64) -> Result<(), PinError> {
+	fn pin<F>(&mut self, hash: &BlockHash, number: u64, hint: F) -> Result<(), PinError>
+	where
+		F: Fn(&StateDbSync<BlockHash, Key, D>) -> bool,
+	{
 		match self.mode {
 			PruningMode::ArchiveAll => Ok(()),
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
-				if self.non_canonical.have_block(hash) ||
-					self.pruning.as_ref().map_or(false, |pruning| pruning.have_block(number))
-				{
+				let have_block = self.non_canonical.have_block(hash) ||
+					self.pruning.as_ref().map_or(false, |pruning| {
+						match pruning.have_block(hash, number) {
+							HaveBlock::NotHave => false,
+							HaveBlock::Have => true,
+							HaveBlock::MayHave => hint(&self),
+						}
+					});
+				if have_block {
 					let refs = self.pinned.entry(hash.clone()).or_default();
 					if *refs == 0 {
 						trace!(target: "state-db-pin", "Pinned block: {:?}", hash);
@@ -565,9 +585,12 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	/// Prevents pruning of specified block and its descendants.
-	/// NOTE: `pin` should only be called for blocks with existing headers
-	pub fn pin(&self, hash: &BlockHash, number: u64) -> Result<(), PinError> {
-		self.db.write().pin(hash, number)
+	/// `hint` used for futher checking if the given block exists
+	pub fn pin<F>(&self, hash: &BlockHash, number: u64, hint: F) -> Result<(), PinError>
+	where
+		F: Fn(&StateDbSync<BlockHash, Key, D>) -> bool,
+	{
+		self.db.write().pin(hash, number, hint)
 	}
 
 	/// Allows pruning of specified block.
@@ -608,8 +631,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	/// Check if block is pruned away.
-	/// NOTE: `is_pruned` should only be called for blocks with existing headers
-	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> bool {
+	pub fn is_pruned(&self, hash: &BlockHash, number: u64) -> IsPruned {
 		return self.db.read().is_pruned(hash, number)
 	}
 
@@ -626,6 +648,27 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	/// Returns the current memory statistics of this instance.
 	pub fn memory_info(&self) -> StateDbMemoryInfo {
 		self.db.read().memory_info()
+	}
+}
+
+/// The result return by `StateDb::is_pruned`
+#[derive(Debug, PartialEq, Eq)]
+pub enum IsPruned {
+	/// Definitely pruned
+	Pruned,
+	/// Definitely not pruned
+	NotPruned,
+	/// May or may not pruned, need futher checking
+	MaybePruned,
+}
+
+impl From<bool> for IsPruned {
+	fn from(pruned: bool) -> Self {
+		if pruned {
+			IsPruned::Pruned
+		} else {
+			IsPruned::NotPruned
+		}
 	}
 }
 
@@ -666,7 +709,7 @@ mod tests {
 		noncanonical::LAST_CANONICAL,
 		pruning::LAST_PRUNED,
 		test::{make_changeset, make_db, TestDb},
-		to_meta_key, CommitSet, Constraints, Error, PruningMode, StateDb, StateDbError,
+		to_meta_key, CommitSet, Constraints, Error, IsPruned, PruningMode, StateDb, StateDbError,
 	};
 	use codec::Encode;
 	use sp_core::H256;
@@ -753,7 +796,7 @@ mod tests {
 	fn full_archive_keeps_everything() {
 		let (db, sdb) = make_test_db(PruningMode::ArchiveAll);
 		assert!(db.data_eq(&make_db(&[1, 21, 22, 3, 4, 91, 921, 922, 93, 94])));
-		assert!(!sdb.is_pruned(&H256::from_low_u64_be(0), 0));
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(0), 0), IsPruned::NotPruned);
 	}
 
 	#[test]
@@ -777,9 +820,10 @@ mod tests {
 			max_blocks: Some(1),
 			max_mem: None,
 		}));
-		assert!(sdb.is_pruned(&H256::from_low_u64_be(0), 0));
-		assert!(sdb.is_pruned(&H256::from_low_u64_be(1), 1));
-		assert!(sdb.is_pruned(&H256::from_low_u64_be(21), 2));
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(0), 0), IsPruned::Pruned);
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(1), 1), IsPruned::Pruned);
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(21), 2), IsPruned::Pruned);
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(22), 2), IsPruned::Pruned);
 		assert!(db.data_eq(&make_db(&[21, 3, 922, 93, 94])));
 	}
 
@@ -789,9 +833,10 @@ mod tests {
 			max_blocks: Some(2),
 			max_mem: None,
 		}));
-		assert!(sdb.is_pruned(&H256::from_low_u64_be(0), 0));
-		assert!(sdb.is_pruned(&H256::from_low_u64_be(1), 1));
-		assert!(!sdb.is_pruned(&H256::from_low_u64_be(21), 2));
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(0), 0), IsPruned::Pruned);
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(1), 1), IsPruned::Pruned);
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(21), 2), IsPruned::NotPruned);
+		assert_eq!(sdb.is_pruned(&H256::from_low_u64_be(22), 2), IsPruned::Pruned);
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 921, 922, 93, 94])));
 	}
 
