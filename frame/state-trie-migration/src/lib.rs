@@ -641,8 +641,7 @@ pub mod pallet {
 			if let Err(error) = migration {
 					Self::halt(error);
 					Ok(().into())
-				},
-			}
+			Ok(post_info)
 		}
 
 		/// Migrate the list of top keys by iterating each of them one by one.
