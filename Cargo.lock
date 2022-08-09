@@ -896,7 +896,7 @@ dependencies = [
  "ansi_term",
  "clap 3.1.18",
  "node-cli",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sc-chain-spec",
  "sc-keystore",
  "sp-core",
@@ -2015,7 +2015,7 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.8.5",
  "scale-info",
 ]
 
@@ -2026,7 +2026,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
 dependencies = [
  "byteorder",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rustc-hex",
  "static_assertions",
 ]
@@ -2118,7 +2118,7 @@ dependencies = [
  "log",
  "memory-db",
  "parity-scale-codec",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_pcg 0.3.1",
  "sc-block-builder",
  "sc-cli",
@@ -2190,7 +2190,7 @@ dependencies = [
  "frame-support",
  "honggfuzz",
  "parity-scale-codec",
- "rand 0.8.4",
+ "rand 0.8.5",
  "scale-info",
  "sp-arithmetic",
  "sp-npos-elections",
@@ -3188,7 +3188,7 @@ dependencies = [
  "jsonrpsee-types",
  "lazy_static",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -3569,7 +3569,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -3596,7 +3596,7 @@ dependencies = [
  "pin-project",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "ring",
  "rw-stream-sink",
  "sha2 0.10.2",
@@ -3743,7 +3743,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "socket2",
  "void",
@@ -3797,7 +3797,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha2 0.10.2",
  "snow",
  "static_assertions",
@@ -3871,7 +3871,7 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-codec",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "static_assertions",
  "thiserror",
@@ -3894,7 +3894,7 @@ dependencies = [
  "log",
  "prost",
  "prost-build",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha2 0.10.2",
  "thiserror",
  "unsigned-varint",
@@ -4052,7 +4052,7 @@ dependencies = [
  "libsecp256k1-core",
  "libsecp256k1-gen-ecmult",
  "libsecp256k1-gen-genmult",
- "rand 0.8.4",
+ "rand 0.8.5",
  "serde",
  "sha2 0.9.8",
  "typenum",
@@ -4484,7 +4484,7 @@ dependencies = [
  "num-complex",
  "num-rational 0.4.0",
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_distr",
  "simba",
  "typenum",
@@ -4507,7 +4507,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7d66043b25d4a6cccb23619d10c19c25304b355a7dccd4a8e11423dd2382146"
 dependencies = [
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -4667,7 +4667,7 @@ dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
  "platforms",
- "rand 0.8.4",
+ "rand 0.8.5",
  "regex",
  "remote-externalities",
  "sc-authority-discovery",
@@ -5298,7 +5298,7 @@ dependencies = [
  "frame-election-provider-support",
  "honggfuzz",
  "pallet-bags-list",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -5452,7 +5452,7 @@ dependencies = [
  "pallet-utility",
  "parity-scale-codec",
  "pretty_assertions",
- "rand 0.8.4",
+ "rand 0.8.5",
  "rand_pcg 0.3.1",
  "scale-info",
  "serde",
@@ -5888,6 +5888,7 @@ dependencies = [
  "log",
  "pallet-balances",
  "parity-scale-codec",
+ "rand 0.8.5",
  "scale-info",
  "sp-core",
  "sp-io",
@@ -6511,7 +6512,7 @@ dependencies = [
  "lz4",
  "memmap2 0.2.1",
  "parking_lot 0.11.2",
- "rand 0.8.4",
+ "rand 0.8.5",
  "snap",
 ]
 
@@ -7125,7 +7126,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
 dependencies = [
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -7164,20 +7165,19 @@ dependencies = [
  "libc",
  "rand_chacha 0.2.2",
  "rand_core 0.5.1",
- "rand_hc 0.2.0",
+ "rand_hc",
  "rand_pcg 0.2.1",
 ]
 
 [[package]]
 name = "rand"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e7573632e6454cf6b99d7aac4ccca54be06da05aca2ef7423d22d27d4d4bcd8"
+checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
 dependencies = [
  "libc",
  "rand_chacha 0.3.0",
  "rand_core 0.6.2",
- "rand_hc 0.3.0",
 ]
 
 [[package]]
@@ -7225,7 +7225,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
 dependencies = [
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -7235,15 +7235,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca3129af7b92a17112d59ad498c6f81eaf463253766b90396d39ea7a39d6613c"
 dependencies = [
  "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_hc"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3190ef7066a446f2e7f42e239d161e905420ccab01eb967c9eb27d21b2322a73"
-dependencies = [
- "rand_core 0.6.2",
 ]
 
 [[package]]
@@ -8249,7 +8240,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
@@ -9357,7 +9348,7 @@ dependencies = [
  "futures",
  "httparse",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "sha-1 0.9.4",
 ]
 
@@ -9836,7 +9827,7 @@ dependencies = [
  "clap 3.1.18",
  "honggfuzz",
  "parity-scale-codec",
- "rand 0.8.4",
+ "rand 0.8.5",
  "scale-info",
  "sp-npos-elections",
  "sp-runtime",
@@ -10233,7 +10224,7 @@ dependencies = [
  "lazy_static",
  "nalgebra",
  "num-traits",
- "rand 0.8.4",
+ "rand 0.8.5",
 ]
 
 [[package]]
@@ -11004,7 +10995,7 @@ dependencies = [
  "ipnet",
  "lazy_static",
  "log",
- "rand 0.8.4",
+ "rand 0.8.5",
  "smallvec",
  "thiserror",
  "tinyvec",
@@ -11090,7 +11081,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if 1.0.0",
  "digest 0.10.3",
- "rand 0.8.4",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
@@ -11799,7 +11790,7 @@ dependencies = [
  "memfd",
  "memoffset",
  "more-asserts",
- "rand 0.8.4",
+ "rand 0.8.5",
  "region 2.2.0",
  "rustix 0.33.7",
  "thiserror",
@@ -12091,7 +12082,7 @@ dependencies = [
  "log",
  "nohash-hasher",
  "parking_lot 0.12.0",
- "rand 0.8.4",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

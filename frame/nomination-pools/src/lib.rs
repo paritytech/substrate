@@ -1448,7 +1448,7 @@ pub mod pallet {
 		PartialUnbondNotAllowedPermissionlessly,
 	}
 
-	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError)]
+	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
 	pub enum DefensiveError {
 		/// There isn't enough space in the unbond pool.
 		NotEnoughSpaceInUnbondPool,
@@ -1751,8 +1751,8 @@ pub mod pallet {
 
 			let bonded_pool = BondedPool::<T>::get(member.pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?;
-			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
-				.defensive_ok_or::<Error<T>>(DefensiveError::SubPoolsNotFound.into())?;
+			let mut sub_pools =
+				SubPoolsStorage::<T>::get(member.pool_id).ok_or(Error::<T>::SubPoolsNotFound)?;
 
 			bonded_pool.ok_to_withdraw_unbonded_with(&caller, &member_account)?;
 
@@ -2379,7 +2379,7 @@ impl<T: Config> Pallet<T> {
 	/// To cater for tests that want to escape parts of these checks, this function is split into
 	/// multiple `level`s, where the higher the level, the more checks we performs. So,
 	/// `sanity_check(255)` is the strongest sanity check, and `0` performs no checks.
-	#[cfg(any(feature = "std", test, debug_assertions))]
+	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
 	pub fn sanity_checks(level: u8) -> Result<(), &'static str> {
 		if level.is_zero() {
 			return Ok(())
@@ -2397,7 +2397,12 @@ impl<T: Config> Pallet<T> {
 
 		for id in reward_pools {
 			let account = Self::create_reward_account(id);
-			assert!(T::Currency::free_balance(&account) >= T::Currency::minimum_balance());
+			assert!(
+				T::Currency::free_balance(&account) >= T::Currency::minimum_balance(),
+				"reward pool of {id}: {:?} (ed = {:?})",
+				T::Currency::free_balance(&account),
+				T::Currency::minimum_balance()
+			);
 		}
 
 		let mut pools_members = BTreeMap::<PoolId, u32>::new();
@@ -2421,6 +2426,13 @@ impl<T: Config> Pallet<T> {
 		RewardPools::<T>::iter_keys().for_each(|id| {
 			// the sum of the pending rewards must be less than the leftover balance. Since the
 			// reward math rounds down, we might accumulate some dust here.
+			log!(
+				trace,
+				"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
+				id,
+				pools_members_pending_rewards.get(&id),
+				RewardPool::<T>::current_balance(id)
+			);
 			assert!(
 				RewardPool::<T>::current_balance(id) >=
 					pools_members_pending_rewards.get(&id).map(|x| *x).unwrap_or_default()
