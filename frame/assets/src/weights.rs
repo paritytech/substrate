@@ -78,9 +78,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn create() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1715` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1715` bytes
 		(27_428_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -88,9 +88,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn force_create() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1191` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1191` bytes
 		(15_512_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -109,9 +109,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `s` is `[0, 5000]`.
 	/// The range of component `a` is `[0, 500]`.
 	fn destroy(c: u32, s: u32, a: u32, ) -> Weight {
-		/// Proof Size
-		/// Worst Case: `10840` bytes
-		/// Base: `5149` bytes
+		// Proof Size
+		// Worst Case: `10840` bytes
+		// Base: `5149` bytes
 		///     PoV component: `c * 240` with slope stddev `0`.
 		///     PoV component: `s * 240` with slope stddev `0`.
 		///     PoV component: `a * 122` with slope stddev `0`.
@@ -136,9 +136,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Account (r:1 w:1)
 	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2662)
 	fn mint() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `1865` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `1865` bytes
 		(31_653_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -148,9 +148,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Account (r:1 w:1)
 	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2662)
 	fn burn() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `2093` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `2093` bytes
 		(36_030_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -162,9 +162,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof Skipped: System Account (max_values: None, max_size: None)
 	fn transfer() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `2132` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `2132` bytes
 		(49_245_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
@@ -176,9 +176,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof Skipped: System Account (max_values: None, max_size: None)
 	fn transfer_keep_alive() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `1960` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `1960` bytes
 		(42_245_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
@@ -190,9 +190,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof Skipped: System Account (max_values: None, max_size: None)
 	fn force_transfer() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `2132` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `2132` bytes
 		(48_359_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
@@ -202,9 +202,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Account (r:1 w:1)
 	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2662)
 	fn freeze() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `1569` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `1569` bytes
 		(22_026_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -214,9 +214,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Account (r:1 w:1)
 	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2662)
 	fn thaw() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `1569` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `1569` bytes
 		(22_429_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -224,9 +224,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn freeze_asset() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1495` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1495` bytes
 		(18_530_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -234,9 +234,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn thaw_asset() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1495` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1495` bytes
 		(18_480_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -246,9 +246,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Metadata (r:1 w:0)
 	/// Proof: Assets Metadata (max_values: None, max_size: Some(140), added: 2700)
 	fn transfer_ownership() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `1461` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `1461` bytes
 		(20_225_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -256,9 +256,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn set_team() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1461` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1461` bytes
 		(18_531_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -270,9 +270,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `n` is `[0, 50]`.
 	/// The range of component `s` is `[0, 50]`.
 	fn set_metadata(_n: u32, _s: u32, ) -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `1985` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `1985` bytes
 		(33_742_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -282,9 +282,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Metadata (r:1 w:1)
 	/// Proof: Assets Metadata (max_values: None, max_size: Some(140), added: 2700)
 	fn clear_metadata() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `2181` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `2181` bytes
 		(33_033_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -296,9 +296,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `n` is `[0, 50]`.
 	/// The range of component `s` is `[0, 50]`.
 	fn force_set_metadata(_n: u32, _s: u32, ) -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `1461` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `1461` bytes
 		(20_082_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -308,9 +308,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Metadata (r:1 w:1)
 	/// Proof: Assets Metadata (max_values: None, max_size: Some(140), added: 2700)
 	fn force_clear_metadata() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `2181` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `2181` bytes
 		(32_332_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -318,9 +318,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn force_asset_status() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1461` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1461` bytes
 		(17_694_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
@@ -330,9 +330,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Approvals (r:1 w:1)
 	/// Proof: Assets Approvals (max_values: None, max_size: Some(148), added: 2708)
 	fn approve_transfer() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5478` bytes
-		/// Base: `2019` bytes
+		// Proof Size
+		// Worst Case: `5478` bytes
+		// Base: `2019` bytes
 		(36_936_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -346,9 +346,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof Skipped: System Account (max_values: None, max_size: None)
 	fn transfer_approved() -> Weight {
-		/// Proof Size
-		/// Worst Case: `8140` bytes
-		/// Base: `2302` bytes
+		// Proof Size
+		// Worst Case: `8140` bytes
+		// Base: `2302` bytes
 		(62_989_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
@@ -358,9 +358,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Approvals (r:1 w:1)
 	/// Proof: Assets Approvals (max_values: None, max_size: Some(148), added: 2708)
 	fn cancel_approval() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5478` bytes
-		/// Base: `2189` bytes
+		// Proof Size
+		// Worst Case: `5478` bytes
+		// Base: `2189` bytes
 		(37_159_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -370,9 +370,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: Assets Approvals (r:1 w:1)
 	/// Proof: Assets Approvals (max_values: None, max_size: Some(148), added: 2708)
 	fn force_cancel_approval() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5478` bytes
-		/// Base: `2189` bytes
+		// Proof Size
+		// Worst Case: `5478` bytes
+		// Base: `2189` bytes
 		(38_118_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
@@ -384,9 +384,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn create() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1715` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1715` bytes
 		(27_428_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -394,9 +394,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn force_create() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1191` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1191` bytes
 		(15_512_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -415,9 +415,9 @@ impl WeightInfo for () {
 	/// The range of component `s` is `[0, 5000]`.
 	/// The range of component `a` is `[0, 500]`.
 	fn destroy(c: u32, s: u32, a: u32, ) -> Weight {
-		/// Proof Size
-		/// Worst Case: `10840` bytes
-		/// Base: `5149` bytes
+		// Proof Size
+		// Worst Case: `10840` bytes
+		// Base: `5149` bytes
 		///     PoV component: `c * 240` with slope stddev `0`.
 		///     PoV component: `s * 240` with slope stddev `0`.
 		///     PoV component: `a * 122` with slope stddev `0`.
@@ -442,9 +442,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Account (r:1 w:1)
 	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2662)
 	fn mint() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `1865` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `1865` bytes
 		(31_653_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
@@ -454,9 +454,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Account (r:1 w:1)
 	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2662)
 	fn burn() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `2093` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `2093` bytes
 		(36_030_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
@@ -468,9 +468,9 @@ impl WeightInfo for () {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof Skipped: System Account (max_values: None, max_size: None)
 	fn transfer() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `2132` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `2132` bytes
 		(49_245_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
@@ -482,9 +482,9 @@ impl WeightInfo for () {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof Skipped: System Account (max_values: None, max_size: None)
 	fn transfer_keep_alive() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `1960` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `1960` bytes
 		(42_245_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
@@ -496,9 +496,9 @@ impl WeightInfo for () {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof Skipped: System Account (max_values: None, max_size: None)
 	fn force_transfer() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `2132` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `2132` bytes
 		(48_359_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
@@ -508,9 +508,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Account (r:1 w:1)
 	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2662)
 	fn freeze() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `1569` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `1569` bytes
 		(22_026_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -520,9 +520,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Account (r:1 w:1)
 	/// Proof: Assets Account (max_values: None, max_size: Some(102), added: 2662)
 	fn thaw() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5432` bytes
-		/// Base: `1569` bytes
+		// Proof Size
+		// Worst Case: `5432` bytes
+		// Base: `1569` bytes
 		(22_429_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -530,9 +530,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn freeze_asset() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1495` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1495` bytes
 		(18_530_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -540,9 +540,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn thaw_asset() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1495` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1495` bytes
 		(18_480_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -552,9 +552,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Metadata (r:1 w:0)
 	/// Proof: Assets Metadata (max_values: None, max_size: Some(140), added: 2700)
 	fn transfer_ownership() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `1461` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `1461` bytes
 		(20_225_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -562,9 +562,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn set_team() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1461` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1461` bytes
 		(18_531_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -576,9 +576,9 @@ impl WeightInfo for () {
 	/// The range of component `n` is `[0, 50]`.
 	/// The range of component `s` is `[0, 50]`.
 	fn set_metadata(_n: u32, _s: u32, ) -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `1985` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `1985` bytes
 		(33_742_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -588,9 +588,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Metadata (r:1 w:1)
 	/// Proof: Assets Metadata (max_values: None, max_size: Some(140), added: 2700)
 	fn clear_metadata() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `2181` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `2181` bytes
 		(33_033_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -602,9 +602,9 @@ impl WeightInfo for () {
 	/// The range of component `n` is `[0, 50]`.
 	/// The range of component `s` is `[0, 50]`.
 	fn force_set_metadata(_n: u32, _s: u32, ) -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `1461` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `1461` bytes
 		(20_082_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -614,9 +614,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Metadata (r:1 w:1)
 	/// Proof: Assets Metadata (max_values: None, max_size: Some(140), added: 2700)
 	fn force_clear_metadata() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5470` bytes
-		/// Base: `2181` bytes
+		// Proof Size
+		// Worst Case: `5470` bytes
+		// Base: `2181` bytes
 		(32_332_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -624,9 +624,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Asset (r:1 w:1)
 	/// Proof: Assets Asset (max_values: None, max_size: Some(210), added: 2770)
 	fn force_asset_status() -> Weight {
-		/// Proof Size
-		/// Worst Case: `2770` bytes
-		/// Base: `1461` bytes
+		// Proof Size
+		// Worst Case: `2770` bytes
+		// Base: `1461` bytes
 		(17_694_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
@@ -636,9 +636,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Approvals (r:1 w:1)
 	/// Proof: Assets Approvals (max_values: None, max_size: Some(148), added: 2708)
 	fn approve_transfer() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5478` bytes
-		/// Base: `2019` bytes
+		// Proof Size
+		// Worst Case: `5478` bytes
+		// Base: `2019` bytes
 		(36_936_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
@@ -652,9 +652,9 @@ impl WeightInfo for () {
 	/// Storage: System Account (r:1 w:1)
 	/// Proof Skipped: System Account (max_values: None, max_size: None)
 	fn transfer_approved() -> Weight {
-		/// Proof Size
-		/// Worst Case: `8140` bytes
-		/// Base: `2302` bytes
+		// Proof Size
+		// Worst Case: `8140` bytes
+		// Base: `2302` bytes
 		(62_989_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
@@ -664,9 +664,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Approvals (r:1 w:1)
 	/// Proof: Assets Approvals (max_values: None, max_size: Some(148), added: 2708)
 	fn cancel_approval() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5478` bytes
-		/// Base: `2189` bytes
+		// Proof Size
+		// Worst Case: `5478` bytes
+		// Base: `2189` bytes
 		(37_159_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
@@ -676,9 +676,9 @@ impl WeightInfo for () {
 	/// Storage: Assets Approvals (r:1 w:1)
 	/// Proof: Assets Approvals (max_values: None, max_size: Some(148), added: 2708)
 	fn force_cancel_approval() -> Weight {
-		/// Proof Size
-		/// Worst Case: `5478` bytes
-		/// Base: `2189` bytes
+		// Proof Size
+		// Worst Case: `5478` bytes
+		// Base: `2189` bytes
 		(38_118_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
