@@ -856,7 +856,7 @@ impl WasmiInstance {
 		// Third, restore the global variables to their initial values.
 		self.global_vals_snapshot.apply(&self.instance)?;
 
-		let res = call_in_wasm_module(
+		call_in_wasm_module(
 			&self.instance,
 			&self.memory,
 			method,

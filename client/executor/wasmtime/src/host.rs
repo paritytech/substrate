@@ -68,7 +68,7 @@ impl HostState {
 	}
 
 	pub(crate) fn allocation_stats(&self) -> AllocationStats {
-		self.allocator.stats()
+		self.allocator.as_ref().unwrap().stats()
 	}
 }
 

@@ -360,7 +360,7 @@ pub struct FreeingBumpHeapAllocator {
 	bumper: u32,
 	free_lists: FreeLists,
 	poisoned: bool,
-	last_observed_memory_size: u32,
+	last_observed_memory_size: u64,
 	stats: AllocationStats,
 }
 
@@ -886,13 +886,13 @@ mod tests {
 			ptrs.push(heap.allocate(&mut mem, 32).expect("Allocate 32 byte"));
 		}
 
-		assert_eq!(heap.total_size, PAGE_SIZE - 16);
+		assert_eq!(heap.stats.bytes_allocated, PAGE_SIZE - 16);
 		assert_eq!(heap.bumper, PAGE_SIZE - 16);
 
 		ptrs.into_iter()
 			.for_each(|ptr| heap.deallocate(&mut mem, ptr).expect("Deallocate 32 byte"));
 
-		assert_eq!(heap.total_size, 0);
+		assert_eq!(heap.stats.bytes_allocated, PAGE_SIZE - 16);
 		assert_eq!(heap.bumper, PAGE_SIZE - 16);
 
 		// Allocate another 8 byte to use the full heap.
