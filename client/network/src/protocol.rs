@@ -19,7 +19,6 @@
 use crate::{
 	config, error,
 	persist_peers::{self, PersistPeersets},
-	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
 
@@ -46,6 +45,7 @@ use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
+	request_responses::RequestFailure,
 	sync::{
 		message::{
 			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
@@ -77,7 +77,6 @@ use std::{
 
 mod notifications;
 
-pub mod event;
 pub mod message;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
@@ -279,6 +278,7 @@ where
 		roles: Roles,
 		chain: Arc<Client>,
 		protocol_id: ProtocolId,
+		fork_id: &Option<String>,
 		network_config: &config::NetworkConfiguration,
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		metrics_registry: Option<&Registry>,
@@ -402,8 +402,17 @@ where
 			}
 		}
 
-		let block_announces_protocol: Cow<'static, str> =
-			format!("/{}/block-announces/1", protocol_id.as_ref()).into();
+		let block_announces_protocol = {
+			let genesis_hash =
+				chain.block_hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
+			if let Some(fork_id) = fork_id {
+				format!("/{}/{}/block-announces/1", hex::encode(genesis_hash), fork_id)
+			} else {
+				format!("/{}/block-announces/1", hex::encode(genesis_hash))
+			}
+		};
+
+		let legacy_ba_protocol_name = format!("/{}/block-announces/1", protocol_id.as_ref());
 
 		let behaviour = {
 			let best_number = info.best_number;
@@ -415,8 +424,8 @@ where
 					.encode();
 
 			let sync_protocol_config = notifications::ProtocolConfig {
-				name: block_announces_protocol,
-				fallback_names: Vec::new(),
+				name: block_announces_protocol.into(),
+				fallback_names: iter::once(legacy_ba_protocol_name.into()).collect(),
 				handshake: block_announces_handshake,
 				max_notification_size: MAX_BLOCK_ANNOUNCE_SIZE,
 			};
@@ -1609,8 +1618,6 @@ where
 			} => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
-					debug_assert!(negotiated_fallback.is_none());
-
 					// `received_handshake` can be either a `Status` message if received from the
 					// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
 					// announces substream.
