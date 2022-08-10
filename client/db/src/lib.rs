@@ -59,7 +59,7 @@ use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sc_client_api::{
 	backend::NewBlockState,
-	leaves::{FinalizationDisplaced, LeafSet},
+	leaves::{FinalizationOutcome, LeafSet},
 	utils::is_descendent_of,
 	IoInfo, MemoryInfo, MemorySize, UsageInfo,
 };
@@ -1251,7 +1251,7 @@ impl<Block: BlockT> Backend<Block> {
 		header: &Block::Header,
 		last_finalized: Option<Block::Hash>,
 		justification: Option<Justification>,
-		finalization_displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
+		finalization_displaced: &mut Option<FinalizationOutcome<Block::Hash, NumberFor<Block>>>,
 	) -> ClientResult<MetaUpdate<Block>> {
 		// TODO: ensure best chain contains this block.
 		let number = *header.number();
@@ -1657,7 +1657,7 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
-		displaced: &mut Option<FinalizationDisplaced<Block::Hash, NumberFor<Block>>>,
+		displaced: &mut Option<FinalizationOutcome<Block::Hash, NumberFor<Block>>>,
 		with_state: bool,
 	) -> ClientResult<()> {
 		let f_num = *f_header.number();
@@ -1696,7 +1696,7 @@ impl<Block: BlockT> Backend<Block> {
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		finalized: NumberFor<Block>,
-		displaced: &FinalizationDisplaced<Block::Hash, NumberFor<Block>>,
+		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
 	) -> ClientResult<()> {
 		if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
 			// Always keep the last finalized block
@@ -2226,9 +2226,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			apply_state_commit(&mut transaction, commit);
 		}
 		transaction.remove(columns::KEY_LOOKUP, hash.as_ref());
-		leaves.revert(*hash, hdr.number);
+		let remove_outcome = leaves.remove(*hash, hdr.number, hdr.parent);
 		leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
-		self.storage.db.commit(transaction)?;
+		if let Err(e) = self.storage.db.commit(transaction) {
+			if let Some(outcome) = remove_outcome {
+				leaves.undo().undo_remove(outcome);
+			}
+			return Err(e.into())
+		}
 		self.blockchain().remove_header_metadata(*hash);
 		Ok(())
 	}
