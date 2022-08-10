@@ -38,7 +38,10 @@ use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{config::SyncMode, NetworkService};
-use sc_network_common::sync::warp::WarpSyncProvider;
+use sc_network_common::{
+	service::{NetworkStateInfo, NetworkStatusProvider, NetworkTransaction},
+	sync::warp::WarpSyncProvider,
+};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
@@ -207,7 +210,7 @@ where
 			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
-			keep_blocks: config.keep_blocks,
+			blocks_pruning: config.blocks_pruning,
 		};
 
 		let backend = new_db_backend(db_config)?;
@@ -319,6 +322,31 @@ where
 	)
 }
 
+/// Shared network instance implementing a set of mandatory traits.
+pub trait SpawnTaskNetwork<Block: BlockT>:
+	sc_offchain::NetworkProvider
+	+ NetworkStateInfo
+	+ NetworkTransaction<Block::Hash>
+	+ NetworkStatusProvider<Block>
+	+ Send
+	+ Sync
+	+ 'static
+{
+}
+
+impl<T, Block> SpawnTaskNetwork<Block> for T
+where
+	Block: BlockT,
+	T: sc_offchain::NetworkProvider
+		+ NetworkStateInfo
+		+ NetworkTransaction<Block::Hash>
+		+ NetworkStatusProvider<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+{
+}
+
 /// Parameters to pass into `build`.
 pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// The service configuration.
@@ -337,7 +365,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub rpc_builder:
 		Box<dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>>,
 	/// A shared network instance.
-	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	pub network: Arc<dyn SpawnTaskNetwork<TBl>>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Telemetry instance for this node.
@@ -349,7 +377,7 @@ pub fn build_offchain_workers<TBl, TCl>(
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	network: Arc<dyn sc_offchain::NetworkProvider + Send + Sync>,
 ) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBl>>>
 where
 	TBl: BlockT,
@@ -516,13 +544,14 @@ where
 	Ok(rpc_handlers)
 }
 
-async fn transaction_notifications<TBl, TExPool>(
-	transaction_pool: Arc<TExPool>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+async fn transaction_notifications<Block, ExPool, Network>(
+	transaction_pool: Arc<ExPool>,
+	network: Network,
 	telemetry: Option<TelemetryHandle>,
 ) where
-	TBl: BlockT,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>,
+	Block: BlockT,
+	ExPool: MaintainedTransactionPool<Block = Block, Hash = <Block as BlockT>::Hash>,
+	Network: NetworkTransaction<<Block as BlockT>::Hash> + Send + Sync,
 {
 	// transaction notifications
 	transaction_pool
@@ -542,13 +571,18 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
+fn init_telemetry<Block, Client, Network>(
 	config: &mut Configuration,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	client: Arc<TCl>,
+	network: Network,
+	client: Arc<Client>,
 	telemetry: &mut Telemetry,
 	sysinfo: Option<sc_telemetry::SysInfo>,
-) -> sc_telemetry::Result<TelemetryHandle> {
+) -> sc_telemetry::Result<TelemetryHandle>
+where
+	Block: BlockT,
+	Client: BlockBackend<Block>,
+	Network: NetworkStateInfo,
+{
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
@@ -741,6 +775,7 @@ where
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = BlockRequestHandler::new(
 			&protocol_id,
+			config.chain_spec.fork_id(),
 			client.clone(),
 			config.network.default_peers_set.in_peers as usize +
 				config.network.default_peers_set.out_peers as usize,
@@ -753,6 +788,7 @@ where
 		// Allow both outgoing and incoming requests.
 		let (handler, protocol_config) = StateRequestHandler::new(
 			&protocol_id,
+			config.chain_spec.fork_id(),
 			client.clone(),
 			config.network.default_peers_set_num_full as usize,
 		);
@@ -763,8 +799,16 @@ where
 	let (warp_sync_provider, warp_sync_protocol_config) = warp_sync
 		.map(|provider| {
 			// Allow both outgoing and incoming requests.
-			let (handler, protocol_config) =
-				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
+			let (handler, protocol_config) = WarpSyncRequestHandler::new(
+				protocol_id.clone(),
+				client
+					.block_hash(0u32.into())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed"),
+				config.chain_spec.fork_id(),
+				provider.clone(),
+			);
 			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
 			(Some(provider), Some(protocol_config))
 		})
@@ -772,8 +816,11 @@ where
 
 	let light_client_request_protocol_config = {
 		// Allow both outgoing and incoming requests.
-		let (handler, protocol_config) =
-			LightClientRequestHandler::new(&protocol_id, client.clone());
+		let (handler, protocol_config) = LightClientRequestHandler::new(
+			&protocol_id,
+			config.chain_spec.fork_id(),
+			client.clone(),
+		);
 		spawn_handle.spawn("light-client-request-handler", Some("networking"), handler.run());
 		protocol_config
 	};
@@ -808,6 +855,7 @@ where
 		chain: client.clone(),
 		transaction_pool: transaction_pool_adapter as _,
 		protocol_id,
+		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
