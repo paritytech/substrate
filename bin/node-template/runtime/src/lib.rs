@@ -466,10 +466,9 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentCallApi<
-		Block,
-		Balance,
-		Call> for Runtime {
+	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentCallApi<Block, Balance, Call>
+		for Runtime
+	{
 		fn query_call_info(
 			call: Call,
 			len: u32,
@@ -478,7 +477,7 @@ impl_runtime_apis! {
 		}
 		fn query_call_fee_details(
 			call: Call,
-			len: u32
+			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_call_fee_details(call, len)
 		}
