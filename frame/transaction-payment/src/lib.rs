@@ -445,44 +445,30 @@ where
 		}
 	}
 
-	/// Query information of a dispatch class, weight, and fee of a given encoded `Call`.
-	///
-	/// # Panics
-	///
-	/// Panics if the `encoded_call` can not be decoded as runtime `T::Call`.
-	pub fn query_call_info(encoded_call: Vec<u8>) -> RuntimeDispatchInfo<BalanceOf<T>>
+	/// Query runtime dispatch info of a given `Call`.
+	pub fn query_call_info(call: T::Call, len: u32) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo> + Decode + GetDispatchInfo,
+		T::Call: Dispatchable<Info = DispatchInfo>,
 	{
-		let call: T::Call = Decode::decode(&mut &*encoded_call).expect("Failed to decode Call.");
-
 		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
 		let DispatchInfo { weight, class, .. } = dispatch_info;
-		let encoded_len = encoded_call.len() as u32;
 
 		RuntimeDispatchInfo {
 			weight,
 			class,
-			partial_fee: Self::compute_fee(encoded_len, &dispatch_info, 0u32.into()),
+			partial_fee: Self::compute_fee(len, &dispatch_info, 0u32.into()),
 		}
 	}
 
-	/// Query fee details of a given encoded `Call`.
-	///
-	/// # Panics
-	///
-	/// Panics if the `encoded_call` can not be decoded as runtime `T::Call`.
-	pub fn query_call_fee_details(encoded_call: Vec<u8>) -> FeeDetails<BalanceOf<T>>
+	/// Query weight_to_fee of a given `Call`.
+	pub fn query_call_fee_details(call: T::Call, len: u32) -> FeeDetails<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo> + Decode + GetDispatchInfo,
+		T::Call: Dispatchable<Info = DispatchInfo>,
 	{
-		let call: T::Call = Decode::decode(&mut &*encoded_call).expect("Failed to decode Call.");
-
 		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
 		let tip = 0u32.into();
-		let encoded_len = encoded_call.len() as u32;
 
-		Self::compute_fee_details(encoded_len, &dispatch_info, tip)
+		Self::compute_fee_details(len, &dispatch_info, tip)
 	}
 
 	/// Compute the final fee value for a particular transaction.
@@ -1258,7 +1244,7 @@ mod tests {
 			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 
 			assert_eq!(
-				TransactionPayment::query_call_info(encoded_call.clone().into()),
+				TransactionPayment::query_call_info(call.clone(), len),
 				RuntimeDispatchInfo {
 					weight: info.weight,
 					class: info.class,
@@ -1269,7 +1255,7 @@ mod tests {
 			);
 
 			assert_eq!(
-				TransactionPayment::query_call_fee_details(encoded_call.into()),
+				TransactionPayment::query_call_fee_details(call, len),
 				FeeDetails {
 					inclusion_fee: Some(InclusionFee {
 						base_fee: 5 * 2,     /* base * weight_fee */
@@ -1281,20 +1267,6 @@ mod tests {
 				},
 			);
 		});
-	}
-
-	#[test]
-	#[should_panic(expected = "Failed to decode Call.")]
-	fn query_call_info_panics() {
-		let invalid_encoded_call: Vec<u8> = vec![1, 2, 3];
-		TransactionPayment::query_call_info(invalid_encoded_call);
-	}
-
-	#[test]
-	#[should_panic(expected = "Failed to decode Call.")]
-	fn query_call_fee_details_panics() {
-		let invalid_encoded_call: Vec<u8> = vec![1, 2, 3];
-		TransactionPayment::query_call_fee_details(invalid_encoded_call);
 	}
 
 	#[test]

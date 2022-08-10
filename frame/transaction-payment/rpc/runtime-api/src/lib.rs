@@ -21,30 +21,22 @@
 
 use codec::Codec;
 use sp_runtime::traits::MaybeDisplay;
-use sp_std::prelude::*;
 
 pub use pallet_transaction_payment::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 
 sp_api::decl_runtime_apis! {
-	pub trait TransactionPaymentApi<Balance>
-	where
+	pub trait TransactionPaymentApi<Balance> where
 		Balance: Codec + MaybeDisplay,
 	{
 		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
 		fn query_fee_details(uxt: Block::Extrinsic, len: u32) -> FeeDetails<Balance>;
+	}
 
-		/// Query information of a dispatch class, weight, and fee of a given encoded `Call`.
-		///
-		/// # Panics
-		///
-		/// Panics if the `encoded_call` can not be decoded as runtime `Call`.
-		fn query_call_info(encoded_call: Vec<u8>) -> RuntimeDispatchInfo<Balance>;
-
-		/// Query fee details of a given encoded `Call`.
-		///
-		/// # Panics
-		///
-		/// Panics if the `encoded_call` can not be decoded as runtime `Call`.
-		fn query_call_fee_details(encoded_call: Vec<u8>) -> FeeDetails<Balance>;
+	pub trait TransactionPaymentCallApi<Balance, Call> where
+		Balance: Codec + MaybeDisplay,
+		Call: Codec,
+	{
+		fn query_call_info(call: Call, len: u32) -> RuntimeDispatchInfo<Balance>;
+		fn query_call_fee_details(call: Call, len: u32) -> FeeDetails<Balance>;
 	}
 }

@@ -241,6 +241,12 @@ impl sp_runtime::traits::Dispatchable for Extrinsic {
 	}
 }
 
+impl frame_support::weights::GetDispatchInfo for Extrinsic {
+	fn get_dispatch_info(&self) -> frame_support::weights::DispatchInfo {
+		panic!("This implementation should not be used for actual get_dispatch_info.");
+	}
+}
+
 impl Extrinsic {
 	/// Convert `&self` into `&Transfer`.
 	///
