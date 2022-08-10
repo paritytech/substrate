@@ -45,7 +45,8 @@ use sc_client_api::{
 };
 use sc_consensus::{
 	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxJustificationImport,
-	ForkChoiceStrategy, ImportResult, JustificationImport, LongestChain, Verifier,
+	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
+	Verifier,
 };
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
@@ -56,8 +57,9 @@ use sc_network::{
 	Multiaddr, NetworkService, NetworkWorker,
 };
 pub use sc_network_common::config::ProtocolId;
-use sc_network_common::sync::warp::{
-	AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider,
+use sc_network_common::{
+	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
+	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -71,7 +73,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
-	BlockOrigin, Error as ConsensusError,
+	BlockOrigin, Error as ConsensusError, SyncOracle,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -243,7 +245,7 @@ where
 {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
-		*self.network.service().local_peer_id()
+		self.network.service().local_peer_id()
 	}
 
 	/// Returns true if we're major syncing.
@@ -797,7 +799,7 @@ where
 			let addrs = connect_to
 				.iter()
 				.map(|v| {
-					let peer_id = *self.peer(*v).network_service().local_peer_id();
+					let peer_id = self.peer(*v).network_service().local_peer_id();
 					let multiaddr = self.peer(*v).listen_addr.clone();
 					MultiaddrWithPeerId { peer_id, multiaddr }
 				})
@@ -893,7 +895,7 @@ where
 		self.mut_peers(move |peers| {
 			for peer in peers.iter_mut() {
 				peer.network
-					.add_known_address(*network.service().local_peer_id(), listen_addr.clone());
+					.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
