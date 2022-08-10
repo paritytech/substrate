@@ -30,7 +30,7 @@ use crate::common::{
 
 use proc_macro2::{Span, TokenStream};
 
-use quote::{quote, quote_spanned};
+use quote::quote;
 
 use syn::{
 	fold::{self, Fold},
@@ -330,6 +330,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 	for decl in decls {
 		let mut decl = decl.clone();
+		let decl_span = decl.span();
 		extend_generics_with_block(&mut decl.generics);
 		let mod_name = generate_runtime_mod_name_for_trait(&decl.ident);
 		let found_attributes = remove_supported_attributes(&mut decl.attrs);
@@ -357,16 +358,16 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 					if let Some(version_attribute) = method_attrs.get(API_VERSION_ATTRIBUTE) {
 						method_version = match parse_runtime_api_version(version_attribute) {
 							Ok(method_api_ver) if method_api_ver < trait_api_version => {
-								let span = method.span();
 								let method_ver = method_api_ver.to_string();
 								let trait_ver = trait_api_version.to_string();
-								result.push(quote_spanned! {
-									span => compile_error!(concat!("Method version `",
-									#method_ver,
-									"` is older than (or equal to) trait version `",
-									#trait_ver,
-									"`. Methods can't define versions older than the trait version."));
-								});
+								let mut err1 = Error::new(version_attribute.span(), format!("Method version `{}` is older than (or equal to) trait version `{}`. Methods can't define versions older than the trait version.", method_ver, trait_ver));
+
+								let err2 = match found_attributes.get(&API_VERSION_ATTRIBUTE) {
+									Some(attr) => Error::new(attr.span(), "Trait version is set here."),
+									None => Error::new(decl_span, "Trait version is not set so it is implicitly equal to 1.")
+								};
+								err1.combine(err2);
+								result.push(err1.to_compile_error());
 
 								trait_api_version
 							},
