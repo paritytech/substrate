@@ -400,7 +400,10 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 		let versioned_api_traits = generate_versioned_api_traits(decl.clone(), methods_by_version);
 
 		let main_api_ident = decl.ident.clone();
-		let versioned_ident = &versioned_api_traits.first().expect("There should always be at least one version.").ident;
+		let versioned_ident = &versioned_api_traits
+			.first()
+			.expect("There should always be at least one version.")
+			.ident;
 
 		result.push(quote!(
 			#[doc(hidden)]
