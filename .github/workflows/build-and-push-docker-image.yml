@@ -36,11 +36,11 @@ jobs:
       - name: Copy wasm artifact from the image
         run: |
           container_id=$(docker create ${{ env.IMAGE_ID }})
-          docker cp $container_id:/home/cere/node-runtime-artifacts/node_runtime.compact.wasm ./
-          short_github_sha=${GITHUB_SHA:0:7}
-          echo "ARTIFACT_NAME=node_runtime.compact.$short_github_sha.wasm" >> $GITHUB_ENV
+          artifact_name=node_runtime.compact.${GITHUB_SHA:0:7}.wasm
+          echo ARTIFACT_NAME=$artifact_name >> $GITHUB_ENV
+          docker cp $container_id:/home/cere/node-runtime-artifacts/node_runtime.compact.wasm ./$artifact_name
       - name: Upload wasm artifact
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.ARTIFACT_NAME }}
-          path: ./node_runtime.compact.wasm
+          path: ./${{ env.ARTIFACT_NAME }}
