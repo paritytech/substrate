@@ -16,7 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sc_network::{ObservedRole, PeerId};
+use sc_network::PeerId;
+use sc_network_common::protocol::event::ObservedRole;
 use sp_runtime::traits::Block as BlockT;
 
 /// Validates consensus messages.
