@@ -618,7 +618,7 @@ fn proxied_batch_all_does_not_nest() {
 }
 
 #[test]
-fn nested_proxy_calls_works_with_different_types() {
+fn nested_proxy_call_respects_outer_proxy_type() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Proxy::add_proxy(Origin::signed(2), 1, ProxyType::NonTranfer, 0));
 		assert_ok!(Proxy::add_proxy(Origin::signed(3), 2, ProxyType::Any, 0));
@@ -627,29 +627,21 @@ fn nested_proxy_calls_works_with_different_types() {
 		assert_eq!(Balances::free_balance(2), 8);
 		assert_eq!(Balances::free_balance(3), 8);
 
-		// Using `3` through `1` should not work
-		assert_noop!(
-			Proxy::proxy(Origin::signed(1), 3, None, Box::new(call_transfer(1, 5))),
-			Error::<Test>::NotProxy
-		);
-
 		// Set `1` as proxy of `3` through `2`.
 		let call = Box::new(Call::Proxy(ProxyCall::proxy {
 			real: 3,
 			force_proxy_type: None,
-			call: Box::new(Call::Proxy(ProxyCall::add_proxy {
-				delegate: 1,
-				proxy_type: ProxyType::Any,
-				delay: 0,
-			})),
+			call: Box::new(call_transfer(1, 2)),
 		}));
-		Proxy::proxy(Origin::signed(1), 2, None, call).unwrap();
+		assert_ok!(Proxy::proxy(Origin::signed(1), 2, None, call));
 
-		// Use the new proxy to transfer some balance
-		assert_ok!(Proxy::proxy(Origin::signed(1), 3, None, Box::new(call_transfer(1, 5))));
+		assert_eq!(Balances::free_balance(1), 10);
 
-		assert_eq!(Balances::free_balance(1), 15);
-		assert_eq!(Balances::free_balance(2), 8);
-		assert_eq!(Balances::free_balance(3), 2);
+		System::assert_has_event(
+			ProxyEvent::ProxyExecuted {
+				result: Err(frame_system::Error::<Test>::CallFiltered.into()),
+			}
+			.into(),
+		);
 	});
 }
