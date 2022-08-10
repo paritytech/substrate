@@ -1877,10 +1877,10 @@ pub mod pallet {
 			);
 			ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
-			let pool_id = LastPoolId::<T>::mutate(|id| {
-				*id += 1;
-				*id
-			});
+			let pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
+				*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
+				Ok(*id)
+			})?;
 			let mut bonded_pool = BondedPool::<T>::new(
 				pool_id,
 				PoolRoles {
