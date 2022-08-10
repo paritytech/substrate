@@ -62,7 +62,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	if get_doc_literals(&pallet_item.attrs).is_empty() {
 		pallet_item.attrs.push(syn::parse_quote!(
 			#[doc = r"
-			The [pallet](https://docs.substrate.io/v3/runtime/frame#pallets) implementing
+			The [pallet](https://docs.substrate.io/reference/frame-pallets/#pallets) implementing
 			the on-chain logic.
 			"]
 		));
