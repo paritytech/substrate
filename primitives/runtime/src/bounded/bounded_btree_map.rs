@@ -192,6 +192,10 @@ where
 				.collect::<Result<BTreeMap<_, _>, _>>()?,
 		))
 	}
+
+	pub fn iter_mut(&mut self) -> sp_std::collections::btree_map::IterMut<K, V> {
+		self.0.iter_mut()
+	}
 }
 
 impl<K, V, S> Default for BoundedBTreeMap<K, V, S>
@@ -539,7 +543,7 @@ pub mod test {
 			b1.iter().map(|(k, v)| (k + 1, *v)).take(2).try_collect().unwrap();
 		assert_eq!(b2.into_iter().map(|(k, _)| k).collect::<Vec<_>>(), vec![2, 3]);
 
-		// but these worn't work
+		// but these won't work
 		let b2: Result<BoundedBTreeMap<u32, (), ConstU32<3>>, _> =
 			b1.iter().map(|(k, v)| (k + 1, *v)).try_collect();
 		assert!(b2.is_err());
@@ -601,5 +605,18 @@ pub mod test {
 			[1, 2, 3, 4].into_iter().map(|k| (k, (k as u16) * 100)).try_collect().unwrap();
 
 		assert_eq!(Ok(b2), b1.try_map(|(_, v)| (v as u16).checked_mul(100_u16).ok_or("overflow")));
+	}
+
+	#[test]
+	fn test_iter_mut() {
+		let mut b1: BoundedBTreeMap<u8, u8, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, k)).try_collect().unwrap();
+
+		let b2: BoundedBTreeMap<u8, u8, ConstU32<7>> =
+			[1, 2, 3, 4].into_iter().map(|k| (k, k * 2)).try_collect().unwrap();
+
+		b1.iter_mut().for_each(|(_, v)| *v *= 2);
+
+		assert_eq!(b1, b2);
 	}
 }
