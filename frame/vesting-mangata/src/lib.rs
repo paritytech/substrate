@@ -793,16 +793,18 @@ where
 		let new_locked =
 			selected_schedule.2.checked_sub(&unlock_amount).ok_or(Error::<T>::MathError)?;
 
+		let start_block = now.max(selected_schedule.1.starting_block());
+
 		if !new_locked.is_zero() {
 			let length_as_balance = selected_schedule
 				.3
-				.saturating_sub(T::BlockNumberToBalance::convert(now))
+				.saturating_sub(T::BlockNumberToBalance::convert(start_block))
 				.max(One::one());
 
 			// .max in length_as_balance computation protects against unsafe div
 			let new_per_block = (new_locked / length_as_balance).max(One::one());
 
-			let vesting_schedule = VestingInfo::new(new_locked, new_per_block, now);
+			let vesting_schedule = VestingInfo::new(new_locked, new_per_block, start_block);
 
 			ensure!(vesting_schedule.is_valid(), Error::<T>::InvalidScheduleParams);
 
@@ -819,7 +821,7 @@ where
 		Self::write_lock(who, locked_now, token_id);
 
 		// Start block, end block
-		Ok((now, selected_schedule.3))
+		Ok((start_block, selected_schedule.3))
 	}
 
 	fn unlock_tokens_by_vesting_index(
@@ -886,6 +888,9 @@ where
 			)
 			.collect::<Vec<_>>();
 
+		
+		let start_block = now.max(selected_schedule.1.starting_block());
+
 		let new_locked = if let Some(unlock_amount) = unlock_some_amount_or_all {
 			selected_schedule.2.checked_sub(&unlock_amount).ok_or(Error::<T>::MathError)?
 		} else {
@@ -897,13 +902,13 @@ where
 		if !new_locked.is_zero() {
 			let length_as_balance = selected_schedule
 				.3
-				.saturating_sub(T::BlockNumberToBalance::convert(now))
+				.saturating_sub(T::BlockNumberToBalance::convert(start_block))
 				.max(One::one());
 
 			// .max in length_as_balance computation protects against unsafe div
 			let new_per_block = (new_locked / length_as_balance).max(One::one());
 
-			let vesting_schedule = VestingInfo::new(new_locked, new_per_block, now);
+			let vesting_schedule = VestingInfo::new(new_locked, new_per_block, start_block);
 
 			ensure!(vesting_schedule.is_valid(), Error::<T>::InvalidScheduleParams);
 
@@ -920,7 +925,7 @@ where
 		Self::write_lock(who, locked_now, token_id);
 
 		// Unlocked amount, start block, end block
-		Ok((unlocked_amount, now, selected_schedule.3))
+		Ok((unlocked_amount, start_block, selected_schedule.3))
 	}
 
 	fn lock_tokens(
