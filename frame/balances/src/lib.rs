@@ -1182,12 +1182,15 @@ impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, 
 		if amount.is_zero() {
 			return Ok(())
 		}
-		ensure!(Self::can_reserve(who, amount), Error::<T, I>::InsufficientBalance);
-		Self::mutate_account(who, |a| {
-			a.free -= amount;
-			a.reserved += amount;
-		})?;
-		Ok(())
+		ensure!(
+			<Self as fungible::InspectHold<T::AccountId>>::can_hold(who, amount),
+			Error::<T, I>::InsufficientBalance,
+		);
+		Self::try_mutate_account(who, |a, _| -> DispatchResult {
+			a.free = a.free.checked_sub(&amount).ok_or(Error::<T, I>::InsufficientBalance)?;
+			a.reserved = a.reserved.checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
+			Ok(())
+		})
 	}
 	fn release(
 		who: &T::AccountId,
