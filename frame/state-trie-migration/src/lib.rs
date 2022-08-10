@@ -742,7 +742,10 @@ pub mod pallet {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
 				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
-				Ok(().into())
+				Ok(PostDispatchInfo {
+					actual_weight: Some(T::WeightInfo::migrate_custom_child_fail()),
+					pays_fee: Pays::Yes,
+				})
 			} else {
 				Self::deposit_event(Event::<T>::Migrated {
 					top: 0,
@@ -957,7 +960,15 @@ mod benchmarks {
 					vec![b"foo".to_vec()],
 					1,
 				).is_ok()
-			)
+			);
+
+			frame_system::Pallet::<T>::assert_last_event(
+				<T as Config>::Event::from(crate::Event::Slashed {
+					who: caller.clone(),
+					amount: T::SignedDepositBase::get()
+						.saturating_add(T::SignedDepositPerItem::get().saturating_mul(1u32.into())),
+				}).into(),
+			);
 		}
 		verify {
 			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());

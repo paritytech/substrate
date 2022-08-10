@@ -139,7 +139,9 @@ impl From<sp_core::storage::StorageMap> for OverlayedMap<StorageKey, Option<Stor
 					)
 				})
 				.collect(),
-			..Default::default()
+			dirty_keys: Default::default(),
+			num_client_transactions: 0,
+			execution_mode: ExecutionMode::Client,
 		}
 	}
 }
