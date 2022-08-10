@@ -43,14 +43,14 @@
 //! To anonymously publish the ticket to the chain a validator sends their tickets
 //! to a random validator who later puts it on-chain as a transaction.
 
-// TODO-SASS-P2
-//#![deny(warnings)]
-//#![warn(unused_must_use, unsafe_code, unused_variables, unused_imports, missing_docs)]
+#![deny(warnings)]
+#![warn(unused_must_use, unsafe_code, unused_variables, unused_imports, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use scale_codec::{Decode, Encode};
+use scale_codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
-use frame_support::{traits::Get, weights::Weight, BoundedBTreeSet, BoundedVec, WeakBoundedVec};
+use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_application_crypto::ByteArray;
 use sp_consensus_vrf::schnorrkel;
@@ -75,6 +75,18 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
+
+/// Tickets related metadata that are commonly used together.
+#[derive(Debug, Default, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy)]
+pub struct TicketsMetadata {
+	/// Number of tickets available for even and odd session indices respectivelly.
+	/// I.e. the index is computed as session-index modulo 2.
+	pub tickets_count: [u32; 2],
+	/// Number of tickets segments
+	pub segments_count: u32,
+	/// Last segment has been already sorted
+	pub sort_started: bool,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -196,16 +208,26 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration, ValueQuery>;
 
-	/// Current session tickets.
+	/// Stored tickets metadata.
 	#[pallet::storage]
-	pub type Tickets<T: Config> = StorageValue<_, BoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
+	pub type TicketsMeta<T> = StorageValue<_, TicketsMetadata, ValueQuery>;
 
-	/// Next session tickets.
-	// TODO-SASS-P2: probably the best thing is to store the tickets in a map
-	// Each map entry contains a vector of tickets as they are received.
+	/// Tickets to be used for current and next session.
+	/// The key consists of a
+	/// - `u8` equal to session-index mod 2
+	/// - `u32` equal to the slot-index.
 	#[pallet::storage]
-	pub type NextTickets<T: Config> =
-		StorageValue<_, BoundedBTreeSet<Ticket, T::MaxTickets>, ValueQuery>;
+	pub type Tickets<T> = StorageMap<_, Identity, (u8, u32), Ticket>;
+
+	// /// Next session tickets temporary accumulator length.
+	// #[pallet::storage]
+	// pub type NextTicketsSegmentsCount<T> = StorageValue<_, u32, ValueQuery>;
+
+	/// Next session tickets temporary accumulator.
+	/// Special u32::MAX key is reserved for partially sorted segment.
+	#[pallet::storage]
+	pub type NextTicketsSegments<T: Config> =
+		StorageMap<_, Identity, u32, BoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
 
 	/// Genesis configuration for Sassafras protocol.
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -252,24 +274,23 @@ pub mod pallet {
 					schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
 				})
 				.and_then(|pubkey| {
-					let current_slot = CurrentSlot::<T>::get();
-
 					let transcript = sp_consensus_sassafras::make_slot_transcript(
 						&Self::randomness(),
-						current_slot,
+						Self::current_slot(),
 						EpochIndex::<T>::get(),
 					);
 
-					let vrf_output = pre_digest.vrf_output;
-
 					// This has already been verified by the client on block import.
 					debug_assert!(pubkey
-						.vrf_verify(transcript.clone(), &vrf_output, &pre_digest.vrf_proof)
+						.vrf_verify(
+							transcript.clone(),
+							&pre_digest.vrf_output,
+							&pre_digest.vrf_proof
+						)
 						.is_ok());
 
-					vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
+					Some(pre_digest.vrf_output.to_bytes())
 				})
-				.map(|inout| inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_BLOCK_VRF_PREFIX))
 				.expect("Pre-digest contains valid randomness; qed");
 
 			Self::deposit_randomness(&randomness);
@@ -286,32 +307,14 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_none(origin)?;
 
+			let mut metadata = TicketsMeta::<T>::get();
+
 			log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ received {} tickets", tickets.len());
 
-			let mut next_tickets = NextTickets::<T>::get();
-
-			// TODO-SASS-P2: temporary code
-			next_tickets = next_tickets.try_mutate(|tree| {
-                for ticket in tickets.iter() {
-                    tree.insert(*ticket);
-                }
-                let max_tickets = T::MaxTickets::get() as usize;
-                if tree.len() > max_tickets {
-                    // Remove the mid values
-                    // TODO-SASS-P2: don't judge me, this will be reimplemented :-)
-                    let diff = tree.len() - max_tickets;
-                    let off = max_tickets / 2;
-                    let val = tree.iter().nth(off).cloned().unwrap();
-                    let mut mid = tree.split_off(&val);
-                    let val = mid.iter().nth(diff).cloned().unwrap();
-                    let mut tail = mid.split_off(&val);
-                    tree.append(&mut tail);
-                    log::warn!(target: "sassafras", "🌳 TICKETS OVERFLOW, drop {} tickets... (len = {})", diff, tree.len());
-                }
-            }).expect("Tickets list len is within the allowed bounds; qed.");
-
-			NextTickets::<T>::put(next_tickets);
-
+			// We just require a unique key to save the partial tickets list.
+			metadata.segments_count += 1;
+			NextTicketsSegments::<T>::insert(metadata.segments_count, tickets);
+			TicketsMeta::<T>::set(metadata);
 			Ok(())
 		}
 	}
@@ -369,8 +372,10 @@ pub mod pallet {
 					next_auth.len() as u32,
 				);
 
-				// TODO-SASS-P2: if we move this in the function above we can drop only
-				// the invalid tickets.
+				// TODO-SASS-P2: if we move this in the `submit_tickets` call then we can
+				// can drop only the invalid tickets.
+				// In this way we don't penalize validators that submit tickets together
+				// with faulty validators.
 				if !tickets
 					.iter()
 					.all(|ticket| sp_consensus_sassafras::check_threshold(ticket, threshold))
@@ -384,8 +389,8 @@ pub mod pallet {
 					// TODO-SASS-P2: if possible use a more efficient way to distinquish
 					// duplicates...
 					.and_provides(tickets)
-					// TODO-SASS-P2: this should be set such that it is discarded after the first
-					// half
+					// TODO-SASS-P2: this sholot_tld be set such that it is discarded after the
+					// first half
 					.longevity(3_u64)
 					.propagate(true)
 					.build()
@@ -429,9 +434,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn slot_epoch_index(slot: Slot) -> u64 {
-		if *GenesisSlot::<T>::get() == 0 {
-			return 0
-		}
+		// TODO-SASS-P2 : is this required?
+		// if *GenesisSlot::<T>::get() == 0 {
+		// 	return 0
+		// }
 		*slot.saturating_sub(Self::current_epoch_start())
 	}
 
@@ -445,7 +451,7 @@ impl<T: Config> Pallet<T> {
 	/// If we detect one or more skipped epochs the policy is to use the authorities and values
 	/// from the first skipped epoch.
 	/// Should the tickets be invalidated? Currently they are... see the `get-ticket` method.
-	pub fn enact_epoch_change(
+	pub(crate) fn enact_epoch_change(
 		authorities: WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<
 			(AuthorityId, SassafrasAuthorityWeight),
@@ -461,22 +467,21 @@ impl<T: Config> Pallet<T> {
 		NextAuthorities::<T>::put(&next_authorities);
 
 		// Update epoch index
-		let mut epoch_index = EpochIndex::<T>::get()
+		let mut epoch_idx = EpochIndex::<T>::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
-		// TODO-SASS-P2: Test this, we also have to properly set the epoch index
-		let slot_idx = CurrentSlot::<T>::get().saturating_sub(Self::epoch_start(epoch_index));
+		let slot_idx = CurrentSlot::<T>::get().saturating_sub(Self::epoch_start(epoch_idx));
 		if slot_idx >= T::EpochDuration::get() {
 			// Detected one or more skipped epochs, kill tickets and recompute the `epoch_index`.
-			NextTickets::<T>::kill();
+			TicketsMeta::<T>::kill();
 			// TODO-SASS-P2: adjust epoch index (TEST ME)
 			let idx: u64 = slot_idx.into();
-			epoch_index += idx / T::EpochDuration::get();
+			epoch_idx += idx / T::EpochDuration::get();
 		}
-		EpochIndex::<T>::put(epoch_index);
+		EpochIndex::<T>::put(epoch_idx);
 
-		let next_epoch_index = epoch_index
+		let next_epoch_index = epoch_idx
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
@@ -502,23 +507,16 @@ impl<T: Config> Pallet<T> {
 		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
 		// }
 
-		Self::update_tickets();
-	}
-
-	/// Call this fuction on epoch change to update tickets.
-	/// Enact next epoch tickets.
-	fn update_tickets() {
-		let mut tickets = NextTickets::<T>::take().into_iter().collect::<Vec<_>>();
-		log::debug!(target: "sassafras", "🌳 @@@@@@@@@ Enacting {} tickets", tickets.len());
-
-		if tickets.len() > T::MaxTickets::get() as usize {
-			log::error!(target: "sassafras", "🌳 should never happen...");
-			tickets.truncate(T::MaxTickets::get() as usize);
+		let epoch_key = (epoch_idx & 1) as u8;
+		let mut tickets_metadata = TicketsMeta::<T>::get();
+		// Optionally finish sorting
+		if tickets_metadata.segments_count != 0 {
+			Self::sort_tickets(u32::MAX, epoch_key, &mut tickets_metadata);
 		}
-
-		let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
-			.expect("vector has been eventually truncated; qed");
-		Tickets::<T>::put(tickets);
+		// Clear the prev (equal to the next) epoch tickets counter.
+		let next_epoch_key = epoch_key ^ 1;
+		tickets_metadata.tickets_count[next_epoch_key as usize] = 0;
+		TicketsMeta::<T>::set(tickets_metadata);
 	}
 
 	/// Call this function on epoch change to update the randomness.
@@ -625,6 +623,8 @@ impl<T: Config> Pallet<T> {
 
 		Initialized::<T>::put(pre_digest);
 
+		// TODO-SASS-P2: incremental parial ordering for NextTickets
+
 		// Enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now);
 	}
@@ -651,11 +651,11 @@ impl<T: Config> Pallet<T> {
 	/// Returns `None` if, according to the sorting strategy, there is no ticket associated to the
 	/// specified slot-index (happend if a ticket falls in the middle of an epoch and n > k),
 	/// or if the slot falls beyond the next epoch.
-	// TODO-SASS-P2: This is a very inefficient and temporary solution.
-	// On refactory we will come up with a better solution (like a scattered vector).
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
+		let epoch_idx = EpochIndex::<T>::get();
 		let duration = T::EpochDuration::get();
-		let slot_idx = Self::slot_epoch_index(slot); // % duration;
+		let mut slot_idx = Self::slot_epoch_index(slot);
+		let mut tickets_meta = TicketsMeta::<T>::get();
 
 		let get_ticket_idx = |slot_idx| {
 			let ticket_idx = if slot_idx < duration / 2 {
@@ -663,26 +663,87 @@ impl<T: Config> Pallet<T> {
 			} else {
 				2 * (duration - (slot_idx + 1))
 			};
-			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>> SLOT-IDX {} -> TICKET-IDX {}", slot_idx, ticket_idx);
-			ticket_idx as usize
+			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>> SLOT-IDX {} -> TICKET-IDX {}", slot_idx, ticket_idx);
+			ticket_idx as u32
 		};
 
-		if slot_idx < duration {
-			// Get a ticket for the current epoch.
-			let tickets = Tickets::<T>::get();
-			let ticket_idx = get_ticket_idx(slot_idx);
-			tickets.get(ticket_idx).cloned()
-		} else if slot_idx < 2 * duration {
-			// Get a ticket for the next epoch. Since its state values were not enacted yet, we
-			// have to fetch it from the `NextTickets` list. This may happen when an author request
-			// the first ticket for an epoch.
-			let tickets = NextTickets::<T>::get();
-			let ticket_idx = get_ticket_idx(slot_idx - duration);
-			tickets.iter().nth(ticket_idx).cloned()
+		let mut epoch_key = (epoch_idx & 1) as u8;
+
+		if duration <= slot_idx && slot_idx < 2 * duration {
+			// Try to get a ticket for the next epoch. Since its state values were not enacted yet,
+			// we may have to finish sorting the tickets.
+			epoch_key ^= 1;
+			slot_idx -= duration;
+			if tickets_meta.segments_count != 0 {
+				Self::sort_tickets(tickets_meta.segments_count, epoch_key, &mut tickets_meta);
+				TicketsMeta::<T>::set(tickets_meta.clone());
+			}
+		} else if slot_idx >= 2 * duration {
+			return None
+		}
+
+		let ticket_idx = get_ticket_idx(slot_idx);
+		if ticket_idx < tickets_meta.tickets_count[epoch_key as usize] {
+			Tickets::<T>::get((epoch_key, ticket_idx))
 		} else {
-			// We have no tickets for the requested slot yet.
 			None
 		}
+	}
+
+	// Sort the tickets that belong to at most `max_iter` segments starting from the last.
+	// If the `max_iter` value is equal to the number of segments then the result is truncated
+	// and saved as the tickets associated to `epoch_key`.
+	// Else the result is saved within the structure itself to be used on next iterations.
+	fn sort_tickets(max_iter: u32, epoch_key: u8, metadata: &mut TicketsMetadata) {
+		let mut segments_count = metadata.segments_count;
+		let max_iter = max_iter.min(segments_count);
+		let max_tickets = T::MaxTickets::get() as usize;
+
+		let mut new_segment = if metadata.sort_started {
+			NextTicketsSegments::<T>::take(u32::MAX).into_inner()
+		} else {
+			Vec::new()
+		};
+
+		let mut require_sort = max_iter != 0;
+
+		let mut sup = if new_segment.len() >= max_tickets {
+			new_segment[new_segment.len() - 1]
+		} else {
+			Ticket::try_from([0xFF; 32]).expect("This is a valid ticket value; qed")
+		};
+
+		for _ in 0..max_iter {
+			let segment = NextTicketsSegments::<T>::take(segments_count);
+
+			segment.into_iter().filter(|t| t < &sup).for_each(|t| new_segment.push(t));
+			if new_segment.len() > max_tickets {
+				require_sort = false;
+				new_segment.sort_unstable();
+				new_segment.truncate(max_tickets);
+				sup = new_segment[new_segment.len() - 1];
+			}
+
+			segments_count -= 1;
+		}
+
+		if require_sort {
+			new_segment.sort_unstable();
+		}
+
+		if segments_count == 0 {
+			// Sort is over, write to the map.
+			// TODO-SASS-P2: is there a better way to write a map from a vector?
+			new_segment.iter().enumerate().for_each(|(i, t)| {
+				Tickets::<T>::insert((epoch_key, i as u32), t);
+			});
+			metadata.tickets_count[epoch_key as usize] = new_segment.len() as u32;
+		} else {
+			NextTicketsSegments::<T>::insert(u32::MAX, BoundedVec::truncate_from(new_segment));
+			metadata.sort_started = true;
+		}
+
+		metadata.segments_count = segments_count;
 	}
 
 	/// Submit next epoch validator tickets via an unsigned extrinsic.

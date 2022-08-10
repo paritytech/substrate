@@ -143,7 +143,7 @@ pub fn new_test_ext_with_pairs(
 	(pairs, t.into())
 }
 
-fn make_ticket_vrf(slot: Slot, attempt: u64, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
+fn make_ticket_vrf(slot: Slot, attempt: u32, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 	let pair = sp_core::sr25519::Pair::from_ref(pair).as_ref();
 
 	let mut epoch = Sassafras::epoch_index();
@@ -164,7 +164,7 @@ fn make_ticket_vrf(slot: Slot, attempt: u64, pair: &AuthorityPair) -> (VRFOutput
 	(output, proof)
 }
 
-pub fn make_tickets(slot: Slot, attempts: u64, pair: &AuthorityPair) -> Vec<(VRFOutput, VRFProof)> {
+pub fn make_tickets(slot: Slot, attempts: u32, pair: &AuthorityPair) -> Vec<(VRFOutput, VRFProof)> {
 	(0..attempts)
 		.into_iter()
 		.map(|attempt| make_ticket_vrf(slot, attempt, pair))
