@@ -125,13 +125,13 @@ impl PartialEq for BasicExternalities {
 			other.overlay.changes().map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>() &&
 			self.overlay
 				.children()
-				.map(|(iter, i)| (iter.map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>(), i))
+				.map(|(iter, i)| (i, iter.map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>()))
 				.collect::<BTreeMap<_, _>>() ==
 				other
 					.overlay
 					.children()
 					.map(|(iter, i)| {
-						(iter.map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>(), i)
+						(i, iter.map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>())
 					})
 					.collect::<BTreeMap<_, _>>()
 	}
