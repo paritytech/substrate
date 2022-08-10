@@ -235,7 +235,10 @@ pub mod pallet {
 		/// reading a key, we simply cannot know how many bytes it is. In other words, this should
 		/// not be used in any environment where resources are strictly bounded (e.g. a parachain),
 		/// but it is acceptable otherwise (relay chain, offchain workers).
-		pub fn migrate_until_exhaustion(&mut self, limits: MigrationLimits) -> DispatchResult {
+		pub fn migrate_until_exhaustion(
+			&mut self,
+			limits: MigrationLimits,
+		) -> Result<(), Error<T>> {
 			log!(debug, "running migrations on top of {:?} until {:?}", self, limits);
 
 			if limits.item.is_zero() || limits.size.is_zero() {
@@ -262,7 +265,7 @@ pub mod pallet {
 		/// Migrate AT MOST ONE KEY. This can be either a top or a child key.
 		///
 		/// This function is *the* core of this entire pallet.
-		fn migrate_tick(&mut self) -> DispatchResult {
+		fn migrate_tick(&mut self) -> Result<(), Error<T>> {
 			match (&self.progress_top, &self.progress_child) {
 				(Progress::ToStart, _) => self.migrate_top(),
 				(Progress::LastKey(_), Progress::LastKey(_)) => {
@@ -301,7 +304,7 @@ pub mod pallet {
 		/// Migrate the current child key, setting it to its new value, if one exists.
 		///
 		/// It updates the dynamic counters.
-		fn migrate_child(&mut self) -> DispatchResult {
+		fn migrate_child(&mut self) -> Result<(), Error<T>> {
 			use sp_io::default_child_storage as child_io;
 			let (maybe_current_child, child_root) = match (&self.progress_child, &self.progress_top)
 			{
@@ -350,7 +353,7 @@ pub mod pallet {
 		/// Migrate the current top key, setting it to its new value, if one exists.
 		///
 		/// It updates the dynamic counters.
-		fn migrate_top(&mut self) -> DispatchResult {
+		fn migrate_top(&mut self) -> Result<(), Error<T>> {
 			let maybe_current_top = match &self.progress_top {
 				Progress::LastKey(last_top) => {
 					let maybe_top: Option<BoundedVec<u8, T::MaxKeyLen>> =
@@ -431,7 +434,7 @@ pub mod pallet {
 		/// The auto migration task finished.
 		AutoMigrationFinished,
 		/// Migration got halted due to an error or miss-configuration.
-		Halted,
+		Halted { error: Error<T> },
 	}
 
 	/// The outer Pallet struct.
@@ -516,8 +519,9 @@ pub mod pallet {
 	pub type SignedMigrationMaxLimits<T> = StorageValue<_, MigrationLimits, OptionQuery>;
 
 	#[pallet::error]
+	#[derive(Clone, PartialEq)]
 	pub enum Error<T> {
-		/// max signed limits not respected.
+		/// Max signed limits not respected.
 		MaxSignedLimits,
 		/// A key was longer than the configured maximum.
 		///
@@ -529,12 +533,12 @@ pub mod pallet {
 		KeyTooLong,
 		/// submitter does not have enough funds.
 		NotEnoughFunds,
-		/// bad witness data provided.
+		/// Bad witness data provided.
 		BadWitness,
-		/// upper bound of size is exceeded,
-		SizeUpperBoundExceeded,
 		/// Signed migration is not allowed because the maximum limit is not set yet.
 		SignedMigrationNotAllowed,
+		/// Bad child root provided.
+		BadChildRoot,
 	}
 
 	#[pallet::call]
@@ -617,7 +621,7 @@ pub mod pallet {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
-				return Err(Error::<T>::SizeUpperBoundExceeded.into())
+				return Ok(().into())
 			}
 
 			Self::deposit_event(Event::<T>::Migrated {
@@ -634,13 +638,10 @@ pub mod pallet {
 
 			MigrationProcess::<T>::put(task);
 			let post_info = PostDispatchInfo { actual_weight, pays_fee: Pays::No };
-			match migration {
-				Ok(_) => Ok(post_info),
-				Err(error) => {
-					Self::halt(&error);
-					Err(DispatchErrorWithPostInfo { post_info, error })
-				},
+			if let Err(error) = migration {
+				Self::halt(error);
 			}
+			Ok(post_info)
 		}
 
 		/// Migrate the list of top keys by iterating each of them one by one.
@@ -679,7 +680,7 @@ pub mod pallet {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
-				Err("wrong witness data".into())
+				Ok(().into())
 			} else {
 				Self::deposit_event(Event::<T>::Migrated {
 					top: keys.len() as u32,
@@ -741,12 +742,9 @@ pub mod pallet {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
 				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
-				Err(DispatchErrorWithPostInfo {
-					error: "bad witness".into(),
-					post_info: PostDispatchInfo {
-						actual_weight: Some(T::WeightInfo::migrate_custom_child_fail()),
-						pays_fee: Pays::Yes,
-					},
+				Ok(PostDispatchInfo {
+					actual_weight: Some(T::WeightInfo::migrate_custom_child_fail()),
+					pays_fee: Pays::Yes,
 				})
 			} else {
 				Self::deposit_event(Event::<T>::Migrated {
@@ -806,7 +804,7 @@ pub mod pallet {
 			if let Some(limits) = Self::auto_limits() {
 				let mut task = Self::migration_process();
 				if let Err(e) = task.migrate_until_exhaustion(limits) {
-					Self::halt(&e);
+					Self::halt(e);
 				}
 				let weight = Self::dynamic_weight(task.dyn_total_items(), task.dyn_size);
 
@@ -849,10 +847,10 @@ pub mod pallet {
 		}
 
 		/// Put a stop to all ongoing migrations and logs an error.
-		fn halt<E: sp_std::fmt::Debug + ?Sized>(msg: &E) {
-			log!(error, "migration halted due to: {:?}", msg);
+		fn halt(error: Error<T>) {
+			log!(error, "migration halted due to: {:?}", error);
 			AutoLimits::<T>::kill();
-			Self::deposit_event(Event::<T>::Halted);
+			Self::deposit_event(Event::<T>::Halted { error });
 		}
 
 		/// Convert a child root key, aka. "Child-bearing top key" into the proper format.
@@ -871,7 +869,7 @@ pub mod pallet {
 		fn transform_child_key_or_halt(root: &Vec<u8>) -> &[u8] {
 			let key = Self::transform_child_key(root);
 			if key.is_none() {
-				Self::halt("bad child root key");
+				Self::halt(Error::<T>::BadChildRoot);
 			}
 			key.unwrap_or_default()
 		}
@@ -961,8 +959,16 @@ mod benchmarks {
 					frame_system::RawOrigin::Signed(caller.clone()).into(),
 					vec![b"foo".to_vec()],
 					1,
-				).is_err()
-			)
+				).is_ok()
+			);
+
+			frame_system::Pallet::<T>::assert_last_event(
+				<T as Config>::Event::from(crate::Event::Slashed {
+					who: caller.clone(),
+					amount: T::SignedDepositBase::get()
+						.saturating_add(T::SignedDepositPerItem::get().saturating_mul(1u32.into())),
+				}).into(),
+			);
 		}
 		verify {
 			assert_eq!(StateTrieMigration::<T>::migration_process(), Default::default());
@@ -1005,7 +1011,7 @@ mod benchmarks {
 					StateTrieMigration::<T>::childify("top"),
 					vec![b"foo".to_vec()],
 					1,
-				).is_err()
+				).is_ok()
 			)
 		}
 		verify {
@@ -1285,18 +1291,16 @@ mod test {
 			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1 << 20, item: 50 });
 
 			// fails if the top key is too long.
-			frame_support::assert_err_with_weight!(
-				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
-					MigrationLimits { item: 50, size: 1 << 20 },
-					Bounded::max_value(),
-					MigrationProcess::<Test>::get()
-				),
-				Error::<Test>::KeyTooLong,
-				Some(2000000),
-			);
+			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
+				Origin::signed(1),
+				MigrationLimits { item: 50, size: 1 << 20 },
+				Bounded::max_value(),
+				MigrationProcess::<Test>::get()
+			),);
 			// The auto migration halted.
-			System::assert_last_event(crate::Event::Halted {}.into());
+			System::assert_last_event(
+				crate::Event::Halted { error: Error::<Test>::KeyTooLong }.into(),
+			);
 			// Limits are killed.
 			assert!(AutoLimits::<Test>::get().is_none());
 
@@ -1322,18 +1326,16 @@ mod test {
 			SignedMigrationMaxLimits::<Test>::put(MigrationLimits { size: 1 << 20, item: 50 });
 
 			// fails if the top key is too long.
-			frame_support::assert_err_with_weight!(
-				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
-					MigrationLimits { item: 50, size: 1 << 20 },
-					Bounded::max_value(),
-					MigrationProcess::<Test>::get()
-				),
-				Error::<Test>::KeyTooLong,
-				Some(2000000),
-			);
+			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
+				Origin::signed(1),
+				MigrationLimits { item: 50, size: 1 << 20 },
+				Bounded::max_value(),
+				MigrationProcess::<Test>::get()
+			));
 			// The auto migration halted.
-			System::assert_last_event(crate::Event::Halted {}.into());
+			System::assert_last_event(
+				crate::Event::Halted { error: Error::<Test>::KeyTooLong }.into(),
+			);
 			// Limits are killed.
 			assert!(AutoLimits::<Test>::get().is_none());
 
@@ -1484,7 +1486,7 @@ mod test {
 						..Default::default()
 					}
 				),
-				Error::<Test>::BadWitness
+				Error::<Test>::BadWitness,
 			);
 
 			// migrate all keys in a series of submissions
@@ -1547,14 +1549,11 @@ mod test {
 			assert_eq!(Balances::free_balance(&1), 1000);
 
 			// note that we don't expect this to be a noop -- we do slash.
-			frame_support::assert_err!(
-				StateTrieMigration::migrate_custom_top(
-					Origin::signed(1),
-					vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
-					correct_witness - 1,
-				),
-				"wrong witness data"
-			);
+			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
+				Origin::signed(1),
+				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
+				correct_witness - 1,
+			),);
 
 			// no funds should remain reserved.
 			assert_eq!(Balances::reserved_balance(&1), 0);
@@ -1584,13 +1583,12 @@ mod test {
 			assert_eq!(Balances::free_balance(&1), 1000);
 
 			// note that we don't expect this to be a noop -- we do slash.
-			assert!(StateTrieMigration::migrate_custom_child(
+			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
 				Origin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				999999, // wrong witness
-			)
-			.is_err());
+			));
 
 			// no funds should remain reserved.
 			assert_eq!(Balances::reserved_balance(&1), 0);
