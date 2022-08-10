@@ -112,9 +112,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Proof Size
 		// Worst Case: `10840` bytes
 		// Base: `5149` bytes
-		///     PoV component: `c * 240` with slope stddev `0`.
-		///     PoV component: `s * 240` with slope stddev `0`.
-		///     PoV component: `a * 122` with slope stddev `0`.
+		//     PoV component: `c * 240` with slope stddev `0`.
+		//     PoV component: `s * 240` with slope stddev `0`.
+		//     PoV component: `a * 122` with slope stddev `0`.
 		(0 as Weight)
 			// Standard Error: `36_000`
 			.saturating_add((17_579_000 as Weight).saturating_mul(c as Weight))
@@ -418,9 +418,9 @@ impl WeightInfo for () {
 		// Proof Size
 		// Worst Case: `10840` bytes
 		// Base: `5149` bytes
-		///     PoV component: `c * 240` with slope stddev `0`.
-		///     PoV component: `s * 240` with slope stddev `0`.
-		///     PoV component: `a * 122` with slope stddev `0`.
+		//     PoV component: `c * 240` with slope stddev `0`.
+		//     PoV component: `s * 240` with slope stddev `0`.
+		//     PoV component: `a * 122` with slope stddev `0`.
 		(0 as Weight)
 			// Standard Error: `36_000`
 			.saturating_add((17_579_000 as Weight).saturating_mul(c as Weight))

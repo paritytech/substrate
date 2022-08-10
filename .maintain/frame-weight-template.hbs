@@ -69,7 +69,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		// Worst Case: `{{benchmark.worst_case_proof_size}}` bytes
 		// Base: `{{benchmark.base_proof_size}}` bytes
 		{{#each benchmark.component_proof_size as |cp|}}
-		///     PoV component: `{{cp.name}} * {{cp.slope}}` with slope stddev `{{underscore cp.error}}`.
+		//     PoV component: `{{cp.name}} * {{cp.slope}}` with slope stddev `{{underscore cp.error}}`.
 		{{/each}}
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
@@ -110,7 +110,7 @@ impl WeightInfo for () {
 		// Worst Case: `{{benchmark.worst_case_proof_size}}` bytes
 		// Base: `{{benchmark.base_proof_size}}` bytes
 		{{#each benchmark.component_proof_size as |cp|}}
-		///     PoV component: `{{cp.name}} * {{cp.slope}}` with slope stddev `{{underscore cp.error}}`.
+		//     PoV component: `{{cp.name}} * {{cp.slope}}` with slope stddev `{{underscore cp.error}}`.
 		{{/each}}
 		({{underscore benchmark.base_weight}} as Weight)
 			{{#each benchmark.component_weight as |cw|}}
