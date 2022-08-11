@@ -33,10 +33,12 @@ use crate::error;
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate)  trait BeefyKeystore<AggregatableSignature> {
-	pub fn authority_id(&self, keys: &[Public]) -> Option<Public>;
+pub(crate)  trait BeefyKeystore {
+    type Signature;
+    type Public;
+        pub fn authority_id(&self, keys: &[Public]) -> Option<Public>;
 
-	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<(Signature,AggregatableSignature),  error::Error>;
+	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<(Self::Signature),  error::Error>;
 
 	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error>;
 
@@ -44,6 +46,35 @@ pub(crate)  trait BeefyKeystore<AggregatableSignature> {
 	
 }
 
+
+//original pub(crate) struct BeefyKeystore(Option<SyncCryptoStorePtr>);
+
+struct BeefyECDSAKeystore (Option<SyncCryptoStorePtr>);
+
+struct BeefyBLSKeystore(Option<SyncCryptoStorePtr>);
+//impl BeefyKeystore for ECDSAKeystore..
+
+struct BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>)
+impl BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>) {
+    fn both(&self) -> (BeefyECDSAKeystore, BeefyBLSKeystore)
+        ( BeefyECDSAKeystore(self.0.clone()), BeefyBLSKeystore(self.0.clone()) )
+}
+    
+
+(ECDSASignature,BLSSignature);
+impl BeefyKeystore for BLSnECDSAKeystore {
+        type Signature = (ECDSASignature,BLSSignature);
+	pub fn authority_id(&self, keys: &[Public]) -> Option<Public>;
+
+	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<(Signature,AggregatableSignature),  error::Error>;
+
+	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error>;
+
+    pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
+    }
+	
+}
+    
 trait SimpleBeefyKeystore<AggregatableSignature> : BeefyKeystore<AggregatableSignature>;
 
 impl<AggregatableSignature> BeefyKeystore<AggregatableSignature> for SimpleBeefyKeystore<AggregatableSignature> {
