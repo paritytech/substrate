@@ -41,8 +41,6 @@ pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 [features]
 default = ["std"]
 std = [
-	"sha2?/std",
-	"hex?/std",
 	"pallet-collective?/std",
 	"frame-benchmarking?/std",
 	"log/std",

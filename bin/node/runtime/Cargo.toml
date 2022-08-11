@@ -196,7 +196,7 @@ std = [
 	"pallet-uniques/std",
 	"pallet-vesting/std",
 	"log/std",
-	"frame-try-runtime/std",
+	"frame-try-runtime?/std",
 	"sp-io/std",
 	"pallet-child-bounties/std",
 	"pallet-alliance/std",
