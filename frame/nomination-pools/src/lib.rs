@@ -364,8 +364,9 @@ enum AccountType {
 pub enum PayoutRecipient<T: Config> {
 	/// Stores the `AccountId` of the member account.
 	MemberAccount(T::AccountId),
-	/// Stores the `AccountId` of the bonded account.
-	BondedAccount(T::AccountId),
+	/// Stores the `AccountId` of the bonded account and the member account.
+	/// (member_account, bonded_account)
+	BondedAccount(T::AccountId, T::AccountId),
 }
 
 /// A member in a pool.
@@ -928,6 +929,7 @@ impl<T: Config> BondedPool<T> {
 	/// Returns `Ok((points_issues, bonded))`, `Err` otherwise.
 	fn try_bond_funds_from_rewards(
 		&mut self,
+		who: &T::AccountId,
 		member: &mut PoolMember<T>,
 		reward_pool: &mut RewardPool<T>,
 	) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
@@ -937,7 +939,7 @@ impl<T: Config> BondedPool<T> {
 			member,
 			self,
 			reward_pool,
-			PayoutRecipient::<T>::BondedAccount(bonded_account.clone()),
+			PayoutRecipient::<T>::BondedAccount(who.clone(), bonded_account.clone()),
 		)?;
 
 		let points_issued =
@@ -1387,8 +1389,13 @@ pub mod pallet {
 		Created { depositor: T::AccountId, pool_id: PoolId },
 		/// A member has became bonded in a pool.
 		Bonded { member: T::AccountId, pool_id: PoolId, bonded: BalanceOf<T>, joined: bool },
-		/// A payout has been made to a member.
-		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
+		/// A payout has been made to a recipient.
+		PaidOut {
+			recipient: T::AccountId,
+			member: T::AccountId,
+			pool_id: PoolId,
+			payout: BalanceOf<T>,
+		},
 		/// A member has unbonded from their pool.
 		///
 		/// - `balance` is the corresponding balance of the number of points that has been
@@ -1608,7 +1615,7 @@ pub mod pallet {
 				BondExtra::FreeBalance(amount) =>
 					(bonded_pool.try_bond_funds(&who, amount, BondType::Later, true)?, amount),
 				BondExtra::Rewards =>
-					bonded_pool.try_bond_funds_from_rewards(&mut member, &mut reward_pool)?,
+					bonded_pool.try_bond_funds_from_rewards(&who, &mut member, &mut reward_pool)?,
 			};
 
 			bonded_pool.ok_to_be_open(bonded)?;
@@ -2413,9 +2420,9 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		let recipient = match payout_recipient {
-			PayoutRecipient::<T>::MemberAccount(member_account) => member_account,
-			PayoutRecipient::<T>::BondedAccount(bonded_account) => bonded_account,
+		let (member_acc, recipient) = match payout_recipient {
+			PayoutRecipient::<T>::MemberAccount(member_acc) => (member_acc.clone(), member_acc),
+			PayoutRecipient::<T>::BondedAccount(member_acc, bonded_acc) => (member_acc, bonded_acc),
 		};
 
 		// Transfer payout to the recipient.
@@ -2427,7 +2434,8 @@ impl<T: Config> Pallet<T> {
 		)?;
 
 		Self::deposit_event(Event::<T>::PaidOut {
-			member: recipient.clone(),
+			member: member_acc,
+			recipient: recipient.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
 		});

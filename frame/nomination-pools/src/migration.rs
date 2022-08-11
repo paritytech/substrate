@@ -279,6 +279,7 @@ pub mod v2 {
 							}
 
 							Pallet::<T>::deposit_event(Event::<T>::PaidOut {
+								recipient: who.clone(),
 								member: who.clone(),
 								pool_id: id,
 								payout: last_claim,
