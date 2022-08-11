@@ -63,7 +63,7 @@ use sc_client_api::{
 	utils::is_descendent_of,
 	IoInfo, MemoryInfo, MemorySize, UsageInfo,
 };
-use sc_state_db::{IsPruned, StateDb, StateDbSync};
+use sc_state_db::{IsPruned, StateDb};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{
 	well_known_cache_keys, Backend as _, CachedHeaderMetadata, Error as ClientError, HeaderBackend,
@@ -1094,7 +1094,7 @@ impl<Block: BlockT> Backend<Block> {
 		let map_e = sp_blockchain::Error::from_state_db;
 
 		let (state_db_init_commit_set, state_db) = StateDb::open(
-			&state_meta_db,
+			state_meta_db,
 			requested_state_pruning,
 			!db.supports_ref_counting(),
 			should_init,
@@ -1454,7 +1454,7 @@ impl<Block: BlockT> Backend<Block> {
 					.storage
 					.state_db
 					.insert_block(&hash, number_u64, pending_block.header.parent_hash(), changeset)
-					.map_err(|e: sc_state_db::Error<io::Error>| {
+					.map_err(|e: sc_state_db::Error<sp_database::error::DatabaseError>| {
 						sp_blockchain::Error::from_state_db(e)
 					})?;
 				apply_state_commit(&mut transaction, commit);
@@ -2250,11 +2250,8 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		match self.blockchain.header_metadata(hash) {
 			Ok(ref hdr) => {
-				// NOTE: similar to `sp_state_machine::Storage::get` but we can't use
-				// `sp_state_machine::Storage::get` directly in order to avoid dead lock
-				let hint = |state_db: &StateDbSync<_, _, _>| {
-					state_db
-						.get(hdr.state_root.as_ref(), self.storage.as_ref())
+				let hint = || {
+					sc_state_db::NodeDb::get(self.storage.as_ref(), hdr.state_root.as_ref())
 						.unwrap_or(None)
 						.is_some()
 				};

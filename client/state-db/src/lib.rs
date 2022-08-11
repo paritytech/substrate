@@ -62,6 +62,7 @@ const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
 const PRUNING_MODE_ARCHIVE_CANON: &[u8] = b"archive_canonical";
 const PRUNING_MODE_CONSTRAINED: &[u8] = b"constrained";
+pub(crate) const MAX_BLOCK_CONSTRAINT: u32 = 256;
 
 /// Database value type.
 pub type DBValue = Vec<u8>;
@@ -98,7 +99,7 @@ impl<
 }
 
 /// Backend database trait. Read-only.
-pub trait MetaDb: Clone {
+pub trait MetaDb {
 	type Error: fmt::Debug;
 
 	/// Get meta value, such as the journal.
@@ -266,7 +267,7 @@ impl Default for PruningMode {
 
 impl Default for Constraints {
 	fn default() -> Self {
-		Self { max_blocks: Some(256), max_mem: None }
+		Self { max_blocks: Some(MAX_BLOCK_CONSTRAINT), max_mem: None }
 	}
 }
 
@@ -289,11 +290,11 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	fn new(
 		mode: PruningMode,
 		ref_counting: bool,
-		db: &D,
+		db: D,
 	) -> Result<StateDbSync<BlockHash, Key, D>, Error<D::Error>> {
 		trace!(target: "state-db", "StateDb settings: {:?}. Ref-counting: {}", mode, ref_counting);
 
-		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(db)?;
+		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(&db)?;
 		let pruning: Option<RefWindow<BlockHash, Key, D>> = match mode {
 			PruningMode::Constrained(Constraints { max_mem: Some(_), .. }) => unimplemented!(),
 			PruningMode::Constrained(_) => Some(RefWindow::new(db, ref_counting)?),
@@ -303,13 +304,13 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		Ok(StateDbSync { mode, non_canonical, pruning, pinned: Default::default() })
 	}
 
-	fn insert_block<E: fmt::Debug>(
+	fn insert_block(
 		&mut self,
 		hash: &BlockHash,
 		number: u64,
 		parent_hash: &BlockHash,
 		mut changeset: ChangeSet<Key>,
-	) -> Result<CommitSet<Key>, Error<E>> {
+	) -> Result<CommitSet<Key>, Error<D::Error>> {
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
@@ -324,7 +325,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	fn canonicalize_block(&mut self, hash: &BlockHash) -> Result<CommitSet<Key>, Error<D::Error>> {
-		// NOTE: it is importent that the change to `LAST_CANONICAL` (emit from
+		// NOTE: it is important that the change to `LAST_CANONICAL` (emit from
 		// `non_canonical.canonicalize`) and the insert of the new pruning journal (emit from
 		// `pruning.note_canonical`) are collected into the same `CommitSet` and are committed to
 		// the database atomically to keep their consistency when restarting the node
@@ -351,27 +352,27 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	fn is_pruned(&self, hash: &BlockHash, number: u64) -> IsPruned {
-		let is_pruned = match self.mode {
-			PruningMode::ArchiveAll => false,
+		match self.mode {
+			PruningMode::ArchiveAll => IsPruned::NotPruned,
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
-					!self.non_canonical.have_block(hash)
+					if !self.non_canonical.have_block(hash) {
+						IsPruned::Pruned
+					} else {
+						IsPruned::NotPruned
+					}
 				} else {
 					match self.pruning.as_ref() {
-						None => false,
-						Some(pruning) => {
-							let have_block = match pruning.have_block(hash, number) {
-								HaveBlock::NotHave => false,
-								HaveBlock::Have => true,
-								HaveBlock::MayHave => return IsPruned::MaybePruned,
-							};
-							!have_block
+						None => IsPruned::NotPruned,
+						Some(pruning) => match pruning.have_block(hash, number) {
+							HaveBlock::NotHave => IsPruned::Pruned,
+							HaveBlock::Have => IsPruned::NotPruned,
+							HaveBlock::MayHave => return IsPruned::MaybePruned,
 						},
 					}
 				}
 			},
-		};
-		is_pruned.into()
+		}
 	}
 
 	fn prune(&mut self, commit: &mut CommitSet<Key>) -> Result<(), Error<D::Error>> {
@@ -418,7 +419,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 
 	fn pin<F>(&mut self, hash: &BlockHash, number: u64, hint: F) -> Result<(), PinError>
 	where
-		F: Fn(&StateDbSync<BlockHash, Key, D>) -> bool,
+		F: Fn() -> bool,
 	{
 		match self.mode {
 			PruningMode::ArchiveAll => Ok(()),
@@ -428,7 +429,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 						match pruning.have_block(hash, number) {
 							HaveBlock::NotHave => false,
 							HaveBlock::Have => true,
-							HaveBlock::MayHave => hint(&self),
+							HaveBlock::MayHave => hint(),
 						}
 					});
 				if have_block {
@@ -521,12 +522,12 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 {
 	/// Create an instance of [`StateDb`].
 	pub fn open(
-		db: &D,
+		db: D,
 		requested_mode: Option<PruningMode>,
 		ref_counting: bool,
 		should_init: bool,
 	) -> Result<(CommitSet<Key>, StateDb<BlockHash, Key, D>), Error<D::Error>> {
-		let stored_mode = fetch_stored_pruning_mode(db)?;
+		let stored_mode = fetch_stored_pruning_mode(&db)?;
 
 		let selected_mode = match (should_init, stored_mode, requested_mode) {
 			(true, stored_mode, requested_mode) => {
@@ -569,13 +570,13 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	/// Add a new non-canonical block.
-	pub fn insert_block<E: fmt::Debug>(
+	pub fn insert_block(
 		&self,
 		hash: &BlockHash,
 		number: u64,
 		parent_hash: &BlockHash,
 		changeset: ChangeSet<Key>,
-	) -> Result<CommitSet<Key>, Error<E>> {
+	) -> Result<CommitSet<Key>, Error<D::Error>> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset)
 	}
 
@@ -588,7 +589,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	/// `hint` used for futher checking if the given block exists
 	pub fn pin<F>(&self, hash: &BlockHash, number: u64, hint: F) -> Result<(), PinError>
 	where
-		F: Fn(&StateDbSync<BlockHash, Key, D>) -> bool,
+		F: Fn() -> bool,
 	{
 		self.db.write().pin(hash, number, hint)
 	}
@@ -662,16 +663,6 @@ pub enum IsPruned {
 	MaybePruned,
 }
 
-impl From<bool> for IsPruned {
-	fn from(pruned: bool) -> Self {
-		if pruned {
-			IsPruned::Pruned
-		} else {
-			IsPruned::NotPruned
-		}
-	}
-}
-
 fn fetch_stored_pruning_mode<D: MetaDb>(db: &D) -> Result<Option<PruningMode>, Error<D::Error>> {
 	let meta_key_mode = to_meta_key(PRUNING_MODE, &());
 	if let Some(stored_mode) = db.get_meta(&meta_key_mode).map_err(Error::Db)? {
@@ -713,7 +704,6 @@ mod tests {
 	};
 	use codec::Encode;
 	use sp_core::H256;
-	use std::io;
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256, TestDb>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
@@ -727,12 +717,12 @@ mod tests {
 		db.commit(&commit);
 
 		let (state_db_init, state_db) =
-			StateDb::open(&mut db, Some(settings), false, true).unwrap();
+			StateDb::open(db.clone(), Some(settings), false, true).unwrap();
 		db.commit(&state_db_init);
 
 		db.commit(
 			&state_db
-				.insert_block::<io::Error>(
+				.insert_block(
 					&H256::from_low_u64_be(1),
 					1,
 					&H256::from_low_u64_be(0),
@@ -742,7 +732,7 @@ mod tests {
 		);
 		db.commit(
 			&state_db
-				.insert_block::<io::Error>(
+				.insert_block(
 					&H256::from_low_u64_be(21),
 					2,
 					&H256::from_low_u64_be(1),
@@ -752,7 +742,7 @@ mod tests {
 		);
 		db.commit(
 			&state_db
-				.insert_block::<io::Error>(
+				.insert_block(
 					&H256::from_low_u64_be(22),
 					2,
 					&H256::from_low_u64_be(1),
@@ -762,7 +752,7 @@ mod tests {
 		);
 		db.commit(
 			&state_db
-				.insert_block::<io::Error>(
+				.insert_block(
 					&H256::from_low_u64_be(3),
 					3,
 					&H256::from_low_u64_be(21),
@@ -775,7 +765,7 @@ mod tests {
 		state_db.apply_pending();
 		db.commit(
 			&state_db
-				.insert_block::<io::Error>(
+				.insert_block(
 					&H256::from_low_u64_be(4),
 					4,
 					&H256::from_low_u64_be(3),
@@ -844,11 +834,11 @@ mod tests {
 	fn detects_incompatible_mode() {
 		let mut db = make_db(&[]);
 		let (state_db_init, state_db) =
-			StateDb::open(&mut db, Some(PruningMode::ArchiveAll), false, true).unwrap();
+			StateDb::open(db.clone(), Some(PruningMode::ArchiveAll), false, true).unwrap();
 		db.commit(&state_db_init);
 		db.commit(
 			&state_db
-				.insert_block::<io::Error>(
+				.insert_block(
 					&H256::from_low_u64_be(0),
 					0,
 					&H256::from_low_u64_be(0),
@@ -858,7 +848,7 @@ mod tests {
 		);
 		let new_mode = PruningMode::Constrained(Constraints { max_blocks: Some(2), max_mem: None });
 		let state_db_open_result: Result<(_, StateDb<H256, H256, TestDb>), _> =
-			StateDb::open(&mut db, Some(new_mode), false, false);
+			StateDb::open(db.clone(), Some(new_mode), false, false);
 		assert!(state_db_open_result.is_err());
 	}
 
@@ -869,12 +859,13 @@ mod tests {
 	) {
 		let mut db = make_db(&[]);
 		let (state_db_init, state_db) =
-			StateDb::<H256, H256, TestDb>::open(&mut db, mode_when_created, false, true).unwrap();
+			StateDb::<H256, H256, TestDb>::open(db.clone(), mode_when_created, false, true)
+				.unwrap();
 		db.commit(&state_db_init);
 		std::mem::drop(state_db);
 
 		let state_db_reopen_result =
-			StateDb::<H256, H256, TestDb>::open(&mut db, mode_when_reopened, false, false);
+			StateDb::<H256, H256, TestDb>::open(db.clone(), mode_when_reopened, false, false);
 		if let Ok(expected_mode) = expected_effective_mode_when_reopenned {
 			let (state_db_init, state_db_reopened) = state_db_reopen_result.unwrap();
 			db.commit(&state_db_init);

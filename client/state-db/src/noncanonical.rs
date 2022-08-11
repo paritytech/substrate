@@ -28,7 +28,7 @@ use log::trace;
 use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
-pub const LAST_CANONICAL: &[u8] = b"last_canonical";
+pub(crate) const LAST_CANONICAL: &[u8] = b"last_canonical";
 const MAX_BLOCKS_PER_LEVEL: u64 = 32;
 
 /// See module documentation.
@@ -755,7 +755,7 @@ mod tests {
 				.unwrap(),
 		);
 		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
-		assert_eq!(db.meta.len(), 3);
+		assert_eq!(db.meta_len(), 3);
 
 		let overlay2 = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		assert_eq!(overlay.levels, overlay2.levels);
