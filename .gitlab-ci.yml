@@ -276,7 +276,7 @@ rusty-cachier-notify:
 cancel-pipeline-test-linux-stable:
   extends:                         .cancel-pipeline-template
   needs:
-    - job:                         test-linux-stable
+    - job:                         "test-linux-stable 1/3"
       artifacts:                   false
 
 cancel-pipeline-test-linux-stable-int:
