@@ -465,3 +465,55 @@ macro_rules! impl_maybe_marker {
 // The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
 // everybody.
 pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
+
+/// Executes the wrapped closure on drop.
+///
+/// Should be used together with the [`defer`] function.
+pub struct DeferGuard<F: FnOnce()>(Option<F>);
+
+impl<F: FnOnce()> Drop for DeferGuard<F> {
+	fn drop(&mut self) {
+		self.0.take().map(|f| f());
+	}
+}
+
+/// Construct a [`DeferGuard`] that will execute the given function on drop.
+///
+/// Multiple calls to [`defer`] will execute the closures in reverse order.
+///
+/// NOTE: This could also be implemented as macro but then it would not work anymore
+/// when called multiple times in the same scope since it needs to create a variable.
+pub fn defer<F: FnOnce()>(f: F) -> impl Drop {
+	DeferGuard(Some(f))
+}
+
+#[cfg(test)]
+mod test {
+	#[test]
+	fn defer_guard_works() {
+		let mut called = false;
+		{
+			let _guard = super::defer(|| {
+				called = true;
+			});
+		}
+		assert!(called, "DeferGuard should have executed the closure");
+	}
+
+	#[test]
+	fn defer_guard_order_works() {
+		let called = std::cell::RefCell::new(1);
+
+		let _guard_last = super::defer(|| {
+			assert_eq!(*called.borrow(), 3);
+		});
+		let _guard_middle = super::defer(|| {
+			assert_eq!(*called.borrow(), 2);
+			*called.borrow_mut() = 3;
+		});
+		let _guard_first = super::defer(|| {
+			assert_eq!(*called.borrow(), 1);
+			*called.borrow_mut() = 2;
+		});
+	}
+}
