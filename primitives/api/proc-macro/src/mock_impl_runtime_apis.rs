@@ -18,8 +18,7 @@
 use crate::utils::{
 	extract_block_type_from_trait_path, extract_impl_trait,
 	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
-	generate_method_runtime_api_impl_name, return_type_extract_type, AllowSelfRefInParameters,
-	RequireQualifiedTraitPath,
+	return_type_extract_type, AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -31,7 +30,7 @@ use syn::{
 	parse::{Error, Parse, ParseStream, Result},
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
-	Attribute, Ident, ItemImpl, Pat, Type, TypePath,
+	Attribute, ItemImpl, Pat, Type, TypePath,
 };
 
 /// Unique identifier used to make the hidden includes unique for this macro.
@@ -251,8 +250,6 @@ fn get_at_param_name(
 struct FoldRuntimeApiImpl<'a> {
 	/// The block type that is being used.
 	block_type: &'a TypePath,
-	/// The identifier of the trait being implemented.
-	impl_trait: &'a Ident,
 }
 
 impl<'a> FoldRuntimeApiImpl<'a> {
@@ -413,11 +410,6 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 
 	for impl_ in impls {
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::No)?;
-		let impl_trait = &impl_trait_path
-			.segments
-			.last()
-			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
-			.clone();
 		let block_type = extract_block_type_from_trait_path(impl_trait_path)?;
 
 		self_ty = match self_ty.take() {
@@ -457,9 +449,7 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 			None => Some(block_type.clone()),
 		};
 
-		result.push(
-			FoldRuntimeApiImpl { block_type, impl_trait: &impl_trait.ident }.process(impl_.clone()),
-		);
+		result.push(FoldRuntimeApiImpl { block_type }.process(impl_.clone()));
 	}
 
 	Ok(GeneratedRuntimeApiImpls {

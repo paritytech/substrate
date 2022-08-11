@@ -70,11 +70,6 @@ pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
 	Ident::new(&format!("runtime_decl_for_{}", trait_), Span::call_site())
 }
 
-/// Generates a name for a method that needs to be implemented in the runtime for the client side.
-pub fn generate_method_runtime_api_impl_name(trait_: &Ident, method: &Ident) -> Ident {
-	Ident::new(&format!("{}_{}_runtime_api_impl", trait_, method), Span::call_site())
-}
-
 /// Get the type of a `syn::ReturnType`.
 pub fn return_type_extract_type(rt: &ReturnType) -> Type {
 	match rt {
@@ -166,11 +161,6 @@ pub fn extract_parameter_names_types_and_borrows(
 	}
 
 	Ok(result)
-}
-
-/// Generates the name for the call api at function.
-pub fn generate_call_api_at_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_call_api_at", fn_name), Span::call_site())
 }
 
 /// Prefix the given function with the trait name.

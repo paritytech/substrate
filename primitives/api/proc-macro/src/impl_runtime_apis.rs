@@ -17,11 +17,9 @@
 
 use crate::utils::{
 	extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_call_api_at_fn_name, generate_crate_access,
-	generate_hidden_includes, generate_method_runtime_api_impl_name,
+	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
 	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
-	return_type_extract_type, versioned_trait_name, AllowSelfRefInParameters,
-	RequireQualifiedTraitPath,
+	versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
 
 use crate::common::API_VERSION_ATTRIBUTE;
@@ -418,8 +416,6 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 /// with code that calls into the runtime.
 struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	runtime_block: &'a TypePath,
-	runtime_mod_path: &'a Path,
-	impl_trait: &'a Ident,
 }
 
 impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
@@ -534,22 +530,13 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 
 	for impl_ in impls {
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
-		let impl_trait = &impl_trait_path
-			.segments
-			.last()
-			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
-			.clone();
 		let runtime_block = extract_block_type_from_trait_path(impl_trait_path)?;
 		let mut runtime_mod_path = extend_with_runtime_decl_path(impl_trait_path.clone());
 		// remove the trait to get just the module path
 		runtime_mod_path.segments.pop();
 
-		let processed_impl = ApiRuntimeImplToApiRuntimeApiImpl {
-			runtime_block,
-			runtime_mod_path: &runtime_mod_path,
-			impl_trait: &impl_trait.ident,
-		}
-		.process(impl_.clone());
+		let processed_impl =
+			ApiRuntimeImplToApiRuntimeApiImpl { runtime_block }.process(impl_.clone());
 
 		result.push(processed_impl);
 	}

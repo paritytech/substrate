@@ -78,12 +78,12 @@ pub use hash_db::Hasher;
 #[doc(hidden)]
 #[cfg(not(feature = "std"))]
 pub use sp_core::to_substrate_wasm_fn_return_value;
-#[doc(hidden)]
-#[cfg(feature = "std")]
-pub use sp_core::{NativeOrEncoded, NeverNativeValue};
 use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};
+#[doc(hidden)]
+#[cfg(feature = "std")]
+pub use sp_core::{NativeOrEncoded, NeverNativeValue};
 #[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
 #[doc(hidden)]
