@@ -162,8 +162,8 @@ where
 		self.0.remove_entry(key)
 	}
 
-    /// Gets a mutable iterator over the entries of the map, sorted by key.
-    ///
+	/// Gets a mutable iterator over the entries of the map, sorted by key.
+	///
 	/// See [`BTreeMap::iter_mut`] for more information.
 	pub fn iter_mut(&mut self) -> sp_std::collections::btree_map::IterMut<K, V> {
 		self.0.iter_mut()
