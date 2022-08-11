@@ -223,7 +223,7 @@ where
 			params.protocol_id.clone(),
 			params
 				.chain
-				.block_hash(0u32.into())
+				.hash(0u32.into())
 				.ok()
 				.flatten()
 				.expect("Genesis block exists; qed"),
