@@ -197,6 +197,34 @@ fn create_benchmark_extrinsics(
 		.collect()
 }
 
+fn create_benchmark_extrinsics_with_nonce_reusing(
+    client: &FullClient,
+    accounts: &[sr25519::Pair],
+    extrinsics_per_account: usize,
+) -> Vec<OpaqueExtrinsic> {
+    accounts
+        .iter()
+        .flat_map(|account| {
+            let mut reuse_nonce: bool = false;
+            (0..extrinsics_per_account).map(move |nonce| {
+                let call = create_extrinsic(
+                    client,
+                    account.clone(),
+                    BalancesCall::transfer {
+                        dest: Sr25519Keyring::Bob.to_account_id().into(),
+                        value: 1 * DOLLARS,
+                    },
+                    Some(if reuse_nonce {nonce as u32 -1} else {nonce as u32})
+                );
+                reuse_nonce = !reuse_nonce;
+				call
+            })
+        })
+        .map(OpaqueExtrinsic::from)
+        .collect()
+}
+
+
 async fn submit_tx_and_wait_for_inclusion(
 	tx_pool: &TransactionPool,
 	tx: OpaqueExtrinsic,
