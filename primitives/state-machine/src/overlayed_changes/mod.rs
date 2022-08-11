@@ -639,6 +639,21 @@ impl OverlayedChanges {
 }
 
 #[cfg(feature = "std")]
+impl From<sp_core::storage::Storage> for OverlayedChanges {
+	fn from(storage: sp_core::storage::Storage) -> Self {
+		Self {
+			top: storage.top.into(),
+			children: storage
+				.children_default
+				.into_iter()
+				.map(|(k, v)| (k, (v.data.into(), v.child_info)))
+				.collect(),
+			..Default::default()
+		}
+	}
+}
+
+#[cfg(feature = "std")]
 fn retain_map<K, V, F>(map: &mut Map<K, V>, f: F)
 where
 	K: std::cmp::Eq + std::hash::Hash,

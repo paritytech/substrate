@@ -4692,6 +4692,7 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-rpc",
  "sc-service",
  "sc-service-test",
@@ -7724,7 +7725,6 @@ dependencies = [
 name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
- "async-trait",
  "futures",
  "futures-timer",
  "ip_network",
@@ -7737,6 +7737,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-client-api",
  "sc-network",
+ "sc-network-common",
  "sp-api",
  "sp-authority-discovery",
  "sp-blockchain",
@@ -8209,7 +8210,6 @@ dependencies = [
  "sc-allocator",
  "sp-maybe-compressed-blob",
  "sp-sandbox",
- "sp-serializer",
  "sp-wasm-interface",
  "thiserror",
  "wasm-instrument",
@@ -8338,7 +8338,7 @@ dependencies = [
  "log",
  "parity-util-mem",
  "sc-client-api",
- "sc-network",
+ "sc-network-common",
  "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
@@ -8420,7 +8420,9 @@ dependencies = [
 name = "sc-network-common"
 version = "0.10.0-dev"
 dependencies = [
+ "async-trait",
  "bitflags",
+ "bytes",
  "futures",
  "libp2p",
  "parity-scale-codec",
@@ -8431,6 +8433,7 @@ dependencies = [
  "sp-consensus",
  "sp-finality-grandpa",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -8446,6 +8449,7 @@ dependencies = [
  "lru",
  "quickcheck",
  "sc-network",
+ "sc-network-common",
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -8555,6 +8559,7 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-network",
+ "sc-network-common",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sc-utils",
@@ -8763,6 +8768,7 @@ dependencies = [
  "sc-consensus",
  "sc-executor",
  "sc-network",
+ "sc-network-common",
  "sc-service",
  "sc-transaction-pool-api",
  "sp-api",
