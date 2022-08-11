@@ -80,7 +80,7 @@ pub use hash_db::Hasher;
 pub use sp_core::to_substrate_wasm_fn_return_value;
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use sp_core::NativeOrEncoded;
+pub use sp_core::{NativeOrEncoded, NeverNativeValue};
 use sp_core::OpaqueMetadata;
 #[doc(hidden)]
 pub use sp_core::{offchain, ExecutionContext};

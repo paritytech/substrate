@@ -329,35 +329,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 		#[cfg(any(feature = "std", test))]
 		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C> {
-			fn call_api_at<
-				R: #crate_::Encode + #crate_::Decode + std::cmp::PartialEq,
-				F: FnOnce(
-					&C,
-					&std::cell::RefCell<#crate_::OverlayedChanges>,
-					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
-					&std::option::Option<#crate_::ProofRecorder<Block>>,
-				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
-				E,
-			>(
-				&self,
-				call_api_at: F,
-			) -> std::result::Result<#crate_::NativeOrEncoded<R>, E> {
-				if *std::cell::RefCell::borrow(&self.commit_on_success) {
-					#crate_::OverlayedChanges::start_transaction(
-						&mut std::cell::RefCell::borrow_mut(&self.changes)
-					);
-				}
-				let res = call_api_at(
-					&self.call,
-					&self.changes,
-					&self.storage_transaction_cache,
-					&self.recorder,
-				);
-
-				self.commit_or_rollback(std::result::Result::is_ok(&res));
-				res
-			}
-
 			fn commit_or_rollback(&self, commit: bool) {
 				let proof = "\
 					We only close a transaction when we opened one ourself.
@@ -451,88 +422,62 @@ struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	impl_trait: &'a Ident,
 }
 
+impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
+	/// Process the given item implementation.
+	fn process(mut self, input: ItemImpl) -> ItemImpl {
+		let mut input = self.fold_item_impl(input);
+
+		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+
+		input.items.clear();
+		input.items.push(parse_quote! {
+			fn __runtime_api_internal_call_api_at(
+				&self,
+				at: &#crate_::BlockId<__SR_API_BLOCK__>,
+				context: #crate_::ExecutionContext,
+				params: std::vec::Vec<u8>,
+				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
+			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
+				if *std::cell::RefCell::borrow(&self.commit_on_success) {
+					#crate_::OverlayedChanges::start_transaction(
+						&mut std::cell::RefCell::borrow_mut(&self.changes)
+					);
+				}
+
+				let version = #crate_::CallApiAt::<__SR_API_BLOCK__>::runtime_version_at(self.call, at)?;
+
+				let params = #crate_::CallApiAtParams::<_, fn() -> _, _> {
+					at,
+					function: (*fn_name)(version),
+					native_call: None,
+					arguments: params,
+					overlayed_changes: &self.changes,
+					storage_transaction_cache: &self.storage_transaction_cache,
+					context,
+					recorder: &self.recorder,
+				};
+
+				let res = #crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at::<#crate_::NeverNativeValue, _>(
+					self.call,
+					params,
+				);
+
+				self.commit_or_rollback(std::result::Result::is_ok(&res));
+
+				res.map(#crate_::NativeOrEncoded::into_encoded)
+			}
+		});
+
+		input
+	}
+}
+
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	fn fold_type_path(&mut self, input: TypePath) -> TypePath {
 		let new_ty_path =
 			if input == *self.runtime_block { parse_quote!(__SR_API_BLOCK__) } else { input };
 
 		fold::fold_type_path(self, new_ty_path)
-	}
-
-	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
-		let block = {
-			let runtime_mod_path = self.runtime_mod_path;
-			let call_api_at_call = generate_call_api_at_fn_name(&input.sig.ident);
-			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-
-			let (param_types, error) = match extract_parameter_names_types_and_borrows(
-				&input.sig,
-				AllowSelfRefInParameters::No,
-			) {
-				Ok(res) => (
-					res.into_iter()
-						.map(|v| {
-							let ty = v.1;
-							let borrow = v.2;
-							quote!( #borrow #ty )
-						})
-						.collect::<Vec<_>>(),
-					None,
-				),
-				Err(e) => (Vec::new(), Some(e.to_compile_error())),
-			};
-
-			// Rewrite the input parameters.
-			input.sig.inputs = parse_quote! {
-				&self,
-				at: &#crate_::BlockId<__SR_API_BLOCK__>,
-				context: #crate_::ExecutionContext,
-				params: Option<( #( #param_types ),* )>,
-				params_encoded: Vec<u8>,
-			};
-
-			input.sig.ident =
-				generate_method_runtime_api_impl_name(self.impl_trait, &input.sig.ident);
-			let ret_type = return_type_extract_type(&input.sig.output);
-
-			// Generate the correct return type.
-			input.sig.output = parse_quote!(
-				-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>
-			);
-
-			// Generate the new method implementation that calls into the runtime.
-			parse_quote!(
-				{
-					// Get the error to the user (if we have one).
-					#error
-
-					self.call_api_at(
-						|
-							call_runtime_at,
-							changes,
-							storage_transaction_cache,
-							recorder
-						| {
-							#runtime_mod_path #call_api_at_call(
-								call_runtime_at,
-								at,
-								params_encoded,
-								changes,
-								storage_transaction_cache,
-								context,
-								recorder,
-							)
-						}
-					)
-				}
-			)
-		};
-
-		let mut input = fold::fold_impl_item_method(self, input);
-		// We need to set the block, after we modified the rest of the ast, otherwise we would
-		// modify our generated block as well.
-		input.block = block;
-		input
 	}
 
 	fn fold_item_impl(&mut self, mut input: ItemImpl) -> ItemImpl {
@@ -599,13 +544,14 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 		// remove the trait to get just the module path
 		runtime_mod_path.segments.pop();
 
-		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
+		let processed_impl = ApiRuntimeImplToApiRuntimeApiImpl {
 			runtime_block,
 			runtime_mod_path: &runtime_mod_path,
 			impl_trait: &impl_trait.ident,
-		};
+		}
+		.process(impl_.clone());
 
-		result.push(visitor.fold_item_impl(impl_.clone()));
+		result.push(processed_impl);
 	}
 	Ok(quote!( #( #result )* ))
 }

@@ -18,7 +18,6 @@
 use sp_api::{
 	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, ApiExt, RuntimeApiInfo,
 };
-use sp_core::NativeOrEncoded;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, GetNodeBlockType},
@@ -120,22 +119,12 @@ mock_impl_runtime_apis! {
 		}
 
 		#[advanced]
-		fn same_name(_: &BlockId<Block>) ->
-			Result<
-				NativeOrEncoded<()>,
-				ApiError
-			>
-		{
+		fn same_name(_: &BlockId<Block>) -> Result<(), ApiError> {
 			Ok(().into())
 		}
 
 		#[advanced]
-		fn wild_card(at: &BlockId<Block>, _: u32) ->
-			Result<
-				NativeOrEncoded<()>,
-				ApiError
-			>
-		{
+		fn wild_card(at: &BlockId<Block>, _: u32) -> Result<(), ApiError> {
 			if let BlockId::Number(1337) = at {
 				// yeah
 				Ok(().into())
@@ -220,7 +209,7 @@ fn mock_runtime_api_has_api() {
 }
 
 #[test]
-#[should_panic(expected = "Mocked runtime apis don't support calling deprecated api versions")]
+#[should_panic(expected = "Calling deprecated methods is not supported by mocked runtime api.")]
 fn mock_runtime_api_panics_on_calling_old_version() {
 	let mock = MockApi { block: None };
 
