@@ -135,6 +135,7 @@ cargo-check-subkey:
     - .test-refs
     - .pipeline-stopper-artifacts
   script:
+    - exit 1
     - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
     - SKIP_WASM_BUILD=1 time cargo check --release
@@ -314,7 +315,6 @@ test-linux-stable-int:
     # Ensure we run the UI tests.
     RUN_UI_TESTS:                  1
   script:
-    - exit 1
     - rusty-cachier snapshot create
     - WASM_BUILD_NO_COLOR=1
       RUST_LOG=sync=trace,consensus=trace,client=trace,state-db=trace,db=trace,forks=trace,state_db=trace,storage_cache=trace
