@@ -1682,8 +1682,15 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
+	Migrations,
 >;
+
+// All migrations executed on runtime upgrade as a nested tuple of types implementing
+// `OnRuntimeUpgrade`.
+type Migrations = (
+	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
+	pallet_alliance::migration::Migration<Runtime>,
+);
 
 /// MMR helper types.
 mod mmr {

@@ -95,6 +95,7 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migration;
 mod types;
 pub mod weights;
 
@@ -125,6 +126,9 @@ use pallet_identity::IdentityField;
 pub use pallet::*;
 pub use types::*;
 pub use weights::*;
+
+/// The log target of this pallet.
+pub const LOG_TARGET: &'static str = "runtime::alliance";
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -219,6 +223,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(migration::STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
