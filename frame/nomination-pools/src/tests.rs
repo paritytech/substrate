@@ -4319,7 +4319,7 @@ mod bond_extra {
 	}
 
 	#[test]
-	fn payout_rewards_to_member_works() {
+	fn payout_rewards_to_bonded_account_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given some free balance.
 			Balances::make_free_balance_be(&default_reward_account(), 7);
@@ -4342,7 +4342,7 @@ mod bond_extra {
 				&mut reward_pool,
 				claimable_reward,
 				current_reward_counter,
-				PayoutRecipient::MemberAccount(10)
+				PayoutRecipient::BondedAccount(10, default_bonded_account())
 			));
 
 			// then
@@ -4351,7 +4351,12 @@ mod bond_extra {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut { recipient: 10, member: 10, pool_id: 1, payout: 2 }
+					Event::PaidOut {
+						recipient: default_bonded_account(),
+						member: 10,
+						pool_id: 1,
+						payout: 2
+					}
 				]
 			);
 		})
