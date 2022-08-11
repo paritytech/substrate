@@ -266,7 +266,7 @@ rusty-cachier-notify:
     PR_NUM:                        "${PR_NUM}"
   trigger:
     project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
-    # remove branch, when pipeline-stopper for substrate and polakdot is updated to the same branch
+    # remove branch, when pipeline-stopper for polakdot is updated to the same branch
     branch:                        "as-improve"
 
 # need to copy jobs this way because otherwise gitlab will wait
