@@ -32,19 +32,19 @@ struct LeafSetItem<H, N> {
 	number: Reverse<N>,
 }
 
-/// A displaced leaf after import.
+/// Inserted and removed leaves after an import action.
 pub struct ImportOutcome<H, N> {
 	inserted: LeafSetItem<H, N>,
 	removed: Option<H>,
 }
 
-/// A displaced leaf after remove.
+/// Inserted and removed leaves after a remove action.
 pub struct RemoveOutcome<H, N> {
 	inserted: Option<H>,
 	removed: LeafSetItem<H, N>,
 }
 
-/// Displaced leaves after finalization.
+/// Removed leaves after a finalization action.
 pub struct FinalizationOutcome<H, N> {
 	removed: BTreeMap<Reverse<N>, Vec<H>>,
 }
@@ -103,7 +103,6 @@ where
 	}
 
 	/// Update the leaf list on import.
-	/// Returns a displaced leaf if there was one.
 	pub fn import(&mut self, hash: H, number: N, parent_hash: H) -> ImportOutcome<H, N> {
 		let number = Reverse(number);
 
@@ -124,7 +123,7 @@ where
 	}
 
 	/// Update the leaf list on removal.
-	/// Returns the displaced leaf.
+	/// Returns `None` if no modifications are applied.
 	pub fn remove(&mut self, hash: H, number: N, parent_hash: H) -> Option<RemoveOutcome<H, N>> {
 		let number = Reverse(number);
 
