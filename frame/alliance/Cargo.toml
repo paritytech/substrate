@@ -43,7 +43,7 @@ default = ["std"]
 std = [
 	"sha2?/std",
 	"hex?/std",
-	"pallet-collective?/std",	
+	"pallet-collective?/std",
 	"frame-benchmarking?/std",
 	"log/std",
 	"codec/std",
