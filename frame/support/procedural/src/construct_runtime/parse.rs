@@ -73,7 +73,14 @@ pub struct ExplicitRuntimeDeclaration {
 impl Parse for RuntimeDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
 		input.parse::<Token![pub]>()?;
-		input.parse::<Token![enum]>()?;
+
+		// Support either `enum` or `struct`.
+		if input.peek(Token![struct]) {
+			input.parse::<Token![struct]>()?;
+		} else {
+			input.parse::<Token![enum]>()?;
+		}
+
 		let name = input.parse::<syn::Ident>()?;
 		let where_section = input.parse()?;
 		let pallets =

@@ -1315,7 +1315,7 @@ where
 
 fn deposit_event<T: Config>(topics: Vec<T::Hash>, event: Event<T>) {
 	<frame_system::Pallet<T>>::deposit_event_indexed(
-		&*topics,
+		&topics,
 		<T as Config>::Event::from(event).into(),
 	)
 }

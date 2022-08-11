@@ -227,7 +227,7 @@ pub enum PruningMode {
 
 impl PruningMode {
 	/// Create a mode that keeps given number of blocks.
-	pub fn keep_blocks(n: u32) -> PruningMode {
+	pub fn blocks_pruning(n: u32) -> PruningMode {
 		PruningMode::Constrained(Constraints { max_blocks: Some(n), max_mem: None })
 	}
 
@@ -835,34 +835,34 @@ mod tests {
 	#[test]
 	fn pruning_mode_compatibility() {
 		for (created, reopened, expected) in [
-			(None, None, Ok(PruningMode::keep_blocks(256))),
-			(None, Some(PruningMode::keep_blocks(256)), Ok(PruningMode::keep_blocks(256))),
-			(None, Some(PruningMode::keep_blocks(128)), Ok(PruningMode::keep_blocks(128))),
-			(None, Some(PruningMode::keep_blocks(512)), Ok(PruningMode::keep_blocks(512))),
+			(None, None, Ok(PruningMode::blocks_pruning(256))),
+			(None, Some(PruningMode::blocks_pruning(256)), Ok(PruningMode::blocks_pruning(256))),
+			(None, Some(PruningMode::blocks_pruning(128)), Ok(PruningMode::blocks_pruning(128))),
+			(None, Some(PruningMode::blocks_pruning(512)), Ok(PruningMode::blocks_pruning(512))),
 			(None, Some(PruningMode::ArchiveAll), Err(())),
 			(None, Some(PruningMode::ArchiveCanonical), Err(())),
-			(Some(PruningMode::keep_blocks(256)), None, Ok(PruningMode::keep_blocks(256))),
+			(Some(PruningMode::blocks_pruning(256)), None, Ok(PruningMode::blocks_pruning(256))),
 			(
-				Some(PruningMode::keep_blocks(256)),
-				Some(PruningMode::keep_blocks(256)),
-				Ok(PruningMode::keep_blocks(256)),
+				Some(PruningMode::blocks_pruning(256)),
+				Some(PruningMode::blocks_pruning(256)),
+				Ok(PruningMode::blocks_pruning(256)),
 			),
 			(
-				Some(PruningMode::keep_blocks(256)),
-				Some(PruningMode::keep_blocks(128)),
-				Ok(PruningMode::keep_blocks(128)),
+				Some(PruningMode::blocks_pruning(256)),
+				Some(PruningMode::blocks_pruning(128)),
+				Ok(PruningMode::blocks_pruning(128)),
 			),
 			(
-				Some(PruningMode::keep_blocks(256)),
-				Some(PruningMode::keep_blocks(512)),
-				Ok(PruningMode::keep_blocks(512)),
+				Some(PruningMode::blocks_pruning(256)),
+				Some(PruningMode::blocks_pruning(512)),
+				Ok(PruningMode::blocks_pruning(512)),
 			),
-			(Some(PruningMode::keep_blocks(256)), Some(PruningMode::ArchiveAll), Err(())),
-			(Some(PruningMode::keep_blocks(256)), Some(PruningMode::ArchiveCanonical), Err(())),
+			(Some(PruningMode::blocks_pruning(256)), Some(PruningMode::ArchiveAll), Err(())),
+			(Some(PruningMode::blocks_pruning(256)), Some(PruningMode::ArchiveCanonical), Err(())),
 			(Some(PruningMode::ArchiveAll), None, Ok(PruningMode::ArchiveAll)),
-			(Some(PruningMode::ArchiveAll), Some(PruningMode::keep_blocks(256)), Err(())),
-			(Some(PruningMode::ArchiveAll), Some(PruningMode::keep_blocks(128)), Err(())),
-			(Some(PruningMode::ArchiveAll), Some(PruningMode::keep_blocks(512)), Err(())),
+			(Some(PruningMode::ArchiveAll), Some(PruningMode::blocks_pruning(256)), Err(())),
+			(Some(PruningMode::ArchiveAll), Some(PruningMode::blocks_pruning(128)), Err(())),
+			(Some(PruningMode::ArchiveAll), Some(PruningMode::blocks_pruning(512)), Err(())),
 			(
 				Some(PruningMode::ArchiveAll),
 				Some(PruningMode::ArchiveAll),
@@ -870,9 +870,9 @@ mod tests {
 			),
 			(Some(PruningMode::ArchiveAll), Some(PruningMode::ArchiveCanonical), Err(())),
 			(Some(PruningMode::ArchiveCanonical), None, Ok(PruningMode::ArchiveCanonical)),
-			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::keep_blocks(256)), Err(())),
-			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::keep_blocks(128)), Err(())),
-			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::keep_blocks(512)), Err(())),
+			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::blocks_pruning(256)), Err(())),
+			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::blocks_pruning(128)), Err(())),
+			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::blocks_pruning(512)), Err(())),
 			(Some(PruningMode::ArchiveCanonical), Some(PruningMode::ArchiveAll), Err(())),
 			(
 				Some(PruningMode::ArchiveCanonical),

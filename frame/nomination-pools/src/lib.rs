@@ -939,7 +939,7 @@ pub struct RewardPool<T: Config> {
 
 impl<T: Config> RewardPool<T> {
 	/// Getter for [`RewardPool::last_recorded_reward_counter`].
-	fn last_recorded_reward_counter(&self) -> T::RewardCounter {
+	pub(crate) fn last_recorded_reward_counter(&self) -> T::RewardCounter {
 		self.last_recorded_reward_counter
 	}
 
@@ -1349,7 +1349,7 @@ pub mod pallet {
 		///   pool.
 		/// - `points` is the number of points that are issued as a result of `balance` being
 		/// dissolved into the corresponding unbonding pool.
-		///
+		/// - `era` is the era in which the balance will be unbonded.
 		/// In the absence of slashing, these values will match. In the presence of slashing, the
 		/// number of points that are issued in the unbonding pool will be less than the amount
 		/// requested to be unbonded.
@@ -1358,6 +1358,7 @@ pub mod pallet {
 			pool_id: PoolId,
 			balance: BalanceOf<T>,
 			points: BalanceOf<T>,
+			era: EraIndex,
 		},
 		/// A member has withdrawn from their pool.
 		///
@@ -1683,6 +1684,7 @@ pub mod pallet {
 				pool_id: member.pool_id,
 				points: points_unbonded,
 				balance: unbonding_balance,
+				era: unbond_era,
 			});
 
 			// Now that we know everything has worked write the items to storage.
@@ -2145,6 +2147,20 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Returns the pending rewards for the specified `member_account`.
+	///
+	/// In the case of error the function returns balance of zero.
+	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
+		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
+			if let Some(reward_pool) = RewardPools::<T>::get(pool_member.pool_id) {
+				return pool_member
+					.pending_rewards(reward_pool.last_recorded_reward_counter())
+					.unwrap_or_default()
+			}
+		}
+		BalanceOf::<T>::default()
+	}
+
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
 	///
 	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
