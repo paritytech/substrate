@@ -540,7 +540,7 @@ mod tests {
 
 			[seal0] nop(_ctx, _unused: u64) => { unreachable!(); },
 
-			// new version of nop with other data type for argumebt
+			// new version of nop with other data type for argument
 			[seal1] nop(_ctx, _unused: i32) => { unreachable!(); },
 		);
 	}

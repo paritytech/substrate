@@ -26,7 +26,7 @@ use frame_system::RawOrigin;
 // To actually run this benchmark on pallet-example-basic, we need to put this pallet into the
 //   runtime and compile it with `runtime-benchmarks` feature. The detail procedures are
 //   documented at:
-//   https://docs.substrate.io/v3/runtime/benchmarking#how-to-benchmark
+//   https://docs.substrate.io/reference/how-to-guides/weights/add-benchmarks/
 //
 // The auto-generated weight estimate of this pallet is copied over to the `weights.rs` file.
 // The exact command of how the estimate generated is printed at the top of the file.
