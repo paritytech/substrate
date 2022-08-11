@@ -18,12 +18,10 @@
 //! Read-only version of Externalities.
 
 use crate::{Backend, StorageKey, StorageValue};
-use codec::Encode;
 use hash_db::Hasher;
 use sp_core::{
 	storage::{ChildInfo, StateVersion, TrackedStorageKey},
 	traits::Externalities,
-	Blake2Hasher,
 };
 use sp_externalities::MultiRemovalResults;
 use std::{
@@ -87,7 +85,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
+		self.backend
+			.storage_hash(key)
+			.expect("Backed failed for storage_hash in ReadOnlyExternalities")
+			// assume H::Out is fix len hash and encode without len encoding
+			.map(|h| h.as_ref().to_vec())
 	}
 
 	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
@@ -97,7 +99,11 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 	}
 
 	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
-		self.child_storage(child_info, key).map(|v| Blake2Hasher::hash(&v).encode())
+		self.backend
+			.child_storage_hash(child_info, key)
+			.expect("Backed failed for child_storage_hash in ReadOnlyExternalities")
+			// assume H::Out is fix len hash and encode without len encoding
+			.map(|h| h.as_ref().to_vec())
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {

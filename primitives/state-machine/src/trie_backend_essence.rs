@@ -32,8 +32,8 @@ use sp_std::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use sp_trie::recorder::Recorder;
 use sp_trie::{
-	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
-	read_trie_value,
+	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_hash,
+	read_child_trie_value, read_trie_value,
 	trie_types::{TrieDBBuilder, TrieError},
 	DBValue, KeySpacedDB, NodeCodec, Trie, TrieCache, TrieDBIterator, TrieDBKeyIterator,
 	TrieRecorder,
@@ -368,6 +368,28 @@ where
 
 		self.with_recorder_and_cache(None, |recorder, cache| {
 			read_trie_value::<Layout<H>, _>(self, &self.root, key, recorder, cache).map_err(map_e)
+		})
+	}
+
+	/// Returns the hash value
+	pub fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Result<Option<H::Out>> {
+		let child_root = match self.child_root(child_info)? {
+			Some(root) => root,
+			None => return Ok(None),
+		};
+
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		self.with_recorder_and_cache(Some(child_root), |recorder, cache| {
+			read_child_trie_hash::<Layout<H>, _>(
+				child_info.keyspace(),
+				self,
+				&child_root,
+				key,
+				recorder,
+				cache,
+			)
+			.map_err(map_e)
 		})
 	}
 

@@ -48,9 +48,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
 
 	/// Get keyed storage value hash or None if there is nothing associated.
-	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
-		self.storage(key).map(|v| v.map(|v| H::hash(&v)))
-	}
+	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error>;
 
 	/// Get keyed child storage or None if there is nothing associated.
 	fn child_storage(
@@ -64,13 +62,11 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
-	) -> Result<Option<H::Out>, Self::Error> {
-		self.child_storage(child_info, key).map(|v| v.map(|v| H::hash(&v)))
-	}
+	) -> Result<Option<H::Out>, Self::Error>;
 
 	/// true if a key exists in storage.
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
-		Ok(self.storage(key)?.is_some())
+		Ok(self.storage_hash(key)?.is_some())
 	}
 
 	/// true if a key exists in child storage.
@@ -79,7 +75,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<bool, Self::Error> {
-		Ok(self.child_storage(child_info, key)?.is_some())
+		Ok(self.child_storage_hash(child_info, key)?.is_some())
 	}
 
 	/// Return the next key in storage in lexicographic order or `None` if there is no value.

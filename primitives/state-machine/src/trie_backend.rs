@@ -245,6 +245,14 @@ where
 		self.essence.storage(key)
 	}
 
+	fn child_storage_hash(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<H::Out>, Self::Error> {
+		self.essence.child_storage_hash(child_info, key)
+	}
+
 	fn child_storage(
 		&self,
 		child_info: &ChildInfo,
