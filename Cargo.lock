@@ -2250,6 +2250,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
+ "sp-api",
  "sp-arithmetic",
  "sp-core",
  "sp-core-hashing-proc-macro",
