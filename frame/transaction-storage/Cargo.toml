@@ -37,7 +37,7 @@ default = ["std"]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "hex-literal"]
 std = [
 	"log/std",
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",

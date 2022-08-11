@@ -16,8 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#![allow(unused)] // @ggwpez FIXME
-
 use super::benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder};
 use crate::{
 	chain_spec, service,
@@ -120,15 +118,11 @@ pub fn run() -> Result<()> {
 						let PartialComponents { client, .. } = new_partial(&config)?;
 						cmd.run(client)
 					},
+					#[allow(unused)]
 					BenchmarkCmd::Storage(cmd) => {
 						#[cfg(not(feature = "runtime-benchmarks"))]
 						return Err("Storage benchmarking can be enabled with `--features runtime-benchmarks`.".into());
 
-						// NOTE: This is needed since `expose_db` is only enabled in
-						// `runtime-benchmarks`. The cleaner fix would be to introduce an
-						// `offchain-benchmarks` flag and use that instead.
-						// However it has been the case forever because of transitive feature
-						// bleeding.
 						#[cfg(feature = "runtime-benchmarks")]
 						{
 							let PartialComponents { client, backend, .. } = new_partial(&config)?;

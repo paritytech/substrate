@@ -60,7 +60,7 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
+	BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, Role, RpcMethods, TaskType,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -264,10 +264,12 @@ async fn build_network_future<
 					sc_rpc::system::Request::SyncState(sender) => {
 						use sc_rpc::system::SyncState;
 
+						let best_number = client.info().best_number;
+
 						let _ = sender.send(SyncState {
 							starting_block,
-							current_block: client.info().best_number,
-							highest_block: network.best_seen_block(),
+							current_block: best_number,
+							highest_block: network.best_seen_block().unwrap_or(best_number),
 						});
 					}
 				}

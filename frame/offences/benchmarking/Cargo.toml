@@ -58,5 +58,5 @@ std = [
 ]
 
 runtime-benchmarks = [
-	
+	"pallet-staking/runtime-benchmarks",
 ]

@@ -5926,6 +5926,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-runtime-interface",
  "sp-staking",
  "sp-std",
 ]
@@ -8456,6 +8457,7 @@ name = "sc-network-light"
 version = "0.10.0-dev"
 dependencies = [
  "futures",
+ "hex",
  "libp2p",
  "log",
  "parity-scale-codec",
@@ -8476,6 +8478,7 @@ version = "0.10.0-dev"
 dependencies = [
  "fork-tree",
  "futures",
+ "hex",
  "libp2p",
  "log",
  "lru",

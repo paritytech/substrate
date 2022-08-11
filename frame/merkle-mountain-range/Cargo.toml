@@ -33,7 +33,7 @@ itertools = "0.10.3"
 default = ["std"]
 std = [
 	"codec/std",
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
 	"mmr-lib/std",

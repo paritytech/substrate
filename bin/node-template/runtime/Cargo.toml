@@ -57,9 +57,9 @@ substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-bu
 [features]
 default = ["std"]
 std = [
-	"frame-try-runtime/std",
-	"frame-system-benchmarking/std",
-	"frame-benchmarking/std",
+	"frame-try-runtime?/std",
+	"frame-system-benchmarking?/std",
+	"frame-benchmarking?/std",
 	"codec/std",
 	"scale-info/std",
 	"frame-executive/std",

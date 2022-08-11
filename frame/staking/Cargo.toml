@@ -53,7 +53,7 @@ rand_chacha = { version = "0.2" }
 default = ["std"]
 std = [
 	"rand_chacha/std",
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"serde",
 	"codec/std",
 	"scale-info/std",

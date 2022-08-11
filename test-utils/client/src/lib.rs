@@ -95,14 +95,14 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 	}
 
 	/// Create new `TestClientBuilder` with default backend and pruning window size
-	pub fn with_pruning_window(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test(keep_blocks, 0));
+	pub fn with_pruning_window(blocks_pruning: u32) -> Self {
+		let backend = Arc::new(Backend::new_test(blocks_pruning, 0));
 		Self::with_backend(backend)
 	}
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
-	pub fn with_tx_storage(keep_blocks: u32) -> Self {
-		let backend = Arc::new(Backend::new_test_with_tx_storage(keep_blocks, 0));
+	pub fn with_tx_storage(blocks_pruning: u32) -> Self {
+		let backend = Arc::new(Backend::new_test_with_tx_storage(blocks_pruning, 0));
 		Self::with_backend(backend)
 	}
 }

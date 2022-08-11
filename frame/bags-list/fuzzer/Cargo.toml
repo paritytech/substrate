@@ -24,3 +24,7 @@ pallet-collective = { version = "4.0.0-dev", features = ["runtime-benchmarks"], 
 pallet-referenda = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../referenda" }
 pallet-conviction-voting = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../conviction-voting" }
 pallet-ranked-collective = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../ranked-collective" }
+
+[[bin]]
+name = "bags-list"
+path = "src/main.rs"

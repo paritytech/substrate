@@ -29,7 +29,7 @@ tt-call = "1.0.8"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }
-sp-state-machine = { version = "0.12.0", optional = true, path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.12.0", default-features = false, optional = true, path = "../../primitives/state-machine" }
 bitflags = "1.3"
 impl-trait-for-tuples = "0.2.2"
 smallvec = "1.8.0"
@@ -61,7 +61,7 @@ std = [
 	"frame-metadata/std",
 	"sp-inherents/std",
 	"sp-staking/std",
-	"sp-state-machine",
+	"sp-state-machine/std",
 	"frame-support-procedural/std",
 	"log/std",
 ]
