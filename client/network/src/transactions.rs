@@ -32,7 +32,7 @@ use crate::{
 	protocol::message,
 	service::NetworkService,
 	utils::{interval, LruHashSet},
-	Event, ExHashT, ObservedRole,
+	ExHashT,
 };
 
 use codec::{Decode, Encode};
@@ -40,7 +40,11 @@ use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::config::ProtocolId;
+use sc_network_common::{
+	config::ProtocolId,
+	protocol::event::{Event, ObservedRole},
+	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
+};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
@@ -176,7 +180,7 @@ impl TransactionsHandlerPrototype {
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(TransactionsHandler<B, H>, TransactionsHandlerController<H>)> {
-		let event_stream = service.event_stream("transactions-handler").boxed();
+		let event_stream = service.event_stream("transactions-handler");
 		let (to_handler, from_controller) = mpsc::unbounded();
 		let gossip_enabled = Arc::new(AtomicBool::new(false));
 
