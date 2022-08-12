@@ -468,7 +468,7 @@ pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
 
 /// Executes the wrapped closure on drop.
 ///
-/// Should be used together with the [`defer`] function.
+/// Should be used together with the [`defer`] macro.
 #[must_use]
 pub struct DeferGuard<F: FnOnce()>(pub Option<F>);
 
@@ -492,16 +492,16 @@ impl<F: FnOnce()> Drop for DeferGuard<F> {
 /// 	defer!(
 /// 		message.borrow_mut().push_str("world!");
 /// 	);
-/// 	defer!({
+/// 	defer!(
 /// 		message.borrow_mut().push_str("Hello ");
-/// 	});
+/// 	);
 /// }
 /// assert_eq!(*message.borrow(), "Hello world!");
 /// ```
 #[macro_export]
 macro_rules! defer(
-	( $code:expr $(;)? ) => {
-		let _guard = $crate::DeferGuard(Some(|| { $code }));
+	( $( $code:tt )* ) => {
+		let _guard = $crate::DeferGuard(Some(|| { $( $code )* }));
 	};
 );
 
