@@ -622,7 +622,10 @@ benchmarks_instance_pallet! {
 		let mut proposer = founders[0].clone();
 		let mut fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 		let mut allies = (0 .. z).map(ally::<T, I>).collect::<Vec<_>>();
-		let witness = ForceSetWitness::new(p, c);
+		let witness = ForceSetWitness{
+			proposals: p,
+			votable_members: c,
+		};
 
 		if c > 0 {
 			let old_founders = (0..c).map(founder::<T, I>).collect::<Vec<_>>();

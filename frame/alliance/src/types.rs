@@ -108,6 +108,7 @@ pub struct ForceSetWitness {
 	pub(super) votable_members: u32,
 }
 
+#[cfg(test)]
 impl ForceSetWitness {
 	// Creates new ForceSetWitness.
 	pub(super) fn new(proposals: u32, votable_members: u32) -> Self {
