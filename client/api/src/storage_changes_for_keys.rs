@@ -235,6 +235,8 @@ where
 			return
 		}
 
+		self.cull_dead_subscribers();
+
 		let all_changes: HashMap<_, _> = all_changes
 			.into_iter()
 			.map(|(key, value)| (StorageKey(key), value.map(StorageData)))
@@ -310,6 +312,10 @@ where
 			}
 		}
 
+		self.last_block_hash = block_hash.clone();
+	}
+
+	fn cull_dead_subscribers(&mut self) {
 		for sid in self.dead_subscriber_ids.lock().drain(..) {
 			let subscriber = self.subscriber_by_id.remove(&sid)
 			    .expect("`dead_subscriber_ids` can only have existing subscribers added to it hence this cannot fail; qed");
@@ -328,8 +334,6 @@ where
 				m.with_label_values(&["removed"]).inc();
 			}
 		}
-
-		self.last_block_hash = block_hash.clone();
 	}
 
 	/// Start listening for particular storage keys.
