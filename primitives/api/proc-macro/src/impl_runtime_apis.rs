@@ -377,6 +377,7 @@ fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
 		// nothing to do
 		return trait_
 	};
+
 	let trait_name = &mut trait_
 		.segments
 		.last_mut()
@@ -425,6 +426,8 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 
 		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 
+		// Delete all functions, because all of them are default implemented by `decl_runtime_apis!`.
+		// We only need to implement the `__runtime_api_internal_call_api_at` function.
 		input.items.clear();
 		input.items.push(parse_quote! {
 			fn __runtime_api_internal_call_api_at(

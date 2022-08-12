@@ -231,10 +231,10 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 		// Process the items in the declaration. The filter_map function below does a lot of stuff
 		// because the method attributes are stripped at this point
-		decl.items = decl
+		decl
 			.items
-			.iter_mut()
-			.filter_map(|i| match i {
+			.iter()
+			.for_each(|i| match i {
 				TraitItem::Method(ref mut method) => {
 					let method_attrs = remove_supported_attributes(&mut method.attrs);
 					let mut method_version = trait_api_version;
@@ -276,8 +276,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 						};
 					}
 
-					// Remove methods that have the `changed_in` attribute as they are not required
-					// for the runtime anymore.
+					// Any method with the `changed_in` attribute isn't required for the runtime anymore.
 					if method_attrs.contains_key(CHANGED_IN_ATTRIBUTE) {
 						None
 					} else {
