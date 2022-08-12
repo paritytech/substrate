@@ -56,6 +56,7 @@ pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_6
 pub mod crypto;
 pub mod hexdisplay;
 
+pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod hash;
@@ -465,89 +466,3 @@ macro_rules! impl_maybe_marker {
 // The maximum possible allocation size was chosen rather arbitrary, 32 MiB should be enough for
 // everybody.
 pub const MAX_POSSIBLE_ALLOCATION: u32 = 33554432; // 2^25 bytes, 32 MiB
-
-/// Executes the wrapped closure on drop.
-///
-/// Should be used together with the [`defer`] macro.
-#[must_use]
-pub struct DeferGuard<F: FnOnce()>(pub Option<F>);
-
-impl<F: FnOnce()> Drop for DeferGuard<F> {
-	fn drop(&mut self) {
-		self.0.take().map(|f| f());
-	}
-}
-
-/// Executes the given code when the current scope is dropped.
-///
-/// Multiple calls to [`defer`] will execute the passed codes in reverse order.
-///
-/// # Example
-///
-/// ```rust
-/// use sp_core::defer;
-///
-/// let message = std::cell::RefCell::new("".to_string());
-/// {
-/// 	defer!(
-/// 		message.borrow_mut().push_str("world!");
-/// 	);
-/// 	defer!(
-/// 		message.borrow_mut().push_str("Hello ");
-/// 	);
-/// }
-/// assert_eq!(*message.borrow(), "Hello world!");
-/// ```
-#[macro_export]
-macro_rules! defer(
-	( $( $code:tt )* ) => {
-		let _guard = $crate::DeferGuard(Some(|| { $( $code )* }));
-	};
-);
-
-#[cfg(test)]
-mod test {
-	use super::defer;
-
-	#[test]
-	fn defer_guard_works() {
-		let mut called = false;
-		{
-			defer!(
-				called = true;
-			);
-		}
-		assert!(called, "DeferGuard should have executed the closure");
-	}
-
-	#[test]
-	/// `defer!` executes the code in reverse order of being called.
-	fn defer_guard_order_works() {
-		let called = std::cell::RefCell::new(1);
-
-		defer!(
-			assert_eq!(*called.borrow(), 3);
-		);
-		defer!({
-			assert_eq!(*called.borrow(), 2);
-			*called.borrow_mut() = 3;
-		});
-		defer!({
-			assert_eq!(*called.borrow(), 1);
-			*called.borrow_mut() = 2;
-		});
-	}
-
-	#[test]
-	#[allow(unused_braces)]
-	fn defer_guard_syntax_works() {
-		let called = std::cell::RefCell::new(0);
-		{
-			defer!(*called.borrow_mut() += 1);
-			defer!(*called.borrow_mut() += 1;); // With ;
-			defer!({ *called.borrow_mut() += 1 });
-			defer!({ *called.borrow_mut() += 1 };); // With ;
-		}
-		assert_eq!(*called.borrow(), 4);
-	}
-}
