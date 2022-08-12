@@ -351,13 +351,19 @@ fn decl_all_pallets<'a>(
 
 		/// All pallets included in the runtime as a nested tuple of types in reversed order.
 		/// Excludes the System pallet.
+		#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+		`AllPalletWithSystem or AllPalletsWithoutSystem`")]
 		pub type AllPalletsWithoutSystemReversed =( #(#names_without_system_reverse),* );
 
 		/// All pallets included in the runtime as a nested tuple of types in reversed order.
+		#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+		`AllPalletWithSystem or AllPalletsWithoutSystem`")]
 		pub type AllPalletsWithSystemReversed = ( #(#names_reversed),* );
 
 		/// All pallets included in the runtime as a nested tuple of types in reversed order.
 		/// With the system pallet first.
+		#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+		`AllPalletWithSystem or AllPalletsWithoutSystem`")]
 		pub type AllPalletsReversedWithSystemFirst = ( #(#names_reversed_with_system_first),* );
 	)
 }

@@ -1597,6 +1597,7 @@ fn test_storage_info() {
 #[test]
 fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
 	// Just ensure the 2 types are same.
+	#[allow(deprecated)]
 	fn _a(_t: AllPalletsReversedWithSystemFirst) {}
 	fn _b(t: (System, Example4, Example2, Example)) {
 		_a(t)
@@ -1624,6 +1625,7 @@ fn assert_type_all_pallets_without_system_is_correct() {
 #[test]
 fn assert_type_all_pallets_with_system_reversed_is_correct() {
 	// Just ensure the 2 types are same.
+	#[allow(deprecated)]
 	fn _a(_t: AllPalletsWithSystemReversed) {}
 	fn _b(t: (Example4, Example2, Example, System)) {
 		_a(t)
@@ -1633,6 +1635,7 @@ fn assert_type_all_pallets_with_system_reversed_is_correct() {
 #[test]
 fn assert_type_all_pallets_without_system_reversed_is_correct() {
 	// Just ensure the 2 types are same.
+	#[allow(deprecated)]
 	fn _a(_t: AllPalletsWithoutSystemReversed) {}
 	fn _b(t: (Example4, Example2, Example)) {
 		_a(t)
