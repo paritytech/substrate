@@ -3486,3 +3486,161 @@ fn set_code_hash() {
 		);
 	});
 }
+
+#[test]
+fn storage_deposit_limit_is_enforced() {
+	let (wasm, code_hash) = compile_module::<Test>("store").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Check that the BOB contract has been instantiated and has the minimum balance
+		let info = ContractInfoOf::<Test>::get(&addr).unwrap();
+		assert_eq!(info.storage_deposit, min_balance);
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
+
+		// Create 100 bytes of storage with a price of per byte
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(1)),
+				100u32.to_le_bytes().to_vec()
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+	});
+}
+
+#[test]
+fn storage_deposit_limit_is_enforced_late() {
+	let (wasm_caller, code_hash_caller) =
+		compile_module::<Test>("create_storage_and_call").unwrap();
+	let (wasm_callee, code_hash_callee) = compile_module::<Test>("store").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		//let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Create both contracts: Constructors do nothing.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm_caller,
+			vec![],
+			vec![],
+		));
+		let addr_caller = Contracts::contract_address(&ALICE, &code_hash_caller, &[]);
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm_callee,
+			vec![],
+			vec![],
+		));
+		let addr_callee = Contracts::contract_address(&ALICE, &code_hash_callee, &[]);
+
+		// Create 100 bytes of storage with a price of per byte
+		// This is 100 Balance + 2 Balance for the item
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr_callee.clone(),
+			0,
+			GAS_LIMIT,
+			Some(codec::Compact(102)),
+			100u32.to_le_bytes().to_vec()
+		));
+
+		// We do not remove any storage but require 14 bytes of storage for the new
+		// storage created in the immediate contract.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(5)),
+				100u32
+					.to_le_bytes()
+					.as_ref()
+					.iter()
+					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
+					.cloned()
+					.collect(),
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+
+		// Allow for the additional 14 bytes but demand an additional byte in the callee contract.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(14)),
+				101u32
+					.to_le_bytes()
+					.as_ref()
+					.iter()
+					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
+					.cloned()
+					.collect(),
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+
+		// Refund in the callee contract but not enough to cover the 14 balance required by the
+		// caller.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(0)),
+				87u32
+					.to_le_bytes()
+					.as_ref()
+					.iter()
+					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
+					.cloned()
+					.collect(),
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+
+		// Same as above but allow for the additional balance.
+		assert_ok!(Contracts::call(
+			Origin::signed(ALICE),
+			addr_caller.clone(),
+			0,
+			GAS_LIMIT,
+			Some(codec::Compact(1)),
+			87u32
+				.to_le_bytes()
+				.as_ref()
+				.iter()
+				.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
+				.cloned()
+				.collect(),
+		));
+	});
+}

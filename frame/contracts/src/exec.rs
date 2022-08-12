@@ -805,6 +805,12 @@ where
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
+			// Storage limit is enforced as late as possible (when the last frame returns) so that
+			// the ordering of storage accesses does not matter.
+			if self.frames.is_empty() {
+				self.top_frame_mut().nested_storage.enforce_limit()?;
+			}
+
 			// Additional work needs to be performed in case of an instantiation.
 			if !output.did_revert() && entry_point == ExportedFunction::Constructor {
 				let frame = self.top_frame();

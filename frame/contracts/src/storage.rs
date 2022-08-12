@@ -178,7 +178,7 @@ where
 				},
 				(None, None) => (),
 			}
-			storage_meter.charge(&diff)?;
+			storage_meter.charge(&diff);
 		}
 
 		match &new_value {
