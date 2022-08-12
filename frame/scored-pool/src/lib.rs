@@ -277,7 +277,7 @@ pub mod pallet {
 			// have a score of `None` are sorted to the end of the bounded vec.
 			pool.sort_by_key(|(_, maybe_score)| Reverse(maybe_score.unwrap_or_default()));
 			<Pallet<T, I>>::update_member_count(self.member_count)
-				.expect("Number of allowed memebers exceeded");
+				.expect("Number of allowed members exceeded");
 			<Pool<T, I>>::put(&pool);
 			<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipInitialized);
 		}
