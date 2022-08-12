@@ -28,7 +28,7 @@ pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 	let mut weight: Weight = 0;
 
 	if onchain_version < 1 {
-		weight = weight.saturating_add(v1::migrate::<T, I>());
+		weight = weight.saturating_add(v0_to_v1::migrate::<T, I>());
 	}
 
 	STORAGE_VERSION.put::<Pallet<T, I>>();
@@ -46,9 +46,9 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 	}
 }
 
-/// V1: `UpForKicking` blacklist is replaced by the retirement period feature not letting members up
-/// for kicking to leave without being slashed.
-mod v1 {
+/// v0_to_v1: `UpForKicking` blacklist is replaced by the retirement period feature not letting members
+/// up for kicking to leave without being slashed.
+mod v0_to_v1 {
 	use super::*;
 
 	pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
