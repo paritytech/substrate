@@ -39,7 +39,7 @@ struct SubscriberId(u64);
 
 #[derive(Debug)]
 enum NotificationKind {
-	/// The initial notification immediately after the subscriber was created..
+	/// The initial notification immediately after the subscriber was created.
 	Initial,
 	/// This new block immediately follows the block we've last seen.
 	Incremental,
@@ -93,12 +93,8 @@ impl<Hash> StorageNotification<Hash> {
 			changes = self
 				.all_changes
 				.iter()
-				.flat_map(|(key, value)| {
-					if self.subscribed_for.contains(&key) {
-						Some((key.clone(), value.clone()))
-					} else {
-						None
-					}
+				.filter_map(|(key, value)| {
+					self.subscribed_for.contains(&key).then(|| (key.clone(), value.clone()))
 				})
 				.collect();
 		} else {

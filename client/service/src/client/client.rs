@@ -386,9 +386,9 @@ where
 				genesis_block.header().state_root(),
 				genesis_block.header().hash()
 			);
-			if info.best_hash == Default::default() {
-				initial_hash = genesis_block.header().hash();
-			}
+
+			initial_hash = genesis_block.header().hash();
+
 			// Genesis may be written after some blocks have been imported and finalized.
 			// So we only finalize it when the database is empty.
 			let block_state = if info.best_hash == Default::default() {
