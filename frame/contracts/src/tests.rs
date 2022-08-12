@@ -158,14 +158,14 @@ impl ChainExtension<Test> for TestExtension {
 		let func_id = env.func_id();
 		let id = env.ext_id() as u32 | func_id as u32;
 		match func_id {
-			0 => {
+			0x8000 => {
 				let mut env = env.buf_in_buf_out();
 				let input = env.read(8)?;
 				env.write(&input, false, None)?;
 				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
 				Ok(RetVal::Converging(id))
 			},
-			1 => {
+			0x8001 => {
 				let env = env.only_in();
 				TEST_EXTENSION.with(|e| {
 					e.borrow_mut().last_seen_inputs =
@@ -173,13 +173,13 @@ impl ChainExtension<Test> for TestExtension {
 				});
 				Ok(RetVal::Converging(id))
 			},
-			2 => {
+			0x8002 => {
 				let mut env = env.buf_in_buf_out();
 				let weight = env.read(5)?[4].into();
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(id))
 			},
-			3 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
+			0x8003 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
 			_ => {
 				panic!("Passed unknown id to test chain extension: {}", func_id);
 			},
@@ -1646,21 +1646,22 @@ fn chain_extension_works() {
 		),);
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
 
-		// 0 = read input buffer and pass it through as output
-		let input: Vec<u8> = ExtensionInput { extension_id: 0, func_id: 0, extra: &[99] }.into();
+		// 0x8000 = read input buffer and pass it through as output
+		let input: Vec<u8> =
+			ExtensionInput { extension_id: 0, func_id: 0x8000, extra: &[99] }.into();
 		let result =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false);
 		assert_eq!(TestExtension::last_seen_buffer(), input);
 		assert_eq!(result.result.unwrap().data, Bytes(input));
 
-		// 1 = treat inputs as integer primitives and store the supplied integers
+		// 0x8001 = treat inputs as integer primitives and store the supplied integers
 		Contracts::bare_call(
 			ALICE,
 			addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			ExtensionInput { extension_id: 0, func_id: 1, extra: &[] }.into(),
+			ExtensionInput { extension_id: 0, func_id: 0x8001, extra: &[] }.into(),
 			false,
 		)
 		.result
@@ -1668,14 +1669,14 @@ fn chain_extension_works() {
 		// those values passed in the fixture
 		assert_eq!(TestExtension::last_seen_inputs(), (4, 4, 16, 12));
 
-		// 2 = charge some extra weight (amount supplied in the fifth byte)
+		// 0x8002 = charge some extra weight (amount supplied in the fifth byte)
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			ExtensionInput { extension_id: 0, func_id: 2, extra: &[0] }.into(),
+			ExtensionInput { extension_id: 0, func_id: 0x8002, extra: &[0] }.into(),
 			false,
 		);
 		assert_ok!(result.result);
@@ -1686,7 +1687,7 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			ExtensionInput { extension_id: 0, func_id: 2, extra: &[42] }.into(),
+			ExtensionInput { extension_id: 0, func_id: 0x8002, extra: &[42] }.into(),
 			false,
 		);
 		assert_ok!(result.result);
@@ -1697,20 +1698,20 @@ fn chain_extension_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			ExtensionInput { extension_id: 0, func_id: 2, extra: &[95] }.into(),
+			ExtensionInput { extension_id: 0, func_id: 0x8002, extra: &[95] }.into(),
 			false,
 		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed, gas_consumed + 95);
 
-		// 3 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
+		// 0x8003 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
 			0,
 			GAS_LIMIT,
 			None,
-			ExtensionInput { extension_id: 0, func_id: 3, extra: &[] }.into(),
+			ExtensionInput { extension_id: 0, func_id: 0x8003, extra: &[] }.into(),
 			false,
 		)
 		.result
