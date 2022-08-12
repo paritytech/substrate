@@ -444,6 +444,7 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					);
 				}
 
+				let res = (|| {
 				let version = #crate_::CallApiAt::<__SR_API_BLOCK__>::runtime_version_at(self.call, at)?;
 
 				let params = #crate_::CallApiAtParams::<_, fn() -> _, _> {
@@ -457,10 +458,11 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 					recorder: &self.recorder,
 				};
 
-				let res = #crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at::<#crate_::NeverNativeValue, _>(
+				#crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at::<#crate_::NeverNativeValue, _>(
 					self.call,
 					params,
-				);
+				)
+			})();
 
 				self.commit_or_rollback(std::result::Result::is_ok(&res));
 
