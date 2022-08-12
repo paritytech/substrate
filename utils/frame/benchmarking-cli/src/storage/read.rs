@@ -25,6 +25,7 @@ use sp_runtime::{
 
 use log::info;
 use rand::prelude::*;
+use sp_storage::{well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX, ChildInfo};
 use std::{fmt::Debug, sync::Arc, time::Instant};
 
 use super::cmd::StorageCmd;
@@ -53,13 +54,41 @@ impl StorageCmd {
 		// Interesting part here:
 		// Read all the keys in the database and measure the time it takes to access each.
 		info!("Reading {} keys", keys.len());
-		for key in keys.clone() {
-			let start = Instant::now();
-			let v = client
-				.storage(&block, &key)
-				.expect("Checked above to exist")
-				.ok_or("Value unexpectedly empty")?;
-			record.append(v.0.len(), start.elapsed())?;
+		let mut child_node_counter = 0u32;
+		for key in keys.as_slice() {
+			if self.params.include_child &&
+				key.as_ref().starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+			{
+				// child tree key
+				let trie_id = key
+					.as_ref()
+					.strip_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+					.expect("Checked above to exist");
+				let info = ChildInfo::new_default(trie_id);
+				let child_keys = client.child_storage_keys(&block, &info, &empty_prefix)?;
+				for ck in &child_keys {
+					let start = Instant::now();
+					let v = client
+						.child_storage(&block, &info, &ck)
+						.expect("Checked above to exist")
+						.ok_or("Value unexpectedly empty")?;
+					record.append(v.0.len(), start.elapsed())?;
+
+					child_node_counter += 1;
+				}
+			} else {
+				// regular key
+				let start = Instant::now();
+				let v = client
+					.storage(&block, &key)
+					.expect("Checked above to exist")
+					.ok_or("Value unexpectedly empty")?;
+				record.append(v.0.len(), start.elapsed())?;
+			}
+		}
+
+		if self.params.include_child {
+			info!("Read {} child keys", child_node_counter);
 		}
 		Ok(record)
 	}

@@ -99,6 +99,10 @@ pub struct StorageParams {
 	/// State cache size.
 	#[clap(long, default_value = "0")]
 	pub state_cache_size: usize,
+
+	/// Include child trees in benchmark.
+	#[clap(long)]
+	pub include_child: bool,
 }
 
 impl StorageCmd {
@@ -171,7 +175,7 @@ impl StorageCmd {
 
 		for i in 0..self.params.warmups {
 			info!("Warmup round {}/{}", i + 1, self.params.warmups);
-			for key in keys.clone() {
+			for key in keys.as_slice() {
 				let _ = client
 					.storage(&block, &key)
 					.expect("Checked above to exist")
