@@ -107,7 +107,6 @@ fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<To
 
 			fn extract_proof(
 				&mut self,
-				_: &#crate_::BlockId<Block>,
 			) -> Option<#crate_::StorageProof> {
 				unimplemented!("`extract_proof` not implemented for runtime api mocks")
 			}
