@@ -184,8 +184,8 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		approve: bool,
 	) -> Result<bool, DispatchError>;
 
-	/// Veto a proposal, close, and remove it from the system, regardless of its current state.
-	/// Returns an active proposals count which includes removed proposal.
+	/// Veto a proposal, closing and removing it from the system, regardless of its current state.
+	/// Returns an active proposals count, which includes removed proposal.
 	fn veto_proposal(proposal_hash: Hash) -> u32;
 
 	/// Close a proposal that is either approved, disapproved, or whose voting period has ended.
