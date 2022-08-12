@@ -40,7 +40,7 @@ use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV0},
-	LayoutV1, MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX,
+	LayoutV0, MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX,
 };
 
 use frame_support::{
@@ -278,7 +278,7 @@ impl<T: Config> ProvingTrie<T> {
 
 	/// Prove the full verification data for a given key and key ID.
 	pub fn prove(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<Vec<Vec<u8>>> {
-		let mut recorder = Recorder::<LayoutV1<T::Hashing>>::new();
+		let mut recorder = Recorder::<LayoutV0<T::Hashing>>::new();
 		{
 			let trie =
 				TrieDBBuilder::new(&self.db, &self.root).with_recorder(&mut recorder).build();

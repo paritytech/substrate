@@ -278,7 +278,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 			fn extract_proof(
 				&mut self,
-				at: &#crate_::BlockId<Block>,
 			) -> std::option::Option<#crate_::StorageProof> {
 				let recorder = std::option::Option::take(&mut self.recorder);
 				std::option::Option::map(recorder, |recorder| {
