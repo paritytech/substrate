@@ -188,7 +188,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 	/// Returns an active proposals count which includes removed proposal.
 	fn veto_proposal(proposal_hash: Hash) -> u32;
 
-	/// Close a proposal that is either approved, disapproved or whose voting period has ended.
+	/// Close a proposal that is either approved, disapproved, or whose voting period has ended.
 	fn close_proposal(
 		proposal_hash: Hash,
 		index: ProposalIndex,
@@ -640,8 +640,8 @@ pub mod pallet {
 			if Self::is_initialized() {
 				// Reset Alliance by removing all members.
 				// Veto and remove all active proposals to avoid any unexpected behavior from
-				// actionable items managed outside of the pallet. Items like `UnscrupulousWebsites`
-				// managed within the pallet left for new Alliance to cleanup or keep.
+				// actionable items managed outside of the pallet. Items managed within the pallet,
+				// like `UnscrupulousWebsites`, are left for the new Alliance to clean up or keep.
 
 				let proposals = T::ProposalProvider::proposals();
 				ensure!(proposals.len() as u32 <= witness.proposals, Error::<T, I>::BadWitness);
