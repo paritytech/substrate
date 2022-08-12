@@ -15,13 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Contains the [`defer`] macro for *deferring* the execution
+//! Contains the [`crate::defer!`] macro for *deferring* the execution
 //! of code until the current scope is dropped.
 //! This helps with *always* executing cleanup code.
 
 /// Executes the wrapped closure on drop.
 ///
-/// Should be used together with the [`defer`] macro.
+/// Should be used together with the [`crate::defer!`] macro.
 #[must_use]
 pub struct DeferGuard<F: FnOnce()>(pub Option<F>);
 
@@ -33,7 +33,7 @@ impl<F: FnOnce()> Drop for DeferGuard<F> {
 
 /// Executes the given code when the current scope is dropped.
 ///
-/// Multiple calls to [`defer`] will execute the passed codes in reverse order.
+/// Multiple calls to [`crate::defer!`] will execute the passed codes in reverse order.
 /// This also applies to panic stack unwinding.
 ///
 /// # Example
@@ -92,6 +92,7 @@ mod test {
 
 	#[test]
 	#[allow(unused_braces)]
+	#[allow(clippy::unnecessary_operation)]
 	fn defer_guard_syntax_works() {
 		let called = std::cell::RefCell::new(0);
 		{
