@@ -44,12 +44,54 @@ fn force_set_members_works() {
 
 		// fails without root
 		assert_noop!(
-			Alliance::force_set_members(Origin::signed(1), vec![], vec![], vec![]),
+			Alliance::force_set_members(
+				Origin::signed(1),
+				vec![],
+				vec![],
+				vec![],
+				Default::default()
+			),
 			BadOrigin
 		);
 
+		assert_noop!(
+			Alliance::force_set_members(Origin::root(), vec![], vec![], vec![], Default::default()),
+			Error::<Test, ()>::BadWitness,
+		);
+
+		assert_noop!(
+			Alliance::force_set_members(Origin::root(), vec![], vec![], vec![], Default::default()),
+			Error::<Test, ()>::BadWitness,
+		);
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![],
+				vec![],
+				ForceSetWitness::new(1, 3)
+			),
+			Error::<Test, ()>::BadWitness,
+		);
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![],
+				vec![],
+				ForceSetWitness::new(2, 1)
+			),
+			Error::<Test, ()>::BadWitness,
+		);
+
 		// success call
-		assert_ok!(Alliance::force_set_members(Origin::root(), vec![8, 5], vec![4], vec![2]));
+		assert_ok!(Alliance::force_set_members(
+			Origin::root(),
+			vec![8, 5],
+			vec![4],
+			vec![2],
+			ForceSetWitness::new(2, 3)
+		));
 
 		// assert new set of voting members
 		assert_eq!(Alliance::votable_members_sorted(), vec![4, 5, 8]);

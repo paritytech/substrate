@@ -366,6 +366,8 @@ pub mod pallet {
 		TooManyAnnouncements,
 		/// Failed to reset alliance.
 		AllianceNotReset,
+		/// Invalid witness data given.
+		BadWitness,
 	}
 
 	#[pallet::event]
@@ -617,17 +619,21 @@ pub mod pallet {
 		/// Initialize the founders, fellows, and allies.
 		/// Resets members and removes all active proposals if alliance is already initialized.
 		///
-		/// This should only be called once, and must be called by the Root origin.
+		/// Must be called by the Root origin.
+		/// To force reset the alliance witness data must be provider.
 		#[pallet::weight(T::WeightInfo::force_set_members(
 			T::MaxFounders::get(),
 			T::MaxFellows::get(),
-			T::MaxAllies::get()
+			T::MaxAllies::get(),
+			witness.proposals,
+			witness.votable_members,
 		))]
 		pub fn force_set_members(
 			origin: OriginFor<T>,
 			founders: Vec<T::AccountId>,
 			fellows: Vec<T::AccountId>,
 			allies: Vec<T::AccountId>,
+			witness: ForceSetWitness,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -637,11 +643,20 @@ pub mod pallet {
 				// actionable items managed outside of the pallet. Items like `UnscrupulousWebsites`
 				// managed within the pallet left for new Alliance to cleanup or keep.
 
-				T::ProposalProvider::proposals().into_iter().for_each(|hash| {
+				let proposals = T::ProposalProvider::proposals();
+				ensure!(proposals.len() as u32 <= witness.proposals, Error::<T, I>::BadWitness);
+
+				let votable_members = Self::votable_members();
+				ensure!(
+					votable_members.len() as u32 <= witness.votable_members,
+					Error::<T, I>::BadWitness
+				);
+
+				proposals.into_iter().for_each(|hash| {
 					T::ProposalProvider::veto_proposal(hash);
 				});
 
-				T::MembershipChanged::change_members_sorted(&[], &Self::votable_members(), &[]);
+				T::MembershipChanged::change_members_sorted(&[], &votable_members, &[]);
 				ensure!(
 					// `MemberRole` variants, the key of the `StorageMap`, is not expected to grow
 					// to 255.

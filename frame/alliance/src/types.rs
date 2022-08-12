@@ -93,3 +93,24 @@ impl Cid {
 		}
 	}
 }
+
+/// Witness data for force_set_members transactions.
+/// Relevant only if executed on an initialized alliance to reset it.
+#[derive(
+	Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo, Default,
+)]
+pub struct ForceSetWitness {
+	/// Number of active proposals which will be vetoed and removed.
+	#[codec(compact)]
+	pub(super) proposals: u32,
+	/// Total number of votable members of a current alliance to remove.
+	#[codec(compact)]
+	pub(super) votable_members: u32,
+}
+
+impl ForceSetWitness {
+	// Creates new ForceSetWitness.
+	pub(super) fn new(proposals: u32, votable_members: u32) -> Self {
+		Self { proposals, votable_members }
+	}
+}

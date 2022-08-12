@@ -121,7 +121,13 @@ benchmarks_instance_pallet! {
 		let proposer = founders[0].clone();
 		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 
-		Alliance::<T, I>::force_set_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+		Alliance::<T, I>::force_set_members(
+			SystemOrigin::Root.into(),
+			founders,
+			fellows,
+			vec![],
+			Default::default(),
+		)?;
 
 		let threshold = m;
 		// Add previous proposals.
@@ -167,7 +173,13 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+		Alliance::<T, I>::force_set_members(
+			SystemOrigin::Root.into(),
+			founders,
+			fellows,
+			vec![],
+			Default::default(),
+		)?;
 
 		// Threshold is 1 less than the number of members so that one person can vote nay
 		let threshold = m - 1;
@@ -230,7 +242,13 @@ benchmarks_instance_pallet! {
 		let founders = (0 .. m).map(founder::<T, I>).collect::<Vec<_>>();
 		let vetor = founders[0].clone();
 
-		Alliance::<T, I>::force_set_members(SystemOrigin::Root.into(), founders, vec![], vec![])?;
+		Alliance::<T, I>::force_set_members(
+			SystemOrigin::Root.into(),
+			founders,
+			vec![],
+			vec![],
+			Default::default(),
+		)?;
 
 		// Threshold is one less than total members so that two nays will disapprove the vote
 		let threshold = m - 1;
@@ -276,7 +294,13 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+		Alliance::<T, I>::force_set_members(
+			SystemOrigin::Root.into(),
+			founders,
+			fellows,
+			vec![],
+			Default::default(),
+		)?;
 
 		let proposer = members[0].clone();
 		let voter = members[1].clone();
@@ -356,7 +380,13 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+		Alliance::<T, I>::force_set_members(
+			SystemOrigin::Root.into(),
+			founders,
+			fellows,
+			vec![],
+			Default::default(),
+		)?;
 
 		let proposer = members[0].clone();
 		let voter = members[1].clone();
@@ -442,7 +472,13 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+		Alliance::<T, I>::force_set_members(
+			SystemOrigin::Root.into(),
+			founders,
+			fellows,
+			vec![],
+			Default::default(),
+		)?;
 
 		let proposer = members[0].clone();
 		let voter = members[1].clone();
@@ -513,7 +549,13 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
+		Alliance::<T, I>::force_set_members(
+			SystemOrigin::Root.into(),
+			founders,
+			fellows,
+			vec![],
+			Default::default(),
+		)?;
 
 		let proposer = members[0].clone();
 		let voter = members[1].clone();
@@ -569,45 +611,49 @@ benchmarks_instance_pallet! {
 	}
 
 	force_set_members {
-		let b in 1 .. MAX_BYTES;
-		// at least 2 founders
-		let x in 2 .. T::MaxFounders::get();
+		// at least 1 founders
+		let x in 1 .. T::MaxFounders::get();
 		let y in 0 .. T::MaxFellows::get();
 		let z in 0 .. T::MaxAllies::get();
-		let p in 1 .. T::MaxProposals::get();
+		let p in 0 .. T::MaxProposals::get();
+		let c in 0 .. T::MaxMembersCount::get();
 
 		let mut founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
-		let proposer = founders[0].clone();
+		let mut proposer = founders[0].clone();
 		let mut fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 		let mut allies = (0 .. z).map(ally::<T, I>).collect::<Vec<_>>();
+		let witness = ForceSetWitness::new(p, c);
 
-		let m = x + y;
-		let bytes_in_storage = b + size_of::<Cid>() as u32 + 32;
-
-		// set members before benchmarked call to include alliance reset to the benchmark
-		Alliance::<T, I>::force_set_members(
-			SystemOrigin::Root.into(),
-			founders.clone(),
-			fellows.clone(),
-			allies.clone()
-		)?;
-
-		let threshold = m;
-		// Add previous proposals.
-		for i in 0 .. p - 1 {
-			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
-				rule: rule(vec![i as u8; b as usize])
-			}.into();
-			Alliance::<T, I>::propose(
-				SystemOrigin::Signed(proposer.clone()).into(),
-				threshold,
-				Box::new(proposal),
-				bytes_in_storage,
+		if c > 0 {
+			let old_founders = (0..c).map(founder::<T, I>).collect::<Vec<_>>();
+			proposer = old_founders[0].clone();
+			// set members before benchmarked call to perform alliance reset.
+			Alliance::<T, I>::force_set_members(
+				SystemOrigin::Root.into(),
+				old_founders,
+				vec![],
+				vec![],
+				Default::default(),
 			)?;
 		}
 
-	}: _(SystemOrigin::Root, founders.clone(), fellows.clone(), allies.clone())
+		if p > 0 && c > 0 {
+			// Add previous proposals.
+			for i in 0..p - 1 {
+				let threshold = c;
+				let bytes_in_storage = i + size_of::<Cid>() as u32 + 32;
+				// Proposals should be different so that different proposal hashes are generated
+				let proposal: T::Proposal =
+					AllianceCall::<T, I>::set_rule { rule: rule(vec![i as u8; i as usize]) }.into();
+				Alliance::<T, I>::propose(
+					SystemOrigin::Signed(proposer.clone()).into(),
+					threshold,
+					Box::new(proposal),
+					bytes_in_storage,
+				)?;
+			}
+		}
+	}: _(SystemOrigin::Root, founders.clone(), fellows.clone(), allies.clone(), witness)
 	verify {
 		founders.sort();
 		fellows.sort();

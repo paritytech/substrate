@@ -304,7 +304,13 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			Error::<Test, ()>::AllianceNotYetInitialized
 		);
 
-		assert_ok!(Alliance::force_set_members(Origin::root(), vec![1, 2], vec![3], vec![]));
+		assert_ok!(Alliance::force_set_members(
+			Origin::root(),
+			vec![1, 2],
+			vec![3],
+			vec![],
+			Default::default()
+		));
 
 		System::set_block_number(1);
 	});
