@@ -61,7 +61,16 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 				let file = File::open(path).map_err(|e| {
 					format!("Error opening spec file at `{}`: {}", path.display(), e)
 				})?;
-				let genesis: GenesisContainer<G> = json::from_reader(file)
+				// SAFETY: `mmap` is fundamentally unsafe since technically the file can change
+				//         underneath us while it is mapped; in practice it's unlikely to be a
+				//         problem
+				let bytes = unsafe {
+					memmap2::Mmap::map(&file).map_err(|e| {
+						format!("Error mmaping spec file `{}`: {}", path.display(), e)
+					})?
+				};
+
+				let genesis: GenesisContainer<G> = json::from_slice(&bytes)
 					.map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
 			},

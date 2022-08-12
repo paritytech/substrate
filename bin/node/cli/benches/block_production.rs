@@ -18,8 +18,8 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 
+use kitchensink_runtime::{constants::currency::*, BalancesCall};
 use node_cli::service::{create_extrinsic, FullClient};
-use node_runtime::{constants::currency::*, BalancesCall};
 use sc_block_builder::{BlockBuilderProvider, BuiltBlock, RecordProof};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_consensus::{
@@ -28,7 +28,7 @@ use sc_consensus::{
 };
 use sc_service::{
 	config::{
-		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
+		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
 		PruningMode, WasmExecutionMethod, WasmtimeInstantiationStrategy,
 	},
 	BasePath, Configuration, Role,
@@ -75,7 +75,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		state_cache_size: 67108864,
 		state_cache_child_ratio: None,
 		state_pruning: Some(PruningMode::ArchiveAll),
-		keep_blocks: KeepBlocks::All,
+		blocks_pruning: BlocksPruning::All,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Compiled {
 			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
@@ -121,9 +121,9 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 }
 
 fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {
-	node_runtime::UncheckedExtrinsic {
+	kitchensink_runtime::UncheckedExtrinsic {
 		signature: None,
-		function: node_runtime::Call::Timestamp(pallet_timestamp::Call::set { now }),
+		function: kitchensink_runtime::Call::Timestamp(pallet_timestamp::Call::set { now }),
 	}
 	.into()
 }

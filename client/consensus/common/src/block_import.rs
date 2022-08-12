@@ -433,10 +433,10 @@ impl<B: BlockT> JustificationSyncLink<B> for () {
 
 impl<B: BlockT, L: JustificationSyncLink<B>> JustificationSyncLink<B> for Arc<L> {
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		L::request_justification(&*self, hash, number);
+		L::request_justification(self, hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		L::clear_justification_requests(&*self);
+		L::clear_justification_requests(self);
 	}
 }

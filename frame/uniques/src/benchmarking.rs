@@ -42,13 +42,10 @@ fn create_collection<T: Config<I>, I: 'static>(
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	assert!(Uniques::<T, I>::force_create(
-		SystemOrigin::Root.into(),
-		collection,
-		caller_lookup.clone(),
-		false,
-	)
-	.is_ok());
+	assert!(
+		Uniques::<T, I>::force_create(SystemOrigin::Root.into(), caller_lookup.clone(), false,)
+			.is_ok()
+	);
 	(collection, caller, caller_lookup)
 }
 
@@ -143,7 +140,7 @@ benchmarks_instance_pallet! {
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-		let call = Call::<T, I>::create { collection, admin };
+		let call = Call::<T, I>::create { admin };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
@@ -152,7 +149,7 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, T::Helper::collection(0), caller_lookup, true)
+	}: _(SystemOrigin::Root, caller_lookup, true)
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
 	}
@@ -405,6 +402,52 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::CollectionMaxSupplySet {
 			collection,
 			max_supply: u32::MAX,
+		}.into());
+	}
+
+	try_increment_id {
+		let (_, caller, _) = create_collection::<T, I>();
+		Uniques::<T, I>::set_next_id(0);
+	}: _(SystemOrigin::Signed(caller.clone()))
+	verify {
+		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
+			next_id: 1u32.into()
+	}.into());
+  }
+
+	set_price {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let price = ItemPrice::<T, I>::from(100u32);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(price), Some(delegate_lookup))
+	verify {
+		assert_last_event::<T, I>(Event::ItemPriceSet {
+			collection,
+			item,
+			price,
+			whitelisted_buyer: Some(delegate),
+		}.into());
+	}
+
+	buy_item {
+		let (collection, seller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let buyer: T::AccountId = account("buyer", 0, SEED);
+		let buyer_lookup = T::Lookup::unlookup(buyer.clone());
+		let price = ItemPrice::<T, I>::from(0u32);
+		let origin = SystemOrigin::Signed(seller.clone()).into();
+		Uniques::<T, I>::set_price(origin, collection, item, Some(price.clone()), Some(buyer_lookup))?;
+		T::Currency::make_free_balance_be(&buyer, DepositBalanceOf::<T, I>::max_value());
+	}: _(SystemOrigin::Signed(buyer.clone()), collection, item, price.clone())
+	verify {
+		assert_last_event::<T, I>(Event::ItemBought {
+			collection,
+			item,
+			price,
+			seller,
+			buyer,
 		}.into());
 	}
 

@@ -17,6 +17,7 @@ serde = { version = "1.0.136", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -49,6 +50,7 @@ default = ["std"]
 std = [
 	"once_cell",
 	"serde",
+	"sp-api/std",
 	"sp-io/std",
 	"codec/std",
 	"scale-info/std",

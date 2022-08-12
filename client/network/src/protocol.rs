@@ -18,7 +18,6 @@
 
 use crate::{
 	config, error,
-	request_responses::RequestFailure,
 	utils::{interval, LruHashSet},
 };
 
@@ -45,6 +44,7 @@ use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
+	request_responses::RequestFailure,
 	sync::{
 		message::{
 			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
@@ -76,7 +76,6 @@ use std::{
 
 mod notifications;
 
-pub mod event;
 pub mod message;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
@@ -179,6 +178,10 @@ pub struct Protocol<B: BlockT, Client> {
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
 	important_peers: HashSet<PeerId>,
+	/// List of nodes that should never occupy peer slots.
+	default_peers_set_no_slot_peers: HashSet<PeerId>,
+	/// Actual list of connected no-slot nodes.
+	default_peers_set_no_slot_connected_peers: HashSet<PeerId>,
 	/// Value that was passed as part of the configuration. Used to cap the number of full nodes.
 	default_peers_set_num_full: usize,
 	/// Number of slots to allocate to light nodes.
@@ -272,6 +275,7 @@ where
 		roles: Roles,
 		chain: Arc<Client>,
 		protocol_id: ProtocolId,
+		fork_id: &Option<String>,
 		network_config: &config::NetworkConfiguration,
 		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		metrics_registry: Option<&Registry>,
@@ -302,6 +306,17 @@ where
 			}
 			imp_p.shrink_to_fit();
 			imp_p
+		};
+
+		let default_peers_set_no_slot_peers = {
+			let mut no_slot_p: HashSet<PeerId> = network_config
+				.default_peers_set
+				.reserved_nodes
+				.iter()
+				.map(|reserved| reserved.peer_id)
+				.collect();
+			no_slot_p.shrink_to_fit();
+			no_slot_p
 		};
 
 		let mut known_addresses = Vec::new();
@@ -356,8 +371,17 @@ where
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
-		let block_announces_protocol: Cow<'static, str> =
-			format!("/{}/block-announces/1", protocol_id.as_ref()).into();
+		let block_announces_protocol = {
+			let genesis_hash =
+				chain.block_hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
+			if let Some(fork_id) = fork_id {
+				format!("/{}/{}/block-announces/1", hex::encode(genesis_hash), fork_id)
+			} else {
+				format!("/{}/block-announces/1", hex::encode(genesis_hash))
+			}
+		};
+
+		let legacy_ba_protocol_name = format!("/{}/block-announces/1", protocol_id.as_ref());
 
 		let behaviour = {
 			let best_number = info.best_number;
@@ -369,8 +393,8 @@ where
 					.encode();
 
 			let sync_protocol_config = notifications::ProtocolConfig {
-				name: block_announces_protocol,
-				fallback_names: Vec::new(),
+				name: block_announces_protocol.into(),
+				fallback_names: iter::once(legacy_ba_protocol_name.into()).collect(),
 				handshake: block_announces_handshake,
 				max_notification_size: MAX_BLOCK_ANNOUNCE_SIZE,
 			};
@@ -404,6 +428,8 @@ where
 			genesis_hash: info.genesis_hash,
 			chain_sync,
 			important_peers,
+			default_peers_set_no_slot_peers,
+			default_peers_set_no_slot_connected_peers: HashSet::new(),
 			default_peers_set_num_full: network_config.default_peers_set_num_full as usize,
 			default_peers_set_num_light: {
 				let total = network_config.default_peers_set.out_peers +
@@ -542,6 +568,7 @@ where
 				self.pending_messages
 					.push_back(CustomMessageOutcome::BlockImport(origin, blocks));
 			}
+			self.default_peers_set_no_slot_connected_peers.remove(&peer);
 			Ok(())
 		} else {
 			Err(())
@@ -723,7 +750,14 @@ where
 			}
 		}
 
-		if status.roles.is_full() && self.chain_sync.num_peers() >= self.default_peers_set_num_full
+		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
+		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
+
+		if status.roles.is_full() &&
+			self.chain_sync.num_peers() >=
+				self.default_peers_set_num_full +
+					self.default_peers_set_no_slot_connected_peers.len() +
+					this_peer_reserved_slot
 		{
 			debug!(target: "sync", "Too many full nodes, rejecting {}", who);
 			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
@@ -767,6 +801,9 @@ where
 		debug!(target: "sync", "Connected {}", who);
 
 		self.peers.insert(who, peer);
+		if no_slot_peer {
+			self.default_peers_set_no_slot_connected_peers.insert(who);
+		}
 		self.pending_messages
 			.push_back(CustomMessageOutcome::PeerNewBest(who, status.best_number));
 
@@ -1539,8 +1576,6 @@ where
 			} => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
-					debug_assert!(negotiated_fallback.is_none());
-
 					// `received_handshake` can be either a `Status` message if received from the
 					// legacy substream ,or a `BlockAnnouncesHandshake` if received from the block
 					// announces substream.
