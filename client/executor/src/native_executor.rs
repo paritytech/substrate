@@ -170,7 +170,7 @@ where
 	/// runtime is invalidated on any `panic!` to prevent a poisoned state. `ext` is already
 	/// implicitly handled as unwind safe, as we store it in a global variable while executing the
 	/// native runtime.
-	fn with_instance<R, F>(
+	pub fn with_instance<R, F>(
 		&self,
 		runtime_code: &RuntimeCode,
 		ext: &mut dyn Externalities,
