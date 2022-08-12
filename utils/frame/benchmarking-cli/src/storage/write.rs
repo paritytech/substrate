@@ -79,9 +79,9 @@ impl StorageCmd {
 
 			'retry: loop {
 				let mut new_v = vec![0; original_v.len()];
-				// 	// Create a random value to overwrite with.
-				// 	// NOTE: We use a possibly higher entropy than the original value,
-				// 	// could be improved but acts as an over-estimation which is fine for now.
+				// Create a random value to overwrite with.
+				// NOTE: We use a possibly higher entropy than the original value,
+				// could be improved but acts as an over-estimation which is fine for now.
 				rng.fill_bytes(&mut new_v[..]);
 				match check_new_value::<Block>(
 					db.clone(),
