@@ -105,6 +105,5 @@ impl KeystoreParams {
 }
 
 fn input_keystore_password() -> Result<String> {
-	rpassword::prompt_password("Keystore password: ")
-		.map_err(|e| format!("{:?}", e).into())
+	rpassword::prompt_password("Keystore password: ").map_err(|e| format!("{:?}", e).into())
 }
