@@ -498,7 +498,7 @@ fn storage_subscription() {
 			client
 				.lock()
 				.storage_changes_for_keys_stream(&[balance_of_key($keyring)])
-				.filter_map(|notif| futures::future::ready(notif.get(&*client.lock())))
+				.map(|notif| notif.get(&*client.lock()))
 		};
 	}
 

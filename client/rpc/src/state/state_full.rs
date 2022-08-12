@@ -408,9 +408,7 @@ where
 			let stream = self.client.storage_changes_for_keys_stream(&keys);
 			let client = Arc::downgrade(&self.client);
 			let stream = stream.filter_map(move |notification| {
-				futures::future::ready(
-					client.upgrade().and_then(|client| notification.get(&*client)),
-				)
+				futures::future::ready(client.upgrade().map(|client| notification.get(&*client)))
 			});
 
 			let fut = async move {

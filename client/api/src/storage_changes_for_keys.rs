@@ -39,11 +39,10 @@ struct SubscriberId(u64);
 
 #[derive(Debug)]
 enum NotificationKind {
-	/// The initial notification immediately after the subscriber was created.
-	Initial,
 	/// This new block immediately follows the block we've last seen.
 	Incremental,
-	/// This new block doesn't immediately follow the block we've last seen.
+	/// This new block doesn't immediately follow the block we've last seen,
+	/// or is the very first block for which we're sending the notifications.
 	Reorganized,
 }
 
@@ -67,7 +66,7 @@ pub struct StorageNotification<Hash> {
 
 impl<Hash> StorageNotification<Hash> {
 	/// Extracts the storage change set from this notification and/or the storage.
-	pub fn get<Block, Backend, Storage>(self, client: &Storage) -> Option<StorageChangeSet<Hash>>
+	pub fn get<Block, Backend, Storage>(self, client: &Storage) -> StorageChangeSet<Hash>
 	where
 		Storage: crate::StorageProvider<Block, Backend>,
 		Backend: crate::backend::Backend<Block>,
@@ -81,7 +80,7 @@ impl<Hash> StorageNotification<Hash> {
 	fn get_impl(
 		&self,
 		mut get_from_storage: impl FnMut(&StorageKey) -> Option<StorageData>,
-	) -> Option<StorageChangeSet<Hash>>
+	) -> StorageChangeSet<Hash>
 	where
 		Hash: Clone,
 	{
@@ -111,21 +110,12 @@ impl<Hash> StorageNotification<Hash> {
 					// have been changed in one of the previous blocks,
 					// so fetch it from the storage.
 					let value = get_from_storage(key);
-					if matches!(self.kind, NotificationKind::Initial) && value.is_none() {
-						// Don't send empty values for the initial notification.
-						continue
-					}
 					changes.push((key.clone(), value));
 				}
 			}
 		}
 
-		if matches!(self.kind, NotificationKind::Initial) && changes.is_empty() {
-			// Don't send notifications with no changes for the initial notification.
-			return None
-		}
-
-		Some(StorageChangeSet { block: self.block_hash.clone(), changes })
+		StorageChangeSet { block: self.block_hash.clone(), changes }
 	}
 }
 
@@ -347,7 +337,7 @@ where
 		message_queue.push_back(StorageNotification {
 			block_hash: self.last_block_hash.clone(),
 			all_changes: Default::default(),
-			kind: NotificationKind::Initial,
+			kind: NotificationKind::Reorganized,
 			subscribed_for: subscribed_for.clone(),
 		});
 
@@ -451,26 +441,24 @@ mod tests {
 				if let Some(notif) = notif {
 					let empty = HashMap::new();
 					let storage = storage.get(&notif.block_hash).unwrap_or(&empty);
-					let notif = notif.get_impl(|key| {
+					let mut notif = notif.get_impl(|key| {
 						storage.get(&key.0).map(|value| StorageData(value.clone()))
 					});
 
-					if let Some(mut notif) = notif {
-						notif.changes.sort();
-						list.push((
-							notif.block,
-							notif
-								.changes
-								.into_iter()
-								.map(|(key, value)| {
-									(
-										String::from_utf8(key.0).unwrap(),
-										value.map(|value| String::from_utf8(value.0).unwrap()),
-									)
-								})
-								.collect(),
-						));
-					}
+					notif.changes.sort();
+					list.push((
+						notif.block,
+						notif
+							.changes
+							.into_iter()
+							.map(|(key, value)| {
+								(
+									String::from_utf8(key.0).unwrap(),
+									value.map(|value| String::from_utf8(value.0).unwrap()),
+								)
+							})
+							.collect(),
+					));
 				}
 			}
 			list
@@ -483,21 +471,26 @@ mod tests {
 		test.insert(Hash(0), Hash(1), vec![("A", Some("1"))]);
 		assert_eq!(
 			test.subscribe(&["A", "B"]).recv_all(),
-			vec![(Hash(1), vec![("A".to_owned(), Some("1".to_owned()))])]
+			vec![(Hash(1), vec![("A".to_owned(), Some("1".to_owned())), ("B".to_owned(), None)])]
 		);
 	}
 
 	#[test]
-	fn nothing_is_sent_if_there_are_no_existing_storage_entries_when_a_subscription_is_created() {
+	fn notification_is_sent_even_if_there_are_no_existing_storage_entries_when_a_subscription_is_created(
+	) {
 		let mut test = TestHarness::default();
 		test.insert(Hash(0), Hash(1), vec![("A", Some("1"))]);
-		assert_eq!(test.subscribe(&["B"]).recv_all(), vec![]);
+		assert_eq!(
+			test.subscribe(&["B"]).recv_all(),
+			vec![(Hash(1), vec![("B".to_owned(), None)])]
+		);
 	}
 
 	#[test]
 	fn unrelated_changes_do_not_trigger_the_subscriber() {
 		let mut test = TestHarness::default();
 		let mut sub = test.subscribe(&["A"]);
+		assert_eq!(sub.recv_all(), vec![(Hash(0), vec![("A".to_owned(), None)])]);
 		test.insert(Hash(0), Hash(1), vec![("B", Some("1"))]);
 		assert_eq!(sub.recv_all(), vec![]);
 	}
@@ -510,6 +503,11 @@ mod tests {
 
 		let mut test = TestHarness::default();
 		let mut sub = test.subscribe(&["A", "B"]);
+		assert_eq!(
+			sub.recv_all(),
+			vec![(Hash(0), vec![("A".to_owned(), None), ("B".to_owned(), None)])]
+		);
+
 		test.insert(Hash(0), Hash(1), vec![("A", Some("1"))]);
 		test.insert(Hash(1), Hash(2), vec![("B", Some("2"))]);
 		test.insert(Hash(2), Hash(3), vec![("C", Some("3"))]);
@@ -537,7 +535,10 @@ mod tests {
 
 		let mut sub = test.subscribe(&["A", "B"]);
 		// Initial notification with values fetched from storage.
-		assert_eq!(sub.recv_all(), vec![(Hash(2), vec![("B".to_owned(), Some("2".to_owned())),])]);
+		assert_eq!(
+			sub.recv_all(),
+			vec![(Hash(2), vec![("A".to_owned(), None), ("B".to_owned(), Some("2".to_owned())),])]
+		);
 
 		test.insert(Hash(1), Hash(3), vec![("C", Some("2"))]);
 		// Fixup notification with values fetched from storage.
