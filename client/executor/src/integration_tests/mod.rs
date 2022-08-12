@@ -226,7 +226,7 @@ fn call_in_wasm<E: Externalities>(
 	ext: &mut E,
 ) -> Result<Vec<u8>, Error> {
 	let executor =
-		crate::WasmExecutor::<HostFunctions>::new(execution_method, Some(1024), 8, None, 2);
+		crate::WasmExecutor::<HostFunctions>::new(execution_method, Some(1024), 8, None, 2, false);
 	executor.uncached_call(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		ext,
@@ -561,6 +561,7 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		8,
 		None,
 		2,
+		false,
 	);
 
 	let err = executor
@@ -687,6 +688,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		8,
 		None,
 		2,
+		false,
 	));
 	let threads: Vec<_> = (0..8)
 		.map(|_| {

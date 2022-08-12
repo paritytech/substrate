@@ -77,6 +77,7 @@ fn executor() -> sc_executor::NativeElseWasmExecutor<ExecutorDispatch> {
 		None,
 		8,
 		2,
+		false,
 	)
 }
 

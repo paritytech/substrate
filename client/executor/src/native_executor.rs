@@ -101,7 +101,8 @@ pub struct WasmExecutor<H> {
 	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
 	/// compiled artifacts.
 	cache_path: Option<PathBuf>,
-
+	/// Ignore missing function imports.
+	allow_missing_host_functions: bool,
 	phantom: PhantomData<H>,
 }
 
@@ -112,6 +113,7 @@ impl<H> Clone for WasmExecutor<H> {
 			default_heap_pages: self.default_heap_pages,
 			cache: self.cache.clone(),
 			cache_path: self.cache_path.clone(),
+			allow_missing_host_functions: self.allow_missing_host_functions,
 			phantom: self.phantom,
 		}
 	}
@@ -137,12 +139,15 @@ where
 	///   compiled execution method is used.
 	///
 	/// `runtime_cache_size` - The capacity of runtime cache.
+	///
+	/// `allow_missing_func_imports` - Ignore missing function imports.
 	pub fn new(
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 		cache_path: Option<PathBuf>,
 		runtime_cache_size: u8,
+		allow_missing_host_functions: bool,
 	) -> Self {
 		WasmExecutor {
 			method,
@@ -153,6 +158,7 @@ where
 				runtime_cache_size,
 			)),
 			cache_path,
+			allow_missing_host_functions,
 			phantom: PhantomData,
 		}
 	}
@@ -353,7 +359,7 @@ where
 		let result = self.with_instance(
 			runtime_code,
 			ext,
-			false,
+			self.allow_missing_host_functions,
 			|module, mut instance, _onchain_version, mut ext| {
 				with_externalities_safe(&mut **ext, move || {
 					preregister_builtin_ext(module.clone());
@@ -374,9 +380,14 @@ where
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
-			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-		})
+		self.with_instance(
+			runtime_code,
+			ext,
+			self.allow_missing_host_functions,
+			|_module, _instance, version, _ext| {
+				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+			},
+		)
 	}
 }
 
@@ -387,7 +398,7 @@ where
 	D: NativeExecutionDispatch,
 {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	_dummy: std::marker::PhantomData<D>,
+	_dummy: PhantomData<D>,
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// Fallback wasm executor.
@@ -408,24 +419,28 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
 	///
 	/// `runtime_cache_size` - The capacity of runtime cache.
+	///
+	/// `allow_missing_func_imports` - Ignore missing function imports.
 	pub fn new(
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 		runtime_cache_size: u8,
+		allow_missing_host_functions: bool,
 	) -> Self {
-		let wasm_executor = WasmExecutor::new(
+		let wasm = WasmExecutor::new(
 			fallback_method,
 			default_heap_pages,
 			max_runtime_instances,
 			None,
 			runtime_cache_size,
+			allow_missing_host_functions,
 		);
 
 		NativeElseWasmExecutor {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
-			wasm: wasm_executor,
+			wasm,
 		}
 	}
 }
@@ -436,10 +451,14 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeElseWasmExecutor<D> 
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm
-			.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
+		self.wasm.with_instance(
+			runtime_code,
+			ext,
+			self.wasm.allow_missing_host_functions,
+			|_module, _instance, version, _ext| {
 				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-			})
+			},
+		)
 	}
 }
 
@@ -606,7 +625,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 		let result = self.wasm.with_instance(
 			runtime_code,
 			ext,
-			false,
+			self.wasm.allow_missing_host_functions,
 			|module, mut instance, onchain_version, mut ext| {
 				let onchain_version =
 					onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;
@@ -717,6 +736,7 @@ mod tests {
 			None,
 			8,
 			2,
+			false,
 		);
 
 		fn extract_host_functions<H>(

@@ -343,7 +343,7 @@ mod tests {
 	}
 
 	fn executor() -> NativeElseWasmExecutor<NativeDispatch> {
-		NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
+		NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2, false)
 	}
 
 	fn new_test_ext() -> TestExternalities {

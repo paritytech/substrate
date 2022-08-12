@@ -42,7 +42,7 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 
 	let executor = sc_executor::WasmExecutor::<
 		ExtendedHostFunctions<sp_io::SubstrateHostFunctions, HF>,
-	>::new(sc_executor::WasmExecutionMethod::Interpreted, Some(8), 8, None, 2);
+	>::new(sc_executor::WasmExecutionMethod::Interpreted, Some(8), 8, None, 2, false);
 
 	let (result, allocation_stats) = executor.uncached_call_with_allocation_stats(
 		RuntimeBlob::uncompress_if_needed(binary).expect("Failed to parse binary"),
