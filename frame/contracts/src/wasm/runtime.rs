@@ -18,15 +18,16 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	exec::{ExecError, ExecResult, Ext, StorageKey, TopicOf},
+	exec::{ExecError, ExecResult, Ext, FixSizedKey, TopicOf, VarSizedKey},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
 	wasm::env_def::ConvertibleToWasm,
 	BalanceOf, CodeHash, Config, Error, SENTINEL,
 };
+
 use bitflags::bitflags;
-use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
-use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
+use codec::{Decode, DecodeLimit, Encode, MaxEncodedLen};
+use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
@@ -35,6 +36,31 @@ use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::ValueType;
 
+/// The maximum nesting depth a contract can use when encoding types.
+const MAX_DECODE_NESTING: u32 = 256;
+
+/// Type of a storage key.
+#[allow(dead_code)]
+enum KeyType {
+	/// Deprecated fix sized key [0;32].
+	Fix,
+	/// Variable sized key used in transparent hashing,
+	/// cannot be larger than MaxStorageKeyLen.
+	Variable(u32),
+}
+
+impl KeyType {
+	fn len<T: Config>(&self) -> Result<u32, TrapReason> {
+		match self {
+			KeyType::Fix => Ok(32u32),
+			KeyType::Variable(len) => {
+				ensure!(len <= &<T>::MaxStorageKeyLen::get(), Error::<T>::DecodingFailed);
+				Ok(*len)
+			},
+		}
+	}
+}
+
 /// Every error that can be returned to a contract when it calls any of the host functions.
 ///
 /// # Note
@@ -42,7 +68,7 @@ use wasm_instrument::parity_wasm::elements::ValueType;
 /// This enum can be extended in the future: New codes can be added but existing codes
 /// will not be changed or removed. This means that any contract **must not** exhaustively
 /// match return codes. Instead, contracts should prepare for unknown variants and deal with
-/// those errors gracefuly in order to be forward compatible.
+/// those errors gracefully in order to be forward compatible.
 #[repr(u32)]
 pub enum ReturnCode {
 	/// API call successful.
@@ -78,8 +104,9 @@ pub enum ReturnCode {
 }
 
 impl ConvertibleToWasm for ReturnCode {
-	type NativeType = Self;
 	const VALUE_TYPE: ValueType = ValueType::I32;
+	type NativeType = Self;
+
 	fn to_typed_value(self) -> sp_sandbox::Value {
 		sp_sandbox::Value::I32(self as i32)
 	}
@@ -416,6 +443,7 @@ pub struct Runtime<'a, E: Ext + 'a> {
 	input_data: Option<Vec<u8>>,
 	memory: sp_sandbox::default_executor::Memory,
 	trap_reason: Option<TrapReason>,
+	chain_extension: Option<Box<<E::T as Config>::ChainExtension>>,
 }
 
 impl<'a, E> Runtime<'a, E>
@@ -429,7 +457,13 @@ where
 		input_data: Vec<u8>,
 		memory: sp_sandbox::default_executor::Memory,
 	) -> Self {
-		Runtime { ext, input_data: Some(input_data), memory, trap_reason: None }
+		Runtime {
+			ext,
+			input_data: Some(input_data),
+			memory,
+			trap_reason: None,
+			chain_extension: Some(Box::new(Default::default())),
+		}
 	}
 
 	/// Converts the sandbox result and the runtime state into the execution outcome.
@@ -544,7 +578,7 @@ where
 		ptr: u32,
 	) -> Result<D, DispatchError> {
 		let buf = self.read_sandbox_memory(ptr, D::max_encoded_len() as u32)?;
-		let decoded = D::decode_all(&mut &buf[..])
+		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
 		Ok(decoded)
 	}
@@ -566,7 +600,7 @@ where
 		len: u32,
 	) -> Result<D, DispatchError> {
 		let buf = self.read_sandbox_memory(ptr, len)?;
-		let decoded = D::decode_all(&mut &buf[..])
+		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
 		Ok(decoded)
 	}
@@ -695,6 +729,7 @@ where
 
 	fn set_storage(
 		&mut self,
+		key_type: KeyType,
 		key_ptr: u32,
 		value_ptr: u32,
 		value_len: u32,
@@ -705,10 +740,21 @@ where
 		if value_len > max_size {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
-		let mut key: StorageKey = [0; 32];
-		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
 		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
-		let write_outcome = self.ext.set_storage(key, value, false)?;
+		let write_outcome = match key_type {
+			KeyType::Fix => self.ext.set_storage(
+				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				value,
+				false,
+			)?,
+			KeyType::Variable(_) => self.ext.set_storage_transparent(
+				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				value,
+				false,
+			)?,
+		};
+
 		self.adjust_gas(
 			charged,
 			RuntimeCosts::SetStorage { new_bytes: value_len, old_bytes: write_outcome.old_len() },
@@ -716,13 +762,68 @@ where
 		Ok(write_outcome.old_len_with_sentinel())
 	}
 
-	fn clear_storage(&mut self, key_ptr: u32) -> Result<u32, TrapReason> {
+	fn clear_storage(&mut self, key_type: KeyType, key_ptr: u32) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
-		let mut key: StorageKey = [0; 32];
-		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		let outcome = self.ext.set_storage(key, None, false)?;
+		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
+		let outcome = match key_type {
+			KeyType::Fix => self.ext.set_storage(
+				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				None,
+				false,
+			)?,
+			KeyType::Variable(_) => self.ext.set_storage_transparent(
+				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+				None,
+				false,
+			)?,
+		};
+
 		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.old_len()));
 		Ok(outcome.old_len_with_sentinel())
+	}
+
+	fn get_storage(
+		&mut self,
+		key_type: KeyType,
+		key_ptr: u32,
+		out_ptr: u32,
+		out_len_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		let charged = self.charge_gas(RuntimeCosts::GetStorage(self.ext.max_value_size()))?;
+		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
+		let outcome = match key_type {
+			KeyType::Fix => self.ext.get_storage(
+				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+			),
+			KeyType::Variable(_) => self.ext.get_storage_transparent(
+				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+			),
+		};
+
+		if let Some(value) = outcome {
+			self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
+			self.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
+			Ok(ReturnCode::Success)
+		} else {
+			self.adjust_gas(charged, RuntimeCosts::GetStorage(0));
+			Ok(ReturnCode::KeyNotFound)
+		}
+	}
+
+	fn contains_storage(&mut self, key_type: KeyType, key_ptr: u32) -> Result<u32, TrapReason> {
+		let charged = self.charge_gas(RuntimeCosts::ContainsStorage(self.ext.max_value_size()))?;
+		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
+		let outcome = match key_type {
+			KeyType::Fix => self.ext.get_storage_size(
+				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+			),
+			KeyType::Variable(_) => self.ext.get_storage_size_transparent(
+				&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
+			),
+		};
+
+		self.adjust_gas(charged, RuntimeCosts::ClearStorage(outcome.unwrap_or(0)));
+		Ok(outcome.unwrap_or(SENTINEL))
 	}
 
 	fn call(
@@ -863,10 +964,13 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_set_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
-		ctx.set_storage(key_ptr, value_ptr, value_len).map(|_| ())
+		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 	},
 
 	// Set the value at the given key in the contract storage.
+	//
+	// This version is to be used with a fixed sized storage key. For runtimes supporting transparent
+	// hashing, please use the newer version of this function.
 	//
 	// The value length must not exceed the maximum defined by the contracts module parameters.
 	// Specifying a `value_len` of zero will store an empty value.
@@ -882,7 +986,27 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[seal1] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
-		ctx.set_storage(key_ptr, value_ptr, value_len)
+		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len)
+	},
+
+	// Set the value at the given key in the contract storage.
+	//
+	// The key and value lengths must not exceed the maximums defined by the contracts module parameters.
+	// Specifying a `value_len` of zero will store an empty value.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the location to store the value is placed.
+	// - `key_len`: the length of the key in bytes.
+	// - `value_ptr`: pointer into the linear memory where the value to set is placed.
+	// - `value_len`: the length of the value in bytes.
+	//
+	// # Return Value
+	//
+	// Returns the size of the pre-existing value at the specified key if any. Otherwise
+	// `SENTINEL` is returned as a sentinel value.
+	[__unstable__] seal_set_storage(ctx, key_ptr: u32, key_len: u32, value_ptr: u32, value_len: u32) -> u32 => {
+		ctx.set_storage(KeyType::Variable(key_len), key_ptr, value_ptr, value_len)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -890,24 +1014,28 @@ define_env!(Env, <E: Ext>,
 	// Equivalent to the newer version of `seal_clear_storage` with the exception of the return
 	// type. Still a valid thing to call when not interested in the return value.
 	[seal0] seal_clear_storage(ctx, key_ptr: u32) => {
-		ctx.clear_storage(key_ptr).map(|_| ()).map_err(Into::into)
+		ctx.clear_storage(KeyType::Fix, key_ptr).map(|_| ())
 	},
 
 	// Clear the value at the given key in the contract storage.
 	//
 	// # Parameters
 	//
-	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
+	// - `key_ptr`: pointer into the linear memory where the key is placed.
+	// - `key_len`: the length of the key in bytes.
 	//
 	// # Return Value
 	//
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
-	[__unstable__] seal_clear_storage(ctx, key_ptr: u32) -> u32 => {
-		ctx.clear_storage(key_ptr).map_err(Into::into)
+	[__unstable__] seal_clear_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
+		ctx.clear_storage(KeyType::Variable(key_len), key_ptr)
 	},
 
 	// Retrieve the value under the given key from storage.
+	//
+	// This version is to be used with a fixed sized storage key. For runtimes supporting transparent
+	// hashing, please use the newer version of this function.
 	//
 	// # Parameters
 	//
@@ -920,20 +1048,35 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::KeyNotFound`
 	[seal0] seal_get_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
-		let charged = ctx.charge_gas(RuntimeCosts::GetStorage(ctx.ext.max_value_size()))?;
-		let mut key: StorageKey = [0; 32];
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let Some(value) = ctx.ext.get_storage(&key) {
-			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
-			Ok(ReturnCode::Success)
-		} else {
-			ctx.adjust_gas(charged, RuntimeCosts::GetStorage(0));
-			Ok(ReturnCode::KeyNotFound)
-		}
+		ctx.get_storage(KeyType::Fix, key_ptr, out_ptr, out_len_ptr)
+	},
+
+	// Retrieve the value under the given key from storage.
+	//
+	// This version is to be used with a fixed sized storage key. For runtimes supporting transparent
+	// hashing, please use the newer version of this function.
+	//
+	// The key length must not exceed the maximum defined by the contracts module parameter.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
+	// - `key_len`: the length of the key in bytes.
+	// - `out_ptr`: pointer to the linear memory where the value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	//
+	// # Errors
+	//
+	// `ReturnCode::KeyNotFound`
+	[__unstable__] seal_get_storage(ctx, key_ptr: u32, key_len: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+		ctx.get_storage(KeyType::Variable(key_len), key_ptr, out_ptr, out_len_ptr)
 	},
 
 	// Checks whether there is a value stored under the given key.
+	//
+	// This version is to be used with a fixed sized storage key. For runtimes supporting transparent
+	// hashing, please use the newer version of this function.
 	//
 	// # Parameters
 	//
@@ -944,16 +1087,24 @@ define_env!(Env, <E: Ext>,
 	// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	// `SENTINEL` is returned as a sentinel value.
 	[seal0] seal_contains_storage(ctx, key_ptr: u32) -> u32 => {
-		let charged = ctx.charge_gas(RuntimeCosts::ContainsStorage(ctx.ext.max_value_size()))?;
-		let mut key: StorageKey = [0; 32];
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let Some(len) = ctx.ext.get_storage_size(&key) {
-			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(len));
-			Ok(len)
-		} else {
-			ctx.adjust_gas(charged, RuntimeCosts::ContainsStorage(0));
-			Ok(SENTINEL)
-		}
+		ctx.contains_storage(KeyType::Fix, key_ptr)
+	},
+
+	// Checks whether there is a value stored under the given key.
+	//
+	// The key length must not exceed the maximum defined by the contracts module parameter.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
+	// - `key_len`: the length of the key in bytes.
+	//
+	// # Return Value
+	//
+	// Returns the size of the pre-existing value at the specified key if any. Otherwise
+	// `SENTINEL` is returned as a sentinel value.
+	[__unstable__] seal_contains_storage(ctx, key_ptr: u32, key_len: u32) -> u32 => {
+		ctx.contains_storage(KeyType::Variable(key_len), key_ptr)
 	},
 
 	// Retrieve and remove the value under the given key from storage.
@@ -961,6 +1112,7 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
+	// - `key_len`: the length of the key in bytes.
 	// - `out_ptr`: pointer to the linear memory where the value is written to.
 	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
 	//   is read from and the value length is written to.
@@ -968,11 +1120,10 @@ define_env!(Env, <E: Ext>,
 	// # Errors
 	//
 	// `ReturnCode::KeyNotFound`
-	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+	[__unstable__] seal_take_storage(ctx, key_ptr: u32, key_len: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
-		let mut key: StorageKey = [0; 32];
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
+		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
+		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage_transparent(&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?, None, true)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
 			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
@@ -1061,7 +1212,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Parameters
 	//
-	// - flags: See [`CallFlags`] for a documenation of the supported flags.
+	// - flags: See [`CallFlags`] for a documentation of the supported flags.
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - gas: how much gas to devote to the execution.
@@ -1605,7 +1756,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity
+	// backwards compatibility
 	[seal0] seal_restore_to(
 		ctx,
 		_dest_ptr: u32,
@@ -1626,7 +1777,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity
+	// backwards compatibility
 	[seal1] seal_restore_to(
 		ctx,
 		_dest_ptr: u32,
@@ -1709,7 +1860,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity.
+	// backwards compatibility.
 	[seal0] seal_set_rent_allowance(ctx, _value_ptr: u32, _value_len: u32) => {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())
@@ -1720,7 +1871,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity.
+	// backwards compatibility.
 	[seal1] seal_set_rent_allowance(ctx, _value_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())
@@ -1731,7 +1882,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity.
+	// backwards compatibility.
 	[seal0] seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::Balance)?;
 		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
@@ -1866,7 +2017,7 @@ define_env!(Env, <E: Ext>,
 	// module error.
 	[seal0] seal_call_chain_extension(
 		ctx,
-		func_id: u32,
+		id: u32,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
@@ -1876,14 +2027,20 @@ define_env!(Env, <E: Ext>,
 		if !<E::T as Config>::ChainExtension::enabled() {
 			return Err(Error::<E::T>::NoChainExtension.into());
 		}
-		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
-		match <E::T as Config>::ChainExtension::call(func_id, env)? {
+		let mut chain_extension = ctx.chain_extension.take().expect(
+			"Constructor initializes with `Some`. This is the only place where it is set to `None`.\
+			It is always reset to `Some` afterwards. qed"
+		);
+		let env = Environment::new(ctx, id, input_ptr, input_len, output_ptr, output_len_ptr);
+		let ret = match chain_extension.call(env)? {
 			RetVal::Converging(val) => Ok(val),
 			RetVal::Diverging{flags, data} => Err(TrapReason::Return(ReturnData {
 				flags: flags.bits(),
 				data,
 			})),
-		}
+		};
+		ctx.chain_extension = Some(chain_extension);
+		ret
 	},
 
 	// Emit a custom debug message.
@@ -1931,15 +2088,15 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Return Value
 	//
-	// Returns `ReturnCode::Success` when the dispatchable was succesfully executed and
-	// returned `Ok`. When the dispatchable was exeuted but returned an error
+	// Returns `ReturnCode::Success` when the dispatchable was successfully executed and
+	// returned `Ok`. When the dispatchable was executed but returned an error
 	// `ReturnCode::CallRuntimeReturnedError` is returned. The full error is not
 	// provided because it is not guaranteed to be stable.
 	//
 	// # Comparison with `ChainExtension`
 	//
 	// Just as a chain extension this API allows the runtime to extend the functionality
-	// of contracts. While making use of this function is generelly easier it cannot be
+	// of contracts. While making use of this function is generally easier it cannot be
 	// used in call cases. Consider writing a chain extension if you need to do perform
 	// one of the following tasks:
 	//

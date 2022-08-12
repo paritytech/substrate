@@ -20,11 +20,11 @@ use frame_support::{
 	traits::Currency,
 	weights::{constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFee},
 };
-use node_primitives::Balance;
-use node_runtime::{
+use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, Call, CheckedExtrinsic, Multiplier, Runtime, TransactionByteFee, TransactionPayment,
 };
+use node_primitives::Balance;
 use node_testing::keyring::*;
 use sp_core::NeverNativeValue;
 use sp_runtime::{traits::One, Perbill};
@@ -58,8 +58,10 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::System(frame_system::Call::fill_block {
-					ratio: Perbill::from_percent(60),
+				function: Call::Sudo(pallet_sudo::Call::sudo {
+					call: Box::new(Call::System(frame_system::Call::fill_block {
+						ratio: Perbill::from_percent(60),
+					})),
 				}),
 			},
 		],

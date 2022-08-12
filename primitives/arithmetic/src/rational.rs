@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{biguint::BigUint, helpers_128bit};
+use crate::{biguint::BigUint, helpers_128bit, Rounding};
 use num_traits::{Bounded, One, Zero};
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -143,27 +143,38 @@ impl Rational128 {
 
 	/// Convert `self` to a similar rational number where denominator is the given `den`.
 	//
-	/// This only returns if the result is accurate. `Err` is returned if the result cannot be
+	/// This only returns if the result is accurate. `None` is returned if the result cannot be
 	/// accurately calculated.
-	pub fn to_den(self, den: u128) -> Result<Self, &'static str> {
+	pub fn to_den(self, den: u128) -> Option<Self> {
 		if den == self.1 {
-			Ok(self)
+			Some(self)
 		} else {
-			helpers_128bit::multiply_by_rational(self.0, den, self.1).map(|n| Self(n, den))
+			helpers_128bit::multiply_by_rational_with_rounding(
+				self.0,
+				den,
+				self.1,
+				Rounding::NearestPrefDown,
+			)
+			.map(|n| Self(n, den))
 		}
 	}
 
 	/// Get the least common divisor of `self` and `other`.
 	///
-	/// This only returns if the result is accurate. `Err` is returned if the result cannot be
+	/// This only returns if the result is accurate. `None` is returned if the result cannot be
 	/// accurately calculated.
-	pub fn lcm(&self, other: &Self) -> Result<u128, &'static str> {
+	pub fn lcm(&self, other: &Self) -> Option<u128> {
 		// this should be tested better: two large numbers that are almost the same.
 		if self.1 == other.1 {
-			return Ok(self.1)
+			return Some(self.1)
 		}
 		let g = helpers_128bit::gcd(self.1, other.1);
-		helpers_128bit::multiply_by_rational(self.1, other.1, g)
+		helpers_128bit::multiply_by_rational_with_rounding(
+			self.1,
+			other.1,
+			g,
+			Rounding::NearestPrefDown,
+		)
 	}
 
 	/// A saturating add that assumes `self` and `other` have the same denominator.
@@ -188,9 +199,11 @@ impl Rational128 {
 	///
 	/// Overflow might happen during any of the steps. Error is returned in such cases.
 	pub fn checked_add(self, other: Self) -> Result<Self, &'static str> {
-		let lcm = self.lcm(&other).map_err(|_| "failed to scale to denominator")?;
-		let self_scaled = self.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
-		let other_scaled = other.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
+		let lcm = self.lcm(&other).ok_or(0).map_err(|_| "failed to scale to denominator")?;
+		let self_scaled =
+			self.to_den(lcm).ok_or(0).map_err(|_| "failed to scale to denominator")?;
+		let other_scaled =
+			other.to_den(lcm).ok_or(0).map_err(|_| "failed to scale to denominator")?;
 		let n = self_scaled
 			.0
 			.checked_add(other_scaled.0)
@@ -202,9 +215,11 @@ impl Rational128 {
 	///
 	/// Overflow might happen during any of the steps. None is returned in such cases.
 	pub fn checked_sub(self, other: Self) -> Result<Self, &'static str> {
-		let lcm = self.lcm(&other).map_err(|_| "failed to scale to denominator")?;
-		let self_scaled = self.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
-		let other_scaled = other.to_den(lcm).map_err(|_| "failed to scale to denominator")?;
+		let lcm = self.lcm(&other).ok_or(0).map_err(|_| "failed to scale to denominator")?;
+		let self_scaled =
+			self.to_den(lcm).ok_or(0).map_err(|_| "failed to scale to denominator")?;
+		let other_scaled =
+			other.to_den(lcm).ok_or(0).map_err(|_| "failed to scale to denominator")?;
 
 		let n = self_scaled
 			.0
@@ -314,18 +329,18 @@ mod tests {
 	#[test]
 	fn to_denom_works() {
 		// simple up and down
-		assert_eq!(r(1, 5).to_den(10), Ok(r(2, 10)));
-		assert_eq!(r(4, 10).to_den(5), Ok(r(2, 5)));
+		assert_eq!(r(1, 5).to_den(10), Some(r(2, 10)));
+		assert_eq!(r(4, 10).to_den(5), Some(r(2, 5)));
 
 		// up and down with large numbers
-		assert_eq!(r(MAX128 - 10, MAX128).to_den(10), Ok(r(10, 10)));
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(10), Ok(r(5, 10)));
+		assert_eq!(r(MAX128 - 10, MAX128).to_den(10), Some(r(10, 10)));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(10), Some(r(5, 10)));
 
 		// large to perbill. This is very well needed for npos-elections.
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(1000_000_000), Ok(r(500_000_000, 1000_000_000)));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(1000_000_000), Some(r(500_000_000, 1000_000_000)));
 
 		// large to large
-		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128 / 2), Ok(r(MAX128 / 4, MAX128 / 2)));
+		assert_eq!(r(MAX128 / 2, MAX128).to_den(MAX128 / 2), Some(r(MAX128 / 4, MAX128 / 2)));
 	}
 
 	#[test]
@@ -342,13 +357,10 @@ mod tests {
 		assert_eq!(r(5, 30).lcm(&r(1, 10)).unwrap(), 30);
 
 		// large numbers
-		assert_eq!(
-			r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128 - 1)),
-			Err("result cannot fit in u128"),
-		);
+		assert_eq!(r(1_000_000_000, MAX128).lcm(&r(7_000_000_000, MAX128 - 1)), None,);
 		assert_eq!(
 			r(1_000_000_000, MAX64).lcm(&r(7_000_000_000, MAX64 - 1)),
-			Ok(340282366920938463408034375210639556610),
+			Some(340282366920938463408034375210639556610),
 		);
 		const_assert!(340282366920938463408034375210639556610 < MAX128);
 		const_assert!(340282366920938463408034375210639556610 == MAX64 * (MAX64 - 1));
@@ -408,55 +420,87 @@ mod tests {
 	}
 
 	#[test]
-	fn multiply_by_rational_works() {
-		assert_eq!(multiply_by_rational(7, 2, 3).unwrap(), 7 * 2 / 3);
-		assert_eq!(multiply_by_rational(7, 20, 30).unwrap(), 7 * 2 / 3);
-		assert_eq!(multiply_by_rational(20, 7, 30).unwrap(), 7 * 2 / 3);
+	fn multiply_by_rational_with_rounding_works() {
+		assert_eq!(multiply_by_rational_with_rounding(7, 2, 3, Rounding::Down).unwrap(), 7 * 2 / 3);
+		assert_eq!(
+			multiply_by_rational_with_rounding(7, 20, 30, Rounding::Down).unwrap(),
+			7 * 2 / 3
+		);
+		assert_eq!(
+			multiply_by_rational_with_rounding(20, 7, 30, Rounding::Down).unwrap(),
+			7 * 2 / 3
+		);
 
 		assert_eq!(
 			// MAX128 % 3 == 0
-			multiply_by_rational(MAX128, 2, 3).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 2, 3, Rounding::Down).unwrap(),
 			MAX128 / 3 * 2,
 		);
 		assert_eq!(
 			// MAX128 % 7 == 3
-			multiply_by_rational(MAX128, 5, 7).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 5, 7, Rounding::Down).unwrap(),
 			(MAX128 / 7 * 5) + (3 * 5 / 7),
 		);
 		assert_eq!(
 			// MAX128 % 7 == 3
-			multiply_by_rational(MAX128, 11, 13).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 11, 13, Rounding::Down).unwrap(),
 			(MAX128 / 13 * 11) + (8 * 11 / 13),
 		);
 		assert_eq!(
 			// MAX128 % 1000 == 455
-			multiply_by_rational(MAX128, 555, 1000).unwrap(),
+			multiply_by_rational_with_rounding(MAX128, 555, 1000, Rounding::Down).unwrap(),
 			(MAX128 / 1000 * 555) + (455 * 555 / 1000),
 		);
 
-		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64, MAX64).unwrap(), 2 * MAX64 - 1);
-		assert_eq!(multiply_by_rational(2 * MAX64 - 1, MAX64 - 1, MAX64).unwrap(), 2 * MAX64 - 3);
+		assert_eq!(
+			multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64, MAX64, Rounding::Down)
+				.unwrap(),
+			2 * MAX64 - 1
+		);
+		assert_eq!(
+			multiply_by_rational_with_rounding(2 * MAX64 - 1, MAX64 - 1, MAX64, Rounding::Down)
+				.unwrap(),
+			2 * MAX64 - 3
+		);
 
 		assert_eq!(
-			multiply_by_rational(MAX64 + 100, MAX64_2, MAX64_2 / 2).unwrap(),
+			multiply_by_rational_with_rounding(MAX64 + 100, MAX64_2, MAX64_2 / 2, Rounding::Down)
+				.unwrap(),
 			(MAX64 + 100) * 2,
 		);
 		assert_eq!(
-			multiply_by_rational(MAX64 + 100, MAX64_2 / 100, MAX64_2 / 200).unwrap(),
+			multiply_by_rational_with_rounding(
+				MAX64 + 100,
+				MAX64_2 / 100,
+				MAX64_2 / 200,
+				Rounding::Down
+			)
+			.unwrap(),
 			(MAX64 + 100) * 2,
 		);
 
 		assert_eq!(
-			multiply_by_rational(2u128.pow(66) - 1, 2u128.pow(65) - 1, 2u128.pow(65)).unwrap(),
+			multiply_by_rational_with_rounding(
+				2u128.pow(66) - 1,
+				2u128.pow(65) - 1,
+				2u128.pow(65),
+				Rounding::Down
+			)
+			.unwrap(),
 			73786976294838206461,
 		);
-		assert_eq!(multiply_by_rational(1_000_000_000, MAX128 / 8, MAX128 / 2).unwrap(), 250000000);
+		assert_eq!(
+			multiply_by_rational_with_rounding(1_000_000_000, MAX128 / 8, MAX128 / 2, Rounding::Up)
+				.unwrap(),
+			250000000
+		);
 
 		assert_eq!(
-			multiply_by_rational(
+			multiply_by_rational_with_rounding(
 				29459999999999999988000u128,
 				1000000000000000000u128,
-				10000000000000000000u128
+				10000000000000000000u128,
+				Rounding::Down
 			)
 			.unwrap(),
 			2945999999999999998800u128
@@ -464,17 +508,28 @@ mod tests {
 	}
 
 	#[test]
-	fn multiply_by_rational_a_b_are_interchangeable() {
-		assert_eq!(multiply_by_rational(10, MAX128, MAX128 / 2), Ok(20));
-		assert_eq!(multiply_by_rational(MAX128, 10, MAX128 / 2), Ok(20));
+	fn multiply_by_rational_with_rounding_a_b_are_interchangeable() {
+		assert_eq!(
+			multiply_by_rational_with_rounding(10, MAX128, MAX128 / 2, Rounding::NearestPrefDown),
+			Some(20)
+		);
+		assert_eq!(
+			multiply_by_rational_with_rounding(MAX128, 10, MAX128 / 2, Rounding::NearestPrefDown),
+			Some(20)
+		);
 	}
 
 	#[test]
 	#[ignore]
-	fn multiply_by_rational_fuzzed_equation() {
+	fn multiply_by_rational_with_rounding_fuzzed_equation() {
 		assert_eq!(
-			multiply_by_rational(154742576605164960401588224, 9223376310179529214, 549756068598),
-			Ok(2596149632101417846585204209223679)
+			multiply_by_rational_with_rounding(
+				154742576605164960401588224,
+				9223376310179529214,
+				549756068598,
+				Rounding::NearestPrefDown
+			),
+			Some(2596149632101417846585204209223679)
 		);
 	}
 }

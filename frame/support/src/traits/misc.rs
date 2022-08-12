@@ -18,13 +18,13 @@
 //! Smaller traits used in FRAME which don't need their own file.
 
 use crate::dispatch::Parameter;
-use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
+use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncodedLen};
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
-	ConstU64, ConstU8, Get, GetDefault, TypedGet,
+	ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
 };
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
@@ -365,16 +365,6 @@ impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating f
 	fn defensive_saturating_mul(self, other: Self) -> Self {
 		self.checked_mul(&other).defensive_unwrap_or_else(|| self.saturating_mul(other))
 	}
-}
-
-/// Try and collect into a collection `C`.
-pub trait TryCollect<C> {
-	type Error;
-	/// Consume self and try to collect the results into `C`.
-	///
-	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
-	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
-	fn try_collect(self) -> Result<C, Self::Error>;
 }
 
 /// Anything that can have a `::len()` method.
@@ -755,7 +745,10 @@ impl<T: Encode> Encode for WrapperOpaque<T> {
 
 impl<T: Decode> Decode for WrapperOpaque<T> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Ok(Self(T::decode(&mut &<Vec<u8>>::decode(input)?[..])?))
+		Ok(Self(T::decode_all_with_depth_limit(
+			sp_api::MAX_EXTRINSIC_DEPTH,
+			&mut &<Vec<u8>>::decode(input)?[..],
+		)?))
 	}
 
 	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -773,7 +766,7 @@ impl<T: MaxEncodedLen> MaxEncodedLen for WrapperOpaque<T> {
 	fn max_encoded_len() -> usize {
 		let t_max_len = T::max_encoded_len();
 
-		// See scale encoding https://docs.substrate.io/v3/advanced/scale-codec
+		// See scale encoding: https://docs.substrate.io/reference/scale-codec/
 		if t_max_len < 64 {
 			t_max_len + 1
 		} else if t_max_len < 2usize.pow(14) {
@@ -817,7 +810,7 @@ impl<T: Decode> WrapperKeepOpaque<T> {
 	///
 	/// Returns `None` if the decoding failed.
 	pub fn try_decode(&self) -> Option<T> {
-		T::decode_all(&mut &self.data[..]).ok()
+		T::decode_all_with_depth_limit(sp_api::MAX_EXTRINSIC_DEPTH, &mut &self.data[..]).ok()
 	}
 
 	/// Returns the length of the encoded `T`.
@@ -949,6 +942,30 @@ impl<Hash> PreimageRecipient<Hash> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use sp_std::marker::PhantomData;
+
+	#[derive(Encode, Decode)]
+	enum NestedType {
+		Nested(Box<Self>),
+		Done,
+	}
+
+	#[test]
+	fn test_opaque_wrapper_decode_limit() {
+		let limit = sp_api::MAX_EXTRINSIC_DEPTH as usize;
+		let mut ok_bytes = vec![0u8; limit];
+		ok_bytes.push(1u8);
+		let mut err_bytes = vec![0u8; limit + 1];
+		err_bytes.push(1u8);
+		assert!(<WrapperOpaque<NestedType>>::decode(&mut &ok_bytes.encode()[..]).is_ok());
+		assert!(<WrapperOpaque<NestedType>>::decode(&mut &err_bytes.encode()[..]).is_err());
+
+		let ok_keep_opaque = WrapperKeepOpaque { data: ok_bytes, _phantom: PhantomData };
+		let err_keep_opaque = WrapperKeepOpaque { data: err_bytes, _phantom: PhantomData };
+
+		assert!(<WrapperKeepOpaque<NestedType>>::try_decode(&ok_keep_opaque).is_some());
+		assert!(<WrapperKeepOpaque<NestedType>>::try_decode(&err_keep_opaque).is_none());
+	}
 
 	#[test]
 	fn test_opaque_wrapper() {
@@ -977,6 +994,10 @@ mod test {
 			2usize.pow(14) - 1 + 2
 		);
 		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
+
+		let data = 4u64;
+		// Ensure that we check that the `Vec<u8>` is consumed completly on decode.
+		assert!(WrapperOpaque::<u32>::decode(&mut &data.encode().encode()[..]).is_err());
 	}
 
 	#[test]

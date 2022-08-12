@@ -29,6 +29,19 @@ help: consider importing this struct
    |
 1  | use frame_system::GenesisConfig;
    |
+help: if you import `GenesisConfig`, refer to it directly
+   |
+40 - construct_runtime! {
+41 -     pub enum Runtime where
+42 -         Block = Block,
+43 -         NodeBlock = Block,
+44 -         UncheckedExtrinsic = UncheckedExtrinsic
+45 -     {
+46 -         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
+47 -         Pallet: test_pallet::{Pallet, Config},
+48 -     }
+49 - }
+   |
 
 error[E0283]: type annotations needed
   --> tests/construct_runtime_ui/no_std_genesis_config.rs:40:1

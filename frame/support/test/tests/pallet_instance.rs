@@ -30,6 +30,7 @@ use sp_runtime::{DispatchError, ModuleError};
 
 #[frame_support::pallet]
 pub mod pallet {
+	use codec::MaxEncodedLen;
 	use frame_support::{pallet_prelude::*, scale_info};
 	use frame_system::pallet_prelude::*;
 	use sp_std::any::TypeId;
@@ -164,6 +165,7 @@ pub mod pallet {
 		Encode,
 		Decode,
 		scale_info::TypeInfo,
+		MaxEncodedLen,
 	)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct Origin<T, I = ()>(PhantomData<(T, I)>);

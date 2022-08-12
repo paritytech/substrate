@@ -27,8 +27,8 @@ use super::{
 };
 use crate::SubscriptionTaskExecutor;
 
-use futures::{future, FutureExt, StreamExt};
-use jsonrpsee::{core::Error as JsonRpseeError, PendingSubscription};
+use futures::{future, stream, FutureExt, StreamExt};
+use jsonrpsee::{core::Error as JsonRpseeError, SubscriptionSink};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
 	StorageProvider,
@@ -199,7 +199,7 @@ where
 					.call(
 						&BlockId::Hash(block),
 						&method,
-						&*call_data,
+						&call_data,
 						self.client.execution_extensions().strategies().other,
 						None,
 					)
@@ -357,7 +357,7 @@ where
 			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(&self, pending: PendingSubscription) {
+	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) {
 		let client = self.client.clone();
 
 		let initial = match self
@@ -369,7 +369,7 @@ where
 		{
 			Ok(initial) => initial,
 			Err(e) => {
-				pending.reject(JsonRpseeError::from(e));
+				let _ = sink.reject(JsonRpseeError::from(e));
 				return
 			},
 		};
@@ -397,15 +397,13 @@ where
 		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
 
 		let fut = async move {
-			if let Some(mut sink) = pending.accept() {
-				sink.pipe_from_stream(stream).await;
-			}
+			sink.pipe_from_stream(stream).await;
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
-	fn subscribe_storage(&self, pending: PendingSubscription, keys: Option<Vec<StorageKey>>) {
+	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
 		if let Some(keys) = keys {
 			let stream = self.client.storage_changes_for_keys_stream(&keys);
 			let client = Arc::downgrade(&self.client);
@@ -416,9 +414,7 @@ where
 			});
 
 			let fut = async move {
-				if let Some(mut sink) = pending.accept() {
-					sink.pipe_from_stream(stream).await;
-				}
+				sink.pipe_from_stream(stream).await;
 			};
 
 			self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
@@ -426,17 +422,11 @@ where
 			let stream = self.client.all_storage_changes_stream();
 
 			let fut = async move {
-				if let Some(mut sink) = pending.accept() {
-					sink.pipe_from_stream(stream).await;
-				}
-			}
-			.boxed();
+				sink.pipe_from_stream(stream).await;
+			};
 
-			self.executor.spawn(
-				"substrate-rpc-wildcard-subscription",
-				Some("rpc"),
-				fut.map(drop).boxed(),
-			);
+			self.executor
+				.spawn("substrate-rpc-wildcard-subscription", Some("rpc"), fut.boxed());
 		}
 	}
 

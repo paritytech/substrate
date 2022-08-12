@@ -249,6 +249,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// The overarching event type.
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
 		/// Handler for withdrawing, refunding and depositing the transaction fee.
 		/// Transaction fees are withdrawn before the transaction is executed.
 		/// After the transaction was executed the transaction weight can be
@@ -319,6 +322,14 @@ pub mod pallet {
 		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
 		}
+	}
+
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		/// A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee,
+		/// has been paid by `who`.
+		TransactionFeePaid { who: T::AccountId, actual_fee: BalanceOf<T>, tip: BalanceOf<T> },
 	}
 
 	#[pallet::hooks]
@@ -432,6 +443,32 @@ where
 			// Unsigned extrinsics have no inclusion fee.
 			FeeDetails { inclusion_fee: None, tip }
 		}
+	}
+
+	/// Query information of a dispatch class, weight, and fee of a given encoded `Call`.
+	pub fn query_call_info(call: T::Call, len: u32) -> RuntimeDispatchInfo<BalanceOf<T>>
+	where
+		T::Call: Dispatchable<Info = DispatchInfo> + GetDispatchInfo,
+	{
+		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
+		let DispatchInfo { weight, class, .. } = dispatch_info;
+
+		RuntimeDispatchInfo {
+			weight,
+			class,
+			partial_fee: Self::compute_fee(len, &dispatch_info, 0u32.into()),
+		}
+	}
+
+	/// Query fee details of a given encoded `Call`.
+	pub fn query_call_fee_details(call: T::Call, len: u32) -> FeeDetails<BalanceOf<T>>
+	where
+		T::Call: Dispatchable<Info = DispatchInfo> + GetDispatchInfo,
+	{
+		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
+		let tip = 0u32.into();
+
+		Self::compute_fee_details(len, &dispatch_info, tip)
 	}
 
 	/// Compute the final fee value for a particular transaction.
@@ -598,7 +635,7 @@ where
 	/// and user-included tip.
 	///
 	/// The priority is based on the amount of `tip` the user is willing to pay per unit of either
-	/// `weight` or `length`, depending which one is more limitting. For `Operational` extrinsics
+	/// `weight` or `length`, depending which one is more limiting. For `Operational` extrinsics
 	/// we add a "virtual tip" to the calculations.
 	///
 	/// The formula should simply be `tip / bounded_{weight|length}`, but since we are using
@@ -734,6 +771,7 @@ where
 			T::OnChargeTransaction::correct_and_deposit_fee(
 				&who, info, post_info, actual_fee, tip, imbalance,
 			)?;
+			Pallet::<T>::deposit_event(Event::<T>::TransactionFeePaid { who, actual_fee, tip });
 		}
 		Ok(())
 	}
@@ -790,7 +828,7 @@ mod tests {
 		{
 			System: system::{Pallet, Call, Config, Storage, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-			TransactionPayment: pallet_transaction_payment::{Pallet, Storage},
+			TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 		}
 	);
 
@@ -899,6 +937,7 @@ mod tests {
 	}
 
 	impl Config for Runtime {
+		type Event = Event;
 		type OnChargeTransaction = CurrencyAdapter<Balances, DealWithFees>;
 		type OperationalFeeMultiplier = OperationalFeeMultiplier;
 		type WeightToFee = WeightToFee;
@@ -1194,6 +1233,43 @@ mod tests {
 	}
 
 	#[test]
+	fn query_call_info_and_fee_details_works() {
+		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+		let info = call.get_dispatch_info();
+		let encoded_call = call.encode();
+		let len = encoded_call.len() as u32;
+
+		ExtBuilder::default().base_weight(5).weight_fee(2).build().execute_with(|| {
+			// all fees should be x1.5
+			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
+
+			assert_eq!(
+				TransactionPayment::query_call_info(call.clone(), len),
+				RuntimeDispatchInfo {
+					weight: info.weight,
+					class: info.class,
+					partial_fee: 5 * 2 /* base * weight_fee */
+						+ len as u64  /* len * 1 */
+						+ info.weight.min(BlockWeights::get().max_block) as u64 * 2 * 3 / 2 /* weight */
+				},
+			);
+
+			assert_eq!(
+				TransactionPayment::query_call_fee_details(call, len),
+				FeeDetails {
+					inclusion_fee: Some(InclusionFee {
+						base_fee: 5 * 2,     /* base * weight_fee */
+						len_fee: len as u64, /* len * 1 */
+						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block) as u64 *
+							2 * 3 / 2  /* weight * weight_fee * multipler */
+					}),
+					tip: 0,
+				},
+			);
+		});
+	}
+
+	#[test]
 	fn compute_fee_works_without_multiplier() {
 		ExtBuilder::default()
 			.base_weight(100)
@@ -1407,8 +1483,14 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::total_balance(&user), 0);
-				// No events for such a scenario
-				assert_eq!(System::events().len(), 0);
+				// TransactionFeePaid Event
+				System::assert_has_event(Event::TransactionPayment(
+					pallet_transaction_payment::Event::TransactionFeePaid {
+						who: user,
+						actual_fee: 0,
+						tip: 0,
+					},
+				));
 			});
 	}
 

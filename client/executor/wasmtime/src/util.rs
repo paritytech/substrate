@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::runtime::StoreData;
+use crate::{runtime::StoreData, InstantiationStrategy};
 use sc_executor_common::{
 	error::{Error, Result},
 	util::checked_range,
@@ -98,3 +98,94 @@ pub(crate) fn write_memory_from(
 	memory[range].copy_from_slice(data);
 	Ok(())
 }
+
+/// Checks whether the `madvise(MADV_DONTNEED)` works as expected.
+///
+/// In certain environments (e.g. when running under the QEMU user-mode emulator)
+/// this syscall is broken.
+#[cfg(target_os = "linux")]
+fn is_madvise_working() -> std::result::Result<bool, String> {
+	let page_size = rustix::param::page_size();
+
+	unsafe {
+		// Allocate two memory pages.
+		let pointer = rustix::mm::mmap_anonymous(
+			std::ptr::null_mut(),
+			2 * page_size,
+			rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+			rustix::mm::MapFlags::PRIVATE,
+		)
+		.map_err(|error| format!("mmap failed: {}", error))?;
+
+		// Dirty them both.
+		std::ptr::write_volatile(pointer.cast::<u8>(), b'A');
+		std::ptr::write_volatile(pointer.cast::<u8>().add(page_size), b'B');
+
+		// Clear the first page.
+		let result_madvise =
+			rustix::mm::madvise(pointer, page_size, rustix::mm::Advice::LinuxDontNeed)
+				.map_err(|error| format!("madvise failed: {}", error));
+
+		// Fetch the values.
+		let value_1 = std::ptr::read_volatile(pointer.cast::<u8>());
+		let value_2 = std::ptr::read_volatile(pointer.cast::<u8>().add(page_size));
+
+		let result_munmap = rustix::mm::munmap(pointer, 2 * page_size)
+			.map_err(|error| format!("munmap failed: {}", error));
+
+		result_madvise?;
+		result_munmap?;
+
+		// Verify that the first page was cleared, while the second one was not.
+		Ok(value_1 == 0 && value_2 == b'B')
+	}
+}
+
+#[cfg(test)]
+#[cfg(target_os = "linux")]
+#[test]
+fn test_is_madvise_working_check_does_not_fail() {
+	assert!(is_madvise_working().is_ok());
+}
+
+/// Checks whether a given instantiation strategy can be safely used, and replaces
+/// it with a slower (but sound) alternative if it isn't.
+#[cfg(target_os = "linux")]
+pub(crate) fn replace_strategy_if_broken(strategy: &mut InstantiationStrategy) {
+	let replacement_strategy = match *strategy {
+		// These strategies don't need working `madvise`.
+		InstantiationStrategy::Pooling | InstantiationStrategy::RecreateInstance => return,
+
+		// These strategies require a working `madvise` to be sound.
+		InstantiationStrategy::PoolingCopyOnWrite => InstantiationStrategy::Pooling,
+		InstantiationStrategy::RecreateInstanceCopyOnWrite |
+		InstantiationStrategy::LegacyInstanceReuse => InstantiationStrategy::RecreateInstance,
+	};
+
+	use once_cell::sync::OnceCell;
+	static IS_OK: OnceCell<bool> = OnceCell::new();
+
+	let is_ok = IS_OK.get_or_init(|| {
+		let is_ok = match is_madvise_working() {
+			Ok(is_ok) => is_ok,
+			Err(error) => {
+				// This should never happen.
+				log::warn!("Failed to check whether `madvise(MADV_DONTNEED)` works: {}", error);
+				false
+			}
+		};
+
+		if !is_ok {
+			log::warn!("You're running on a system with a broken `madvise(MADV_DONTNEED)` implementation. This will result in lower performance.");
+		}
+
+		is_ok
+	});
+
+	if !is_ok {
+		*strategy = replacement_strategy;
+	}
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(crate) fn replace_strategy_if_broken(_: &mut InstantiationStrategy) {}

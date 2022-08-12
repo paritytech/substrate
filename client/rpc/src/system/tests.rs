@@ -123,7 +123,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 					let _ = sender.send(SyncState {
 						starting_block: 1,
 						current_block: 2,
-						highest_block: Some(3),
+						highest_block: 3,
 					});
 				},
 			};
@@ -297,10 +297,7 @@ async fn system_node_roles() {
 async fn system_sync_state() {
 	let sync_state: SyncState<i32> =
 		api(None).call("system_syncState", EmptyParams::new()).await.unwrap();
-	assert_eq!(
-		sync_state,
-		SyncState { starting_block: 1, current_block: 2, highest_block: Some(3) }
-	);
+	assert_eq!(sync_state, SyncState { starting_block: 1, current_block: 2, highest_block: 3 });
 }
 
 #[tokio::test]

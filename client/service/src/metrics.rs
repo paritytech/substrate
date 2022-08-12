@@ -22,7 +22,8 @@ use crate::config::Configuration;
 use futures_timer::Delay;
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_client_api::{ClientInfo, UsageProvider};
-use sc_network::{config::Role, NetworkService, NetworkStatus};
+use sc_network::config::Role;
+use sc_network_common::service::{NetworkStatus, NetworkStatusProvider};
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::{MaintainedTransactionPool, PoolStatus};
 use sc_utils::metrics::register_globals;
@@ -160,7 +161,7 @@ impl MetricsService {
 	) -> Result<Self, PrometheusError> {
 		let role_bits = match config.role {
 			Role::Full => 1u64,
-			Role::Light => 2u64,
+			// 2u64 used to represent light client role
 			Role::Authority { .. } => 4u64,
 		};
 
@@ -182,15 +183,16 @@ impl MetricsService {
 	/// Returns a never-ending `Future` that performs the
 	/// metric and telemetry updates with information from
 	/// the given sources.
-	pub async fn run<TBl, TExPool, TCl>(
+	pub async fn run<TBl, TExPool, TCl, TNet>(
 		mut self,
 		client: Arc<TCl>,
 		transactions: Arc<TExPool>,
-		network: Arc<NetworkService<TBl, <TBl as Block>::Hash>>,
+		network: TNet,
 	) where
 		TBl: Block,
 		TCl: ProvideRuntimeApi<TBl> + UsageProvider<TBl>,
 		TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as Block>::Hash>,
+		TNet: NetworkStatusProvider<TBl>,
 	{
 		let mut timer = Delay::new(Duration::from_secs(0));
 		let timer_interval = Duration::from_secs(5);
@@ -298,9 +300,10 @@ impl MetricsService {
 						UniqueSaturatedInto::<u64>::unique_saturated_into(num)
 					});
 
-				if let Some(best_seen_block) = best_seen_block {
-					metrics.block_height.with_label_values(&["sync_target"]).set(best_seen_block);
-				}
+				metrics
+					.block_height
+					.with_label_values(&["sync_target"])
+					.set(best_seen_block.unwrap_or(best_number));
 			}
 		}
 	}
