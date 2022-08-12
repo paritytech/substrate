@@ -699,7 +699,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = (when + alarm_interval - One::one()) / alarm_interval * alarm_interval;
+		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
+			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
