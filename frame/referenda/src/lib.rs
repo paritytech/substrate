@@ -752,7 +752,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			None
 		};
 		let deciding_status = DecidingStatus { since: now, confirming };
-		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track);
+		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track)
+			.max(now.saturating_add(One::one()));
 		status.deciding = Some(deciding_status);
 		let branch =
 			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };
