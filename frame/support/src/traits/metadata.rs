@@ -85,7 +85,7 @@ pub trait PalletsInfoAccess {
 impl PalletsInfoAccess for Tuple {
 	fn infos() -> Vec<PalletInfoData> {
 		let mut res = vec![];
-		for_tuples!( #( res.extend_from_slice(&Tuple::infos()); )* );
+		for_tuples!( #( res.extend(Tuple::infos()); )* );
 		res
 	}
 }
