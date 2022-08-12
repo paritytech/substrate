@@ -277,21 +277,17 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 					}
 
 					// Any method with the `changed_in` attribute isn't required for the runtime anymore.
-					if method_attrs.contains_key(CHANGED_IN_ATTRIBUTE) {
-						None
-					} else {
+					if !method_attrs.contains_key(CHANGED_IN_ATTRIBUTE) {
 						// Make sure we replace all the wild card parameter names.
 						replace_wild_card_parameter_names(&mut method.sig);
 
 						// partition methods by api version
 						methods_by_version.entry(method_version).or_default().push(method.clone());
 
-						Some(TraitItem::Method(method.clone()))
 					}
 				},
-				r => Some(r.clone()),
-			})
-			.collect();
+				_ => (),
+			});
 
 		let versioned_api_traits = generate_versioned_api_traits(decl.clone(), methods_by_version);
 
