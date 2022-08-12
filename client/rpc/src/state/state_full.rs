@@ -27,7 +27,7 @@ use super::{
 };
 use crate::SubscriptionTaskExecutor;
 
-use futures::{future, stream, FutureExt, StreamExt};
+use futures::{future, FutureExt, StreamExt};
 use jsonrpsee::{core::Error as JsonRpseeError, SubscriptionSink};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
