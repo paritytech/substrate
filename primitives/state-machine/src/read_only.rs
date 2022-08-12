@@ -18,6 +18,7 @@
 //! Read-only version of Externalities.
 
 use crate::{Backend, StorageKey, StorageValue};
+use codec::Encode;
 use hash_db::Hasher;
 use sp_core::{
 	storage::{ChildInfo, StateVersion, TrackedStorageKey},
@@ -42,7 +43,10 @@ pub trait InspectState<H: Hasher, B: Backend<H>> {
 	fn inspect_state<F: FnOnce() -> R, R>(&self, f: F) -> R;
 }
 
-impl<H: Hasher, B: Backend<H>> InspectState<H, B> for B {
+impl<H: Hasher, B: Backend<H>> InspectState<H, B> for B
+where
+	H::Out: Encode,
+{
 	fn inspect_state<F: FnOnce() -> R, R>(&self, f: F) -> R {
 		ReadOnlyExternalities::from(self).execute_with(f)
 	}
@@ -64,7 +68,10 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> From<&'a B> for ReadOnlyExternalities<'a
 	}
 }
 
-impl<'a, H: Hasher, B: 'a + Backend<H>> ReadOnlyExternalities<'a, H, B> {
+impl<'a, H: Hasher, B: 'a + Backend<H>> ReadOnlyExternalities<'a, H, B>
+where
+	H::Out: Encode,
+{
 	/// Execute the given closure while `self` is set as externalities.
 	///
 	/// Returns the result of the given closure.
@@ -73,7 +80,10 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> ReadOnlyExternalities<'a, H, B> {
 	}
 }
 
-impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<'a, H, B> {
+impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<'a, H, B>
+where
+	H::Out: Encode,
+{
 	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {
 		panic!("Should not be used in read-only externalities!")
 	}
@@ -88,8 +98,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		self.backend
 			.storage_hash(key)
 			.expect("Backed failed for storage_hash in ReadOnlyExternalities")
-			// assume H::Out is fix len hash and encode without len encoding
-			.map(|h| h.as_ref().to_vec())
+			.map(|h| h.encode())
 	}
 
 	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
@@ -102,8 +111,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<
 		self.backend
 			.child_storage_hash(child_info, key)
 			.expect("Backed failed for child_storage_hash in ReadOnlyExternalities")
-			// assume H::Out is fix len hash and encode without len encoding
-			.map(|h| h.as_ref().to_vec())
+			.map(|h| h.encode())
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
