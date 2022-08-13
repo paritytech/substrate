@@ -293,8 +293,9 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 // `BoundedVec` encodes to something which will always decode as a `Vec`.
 impl<T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedVec<T, S> {}
 
-// `BoundedVec` encodes to same thing as an equivalent `Slice`.
-impl<T: Encode + Decode, S: Get<u32>> EncodeLike<&[T]> for BoundedVec<T, S> {}
+// `Slice` encodes to something which will always decode as a `BoundedVec` (will fail if it is
+// outside bounds).
+impl<T: Encode + Decode, S: Get<u32>> EncodeLike<BoundedVec<T, S>> for &[T] {}
 
 impl<T, S> BoundedVec<T, S> {
 	/// Create `Self` from `t` without any checks.
@@ -1229,11 +1230,10 @@ pub mod test {
 		let v: Vec<u8> = slice.iter().copied().collect();
 		let b: BoundedVec<u8, ConstU32<5>> = slice.iter().copied().try_collect().unwrap();
 
-		let b_encoded = b.encode();
-		let slice_encoded = EncodeStuff::<BoundedVec<u8, ConstU32<5>>>::encode_like_method(&slice);
+		let bounded_vec_encoded = EncodeStuff::<&[u8]>::encode_like_method(&b);
 		let vec_encoded = EncodeStuff::<BoundedVec<u8, ConstU32<5>>>::encode_like_method(&v);
 
-		assert_eq!(b_encoded, slice_encoded);
-		assert_eq!(b_encoded, vec_encoded);
+		assert_eq!(slice.encode(), bounded_vec_encoded);
+		assert_eq!(b.encode(), vec_encoded);
 	}
 }
