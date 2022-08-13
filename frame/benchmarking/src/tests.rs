@@ -227,6 +227,24 @@ mod benchmarks {
 			// This should never be reached.
 			assert!(value > 100);
 		}
+
+		modify_in_setup_then_error {
+			Value::<T>::set(Some(123));
+			return Err(BenchmarkError::Stop("Should error"));
+		}: { }
+
+		modify_in_call_then_error {
+		}: {
+			Value::<T>::set(Some(123));
+			return Err(BenchmarkError::Stop("Should error"));
+		}
+
+		modify_in_verify_then_error {
+		}: {
+		} verify {
+			Value::<T>::set(Some(123));
+			return Err(BenchmarkError::Stop("Should error"));
+		}
 	}
 
 	#[test]
@@ -348,6 +366,28 @@ mod benchmarks {
 				Err(BenchmarkError::Override(_)),
 			));
 			assert_eq!(Pallet::<Test>::test_benchmark_skip_benchmark(), Err(BenchmarkError::Skip),);
+		});
+	}
+
+	/// An error return of a benchmark test function still causes the db to be wiped.
+	#[test]
+	fn benchmark_error_wipes_storage() {
+		new_test_ext().execute_with(|| {
+			// Test that error returns also wipe the db.
+			assert_err!(
+				Pallet::<Test>::test_benchmark_modify_in_setup_then_error(),
+				"Should error"
+			);
+			assert_eq!(Value::<Test>::get(), None);
+
+			assert_err!(Pallet::<Test>::test_benchmark_modify_in_call_then_error(), "Should error");
+			assert_eq!(Value::<Test>::get(), None);
+
+			assert_err!(
+				Pallet::<Test>::test_benchmark_modify_in_verify_then_error(),
+				"Should error"
+			);
+			assert_eq!(Value::<Test>::get(), None);
 		});
 	}
 }
