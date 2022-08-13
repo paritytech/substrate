@@ -101,8 +101,16 @@ fn info<T: Config>(index: ReferendumIndex) -> &'static TrackInfoOf<T> {
 }
 
 fn make_passing_after<T: Config>(index: ReferendumIndex, period_portion: Perbill) {
-	let support = info::<T>(index).min_support.threshold(period_portion);
-	let approval = info::<T>(index).min_approval.threshold(period_portion);
+	// We add an extra 1 percent to handle any perbill rounding errors which may cause
+	// a proposal to not actually pass.
+	let support = info::<T>(index)
+		.min_support
+		.threshold(period_portion)
+		.saturating_add(Perbill::from_percent(1));
+	let approval = info::<T>(index)
+		.min_approval
+		.threshold(period_portion)
+		.saturating_add(Perbill::from_percent(1));
 	Referenda::<T>::access_poll(index, |status| {
 		if let PollStatus::Ongoing(tally, class) = status {
 			*tally = T::Tally::from_requirements(support, approval, class);
