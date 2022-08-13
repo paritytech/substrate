@@ -1941,7 +1941,7 @@ mod tests {
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 
 		ext.execute_with(|| {
-			// invalid ed25519 signature
+			// valid ed25519 signature
 			crypto::start_batch_verify();
 			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
 			assert!(crypto::finish_batch_verify());
