@@ -480,8 +480,7 @@ impl TraitPair for Pair {
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let r: [u8; 64] = self.secret.sign(message).into();
-		Signature::from_raw(r)
+		Signature::from_raw(self.secret.sign(message).into())
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
