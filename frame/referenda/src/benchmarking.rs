@@ -23,8 +23,8 @@ use assert_matches::assert_matches;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
-	traits::{Currency, EnsureOrigin},
 	dispatch::UnfilteredDispatchable,
+	traits::{Currency, EnsureOrigin},
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Hash};
