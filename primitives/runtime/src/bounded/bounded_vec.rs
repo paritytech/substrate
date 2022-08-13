@@ -290,10 +290,10 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	}
 }
 
-// `BoundedVec` encode to something which will always decode as a `Vec`.
+// `BoundedVec` encodes to something which will always decode as a `Vec`.
 impl<T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedVec<T, S> {}
 
-// `BoundedVec` encodes to something which will always decode as a `Slice`.
+// `BoundedVec` encodes to same thing as an equivalent `Slice`.
 impl<T: Encode + Decode, S: Get<u32>> EncodeLike<&[T]> for BoundedVec<T, S> {}
 
 impl<T, S> BoundedVec<T, S> {
@@ -889,6 +889,17 @@ pub mod test {
 	use super::*;
 	use crate::{bounded_vec, traits::ConstU32};
 
+	struct EncodeStuff<T>(T);
+
+	impl<T: Encode> EncodeStuff<T> {
+		fn encode_like_method<R: Encode>(value: &R) -> Vec<u8>
+		where
+			T: EncodeLike<R>,
+		{
+			value.encode()
+		}
+	}
+
 	#[test]
 	fn slide_works() {
 		let mut b: BoundedVec<u32, ConstU32<6>> = bounded_vec![0, 1, 2, 3, 4, 5];
@@ -1210,5 +1221,19 @@ pub mod test {
 		// Sort by absolute value.
 		v.sort_by_key(|k| k.abs());
 		assert_eq!(v, vec![1, 2, -3, 4, -5]);
+	}
+
+	#[test]
+	fn bounded_vec_encodes_like() {
+		let slice: &[u8] = &[1, 2, 3, 4];
+		let v: Vec<u8> = slice.iter().copied().collect();
+		let b: BoundedVec<u8, ConstU32<5>> = slice.iter().copied().try_collect().unwrap();
+
+		let b_encoded = b.encode();
+		let slice_encoded = EncodeStuff::<BoundedVec<u8, ConstU32<5>>>::encode_like_method(&slice);
+		let vec_encoded = EncodeStuff::<BoundedVec<u8, ConstU32<5>>>::encode_like_method(&v);
+
+		assert_eq!(b_encoded, slice_encoded);
+		assert_eq!(b_encoded, vec_encoded);
 	}
 }
