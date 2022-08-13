@@ -278,8 +278,7 @@ pub mod pallet {
 			+ Debug
 			+ MaybeDisplay
 			+ Ord
-			+ MaxEncodedLen
-			+ Clone;
+			+ MaxEncodedLen;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///
