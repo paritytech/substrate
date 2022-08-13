@@ -108,11 +108,7 @@ where
 
 		let removed = if number.0 != N::zero() {
 			let parent_number = Reverse(number.0.clone() - N::one());
-			if self.remove_leaf(&parent_number, &parent_hash) {
-				Some(parent_hash)
-			} else {
-				None
-			}
+			self.remove_leaf(&parent_number, &parent_hash).then(|| parent_hash)
 		} else {
 			None
 		};
