@@ -24,6 +24,7 @@ use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account}
 use frame_support::{
 	assert_ok,
 	traits::{Currency, EnsureOrigin},
+	dispatch::UnfilteredDispatchable,
 };
 use frame_system::RawOrigin;
 use sp_runtime::traits::{Bounded, Hash};
@@ -41,17 +42,20 @@ fn funded_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T
 	caller
 }
 
-fn create_referendum<T: Config<I>, I: 'static>() -> (T::AccountId, ReferendumIndex) {
-	let caller = funded_account::<T, I>("caller", 0);
-	whitelist_account!(caller);
-	assert_ok!(Referenda::<T, I>::submit(
-		RawOrigin::Signed(caller.clone()).into(),
-		Box::new(RawOrigin::Root.into()),
-		T::Hashing::hash_of(&0),
-		DispatchTime::After(0u32.into())
-	));
+fn create_referendum<T: Config<I>, I: 'static>() -> (T::Origin, ReferendumIndex) {
+	let origin: T::Origin = T::SubmitOrigin::successful_origin();
+	if let Ok(caller) = frame_system::ensure_signed(origin.clone()) {
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T, I>::max_value());
+		whitelist_account!(caller);
+	}
+
+	let proposal_origin = Box::new(RawOrigin::Root.into());
+	let proposal_hash = T::Hashing::hash_of(&0);
+	let enactment_moment = DispatchTime::After(0u32.into());
+	let call = Call::<T, I>::submit { proposal_origin, proposal_hash, enactment_moment };
+	assert_ok!(call.dispatch_bypass_filter(origin.clone()));
 	let index = ReferendumCount::<T, I>::get() - 1;
-	(caller, index)
+	(origin, index)
 }
 
 fn place_deposit<T: Config<I>, I: 'static>(index: ReferendumIndex) {
@@ -72,7 +76,7 @@ fn fill_queue<T: Config<I>, I: 'static>(
 	// First, create enough other referendums to fill the track.
 	let mut others = vec![];
 	for _ in 0..info::<T, I>(index).max_deciding {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		others.push(index);
 	}
@@ -80,7 +84,7 @@ fn fill_queue<T: Config<I>, I: 'static>(
 	// We will also need enough referenda which are queued and passing, we want `MaxQueued - 1`
 	// in order to force the maximum amount of work to insert ours into the queue.
 	for _ in spaces..T::MaxQueued::get() {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		make_passing_after::<T, I>(index, Perbill::from_percent(pass_after));
 		others.push(index);
@@ -181,10 +185,13 @@ fn is_not_confirming<T: Config<I>, I: 'static>(index: ReferendumIndex) -> bool {
 
 benchmarks_instance_pallet! {
 	submit {
-		let caller = funded_account::<T, I>("caller", 0);
-		whitelist_account!(caller);
-	}: _(
-		RawOrigin::Signed(caller),
+		let origin: T::Origin = T::SubmitOrigin::successful_origin();
+		if let Ok(caller) = frame_system::ensure_signed(origin.clone()) {
+			T::Currency::make_free_balance_be(&caller, BalanceOf::<T, I>::max_value());
+			whitelist_account!(caller);
+		}
+	}: _<T::Origin>(
+		origin,
 		Box::new(RawOrigin::Root.into()),
 		T::Hashing::hash_of(&0),
 		DispatchTime::After(0u32.into())
@@ -194,16 +201,16 @@ benchmarks_instance_pallet! {
 	}
 
 	place_decision_deposit_preparing {
-		let (caller, index) = create_referendum::<T, I>();
-	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+		let (origin, index) = create_referendum::<T, I>();
+	}: place_decision_deposit<T::Origin>(origin, index)
 	verify {
 		assert!(Referenda::<T, I>::ensure_ongoing(index).unwrap().decision_deposit.is_some());
 	}
 
 	place_decision_deposit_queued {
-		let (caller, index) = create_referendum::<T, I>();
+		let (origin, index) = create_referendum::<T, I>();
 		fill_queue::<T, I>(index, 1, 90);
-	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+	}: place_decision_deposit<T::Origin>(origin, index)
 	verify {
 		let track = Referenda::<T, I>::ensure_ongoing(index).unwrap().track;
 		assert_eq!(TrackQueue::<T, I>::get(&track).len() as u32, T::MaxQueued::get());
@@ -211,9 +218,9 @@ benchmarks_instance_pallet! {
 	}
 
 	place_decision_deposit_not_queued {
-		let (caller, index) = create_referendum::<T, I>();
+		let (origin, index) = create_referendum::<T, I>();
 		fill_queue::<T, I>(index, 0, 90);
-	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+	}: place_decision_deposit<T::Origin>(origin, index)
 	verify {
 		let track = Referenda::<T, I>::ensure_ongoing(index).unwrap().track;
 		assert_eq!(TrackQueue::<T, I>::get(&track).len() as u32, T::MaxQueued::get());
@@ -221,33 +228,33 @@ benchmarks_instance_pallet! {
 	}
 
 	place_decision_deposit_passing {
-		let (caller, index) = create_referendum::<T, I>();
+		let (origin, index) = create_referendum::<T, I>();
 		skip_prepare_period::<T, I>(index);
 		make_passing::<T, I>(index);
-	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+	}: place_decision_deposit<T::Origin>(origin, index)
 	verify {
 		assert!(is_confirming::<T, I>(index));
 	}
 
 	place_decision_deposit_failing {
-		let (caller, index) = create_referendum::<T, I>();
+		let (origin, index) = create_referendum::<T, I>();
 		skip_prepare_period::<T, I>(index);
-	}: place_decision_deposit(RawOrigin::Signed(caller), index)
+	}: place_decision_deposit<T::Origin>(origin, index)
 	verify {
 		assert!(is_not_confirming::<T, I>(index));
 	}
 
 	refund_decision_deposit {
-		let (caller, index) = create_referendum::<T, I>();
+		let (origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		assert_ok!(Referenda::<T, I>::cancel(T::CancelOrigin::successful_origin(), index));
-	}: _(RawOrigin::Signed(caller), index)
+	}: _<T::Origin>(origin, index)
 	verify {
 		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, _, None)));
 	}
 
 	cancel {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 	}: _<T::Origin>(T::CancelOrigin::successful_origin(), index)
 	verify {
@@ -255,7 +262,7 @@ benchmarks_instance_pallet! {
 	}
 
 	kill {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 	}: _<T::Origin>(T::KillOrigin::successful_origin(), index)
 	verify {
@@ -263,7 +270,7 @@ benchmarks_instance_pallet! {
 	}
 
 	one_fewer_deciding_queue_empty {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
 		nudge::<T, I>(index);
@@ -276,7 +283,7 @@ benchmarks_instance_pallet! {
 	}
 
 	one_fewer_deciding_failing {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		// No spaces free in the queue.
 		let queued = fill_queue::<T, I>(index, 0, 90);
 		let track = Referenda::<T, I>::ensure_ongoing(index).unwrap().track;
@@ -295,7 +302,7 @@ benchmarks_instance_pallet! {
 	}
 
 	one_fewer_deciding_passing {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		// No spaces free in the queue.
 		let queued = fill_queue::<T, I>(index, 0, 0);
 		let track = Referenda::<T, I>::ensure_ongoing(index).unwrap().track;
@@ -315,7 +322,7 @@ benchmarks_instance_pallet! {
 
 	nudge_referendum_requeued_insertion {
 		// First create our referendum and place the deposit. It will be failing.
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		fill_queue::<T, I>(index, 0, 90);
 
@@ -336,7 +343,7 @@ benchmarks_instance_pallet! {
 
 	nudge_referendum_requeued_slide {
 		// First create our referendum and place the deposit. It will be failing.
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		fill_queue::<T, I>(index, 1, 90);
 
@@ -362,7 +369,7 @@ benchmarks_instance_pallet! {
 		// insertion at the beginning.
 
 		// First create our referendum and place the deposit. It will be failing.
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		fill_queue::<T, I>(index, 1, 0);
 
@@ -379,7 +386,7 @@ benchmarks_instance_pallet! {
 
 	nudge_referendum_not_queued {
 		// First create our referendum and place the deposit. It will be failing.
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		fill_queue::<T, I>(index, 0, 0);
 
@@ -395,7 +402,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_no_deposit {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		skip_prepare_period::<T, I>(index);
 	}: nudge_referendum(RawOrigin::Root, index)
 	verify {
@@ -404,7 +411,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_preparing {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 	}: nudge_referendum(RawOrigin::Root, index)
 	verify {
@@ -413,7 +420,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_timed_out {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		skip_timeout_period::<T, I>(index);
 	}: nudge_referendum(RawOrigin::Root, index)
 	verify {
@@ -422,7 +429,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_begin_deciding_failing {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
 	}: nudge_referendum(RawOrigin::Root, index)
@@ -431,7 +438,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_begin_deciding_passing {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		make_passing::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
@@ -441,7 +448,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_begin_confirming {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
 		nudge::<T, I>(index);
@@ -453,7 +460,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_end_confirming {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
 		make_passing::<T, I>(index);
@@ -466,7 +473,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_continue_not_confirming {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
 		nudge::<T, I>(index);
@@ -480,7 +487,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_continue_confirming {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		make_passing::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
@@ -493,7 +500,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_approved {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
 		make_passing::<T, I>(index);
@@ -506,7 +513,7 @@ benchmarks_instance_pallet! {
 	}
 
 	nudge_referendum_rejected {
-		let (_caller, index) = create_referendum::<T, I>();
+		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		skip_prepare_period::<T, I>(index);
 		make_failing::<T, I>(index);
