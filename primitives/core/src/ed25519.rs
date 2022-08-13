@@ -451,7 +451,6 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-		// does try_into consume the seed? can I consume seed_slice here? I think not right?
 		let secret =
 			SigningKey::try_from(seed_slice).map_err(|_| SecretStringError::InvalidSeedLength)?;
 		let public = VerificationKey::from(&secret);
