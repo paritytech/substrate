@@ -475,8 +475,7 @@ impl TraitPair for Pair {
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		let pk: [u8; 32] = self.public.into();
-		Public(pk)
+		Public(self.public.into())
 	}
 
 	/// Sign a message.
