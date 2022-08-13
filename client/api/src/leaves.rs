@@ -304,7 +304,7 @@ where
 	}
 
 	/// Undo a removed block by providing the displaced leaf.
-	/// No additional operations should be performed between import and undo.
+	/// No additional operations should be performed between remove and undo.
 	pub fn undo_remove(&mut self, outcome: RemoveOutcome<H, N>) {
 		if let Some(inserted_hash) = outcome.inserted {
 			let inserted_number = Reverse(outcome.removed.number.0.clone() - N::one());
@@ -314,7 +314,7 @@ where
 	}
 
 	/// Undo a finalization operation by providing the displaced leaves.
-	/// No additional operations should be performed between import and undo.
+	/// No additional operations should be performed between finalization and undo.
 	pub fn undo_finalization(&mut self, mut outcome: FinalizationOutcome<H, N>) {
 		self.inner.storage.append(&mut outcome.removed);
 	}
