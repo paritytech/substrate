@@ -290,10 +290,10 @@ impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	}
 }
 
-// `BoundedVec`s encode to something which will always decode as a `Vec`.
+// `BoundedVec` encode to something which will always decode as a `Vec`.
 impl<T: Encode + Decode, S: Get<u32>> EncodeLike<Vec<T>> for BoundedVec<T, S> {}
 
-// `BoundedVec encodes to something which will always decode as a `Slice`.
+// `BoundedVec` encodes to something which will always decode as a `Slice`.
 impl<T: Encode + Decode, S: Get<u32>> EncodeLike<&[T]> for BoundedVec<T, S> {}
 
 impl<T, S> BoundedVec<T, S> {
