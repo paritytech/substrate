@@ -318,11 +318,10 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(DecidingCount::<T, I>::get(&track), deciding_count);
 		assert_eq!(TrackQueue::<T, I>::get(&track).len() as u32, T::MaxQueued::get() - 1);
-		// TODO: FIX before merge
-		assert!(queued.into_iter().filter(|i| !Referenda::<T, I>::ensure_ongoing(i)
+		assert!(queued.into_iter().skip(1).filter(|i| Referenda::<T, I>::ensure_ongoing(*i)
 			.unwrap()
 			.deciding
-			.map_or(true, |d| d.confirming.is_some())
+			.map_or(false, |d| d.confirming.is_some())
 		).count() == 1);
 	}
 
