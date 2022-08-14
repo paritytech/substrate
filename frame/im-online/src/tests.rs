@@ -91,7 +91,8 @@ fn should_report_offline_validators() {
 
 		// should not report when heartbeat is sent
 		for (idx, v) in validators.into_iter().take(4).enumerate() {
-			let _ = heartbeat(block, 3, idx as u32, v.into(), Session::validators()).unwrap();
+			let _ =
+				heartbeat(block, 3, idx as u32, v.into(), Session::validators().to_vec()).unwrap();
 		}
 		advance_session();
 
@@ -162,7 +163,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert!(!ImOnline::is_online(2));
 
 		// when
-		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators()).unwrap();
+		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators().to_vec()).unwrap();
 
 		// then
 		assert!(ImOnline::is_online(0));
@@ -170,7 +171,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 		assert!(!ImOnline::is_online(2));
 
 		// and when
-		let _ = heartbeat(1, 2, 2, 3.into(), Session::validators()).unwrap();
+		let _ = heartbeat(1, 2, 2, 3.into(), Session::validators().to_vec()).unwrap();
 
 		// then
 		assert!(ImOnline::is_online(0));
@@ -194,11 +195,11 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 
 		// when
 		assert_noop!(
-			heartbeat(1, 3, 0, 1.into(), Session::validators()),
+			heartbeat(1, 3, 0, 1.into(), Session::validators().to_vec()),
 			"Transaction is outdated"
 		);
 		assert_noop!(
-			heartbeat(1, 1, 0, 1.into(), Session::validators()),
+			heartbeat(1, 1, 0, 1.into(), Session::validators().to_vec()),
 			"Transaction is outdated"
 		);
 
@@ -272,7 +273,7 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 		assert_eq!(Session::validators(), vec![1, 2, 3]);
 
 		// send an heartbeat from authority id 0 at session 2
-		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators()).unwrap();
+		let _ = heartbeat(1, 2, 0, 1.into(), Session::validators().to_vec()).unwrap();
 
 		// the heartbeat is stored
 		assert!(!ImOnline::received_heartbeats(&2, &0).is_none());
