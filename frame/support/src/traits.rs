@@ -58,9 +58,9 @@ pub use misc::{
 	Backing, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16,
 	ConstU32, ConstU64, ConstU8, DefensiveSaturating, EnsureInherentsAreFirst, EqualPrivilegeOnly,
 	EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime,
-	IsSubType, IsType, Len, OnKilledAccount, OnNewAccount, PreimageProvider, PreimageRecipient,
-	PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, TypedGet, UnixTime, WrapperKeepOpaque,
-	WrapperOpaque, OffchainWorker,
+	IsSubType, IsType, Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider,
+	PreimageRecipient, PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, TypedGet, UnixTime,
+	WrapperKeepOpaque, WrapperOpaque,
 };
 #[doc(hidden)]
 pub use misc::{DEFENSIVE_OP_INTERNAL_ERROR, DEFENSIVE_OP_PUBLIC_ERROR};
@@ -82,7 +82,7 @@ mod hooks;
 pub use hooks::GenesisBuild;
 pub use hooks::{
 	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
-	OnTimestampSet, SanityCheckTargets
+	OnTimestampSet, SanityCheckTargets,
 };
 #[cfg(feature = "try-runtime")]
 pub use hooks::{OnRuntimeUpgradeHelpersExt, SanityCheck, ON_RUNTIME_UPGRADE_PREFIX}; // TODO: sanity-check-targets should also ideally be feature gated here.
