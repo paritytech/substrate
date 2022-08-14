@@ -696,25 +696,13 @@ fn choose_pruning_mode(
 #[cfg(test)]
 mod tests {
 	use crate::{
-		noncanonical::LAST_CANONICAL,
-		pruning::LAST_PRUNED,
 		test::{make_changeset, make_db, TestDb},
-		to_meta_key, CommitSet, Constraints, Error, IsPruned, PruningMode, StateDb, StateDbError,
+		Constraints, Error, IsPruned, PruningMode, StateDb, StateDbError,
 	};
-	use codec::Encode;
 	use sp_core::H256;
 
 	fn make_test_db(settings: PruningMode) -> (TestDb, StateDb<H256, H256, TestDb>) {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
-
-		let mut commit = CommitSet::default();
-		commit
-			.meta
-			.inserted
-			.push((to_meta_key(LAST_CANONICAL, &()), (H256::from_low_u64_be(0), 0u64).encode()));
-		commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), 0u64.encode()));
-		db.commit(&commit);
-
 		let (state_db_init, state_db) =
 			StateDb::open(db.clone(), Some(settings), false, true).unwrap();
 		db.commit(&state_db_init);
