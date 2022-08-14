@@ -50,7 +50,7 @@ mod error;
 pub use error::PalletError;
 
 mod filter;
-pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
+pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter};
 
 mod misc;
 pub use misc::{
@@ -81,7 +81,8 @@ mod hooks;
 #[cfg(feature = "std")]
 pub use hooks::GenesisBuild;
 pub use hooks::{
-	Hooks, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade, OnTimestampSet,
+	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
+	OnTimestampSet,
 };
 #[cfg(feature = "try-runtime")]
 pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};

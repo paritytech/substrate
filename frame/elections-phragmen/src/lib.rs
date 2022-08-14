@@ -125,17 +125,6 @@ pub mod migrations;
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 
-// Some safe temp values to make the wasm execution sane while we still use this pallet.
-#[cfg(test)]
-pub(crate) const MAX_CANDIDATES: u32 = 100;
-#[cfg(not(test))]
-pub(crate) const MAX_CANDIDATES: u32 = 1000;
-
-#[cfg(test)]
-pub(crate) const MAX_VOTERS: u32 = 1000;
-#[cfg(not(test))]
-pub(crate) const MAX_VOTERS: u32 = 10 * 1000;
-
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
@@ -258,6 +247,21 @@ pub mod pallet {
 		/// be in passive mode.
 		#[pallet::constant]
 		type TermDuration: Get<Self::BlockNumber>;
+
+		/// The maximum number of candidates in a phragmen election.
+		///
+		/// Warning: The election happens onchain, and this value will determine
+		/// the size of the election. When this limit is reached no more
+		/// candidates are accepted in the election.
+		#[pallet::constant]
+		type MaxCandidates: Get<u32>;
+
+		/// The maximum number of voters to allow in a phragmen election.
+		///
+		/// Warning: This impacts the size of the election which is run onchain.
+		/// When the limit is reached the new voters are ignored.
+		#[pallet::constant]
+		type MaxVoters: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -397,7 +401,10 @@ pub mod pallet {
 
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
 			ensure!(actual_count <= candidate_count, Error::<T>::InvalidWitnessData);
-			ensure!(actual_count <= MAX_CANDIDATES, Error::<T>::TooManyCandidates);
+			ensure!(
+				actual_count <= <T as Config>::MaxCandidates::get(),
+				Error::<T>::TooManyCandidates
+			);
 
 			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
@@ -913,10 +920,11 @@ impl<T: Config> Pallet<T> {
 
 		let mut num_edges: u32 = 0;
 
+		let max_voters = <T as Config>::MaxVoters::get() as usize;
 		// used for prime election.
 		let mut voters_and_stakes = Vec::new();
 		match Voting::<T>::iter().try_for_each(|(voter, Voter { stake, votes, .. })| {
-			if voters_and_stakes.len() < MAX_VOTERS as usize {
+			if voters_and_stakes.len() < max_voters {
 				voters_and_stakes.push((voter, stake, votes));
 				Ok(())
 			} else {
@@ -930,7 +938,7 @@ impl<T: Config> Pallet<T> {
 					"Failed to run election. Number of voters exceeded",
 				);
 				Self::deposit_event(Event::ElectionError);
-				return T::DbWeight::get().reads(3 + MAX_VOTERS as u64)
+				return T::DbWeight::get().reads(3 + max_voters as u64)
 			},
 		}
 
@@ -1266,6 +1274,8 @@ mod tests {
 
 	parameter_types! {
 		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
+		pub const PhragmenMaxVoters: u32 = 1000;
+		pub const PhragmenMaxCandidates: u32 = 100;
 	}
 
 	impl Config for Test {
@@ -1284,6 +1294,8 @@ mod tests {
 		type LoserCandidate = ();
 		type KickedMember = ();
 		type WeightInfo = ();
+		type MaxVoters = PhragmenMaxVoters;
+		type MaxCandidates = PhragmenMaxCandidates;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;

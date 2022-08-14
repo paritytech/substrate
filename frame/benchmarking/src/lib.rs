@@ -1054,7 +1054,9 @@ macro_rules! impl_benchmark {
 					// Time the extrinsic logic.
 					$crate::log::trace!(
 						target: "benchmark",
-						"Start Benchmark: {:?}", c
+						"Start Benchmark: {} ({:?})",
+						extrinsic,
+						c
 					);
 
 					let start_pov = $crate::benchmarking::proof_size();
