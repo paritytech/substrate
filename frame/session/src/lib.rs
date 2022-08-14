@@ -95,8 +95,7 @@
 //! use pallet_session as session;
 //!
 //! fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
-//! 	<pallet_session::Pallet<T>>::validators().to_vec()
-//! }
+//! 	<pallet_session::Pallet<T>>::validators().into_inner()
 //! # fn main(){}
 //! ```
 //!
@@ -125,7 +124,7 @@ use frame_support::{
 	},
 	weights::Weight,
 	Parameter,
-	BoundedVec,
+	WeakBoundedVec,
 };
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
@@ -414,9 +413,9 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		// Max number of validators
+		// Maximum number of validators.
 		#[pallet::constant]
-		type ValidatorSet: Get<u32>;
+		type MaxValidators: Get<u32>;
 	}
 
 	#[pallet::genesis_config]
@@ -471,7 +470,7 @@ pub mod pallet {
 					);
 					self.keys.iter().map(|x| x.1.clone()).collect()
 				});
-			let initial_validators_bounded: BoundedVec<T::ValidatorId, T::ValidatorSet> = initial_validators_0.clone().try_into().expect("Too many current validators");
+			let initial_validators_bounded: WeakBoundedVec<T::ValidatorId, T::MaxValidators> = initial_validators_0.clone().try_into().expect("Too many initial validators");
 			assert!(
 				!initial_validators_0.is_empty(),
 				"Empty validator set for session 0 in genesis block!"
@@ -508,7 +507,7 @@ pub mod pallet {
 	/// The current set of validators.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
-	pub type Validators<T: Config> = StorageValue<_, BoundedVec<T::ValidatorId, T::ValidatorSet>, ValueQuery>;
+	pub type Validators<T: Config> = StorageValue<_, WeakBoundedVec<T::ValidatorId, T::MaxValidators>, ValueQuery>;
 
 	/// Current index of the session.
 	#[pallet::storage]
@@ -533,7 +532,7 @@ pub mod pallet {
 	/// a new set of identities.
 	#[pallet::storage]
 	#[pallet::getter(fn disabled_validators)]
-	pub type DisabledValidators<T: Config> = StorageValue<_, BoundedVec<u32, T::ValidatorSet>, ValueQuery>;
+	pub type DisabledValidators<T: Config> = StorageValue<_, BoundedVec<u32, T::MaxValidators>, ValueQuery>;
 
 	/// The next session keys for a validator.
 	#[pallet::storage]
@@ -654,8 +653,9 @@ impl<T: Config> Pallet<T> {
 		let validators =
 			session_keys.iter().map(|(validator, _)| validator.clone()).collect::<Vec<_>>();
 
-		let validator2: BoundedVec<T::ValidatorId, T::ValidatorSet> = validators.clone().try_into().expect("Too many current validators");
-		Validators::<T>::put(&validator2);
+		// TODO: Handle defensifely?
+		let bounded_validator_set: WeakBoundedVec<T::ValidatorId, T::MaxValidators> = validators.clone().try_into().expect("Max amount of validators reached");
+		Validators::<T>::put(bounded_validator_set);
 
 		if changed {
 			// reset disabled validators
@@ -677,7 +677,7 @@ impl<T: Config> Pallet<T> {
 				// same as before, as underlying economic conditions may have changed.
 				(validators, true)
 			} else {
-				(Validators::<T>::get().to_vec(), false)
+				(Validators::<T>::get().into_inner(), false)
 			};
 
 		// Queue next session keys.

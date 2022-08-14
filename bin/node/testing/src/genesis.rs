@@ -72,7 +72,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 			validator_count: 3,
 			minimum_validator_count: 0,
 			slash_reward_fraction: Perbill::from_percent(10),
-			invulnerables: vec![alice(), bob(), charlie()],
+			invulnerables: vec![alice(), bob(), charlie()].try_into().unwrap(),
 			..Default::default()
 		},
 		babe: BabeConfig { authorities: vec![], epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG) },

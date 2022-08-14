@@ -317,7 +317,7 @@ pub fn testnet_genesis(
 		staking: StakingConfig {
 			validator_count: initial_authorities.len() as u32,
 			minimum_validator_count: initial_authorities.len() as u32,
-			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+			invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect::<Vec<_>>().try_into().unwrap(),
 			slash_reward_fraction: Perbill::from_percent(10),
 			stakers,
 			..Default::default()
