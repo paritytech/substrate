@@ -37,7 +37,7 @@ use std::{
 use codec::{Decode, Encode};
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{AllocationStats, InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_core::{
 	traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt},
@@ -130,14 +130,13 @@ where
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///   Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	///
-	/// `host_functions` - The set of host functions to be available for import provided by this
-	///   executor.
-	///
 	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
 	///
 	/// `cache_path` - A path to a directory where the executor can place its files for purposes of
 	///   caching. This may be important in cases when there are many different modules with the
 	///   compiled execution method is used.
+	///
+	/// `runtime_cache_size` - The capacity of runtime cache.
 	pub fn new(
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
@@ -209,7 +208,7 @@ where
 	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be instantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
-	/// In case of problems with during creation of the runtime or instantation, a `Err` is
+	/// In case of problems with during creation of the runtime or instantiation, a `Err` is
 	/// returned. that describes the message.
 	#[doc(hidden)] // We use this function for tests across multiple crates.
 	pub fn uncached_call(
@@ -219,6 +218,47 @@ where
 		allow_missing_host_functions: bool,
 		export_name: &str,
 		call_data: &[u8],
+	) -> std::result::Result<Vec<u8>, Error> {
+		self.uncached_call_impl(
+			runtime_blob,
+			ext,
+			allow_missing_host_functions,
+			export_name,
+			call_data,
+			&mut None,
+		)
+	}
+
+	/// Same as `uncached_call`, except it also returns allocation statistics.
+	#[doc(hidden)] // We use this function in tests.
+	pub fn uncached_call_with_allocation_stats(
+		&self,
+		runtime_blob: RuntimeBlob,
+		ext: &mut dyn Externalities,
+		allow_missing_host_functions: bool,
+		export_name: &str,
+		call_data: &[u8],
+	) -> (std::result::Result<Vec<u8>, Error>, Option<AllocationStats>) {
+		let mut allocation_stats = None;
+		let result = self.uncached_call_impl(
+			runtime_blob,
+			ext,
+			allow_missing_host_functions,
+			export_name,
+			call_data,
+			&mut allocation_stats,
+		);
+		(result, allocation_stats)
+	}
+
+	fn uncached_call_impl(
+		&self,
+		runtime_blob: RuntimeBlob,
+		ext: &mut dyn Externalities,
+		allow_missing_host_functions: bool,
+		export_name: &str,
+		call_data: &[u8],
+		allocation_stats_out: &mut Option<AllocationStats>,
 	) -> std::result::Result<Vec<u8>, Error> {
 		let module = crate::wasm_runtime::create_wasm_runtime_with_code::<H>(
 			self.method,
@@ -235,10 +275,14 @@ where
 		let mut instance = AssertUnwindSafe(instance);
 		let mut ext = AssertUnwindSafe(ext);
 		let module = AssertUnwindSafe(module);
+		let mut allocation_stats_out = AssertUnwindSafe(allocation_stats_out);
 
 		with_externalities_safe(&mut **ext, move || {
 			preregister_builtin_ext(module.clone());
-			instance.call_export(export_name, call_data)
+			let (result, allocation_stats) =
+				instance.call_with_allocation_stats(export_name.into(), call_data);
+			**allocation_stats_out = allocation_stats;
+			result
 		})
 		.and_then(|r| r)
 	}
@@ -360,6 +404,10 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	///
+	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
+	///
+	/// `runtime_cache_size` - The capacity of runtime cache.
 	pub fn new(
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,

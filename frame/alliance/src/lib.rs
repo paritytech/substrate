@@ -311,7 +311,9 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// The founders/fellows/allies have already been initialized.
-		MembersAlreadyInitialized,
+		AllianceAlreadyInitialized,
+		/// The Alliance has not been initialized yet, therefore accounts cannot join it.
+		AllianceNotYetInitialized,
 		/// Account is already a member.
 		AlreadyMember,
 		/// Account is not a member.
@@ -434,6 +436,11 @@ pub mod pallet {
 				Members::<T, I>::insert(MemberRole::Fellow, members);
 			}
 			if !self.allies.is_empty() {
+				// Only allow Allies if the Alliance is "initialized".
+				assert!(
+					Pallet::<T, I>::is_initialized(),
+					"Alliance must have Founders or Fellows to have Allies"
+				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
 					self.allies.clone().try_into().expect("Too many genesis allies");
 				Members::<T, I>::insert(MemberRole::Ally, members);
@@ -612,6 +619,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
+			// Cannot be called if the Alliance already has Founders or Fellows.
+			// TODO: Remove check and allow Root to set members at any time.
+			// https://github.com/paritytech/substrate/issues/11928
+			ensure!(!Self::is_initialized(), Error::<T, I>::AllianceAlreadyInitialized);
+
 			let mut founders: BoundedVec<T::AccountId, T::MaxMembersCount> =
 				founders.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
 			let mut fellows: BoundedVec<T::AccountId, T::MaxMembersCount> =
@@ -619,12 +631,6 @@ pub mod pallet {
 			let mut allies: BoundedVec<T::AccountId, T::MaxMembersCount> =
 				allies.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
 
-			ensure!(
-				!Self::has_member(MemberRole::Founder) &&
-					!Self::has_member(MemberRole::Fellow) &&
-					!Self::has_member(MemberRole::Ally),
-				Error::<T, I>::MembersAlreadyInitialized
-			);
 			for member in founders.iter().chain(fellows.iter()).chain(allies.iter()) {
 				Self::has_identity(member)?;
 			}
@@ -704,6 +710,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::join_alliance())]
 		pub fn join_alliance(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+
+			// We don't want anyone to join as an Ally before the Alliance has been initialized via
+			// Root call. The reasons are two-fold:
+			//
+			// 1. There is no `Rule` or admission criteria, so the joiner would be an ally to
+			//    nought, and
+			// 2. It adds complexity to the initialization, namely deciding to overwrite accounts
+			//    that already joined as an Ally.
+			ensure!(Self::is_initialized(), Error::<T, I>::AllianceNotYetInitialized);
 
 			// Unscrupulous accounts are non grata.
 			ensure!(!Self::is_unscrupulous_account(&who), Error::<T, I>::AccountNonGrata);
@@ -867,6 +882,11 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Check if the Alliance has been initialized.
+	fn is_initialized() -> bool {
+		Self::has_member(MemberRole::Founder) || Self::has_member(MemberRole::Fellow)
+	}
+
 	/// Check if a given role has any members.
 	fn has_member(role: MemberRole) -> bool {
 		Members::<T, I>::decode_len(role).unwrap_or_default() > 0
