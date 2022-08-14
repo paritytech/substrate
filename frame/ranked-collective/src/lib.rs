@@ -85,16 +85,16 @@ pub type Votes = u32;
 	Decode,
 	MaxEncodedLen,
 )]
-#[scale_info(skip_type_params(M))]
+#[scale_info(skip_type_params(T, I, M))]
 #[codec(mel_bound())]
-pub struct Tally<M: GetMaxVoters> {
+pub struct Tally<T, I, M: GetMaxVoters> {
 	bare_ayes: MemberIndex,
 	ayes: Votes,
 	nays: Votes,
-	dummy: PhantomData<M>,
+	dummy: PhantomData<(T, I, M)>,
 }
 
-impl<M: GetMaxVoters> Tally<M> {
+impl<T: Config<I>, I: 'static, M: GetMaxVoters> Tally<T, I, M> {
 	pub fn from_parts(bare_ayes: MemberIndex, ayes: Votes, nays: Votes) -> Self {
 		Tally { bare_ayes, ayes, nays, dummy: PhantomData }
 	}
@@ -107,10 +107,10 @@ impl<M: GetMaxVoters> Tally<M> {
 
 // All functions of VoteTally now include the class as a param.
 
-pub type TallyOf<T, I = ()> = Tally<Pallet<T, I>>;
+pub type TallyOf<T, I = ()> = Tally<T, I, Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
 
-impl<M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<M> {
+impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<T, I, M> {
 	fn new(_: Rank) -> Self {
 		Self { bare_ayes: 0, ayes: 0, nays: 0, dummy: PhantomData }
 	}
@@ -142,6 +142,18 @@ impl<M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<M> {
 		let ayes = support * c;
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
 		Self { bare_ayes: ayes, ayes, nays, dummy: PhantomData }
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup_tally(class: Rank) {
+		if M::get_max_voters(class) == 0 {
+			for i in 0..1_000 {
+				let who: T::AccountId = frame_benchmarking::account("for_benchmarking", i, 0);
+				crate::Pallet::<T, I>::do_add_member_to_rank(who, class)
+					.expect("could not add members for benchmarks");
+			}
+			assert_eq!(M::get_max_voters(class), 1_000);
+		}
 	}
 }
 
