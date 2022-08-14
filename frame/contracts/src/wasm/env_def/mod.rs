@@ -31,8 +31,8 @@ pub trait ConvertibleToWasm: Sized {
 	fn from_typed_value(_: Value) -> Option<Self>;
 }
 impl ConvertibleToWasm for i32 {
-	type NativeType = i32;
 	const VALUE_TYPE: ValueType = ValueType::I32;
+	type NativeType = i32;
 	fn to_typed_value(self) -> Value {
 		Value::I32(self)
 	}
@@ -41,8 +41,8 @@ impl ConvertibleToWasm for i32 {
 	}
 }
 impl ConvertibleToWasm for u32 {
-	type NativeType = u32;
 	const VALUE_TYPE: ValueType = ValueType::I32;
+	type NativeType = u32;
 	fn to_typed_value(self) -> Value {
 		Value::I32(self as i32)
 	}
@@ -54,8 +54,8 @@ impl ConvertibleToWasm for u32 {
 	}
 }
 impl ConvertibleToWasm for u64 {
-	type NativeType = u64;
 	const VALUE_TYPE: ValueType = ValueType::I64;
+	type NativeType = u64;
 	fn to_typed_value(self) -> Value {
 		Value::I64(self as i64)
 	}

@@ -18,15 +18,17 @@
 use proc_macro2::{Span, TokenStream};
 
 use syn::{
-	parse_quote, spanned::Spanned, token::And, Error, FnArg, GenericArgument, Ident, ImplItem,
-	ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
+	parse_quote, spanned::Spanned, token::And, Attribute, Error, FnArg, GenericArgument, Ident,
+	ImplItem, ItemImpl, Pat, Path, PathArguments, Result, ReturnType, Signature, Type, TypePath,
 };
 
-use quote::quote;
+use quote::{format_ident, quote};
 
 use std::env;
 
 use proc_macro_crate::{crate_name, FoundCrate};
+
+use crate::common::API_VERSION_ATTRIBUTE;
 
 fn generate_hidden_includes_mod_name(unique_id: &'static str) -> Ident {
 	Ident::new(&format!("sp_api_hidden_includes_{}", unique_id), Span::call_site())
@@ -66,11 +68,6 @@ pub fn generate_crate_access(unique_id: &'static str) -> TokenStream {
 /// Generates the name of the module that contains the trait declaration for the runtime.
 pub fn generate_runtime_mod_name_for_trait(trait_: &Ident) -> Ident {
 	Ident::new(&format!("runtime_decl_for_{}", trait_), Span::call_site())
-}
-
-/// Generates a name for a method that needs to be implemented in the runtime for the client side.
-pub fn generate_method_runtime_api_impl_name(trait_: &Ident, method: &Ident) -> Ident {
-	Ident::new(&format!("{}_{}_runtime_api_impl", trait_, method), Span::call_site())
 }
 
 /// Get the type of a `syn::ReturnType`.
@@ -166,16 +163,6 @@ pub fn extract_parameter_names_types_and_borrows(
 	Ok(result)
 }
 
-/// Generates the name for the native call generator function.
-pub fn generate_native_call_generator_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_native_call_generator", fn_name), Span::call_site())
-}
-
-/// Generates the name for the call api at function.
-pub fn generate_call_api_at_fn_name(fn_name: &Ident) -> Ident {
-	Ident::new(&format!("{}_call_api_at", fn_name), Span::call_site())
-}
-
 /// Prefix the given function with the trait name.
 pub fn prefix_function_with_trait<F: ToString>(trait_: &Ident, function: &F) -> String {
 	format!("{}_{}", trait_, function.to_string())
@@ -266,4 +253,24 @@ pub fn extract_impl_trait(impl_: &ItemImpl, require: RequireQualifiedTraitPath) 
 				))
 			}
 		})
+}
+
+/// Parse the given attribute as `API_VERSION_ATTRIBUTE`.
+pub fn parse_runtime_api_version(version: &Attribute) -> Result<u64> {
+	let version = version.parse_args::<syn::LitInt>().map_err(|_| {
+		Error::new(
+			version.span(),
+			&format!(
+				"Unexpected `{api_version}` attribute. The supported format is `{api_version}(1)`",
+				api_version = API_VERSION_ATTRIBUTE
+			),
+		)
+	})?;
+
+	version.base10_parse()
+}
+
+// Each versioned trait is named 'ApiNameVN' where N is the specific version. E.g. ParachainHostV2
+pub fn versioned_trait_name(trait_ident: &Ident, version: u64) -> Ident {
+	format_ident!("{}V{}", trait_ident, version)
 }

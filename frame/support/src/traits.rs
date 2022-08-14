@@ -50,7 +50,7 @@ mod error;
 pub use error::PalletError;
 
 mod filter;
-pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
+pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter};
 
 mod misc;
 pub use misc::{
@@ -60,7 +60,7 @@ pub use misc::{
 	EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime,
 	IsSubType, IsType, Len, OnKilledAccount, OnNewAccount, PreimageProvider, PreimageRecipient,
 	PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, TypedGet, UnixTime, WrapperKeepOpaque,
-	WrapperOpaque,
+	WrapperOpaque, OffchainWorker,
 };
 #[doc(hidden)]
 pub use misc::{DEFENSIVE_OP_INTERNAL_ERROR, DEFENSIVE_OP_PUBLIC_ERROR};
@@ -81,8 +81,8 @@ mod hooks;
 #[cfg(feature = "std")]
 pub use hooks::GenesisBuild;
 pub use hooks::{
-	Hooks, OffchainWorker, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
-	OnTimestampSet, SanityCheckTargets,
+	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
+	OnTimestampSet, SanityCheckTargets
 };
 #[cfg(feature = "try-runtime")]
 pub use hooks::{OnRuntimeUpgradeHelpersExt, SanityCheck, ON_RUNTIME_UPGRADE_PREFIX}; // TODO: sanity-check-targets should also ideally be feature gated here.
@@ -97,9 +97,8 @@ mod dispatch;
 #[allow(deprecated)]
 pub use dispatch::EnsureOneOf;
 pub use dispatch::{
-	AsEnsureOriginWithArg, DispatchableWithStorageLayer, EitherOf, EitherOfDiverse, EnsureOrigin,
-	EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess,
-	UnfilteredDispatchable,
+	AsEnsureOriginWithArg, EitherOf, EitherOfDiverse, EnsureOrigin, EnsureOriginWithArg,
+	MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess, UnfilteredDispatchable,
 };
 
 mod voting;

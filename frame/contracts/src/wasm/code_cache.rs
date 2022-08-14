@@ -215,7 +215,7 @@ impl<T: Config> Token<T> for CodeToken {
 		use self::CodeToken::*;
 		// In case of `Load` we already covered the general costs of
 		// calling the storage but still need to account for the actual size of the
-		// contract code. This is why we substract `T::*::(0)`. We need to do this at this
+		// contract code. This is why we subtract `T::*::(0)`. We need to do this at this
 		// point because when charging the general weight for calling the contract we not know the
 		// size of the contract.
 		match *self {
@@ -223,8 +223,8 @@ impl<T: Config> Token<T> for CodeToken {
 			Load(len) => {
 				let computation = T::WeightInfo::call_with_code_per_byte(len)
 					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
-				let bandwith = T::ContractAccessWeight::get().saturating_mul(len.into());
-				computation.max(bandwith)
+				let bandwidth = T::ContractAccessWeight::get().saturating_mul(len.into());
+				computation.max(bandwidth)
 			},
 		}
 	}

@@ -21,25 +21,6 @@ use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 
-/// Off-chain computation trait.
-///
-/// Implementing this trait on a module allows you to perform long-running tasks that make (by
-/// default) validators generate transactions that feed results of those long-running computations
-/// back on chain.
-///
-/// NOTE: This function runs off-chain, so it can access the block state, but cannot preform any
-/// alterations. More specifically alterations are not forbidden, but they are not persisted in any
-/// way after the worker has finished.
-#[impl_for_tuples(100)]
-pub trait OffchainWorker<BlockNumber> {
-	/// This function is being called after every block import (when fully synced).
-	///
-	/// Implement this and use any of the `Offchain` `sp_io` set of APIs to perform off-chain
-	/// computations, calls and submit transactions with results to trigger any on-chain changes.
-	/// Any state alterations are lost and are not persisted.
-	fn offchain_worker(_n: BlockNumber) {}
-}
-
 /// The block initialization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is
@@ -57,7 +38,9 @@ pub trait OnInitialize<BlockNumber> {
 	}
 }
 
-#[impl_for_tuples(100)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
 		let mut weight = 0;
@@ -69,7 +52,9 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 /// The block finalization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is ending.
-#[impl_for_tuples(100)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
 	///
@@ -98,7 +83,9 @@ pub trait OnIdle<BlockNumber> {
 	}
 }
 
-#[impl_for_tuples(100)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
 		let on_idle_functions: &[fn(
@@ -228,7 +215,9 @@ impl<BlockNumber: Clone + AtLeast32BitUnsigned> SanityCheck<BlockNumber> for Tup
 /// Implementing this trait for a pallet let's you express operations that should
 /// happen at genesis. It will be called in an externalities provided environment and
 /// will see the genesis state after all pallets have written their genesis state.
-#[impl_for_tuples(100)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnGenesis {
 	/// Something that should happen at genesis.
 	fn on_genesis() {}
@@ -307,7 +296,9 @@ pub trait OnRuntimeUpgrade {
 	}
 }
 
-#[impl_for_tuples(100)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		let mut weight = 0;
@@ -328,6 +319,19 @@ impl OnRuntimeUpgrade for Tuple {
 		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
 		result
 	}
+}
+
+/// Type that provide some integrity tests.
+///
+/// This implemented for modules by `decl_module`.
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+pub trait IntegrityTest {
+	/// Run integrity test.
+	///
+	/// The test is not executed in a externalities provided environment.
+	fn integrity_test() {}
 }
 
 /// The pallet hooks trait. Implementing this lets you express some logic to execute.
@@ -450,7 +454,9 @@ pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeD
 }
 
 /// A trait which is called when the timestamp is set in the runtime.
-#[impl_for_tuples(100)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnTimestampSet<Moment> {
 	/// Called when the timestamp is set.
 	fn on_timestamp_set(moment: Moment);

@@ -1,5 +1,5 @@
 error: `integrity_test` can only be passed once as input.
- --> $DIR/reserved_keyword_two_times_integrity_test.rs:1:1
+ --> tests/decl_module_ui/reserved_keyword_two_times_integrity_test.rs:1:1
   |
 1 | / frame_support::decl_module! {
 2 | |     pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
@@ -13,13 +13,7 @@ error: `integrity_test` can only be passed once as input.
   = note: this error originates in the macro `$crate::decl_module` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0601]: `main` function not found in crate `$CRATE`
- --> $DIR/reserved_keyword_two_times_integrity_test.rs:1:1
+ --> tests/decl_module_ui/reserved_keyword_two_times_integrity_test.rs:7:2
   |
-1 | / frame_support::decl_module! {
-2 | |     pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
-3 | |         fn integrity_test() {}
-4 | |
-5 | |         fn integrity_test() {}
-6 | |     }
-7 | | }
-  | |_^ consider adding a `main` function to `$DIR/tests/decl_module_ui/reserved_keyword_two_times_integrity_test.rs`
+7 | }
+  |  ^ consider adding a `main` function to `$DIR/tests/decl_module_ui/reserved_keyword_two_times_integrity_test.rs`
