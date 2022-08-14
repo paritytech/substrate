@@ -25,7 +25,14 @@ use super::{
 use crate::{communication::grandpa_protocol_name, environment::SharedVoterSetState};
 use futures::prelude::*;
 use parity_scale_codec::Encode;
-use sc_network::{config::Role, Event as NetworkEvent, ObservedRole, PeerId};
+use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
+use sc_network_common::{
+	protocol::event::{Event as NetworkEvent, ObservedRole},
+	service::{
+		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
+	},
+};
 use sc_network_gossip::Validator;
 use sc_network_test::{Block, Hash};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -34,6 +41,7 @@ use sp_keyring::Ed25519Keyring;
 use sp_runtime::traits::NumberFor;
 use std::{
 	borrow::Cow,
+	collections::HashSet,
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
@@ -42,8 +50,8 @@ use std::{
 #[derive(Debug)]
 pub(crate) enum Event {
 	EventStream(TracingUnboundedSender<NetworkEvent>),
-	WriteNotification(sc_network::PeerId, Vec<u8>),
-	Report(sc_network::PeerId, sc_network::ReputationChange),
+	WriteNotification(PeerId, Vec<u8>),
+	Report(PeerId, ReputationChange),
 	Announce(Hash),
 }
 
@@ -52,40 +60,113 @@ pub(crate) struct TestNetwork {
 	sender: TracingUnboundedSender<Event>,
 }
 
-impl sc_network_gossip::Network<Block> for TestNetwork {
-	fn event_stream(&self) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
+impl NetworkPeers for TestNetwork {
+	fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
+		unimplemented!();
+	}
+
+	fn set_authorized_only(&self, _reserved_only: bool) {
+		unimplemented!();
+	}
+
+	fn add_known_address(&self, _peer_id: PeerId, _addr: Multiaddr) {
+		unimplemented!();
+	}
+
+	fn report_peer(&self, who: PeerId, cost_benefit: ReputationChange) {
+		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
+	}
+
+	fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+
+	fn accept_unreserved_peers(&self) {
+		unimplemented!();
+	}
+
+	fn deny_unreserved_peers(&self) {
+		unimplemented!();
+	}
+
+	fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+		unimplemented!();
+	}
+
+	fn remove_reserved_peer(&self, _peer_id: PeerId) {
+		unimplemented!();
+	}
+
+	fn set_reserved_peers(
+		&self,
+		_protocol: Cow<'static, str>,
+		_peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		unimplemented!();
+	}
+
+	fn add_peers_to_reserved_set(
+		&self,
+		_protocol: Cow<'static, str>,
+		_peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		unimplemented!();
+	}
+
+	fn remove_peers_from_reserved_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {}
+
+	fn add_to_peers_set(
+		&self,
+		_protocol: Cow<'static, str>,
+		_peers: HashSet<Multiaddr>,
+	) -> Result<(), String> {
+		unimplemented!();
+	}
+
+	fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+		unimplemented!();
+	}
+
+	fn sync_num_connected(&self) -> usize {
+		unimplemented!();
+	}
+}
+
+impl NetworkEventStream for TestNetwork {
+	fn event_stream(
+		&self,
+		_name: &'static str,
+	) -> Pin<Box<dyn Stream<Item = NetworkEvent> + Send>> {
 		let (tx, rx) = tracing_unbounded("test");
 		let _ = self.sender.unbounded_send(Event::EventStream(tx));
 		Box::pin(rx)
 	}
+}
 
-	fn report_peer(&self, who: sc_network::PeerId, cost_benefit: sc_network::ReputationChange) {
-		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
+impl NetworkNotification for TestNetwork {
+	fn write_notification(&self, target: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
+		let _ = self.sender.unbounded_send(Event::WriteNotification(target, message));
 	}
 
-	fn add_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
-
-	fn remove_set_reserved(&self, _: PeerId, _: Cow<'static, str>) {}
-
-	fn disconnect_peer(&self, _: PeerId, _: Cow<'static, str>) {}
-
-	fn write_notification(&self, who: PeerId, _: Cow<'static, str>, message: Vec<u8>) {
-		let _ = self.sender.unbounded_send(Event::WriteNotification(who, message));
-	}
-
-	fn announce(&self, block: Hash, _associated_data: Option<Vec<u8>>) {
-		let _ = self.sender.unbounded_send(Event::Announce(block));
+	fn notification_sender(
+		&self,
+		_target: PeerId,
+		_protocol: Cow<'static, str>,
+	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
+		unimplemented!();
 	}
 }
 
-impl super::Network<Block> for TestNetwork {
-	fn set_sync_fork_request(
-		&self,
-		_peers: Vec<sc_network::PeerId>,
-		_hash: Hash,
-		_number: NumberFor<Block>,
-	) {
+impl NetworkBlock<Hash, NumberFor<Block>> for TestNetwork {
+	fn announce_block(&self, hash: Hash, _data: Option<Vec<u8>>) {
+		let _ = self.sender.unbounded_send(Event::Announce(hash));
 	}
+
+	fn new_best_block_imported(&self, _hash: Hash, _number: NumberFor<Block>) {
+		unimplemented!();
+	}
+}
+
+impl NetworkSyncForkRequest<Hash, NumberFor<Block>> for TestNetwork {
+	fn set_sync_fork_request(&self, _peers: Vec<PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
 }
 
 impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
@@ -93,8 +174,8 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 
 	fn broadcast_message(&mut self, _: Hash, _: Vec<u8>, _: bool) {}
 
-	fn send_message(&mut self, who: &sc_network::PeerId, data: Vec<u8>) {
-		<Self as sc_network_gossip::Network<Block>>::write_notification(
+	fn send_message(&mut self, who: &PeerId, data: Vec<u8>) {
+		<Self as NetworkNotification>::write_notification(
 			self,
 			who.clone(),
 			grandpa_protocol_name::NAME.into(),
@@ -102,7 +183,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 		);
 	}
 
-	fn send_topic(&mut self, _: &sc_network::PeerId, _: Hash, _: bool) {}
+	fn send_topic(&mut self, _: &PeerId, _: Hash, _: bool) {}
 }
 
 pub(crate) struct Tester {
@@ -207,8 +288,8 @@ struct NoopContext;
 impl sc_network_gossip::ValidatorContext<Block> for NoopContext {
 	fn broadcast_topic(&mut self, _: Hash, _: bool) {}
 	fn broadcast_message(&mut self, _: Hash, _: Vec<u8>, _: bool) {}
-	fn send_message(&mut self, _: &sc_network::PeerId, _: Vec<u8>) {}
-	fn send_topic(&mut self, _: &sc_network::PeerId, _: Hash, _: bool) {}
+	fn send_message(&mut self, _: &PeerId, _: Vec<u8>) {}
+	fn send_topic(&mut self, _: &PeerId, _: Hash, _: bool) {}
 }
 
 #[test]
@@ -252,7 +333,7 @@ fn good_commit_leads_to_relay() {
 	})
 	.encode();
 
-	let id = sc_network::PeerId::random();
+	let id = PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
 	let test = make_test_network()
@@ -301,7 +382,7 @@ fn good_commit_leads_to_relay() {
 					});
 
 					// Add a random peer which will be the recipient of this message
-					let receiver_id = sc_network::PeerId::random();
+					let receiver_id = PeerId::random();
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
 						remote: receiver_id.clone(),
 						protocol: grandpa_protocol_name::NAME.into(),
@@ -403,7 +484,7 @@ fn bad_commit_leads_to_report() {
 	})
 	.encode();
 
-	let id = sc_network::PeerId::random();
+	let id = PeerId::random();
 	let global_topic = super::global_topic::<Block>(set_id);
 
 	let test = make_test_network()
@@ -484,7 +565,7 @@ fn bad_commit_leads_to_report() {
 
 #[test]
 fn peer_with_higher_view_leads_to_catch_up_request() {
-	let id = sc_network::PeerId::random();
+	let id = PeerId::random();
 
 	let (tester, mut net) = make_test_network();
 	let test = tester
