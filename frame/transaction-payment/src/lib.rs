@@ -445,6 +445,32 @@ where
 		}
 	}
 
+	/// Query information of a dispatch class, weight, and fee of a given encoded `Call`.
+	pub fn query_call_info(call: T::Call, len: u32) -> RuntimeDispatchInfo<BalanceOf<T>>
+	where
+		T::Call: Dispatchable<Info = DispatchInfo> + GetDispatchInfo,
+	{
+		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
+		let DispatchInfo { weight, class, .. } = dispatch_info;
+
+		RuntimeDispatchInfo {
+			weight,
+			class,
+			partial_fee: Self::compute_fee(len, &dispatch_info, 0u32.into()),
+		}
+	}
+
+	/// Query fee details of a given encoded `Call`.
+	pub fn query_call_fee_details(call: T::Call, len: u32) -> FeeDetails<BalanceOf<T>>
+	where
+		T::Call: Dispatchable<Info = DispatchInfo> + GetDispatchInfo,
+	{
+		let dispatch_info = <T::Call as GetDispatchInfo>::get_dispatch_info(&call);
+		let tip = 0u32.into();
+
+		Self::compute_fee_details(len, &dispatch_info, tip)
+	}
+
 	/// Compute the final fee value for a particular transaction.
 	pub fn compute_fee(len: u32, info: &DispatchInfoOf<T::Call>, tip: BalanceOf<T>) -> BalanceOf<T>
 	where
@@ -1202,6 +1228,43 @@ mod tests {
 			assert_eq!(
 				TransactionPayment::query_fee_details(unsigned_xt, len),
 				FeeDetails { inclusion_fee: None, tip: 0 },
+			);
+		});
+	}
+
+	#[test]
+	fn query_call_info_and_fee_details_works() {
+		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+		let info = call.get_dispatch_info();
+		let encoded_call = call.encode();
+		let len = encoded_call.len() as u32;
+
+		ExtBuilder::default().base_weight(5).weight_fee(2).build().execute_with(|| {
+			// all fees should be x1.5
+			<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
+
+			assert_eq!(
+				TransactionPayment::query_call_info(call.clone(), len),
+				RuntimeDispatchInfo {
+					weight: info.weight,
+					class: info.class,
+					partial_fee: 5 * 2 /* base * weight_fee */
+						+ len as u64  /* len * 1 */
+						+ info.weight.min(BlockWeights::get().max_block) as u64 * 2 * 3 / 2 /* weight */
+				},
+			);
+
+			assert_eq!(
+				TransactionPayment::query_call_fee_details(call, len),
+				FeeDetails {
+					inclusion_fee: Some(InclusionFee {
+						base_fee: 5 * 2,     /* base * weight_fee */
+						len_fee: len as u64, /* len * 1 */
+						adjusted_weight_fee: info.weight.min(BlockWeights::get().max_block) as u64 *
+							2 * 3 / 2  /* weight * weight_fee * multipler */
+					}),
+					tip: 0,
+				},
 			);
 		});
 	}
