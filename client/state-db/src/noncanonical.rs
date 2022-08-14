@@ -376,12 +376,13 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
-	/// Returns a set of changes that need to be added to the DB.
+	/// Add a set of changes of the canonicalized block to `CommitSet`
+	/// Return the block number of the canonicalized block
 	pub fn canonicalize(
 		&mut self,
 		hash: &BlockHash,
 		commit: &mut CommitSet<Key>,
-	) -> Result<(), StateDbError> {
+	) -> Result<u64, StateDbError> {
 		trace!(target: "state-db", "Canonicalizing {:?}", hash);
 		let level = self
 			.levels
@@ -431,7 +432,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			.push((to_meta_key(LAST_CANONICAL, &()), canonicalized.encode()));
 		trace!(target: "state-db", "Discarding {} records", commit.meta.deleted.len());
 		self.pending_canonicalizations.push(hash.clone());
-		Ok(())
+		Ok(canonicalized.1)
 	}
 
 	fn apply_canonicalizations(&mut self) {

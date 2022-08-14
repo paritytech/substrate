@@ -25,7 +25,8 @@
 //! The changes are journaled in the DB.
 
 use crate::{
-	noncanonical::LAST_CANONICAL, to_meta_key, CommitSet, Error, Hash, MetaDb, MAX_BLOCK_CONSTRAINT,
+	noncanonical::LAST_CANONICAL, to_meta_key, CommitSet, Error, Hash, MetaDb, StateDbError,
+	MAX_BLOCK_CONSTRAINT,
 };
 use codec::{Decode, Encode};
 use log::{trace, warn};
@@ -468,7 +469,18 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 	}
 
 	/// Add a change set to the window. Creates a journal record and pushes it to `commit`
-	pub fn note_canonical(&mut self, hash: &BlockHash, commit: &mut CommitSet<Key>) {
+	pub fn note_canonical(
+		&mut self,
+		hash: &BlockHash,
+		number: u64,
+		commit: &mut CommitSet<Key>,
+	) -> Result<(), Error<D::Error>> {
+		if self.pending_number == 0 && self.queue.len() == 0 && number > 0 {
+			// assume that parent was canonicalized
+			self.pending_number = number;
+		} else if (self.pending_number + self.queue.len() as u64) != number {
+			return Err(Error::StateDb(StateDbError::InvalidBlockNumber))
+		}
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
 		let inserted = if matches!(self.queue, DeathRowQueue::Mem { .. }) {
 			commit.data.inserted.iter().map(|(k, _)| k.clone()).collect()
@@ -477,10 +489,10 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		};
 		let deleted = ::std::mem::take(&mut commit.data.deleted);
 		let journal_record = JournalRecord { hash: hash.clone(), inserted, deleted };
-		let block = self.pending_number + self.queue.len() as u64;
-		commit.meta.inserted.push((to_journal_key(block), journal_record.encode()));
+		commit.meta.inserted.push((to_journal_key(number), journal_record.encode()));
 		self.queue.import(self.pending_number, journal_record);
 		self.pending_canonicalizations += 1;
+		Ok(())
 	}
 
 	/// Apply all pending changes
@@ -562,7 +574,7 @@ mod tests {
 		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
 		let mut commit = make_commit(&[4, 5], &[1, 3]);
 		let hash = H256::random();
-		pruning.note_canonical(&hash, &mut commit);
+		pruning.note_canonical(&hash, 0, &mut commit).unwrap();
 		db.commit(&commit);
 		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Have);
 		pruning.apply_pending();
@@ -592,10 +604,10 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
 		let mut commit = make_commit(&[4], &[1]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
 		let mut commit = make_commit(&[5], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 1, &mut commit).unwrap();
 		db.commit(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
@@ -620,10 +632,10 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
 		let mut commit = make_commit(&[4], &[1]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
 		let mut commit = make_commit(&[5], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 1, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
 		let mut commit = CommitSet::default();
@@ -643,13 +655,13 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
 		let mut commit = make_commit(&[], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
 		let mut commit = make_commit(&[2], &[]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 1, &mut commit).unwrap();
 		db.commit(&commit);
 		let mut commit = make_commit(&[], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 2, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 		pruning.apply_pending();
@@ -676,13 +688,13 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
 		let mut commit = make_commit(&[], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
 		let mut commit = make_commit(&[2], &[]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 1, &mut commit).unwrap();
 		db.commit(&commit);
 		let mut commit = make_commit(&[], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 2, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 
@@ -706,13 +718,13 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), false).unwrap();
 		let mut commit = make_commit(&[], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
 		let mut commit = make_commit(&[2], &[]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 1, &mut commit).unwrap();
 		db.commit(&commit);
 		let mut commit = make_commit(&[], &[2]);
-		pruning.note_canonical(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), 2, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 		pruning.apply_pending();
@@ -806,7 +818,7 @@ mod tests {
 		// queue size and content should match
 		for i in 0..(CACHE_BATCH_SIZE + 10) {
 			let mut commit = make_commit(&[], &[]);
-			pruning.note_canonical(&(i as u64), &mut commit);
+			pruning.note_canonical(&(i as u64), i as u64, &mut commit).unwrap();
 			push_last_canonicalized(i as u64, &mut commit);
 			db.commit(&commit);
 			// block will fill in cache first
@@ -831,7 +843,13 @@ mod tests {
 		// import a new block to the end of the queue
 		// won't keep the new block in memory
 		let mut commit = CommitSet::default();
-		pruning.note_canonical(&(CACHE_BATCH_SIZE as u64 + 10), &mut commit);
+		pruning
+			.note_canonical(
+				&(CACHE_BATCH_SIZE as u64 + 10),
+				CACHE_BATCH_SIZE as u64 + 10,
+				&mut commit,
+			)
+			.unwrap();
 		assert_eq!(pruning.queue.len(), CACHE_BATCH_SIZE + 11);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), CACHE_BATCH_SIZE);
@@ -879,7 +897,7 @@ mod tests {
 		// import blocks
 		for i in 0..(CACHE_BATCH_SIZE as u64 * 2 + 10) {
 			let mut commit = make_commit(&[], &[]);
-			pruning.note_canonical(&i, &mut commit);
+			pruning.note_canonical(&i, i, &mut commit).unwrap();
 			push_last_canonicalized(i as u64, &mut commit);
 			db.commit(&commit);
 		}

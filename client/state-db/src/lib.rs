@@ -333,15 +333,12 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		if self.mode == PruningMode::ArchiveAll {
 			return Ok(commit)
 		}
-		match self.non_canonical.canonicalize(hash, &mut commit) {
-			Ok(()) =>
-				if self.mode == PruningMode::ArchiveCanonical {
-					commit.data.deleted.clear();
-				},
-			Err(e) => return Err(e.into()),
-		};
+		let number = self.non_canonical.canonicalize(hash, &mut commit)?;
+		if self.mode == PruningMode::ArchiveCanonical {
+			commit.data.deleted.clear();
+		}
 		if let Some(ref mut pruning) = self.pruning {
-			pruning.note_canonical(hash, &mut commit);
+			pruning.note_canonical(hash, number, &mut commit)?;
 		}
 		self.prune(&mut commit)?;
 		Ok(commit)
