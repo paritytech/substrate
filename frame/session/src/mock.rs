@@ -289,7 +289,7 @@ impl Convert<u64, Option<u64>> for TestValidatorIdOf {
 }
 
 parameter_types! {
-	pub const ValidatorSet: u32 = 3072;
+	pub const MaxValidators: u32 = 3072;
 }
 
 impl Config for Test {
@@ -305,7 +305,7 @@ impl Config for Test {
 	type Event = Event;
 	type NextSessionRotation = ();
 	type WeightInfo = ();
-	type ValidatorSet = ValidatorSet;
+	type MaxValidators = MaxValidators;
 }
 
 #[cfg(feature = "historical")]

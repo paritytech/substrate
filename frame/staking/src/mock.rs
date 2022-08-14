@@ -170,6 +170,11 @@ sp_runtime::impl_opaque_keys! {
 		pub other: OtherSessionHandler,
 	}
 }
+
+parameter_types! {
+	pub const MaxValidators: u32 = 3072;
+}
+
 impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
@@ -180,6 +185,7 @@ impl pallet_session::Config for Test {
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 impl pallet_session::historical::Config for Test {
@@ -302,6 +308,7 @@ impl crate::pallet::pallet::Config for Test {
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;
@@ -499,7 +506,7 @@ impl ExtBuilder {
 			stakers: stakers.clone(),
 			validator_count: self.validator_count,
 			minimum_validator_count: self.minimum_validator_count,
-			invulnerables: self.invulnerables,
+			invulnerables: self.invulnerables.try_into().unwrap(),
 			slash_reward_fraction: Perbill::from_percent(10),
 			min_nominator_bond: self.min_nominator_bond,
 			min_validator_bond: self.min_validator_bond,

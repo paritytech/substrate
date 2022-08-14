@@ -3437,13 +3437,13 @@ fn six_session_delay() {
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 2), None);
 		assert_eq!(
 			<Staking as SessionManager<_>>::new_session(init_session + 3),
-			Some(val_set.clone())
+			Some(val_set.clone().into_inner())
 		);
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 4), None);
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 5), None);
 		assert_eq!(
 			<Staking as SessionManager<_>>::new_session(init_session + 6),
-			Some(val_set.clone())
+			Some(val_set.clone().into_inner())
 		);
 
 		<Staking as SessionManager<_>>::end_session(init_session);

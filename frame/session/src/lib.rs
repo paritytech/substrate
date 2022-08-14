@@ -96,6 +96,7 @@
 //!
 //! fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
 //! 	<pallet_session::Pallet<T>>::validators().into_inner()
+//! }
 //! # fn main(){}
 //! ```
 //!
@@ -921,7 +922,7 @@ impl<T: Config> ValidatorSet<T::AccountId> for Pallet<T> {
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		Pallet::<T>::validators().to_vec()
+		Pallet::<T>::validators().into_inner()
 	}
 }
 
