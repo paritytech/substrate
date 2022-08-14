@@ -198,6 +198,7 @@ mod tests {
 
 	parameter_types! {
 		pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+		pub const MaxValidators: u32 = 3072;
 	}
 
 	impl Config for Test {
@@ -214,6 +215,7 @@ mod tests {
 		type ValidatorIdOf = ConvertInto;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 		type WeightInfo = ();
+		type MaxValidators = MaxValidators;
 	}
 
 	impl pallet_session::historical::Config for Test {

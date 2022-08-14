@@ -92,6 +92,7 @@ impl pallet_beefy::Config for Test {
 
 parameter_types! {
 	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
+	pub const MaxValidators: u32 = 3072;
 }
 
 impl pallet_session::Config for Test {
@@ -104,6 +105,7 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 pub struct MockSessionManager;
