@@ -62,7 +62,7 @@ const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
 const PRUNING_MODE_ARCHIVE_CANON: &[u8] = b"archive_canonical";
 const PRUNING_MODE_CONSTRAINED: &[u8] = b"constrained";
-pub(crate) const MAX_BLOCK_CONSTRAINT: u32 = 256;
+pub(crate) const DEFAULT_MAX_BLOCK_CONSTRAINT: u32 = 256;
 
 /// Database value type.
 pub type DBValue = Vec<u8>;
@@ -267,7 +267,7 @@ impl Default for PruningMode {
 
 impl Default for Constraints {
 	fn default() -> Self {
-		Self { max_blocks: Some(MAX_BLOCK_CONSTRAINT), max_mem: None }
+		Self { max_blocks: Some(DEFAULT_MAX_BLOCK_CONSTRAINT), max_mem: None }
 	}
 }
 
@@ -297,7 +297,8 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(&db)?;
 		let pruning: Option<RefWindow<BlockHash, Key, D>> = match mode {
 			PruningMode::Constrained(Constraints { max_mem: Some(_), .. }) => unimplemented!(),
-			PruningMode::Constrained(_) => Some(RefWindow::new(db, ref_counting)?),
+			PruningMode::Constrained(Constraints { max_blocks, .. }) =>
+				Some(RefWindow::new(db, max_blocks.unwrap_or(0), ref_counting)?),
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => None,
 		};
 
@@ -481,10 +482,11 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		if let Some(pruning) = &mut self.pruning {
 			pruning.apply_pending();
 		}
+		let next_hash = self.pruning.as_mut().map(|p| p.next_hash());
 		trace!(
 			target: "forks",
 			"First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
-			self.pruning.as_mut().map(|p| p.next_hash()),
+			next_hash,
 			self.pruning.as_ref().map(|p| p.pending()).unwrap_or(0),
 			self.non_canonical.last_canonicalized_hash(),
 			self.non_canonical.last_canonicalized_block_number().unwrap_or(0),

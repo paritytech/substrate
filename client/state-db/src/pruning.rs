@@ -26,7 +26,7 @@
 
 use crate::{
 	noncanonical::LAST_CANONICAL, to_meta_key, CommitSet, Error, Hash, MetaDb, StateDbError,
-	MAX_BLOCK_CONSTRAINT,
+	DEFAULT_MAX_BLOCK_CONSTRAINT,
 };
 use codec::{Decode, Encode};
 use log::{trace, warn};
@@ -37,8 +37,6 @@ use std::{
 
 pub(crate) const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
-// Default pruning window size plus a magic number keep most common ops in cache
-const CACHE_BATCH_SIZE: usize = MAX_BLOCK_CONSTRAINT as usize + 10;
 
 /// See module documentation.
 #[derive(parity_util_mem_derive::MallocSizeOf)]
@@ -47,7 +45,7 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	/// pruning window.
 	queue: DeathRowQueue<BlockHash, Key, D>,
 	/// Block number that corresponds to the front of `death_rows`.
-	pending_number: u64,
+	base: u64,
 	/// Number of call of `note_canonical` after
 	/// last call `apply_pending` or `revert_pending`
 	pending_canonicalizations: usize,
@@ -77,6 +75,8 @@ enum DeathRowQueue<BlockHash: Hash, Key: Hash, D: MetaDb> {
 		/// Only caching the first fews blocks of the pruning window, blocks inside are
 		/// successive and ordered by block number
 		cache: VecDeque<DeathRow<BlockHash, Key>>,
+		/// A soft limit of the cache's size
+		cache_capacity: usize,
 		/// The number of blocks that not loaded into `cache`
 		uncached_blocks: usize,
 	},
@@ -114,22 +114,32 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		db: D,
 		base: u64,
 		mut uncached_blocks: usize,
+		window_size: u32,
 	) -> Result<DeathRowQueue<BlockHash, Key, D>, Error<D::Error>> {
-		let mut cache = VecDeque::with_capacity(CACHE_BATCH_SIZE);
+		// The pruning window size (if not larger than `DEFAULT_MAX_BLOCK_CONSTRAINT`) plus a magic
+		// number keep most common ops in cache
+		let cache_capacity = window_size.min(DEFAULT_MAX_BLOCK_CONSTRAINT) as usize + 10;
+		let mut cache = VecDeque::with_capacity(cache_capacity);
 		trace!(target: "state-db", "Reading pruning journal for the database-backed queue. Pending #{}", base);
 		// Load block from db
-		DeathRowQueue::load_batch_from_db(&db, &mut uncached_blocks, &mut cache, base)?;
-		Ok(DeathRowQueue::DbBacked { db, cache, uncached_blocks })
+		DeathRowQueue::load_batch_from_db(
+			&db,
+			&mut uncached_blocks,
+			&mut cache,
+			base,
+			cache_capacity,
+		)?;
+		Ok(DeathRowQueue::DbBacked { db, cache, cache_capacity, uncached_blocks })
 	}
 
 	/// import a new block to the back of the queue
 	fn import(&mut self, base: u64, journal_record: JournalRecord<BlockHash, Key>) {
 		let JournalRecord { hash, inserted, deleted } = journal_record;
 		match self {
-			DeathRowQueue::DbBacked { uncached_blocks, cache, .. } => {
+			DeathRowQueue::DbBacked { uncached_blocks, cache, cache_capacity, .. } => {
 				// `uncached_blocks` is zero means currently all block are loaded into `cache`
 				// thus if `cache` is not full, load the next block into `cache` too
-				if *uncached_blocks == 0 && cache.len() < CACHE_BATCH_SIZE {
+				if *uncached_blocks == 0 && cache.len() < *cache_capacity {
 					cache.push_back(DeathRow { hash, deleted: deleted.into_iter().collect() });
 				} else {
 					*uncached_blocks += 1;
@@ -159,10 +169,16 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		base: u64,
 	) -> Result<Option<DeathRow<BlockHash, Key>>, Error<D::Error>> {
 		match self {
-			DeathRowQueue::DbBacked { db, uncached_blocks, cache } => {
+			DeathRowQueue::DbBacked { db, uncached_blocks, cache, cache_capacity } => {
 				if cache.is_empty() && *uncached_blocks != 0 {
 					// load more blocks from db since there are still blocks in it
-					DeathRowQueue::load_batch_from_db(db, uncached_blocks, cache, base)?;
+					DeathRowQueue::load_batch_from_db(
+						db,
+						uncached_blocks,
+						cache,
+						base,
+						*cache_capacity,
+					)?;
 				}
 				Ok(cache.pop_front())
 			},
@@ -215,6 +231,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		uncached_blocks: &mut usize,
 		cache: &mut VecDeque<DeathRow<BlockHash, Key>>,
 		base: u64,
+		cache_capacity: usize,
 	) -> Result<(), Error<D::Error>> {
 		// return if all blocks already loaded into `cache` and there are no other
 		// blocks in the backend database
@@ -222,7 +239,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 			return Ok(())
 		}
 		let start = base + cache.len() as u64;
-		let batch_size = cmp::min(*uncached_blocks, CACHE_BATCH_SIZE);
+		let batch_size = cmp::min(*uncached_blocks, cache_capacity);
 		let mut loaded = 0;
 		for i in 0..batch_size as u64 {
 			match load_death_row_from_db::<BlockHash, Key, D>(db, start + i)? {
@@ -248,12 +265,18 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		index: usize,
 	) -> Result<Option<DeathRow<BlockHash, Key>>, Error<D::Error>> {
 		match self {
-			DeathRowQueue::DbBacked { db, uncached_blocks, cache } => {
+			DeathRowQueue::DbBacked { db, uncached_blocks, cache, cache_capacity } => {
 				// check if `index` target a block reside on disk
 				if index >= cache.len() && index < cache.len() + *uncached_blocks {
 					// if `index` target the next batch of `DeathRow`, load a batch from db
-					if index - cache.len() < cmp::min(*uncached_blocks, CACHE_BATCH_SIZE) {
-						DeathRowQueue::load_batch_from_db(db, uncached_blocks, cache, base)?;
+					if index - cache.len() < cmp::min(*uncached_blocks, *cache_capacity) {
+						DeathRowQueue::load_batch_from_db(
+							db,
+							uncached_blocks,
+							cache,
+							base,
+							*cache_capacity,
+						)?;
 					} else {
 						// load a single `DeathRow` from db, but do not insert it to `cache`
 						// because `cache` is a queue of successive `DeathRow`
@@ -383,11 +406,12 @@ impl From<bool> for HaveBlock {
 impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 	pub fn new(
 		db: D,
+		window_size: u32,
 		count_insertions: bool,
 	) -> Result<RefWindow<BlockHash, Key, D>, Error<D::Error>> {
 		// the block number of the first block in the queue or the next block number if the queue is
 		// empty
-		let pending_number = match db.get_meta(&to_meta_key(LAST_PRUNED, &())).map_err(Error::Db)? {
+		let base = match db.get_meta(&to_meta_key(LAST_PRUNED, &())).map_err(Error::Db)? {
 			Some(buffer) => u64::decode(&mut buffer.as_slice())? + 1,
 			None => 0,
 		};
@@ -399,22 +423,22 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			};
 
 		let queue = if count_insertions {
-			DeathRowQueue::new_mem(&db, pending_number)?
+			DeathRowQueue::new_mem(&db, base)?
 		} else {
 			let unload = match last_canonicalized_number {
 				Some(last_canonicalized_number) => {
-					debug_assert!(last_canonicalized_number + 1 >= pending_number);
-					last_canonicalized_number + 1 - pending_number
+					debug_assert!(last_canonicalized_number + 1 >= base);
+					last_canonicalized_number + 1 - base
 				},
 				// None means `LAST_CANONICAL` is never been wrote, since the pruning journals are
 				// in the same `CommitSet` as `LAST_CANONICAL`, it means no pruning journal have
 				// ever been committed to the db, thus set `unload` to zero
 				None => 0,
 			};
-			DeathRowQueue::new_db_backed(db, pending_number, unload as usize)?
+			DeathRowQueue::new_db_backed(db, base, unload as usize, window_size)?
 		};
 
-		Ok(RefWindow { queue, pending_number, pending_canonicalizations: 0, pending_prunings: 0 })
+		Ok(RefWindow { queue, base, pending_canonicalizations: 0, pending_prunings: 0 })
 	}
 
 	pub fn window_size(&self) -> u64 {
@@ -422,7 +446,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 	}
 
 	pub fn next_hash(&mut self) -> Result<Option<BlockHash>, Error<D::Error>> {
-		self.queue.get_hash(self.pending_number, self.pending_prunings)
+		self.queue.get_hash(self.base, self.pending_prunings)
 	}
 
 	pub fn mem_used(&self) -> usize {
@@ -431,7 +455,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 
 	// Return the block number of the first block that not been pending pruned
 	pub fn pending(&self) -> u64 {
-		self.pending_number + self.pending_prunings as u64
+		self.base + self.pending_prunings as u64
 	}
 
 	fn is_empty(&self) -> bool {
@@ -443,24 +467,24 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		// if the queue is empty or the block number exceed the pruning window, we definitely
 		// do not have this block
 		if self.is_empty() ||
-			!(number >= self.pending() && number < self.pending_number + self.queue.len() as u64)
+			!(number >= self.pending() && number < self.base + self.queue.len() as u64)
 		{
 			return HaveBlock::NotHave
 		}
-		self.queue.have_block(hash, (number - self.pending_number) as usize)
+		self.queue.have_block(hash, (number - self.base) as usize)
 	}
 
 	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
 	pub fn prune_one(&mut self, commit: &mut CommitSet<Key>) -> Result<(), Error<D::Error>> {
-		if let Some(pruned) = self.queue.get(self.pending_number, self.pending_prunings)? {
+		if let Some(pruned) = self.queue.get(self.base, self.pending_prunings)? {
 			trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
-			let index = self.pending_number + self.pending_prunings as u64;
+			let index = self.base + self.pending_prunings as u64;
 			commit.data.deleted.extend(pruned.deleted.into_iter());
 			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), index.encode()));
 			commit
 				.meta
 				.deleted
-				.push(to_journal_key(self.pending_number + self.pending_prunings as u64));
+				.push(to_journal_key(self.base + self.pending_prunings as u64));
 			self.pending_prunings += 1;
 		} else {
 			warn!(target: "state-db", "Trying to prune when there's nothing to prune");
@@ -475,10 +499,10 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		number: u64,
 		commit: &mut CommitSet<Key>,
 	) -> Result<(), Error<D::Error>> {
-		if self.pending_number == 0 && self.queue.len() == 0 && number > 0 {
+		if self.base == 0 && self.queue.len() == 0 && number > 0 {
 			// assume that parent was canonicalized
-			self.pending_number = number;
-		} else if (self.pending_number + self.queue.len() as u64) != number {
+			self.base = number;
+		} else if (self.base + self.queue.len() as u64) != number {
 			return Err(Error::StateDb(StateDbError::InvalidBlockNumber))
 		}
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
@@ -490,7 +514,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		let deleted = ::std::mem::take(&mut commit.data.deleted);
 		let journal_record = JournalRecord { hash: hash.clone(), inserted, deleted };
 		commit.meta.inserted.push((to_journal_key(number), journal_record.encode()));
-		self.queue.import(self.pending_number, journal_record);
+		self.queue.import(self.base, journal_record);
 		self.pending_canonicalizations += 1;
 		Ok(())
 	}
@@ -501,22 +525,21 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		for _ in 0..self.pending_prunings {
 			let pruned = self
 				.queue
-				.pop_front(self.pending_number)
+				.pop_front(self.base)
 				// NOTE: `pop_front` should not return `MetaDb::Error` because blocks are visited
 				// by `RefWindow::prune_one` first then `RefWindow::apply_pending` and
 				// `DeathRowQueue::get` should load the blocks into cache already
 				.expect("block must loaded in cache thus no MetaDb::Error")
 				.expect("pending_prunings is always < queue.len()");
 			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
-			self.pending_number += 1;
+			self.base += 1;
 		}
 		self.pending_prunings = 0;
 	}
 
 	/// Revert all pending changes
 	pub fn revert_pending(&mut self) {
-		self.queue
-			.revert_recent_add(self.pending_number, self.pending_canonicalizations);
+		self.queue.revert_recent_add(self.base, self.pending_canonicalizations);
 		self.pending_canonicalizations = 0;
 		self.pending_prunings = 0;
 	}
@@ -524,14 +547,11 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		to_journal_key, DeathRowQueue, HaveBlock, JournalRecord, RefWindow, CACHE_BATCH_SIZE,
-		LAST_PRUNED,
-	};
+	use super::{to_journal_key, DeathRowQueue, HaveBlock, JournalRecord, RefWindow, LAST_PRUNED};
 	use crate::{
 		noncanonical::LAST_CANONICAL,
 		test::{make_commit, make_db, TestDb},
-		to_meta_key, CommitSet, Hash,
+		to_meta_key, CommitSet, Hash, DEFAULT_MAX_BLOCK_CONSTRAINT,
 	};
 	use codec::Encode;
 	use sp_core::H256;
@@ -539,16 +559,17 @@ mod tests {
 	fn check_journal(pruning: &RefWindow<H256, H256, TestDb>, db: &TestDb) {
 		let count_insertions = matches!(pruning.queue, DeathRowQueue::Mem { .. });
 		let restored: RefWindow<H256, H256, TestDb> =
-			RefWindow::new(db.clone(), count_insertions).unwrap();
-		assert_eq!(pruning.pending_number, restored.pending_number);
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, count_insertions).unwrap();
+		assert_eq!(pruning.base, restored.base);
 		assert_eq!(pruning.queue.get_mem_queue_state(), restored.queue.get_mem_queue_state());
 	}
 
 	#[test]
 	fn created_from_empty_db() {
 		let db = make_db(&[]);
-		let pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db, true).unwrap();
-		assert_eq!(pruning.pending_number, 0);
+		let pruning: RefWindow<H256, H256, TestDb> =
+			RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
+		assert_eq!(pruning.base, 0);
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert!(death_rows.is_empty());
 		assert!(death_index.is_empty());
@@ -557,10 +578,11 @@ mod tests {
 	#[test]
 	fn prune_empty() {
 		let db = make_db(&[]);
-		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db, true).unwrap();
+		let mut pruning: RefWindow<H256, H256, TestDb> =
+			RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
-		assert_eq!(pruning.pending_number, 0);
+		assert_eq!(pruning.base, 0);
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert!(death_rows.is_empty());
 		assert!(death_index.is_empty());
@@ -571,7 +593,8 @@ mod tests {
 	#[test]
 	fn prune_one() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
+		let mut pruning: RefWindow<H256, H256, TestDb> =
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
 		let mut commit = make_commit(&[4, 5], &[1, 3]);
 		let hash = H256::random();
 		pruning.note_canonical(&hash, 0, &mut commit).unwrap();
@@ -596,13 +619,14 @@ mod tests {
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert!(death_rows.is_empty());
 		assert!(death_index.is_empty());
-		assert_eq!(pruning.pending_number, 1);
+		assert_eq!(pruning.base, 1);
 	}
 
 	#[test]
 	fn prune_two() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
+		let mut pruning: RefWindow<H256, H256, TestDb> =
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
 		let mut commit = make_commit(&[4], &[1]);
 		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
@@ -624,13 +648,14 @@ mod tests {
 		db.commit(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
-		assert_eq!(pruning.pending_number, 2);
+		assert_eq!(pruning.base, 2);
 	}
 
 	#[test]
 	fn prune_two_pending() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
+		let mut pruning: RefWindow<H256, H256, TestDb> =
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
 		let mut commit = make_commit(&[4], &[1]);
 		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
@@ -647,13 +672,14 @@ mod tests {
 		db.commit(&commit);
 		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
-		assert_eq!(pruning.pending_number, 2);
+		assert_eq!(pruning.base, 2);
 	}
 
 	#[test]
 	fn reinserted_survives() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
+		let mut pruning: RefWindow<H256, H256, TestDb> =
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
 		let mut commit = make_commit(&[], &[2]);
 		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
@@ -680,13 +706,14 @@ mod tests {
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
 		pruning.apply_pending();
-		assert_eq!(pruning.pending_number, 3);
+		assert_eq!(pruning.base, 3);
 	}
 
 	#[test]
 	fn reinserted_survive_pending() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), true).unwrap();
+		let mut pruning: RefWindow<H256, H256, TestDb> =
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
 		let mut commit = make_commit(&[], &[2]);
 		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
@@ -710,13 +737,14 @@ mod tests {
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
 		pruning.apply_pending();
-		assert_eq!(pruning.pending_number, 3);
+		assert_eq!(pruning.base, 3);
 	}
 
 	#[test]
 	fn reinserted_ignores() {
 		let mut db = make_db(&[1, 2, 3]);
-		let mut pruning: RefWindow<H256, H256, TestDb> = RefWindow::new(db.clone(), false).unwrap();
+		let mut pruning: RefWindow<H256, H256, TestDb> =
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
 		let mut commit = make_commit(&[], &[2]);
 		pruning.note_canonical(&H256::random(), 0, &mut commit).unwrap();
 		db.commit(&commit);
@@ -754,9 +782,10 @@ mod tests {
 		let mut commit = CommitSet::default();
 
 		fn load_pruning_from_db(db: TestDb) -> (usize, u64) {
-			let pruning: RefWindow<u64, H256, TestDb> = RefWindow::new(db, false).unwrap();
+			let pruning: RefWindow<u64, H256, TestDb> =
+				RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
 			let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
-			(cache.len(), pruning.pending_number)
+			(cache.len(), pruning.base)
 		}
 
 		fn push_record(block: u64, commit: &mut CommitSet<H256>) {
@@ -767,24 +796,24 @@ mod tests {
 		}
 
 		// empty database
-		let (loaded_blocks, pending_number) = load_pruning_from_db(db.clone());
+		let (loaded_blocks, base) = load_pruning_from_db(db.clone());
 		assert_eq!(loaded_blocks, 0);
-		assert_eq!(pending_number, 0);
+		assert_eq!(base, 0);
 
 		// canonicalized the genesis block but no pruning
 		push_last_canonicalized(0, &mut commit);
 		push_record(0, &mut commit);
 		db.commit(&commit);
-		let (loaded_blocks, pending_number) = load_pruning_from_db(db.clone());
+		let (loaded_blocks, base) = load_pruning_from_db(db.clone());
 		assert_eq!(loaded_blocks, 1);
-		assert_eq!(pending_number, 0);
+		assert_eq!(base, 0);
 
 		// pruned the genesis block
 		push_last_pruned(0, &mut commit);
 		db.commit(&commit);
-		let (loaded_blocks, pending_number) = load_pruning_from_db(db.clone());
+		let (loaded_blocks, base) = load_pruning_from_db(db.clone());
 		assert_eq!(loaded_blocks, 0);
-		assert_eq!(pending_number, 1);
+		assert_eq!(base, 1);
 
 		// canonicalize more blocks
 		push_last_canonicalized(10, &mut commit);
@@ -792,22 +821,24 @@ mod tests {
 			push_record(i, &mut commit);
 		}
 		db.commit(&commit);
-		let (loaded_blocks, pending_number) = load_pruning_from_db(db.clone());
+		let (loaded_blocks, base) = load_pruning_from_db(db.clone());
 		assert_eq!(loaded_blocks, 10);
-		assert_eq!(pending_number, 1);
+		assert_eq!(base, 1);
 
 		// pruned all blocks
 		push_last_pruned(10, &mut commit);
 		db.commit(&commit);
-		let (loaded_blocks, pending_number) = load_pruning_from_db(db.clone());
+		let (loaded_blocks, base) = load_pruning_from_db(db.clone());
 		assert_eq!(loaded_blocks, 0);
-		assert_eq!(pending_number, 11);
+		assert_eq!(base, 11);
 	}
 
 	#[test]
 	fn db_backed_queue() {
 		let mut db = make_db(&[]);
-		let mut pruning: RefWindow<u64, H256, TestDb> = RefWindow::new(db.clone(), false).unwrap();
+		let mut pruning: RefWindow<u64, H256, TestDb> =
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
+		let cache_capacity = DEFAULT_MAX_BLOCK_CONSTRAINT as usize + 10;
 
 		// start as an empty queue
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
@@ -816,27 +847,27 @@ mod tests {
 
 		// import blocks
 		// queue size and content should match
-		for i in 0..(CACHE_BATCH_SIZE + 10) {
+		for i in 0..(cache_capacity + 10) {
 			let mut commit = make_commit(&[], &[]);
 			pruning.note_canonical(&(i as u64), i as u64, &mut commit).unwrap();
 			push_last_canonicalized(i as u64, &mut commit);
 			db.commit(&commit);
 			// block will fill in cache first
 			let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-			if i < CACHE_BATCH_SIZE {
+			if i < cache_capacity {
 				assert_eq!(cache.len(), i + 1);
 				assert_eq!(uncached_blocks, 0);
 			} else {
-				assert_eq!(cache.len(), CACHE_BATCH_SIZE);
-				assert_eq!(uncached_blocks, i - CACHE_BATCH_SIZE + 1);
+				assert_eq!(cache.len(), cache_capacity);
+				assert_eq!(uncached_blocks, i - cache_capacity + 1);
 			}
 		}
 		pruning.apply_pending();
-		assert_eq!(pruning.queue.len(), CACHE_BATCH_SIZE + 10);
+		assert_eq!(pruning.queue.len(), cache_capacity + 10);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-		assert_eq!(cache.len(), CACHE_BATCH_SIZE);
+		assert_eq!(cache.len(), cache_capacity);
 		assert_eq!(uncached_blocks, 10);
-		for i in 0..CACHE_BATCH_SIZE {
+		for i in 0..cache_capacity {
 			assert_eq!(cache[i].hash, i as u64);
 		}
 
@@ -844,23 +875,19 @@ mod tests {
 		// won't keep the new block in memory
 		let mut commit = CommitSet::default();
 		pruning
-			.note_canonical(
-				&(CACHE_BATCH_SIZE as u64 + 10),
-				CACHE_BATCH_SIZE as u64 + 10,
-				&mut commit,
-			)
+			.note_canonical(&(cache_capacity as u64 + 10), cache_capacity as u64 + 10, &mut commit)
 			.unwrap();
-		assert_eq!(pruning.queue.len(), CACHE_BATCH_SIZE + 11);
+		assert_eq!(pruning.queue.len(), cache_capacity + 11);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-		assert_eq!(cache.len(), CACHE_BATCH_SIZE);
+		assert_eq!(cache.len(), cache_capacity);
 		assert_eq!(uncached_blocks, 11);
 
 		// revert the last add that no apply yet
 		// NOTE: do not commit the previous `CommitSet` to db
 		pruning.queue.revert_recent_add(0, 1);
-		assert_eq!(pruning.queue.len(), CACHE_BATCH_SIZE + 10);
+		assert_eq!(pruning.queue.len(), cache_capacity + 10);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-		assert_eq!(cache.len(), CACHE_BATCH_SIZE);
+		assert_eq!(cache.len(), cache_capacity);
 		assert_eq!(uncached_blocks, 10);
 
 		// remove one block from the start of the queue
@@ -869,22 +896,23 @@ mod tests {
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
 		pruning.apply_pending();
-		assert_eq!(pruning.queue.len(), CACHE_BATCH_SIZE + 9);
+		assert_eq!(pruning.queue.len(), cache_capacity + 9);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-		assert_eq!(cache.len(), CACHE_BATCH_SIZE - 1);
+		assert_eq!(cache.len(), cache_capacity - 1);
 		assert_eq!(uncached_blocks, 10);
-		for i in 0..(CACHE_BATCH_SIZE - 1) {
+		for i in 0..(cache_capacity - 1) {
 			assert_eq!(cache[i].hash, (i + 1) as u64);
 		}
 
 		// load a new queue from db
 		// `cache` is full again but the content of the queue should be the same
-		let pruning: RefWindow<u64, H256, TestDb> = RefWindow::new(db, false).unwrap();
-		assert_eq!(pruning.queue.len(), CACHE_BATCH_SIZE + 9);
+		let pruning: RefWindow<u64, H256, TestDb> =
+			RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
+		assert_eq!(pruning.queue.len(), cache_capacity + 9);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-		assert_eq!(cache.len(), CACHE_BATCH_SIZE);
+		assert_eq!(cache.len(), cache_capacity);
 		assert_eq!(uncached_blocks, 9);
-		for i in 0..CACHE_BATCH_SIZE {
+		for i in 0..cache_capacity {
 			assert_eq!(cache[i].hash, (i + 1) as u64);
 		}
 	}
@@ -892,10 +920,12 @@ mod tests {
 	#[test]
 	fn load_block_from_db() {
 		let mut db = make_db(&[]);
-		let mut pruning: RefWindow<u64, H256, TestDb> = RefWindow::new(db.clone(), false).unwrap();
+		let mut pruning: RefWindow<u64, H256, TestDb> =
+			RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
+		let cache_capacity = DEFAULT_MAX_BLOCK_CONSTRAINT as usize + 10;
 
 		// import blocks
-		for i in 0..(CACHE_BATCH_SIZE as u64 * 2 + 10) {
+		for i in 0..(cache_capacity as u64 * 2 + 10) {
 			let mut commit = make_commit(&[], &[]);
 			pruning.note_canonical(&i, i, &mut commit).unwrap();
 			push_last_canonicalized(i as u64, &mut commit);
@@ -905,24 +935,24 @@ mod tests {
 		// the following operations won't triger loading block from db:
 		// - getting block in cache
 		// - getting block not in the queue
-		let index = CACHE_BATCH_SIZE;
+		let index = cache_capacity;
 		assert_eq!(
 			pruning.queue.get(0, index - 1).unwrap().unwrap().hash,
-			CACHE_BATCH_SIZE as u64 - 1
+			cache_capacity as u64 - 1
 		);
-		assert_eq!(pruning.queue.get(0, CACHE_BATCH_SIZE * 2 + 10).unwrap(), None);
+		assert_eq!(pruning.queue.get(0, cache_capacity * 2 + 10).unwrap(), None);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-		assert_eq!(cache.len(), CACHE_BATCH_SIZE);
-		assert_eq!(uncached_blocks, CACHE_BATCH_SIZE + 10);
+		assert_eq!(cache.len(), cache_capacity);
+		assert_eq!(uncached_blocks, cache_capacity + 10);
 
 		// getting a block not in cache will triger loading block from db
-		assert_eq!(pruning.queue.get(0, index).unwrap().unwrap().hash, CACHE_BATCH_SIZE as u64);
+		assert_eq!(pruning.queue.get(0, index).unwrap().unwrap().hash, cache_capacity as u64);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-		assert_eq!(cache.len(), CACHE_BATCH_SIZE * 2);
+		assert_eq!(cache.len(), cache_capacity * 2);
 		assert_eq!(uncached_blocks, 10);
 
 		// clear all block loaded in cache
-		for _ in 0..CACHE_BATCH_SIZE * 2 {
+		for _ in 0..cache_capacity * 2 {
 			let mut commit = CommitSet::default();
 			pruning.prune_one(&mut commit).unwrap();
 			db.commit(&commit);
@@ -935,8 +965,8 @@ mod tests {
 		// getting the hash of block that not in cache will also triger loading
 		// the remaining blocks from db
 		assert_eq!(
-			pruning.queue.get(pruning.pending_number, 0).unwrap().unwrap().hash,
-			(CACHE_BATCH_SIZE * 2) as u64
+			pruning.queue.get(pruning.base, 0).unwrap().unwrap().hash,
+			(cache_capacity * 2) as u64
 		);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), 10);
@@ -944,13 +974,14 @@ mod tests {
 
 		// load a new queue from db
 		// `cache` should be the same
-		let pruning: RefWindow<u64, H256, TestDb> = RefWindow::new(db, false).unwrap();
+		let pruning: RefWindow<u64, H256, TestDb> =
+			RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
 		assert_eq!(pruning.queue.len(), 10);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), 10);
 		assert_eq!(uncached_blocks, 0);
 		for i in 0..10 {
-			assert_eq!(cache[i].hash, (CACHE_BATCH_SIZE * 2 + i) as u64);
+			assert_eq!(cache[i].hash, (cache_capacity * 2 + i) as u64);
 		}
 	}
 }
