@@ -117,7 +117,6 @@ fn make_passing_after<T: Config<I>, I: 'static>(index: ReferendumIndex, period_p
 		.saturating_add(Perbill::from_percent(1));
 	Referenda::<T, I>::access_poll(index, |status| {
 		if let PollStatus::Ongoing(tally, class) = status {
-			T::Tally::setup_tally(class);
 			*tally = T::Tally::from_requirements(support, approval, class);
 		}
 	});
@@ -126,7 +125,6 @@ fn make_passing_after<T: Config<I>, I: 'static>(index: ReferendumIndex, period_p
 fn make_passing<T: Config<I>, I: 'static>(index: ReferendumIndex) {
 	Referenda::<T, I>::access_poll(index, |status| {
 		if let PollStatus::Ongoing(tally, class) = status {
-			T::Tally::setup_tally(class);
 			*tally = T::Tally::unanimity(class);
 		}
 	});
@@ -135,7 +133,6 @@ fn make_passing<T: Config<I>, I: 'static>(index: ReferendumIndex) {
 fn make_failing<T: Config<I>, I: 'static>(index: ReferendumIndex) {
 	Referenda::<T, I>::access_poll(index, |status| {
 		if let PollStatus::Ongoing(tally, class) = status {
-			T::Tally::setup_tally(class);
 			*tally = T::Tally::rejection(class);
 		}
 	});

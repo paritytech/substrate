@@ -107,7 +107,7 @@ pub trait VoteTally<Votes, Class> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(support: Perbill, approval: Perbill, class: Class) -> Self;
 	#[cfg(feature = "runtime-benchmarks")]
-	fn setup_tally(class: Class);
+	fn setup(class: Class);
 }
 pub enum PollStatus<Tally, Moment, Class> {
 	None,

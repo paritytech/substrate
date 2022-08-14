@@ -95,7 +95,7 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn setup_tally(_: Class) {}
+	fn setup(_: Class) {}
 }
 
 impl<

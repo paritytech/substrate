@@ -871,6 +871,7 @@ impl pallet_ranked_collective::Config for Runtime {
 	type Polls = RankedPolls;
 	type MinRankOfClass = traits::Identity;
 	type VoteWeight = pallet_ranked_collective::Geometric;
+	type MaxAyes = ConstU32<1_000>;
 }
 
 impl pallet_remark::Config for Runtime {

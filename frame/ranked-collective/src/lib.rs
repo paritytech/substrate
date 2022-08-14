@@ -43,7 +43,7 @@
 
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{traits::Convert, ArithmeticError::Overflow, Perbill, RuntimeDebug};
+use sp_runtime::{traits::{Convert, Get}, ArithmeticError::Overflow, Perbill, RuntimeDebug};
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -125,6 +125,7 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn unanimity(class: Rank) -> Self {
+		Self::setup(class);
 		Self {
 			bare_ayes: M::get_max_voters(class),
 			ayes: M::get_max_voters(class),
@@ -134,10 +135,12 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn rejection(class: Rank) -> Self {
+		Self::setup(class);
 		Self { bare_ayes: 0, ayes: 0, nays: M::get_max_voters(class), dummy: PhantomData }
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn from_requirements(support: Perbill, approval: Perbill, class: Rank) -> Self {
+		Self::setup(class);
 		let c = M::get_max_voters(class);
 		let ayes = support * c;
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
@@ -145,10 +148,10 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn setup_tally(class: Rank) {
+	fn setup(class: Rank) {
 		if M::get_max_voters(class) == 0 {
-			for i in 0..1_000 {
-				let who: T::AccountId = frame_benchmarking::account("for_benchmarking", i, 0);
+			for i in 0..T::MaxAyes::get() {
+				let who: T::AccountId = frame_benchmarking::account("ranked_collective_benchmarking", i, 0);
 				crate::Pallet::<T, I>::do_add_member_to_rank(who, class)
 					.expect("could not add members for benchmarks");
 			}
@@ -379,6 +382,13 @@ pub mod pallet {
 		/// Rank_delta is defined as the number of ranks above the minimum required to take part
 		/// in the poll.
 		type VoteWeight: Convert<Rank, Votes>;
+
+		/// The maximum number of expected Ayes in production for this pallet.
+		///
+		/// This is specifically used for benchmarking, and should be kept up to date with an approximate
+		/// number of users which exist in the production instance of this pallet.
+		#[pallet::constant]
+		type MaxAyes: Get<u32>;
 	}
 
 	/// The number of members in the collective who have at least the rank according to the index
