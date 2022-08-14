@@ -43,7 +43,11 @@
 
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{traits::{Convert, Get}, ArithmeticError::Overflow, Perbill, RuntimeDebug};
+use sp_runtime::{
+	traits::{Convert, Get},
+	ArithmeticError::Overflow,
+	Perbill, RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -151,7 +155,8 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally
 	fn setup(class: Rank) {
 		if M::get_max_voters(class) == 0 {
 			for i in 0..T::MaxAyes::get() {
-				let who: T::AccountId = frame_benchmarking::account("ranked_collective_benchmarking", i, 0);
+				let who: T::AccountId =
+					frame_benchmarking::account("ranked_collective_benchmarking", i, 0);
 				crate::Pallet::<T, I>::do_add_member_to_rank(who, class)
 					.expect("could not add members for benchmarks");
 			}
@@ -385,8 +390,8 @@ pub mod pallet {
 
 		/// The maximum number of expected Ayes in production for this pallet.
 		///
-		/// This is specifically used for benchmarking, and should be kept up to date with an approximate
-		/// number of users which exist in the production instance of this pallet.
+		/// This is specifically used for benchmarking, and should be kept up to date with an
+		/// approximate number of users which exist in the production instance of this pallet.
 		#[pallet::constant]
 		type MaxAyes: Get<u32>;
 	}
