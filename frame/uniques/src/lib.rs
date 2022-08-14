@@ -97,7 +97,8 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ Copy
 			+ Default
-			+ AtLeast32BitUnsigned;
+			+ AtLeast32BitUnsigned
+			+ MaybeSerializeDeserialize;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy + MaybeSerializeDeserialize;
