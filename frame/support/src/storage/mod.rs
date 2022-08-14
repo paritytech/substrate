@@ -29,6 +29,7 @@ use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
 use sp_std::prelude::*;
 
+use self::types::QueryKindTrait;
 pub use self::{
 	transactional::{with_transaction, with_transaction_unchecked},
 	types::StorageEntryMetadataBuilder,

@@ -24,6 +24,7 @@ use sp_std::prelude::*;
 
 mod counted_map;
 mod double_map;
+mod hooked_map;
 mod key;
 mod map;
 mod nmap;
