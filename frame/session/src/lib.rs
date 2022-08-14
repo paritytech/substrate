@@ -469,7 +469,7 @@ pub mod pallet {
 					);
 					self.keys.iter().map(|x| x.1.clone()).collect()
 				});
-			let initial_validators_bounded: WeakBoundedVec<T::ValidatorId, T::MaxValidators> =
+			let initial_validators: WeakBoundedVec<T::ValidatorId, T::MaxValidators> =
 				initial_validators_0.clone().try_into().expect("Too many initial validators");
 			assert!(
 				!initial_validators_0.is_empty(),
@@ -497,7 +497,7 @@ pub mod pallet {
 			// Tell everyone about the genesis session keys
 			T::SessionHandler::on_genesis_session::<T::Keys>(&queued_keys);
 
-			Validators::<T>::put(initial_validators_bounded);
+			Validators::<T>::put(initial_validators);
 			<QueuedKeys<T>>::put(queued_keys);
 
 			T::SessionManager::start_session(0);
@@ -655,9 +655,8 @@ impl<T: Config> Pallet<T> {
 		let validators =
 			session_keys.iter().map(|(validator, _)| validator.clone()).collect::<Vec<_>>();
 
-		// TODO: Handle defensifely?
 		let bounded_validator_set: WeakBoundedVec<T::ValidatorId, T::MaxValidators> =
-			validators.clone().try_into().expect("Max amount of validators reached");
+			validators.clone().try_into().expect("Max validators reached");
 		Validators::<T>::put(bounded_validator_set);
 
 		if changed {
