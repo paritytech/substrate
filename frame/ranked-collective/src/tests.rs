@@ -186,7 +186,6 @@ impl Config for Test {
 	type Polls = TestPolls;
 	type MinRankOfClass = Identity;
 	type VoteWeight = Geometric;
-	type MaxAyes = ConstU32<1_000>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

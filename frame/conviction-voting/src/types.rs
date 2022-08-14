@@ -95,7 +95,7 @@ impl<
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn setup(_: Class) {}
+	fn setup(_: Class, _: Perbill) {}
 }
 
 impl<

@@ -739,7 +739,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&track.min_approval,
 			status.track,
 		);
-		println!("{:?}", is_passing);
 		status.in_queue = false;
 		Self::deposit_event(Event::<T, I>::DecisionStarted {
 			index,

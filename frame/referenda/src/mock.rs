@@ -291,7 +291,7 @@ impl<Class> VoteTally<u32, Class> for Tally {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn setup(_: Class) {}
+	fn setup(_: Class, _: Perbill) {}
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
