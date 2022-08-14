@@ -25,6 +25,21 @@ use prometheus_endpoint::{
 };
 use std::net::SocketAddr;
 
+/// Histogram time buckets in microseconds.
+const HISTOGRAM_BUCKETS: [f64; 11] = [
+	5.0,
+	25.0,
+	100.0,
+	500.0,
+	1_000.0,
+	2_500.0,
+	10_000.0,
+	25_000.0,
+	100_000.0,
+	1_000_000.0,
+	10_000_000.0,
+];
+
 /// Metrics for RPC middleware storing information about the number of requests started/completed,
 /// calls started/completed and their timings.
 #[derive(Debug, Clone)]
@@ -75,7 +90,8 @@ impl RpcMetrics {
 						HistogramOpts::new(
 							"substrate_rpc_calls_time",
 							"Total time [μs] of processed RPC calls",
-						),
+						)
+						.buckets(HISTOGRAM_BUCKETS.to_vec()),
 						&["protocol", "method"],
 					)?,
 					metrics_registry,
