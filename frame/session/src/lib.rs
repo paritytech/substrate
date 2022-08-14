@@ -123,8 +123,7 @@ use frame_support::{
 		ValidatorRegistration, ValidatorSet,
 	},
 	weights::Weight,
-	Parameter,
-	WeakBoundedVec,
+	Parameter, WeakBoundedVec,
 };
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
@@ -470,7 +469,8 @@ pub mod pallet {
 					);
 					self.keys.iter().map(|x| x.1.clone()).collect()
 				});
-			let initial_validators_bounded: WeakBoundedVec<T::ValidatorId, T::MaxValidators> = initial_validators_0.clone().try_into().expect("Too many initial validators");
+			let initial_validators_bounded: WeakBoundedVec<T::ValidatorId, T::MaxValidators> =
+				initial_validators_0.clone().try_into().expect("Too many initial validators");
 			assert!(
 				!initial_validators_0.is_empty(),
 				"Empty validator set for session 0 in genesis block!"
@@ -507,7 +507,8 @@ pub mod pallet {
 	/// The current set of validators.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
-	pub type Validators<T: Config> = StorageValue<_, WeakBoundedVec<T::ValidatorId, T::MaxValidators>, ValueQuery>;
+	pub type Validators<T: Config> =
+		StorageValue<_, WeakBoundedVec<T::ValidatorId, T::MaxValidators>, ValueQuery>;
 
 	/// Current index of the session.
 	#[pallet::storage]
@@ -532,7 +533,8 @@ pub mod pallet {
 	/// a new set of identities.
 	#[pallet::storage]
 	#[pallet::getter(fn disabled_validators)]
-	pub type DisabledValidators<T: Config> = StorageValue<_, BoundedVec<u32, T::MaxValidators>, ValueQuery>;
+	pub type DisabledValidators<T: Config> =
+		StorageValue<_, BoundedVec<u32, T::MaxValidators>, ValueQuery>;
 
 	/// The next session keys for a validator.
 	#[pallet::storage]
@@ -654,7 +656,8 @@ impl<T: Config> Pallet<T> {
 			session_keys.iter().map(|(validator, _)| validator.clone()).collect::<Vec<_>>();
 
 		// TODO: Handle defensifely?
-		let bounded_validator_set: WeakBoundedVec<T::ValidatorId, T::MaxValidators> = validators.clone().try_into().expect("Max amount of validators reached");
+		let bounded_validator_set: WeakBoundedVec<T::ValidatorId, T::MaxValidators> =
+			validators.clone().try_into().expect("Max amount of validators reached");
 		Validators::<T>::put(bounded_validator_set);
 
 		if changed {
@@ -901,7 +904,6 @@ impl<T: Config> Pallet<T> {
 
 	fn clear_key_owner(id: KeyTypeId, key_data: &[u8]) {
 		<KeyOwner<T>>::remove((id, key_data));
-
 	}
 }
 

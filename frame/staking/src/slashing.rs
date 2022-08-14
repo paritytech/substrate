@@ -339,7 +339,9 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 		match offending.binary_search_by_key(&validator_index_u32, |(index, _)| *index) {
 			// this is a new offending validator
 			Err(index) => {
-				offending.try_insert(index, (validator_index_u32, disable)).expect("Limit reached");
+				offending
+					.try_insert(index, (validator_index_u32, disable))
+					.expect("Limit reached");
 
 				let offending_threshold =
 					T::OffendingValidatorsThreshold::get() * validators.len() as u32;

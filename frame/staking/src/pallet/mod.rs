@@ -237,7 +237,8 @@ pub mod pallet {
 	/// invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
-	pub type Invulnerables<T: Config> = StorageValue<_, BoundedVec<T::AccountId, T::MaxValidators>, ValueQuery>;
+	pub type Invulnerables<T: Config> =
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxValidators>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
 	#[pallet::storage]
@@ -499,7 +500,8 @@ pub mod pallet {
 	/// the era ends.
 	#[pallet::storage]
 	#[pallet::getter(fn offending_validators)]
-	pub type OffendingValidators<T: Config> = StorageValue<_, BoundedVec<(u32, bool), T::MaxValidators>, ValueQuery>;
+	pub type OffendingValidators<T: Config> =
+		StorageValue<_, BoundedVec<(u32, bool), T::MaxValidators>, ValueQuery>;
 
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.
