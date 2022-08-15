@@ -555,8 +555,7 @@ impl DhtValueFoundTester {
 		self.local_worker
 			.as_ref()
 			.map(|w| {
-				w.addr_cache
-					.get_addresses_by_authority_id(&self.remote_authority_public.into())
+				w.addr_cache.get_addresses_by_authority_id(&self.remote_authority_public.into())
 			})
 			.unwrap()
 	}

@@ -1920,10 +1920,7 @@ pub mod pallet {
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
 
-			Self::deposit_event(Event::<T>::Created {
-				depositor: who.clone(),
-				pool_id,
-			});
+			Self::deposit_event(Event::<T>::Created { depositor: who.clone(), pool_id });
 
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who,

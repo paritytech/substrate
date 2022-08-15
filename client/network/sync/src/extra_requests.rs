@@ -446,11 +446,7 @@ mod tests {
 					PeerSyncState::DownloadingJustification(r.0);
 			}
 
-			let active = requests
-				.active_requests
-				.iter()
-				.map(|(&p, &r)| (p, r))
-				.collect::<Vec<_>>();
+			let active = requests.active_requests.iter().map(|(&p, &r)| (p, r)).collect::<Vec<_>>();
 
 			for (peer, req) in &active {
 				assert!(requests.failed_requests.get(req).is_none());

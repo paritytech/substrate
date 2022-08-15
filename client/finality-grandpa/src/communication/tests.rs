@@ -305,8 +305,7 @@ fn good_commit_leads_to_relay() {
 		let target_hash: Hash = [1; 32].into();
 		let target_number = 500;
 
-		let precommit =
-			finality_grandpa::Precommit { target_hash, target_number };
+		let precommit = finality_grandpa::Precommit { target_hash, target_number };
 		let payload = sp_finality_grandpa::localized_payload(
 			round,
 			set_id,
@@ -456,8 +455,7 @@ fn bad_commit_leads_to_report() {
 		let target_hash: Hash = [1; 32].into();
 		let target_number = 500;
 
-		let precommit =
-			finality_grandpa::Precommit { target_hash, target_number };
+		let precommit = finality_grandpa::Precommit { target_hash, target_number };
 		let payload = sp_finality_grandpa::localized_payload(
 			round,
 			set_id,

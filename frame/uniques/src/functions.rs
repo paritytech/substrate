@@ -234,11 +234,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
 		if let Some(ref price) = price {
-			ItemPriceOf::<T, I>::insert(
-				&collection,
-				&item,
-				(price, whitelisted_buyer.clone()),
-			);
+			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));
 			Self::deposit_event(Event::ItemPriceSet {
 				collection,
 				item,

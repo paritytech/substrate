@@ -562,10 +562,7 @@ mod tests {
 			for subscriber in subscribers.iter_mut() {
 				assert_eq!(
 					subscriber.next(),
-					Some(TopicNotification {
-						message: message.clone(),
-						sender: Some(remote_peer),
-					}),
+					Some(TopicNotification { message: message.clone(), sender: Some(remote_peer) }),
 				);
 			}
 		}
@@ -710,10 +707,7 @@ mod tests {
 					.collect();
 
 				event_sender
-					.start_send(Event::NotificationsReceived {
-						remote: remote_peer,
-						messages,
-					})
+					.start_send(Event::NotificationsReceived { remote: remote_peer, messages })
 					.expect("Event stream is unbounded; qed.");
 			}
 

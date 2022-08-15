@@ -55,10 +55,7 @@ fn veto_external_works() {
 		assert!(<NextExternal<Test>>::exists());
 
 		// 3 can't veto the same thing twice.
-		assert_noop!(
-			Democracy::veto_external(Origin::signed(3), h),
-			Error::<Test>::AlreadyVetoed
-		);
+		assert_noop!(Democracy::veto_external(Origin::signed(3), h), Error::<Test>::AlreadyVetoed);
 
 		// 4 vetoes.
 		assert_ok!(Democracy::veto_external(Origin::signed(4), h));

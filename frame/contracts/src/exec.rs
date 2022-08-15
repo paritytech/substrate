@@ -1416,12 +1416,7 @@ mod tests {
 				loader.counter += 1;
 				loader.map.insert(
 					hash,
-					MockExecutable {
-						func: Rc::new(f),
-						func_type,
-						code_hash: hash,
-						refcount: 1,
-					},
+					MockExecutable { func: Rc::new(f), func_type, code_hash: hash, refcount: 1 },
 				);
 				hash
 			})

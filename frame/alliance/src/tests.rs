@@ -176,13 +176,7 @@ fn close_works() {
 		assert_ok!(Alliance::vote(Origin::signed(1), hash, 0, true));
 		assert_ok!(Alliance::vote(Origin::signed(2), hash, 0, true));
 		assert_ok!(Alliance::vote(Origin::signed(3), hash, 0, true));
-		assert_ok!(Alliance::close(
-			Origin::signed(1),
-			hash,
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Alliance::close(Origin::signed(1), hash, 0, proposal_weight, proposal_len));
 
 		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(

@@ -872,30 +872,15 @@ mod score {
 		let claim =
 			[12488167277027543u128, 5559266368032409496, 118700736389524721358337889258988054];
 
-		assert_eq!(
-			is_score_better(claim, initial, Perbill::from_rational(1u32, 10_000),),
-			true,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(1u32, 10_000),), true,);
 
-		assert_eq!(
-			is_score_better(claim, initial, Perbill::from_rational(2u32, 10_000),),
-			true,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(2u32, 10_000),), true,);
 
-		assert_eq!(
-			is_score_better(claim, initial, Perbill::from_rational(3u32, 10_000),),
-			true,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(3u32, 10_000),), true,);
 
-		assert_eq!(
-			is_score_better(claim, initial, Perbill::from_rational(4u32, 10_000),),
-			true,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(4u32, 10_000),), true,);
 
-		assert_eq!(
-			is_score_better(claim, initial, Perbill::from_rational(5u32, 10_000),),
-			false,
-		);
+		assert_eq!(is_score_better(claim, initial, Perbill::from_rational(5u32, 10_000),), false,);
 	}
 
 	#[test]

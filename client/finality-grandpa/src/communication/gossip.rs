@@ -2158,10 +2158,7 @@ mod tests {
 		let peer_authority = PeerId::random();
 		let peer_full = PeerId::random();
 
-		val.inner
-			.write()
-			.peers
-			.new_peer(peer_authority, ObservedRole::Authority);
+		val.inner.write().peers.new_peer(peer_authority, ObservedRole::Authority);
 		val.inner.write().peers.new_peer(peer_full, ObservedRole::Full);
 
 		let import_neighbor_message = |peer| {
@@ -2271,10 +2268,7 @@ mod tests {
 		full_nodes.resize_with(30, || PeerId::random());
 
 		for i in 0..30 {
-			val.inner
-				.write()
-				.peers
-				.new_peer(authorities[i], ObservedRole::Authority);
+			val.inner.write().peers.new_peer(authorities[i], ObservedRole::Authority);
 
 			val.inner.write().peers.new_peer(full_nodes[i], ObservedRole::Full);
 		}
