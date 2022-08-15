@@ -130,14 +130,13 @@ where
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///   Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	///
-	/// `host_functions` - The set of host functions to be available for import provided by this
-	///   executor.
-	///
 	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
 	///
 	/// `cache_path` - A path to a directory where the executor can place its files for purposes of
 	///   caching. This may be important in cases when there are many different modules with the
 	///   compiled execution method is used.
+	///
+	/// `runtime_cache_size` - The capacity of runtime cache.
 	pub fn new(
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
@@ -209,7 +208,7 @@ where
 	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be instantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
-	/// In case of problems with during creation of the runtime or instantation, a `Err` is
+	/// In case of problems with during creation of the runtime or instantiation, a `Err` is
 	/// returned. that describes the message.
 	#[doc(hidden)] // We use this function for tests across multiple crates.
 	pub fn uncached_call(
@@ -405,6 +404,10 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	///
+	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
+	///
+	/// `runtime_cache_size` - The capacity of runtime cache.
 	pub fn new(
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,

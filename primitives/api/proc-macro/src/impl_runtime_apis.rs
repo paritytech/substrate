@@ -17,12 +17,12 @@
 
 use crate::utils::{
 	extract_all_signature_types, extract_block_type_from_trait_path, extract_impl_trait,
-	extract_parameter_names_types_and_borrows, generate_call_api_at_fn_name, generate_crate_access,
-	generate_hidden_includes, generate_method_runtime_api_impl_name,
-	generate_native_call_generator_fn_name, generate_runtime_mod_name_for_trait,
-	prefix_function_with_trait, return_type_extract_type, AllowSelfRefInParameters,
-	RequireQualifiedTraitPath,
+	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
+	generate_runtime_mod_name_for_trait, parse_runtime_api_version, prefix_function_with_trait,
+	versioned_trait_name, AllowSelfRefInParameters, RequireQualifiedTraitPath,
 };
+
+use crate::common::API_VERSION_ATTRIBUTE;
 
 use proc_macro2::{Span, TokenStream};
 
@@ -33,8 +33,7 @@ use syn::{
 	parse::{Error, Parse, ParseStream, Result},
 	parse_macro_input, parse_quote,
 	spanned::Spanned,
-	Attribute, GenericArgument, Ident, ImplItem, ItemImpl, Path, PathArguments, Signature, Type,
-	TypePath,
+	Attribute, Ident, ImplItem, ItemImpl, Path, Signature, Type, TypePath,
 };
 
 use std::collections::HashSet;
@@ -105,8 +104,10 @@ fn generate_impl_calls(
 	let mut impl_calls = Vec::new();
 
 	for impl_ in impls {
+		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
 		let impl_trait = extend_with_runtime_decl_path(impl_trait_path.clone());
+		let impl_trait = extend_with_api_version(impl_trait, trait_api_ver);
 		let impl_trait_ident = &impl_trait_path
 			.segments
 			.last()
@@ -326,35 +327,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 
 		#[cfg(any(feature = "std", test))]
 		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> RuntimeApiImpl<Block, C> {
-			fn call_api_at<
-				R: #crate_::Encode + #crate_::Decode + std::cmp::PartialEq,
-				F: FnOnce(
-					&C,
-					&std::cell::RefCell<#crate_::OverlayedChanges>,
-					&std::cell::RefCell<#crate_::StorageTransactionCache<Block, C::StateBackend>>,
-					&std::option::Option<#crate_::ProofRecorder<Block>>,
-				) -> std::result::Result<#crate_::NativeOrEncoded<R>, E>,
-				E,
-			>(
-				&self,
-				call_api_at: F,
-			) -> std::result::Result<#crate_::NativeOrEncoded<R>, E> {
-				if *std::cell::RefCell::borrow(&self.commit_on_success) {
-					#crate_::OverlayedChanges::start_transaction(
-						&mut std::cell::RefCell::borrow_mut(&self.changes)
-					);
-				}
-				let res = call_api_at(
-					&self.call,
-					&self.changes,
-					&self.storage_transaction_cache,
-					&self.recorder,
-				);
-
-				self.commit_or_rollback(std::result::Result::is_ok(&res));
-				res
-			}
-
 			fn commit_or_rollback(&self, commit: bool) {
 				let proof = "\
 					We only close a transaction when we opened one ourself.
@@ -398,6 +370,24 @@ fn extend_with_runtime_decl_path(mut trait_: Path) -> Path {
 	trait_
 }
 
+fn extend_with_api_version(mut trait_: Path, version: Option<u64>) -> Path {
+	let version = if let Some(v) = version {
+		v
+	} else {
+		// nothing to do
+		return trait_
+	};
+
+	let trait_name = &mut trait_
+		.segments
+		.last_mut()
+		.expect("Trait path should always contain at least one item; qed")
+		.ident;
+	*trait_name = versioned_trait_name(trait_name, version);
+
+	trait_
+}
+
 /// Generates the implementations of the apis for the runtime.
 fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	let mut impls_prepared = Vec::new();
@@ -405,9 +395,12 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 	// We put `runtime` before each trait to get the trait that is intended for the runtime and
 	// we put the `RuntimeBlock` as first argument for the trait generics.
 	for impl_ in impls.iter() {
+		let trait_api_ver = extract_api_version(&impl_.attrs, impl_.span())?;
+
 		let mut impl_ = impl_.clone();
 		let trait_ = extract_impl_trait(&impl_, RequireQualifiedTraitPath::Yes)?.clone();
 		let trait_ = extend_with_runtime_decl_path(trait_);
+		let trait_ = extend_with_api_version(trait_, trait_api_ver);
 
 		impl_.trait_.as_mut().unwrap().1 = trait_;
 		impl_.attrs = filter_cfg_attrs(&impl_.attrs);
@@ -424,10 +417,61 @@ fn generate_api_impl_for_runtime(impls: &[ItemImpl]) -> Result<TokenStream> {
 /// with code that calls into the runtime.
 struct ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 	runtime_block: &'a TypePath,
-	runtime_mod_path: &'a Path,
-	runtime_type: &'a Type,
-	trait_generic_arguments: &'a [GenericArgument],
-	impl_trait: &'a Ident,
+}
+
+impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
+	/// Process the given item implementation.
+	fn process(mut self, input: ItemImpl) -> ItemImpl {
+		let mut input = self.fold_item_impl(input);
+
+		let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
+
+		// Delete all functions, because all of them are default implemented by
+		// `decl_runtime_apis!`. We only need to implement the `__runtime_api_internal_call_api_at`
+		// function.
+		input.items.clear();
+		input.items.push(parse_quote! {
+			fn __runtime_api_internal_call_api_at(
+				&self,
+				at: &#crate_::BlockId<__SR_API_BLOCK__>,
+				context: #crate_::ExecutionContext,
+				params: std::vec::Vec<u8>,
+				fn_name: &dyn Fn(#crate_::RuntimeVersion) -> &'static str,
+			) -> std::result::Result<std::vec::Vec<u8>, #crate_::ApiError> {
+				if *std::cell::RefCell::borrow(&self.commit_on_success) {
+					#crate_::OverlayedChanges::start_transaction(
+						&mut std::cell::RefCell::borrow_mut(&self.changes)
+					);
+				}
+
+				let res = (|| {
+				let version = #crate_::CallApiAt::<__SR_API_BLOCK__>::runtime_version_at(self.call, at)?;
+
+				let params = #crate_::CallApiAtParams::<_, fn() -> _, _> {
+					at,
+					function: (*fn_name)(version),
+					native_call: None,
+					arguments: params,
+					overlayed_changes: &self.changes,
+					storage_transaction_cache: &self.storage_transaction_cache,
+					context,
+					recorder: &self.recorder,
+				};
+
+				#crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at::<#crate_::NeverNativeValue, _>(
+					self.call,
+					params,
+				)
+			})();
+
+				self.commit_or_rollback(std::result::Result::is_ok(&res));
+
+				res.map(#crate_::NativeOrEncoded::into_encoded)
+			}
+		});
+
+		input
+	}
 }
 
 impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
@@ -436,108 +480,6 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			if input == *self.runtime_block { parse_quote!(__SR_API_BLOCK__) } else { input };
 
 		fold::fold_type_path(self, new_ty_path)
-	}
-
-	fn fold_impl_item_method(&mut self, mut input: syn::ImplItemMethod) -> syn::ImplItemMethod {
-		let block = {
-			let runtime_mod_path = self.runtime_mod_path;
-			let runtime = self.runtime_type;
-			let native_call_generator_ident =
-				generate_native_call_generator_fn_name(&input.sig.ident);
-			let call_api_at_call = generate_call_api_at_fn_name(&input.sig.ident);
-			let trait_generic_arguments = self.trait_generic_arguments;
-			let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
-
-			// Generate the access to the native parameters
-			let param_tuple_access = if input.sig.inputs.len() == 1 {
-				vec![quote!(p)]
-			} else {
-				input
-					.sig
-					.inputs
-					.iter()
-					.enumerate()
-					.map(|(i, _)| {
-						let i = syn::Index::from(i);
-						quote!( p.#i )
-					})
-					.collect::<Vec<_>>()
-			};
-
-			let (param_types, error) = match extract_parameter_names_types_and_borrows(
-				&input.sig,
-				AllowSelfRefInParameters::No,
-			) {
-				Ok(res) => (
-					res.into_iter()
-						.map(|v| {
-							let ty = v.1;
-							let borrow = v.2;
-							quote!( #borrow #ty )
-						})
-						.collect::<Vec<_>>(),
-					None,
-				),
-				Err(e) => (Vec::new(), Some(e.to_compile_error())),
-			};
-
-			// Rewrite the input parameters.
-			input.sig.inputs = parse_quote! {
-				&self,
-				at: &#crate_::BlockId<__SR_API_BLOCK__>,
-				context: #crate_::ExecutionContext,
-				params: Option<( #( #param_types ),* )>,
-				params_encoded: Vec<u8>,
-			};
-
-			input.sig.ident =
-				generate_method_runtime_api_impl_name(self.impl_trait, &input.sig.ident);
-			let ret_type = return_type_extract_type(&input.sig.output);
-
-			// Generate the correct return type.
-			input.sig.output = parse_quote!(
-				-> std::result::Result<#crate_::NativeOrEncoded<#ret_type>, #crate_::ApiError>
-			);
-
-			// Generate the new method implementation that calls into the runtime.
-			parse_quote!(
-				{
-					// Get the error to the user (if we have one).
-					#error
-
-					self.call_api_at(
-						|
-							call_runtime_at,
-							changes,
-							storage_transaction_cache,
-							recorder
-						| {
-							#runtime_mod_path #call_api_at_call(
-								call_runtime_at,
-								at,
-								params_encoded,
-								changes,
-								storage_transaction_cache,
-								params.map(|p| {
-									#runtime_mod_path #native_call_generator_ident ::
-										<#runtime, __SR_API_BLOCK__ #(, #trait_generic_arguments )*> (
-										#( #param_tuple_access ),*
-									)
-								}),
-								context,
-								recorder,
-							)
-						}
-					)
-				}
-			)
-		};
-
-		let mut input = fold::fold_impl_item_method(self, input);
-		// We need to set the block, after we modified the rest of the ast, otherwise we would
-		// modify our generated block as well.
-		input.block = block;
-		input
 	}
 
 	fn fold_item_impl(&mut self, mut input: ItemImpl) -> ItemImpl {
@@ -594,45 +536,55 @@ fn generate_api_impl_for_runtime_api(impls: &[ItemImpl]) -> Result<TokenStream> 
 
 	for impl_ in impls {
 		let impl_trait_path = extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?;
-		let impl_trait = &impl_trait_path
-			.segments
-			.last()
-			.ok_or_else(|| Error::new(impl_trait_path.span(), "Empty trait path not possible!"))?
-			.clone();
 		let runtime_block = extract_block_type_from_trait_path(impl_trait_path)?;
-		let runtime_type = &impl_.self_ty;
 		let mut runtime_mod_path = extend_with_runtime_decl_path(impl_trait_path.clone());
 		// remove the trait to get just the module path
 		runtime_mod_path.segments.pop();
 
-		let trait_generic_arguments = match impl_trait.arguments {
-			PathArguments::Parenthesized(_) | PathArguments::None => vec![],
-			PathArguments::AngleBracketed(ref b) => b.args.iter().cloned().collect(),
-		};
+		let processed_impl =
+			ApiRuntimeImplToApiRuntimeApiImpl { runtime_block }.process(impl_.clone());
 
-		let mut visitor = ApiRuntimeImplToApiRuntimeApiImpl {
-			runtime_block,
-			runtime_mod_path: &runtime_mod_path,
-			runtime_type,
-			trait_generic_arguments: &trait_generic_arguments,
-			impl_trait: &impl_trait.ident,
-		};
-
-		result.push(visitor.fold_item_impl(impl_.clone()));
+		result.push(processed_impl);
 	}
 	Ok(quote!( #( #result )* ))
+}
+
+fn populate_runtime_api_versions(
+	result: &mut Vec<TokenStream>,
+	sections: &mut Vec<TokenStream>,
+	attrs: Vec<Attribute>,
+	id: Path,
+	version: TokenStream,
+	crate_access: &TokenStream,
+) {
+	result.push(quote!(
+			#( #attrs )*
+			(#id, #version)
+	));
+
+	sections.push(quote!(
+		#( #attrs )*
+		const _: () = {
+			// All sections with the same name are going to be merged by concatenation.
+			#[cfg(not(feature = "std"))]
+			#[link_section = "runtime_apis"]
+			static SECTION_CONTENTS: [u8; 12] = #crate_access::serialize_runtime_api_info(#id, #version);
+		};
+	));
 }
 
 /// Generates `RUNTIME_API_VERSIONS` that holds all version information about the implemented
 /// runtime apis.
 fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
-	let mut result = Vec::with_capacity(impls.len());
-	let mut sections = Vec::with_capacity(impls.len());
+	let mut result = Vec::<TokenStream>::with_capacity(impls.len());
+	let mut sections = Vec::<TokenStream>::with_capacity(impls.len());
 	let mut processed_traits = HashSet::new();
 
 	let c = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 	for impl_ in impls {
+		let api_ver = extract_api_version(&impl_.attrs, impl_.span())?.map(|a| a as u32);
+
 		let mut path = extend_with_runtime_decl_path(
 			extract_impl_trait(impl_, RequireQualifiedTraitPath::Yes)?.clone(),
 		);
@@ -655,23 +607,11 @@ fn generate_runtime_api_versions(impls: &[ItemImpl]) -> Result<TokenStream> {
 		}
 
 		let id: Path = parse_quote!( #path ID );
-		let version: Path = parse_quote!( #path VERSION );
+		let version = quote!( #path VERSION );
 		let attrs = filter_cfg_attrs(&impl_.attrs);
 
-		result.push(quote!(
-			#( #attrs )*
-			(#id, #version)
-		));
-
-		sections.push(quote!(
-			#( #attrs )*
-			const _: () = {
-				// All sections with the same name are going to be merged by concatenation.
-				#[cfg(not(feature = "std"))]
-				#[link_section = "runtime_apis"]
-				static SECTION_CONTENTS: [u8; 12] = #c::serialize_runtime_api_info(#id, #version);
-			};
-		));
+		let api_ver = api_ver.map(|a| quote!( #a )).unwrap_or_else(|| version);
+		populate_runtime_api_versions(&mut result, &mut sections, attrs, id, api_ver, &c)
 	}
 
 	Ok(quote!(
@@ -724,6 +664,33 @@ fn impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {
 // Filters all attributes except the cfg ones.
 fn filter_cfg_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
 	attrs.iter().filter(|a| a.path.is_ident("cfg")).cloned().collect()
+}
+
+// Extracts the value of `API_VERSION_ATTRIBUTE` and handles errors.
+// Returns:
+// - Err if the version is malformed
+// - Some(u64) if the version is set
+// - None if the version is not set (this is valid).
+fn extract_api_version(attrs: &Vec<Attribute>, span: Span) -> Result<Option<u64>> {
+	// First fetch all `API_VERSION_ATTRIBUTE` values (should be only one)
+	let api_ver = attrs
+		.iter()
+		.filter(|a| a.path.is_ident(API_VERSION_ATTRIBUTE))
+		.collect::<Vec<_>>();
+
+	if api_ver.len() > 1 {
+		return Err(Error::new(
+			span,
+			format!(
+				"Found multiple #[{}] attributes for an API implementation. \
+				Each runtime API can have only one version.",
+				API_VERSION_ATTRIBUTE
+			),
+		))
+	}
+
+	// Parse the runtime version if there exists one.
+	api_ver.first().map(|v| parse_runtime_api_version(v)).transpose()
 }
 
 #[cfg(test)]

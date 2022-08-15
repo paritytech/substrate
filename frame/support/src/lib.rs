@@ -16,6 +16,16 @@
 // limitations under the License.
 
 //! Support code for the runtime.
+//!
+//! ## Note on Tuple Traits
+//!
+//! Many of the traits defined in [`traits`] have auto-implementations on tuples as well. Usually,
+//! the tuple is a function of number of pallets in the runtime. By default, the traits are
+//! implemented for tuples of up to 64 items.
+//
+// If you have more pallets in your runtime, or for any other reason need more, enabled `tuples-96`
+// or the `tuples-128` complication flag. Note that these features *will increase* the compilation
+// of this crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

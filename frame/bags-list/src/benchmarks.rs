@@ -25,7 +25,7 @@ use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::One;
 
-frame_benchmarking::benchmarks! {
+frame_benchmarking::benchmarks_instance_pallet! {
 	rebag_non_terminal {
 		// An expensive case for rebag-ing (rebag a non-terminal node):
 		//
@@ -97,7 +97,7 @@ frame_benchmarking::benchmarks! {
 
 		// clear any pre-existing storage.
 		// NOTE: safe to call outside block production
-		List::<T>::unsafe_clear();
+		List::<T, I>::unsafe_clear();
 
 		// define our origin and destination thresholds.
 		let origin_bag_thresh = T::BagThresholds::get()[0];
@@ -146,7 +146,7 @@ frame_benchmarking::benchmarks! {
 
 		// clear any pre-existing storage.
 		// NOTE: safe to call outside block production
-		List::<T>::unsafe_clear();
+		List::<T, I>::unsafe_clear();
 
 		let bag_thresh = T::BagThresholds::get()[0];
 
