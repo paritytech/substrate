@@ -1419,7 +1419,7 @@ mod tests {
 					MockExecutable {
 						func: Rc::new(f),
 						func_type,
-						code_hash: hash.clone(),
+						code_hash: hash,
 						refcount: 1,
 					},
 				);
@@ -2189,7 +2189,6 @@ mod tests {
 		let dummy_ch = MockLoader::insert(Call, |_, _| exec_success());
 		let instantiated_contract_address = Rc::new(RefCell::new(None::<AccountIdOf<Test>>));
 		let instantiator_ch = MockLoader::insert(Call, {
-			let dummy_ch = dummy_ch.clone();
 			let instantiated_contract_address = Rc::clone(&instantiated_contract_address);
 			move |ctx, _| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
@@ -2252,7 +2251,6 @@ mod tests {
 	fn instantiation_traps() {
 		let dummy_ch = MockLoader::insert(Constructor, |_, _| Err("It's a trap!".into()));
 		let instantiator_ch = MockLoader::insert(Call, {
-			let dummy_ch = dummy_ch.clone();
 			move |ctx, _| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				assert_matches!(

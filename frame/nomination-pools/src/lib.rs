@@ -491,7 +491,7 @@ impl<T: Config> PoolMember<T> {
 				true
 			} else {
 				removed_points
-					.try_insert(*e, p.clone())
+					.try_insert(*e, *p)
 					.expect("source map is bounded, this is a subset, will be bounded; qed");
 				false
 			}
@@ -1922,7 +1922,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::Created {
 				depositor: who.clone(),
-				pool_id: pool_id.clone(),
+				pool_id,
 			});
 
 			Self::deposit_event(Event::<T>::Bonded {

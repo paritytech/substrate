@@ -1343,7 +1343,7 @@ mod tests {
 		}
 		pub fn genesis_members(mut self, members: Vec<(u64, u64)>) -> Self {
 			MEMBERS.with(|m| {
-				*m.borrow_mut() = members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>()
+				*m.borrow_mut() = members.iter().map(|(m, _)| *m).collect::<Vec<_>>()
 			});
 			self.genesis_members = members;
 			self
@@ -1360,7 +1360,7 @@ mod tests {
 			sp_tracing::try_init_simple();
 			MEMBERS.with(|m| {
 				*m.borrow_mut() =
-					self.genesis_members.iter().map(|(m, _)| m.clone()).collect::<Vec<_>>()
+					self.genesis_members.iter().map(|(m, _)| *m).collect::<Vec<_>>()
 			});
 			let mut ext: sp_io::TestExternalities = GenesisConfig {
 				balances: pallet_balances::GenesisConfig::<Test> {

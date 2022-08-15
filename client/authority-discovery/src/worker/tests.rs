@@ -48,7 +48,7 @@ pub(crate) struct TestApi {
 impl ProvideRuntimeApi<Block> for TestApi {
 	type Api = RuntimeApi;
 
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
+	fn runtime_api(&self) -> ApiRef<'_, Self::Api> {
 		RuntimeApi { authorities: self.authorities.clone() }.into()
 	}
 }
@@ -530,7 +530,7 @@ impl DhtValueFoundTester {
 	) -> Option<&HashSet<Multiaddr>> {
 		let (_dht_event_tx, dht_event_rx) = channel(1);
 		let local_test_api =
-			Arc::new(TestApi { authorities: vec![self.remote_authority_public.clone().into()] });
+			Arc::new(TestApi { authorities: vec![self.remote_authority_public.into()] });
 		let local_network: Arc<TestNetwork> = Arc::new(Default::default());
 		let local_key_store = KeyStore::new();
 
@@ -556,7 +556,7 @@ impl DhtValueFoundTester {
 			.as_ref()
 			.map(|w| {
 				w.addr_cache
-					.get_addresses_by_authority_id(&self.remote_authority_public.clone().into())
+					.get_addresses_by_authority_id(&self.remote_authority_public.into())
 			})
 			.unwrap()
 	}
@@ -569,7 +569,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 	let addresses = (1..100).map(|i| tester.multiaddr_with_peer_id(i)).collect();
 	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		addresses,
-		tester.remote_authority_public.clone().into(),
+		tester.remote_authority_public.into(),
 		&tester.remote_key_store,
 		None,
 	));
@@ -584,7 +584,7 @@ fn strict_accept_address_with_peer_signature() {
 	let addr = tester.multiaddr_with_peer_id(1);
 	let kv_pairs = block_on(build_dht_event(
 		vec![addr.clone()],
-		tester.remote_authority_public.clone().into(),
+		tester.remote_authority_public.into(),
 		&tester.remote_key_store,
 		Some(&TestSigner { keypair: &tester.remote_node_key }),
 	));
@@ -604,7 +604,7 @@ fn reject_address_with_rogue_peer_signature() {
 	let rogue_remote_node_key = Keypair::generate_ed25519();
 	let kv_pairs = block_on(build_dht_event(
 		vec![tester.multiaddr_with_peer_id(1)],
-		tester.remote_authority_public.clone().into(),
+		tester.remote_authority_public.into(),
 		&tester.remote_key_store,
 		Some(&TestSigner { keypair: &rogue_remote_node_key }),
 	));
@@ -622,7 +622,7 @@ fn reject_address_with_invalid_peer_signature() {
 	let mut tester = DhtValueFoundTester::new();
 	let mut kv_pairs = block_on(build_dht_event(
 		vec![tester.multiaddr_with_peer_id(1)],
-		tester.remote_authority_public.clone().into(),
+		tester.remote_authority_public.into(),
 		&tester.remote_key_store,
 		Some(&TestSigner { keypair: &tester.remote_node_key }),
 	));
@@ -644,7 +644,7 @@ fn reject_address_without_peer_signature() {
 	let mut tester = DhtValueFoundTester::new();
 	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		vec![tester.multiaddr_with_peer_id(1)],
-		tester.remote_authority_public.clone().into(),
+		tester.remote_authority_public.into(),
 		&tester.remote_key_store,
 		None,
 	));
@@ -662,7 +662,7 @@ fn do_not_cache_addresses_without_peer_id() {
 		"/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
 	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		vec![multiaddr_with_peer_id.clone(), multiaddr_without_peer_id],
-		tester.remote_authority_public.clone().into(),
+		tester.remote_authority_public.into(),
 		&tester.remote_key_store,
 		None,
 	));

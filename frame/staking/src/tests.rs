@@ -1084,7 +1084,7 @@ fn validator_payment_prefs_work() {
 		let commission = Perbill::from_percent(40);
 		<Validators<Test>>::insert(
 			&11,
-			ValidatorPrefs { commission: commission.clone(), ..Default::default() },
+			ValidatorPrefs { commission, ..Default::default() },
 		);
 
 		// Reward controller so staked ratio doesn't change.

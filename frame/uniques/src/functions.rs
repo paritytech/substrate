@@ -237,12 +237,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ItemPriceOf::<T, I>::insert(
 				&collection,
 				&item,
-				(price.clone(), whitelisted_buyer.clone()),
+				(price, whitelisted_buyer.clone()),
 			);
 			Self::deposit_event(Event::ItemPriceSet {
 				collection,
 				item,
-				price: price.clone(),
+				price: *price,
 				whitelisted_buyer,
 			});
 		} else {

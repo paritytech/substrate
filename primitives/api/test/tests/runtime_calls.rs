@@ -148,10 +148,9 @@ fn record_proof_works() {
 		.build_with_longest_chain();
 
 	let block_id = BlockId::Number(client.chain_info().best_number);
-	let storage_root = futures::executor::block_on(longest_chain.best_chain())
+	let storage_root = *futures::executor::block_on(longest_chain.best_chain())
 		.unwrap()
-		.state_root()
-		.clone();
+		.state_root();
 
 	let runtime_code = sp_core::traits::RuntimeCode {
 		code_fetcher: &sp_core::traits::WrappedRuntimeCode(

@@ -449,13 +449,13 @@ mod tests {
 			let active = requests
 				.active_requests
 				.iter()
-				.map(|(p, &r)| (p.clone(), r))
+				.map(|(&p, &r)| (p, r))
 				.collect::<Vec<_>>();
 
 			for (peer, req) in &active {
 				assert!(requests.failed_requests.get(req).is_none());
 				assert!(!requests.pending_requests.contains(req));
-				assert!(requests.on_response::<()>(peer.clone(), None).is_none());
+				assert!(requests.on_response::<()>(*peer, None).is_none());
 				assert!(requests.pending_requests.contains(req));
 				assert_eq!(
 					1,
