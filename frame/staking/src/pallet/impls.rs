@@ -1347,11 +1347,13 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
 		Ok(Pallet::<T>::weight_of(id))
 	}
-	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
+	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on update.
+		Ok(())
 	}
-	fn on_remove(_: &T::AccountId) {
+	fn on_remove(_: &T::AccountId) -> Result<(), Self::Error> {
 		// nothing to do on remove.
+		Ok(())
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
@@ -1365,7 +1367,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	}
 
 	fn unsafe_clear() {
-		Validators::<T>::clear();
+		#[allow(deprecated)]
+		Validators::<T>::remove_all();
 	}
 }
 
