@@ -1042,8 +1042,8 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
-				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| a.borrow().clone()), 5 + 5 + 10);
-				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| a.borrow().clone()), 0);
+				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5 + 5 + 10);
+				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 0);
 
 				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() = 0);
 
@@ -1060,8 +1060,8 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 50 - 5);
-				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| a.borrow().clone()), 5 + 10 + 50);
-				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| a.borrow().clone()), 5);
+				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5 + 10 + 50);
+				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5);
 			});
 	}
 
