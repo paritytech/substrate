@@ -296,8 +296,18 @@ mod tests {
 		type Event = Event;
 	}
 
+	fn new_test_ext() -> sp_io::TestExternalities {
+		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+		pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 10), (2, 10)] }
+			.assimilate_storage(&mut t)
+			.unwrap();
+		t.into()
+	}
+
 	#[test]
 	fn test() {
-		assert_eq!(1, 1);
+		new_test_ext().execute_with(|| {
+			assert_eq!(1, 1);
+		})
 	}
 }
