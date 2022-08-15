@@ -23,7 +23,7 @@
 use pallet_session::historical::IdentificationTuple;
 use pallet_staking::{BalanceOf, Exposure, ExposureOf, Pallet as Staking};
 use sp_runtime::{traits::Convert, Perbill};
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 
 pub use pallet::*;
 
@@ -52,6 +52,10 @@ pub mod pallet {
 	pub enum Error<T> {
 		FailedToGetActiveEra,
 	}
+
+	#[allow(type_alias_bounds)]
+	type OffenceDetails<T: Config> =
+		sp_staking::offence::OffenceDetails<T::AccountId, IdentificationTuple<T>>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
@@ -97,10 +101,7 @@ pub mod pallet {
 			FullIdentificationOf = ExposureOf<T>,
 		>,
 	{
-		fn submit_offence(
-			offenders: &[OffenceDetails<T::AccountId, IdentificationTuple<T>>],
-			slash_fraction: &[Perbill],
-		) {
+		fn submit_offence(offenders: &[OffenceDetails<T>], slash_fraction: &[Perbill]) {
 			let session_index = <pallet_session::Pallet<T> as frame_support::traits::ValidatorSet<T::AccountId>>::session_index();
 
 			<pallet_staking::Pallet<T> as OnOffenceHandler<
@@ -112,14 +113,14 @@ pub mod pallet {
 
 		fn get_offence_details(
 			offenders: Vec<(T::AccountId, Perbill)>,
-		) -> Result<Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>>, DispatchError> {
+		) -> Result<Vec<OffenceDetails<T>>, DispatchError> {
 			let active_era = Staking::<T>::active_era().ok_or(Error::<T>::FailedToGetActiveEra)?;
 			let now = active_era.index;
 
 			Ok(offenders
 				.clone()
 				.into_iter()
-				.map(|(o, _)| OffenceDetails::<T::AccountId, IdentificationTuple<T>> {
+				.map(|(o, _)| OffenceDetails::<T> {
 					offender: (o.clone(), Staking::<T>::eras_stakers(now, o)),
 					reporters: vec![],
 				})
@@ -310,6 +311,13 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let offenders = (&[]).to_vec();
 			assert_err!(RootOffences::create_offence(Origin::signed(1), offenders), BadOrigin);
+		})
+	}
+
+	#[test]
+	fn create_offence_works_given_root_origin() {
+		new_test_ext().execute_with(|| {
+			//assert_ok!(RootOffences::create_offence(Origin::root(), offenders));
 		})
 	}
 }
