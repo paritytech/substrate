@@ -36,129 +36,21 @@
 
 use crate::{Error, NodeCodec};
 use hash_db::Hasher;
-use lru::LruCache;
-use nohash_hasher::{BuildNoHashHasher, IntMap, IntSet};
-use parking_lot::{Mutex, MutexGuard, RwLock, RwLockReadGuard};
+use hashbrown::HashSet;
+use parking_lot::{Mutex, MutexGuard, RwLockReadGuard};
+use shared_cache::{SharedNodeCache, SharedValueCache, ValueCacheKey};
 use std::{
-	collections::{hash_map::Entry, HashMap, HashSet},
-	hash::{BuildHasher, Hasher as _},
+	collections::{hash_map::Entry as MapEntry, HashMap},
 	mem,
 	sync::Arc,
 };
 use trie_db::{node::NodeOwned, CachedValue};
 
+mod shared_cache;
+
+pub use shared_cache::SharedTrieCache;
+
 const LOG_TARGET: &str = "trie-cache";
-
-lazy_static::lazy_static! {
-	static ref RANDOM_STATE: ahash::RandomState = ahash::RandomState::default();
-}
-
-/// No hashing [`LruCache`].
-///
-/// The key is an `u64` that is expected to be unique.
-type NoHashingLruCache<T> = lru::LruCache<u64, T, BuildNoHashHasher<u64>>;
-
-/// Returns a hasher prepared to build the final value cache key.
-///
-/// To build the final hash the storage key still needs to be added to the hasher.
-/// If you are only interested in the full value cache key, you can directly use
-/// [`value_cache_get_key`].
-fn value_cache_partial_hash(storage_root: &impl AsRef<[u8]>) -> impl std::hash::Hasher + Clone {
-	let mut hasher = RANDOM_STATE.build_hasher();
-	hasher.write(storage_root.as_ref());
-	hasher
-}
-
-/// Get the key for the value cache.
-///
-/// The key is build by hashing the actual storage `key` and the `storage_root`.
-fn value_cache_get_key(key: &[u8], storage_root: &impl AsRef<[u8]>) -> u64 {
-	let mut hasher = value_cache_partial_hash(storage_root);
-	hasher.write(key);
-	hasher.finish()
-}
-
-/// The shared node cache.
-///
-/// Internally this stores all cached nodes in a [`LruCache`]. It ensures that when updating the
-/// cache, that the cache stays within its allowed bounds.
-struct SharedNodeCache<H: Hasher> {
-	/// The cached nodes, ordered by least recently used.
-	lru: LruCache<H::Out, NodeOwned<H::Out>>,
-	/// The size of [`Self::lru`] in bytes.
-	size_in_bytes: usize,
-	/// The maximum cache size of [`Self::lru`].
-	cache_size: CacheSize,
-}
-
-impl<H: Hasher> SharedNodeCache<H> {
-	/// Create a new instance.
-	fn new(cache_size: CacheSize) -> Self {
-		Self { lru: LruCache::unbounded(), size_in_bytes: 0, cache_size }
-	}
-
-	/// Get the node for `key`.
-	///
-	/// This doesn't change the least recently order in the internal [`LruCache`].
-	fn get(&self, key: &H::Out) -> Option<&NodeOwned<H::Out>> {
-		self.lru.peek(key)
-	}
-
-	/// Update the cache with the `added` nodes and the `accessed` nodes.
-	///
-	/// The `added` nodes are the ones that have been collected by doing operations on the trie and
-	/// now should be stored in the shared cache. The `accessed` nodes are only referenced by hash
-	/// and represent the nodes that were retrieved from this shared cache through [`Self::get`].
-	/// These `accessed` nodes are being put to the front of the internal [`LruCache`] like the
-	/// `added` ones.
-	///
-	/// After the internal [`LruCache`] was updated, it is ensured that the internal [`LruCache`] is
-	/// inside its bounds ([`Self::maximum_size_in_bytes`]).
-	fn update(
-		&mut self,
-		added: impl IntoIterator<Item = (H::Out, NodeOwned<H::Out>)>,
-		accessed: impl IntoIterator<Item = H::Out>,
-	) {
-		let update_size_in_bytes =
-			|size_in_bytes: &mut usize, key: &H::Out, node: &NodeOwned<H::Out>| {
-				if let Some(new_size_in_bytes) =
-					size_in_bytes.checked_sub(key.as_ref().len() + node.size_in_bytes())
-				{
-					*size_in_bytes = new_size_in_bytes;
-				} else {
-					*size_in_bytes = 0;
-					tracing::error!(target: LOG_TARGET, "Trie cache underflow detected!",);
-				}
-			};
-
-		accessed.into_iter().for_each(|key| {
-			// Access every node in the lru to put it to the front.
-			self.lru.get(&key);
-		});
-		added.into_iter().for_each(|(key, node)| {
-			self.size_in_bytes += key.as_ref().len() + node.size_in_bytes();
-
-			if let Some((r_key, r_node)) = self.lru.push(key, node) {
-				update_size_in_bytes(&mut self.size_in_bytes, &r_key, &r_node);
-			}
-
-			// Directly ensure that we respect the maximum size. By doing it directly here we ensure
-			// that the internal map of the [`LruCache`] doesn't grow too much.
-			while self.cache_size.exceeds(self.size_in_bytes) {
-				// This should always be `Some(_)`, otherwise something is wrong!
-				if let Some((key, node)) = self.lru.pop_lru() {
-					update_size_in_bytes(&mut self.size_in_bytes, &key, &node);
-				}
-			}
-		});
-	}
-
-	/// Reset the cache.
-	fn reset(&mut self) {
-		self.size_in_bytes = 0;
-		self.lru.clear();
-	}
-}
 
 /// The size of the cache.
 #[derive(Debug, Clone, Copy)]
@@ -176,98 +68,6 @@ impl CacheSize {
 			Self::Unlimited => false,
 			Self::Maximum(max) => *max < current_size,
 		}
-	}
-}
-
-/// The shared trie cache.
-///
-/// It should be instantiated once per node. It will hold the trie nodes and values of all
-/// operations to the state. To not use all available memory it will ensure to stay in the
-/// bounds given via the [`CacheSize`] at startup.
-///
-/// The instance of this object can be shared between multiple threads.
-pub struct SharedTrieCache<H: Hasher> {
-	node_cache: Arc<RwLock<SharedNodeCache<H>>>,
-	/// The key to lookup a [`CachedValue`] is build using [`value_cache_get_key`].
-	///
-	/// We use this custom key generation function to use one [`LruCache`] over all different
-	/// state tries. As the storage key can be the same for different state tries, we need to
-	/// incorporate the storage root of the trie to get an unique key.
-	value_cache: Arc<RwLock<NoHashingLruCache<CachedValue<H::Out>>>>,
-}
-
-impl<H: Hasher> Clone for SharedTrieCache<H> {
-	fn clone(&self) -> Self {
-		Self { node_cache: self.node_cache.clone(), value_cache: self.value_cache.clone() }
-	}
-}
-
-impl<H: Hasher> SharedTrieCache<H> {
-	/// Returns the size of one element in the value cache.
-	fn value_cache_element_size() -> usize {
-		// key + value
-		mem::size_of::<u64>() + mem::size_of::<CachedValue<H::Out>>()
-	}
-
-	/// Create a new [`SharedTrieCache`].
-	pub fn new(cache_size: CacheSize) -> Self {
-		let (node_cache_size, value_cache) = match cache_size {
-			CacheSize::Maximum(max) => {
-				// The value cache element size isn't that huge, roughly around 50 bytes (mainly
-				// depending on the hash size). Thus, we only give it 5% of the overall cache size.
-				let value_cache_size_in_bytes = (max as f32 * 0.05) as usize;
-
-				(
-					CacheSize::Maximum(max - value_cache_size_in_bytes),
-					NoHashingLruCache::with_hasher(
-						value_cache_size_in_bytes / Self::value_cache_element_size(),
-						Default::default(),
-					),
-				)
-			},
-			CacheSize::Unlimited =>
-				(CacheSize::Unlimited, NoHashingLruCache::unbounded_with_hasher(Default::default())),
-		};
-
-		Self {
-			node_cache: Arc::new(RwLock::new(SharedNodeCache::new(node_cache_size))),
-			value_cache: Arc::new(RwLock::new(value_cache)),
-		}
-	}
-
-	/// Create a new [`LocalTrieCache`] instance from this shared cache.
-	pub fn local_cache(&self) -> LocalTrieCache<H> {
-		LocalTrieCache {
-			shared: self.clone(),
-			node_cache: Default::default(),
-			value_cache: Default::default(),
-			shared_node_cache_access: Default::default(),
-			shared_value_cache_access: Default::default(),
-		}
-	}
-
-	/// Returns the used memory size of this cache in bytes.
-	pub fn used_memory_size(&self) -> usize {
-		let value_cache_size = self.value_cache.read().len() * Self::value_cache_element_size();
-		let node_cache_size = self.node_cache.read().size_in_bytes;
-
-		node_cache_size + value_cache_size
-	}
-
-	/// Reset the node cache.
-	pub fn reset_node_cache(&self) {
-		self.node_cache.write().reset();
-	}
-
-	/// Reset the value cache.
-	pub fn reset_value_cache(&self) {
-		self.value_cache.write().clear();
-	}
-
-	/// Reset the entire cache.
-	pub fn reset(&self) {
-		self.reset_node_cache();
-		self.reset_value_cache();
 	}
 }
 
@@ -292,12 +92,12 @@ pub struct LocalTrieCache<H: Hasher> {
 	/// local instance is merged back to the shared cache.
 	shared_node_cache_access: Mutex<HashSet<H::Out>>,
 	/// The local cache for the values.
-	value_cache: Mutex<IntMap<u64, CachedValue<H::Out>>>,
+	value_cache: Mutex<HashMap<ValueCacheKey<'static, H::Out>, CachedValue<H::Out>>>,
 	/// Keeps track of all values accessed in the shared cache.
 	///
 	/// This will be used to ensure that these nodes are brought to the front of the lru when this
 	/// local instance is merged back to the shared cache.
-	shared_value_cache_access: Mutex<IntSet<u64>>,
+	shared_value_cache_access: Mutex<HashSet<ValueCacheKey<'static, H::Out>>>,
 }
 
 impl<H: Hasher> LocalTrieCache<H> {
@@ -344,19 +144,10 @@ impl<H: Hasher> Drop for LocalTrieCache<H> {
 			.write()
 			.update(self.node_cache.lock().drain(), self.shared_node_cache_access.lock().drain());
 
-		let mut shared_value_cache = self.shared.value_cache.write();
-		let mut shared_value_cache_access = self.shared_value_cache_access.lock();
-
-		// First write the new values that were cached here locally
-		self.value_cache.lock().drain().for_each(|(k, v)| {
-			shared_value_cache_access.remove(&k);
-			shared_value_cache.put(k, v);
-		});
-		// Then only touch the ones that we have read from the global cache, to bring them
-		// up in the lru.
-		shared_value_cache_access.drain().for_each(|k| {
-			shared_value_cache.get(&k);
-		});
+		self.shared
+			.value_cache
+			.write()
+			.update(self.value_cache.lock().drain(), self.shared_value_cache_access.lock().drain());
 	}
 }
 
@@ -364,17 +155,17 @@ impl<H: Hasher> Drop for LocalTrieCache<H> {
 enum ValueCache<'a, H> {
 	/// The value cache is fresh, aka not yet associated to any storage root.
 	/// This is used for example when a new trie is being build, to cache new values.
-	Fresh(HashMap<Vec<u8>, CachedValue<H>>),
+	Fresh(HashMap<Arc<[u8]>, CachedValue<H>>),
 	/// The value cache is already bound to a specific storage root.
 	ForStorageRoot {
-		shared_value_cache: RwLockReadGuard<'a, NoHashingLruCache<CachedValue<H>>>,
-		shared_value_cache_access: MutexGuard<'a, IntSet<u64>>,
-		local_value_cache: MutexGuard<'a, IntMap<u64, CachedValue<H>>>,
+		shared_value_cache: RwLockReadGuard<'a, SharedValueCache<H>>,
+		shared_value_cache_access: MutexGuard<'a, HashSet<ValueCacheKey<'static, H>>>,
+		local_value_cache: MutexGuard<'a, HashMap<ValueCacheKey<'static, H>, CachedValue<H>>>,
 		storage_root: H,
 	},
 }
 
-impl<H: AsRef<[u8]>> ValueCache<'_, H> {
+impl<H: AsRef<[u8]> + std::hash::Hash + Eq + Clone + Copy> ValueCache<'_, H> {
 	/// Get the value for the given `key`.
 	fn get(&mut self, key: &[u8]) -> Option<&CachedValue<H>> {
 		match self {
@@ -385,7 +176,7 @@ impl<H: AsRef<[u8]>> ValueCache<'_, H> {
 				shared_value_cache_access,
 				storage_root,
 			} => {
-				let key = value_cache_get_key(key, &storage_root);
+				let key = ValueCacheKey::Ref { storage_key: key, storage_root: *storage_root };
 
 				// We first need to look up in the local cache and then the shared cache.
 				// It can happen that some value is cached in the shared cache, but the
@@ -394,12 +185,23 @@ impl<H: AsRef<[u8]>> ValueCache<'_, H> {
 				//
 				// So, the logic of the trie would lookup the data and the node and store both
 				// in our local caches.
-				local_value_cache.get(&key).or_else(|| {
-					shared_value_cache.peek(&key).map(|v| {
-						shared_value_cache_access.insert(key);
-						v
-					})
-				})
+				if let Some(val) = local_value_cache.get(unsafe {
+					// SAFETY
+					//
+					// We need to convert the lifetime to make the compiler happy. However, as
+					// we only use the `key` to looking up the value this lifetime conversion is
+					// safe.
+					mem::transmute::<&ValueCacheKey<'_, H>, &ValueCacheKey<'static, H>>(&key)
+				}) {
+					return Some(val)
+				} else if let Some(val) = shared_value_cache.get(&key).map(|v| {
+					shared_value_cache_access.insert(key.into_value());
+					v
+				}) {
+					Some(val)
+				} else {
+					None
+				}
 			},
 		}
 	}
@@ -411,8 +213,11 @@ impl<H: AsRef<[u8]>> ValueCache<'_, H> {
 				map.insert(key.into(), value);
 			},
 			Self::ForStorageRoot { local_value_cache, storage_root, .. } => {
-				let key = value_cache_get_key(key, &storage_root);
-				local_value_cache.insert(key, value);
+				local_value_cache.insert(
+					ValueCacheKey::Ref { storage_root: *storage_root, storage_key: key }
+						.into_value(),
+					value,
+				);
 			},
 		}
 	}
@@ -440,20 +245,14 @@ impl<'a, H: Hasher> TrieCache<'a, H> {
 	pub fn merge_into(self, local: &LocalTrieCache<H>, storage_root: H::Out) {
 		let cache = if let ValueCache::Fresh(cache) = self.value_cache { cache } else { return };
 
-		let mut value_cache = local.shared.value_cache.write();
-
 		if !cache.is_empty() {
-			let hasher = value_cache_partial_hash(&storage_root);
+			let mut value_cache = local.value_cache.lock();
 
 			cache
 				.into_iter()
-				.map(|(k, v)| {
-					let mut hasher = hasher.clone();
-					hasher.write(&k);
-					(hasher.finish(), v)
-				})
+				.map(|(k, v)| (ValueCacheKey::Value { storage_root, storage_key: k }, v))
 				.for_each(|(k, v)| {
-					value_cache.push(k, v);
+					value_cache.insert(k, v);
 				});
 		}
 	}
@@ -472,11 +271,11 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 		}
 
 		match self.local_cache.entry(hash) {
-			Entry::Occupied(res) => {
+			MapEntry::Occupied(res) => {
 				tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from local cache");
 				Ok(res.into_mut())
 			},
-			Entry::Vacant(vacant) => {
+			MapEntry::Vacant(vacant) => {
 				let node = (*fetch_node)();
 
 				tracing::trace!(
@@ -539,8 +338,6 @@ mod tests {
 	use super::*;
 	use trie_db::{Bytes, Trie, TrieDBBuilder, TrieDBMutBuilder, TrieHash, TrieMut};
 
-	use crate::cache::value_cache_get_key;
-
 	type MemoryDB = crate::MemoryDB<sp_core::Blake2Hasher>;
 	type Layout = crate::LayoutV1<sp_core::Blake2Hasher>;
 	type Cache = super::SharedTrieCache<sp_core::Blake2Hasher>;
@@ -579,7 +376,7 @@ mod tests {
 		}
 
 		// Local cache wasn't dropped yet, so there should nothing in the shared caches.
-		assert!(shared_cache.value_cache.read().is_empty());
+		assert!(shared_cache.value_cache.read().lru.is_empty());
 		assert!(shared_cache.node_cache.read().lru.is_empty());
 
 		drop(local_cache);
@@ -589,7 +386,8 @@ mod tests {
 		let cached_data = shared_cache
 			.value_cache
 			.read()
-			.peek(&value_cache_get_key(TEST_DATA[0].0, &root))
+			.lru
+			.peek(&ValueCacheKey::Value { storage_root: root, storage_key: TEST_DATA[0].0.into() })
 			.unwrap()
 			.clone();
 		assert_eq!(Bytes::from(TEST_DATA[0].1.to_vec()), cached_data.data().flatten().unwrap());
@@ -597,8 +395,8 @@ mod tests {
 		let fake_data = Bytes::from(&b"fake_data"[..]);
 
 		let local_cache = shared_cache.local_cache();
-		shared_cache.value_cache.write().put(
-			value_cache_get_key(TEST_DATA[1].0, &root),
+		shared_cache.value_cache.write().lru.put(
+			ValueCacheKey::Value { storage_root: root, storage_key: TEST_DATA[1].0.into() },
 			(fake_data.clone(), Default::default()).into(),
 		);
 
@@ -620,25 +418,31 @@ mod tests {
 		let new_value = vec![23; 64];
 
 		let shared_cache = Cache::new(CACHE_SIZE);
-		let local_cache = shared_cache.local_cache();
-
 		let mut new_root = root;
-		let mut cache = local_cache.as_trie_db_mut_cache();
 
 		{
-			let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
-				.with_cache(&mut cache)
-				.build();
+			let local_cache = shared_cache.local_cache();
 
-			trie.insert(&new_key, &new_value).unwrap();
+			let mut cache = local_cache.as_trie_db_mut_cache();
+
+			{
+				let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
+					.with_cache(&mut cache)
+					.build();
+
+				trie.insert(&new_key, &new_value).unwrap();
+			}
+
+			cache.merge_into(&local_cache, new_root);
 		}
 
-		cache.merge_into(&local_cache, new_root);
-
+		// After the local cache is dropped, all changes should have been merged back to the shared
+		// cache.
 		let cached_data = shared_cache
 			.value_cache
 			.read()
-			.peek(&value_cache_get_key(&new_key, &new_root))
+			.lru
+			.peek(&ValueCacheKey::Value { storage_root: new_root, storage_key: new_key.into() })
 			.unwrap()
 			.clone();
 		assert_eq!(Bytes::from(new_value), cached_data.data().flatten().unwrap());
@@ -653,9 +457,9 @@ mod tests {
 		for i in 0..5 {
 			// Clear some of the caches.
 			if i == 2 {
-				shared_cache.node_cache.write().reset();
+				shared_cache.reset_node_cache();
 			} else if i == 3 {
-				shared_cache.value_cache.write().clear();
+				shared_cache.reset_value_cache();
 			}
 
 			let local_cache = shared_cache.local_cache();
@@ -699,9 +503,9 @@ mod tests {
 		for i in 0..5 {
 			// Clear some of the caches.
 			if i == 2 {
-				shared_cache.node_cache.write().reset();
+				shared_cache.reset_node_cache();
 			} else if i == 3 {
-				shared_cache.value_cache.write().clear();
+				shared_cache.reset_value_cache();
 			}
 
 			let recorder = Recorder::default();
@@ -761,9 +565,10 @@ mod tests {
 		assert!(shared_cache
 			.value_cache
 			.read()
+			.lru
 			.iter()
 			.map(|d| d.0)
-			.all(|l| TEST_DATA.iter().any(|d| *l == value_cache_get_key(&d.0, &root))));
+			.all(|l| TEST_DATA.iter().any(|d| l.storage_key() == d.0)));
 
 		{
 			let local_cache = shared_cache.local_cache();
@@ -780,10 +585,11 @@ mod tests {
 		assert!(shared_cache
 			.value_cache
 			.read()
+			.lru
 			.iter()
 			.take(2)
 			.map(|d| d.0)
-			.all(|l| { TEST_DATA.iter().take(2).any(|d| *l == value_cache_get_key(&d.0, &root)) }));
+			.all(|l| { TEST_DATA.iter().take(2).any(|d| l.storage_key() == d.0) }));
 
 		let most_recently_used_nodes = shared_cache
 			.node_cache
@@ -794,7 +600,7 @@ mod tests {
 			.collect::<Vec<_>>();
 
 		// Delete the value cache, so that we access the nodes.
-		shared_cache.value_cache.write().clear();
+		shared_cache.reset_value_cache();
 
 		{
 			let local_cache = shared_cache.local_cache();
@@ -849,15 +655,8 @@ mod tests {
 			}
 		}
 
-		let node_cache_size = shared_cache
-			.node_cache
-			.read()
-			.lru
-			.iter()
-			.map(|(k, v)| k.as_ref().len() + v.size_in_bytes())
-			.sum::<usize>();
-		let value_cache_size = shared_cache.value_cache.read().len() *
-			(mem::size_of::<u64>() + mem::size_of::<CachedValue<sp_core::H256>>());
+		let node_cache_size = shared_cache.node_cache.read().size_in_bytes;
+		let value_cache_size = shared_cache.value_cache.read().size_in_bytes;
 
 		assert!(node_cache_size + value_cache_size < CACHE_SIZE_RAW);
 	}
