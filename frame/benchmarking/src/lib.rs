@@ -38,6 +38,8 @@ pub use log;
 #[doc(hidden)]
 pub use paste;
 #[doc(hidden)]
+pub use sp_core::defer;
+#[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sp_runtime::traits::Zero;
@@ -1033,6 +1035,9 @@ macro_rules! impl_benchmark {
 
 				// Always do at least one internal repeat...
 				for _ in 0 .. internal_repeats.max(1) {
+					// Always reset the state after the benchmark.
+					$crate::defer!($crate::benchmarking::wipe_db());
+
 					// Set up the externalities environment for the setup we want to
 					// benchmark.
 					let closure_to_benchmark = <
@@ -1110,9 +1115,6 @@ macro_rules! impl_benchmark {
 						proof_size: diff_pov,
 						keys: read_and_written_keys,
 					});
-
-					// Wipe the DB back to the genesis state.
-					$crate::benchmarking::wipe_db();
 				}
 
 				return Ok(results);
@@ -1175,6 +1177,9 @@ macro_rules! impl_benchmark_test {
 					let execute_benchmark = |
 						c: $crate::Vec<($crate::BenchmarkParameter, u32)>
 					| -> Result<(), $crate::BenchmarkError> {
+						// Always reset the state after the benchmark.
+						$crate::defer!($crate::benchmarking::wipe_db());
+
 						// Set up the benchmark, return execution + verification function.
 						let closure_to_verify = <
 							SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
@@ -1186,12 +1191,7 @@ macro_rules! impl_benchmark_test {
 						}
 
 						// Run execution + verification
-						closure_to_verify()?;
-
-						// Reset the state
-						$crate::benchmarking::wipe_db();
-
-						Ok(())
+						closure_to_verify()
 					};
 
 					if components.is_empty() {
