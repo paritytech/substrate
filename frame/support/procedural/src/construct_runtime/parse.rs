@@ -646,18 +646,6 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 				SpecifiedParts::All => (),
 			}
 
-			// let meta = attr.parse_meta()?;
-			// match meta {
-			// 	Meta::List(MetaList { path: Path { segments, .. }, nested, .. }) if segments.len() ==
-			// 1 && segments[0].ident == "cfg" => { 		let predicates =
-			// cfg_expr::expr::Expression::parse(&nested.into_token_stream().to_string())
-			// 			.map_err(|e| syn::Error::new(attr.span(), &e.to_string()))?;
-			// 	},
-			// 	_ => {
-			// 		let msg = "Unsupported attribute, only #[cfg] is supported on pallet declarations in
-			// `construct_runtime`"; 		return Err(syn::Error::new(attr.span(), msg))
-			// 	}
-			// }
 			let cfg_pattern = pallet
 				.attrs
 				.iter()
