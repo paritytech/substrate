@@ -471,6 +471,18 @@ pub mod pallet {
 			Self::do_add_member(who)
 		}
 
+		// Only root account can add a member to
+		#[pallet::weight(100)]
+		pub fn add_member_to_rank(
+			origin: OriginFor<T>,
+			member: T::AccountId,
+			rank: Rank
+		) -> DispatchResult {
+			let _= ensure_root(origin)?;
+			Self::do_add_member_to_rank(member,rank)?;
+			Ok(())
+		}
+
 		/// Increment the rank of an existing member by one.
 		///
 		/// - `origin`: Must be the `AdminOrigin`.
@@ -604,7 +616,8 @@ pub mod pallet {
 		/// - `origin`: Must be `Signed` by any account.
 		/// - `poll_index`: Index of a poll which is completed and for which votes continue to
 		///   exist.
-		/// - `max`: Maximum number of vote items from remove in this call.
+		///  `max`: Maximum number of vote items from remove in this call.
+		/// =====================
 		///
 		/// Transaction fees are waived if the operation is successful.
 		///

@@ -44,9 +44,15 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Club: pallet_ranked_collective::{Pallet, Call, Storage, Event<T>},
 	}
 );
+
+impl pallet_sudo::Config for Test {
+	type Event = Event;
+	type Call = Call;
+}
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -362,6 +368,24 @@ fn promote_demote_by_rank_works() {
 		assert_ok!(Club::remove_member(Origin::signed(2), 7, 1));
 	});
 }
+
+// --Testing ad_member_rank which require a Sudo account ----
+
+pub fn test_with_sudo(root_key:u64) -> sp_io::TestExternalities {
+	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	pallet_sudo::GenesisConfig::<Test> { key: Some(root_key) }.build();
+	let ext = sp_io::TestExternalities::new(t);
+	ext
+}
+
+#[test]
+pub fn add_member_to_rank_work(){
+	test_with_sudo(1).execute_with(||{
+		assert_ok!(Club::add_member_to_rank(Origin::root(), 2,1));
+		assert_eq!(Sudo::key(),Some(1));
+	})
+}
+
 
 #[test]
 fn voting_works() {
