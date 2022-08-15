@@ -1310,15 +1310,29 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 }
 
 /// A simple sorted list implementation that does not require any additional pallets. Note, this
-/// does not provided validators in sorted ordered. If you desire nominators in a sorted order take
+/// does not provide validators in sorted order. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list].
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
+	type Score = VoteWeight;
 	type Error = ();
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
 		Box::new(Validators::<T>::iter().map(|(v, _)| v))
+	}
+	fn iter_from(
+		start: &T::AccountId,
+	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
+		if Validators::<T>::contains_key(start) {
+			let start_key = Validators::<T>::hashed_key_for(start);
+			Ok(Box::new(
+				Validators::<T>::iter_from(start_key)
+					.map(|(n, _)| n)
+			))
+		} else {
+			Err(())
+		}
 	}
 	fn count() -> u32 {
 		Validators::<T>::count()
@@ -1329,6 +1343,9 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
+	}
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::weight_of(id))
 	}
 	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
 		// nothing to do on update.
@@ -1348,7 +1365,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	}
 
 	fn unsafe_clear() {
-		Validators::<T>::remove_all();
+		Validators::<T>::clear();
 	}
 }
 
