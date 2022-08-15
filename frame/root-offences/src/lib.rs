@@ -135,7 +135,7 @@ mod tests {
 
 	use frame_election_provider_support::{onchain, SequentialPhragmen};
 	use frame_support::{
-		parameter_types,
+		parameter_types, assert_err,
 		traits::{ConstU32, ConstU64},
 	};
 	use pallet_session::TestSessionHandler;
@@ -305,9 +305,14 @@ mod tests {
 	}
 
 	#[test]
-	fn test() {
+	fn create_offence_fails_given_signed_origin() {
+		use sp_runtime::traits::BadOrigin;
 		new_test_ext().execute_with(|| {
-			assert_eq!(1, 1);
+			let offenders = (&[]).to_vec();
+			assert_err!(
+				RootOffences::create_offence(Origin::signed(1), offenders),
+				BadOrigin
+			);
 		})
 	}
 }
