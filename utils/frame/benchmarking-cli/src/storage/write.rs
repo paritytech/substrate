@@ -67,23 +67,33 @@ impl StorageCmd {
 		let mut kvs = trie.pairs();
 		let (mut rng, _) = new_rng(None);
 		kvs.shuffle(&mut rng);
+		info!("Writing {} keys", kvs.len());
 
-		let mut child_tries = Vec::new();
+		let mut child_nodes = Vec::new();
 
 		// Generate all random values first; Make sure there are no collisions with existing
 		// db entries, so we can rollback all additions without corrupting existing entries.
-		for (k, original_v) in kvs.iter_mut() {
+		for (k, original_v) in kvs {
 			if self.params.include_child && k.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX) {
-				child_tries.push(k.clone());
+				let trie_id = k
+					.strip_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+					.expect("Checked above to exist");
+				let info = ChildInfo::new_default(trie_id);
+				let child_keys =
+					client.child_storage_keys_iter(&block, info.clone(), None, None)?;
+				for ck in child_keys {
+					child_nodes.push((ck.clone(), info.clone()));
+				}
+				continue // skip benchmarking child root
 			}
 
-			'retry: loop {
-				let mut new_v = vec![0; original_v.len()];
+			let mut new_v = vec![0; original_v.len()];
+			loop {
 				// Create a random value to overwrite with.
 				// NOTE: We use a possibly higher entropy than the original value,
 				// could be improved but acts as an over-estimation which is fine for now.
 				rng.fill_bytes(&mut new_v[..]);
-				match check_new_value::<Block>(
+				if check_new_value::<Block>(
 					db.clone(),
 					&trie,
 					&k.to_vec(),
@@ -92,19 +102,12 @@ impl StorageCmd {
 					state_col,
 					None,
 				) {
-					true => {
-						*original_v = new_v;
-						break
-					},
-					false => continue 'retry,
+					break
 				}
 			}
-		}
 
-		info!("Writing {} keys", kvs.len());
-		// Write each value in one commit.
-		for (k, new_v) in kvs.iter() {
-			let res = calculate_bench::<Block>(
+			// Write each value in one commit.
+			let (size, duration) = measure_write::<Block>(
 				db.clone(),
 				&trie,
 				k.to_vec(),
@@ -113,53 +116,44 @@ impl StorageCmd {
 				state_col,
 				None,
 			)?;
-			record.append(res.0, res.1)?;
+			record.append(size, duration)?;
 		}
 
 		if self.params.include_child {
-			info!("Writing {} child trees", child_tries.len());
+			child_nodes.shuffle(&mut rng);
+			info!("Writing {} child keys", child_nodes.len());
 
-			for key in child_tries {
-				let trie_id = key
-					.strip_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
-					.expect("Checked above to exist");
-				let info = ChildInfo::new_default(trie_id);
-				let child_keys =
-					client.child_storage_keys_iter(&block, info.clone(), None, None)?;
-
-				for ck in child_keys {
-					if let Some(original_v) = client
-						.child_storage(&block, &info.clone(), &ck)
-						.expect("Checked above to exist")
-					{
-						let mut new_v = vec![0; original_v.0.len()];
-						'child_retry: loop {
-							rng.fill_bytes(&mut new_v[..]);
-							match check_new_value::<Block>(
-								db.clone(),
-								&trie,
-								&ck.0,
-								&new_v,
-								self.state_version(),
-								state_col,
-								Some(&info),
-							) {
-								true => break,
-								false => continue 'child_retry,
-							}
-						}
-
-						let res = calculate_bench::<Block>(
+			for (key, info) in child_nodes {
+				if let Some(original_v) = client
+					.child_storage(&block, &info.clone(), &key)
+					.expect("Checked above to exist")
+				{
+					let mut new_v = vec![0; original_v.0.len()];
+					loop {
+						rng.fill_bytes(&mut new_v[..]);
+						if check_new_value::<Block>(
 							db.clone(),
 							&trie,
-							ck.0,
-							new_v.to_vec(),
+							&key.0,
+							&new_v,
 							self.state_version(),
 							state_col,
 							Some(&info),
-						)?;
-						record.append(res.0, res.1)?;
+						) {
+							break
+						}
 					}
+
+					let (size, duration) = measure_write::<Block>(
+						db.clone(),
+						&trie,
+						key.0,
+						new_v.to_vec(),
+						self.state_version(),
+						state_col,
+						Some(&info),
+					)?;
+					record.append(size, duration)?;
 				}
 			}
 		}
@@ -194,9 +188,9 @@ fn convert_tx<B: BlockT>(
 	ret
 }
 
-/// Calculates and returns benchmark params
+/// Measures write benchmark
 /// if `child_info` exist then it means this is a child tree key
-fn calculate_bench<Block: BlockT>(
+fn measure_write<Block: BlockT>(
 	db: Arc<dyn sp_database::Database<DbHash>>,
 	trie: &DbState<Block>,
 	key: Vec<u8>,
