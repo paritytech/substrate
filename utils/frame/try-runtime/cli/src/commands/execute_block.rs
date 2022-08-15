@@ -142,6 +142,11 @@ where
 			.overwrite_online_at(parent_hash.to_owned());
 
 		let builder = if command.overwrite_wasm_code {
+			log::info!(
+				target: LOG_TARGET,
+				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
+				config.chain_spec.name(),
+			);
 			let (code_key, code) = extract_code(&config.chain_spec)?;
 			builder.inject_hashed_key_value(&[(code_key, code)])
 		} else {

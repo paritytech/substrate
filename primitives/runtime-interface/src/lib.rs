@@ -308,10 +308,10 @@ pub use sp_std;
 ///
 /// 1. The generated functions are not callable from the native side.
 /// 2. The trait as shown above is not implemented for [`Externalities`] and is instead
-/// implemented for `FunctionExecutor` (from `sp-wasm-interface`).
+/// implemented for `FunctionContext` (from `sp-wasm-interface`).
 ///
 /// # Disable tracing
-/// By addding `no_tracing` to the list of options you can prevent the wasm-side interface from
+/// By adding `no_tracing` to the list of options you can prevent the wasm-side interface from
 /// generating the default `sp-tracing`-calls. Note that this is rarely needed but only meant
 /// for the case when that would create a circular dependency. You usually _do not_ want to add
 /// this flag, as tracing doesn't cost you anything by default anyways (it is added as a no-op)

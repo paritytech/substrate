@@ -17,10 +17,7 @@
 //! Helper for handling (i.e. answering) block requests from a remote peer via the
 //! `crate::request_responses::RequestResponsesBehaviour`.
 
-use crate::{
-	message::BlockAttributes,
-	schema::v1::{block_request::FromBlock, BlockResponse, Direction},
-};
+use crate::schema::v1::{block_request::FromBlock, BlockResponse, Direction};
 use codec::{Decode, Encode};
 use futures::{
 	channel::{mpsc, oneshot},
@@ -34,6 +31,7 @@ use sc_client_api::BlockBackend;
 use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	sync::message::BlockAttributes,
 };
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -64,9 +62,15 @@ mod rep {
 }
 
 /// Generates a [`ProtocolConfig`] for the block request protocol, refusing incoming requests.
-pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
+pub fn generate_protocol_config<Hash: AsRef<[u8]>>(
+	protocol_id: &ProtocolId,
+	genesis_hash: Hash,
+	fork_id: Option<&str>,
+) -> ProtocolConfig {
 	ProtocolConfig {
-		name: generate_protocol_name(protocol_id).into(),
+		name: generate_protocol_name(genesis_hash, fork_id).into(),
+		fallback_names: std::iter::once(generate_legacy_protocol_name(protocol_id).into())
+			.collect(),
 		max_request_size: 1024 * 1024,
 		max_response_size: 16 * 1024 * 1024,
 		request_timeout: Duration::from_secs(20),
@@ -74,8 +78,17 @@ pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
 	}
 }
 
-/// Generate the block protocol name from chain specific protocol identifier.
-fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
+/// Generate the block protocol name from the genesis hash and fork id.
+fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {
+	if let Some(fork_id) = fork_id {
+		format!("/{}/{}/sync/2", hex::encode(genesis_hash), fork_id)
+	} else {
+		format!("/{}/sync/2", hex::encode(genesis_hash))
+	}
+}
+
+/// Generate the legacy block protocol name from chain specific protocol identifier.
+fn generate_legacy_protocol_name(protocol_id: &ProtocolId) -> String {
 	format!("/{}/sync/2", protocol_id.as_ref())
 }
 
@@ -131,6 +144,7 @@ where
 	/// Create a new [`BlockRequestHandler`].
 	pub fn new(
 		protocol_id: &ProtocolId,
+		fork_id: Option<&str>,
 		client: Arc<Client>,
 		num_peer_hint: usize,
 	) -> (Self, ProtocolConfig) {
@@ -138,7 +152,15 @@ where
 		// number of peers.
 		let (tx, request_receiver) = mpsc::channel(num_peer_hint);
 
-		let mut protocol_config = generate_protocol_config(protocol_id);
+		let mut protocol_config = generate_protocol_config(
+			protocol_id,
+			client
+				.block_hash(0u32.into())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+			fork_id,
+		);
 		protocol_config.inbound_queue = Some(tx);
 
 		let seen_requests = LruCache::new(num_peer_hint * 2);
@@ -204,14 +226,14 @@ where
 
 		let mut reputation_change = None;
 
+		let small_request = attributes
+			.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
+			.is_empty();
+
 		match self.seen_requests.get_mut(&key) {
 			Some(SeenRequestsValue::First) => {},
 			Some(SeenRequestsValue::Fulfilled(ref mut requests)) => {
 				*requests = requests.saturating_add(1);
-
-				let small_request = attributes
-					.difference(BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION)
-					.is_empty();
 
 				if *requests > MAX_NUMBER_OF_SAME_REQUESTS_PER_PEER {
 					reputation_change = Some(if small_request {
@@ -228,16 +250,13 @@ where
 
 		debug!(
 			target: LOG_TARGET,
-			"Handling block request from {}: Starting at `{:?}` with maximum blocks \
-			 of `{}`, direction `{:?}` and attributes `{:?}`.",
-			peer,
-			from_block_id,
-			max_blocks,
-			direction,
-			attributes,
+			"Handling block request from {peer}: Starting at `{from_block_id:?}` with \
+			maximum blocks of `{max_blocks}`, reputation_change: `{reputation_change:?}`, \
+			small_request `{small_request:?}`, direction `{direction:?}` and \
+			attributes `{attributes:?}`.",
 		);
 
-		let result = if reputation_change.is_none() {
+		let maybe_block_response = if reputation_change.is_none() || small_request {
 			let block_response = self.get_block_response(
 				attributes,
 				from_block_id,
@@ -261,9 +280,22 @@ where
 				}
 			}
 
+			Some(block_response)
+		} else {
+			None
+		};
+
+		debug!(
+			target: LOG_TARGET,
+			"Sending result of block request from {peer} starting at `{from_block_id:?}`: \
+			blocks: {:?}, data: {:?}",
+			maybe_block_response.as_ref().map(|res| res.blocks.len()),
+			maybe_block_response.as_ref().map(|res| res.encoded_len()),
+		);
+
+		let result = if let Some(block_response) = maybe_block_response {
 			let mut data = Vec::with_capacity(block_response.encoded_len());
 			block_response.encode(&mut data)?;
-
 			Ok(data)
 		} else {
 			Err(())

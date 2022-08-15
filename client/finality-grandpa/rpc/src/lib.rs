@@ -26,7 +26,8 @@ use std::sync::Arc;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
-	PendingSubscription,
+	types::SubscriptionResult,
+	SubscriptionSink,
 };
 
 mod error;
@@ -66,7 +67,7 @@ pub trait GrandpaApi<Notification, Hash, Number> {
 }
 
 /// Provides RPC methods for interacting with GRANDPA.
-pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
+pub struct Grandpa<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	executor: SubscriptionTaskExecutor,
 	authority_set: AuthoritySet,
 	voter_state: VoterState,
@@ -74,9 +75,9 @@ pub struct GrandpaRpc<AuthoritySet, VoterState, Block: BlockT, ProofProvider> {
 	finality_proof_provider: Arc<ProofProvider>,
 }
 impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
-	GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
+	Grandpa<AuthoritySet, VoterState, Block, ProofProvider>
 {
-	/// Prepare a new [`GrandpaRpc`]
+	/// Prepare a new [`Grandpa`] Rpc handler.
 	pub fn new(
 		executor: SubscriptionTaskExecutor,
 		authority_set: AuthoritySet,
@@ -91,7 +92,7 @@ impl<AuthoritySet, VoterState, Block: BlockT, ProofProvider>
 #[async_trait]
 impl<AuthoritySet, VoterState, Block, ProofProvider>
 	GrandpaApiServer<JustificationNotification, Block::Hash, NumberFor<Block>>
-	for GrandpaRpc<AuthoritySet, VoterState, Block, ProofProvider>
+	for Grandpa<AuthoritySet, VoterState, Block, ProofProvider>
 where
 	VoterState: ReportVoterState + Send + Sync + 'static,
 	AuthoritySet: ReportAuthoritySet + Send + Sync + 'static,
@@ -102,7 +103,7 @@ where
 		ReportedRoundStates::from(&self.authority_set, &self.voter_state).map_err(Into::into)
 	}
 
-	fn subscribe_justifications(&self, pending: PendingSubscription) {
+	fn subscribe_justifications(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 		let stream = self.justification_stream.subscribe().map(
 			|x: sc_finality_grandpa::GrandpaJustification<Block>| {
 				JustificationNotification::from(x)
@@ -110,14 +111,11 @@ where
 		);
 
 		let fut = async move {
-			if let Some(mut sink) = pending.accept() {
-				sink.pipe_from_stream(stream).await;
-			}
-		}
-		.boxed();
+			sink.pipe_from_stream(stream).await;
+		};
 
-		self.executor
-			.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		Ok(())
 	}
 
 	async fn prove_finality(
@@ -245,7 +243,7 @@ mod tests {
 	fn setup_io_handler<VoterState>(
 		voter_state: VoterState,
 	) -> (
-		RpcModule<GrandpaRpc<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
+		RpcModule<Grandpa<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
 		GrandpaJustificationSender<Block>,
 	)
 	where
@@ -258,7 +256,7 @@ mod tests {
 		voter_state: VoterState,
 		finality_proof: Option<FinalityProof<Header>>,
 	) -> (
-		RpcModule<GrandpaRpc<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
+		RpcModule<Grandpa<TestAuthoritySet, VoterState, Block, TestFinalityProofProvider>>,
 		GrandpaJustificationSender<Block>,
 	)
 	where
@@ -268,7 +266,7 @@ mod tests {
 		let finality_proof_provider = Arc::new(TestFinalityProofProvider { finality_proof });
 		let executor = Arc::new(TaskExecutor::default());
 
-		let rpc = GrandpaRpc::new(
+		let rpc = Grandpa::new(
 			executor,
 			TestAuthoritySet,
 			voter_state,
@@ -285,9 +283,9 @@ mod tests {
 		let (rpc, _) = setup_io_handler(EmptyVoterState);
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"GRANDPA RPC endpoint not ready"},"id":0}"#.to_string();
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
-		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
+		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
 
-		assert_eq!(expected_response, result,);
+		assert_eq!(expected_response, response.result);
 	}
 
 	#[tokio::test]
@@ -308,35 +306,8 @@ mod tests {
 		},\"id\":0}".to_string();
 
 		let request = r#"{"jsonrpc":"2.0","method":"grandpa_roundState","params":[],"id":0}"#;
-		let (result, _) = rpc.raw_json_request(&request).await.unwrap();
-		assert_eq!(expected_response, result);
-	}
-
-	#[tokio::test]
-	async fn subscribe_and_unsubscribe_to_justifications() {
-		let (rpc, _) = setup_io_handler(TestVoterState);
-		// Subscribe call.
-		let sub = rpc
-			.subscribe("grandpa_subscribeJustifications", EmptyParams::new())
-			.await
-			.unwrap();
-
-		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
-
-		// Unsubscribe
-		let unsub_req = format!(
-			"{{\"jsonrpc\":\"2.0\",\"method\":\"grandpa_unsubscribeJustifications\",\"params\":[{}],\"id\":1}}",
-			ser_id
-		);
-		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
-
-		assert_eq!(response, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
-
-		// Unsubscribe again and fail
-		let (response, _) = rpc.raw_json_request(&unsub_req).await.unwrap();
-		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
-
-		assert_eq!(response, expected);
+		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
+		assert_eq!(expected_response, response.result);
 	}
 
 	#[tokio::test]
@@ -357,7 +328,7 @@ mod tests {
 			.unwrap();
 		let expected = r#"{"jsonrpc":"2.0","result":false,"id":1}"#;
 
-		assert_eq!(response, expected);
+		assert_eq!(response.result, expected);
 	}
 
 	fn create_justification() -> GrandpaJustification<Block> {

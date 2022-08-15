@@ -14,13 +14,21 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-prost-build = "0.9"
+prost-build = "0.10"
 
 [dependencies]
+async-trait = "0.1.50"
+bitflags = "1.3.2"
+bytes = "1"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
 	"derive",
 ] }
 futures = "0.3.21"
-libp2p = "0.44.0"
+libp2p = "0.46.1"
 smallvec = "1.8.0"
+sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
+sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/finality-grandpa" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+thiserror = "1.0"

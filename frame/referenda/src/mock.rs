@@ -160,12 +160,14 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 					confirm_period: 2,
 					min_enactment_period: 4,
 					min_approval: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(100),
-						delta: Perbill::from_percent(50),
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(50),
+						ceil: Perbill::from_percent(100),
 					},
-					min_turnout: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(100),
-						delta: Perbill::from_percent(100),
+					min_support: Curve::LinearDecreasing {
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(0),
+						ceil: Perbill::from_percent(100),
 					},
 				},
 			),
@@ -180,12 +182,14 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 					confirm_period: 1,
 					min_enactment_period: 2,
 					min_approval: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(55),
-						delta: Perbill::from_percent(5),
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(95),
+						ceil: Perbill::from_percent(100),
 					},
-					min_turnout: Curve::LinearDecreasing {
-						begin: Perbill::from_percent(10),
-						delta: Perbill::from_percent(10),
+					min_support: Curve::LinearDecreasing {
+						length: Perbill::from_percent(100),
+						floor: Perbill::from_percent(90),
+						ceil: Perbill::from_percent(100),
 					},
 				},
 			),
@@ -211,6 +215,7 @@ impl Config for Test {
 	type Event = Event;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
+	type SubmitOrigin = frame_system::EnsureSigned<u64>;
 	type CancelOrigin = EnsureSignedBy<Four, u64>;
 	type KillOrigin = EnsureRoot<u64>;
 	type Slash = ();
@@ -241,36 +246,52 @@ pub fn new_test_ext_execute_with_cond(execute: impl FnOnce(bool) -> () + Clone) 
 	new_test_ext().execute_with(|| execute(true));
 }
 
-#[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, Default, MaxEncodedLen)]
+#[derive(Encode, Debug, Decode, TypeInfo, Eq, PartialEq, Clone, MaxEncodedLen)]
 pub struct Tally {
 	pub ayes: u32,
 	pub nays: u32,
 }
 
-impl VoteTally<u32> for Tally {
-	fn ayes(&self) -> u32 {
+impl<Class> VoteTally<u32, Class> for Tally {
+	fn new(_: Class) -> Self {
+		Self { ayes: 0, nays: 0 }
+	}
+
+	fn ayes(&self, _: Class) -> u32 {
 		self.ayes
 	}
 
-	fn turnout(&self) -> Perbill {
-		Perbill::from_percent(self.ayes + self.nays)
+	fn support(&self, _: Class) -> Perbill {
+		Perbill::from_percent(self.ayes)
 	}
 
-	fn approval(&self) -> Perbill {
-		Perbill::from_rational(self.ayes, self.ayes + self.nays)
+	fn approval(&self, _: Class) -> Perbill {
+		if self.ayes + self.nays > 0 {
+			Perbill::from_rational(self.ayes, self.ayes + self.nays)
+		} else {
+			Perbill::zero()
+		}
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity() -> Self {
+	fn unanimity(_: Class) -> Self {
 		Self { ayes: 100, nays: 0 }
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self {
-		let turnout = turnout.mul_ceil(100u32);
-		let ayes = approval.mul_ceil(turnout);
-		Self { ayes, nays: turnout - ayes }
+	fn rejection(_: Class) -> Self {
+		Self { ayes: 0, nays: 100 }
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn from_requirements(support: Perbill, approval: Perbill, _: Class) -> Self {
+		let ayes = support.mul_ceil(100u32);
+		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
+		Self { ayes, nays }
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup(_: Class, _: Perbill) {}
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
@@ -292,7 +313,7 @@ pub fn set_balance_proposal_hash(value: u64) -> H256 {
 pub fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 	Referenda::submit(
 		Origin::signed(who),
-		frame_system::RawOrigin::Root.into(),
+		Box::new(frame_system::RawOrigin::Root.into()),
 		set_balance_proposal_hash(value),
 		DispatchTime::After(delay),
 	)
@@ -420,7 +441,7 @@ impl RefState {
 	pub fn create(self) -> ReferendumIndex {
 		assert_ok!(Referenda::submit(
 			Origin::signed(1),
-			frame_support::dispatch::RawOrigin::Root.into(),
+			Box::new(frame_support::dispatch::RawOrigin::Root.into()),
 			set_balance_proposal_hash(1),
 			DispatchTime::At(10),
 		));

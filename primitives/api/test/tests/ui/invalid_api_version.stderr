@@ -1,5 +1,0 @@
-error: Unexpected `api_version` attribute. The supported format is `api_version(1)`
- --> $DIR/invalid_api_version.rs:2:4
-  |
-2 |     #[api_version]
-  |       ^^^^^^^^^^^

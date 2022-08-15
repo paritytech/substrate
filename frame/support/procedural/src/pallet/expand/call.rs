@@ -42,6 +42,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
+	let call_index = methods.iter().map(|method| method.call_index).collect::<Vec<_>>();
 	let new_call_variant_fn_name = fn_name
 		.iter()
 		.map(|fn_name| quote::format_ident!("new_call_variant_{}", fn_name))
@@ -139,6 +140,24 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
 
+	// Wrap all calls inside of storage layers
+	if let Some(syn::Item::Impl(item_impl)) = def
+		.call
+		.as_ref()
+		.map(|c| &mut def.item.content.as_mut().expect("Checked by def parser").1[c.index])
+	{
+		item_impl.items.iter_mut().for_each(|i| {
+			if let syn::ImplItem::Method(method) = i {
+				let block = &method.block;
+				method.block = syn::parse_quote! {{
+					// We execute all dispatchable in a new storage layer, allowing them
+					// to return an error at any point, and undoing any storage changes.
+					#frame_support::storage::with_storage_layer(|| #block)
+				}};
+			}
+		});
+	}
+
 	quote::quote_spanned!(span =>
 		#[doc(hidden)]
 		pub mod __substrate_call_check {
@@ -177,6 +196,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			),
 			#(
 				#( #[doc = #fn_doc] )*
+				#[codec(index = #call_index)]
 				#fn_name {
 					#(
 						#[allow(missing_docs)]

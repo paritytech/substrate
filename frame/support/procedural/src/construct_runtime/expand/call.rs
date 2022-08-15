@@ -62,6 +62,42 @@ pub fn expand_outer_dispatch(
 		pub enum Call {
 			#variant_defs
 		}
+		#[cfg(test)]
+		impl Call {
+			/// Return a list of the module names together with their size in memory.
+			pub const fn sizes() -> &'static [( &'static str, usize )] {
+				use #scrate::dispatch::Callable;
+				use core::mem::size_of;
+				&[#(
+					(
+						stringify!(#pallet_names),
+						size_of::< <#pallet_names as Callable<#runtime>>::Call >(),
+					),
+				)*]
+			}
+
+			/// Panics with diagnostic information if the size is greater than the given `limit`.
+			pub fn assert_size_under(limit: usize) {
+				let size = core::mem::size_of::<Self>();
+				let call_oversize = size > limit;
+				if call_oversize {
+					println!("Size of `Call` is {} bytes (provided limit is {} bytes)", size, limit);
+					let mut sizes = Self::sizes().to_vec();
+					sizes.sort_by_key(|x| -(x.1 as isize));
+					for (i, &(name, size)) in sizes.iter().enumerate().take(5) {
+						println!("Offender #{}: {} at {} bytes", i + 1, name, size);
+					}
+					if let Some((_, next_size)) = sizes.get(5) {
+						println!("{} others of size {} bytes or less", sizes.len() - 5, next_size);
+					}
+					panic!(
+						"Size of `Call` is more than limit; use `Box` on complex parameter types to reduce the
+						size of `Call`.
+						If the limit is too strong, maybe consider providing a higher limit."
+					);
+				}
+			}
+		}
 		impl #scrate::dispatch::GetDispatchInfo for Call {
 			fn get_dispatch_info(&self) -> #scrate::dispatch::DispatchInfo {
 				match self {

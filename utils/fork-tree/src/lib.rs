@@ -126,6 +126,11 @@ where
 	/// imported in order.
 	///
 	/// Returns `true` if the imported node is a root.
+	// WARNING: some users of this method (i.e. consensus epoch changes tree) currently silently
+	// rely on a **post-order DFS** traversal. If we are using instead a top-down traversal method
+	// then the `is_descendent_of` closure, when used after a warp-sync, may end up querying the
+	// backend for a block (the one corresponding to the root) that is not present and thus will
+	// return a wrong result.
 	pub fn import<F, E>(
 		&mut self,
 		hash: H,
@@ -143,29 +148,20 @@ where
 			}
 		}
 
-		let mut children = &mut self.roots;
-		let mut i = 0;
-		while i < children.len() {
-			let child = &children[i];
-			if child.hash == hash {
-				return Err(Error::Duplicate)
-			}
-			if child.number < number && is_descendent_of(&child.hash, &hash)? {
-				children = &mut children[i].children;
-				i = 0;
-			} else {
-				i += 1;
-			}
+		let (children, is_root) =
+			match self.find_node_where_mut(&hash, &number, is_descendent_of, &|_| true)? {
+				Some(parent) => (&mut parent.children, false),
+				None => (&mut self.roots, true),
+			};
+
+		if children.iter().any(|elem| elem.hash == hash) {
+			return Err(Error::Duplicate)
 		}
 
-		let is_first = children.is_empty();
 		children.push(Node { data, hash, number, children: Default::default() });
 
-		// Quick way to check if the pushed node is a root
-		let is_root = children.as_ptr() == self.roots.as_ptr();
-
-		if is_first {
-			// Rebalance is required only if we've extended the branch depth.
+		if children.len() == 1 {
+			// Rebalance may be required only if we've extended the branch depth.
 			self.rebalance();
 		}
 
@@ -289,6 +285,11 @@ where
 	/// index in the traverse path goes last. If a node is found that matches the predicate
 	/// the returned path should always contain at least one index, otherwise `None` is
 	/// returned.
+	// WARNING: some users of this method (i.e. consensus epoch changes tree) currently silently
+	// rely on a **post-order DFS** traversal. If we are using instead a top-down traversal method
+	// then the `is_descendent_of` closure, when used after a warp-sync, will end up querying the
+	// backend for a block (the one corresponding to the root) that is not present and thus will
+	// return a wrong result.
 	pub fn find_node_index_where<F, E, P>(
 		&self,
 		hash: &H,
@@ -301,30 +302,52 @@ where
 		F: Fn(&H, &H) -> Result<bool, E>,
 		P: Fn(&V) -> bool,
 	{
-		let mut path = vec![];
-		let mut children = &self.roots;
-		let mut i = 0;
-		let mut best_depth = 0;
+		let mut stack = vec![];
+		let mut root_idx = 0;
+		let mut found = false;
+		let mut is_descendent = false;
 
-		while i < children.len() {
-			let node = &children[i];
-			if node.number < *number && is_descendent_of(&node.hash, hash)? {
-				path.push(i);
-				if predicate(&node.data) {
-					best_depth = path.len();
-				}
-				i = 0;
-				children = &node.children;
-			} else {
-				i += 1;
+		while root_idx < self.roots.len() {
+			if *number <= self.roots[root_idx].number {
+				root_idx += 1;
+				continue
 			}
+			// The second element in the stack tuple tracks what is the **next** children
+			// index to search into. If we find an ancestor then we stop searching into
+			// alternative branches and we focus on the current path up to the root.
+			stack.push((&self.roots[root_idx], 0));
+			while let Some((node, i)) = stack.pop() {
+				if i < node.children.len() && !is_descendent {
+					stack.push((node, i + 1));
+					if node.children[i].number < *number {
+						stack.push((&node.children[i], 0));
+					}
+				} else if is_descendent || is_descendent_of(&node.hash, hash)? {
+					is_descendent = true;
+					if predicate(&node.data) {
+						found = true;
+						break
+					}
+				}
+			}
+
+			// If the element we are looking for is a descendent of the current root
+			// then we can stop the search.
+			if is_descendent {
+				break
+			}
+			root_idx += 1;
 		}
 
-		Ok(if best_depth == 0 {
-			None
-		} else {
-			path.truncate(best_depth);
+		Ok(if found {
+			// The path is the root index followed by the indices of all the children
+			// we were processing when we found the element (remember the stack
+			// contains the index of the **next** children to process).
+			let path: Vec<_> =
+				std::iter::once(root_idx).chain(stack.iter().map(|(_, i)| *i - 1)).collect();
 			Some(path)
+		} else {
+			None
 		})
 	}
 
@@ -1418,16 +1441,14 @@ mod test {
 
 	#[test]
 	fn find_node_index_with_predicate_works() {
-		fn is_descendent_of(parent: &char, child: &char) -> Result<bool, std::convert::Infallible> {
-			match *parent {
-				'A' => Ok(['B', 'C', 'D', 'E', 'F'].contains(child)),
-				'B' => Ok(['C', 'D'].contains(child)),
-				'C' => Ok(['D'].contains(child)),
-				'E' => Ok(['F'].contains(child)),
-				'D' | 'F' => Ok(false),
-				_ => unreachable!(),
-			}
-		}
+		let is_descendent_of = |parent: &char, child: &char| match *parent {
+			'A' => Ok(['B', 'C', 'D', 'E', 'F'].contains(child)),
+			'B' => Ok(['C', 'D'].contains(child)),
+			'C' => Ok(['D'].contains(child)),
+			'E' => Ok(['F'].contains(child)),
+			'D' | 'F' => Ok(false),
+			_ => Err(TestError),
+		};
 
 		// A(t) --- B(f) --- C(t) --- D(f)
 		//      \-- E(t) --- F(f)
@@ -1468,6 +1489,9 @@ mod test {
 	fn find_node_works() {
 		let (tree, is_descendent_of) = test_fork_tree();
 
+		let node = tree.find_node_where(&"B", &2, &is_descendent_of, &|_| true).unwrap().unwrap();
+		assert_eq!((node.hash, node.number), ("A", 1));
+
 		let node = tree.find_node_where(&"D", &4, &is_descendent_of, &|_| true).unwrap().unwrap();
 		assert_eq!((node.hash, node.number), ("C", 3));
 
@@ -1476,5 +1500,33 @@ mod test {
 
 		let node = tree.find_node_where(&"N", &6, &is_descendent_of, &|_| true).unwrap().unwrap();
 		assert_eq!((node.hash, node.number), ("M", 5));
+	}
+
+	#[test]
+	fn post_order_traversal_requirement() {
+		let (mut tree, is_descendent_of) = test_fork_tree();
+
+		// Test for the post-order DFS traversal requirement as specified by the
+		// `find_node_index_where` and `import` comments.
+		let is_descendent_of_for_post_order = |parent: &&str, child: &&str| match *parent {
+			"A" => Err(TestError),
+			"K" if *child == "Z" => Ok(true),
+			_ => is_descendent_of(parent, child),
+		};
+
+		// Post order traversal requirement for `find_node_index_where`
+		let path = tree
+			.find_node_index_where(&"N", &6, &is_descendent_of_for_post_order, &|_| true)
+			.unwrap()
+			.unwrap();
+		assert_eq!(path, [0, 1, 0, 0, 0]);
+
+		// Post order traversal requirement for `import`
+		let res = tree.import(&"Z", 100, (), &is_descendent_of_for_post_order);
+		assert_eq!(res, Ok(false));
+		assert_eq!(
+			tree.iter().map(|node| *node.0).collect::<Vec<_>>(),
+			vec!["A", "B", "C", "D", "E", "F", "H", "L", "M", "O", "I", "G", "J", "K", "Z"],
+		);
 	}
 }

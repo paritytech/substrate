@@ -19,8 +19,10 @@
 //! Service configuration.
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
-pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode};
+pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::WasmExecutionMethod;
+#[cfg(feature = "wasmtime")]
+pub use sc_executor::WasmtimeInstantiationStrategy;
 pub use sc_network::{
 	config::{
 		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role,
@@ -75,7 +77,9 @@ pub struct Configuration {
 	/// State pruning settings.
 	pub state_pruning: Option<PruningMode>,
 	/// Number of blocks to keep in the db.
-	pub keep_blocks: KeepBlocks,
+	///
+	/// NOTE: only finalized blocks are subject for removal!
+	pub blocks_pruning: BlocksPruning,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.

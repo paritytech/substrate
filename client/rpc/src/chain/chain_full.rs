@@ -26,7 +26,7 @@ use futures::{
 	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
 };
-use jsonrpsee::{core::async_trait, PendingSubscription};
+use jsonrpsee::SubscriptionSink;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -51,7 +51,6 @@ impl<Block: BlockT, Client> FullChain<Block, Client> {
 	}
 }
 
-#[async_trait]
 impl<Block, Client> ChainBackend<Client, Block> for FullChain<Block, Client>
 where
 	Block: BlockT + 'static,
@@ -62,15 +61,15 @@ where
 		&self.client
 	}
 
-	async fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
+	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
 		self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
 	}
 
-	async fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
+	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
 		self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
 	}
 
-	fn subscribe_all_heads(&self, sink: PendingSubscription) {
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -84,7 +83,7 @@ where
 		)
 	}
 
-	fn subscribe_new_heads(&self, sink: PendingSubscription) {
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -99,7 +98,7 @@ where
 		)
 	}
 
-	fn subscribe_finalized_heads(&self, sink: PendingSubscription) {
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -118,7 +117,7 @@ where
 fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
 	executor: &SubscriptionTaskExecutor,
-	pending: PendingSubscription,
+	mut sink: SubscriptionSink,
 	best_block_hash: G,
 	stream: F,
 ) where
@@ -144,11 +143,8 @@ fn subscribe_headers<Block, Client, F, G, S>(
 	let stream = stream::iter(maybe_header).chain(stream());
 
 	let fut = async move {
-		if let Some(mut sink) = pending.accept() {
-			sink.pipe_from_stream(stream).await;
-		}
-	}
-	.boxed();
+		sink.pipe_from_stream(stream).await;
+	};
 
-	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.map(drop).boxed());
+	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 }

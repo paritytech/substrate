@@ -31,7 +31,7 @@ use sc_service::{
 		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
-	ChainSpec, KeepBlocks, TracingReceiver,
+	BlocksPruning, ChainSpec, TracingReceiver,
 };
 use sc_tracing::logging::LoggerBuilder;
 use std::{net::SocketAddr, path::PathBuf};
@@ -145,7 +145,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the transaction pool options
 	///
 	/// By default this is `TransactionPoolOptions::default()`.
-	fn transaction_pool(&self) -> Result<TransactionPoolOptions> {
+	fn transaction_pool(&self, _is_dev: bool) -> Result<TransactionPoolOptions> {
 		Ok(Default::default())
 	}
 
@@ -211,15 +211,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		base_path: &PathBuf,
 		cache_size: usize,
 		database: Database,
-		role: &Role,
 	) -> Result<DatabaseSource> {
-		let role_dir = match role {
-			Role::Light => "light",
-			Role::Full | Role::Authority => "full",
-		};
+		let role_dir = "full";
 		let rocksdb_path = base_path.join("db").join(role_dir);
 		let paritydb_path = base_path.join("paritydb").join(role_dir);
 		Ok(match database {
+			#[cfg(feature = "rocksdb")]
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
 			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
 			Database::ParityDbDeprecated => {
@@ -260,11 +257,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the block pruning mode.
 	///
 	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
-	/// `KeepBlocks::All`.
-	fn keep_blocks(&self) -> Result<KeepBlocks> {
+	/// `BlocksPruning::All`.
+	fn blocks_pruning(&self) -> Result<BlocksPruning> {
 		self.pruning_params()
-			.map(|x| x.keep_blocks())
-			.unwrap_or_else(|| Ok(KeepBlocks::All))
+			.map(|x| x.blocks_pruning())
+			.unwrap_or_else(|| Ok(BlocksPruning::All))
 	}
 
 	/// Get the chain ID (string).
@@ -366,6 +363,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 
 	/// Get maximum RPC response payload size.
 	fn rpc_max_response_size(&self) -> Result<Option<usize>> {
+		Ok(None)
+	}
+
+	/// Get maximum number of subscriptions per connection.
+	fn rpc_max_subscriptions_per_connection(&self) -> Result<Option<usize>> {
 		Ok(None)
 	}
 
@@ -495,7 +497,16 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		let net_config_dir = config_dir.join(DEFAULT_NETWORK_CONFIG_PATH);
 		let client_id = C::client_id();
 		let database_cache_size = self.database_cache_size()?.unwrap_or(1024);
-		let database = self.database()?.unwrap_or(Database::RocksDb);
+		let database = self.database()?.unwrap_or(
+			#[cfg(feature = "rocksdb")]
+			{
+				Database::RocksDb
+			},
+			#[cfg(not(feature = "rocksdb"))]
+			{
+				Database::ParityDb
+			},
+		);
 		let node_key = self.node_key(&net_config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
@@ -508,7 +519,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			impl_name: C::impl_name(),
 			impl_version: C::impl_version(),
 			tokio_handle,
-			transaction_pool: self.transaction_pool()?,
+			transaction_pool: self.transaction_pool(is_dev)?,
 			network: self.network_config(
 				&chain_spec,
 				is_dev,
@@ -521,11 +532,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			)?,
 			keystore_remote,
 			keystore,
-			database: self.database_config(&config_dir, database_cache_size, database, &role)?,
+			database: self.database_config(&config_dir, database_cache_size, database)?,
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			state_pruning: self.state_pruning()?,
-			keep_blocks: self.keep_blocks()?,
+			blocks_pruning: self.blocks_pruning()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,
@@ -539,7 +550,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			rpc_max_request_size: self.rpc_max_request_size()?,
 			rpc_max_response_size: self.rpc_max_response_size()?,
 			rpc_id_provider: None,
-			rpc_max_subs_per_conn: None,
+			rpc_max_subs_per_conn: self.rpc_max_subscriptions_per_connection()?,
 			ws_max_out_buffer_capacity: self.ws_max_out_buffer_capacity()?,
 			prometheus_config: self
 				.prometheus_config(DCV::prometheus_listen_port(), &chain_spec)?,

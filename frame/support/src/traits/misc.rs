@@ -18,9 +18,15 @@
 //! Smaller traits used in FRAME which don't need their own file.
 
 use crate::dispatch::Parameter;
-use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
+use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncodedLen};
+use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
+#[doc(hidden)]
+pub use sp_runtime::traits::{
+	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
+	ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
+};
 use sp_runtime::{traits::Block as BlockT, DispatchError};
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -362,16 +368,6 @@ impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating f
 	}
 }
 
-/// Try and collect into a collection `C`.
-pub trait TryCollect<C> {
-	type Error;
-	/// Consume self and try to collect the results into `C`.
-	///
-	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
-	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
-	fn try_collect(self) -> Result<C, Self::Error>;
-}
-
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
@@ -386,57 +382,6 @@ where
 		self.clone().into_iter().len()
 	}
 }
-
-/// A trait for querying a single value from a type.
-///
-/// It is not required that the value is constant.
-pub trait Get<T> {
-	/// Return the current value.
-	fn get() -> T;
-}
-
-impl<T: Default> Get<T> for () {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-/// Implement Get by returning Default for any type that implements Default.
-pub struct GetDefault;
-impl<T: Default> Get<T> for GetDefault {
-	fn get() -> T {
-		T::default()
-	}
-}
-
-macro_rules! impl_const_get {
-	($name:ident, $t:ty) => {
-		#[derive($crate::RuntimeDebug)]
-		pub struct $name<const T: $t>;
-		impl<const T: $t> Get<$t> for $name<T> {
-			fn get() -> $t {
-				T
-			}
-		}
-		impl<const T: $t> Get<Option<$t>> for $name<T> {
-			fn get() -> Option<$t> {
-				Some(T)
-			}
-		}
-	};
-}
-
-impl_const_get!(ConstBool, bool);
-impl_const_get!(ConstU8, u8);
-impl_const_get!(ConstU16, u16);
-impl_const_get!(ConstU32, u32);
-impl_const_get!(ConstU64, u64);
-impl_const_get!(ConstU128, u128);
-impl_const_get!(ConstI8, i8);
-impl_const_get!(ConstI16, i16);
-impl_const_get!(ConstI32, i32);
-impl_const_get!(ConstI64, i64);
-impl_const_get!(ConstI128, i128);
 
 /// A type for which some values make sense to be able to drop without further consideration.
 pub trait TryDrop: Sized {
@@ -523,14 +468,18 @@ impl<A, B> SameOrOther<A, B> {
 }
 
 /// Handler for when a new account has been created.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
 	fn on_new_account(who: &AccountId);
 }
 
 /// The account with the given id was reaped.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnKilledAccount<AccountId> {
 	/// The account with the given id was reaped.
 	fn on_killed_account(who: &AccountId);
@@ -688,7 +637,9 @@ impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
 /// but cannot preform any alterations. More specifically alterations are
 /// not forbidden, but they are not persisted in any way after the worker
 /// has finished.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called after every block import (when fully synced).
 	///
@@ -801,7 +752,10 @@ impl<T: Encode> Encode for WrapperOpaque<T> {
 
 impl<T: Decode> Decode for WrapperOpaque<T> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Ok(Self(T::decode(&mut &<Vec<u8>>::decode(input)?[..])?))
+		Ok(Self(T::decode_all_with_depth_limit(
+			sp_api::MAX_EXTRINSIC_DEPTH,
+			&mut &<Vec<u8>>::decode(input)?[..],
+		)?))
 	}
 
 	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -819,7 +773,7 @@ impl<T: MaxEncodedLen> MaxEncodedLen for WrapperOpaque<T> {
 	fn max_encoded_len() -> usize {
 		let t_max_len = T::max_encoded_len();
 
-		// See scale encoding https://docs.substrate.io/v3/advanced/scale-codec
+		// See scale encoding: https://docs.substrate.io/reference/scale-codec/
 		if t_max_len < 64 {
 			t_max_len + 1
 		} else if t_max_len < 2usize.pow(14) {
@@ -863,7 +817,7 @@ impl<T: Decode> WrapperKeepOpaque<T> {
 	///
 	/// Returns `None` if the decoding failed.
 	pub fn try_decode(&self) -> Option<T> {
-		T::decode_all(&mut &self.data[..]).ok()
+		T::decode_all_with_depth_limit(sp_api::MAX_EXTRINSIC_DEPTH, &mut &self.data[..]).ok()
 	}
 
 	/// Returns the length of the encoded `T`.
@@ -995,6 +949,30 @@ impl<Hash> PreimageRecipient<Hash> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use sp_std::marker::PhantomData;
+
+	#[derive(Encode, Decode)]
+	enum NestedType {
+		Nested(Box<Self>),
+		Done,
+	}
+
+	#[test]
+	fn test_opaque_wrapper_decode_limit() {
+		let limit = sp_api::MAX_EXTRINSIC_DEPTH as usize;
+		let mut ok_bytes = vec![0u8; limit];
+		ok_bytes.push(1u8);
+		let mut err_bytes = vec![0u8; limit + 1];
+		err_bytes.push(1u8);
+		assert!(<WrapperOpaque<NestedType>>::decode(&mut &ok_bytes.encode()[..]).is_ok());
+		assert!(<WrapperOpaque<NestedType>>::decode(&mut &err_bytes.encode()[..]).is_err());
+
+		let ok_keep_opaque = WrapperKeepOpaque { data: ok_bytes, _phantom: PhantomData };
+		let err_keep_opaque = WrapperKeepOpaque { data: err_bytes, _phantom: PhantomData };
+
+		assert!(<WrapperKeepOpaque<NestedType>>::try_decode(&ok_keep_opaque).is_some());
+		assert!(<WrapperKeepOpaque<NestedType>>::try_decode(&err_keep_opaque).is_none());
+	}
 
 	#[test]
 	fn test_opaque_wrapper() {
@@ -1023,6 +1001,10 @@ mod test {
 			2usize.pow(14) - 1 + 2
 		);
 		assert_eq!(<WrapperOpaque<[u8; 2usize.pow(14)]>>::max_encoded_len(), 2usize.pow(14) + 4);
+
+		let data = 4u64;
+		// Ensure that we check that the `Vec<u8>` is consumed completly on decode.
+		assert!(WrapperOpaque::<u32>::decode(&mut &data.encode().encode()[..]).is_err());
 	}
 
 	#[test]

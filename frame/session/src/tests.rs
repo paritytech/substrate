@@ -459,7 +459,7 @@ fn test_migration_v1() {
 		historical::{HistoricalSessions, StoredRange},
 		mock::Historical,
 	};
-	use frame_support::traits::PalletInfoAccess;
+	use frame_support::traits::{PalletInfoAccess, StorageVersion};
 
 	new_test_ext().execute_with(|| {
 		assert!(<HistoricalSessions<Test>>::iter_values().count() > 0);

@@ -22,17 +22,12 @@
 use super::*;
 
 use frame_benchmarking::{account, benchmarks, whitelist, BenchmarkError, BenchmarkResult};
-use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
-	traits::OnInitialize,
-};
+use frame_support::{dispatch::DispatchResultWithPostInfo, traits::OnInitialize};
 use frame_system::RawOrigin;
 
 use crate::Pallet as Elections;
 
 const BALANCE_FACTOR: u32 = 250;
-const MAX_VOTERS: u32 = 500;
-const MAX_CANDIDATES: u32 = 200;
 
 type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
@@ -41,7 +36,7 @@ fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, 0);
 	// Fund each account with at-least his stake but still a sane amount as to not mess up
 	// the vote calculation.
-	let amount = default_stake::<T>(MAX_VOTERS) * BalanceOf::<T>::from(BALANCE_FACTOR);
+	let amount = default_stake::<T>(T::MaxVoters::get()) * BalanceOf::<T>::from(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
 	// important to increase the total issuance since T::CurrencyToVote will need it to be sane for
 	// phragmen to work.
@@ -148,6 +143,7 @@ fn clean<T: Config>() {
 	<Members<T>>::kill();
 	<Candidates<T>>::kill();
 	<RunnersUp<T>>::kill();
+	#[allow(deprecated)]
 	<Voting<T>>::remove_all(None);
 }
 
@@ -234,7 +230,7 @@ benchmarks! {
 
 	submit_candidacy {
 		// number of already existing candidates.
-		let c in 1 .. MAX_CANDIDATES;
+		let c in 1 .. T::MaxCandidates::get();
 		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
@@ -265,7 +261,7 @@ benchmarks! {
 		// this will check members, runners-up and candidate for removal. Members and runners-up are
 		// limited by the runtime bound, nonetheless we fill them by `m`.
 		// number of already existing candidates.
-		let c in 1 .. MAX_CANDIDATES;
+		let c in 1 .. T::MaxCandidates::get();
 		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
@@ -344,38 +340,6 @@ benchmarks! {
 		))?;
 	}
 
-	// -- Root ones
-	#[extra] // this calls into phragmen and consumes a full block for now.
-	remove_member_without_replacement_extra {
-		// worse case is when we remove a member and we have no runner as a replacement. This
-		// triggers phragmen again. The only parameter is how many candidates will compete for the
-		// new slot.
-		let c in 1 .. MAX_CANDIDATES;
-		clean::<T>();
-
-		// fill only desired members. no runners-up.
-		let all_members = fill_seats_up_to::<T>(T::DesiredMembers::get())?;
-		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());
-
-		// submit a new one to compensate, with self-vote.
-		let replacements = submit_candidates_with_self_vote::<T>(c, "new_candidate")?;
-
-		// create some voters for these replacements.
-		distribute_voters::<T>(replacements, MAX_VOTERS, MAXIMUM_VOTE)?;
-
-		let to_remove = as_lookup::<T>(all_members[0].clone());
-	}: remove_member(RawOrigin::Root, to_remove, false)
-	verify {
-		// must still have the desired number of members members.
-		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());
-		#[cfg(test)]
-		{
-			// reset members in between benchmark tests.
-			use crate::tests::MEMBERS;
-			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
-		}
-	}
-
 	remove_member_with_replacement {
 		// easy case. We have a runner up. Nothing will have that much of an impact. m will be
 		// number of members and runners. There is always at least one runner.
@@ -384,43 +348,10 @@ benchmarks! {
 
 		let _ = fill_seats_up_to::<T>(m)?;
 		let removing = as_lookup::<T>(<Elections<T>>::members_ids()[0].clone());
-	}: remove_member(RawOrigin::Root, removing, true)
+	}: remove_member(RawOrigin::Root, removing, true, false)
 	verify {
 		// must still have enough members.
 		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());
-		#[cfg(test)]
-		{
-			// reset members in between benchmark tests.
-			use crate::tests::MEMBERS;
-			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
-		}
-	}
-
-	remove_member_wrong_refund {
-		// The root call by mistake indicated that this will have no replacement, while it has!
-		// this has now consumed a lot of weight and need to refund.
-		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
-		clean::<T>();
-
-		let _ = fill_seats_up_to::<T>(m)?;
-		let removing = as_lookup::<T>(<Elections<T>>::members_ids()[0].clone());
-		let who = T::Lookup::lookup(removing.clone()).expect("member was added above");
-		let call = Call::<T>::remove_member { who: removing, has_replacement: false }.encode();
-	}: {
-		assert_eq!(
-			<Call<T> as Decode>::decode(&mut &*call)
-				.expect("call is encoded above, encoding must be correct")
-				.dispatch_bypass_filter(RawOrigin::Root.into())
-				.unwrap_err()
-				.error,
-			Error::<T>::InvalidReplacement.into(),
-		);
-	}
-	verify {
-		// must still have enough members.
-		assert_eq!(<Elections<T>>::members().len() as u32, T::DesiredMembers::get());
-		// on fail, `who` must still be a member
-		assert!(<Elections<T>>::members_ids().contains(&who));
 		#[cfg(test)]
 		{
 			// reset members in between benchmark tests.
@@ -431,14 +362,14 @@ benchmarks! {
 
 	clean_defunct_voters {
 		// total number of voters.
-		let v in (MAX_VOTERS / 2) .. MAX_VOTERS;
+		let v in (T::MaxVoters::get() / 2) .. T::MaxVoters::get();
 		// those that are defunct and need removal.
-		let d in 1 .. (MAX_VOTERS / 2);
+		let d in 1 .. (T::MaxVoters::get() / 2);
 
 		// remove any previous stuff.
 		clean::<T>();
 
-		let all_candidates = submit_candidates::<T>(v, "candidates")?;
+		let all_candidates = submit_candidates::<T>(T::MaxCandidates::get(), "candidates")?;
 		distribute_voters::<T>(all_candidates, v, MAXIMUM_VOTE)?;
 
 		// all candidates leave.
@@ -458,9 +389,9 @@ benchmarks! {
 		// members, this is hard-coded in the runtime and cannot be trivially changed at this stage.
 		// Yet, change the number of voters, candidates and edge per voter to see the impact. Note
 		// that we give all candidates a self vote to make sure they are all considered.
-		let c in 1 .. MAX_CANDIDATES;
-		let v in 1 .. MAX_VOTERS;
-		let e in MAX_VOTERS .. MAX_VOTERS * MAXIMUM_VOTE as u32;
+		let c in 1 .. T::MaxCandidates::get();
+		let v in 1 .. T::MaxVoters::get();
+		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() as u32 * MAXIMUM_VOTE as u32;
 		clean::<T>();
 
 		// so we have a situation with v and e. we want e to basically always be in the range of `e
@@ -473,7 +404,7 @@ benchmarks! {
 		let votes_per_voter = (e / v).min(MAXIMUM_VOTE as u32);
 
 		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
-		let _ = distribute_voters::<T>(all_candidates, v, votes_per_voter as usize)?;
+		let _ = distribute_voters::<T>(all_candidates, v.saturating_sub(c), votes_per_voter as usize)?;
 	}: {
 		<Elections<T>>::on_initialize(T::TermDuration::get());
 	}
@@ -494,15 +425,19 @@ benchmarks! {
 
 	#[extra]
 	election_phragmen_c_e {
-		let c in 1 .. MAX_CANDIDATES;
-		let e in MAX_VOTERS .. MAX_VOTERS * MAXIMUM_VOTE as u32;
-		let fixed_v = MAX_VOTERS;
+		let c in 1 .. T::MaxCandidates::get();
+		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() * MAXIMUM_VOTE as u32;
+		let fixed_v = T::MaxVoters::get();
 		clean::<T>();
 
 		let votes_per_voter = e / fixed_v;
 
 		let all_candidates = submit_candidates_with_self_vote::<T>(c, "candidates")?;
-		let _ = distribute_voters::<T>(all_candidates, fixed_v, votes_per_voter as usize)?;
+		let _ = distribute_voters::<T>(
+			all_candidates,
+			fixed_v - c,
+			votes_per_voter as usize,
+		)?;
 	}: {
 		<Elections<T>>::on_initialize(T::TermDuration::get());
 	}
@@ -524,7 +459,7 @@ benchmarks! {
 	#[extra]
 	election_phragmen_v {
 		let v in 4 .. 16;
-		let fixed_c = MAX_CANDIDATES;
+		let fixed_c = T::MaxCandidates::get() / 10;
 		let fixed_e = 64;
 		clean::<T>();
 

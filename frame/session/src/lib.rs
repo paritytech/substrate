@@ -121,7 +121,7 @@ use frame_support::{
 	ensure,
 	traits::{
 		EstimateNextNewSession, EstimateNextSessionRotation, FindAuthor, Get, OneSessionHandler,
-		StorageVersion, ValidatorRegistration, ValidatorSet,
+		ValidatorRegistration, ValidatorSet,
 	},
 	weights::Weight,
 	Parameter,

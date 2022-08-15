@@ -271,7 +271,9 @@ use remote_externalities::{
 };
 use sc_chain_spec::ChainSpec;
 use sc_cli::{
-	CliConfiguration, ExecutionStrategy, WasmExecutionMethod, DEFAULT_WASM_EXECUTION_METHOD,
+	execution_method_from_cli, CliConfiguration, ExecutionStrategy, WasmExecutionMethod,
+	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+	DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
@@ -400,6 +402,17 @@ pub struct SharedParams {
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
+	/// The WASM instantiation method to use.
+	///
+	/// Only has an effect when `wasm-execution` is set to `compiled`.
+	#[clap(
+		long = "wasm-instantiation-strategy",
+		value_name = "STRATEGY",
+		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
+		arg_enum,
+	)]
+	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
+
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
 	#[clap(long)]
@@ -459,9 +472,10 @@ pub enum State {
 		#[clap(short, long)]
 		snapshot_path: Option<PathBuf>,
 
-		/// The pallets to scrape. If empty, entire chain state will be scraped.
+		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
+		/// be scraped.
 		#[clap(short, long, multiple_values = true)]
-		pallets: Vec<String>,
+		pallet: Vec<String>,
 
 		/// Fetch the child-keys as well.
 		///
@@ -485,7 +499,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live { snapshot_path, pallets, uri, at, child_tree } => {
+			State::Live { snapshot_path, pallet, uri, at, child_tree } => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
@@ -494,7 +508,7 @@ impl State {
 					.mode(Mode::Online(OnlineConfig {
 						transport: uri.to_owned().into(),
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-						pallets: pallets.clone(),
+						pallets: pallet.clone(),
 						scrape_children: true,
 						at,
 					}))
@@ -675,13 +689,12 @@ pub(crate) fn build_executor<D: NativeExecutionDispatch + 'static>(
 	shared: &SharedParams,
 	config: &sc_service::Configuration,
 ) -> NativeElseWasmExecutor<D> {
-	let wasm_method = shared.wasm_method;
 	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
 	let max_runtime_instances = config.max_runtime_instances;
 	let runtime_cache_size = config.runtime_cache_size;
 
 	NativeElseWasmExecutor::<D>::new(
-		wasm_method.into(),
+		execution_method_from_cli(shared.wasm_method, shared.wasmtime_instantiation_strategy),
 		heap_pages,
 		max_runtime_instances,
 		runtime_cache_size,
@@ -710,7 +723,7 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {}", e))
+	.map_err(|e| format!("failed to execute '{}': {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	Ok((changes, encoded_results))

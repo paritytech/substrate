@@ -30,15 +30,13 @@
 
 pub mod offchain;
 
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub mod bench;
 
 mod children;
-#[cfg(feature = "with-parity-db")]
 mod parity_db;
 mod stats;
 mod storage_cache;
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
+#[cfg(any(feature = "rocksdb", test))]
 mod upgrade;
 mod utils;
 
@@ -94,7 +92,6 @@ use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
 pub use sc_state_db::PruningMode;
 pub use sp_database::Database;
 
-#[cfg(any(feature = "with-kvdb-rocksdb", test))]
 pub use bench::BenchmarkingState;
 
 const CACHE_HEADERS: usize = 8;
@@ -106,7 +103,6 @@ const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
 pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
 
-#[cfg(feature = "with-parity-db")]
 /// Length of a [`DbHash`].
 const DB_HASH_LEN: usize = 32;
 
@@ -226,9 +222,10 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.state.apply_to_keys_while(child_info, prefix, f)
+		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn for_child_keys_with_prefix<F: FnMut(&[u8])>(
@@ -301,12 +298,14 @@ pub struct DatabaseSettings {
 	/// Where to find the database.
 	pub source: DatabaseSource,
 	/// Block pruning mode.
-	pub keep_blocks: KeepBlocks,
+	///
+	/// NOTE: only finalized blocks are subject for removal!
+	pub blocks_pruning: BlocksPruning,
 }
 
 /// Block pruning settings.
 #[derive(Debug, Clone, Copy)]
-pub enum KeepBlocks {
+pub enum BlocksPruning {
 	/// Keep full block history.
 	All,
 	/// Keep N recent finalized blocks.
@@ -327,6 +326,7 @@ pub enum DatabaseSource {
 		cache_size: usize,
 	},
 	/// Load a RocksDB database from a given path. Recommended for most uses.
+	#[cfg(feature = "rocksdb")]
 	RocksDb {
 		/// Path to the database.
 		path: PathBuf,
@@ -359,7 +359,9 @@ impl DatabaseSource {
 			// IIUC this is needed for polkadot to create its own dbs, so until it can use parity db
 			// I would think rocksdb, but later parity-db.
 			DatabaseSource::Auto { paritydb_path, .. } => Some(paritydb_path),
-			DatabaseSource::RocksDb { path, .. } | DatabaseSource::ParityDb { path } => Some(path),
+			#[cfg(feature = "rocksdb")]
+			DatabaseSource::RocksDb { path, .. } => Some(path),
+			DatabaseSource::ParityDb { path } => Some(path),
 			DatabaseSource::Custom { .. } => None,
 		}
 	}
@@ -371,7 +373,11 @@ impl DatabaseSource {
 				*paritydb_path = p.into();
 				true
 			},
-			DatabaseSource::RocksDb { ref mut path, .. } |
+			#[cfg(feature = "rocksdb")]
+			DatabaseSource::RocksDb { ref mut path, .. } => {
+				*path = p.into();
+				true
+			},
 			DatabaseSource::ParityDb { ref mut path } => {
 				*path = p.into();
 				true
@@ -385,6 +391,7 @@ impl std::fmt::Display for DatabaseSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let name = match self {
 			DatabaseSource::Auto { .. } => "Auto",
+			#[cfg(feature = "rocksdb")]
 			DatabaseSource::RocksDb { .. } => "RocksDb",
 			DatabaseSource::ParityDb { .. } => "ParityDb",
 			DatabaseSource::Custom { .. } => "Custom",
@@ -1005,7 +1012,7 @@ pub struct Backend<Block: BlockT> {
 	shared_cache: SharedCache<Block>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
-	keep_blocks: KeepBlocks,
+	blocks_pruning: BlocksPruning,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
@@ -1036,21 +1043,21 @@ impl<Block: BlockT> Backend<Block> {
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
-		Self::new_test_with_tx_storage(keep_blocks, canonicalization_delay)
+	pub fn new_test(blocks_pruning: u32, canonicalization_delay: u64) -> Self {
+		Self::new_test_with_tx_storage(blocks_pruning, canonicalization_delay)
 	}
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_with_tx_storage(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+	pub fn new_test_with_tx_storage(blocks_pruning: u32, canonicalization_delay: u64) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			state_pruning: Some(PruningMode::keep_blocks(keep_blocks)),
+			state_pruning: Some(PruningMode::blocks_pruning(blocks_pruning)),
 			source: DatabaseSource::Custom { db, require_create_flag: true },
-			keep_blocks: KeepBlocks::Some(keep_blocks),
+			blocks_pruning: BlocksPruning::Some(blocks_pruning),
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -1117,7 +1124,7 @@ impl<Block: BlockT> Backend<Block> {
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
-			keep_blocks: config.keep_blocks,
+			blocks_pruning: config.blocks_pruning,
 			genesis_state: RwLock::new(None),
 		};
 
@@ -1338,8 +1345,15 @@ impl<Block: BlockT> Backend<Block> {
 
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = *pending_block.header.number();
+			let highest_leaf = self
+				.blockchain
+				.leaves
+				.read()
+				.highest_leaf()
+				.map(|(n, _)| n)
+				.unwrap_or(Zero::zero());
 			let existing_header =
-				number <= best_num && self.blockchain.header(BlockId::hash(hash))?.is_some();
+				number <= highest_leaf && self.blockchain.header(BlockId::hash(hash))?.is_some();
 
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
@@ -1684,9 +1698,9 @@ impl<Block: BlockT> Backend<Block> {
 		finalized: NumberFor<Block>,
 		displaced: &FinalizationDisplaced<Block::Hash, NumberFor<Block>>,
 	) -> ClientResult<()> {
-		if let KeepBlocks::Some(keep_blocks) = self.keep_blocks {
+		if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
 			// Always keep the last finalized block
-			let keep = std::cmp::max(keep_blocks, 1);
+			let keep = std::cmp::max(blocks_pruning, 1);
 			if finalized >= keep.into() {
 				let number = finalized.saturating_sub(keep.into());
 				self.prune_block(transaction, BlockId::<Block>::number(number))?;
@@ -2050,36 +2064,46 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	) -> ClientResult<(NumberFor<Block>, HashSet<Block::Hash>)> {
 		let mut reverted_finalized = HashSet::new();
 
-		let mut best_number = self.blockchain.info().best_number;
-		let mut best_hash = self.blockchain.info().best_hash;
+		let info = self.blockchain.info();
 
-		let finalized = self.blockchain.info().finalized_number;
+		let highest_leaf = self
+			.blockchain
+			.leaves
+			.read()
+			.highest_leaf()
+			.and_then(|(n, h)| h.last().map(|h| (n, *h)));
+
+		let best_number = info.best_number;
+		let best_hash = info.best_hash;
+
+		let finalized = info.finalized_number;
 
 		let revertible = best_number - finalized;
 		let n = if !revert_finalized && revertible < n { revertible } else { n };
 
+		let (n, mut number_to_revert, mut hash_to_revert) = match highest_leaf {
+			Some((l_n, l_h)) => (n + (l_n - best_number), l_n, l_h),
+			None => (n, best_number, best_hash),
+		};
+
 		let mut revert_blocks = || -> ClientResult<NumberFor<Block>> {
 			for c in 0..n.saturated_into::<u64>() {
-				if best_number.is_zero() {
+				if number_to_revert.is_zero() {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
 				}
 				let mut transaction = Transaction::new();
 				let removed =
-					self.blockchain.header(BlockId::Number(best_number))?.ok_or_else(|| {
+					self.blockchain.header(BlockId::Hash(hash_to_revert))?.ok_or_else(|| {
 						sp_blockchain::Error::UnknownBlock(format!(
-							"Error reverting to {}. Block hash not found.",
-							best_number
+							"Error reverting to {}. Block header not found.",
+							hash_to_revert,
 						))
 					})?;
 				let removed_hash = removed.hash();
 
-				let prev_number = best_number.saturating_sub(One::one());
-				let prev_hash = self.blockchain.hash(prev_number)?.ok_or_else(|| {
-					sp_blockchain::Error::UnknownBlock(format!(
-						"Error reverting to {}. Block hash not found.",
-						best_number
-					))
-				})?;
+				let prev_number = number_to_revert.saturating_sub(One::one());
+				let prev_hash =
+					if prev_number == best_number { best_hash } else { *removed.parent_hash() };
 
 				if !self.have_state_at(&prev_hash, prev_number) {
 					return Ok(c.saturated_into::<NumberFor<Block>>())
@@ -2089,12 +2113,15 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 					Some(commit) => {
 						apply_state_commit(&mut transaction, commit);
 
-						best_number = prev_number;
-						best_hash = prev_hash;
+						number_to_revert = prev_number;
+						hash_to_revert = prev_hash;
 
-						let update_finalized = best_number < finalized;
+						let update_finalized = number_to_revert < finalized;
 
-						let key = utils::number_and_hash_to_lookup_key(best_number, &best_hash)?;
+						let key = utils::number_and_hash_to_lookup_key(
+							number_to_revert,
+							&hash_to_revert,
+						)?;
 						if update_finalized {
 							transaction.set_from_vec(
 								columns::META,
@@ -2104,12 +2131,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 							reverted_finalized.insert(removed_hash);
 							if let Some((hash, _)) = self.blockchain.info().finalized_state {
-								if hash == best_hash {
-									if !best_number.is_zero() &&
-										self.have_state_at(&prev_hash, best_number - One::one())
-									{
+								if hash == hash_to_revert {
+									if !number_to_revert.is_zero() &&
+										self.have_state_at(
+											&prev_hash,
+											number_to_revert - One::one(),
+										) {
 										let lookup_key = utils::number_and_hash_to_lookup_key(
-											best_number - One::one(),
+											number_to_revert - One::one(),
 											prev_hash,
 										)?;
 										transaction.set_from_vec(
@@ -2130,13 +2159,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 							&mut transaction,
 							columns::META,
 							meta_keys::CHILDREN_PREFIX,
-							best_hash,
+							hash_to_revert,
 						);
 						self.storage.db.commit(transaction)?;
+
+						let is_best = number_to_revert < best_number;
+
 						self.blockchain.update_meta(MetaUpdate {
-							hash: best_hash,
-							number: best_number,
-							is_best: true,
+							hash: hash_to_revert,
+							number: number_to_revert,
+							is_best,
 							is_finalized: update_finalized,
 							with_state: false,
 						});
@@ -2154,7 +2186,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			let mut transaction = Transaction::new();
 			let mut leaves = self.blockchain.leaves.write();
 
-			leaves.revert(best_hash, best_number);
+			leaves.revert(hash_to_revert, number_to_revert);
 			leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 			self.storage.db.commit(transaction)?;
 
@@ -2285,7 +2317,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn get_import_lock(&self) -> &RwLock<()> {
-		&*self.import_lock
+		&self.import_lock
 	}
 
 	fn requires_full_sync(&self) -> bool {
@@ -2433,9 +2465,9 @@ pub(crate) mod tests {
 			DatabaseSettings {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
-				state_pruning: Some(PruningMode::keep_blocks(1)),
+				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
-				keep_blocks: KeepBlocks::All,
+				blocks_pruning: BlocksPruning::All,
 			},
 			0,
 		)
@@ -3455,5 +3487,113 @@ pub(crate) mod tests {
 		// Insert a fork prior to finalization point. Leave should not be created.
 		insert_header_no_head(&backend, 1, block0, [1; 32].into());
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2_a]);
+	}
+
+	#[test]
+	fn revert_non_best_blocks() {
+		let backend = Backend::<Block>::new_test(10, 10);
+
+		let genesis =
+			insert_block(&backend, 0, Default::default(), None, Default::default(), vec![], None)
+				.unwrap();
+
+		let block1 =
+			insert_block(&backend, 1, genesis, None, Default::default(), vec![], None).unwrap();
+
+		let block2 =
+			insert_block(&backend, 2, block1, None, Default::default(), vec![], None).unwrap();
+
+		let block3 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Number(1)).unwrap();
+			let header = Header {
+				number: 3,
+				parent_hash: block2,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		let block4 = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			let header = Header {
+				number: 4,
+				parent_hash: block3,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		let block3_fork = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			let header = Header {
+				number: 3,
+				parent_hash: block2,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: H256::from_low_u64_le(42),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
+
+		assert!(backend.have_state_at(&block1, 1));
+		assert!(backend.have_state_at(&block2, 2));
+		assert!(backend.have_state_at(&block3, 3));
+		assert!(backend.have_state_at(&block4, 4));
+		assert!(backend.have_state_at(&block3_fork, 3));
+
+		assert_eq!(backend.blockchain.leaves().unwrap(), vec![block4, block3_fork]);
+		assert_eq!(4, backend.blockchain.leaves.read().highest_leaf().unwrap().0);
+
+		assert_eq!(3, backend.revert(1, false).unwrap().0);
+
+		assert!(backend.have_state_at(&block1, 1));
+		assert!(!backend.have_state_at(&block2, 2));
+		assert!(!backend.have_state_at(&block3, 3));
+		assert!(!backend.have_state_at(&block4, 4));
+		assert!(!backend.have_state_at(&block3_fork, 3));
+
+		assert_eq!(backend.blockchain.leaves().unwrap(), vec![block1]);
+		assert_eq!(1, backend.blockchain.leaves.read().highest_leaf().unwrap().0);
+	}
+
+	#[test]
+	fn test_no_duplicated_leaves_allowed() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		// Add block 2 not as the best block
+		let block2 = insert_header_no_head(&backend, 2, block1, Default::default());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
+		assert_eq!(backend.blockchain().info().best_hash, block1);
+
+		// Add block 2 as the best block
+		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
+		assert_eq!(backend.blockchain().info().best_hash, block2);
 	}
 }

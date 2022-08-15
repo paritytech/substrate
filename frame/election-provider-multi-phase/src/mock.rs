@@ -18,7 +18,9 @@
 use super::*;
 use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
-	data_provider, onchain, ElectionDataProvider, NposSolution, SequentialPhragmen,
+	data_provider,
+	onchain::{self, UnboundedExecution},
+	ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
@@ -37,8 +39,8 @@ use sp_core::{
 	H256,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, ElectionResult,
-	EvaluateSupport, ExtendedBalance,
+	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, BalancingConfig,
+	ElectionResult, EvaluateSupport,
 };
 use sp_runtime::{
 	testing::Header,
@@ -322,7 +324,7 @@ impl InstantElectionProvider for MockFallback {
 }
 
 parameter_types! {
-	pub static Balancing: Option<(usize, ExtendedBalance)> = Some((0, 0));
+	pub static Balancing: Option<BalancingConfig> = Some( BalancingConfig { iterations: 0, tolerance: 0 } );
 }
 
 pub struct TestBenchmarkingConfig;
@@ -379,7 +381,7 @@ impl crate::Config for Runtime {
 	type WeightInfo = ();
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
-	type GovernanceFallback = NoFallback<Self>;
+	type GovernanceFallback = UnboundedExecution<OnChainSeqPhragmen>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;

@@ -81,6 +81,8 @@ mod batch_verifier;
 #[cfg(feature = "std")]
 use batch_verifier::BatchVerifier;
 
+pub use sp_externalities::MultiRemovalResults;
+
 #[cfg(feature = "std")]
 const LOG_TARGET: &str = "runtime::io";
 
@@ -99,18 +101,32 @@ pub enum EcdsaVerifyError {
 /// removed from the backend from making the `storage_kill` call.
 #[derive(PassByCodec, Encode, Decode)]
 pub enum KillStorageResult {
-	/// All key to remove were removed, return number of key removed from backend.
+	/// All keys to remove were removed, return number of iterations performed during the
+	/// operation.
 	AllRemoved(u32),
-	/// Not all key to remove were removed, return number of key removed from backend.
+	/// Not all key to remove were removed, return number of iterations performed during the
+	/// operation.
 	SomeRemaining(u32),
+}
+
+impl From<MultiRemovalResults> for KillStorageResult {
+	fn from(r: MultiRemovalResults) -> Self {
+		// We use `loops` here rather than `backend` because that's the same as the original
+		// functionality pre-#11490. This won't matter once we switch to the new host function
+		// since we won't be using the `KillStorageResult` type in the runtime any more.
+		match r.maybe_cursor {
+			None => Self::AllRemoved(r.loops),
+			Some(..) => Self::SomeRemaining(r.loops),
+		}
+	}
 }
 
 /// Interface for accessing the storage from within the runtime.
 #[runtime_interface]
 pub trait Storage {
 	/// Returns the data for `key` in the storage or `None` if the key can not be found.
-	fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.storage(key).map(|s| s.to_vec())
+	fn get(&self, key: &[u8]) -> Option<bytes::Bytes> {
+		self.storage(key).map(|s| bytes::Bytes::from(s.to_vec()))
 	}
 
 	/// Get `key` from storage, placing the value into `value_out` and return the number of
@@ -145,7 +161,7 @@ pub trait Storage {
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		let _ = Externalities::clear_prefix(*self, prefix, None);
+		let _ = Externalities::clear_prefix(*self, prefix, None, None);
 	}
 
 	/// Clear the storage of each key-value pair where the key starts with the given `prefix`.
@@ -175,11 +191,54 @@ pub trait Storage {
 	/// backend.
 	#[version(2)]
 	fn clear_prefix(&mut self, prefix: &[u8], limit: Option<u32>) -> KillStorageResult {
-		let (all_removed, num_removed) = Externalities::clear_prefix(*self, prefix, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
-		}
+		Externalities::clear_prefix(*self, prefix, limit, None).into()
+	}
+
+	/// Partially clear the storage of each key-value pair where the key starts with the given
+	/// prefix.
+	///
+	/// # Limit
+	///
+	/// A *limit* should always be provided through `maybe_limit`. This is one fewer than the
+	/// maximum number of backend iterations which may be done by this operation and as such
+	/// represents the maximum number of backend deletions which may happen. A *limit* of zero
+	/// implies that no keys will be deleted, though there may be a single iteration done.
+	///
+	/// The limit can be used to partially delete a prefix storage in case it is too large or costly
+	/// to delete in a single operation.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call) for any given `maybe_prefix` value. Subsequent calls
+	/// operating on the same prefix should always pass `Some`, and this should be equal to the
+	/// previous call result's `maybe_cursor` field.
+	///
+	/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once
+	/// the resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call for any given prefix, it is important that no keys further
+	/// keys under the same prefix are inserted. If so, then they may or may not be deleted by
+	/// subsequent calls.
+	///
+	/// # Note
+	///
+	/// Please note that keys which are residing in the overlay for that prefix when
+	/// issuing this call are deleted without counting towards the `limit`.
+	#[version(3, register_only)]
+	fn clear_prefix(
+		&mut self,
+		maybe_prefix: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<Vec<u8>>, //< TODO Make work or just Option<Vec<u8>>?
+	) -> MultiRemovalResults {
+		Externalities::clear_prefix(
+			*self,
+			maybe_prefix,
+			maybe_limit,
+			maybe_cursor.as_ref().map(|x| &x[..]),
+		)
+		.into()
 	}
 
 	/// Append the encoded `value` to the storage item at `key`.
@@ -323,7 +382,7 @@ pub trait DefaultChildStorage {
 	/// is removed.
 	fn storage_kill(&mut self, storage_key: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
-		self.kill_child_storage(&child_info, None);
+		let _ = self.kill_child_storage(&child_info, None, None);
 	}
 
 	/// Clear a child storage key.
@@ -332,8 +391,8 @@ pub trait DefaultChildStorage {
 	#[version(2)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> bool {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, _num_removed) = self.kill_child_storage(&child_info, limit);
-		all_removed
+		let r = self.kill_child_storage(&child_info, limit, None);
+		r.maybe_cursor.is_none()
 	}
 
 	/// Clear a child storage key.
@@ -342,11 +401,22 @@ pub trait DefaultChildStorage {
 	#[version(3)]
 	fn storage_kill(&mut self, storage_key: &[u8], limit: Option<u32>) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, num_removed) = self.kill_child_storage(&child_info, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
-		}
+		self.kill_child_storage(&child_info, limit, None).into()
+	}
+
+	/// Clear a child storage key.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(4, register_only)]
+	fn storage_kill(
+		&mut self,
+		storage_key: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<Vec<u8>>,
+	) -> MultiRemovalResults {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.kill_child_storage(&child_info, maybe_limit, maybe_cursor.as_ref().map(|x| &x[..]))
+			.into()
 	}
 
 	/// Check a child storage key.
@@ -362,7 +432,7 @@ pub trait DefaultChildStorage {
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
 	fn clear_prefix(&mut self, storage_key: &[u8], prefix: &[u8]) {
 		let child_info = ChildInfo::new_default(storage_key);
-		let _ = self.clear_child_prefix(&child_info, prefix, None);
+		let _ = self.clear_child_prefix(&child_info, prefix, None, None);
 	}
 
 	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
@@ -376,11 +446,28 @@ pub trait DefaultChildStorage {
 		limit: Option<u32>,
 	) -> KillStorageResult {
 		let child_info = ChildInfo::new_default(storage_key);
-		let (all_removed, num_removed) = self.clear_child_prefix(&child_info, prefix, limit);
-		match all_removed {
-			true => KillStorageResult::AllRemoved(num_removed),
-			false => KillStorageResult::SomeRemaining(num_removed),
-		}
+		self.clear_child_prefix(&child_info, prefix, limit, None).into()
+	}
+
+	/// Clear the child storage of each key-value pair where the key starts with the given `prefix`.
+	///
+	/// See `Storage` module `clear_prefix` documentation for `limit` usage.
+	#[version(3, register_only)]
+	fn clear_prefix(
+		&mut self,
+		storage_key: &[u8],
+		prefix: &[u8],
+		maybe_limit: Option<u32>,
+		maybe_cursor: Option<Vec<u8>>,
+	) -> MultiRemovalResults {
+		let child_info = ChildInfo::new_default(storage_key);
+		self.clear_child_prefix(
+			&child_info,
+			prefix,
+			maybe_limit,
+			maybe_cursor.as_ref().map(|x| &x[..]),
+		)
+		.into()
 	}
 
 	/// Default child root calculation.
@@ -1435,17 +1522,17 @@ mod tracing_setup {
 		fn new_span(&self, attrs: &Attributes<'_>) -> Id {
 			Id::from_u64(wasm_tracing::enter_span(Crossing(attrs.into())))
 		}
-		fn enter(&self, span: &Id) {
+		fn enter(&self, _: &Id) {
 			// Do nothing, we already entered the span previously
 		}
 		/// Not implemented! We do not support recording values later
 		/// Will panic when used.
-		fn record(&self, span: &Id, values: &Record<'_>) {
+		fn record(&self, _: &Id, _: &Record<'_>) {
 			unimplemented! {} // this usage is not supported
 		}
 		/// Not implemented! We do not support recording values later
 		/// Will panic when used.
-		fn record_follows_from(&self, span: &Id, follows: &Id) {
+		fn record_follows_from(&self, _: &Id, _: &Id) {
 			unimplemented! {} // this usage is not supported
 		}
 		fn event(&self, event: &Event<'_>) {
@@ -1700,7 +1787,7 @@ mod tests {
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
 			storage::set(b"hello", b"world");
-			assert_eq!(storage::get(b"hello"), Some(b"world".to_vec()));
+			assert_eq!(storage::get(b"hello"), Some(b"world".to_vec().into()));
 			assert_eq!(storage::get(b"foo"), None);
 			storage::set(b"foo", &[1, 2, 3][..]);
 		});
@@ -1712,7 +1799,7 @@ mod tests {
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
-			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec()));
+			assert_eq!(storage::get(b"foo"), Some(b"bar".to_vec().into()));
 		});
 
 		let value = vec![7u8; 35];
@@ -1722,7 +1809,7 @@ mod tests {
 
 		t.execute_with(|| {
 			assert_eq!(storage::get(b"hello"), None);
-			assert_eq!(storage::get(b"foo00"), Some(value.clone()));
+			assert_eq!(storage::get(b"foo00"), Some(value.clone().into()));
 		});
 	}
 
@@ -1757,15 +1844,30 @@ mod tests {
 		});
 
 		t.execute_with(|| {
+			// We can switch to this once we enable v3 of the `clear_prefix`.
+			//assert!(matches!(
+			//	storage::clear_prefix(b":abc", None),
+			//	MultiRemovalResults::NoneLeft { db: 2, total: 2 }
+			//));
 			assert!(matches!(
 				storage::clear_prefix(b":abc", None),
-				KillStorageResult::AllRemoved(2)
+				KillStorageResult::AllRemoved(2),
 			));
 
 			assert!(storage::get(b":a").is_some());
 			assert!(storage::get(b":abdd").is_some());
 			assert!(storage::get(b":abcd").is_none());
 			assert!(storage::get(b":abc").is_none());
+
+			// We can switch to this once we enable v3 of the `clear_prefix`.
+			//assert!(matches!(
+			//	storage::clear_prefix(b":abc", None),
+			//	MultiRemovalResults::NoneLeft { db: 0, total: 0 }
+			//));
+			assert!(matches!(
+				storage::clear_prefix(b":abc", None),
+				KillStorageResult::AllRemoved(0),
+			));
 		});
 	}
 
@@ -1793,6 +1895,7 @@ mod tests {
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let pair_unused = sr25519::Pair::generate_with_phrase(None).0;
 			crypto::start_batch_verify();
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
@@ -1800,8 +1903,10 @@ mod tests {
 				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 
-			// push invlaid
-			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
+			// push invalid
+			let msg = b"asdf!";
+			let signature = pair.sign(msg);
+			crypto::sr25519_batch_verify(&signature, msg, &pair_unused.public());
 			assert!(!crypto::finish_batch_verify());
 
 			crypto::start_batch_verify();
@@ -1836,10 +1941,10 @@ mod tests {
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 
 		ext.execute_with(|| {
-			// invalid ed25519 signature
+			// valid ed25519 signature
 			crypto::start_batch_verify();
 			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
-			assert!(!crypto::finish_batch_verify());
+			assert!(crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
 			crypto::start_batch_verify();
@@ -1859,12 +1964,14 @@ mod tests {
 			// 1 valid, 1 invalid ed25519 signature
 			crypto::start_batch_verify();
 
-			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let pair1 = ed25519::Pair::generate_with_phrase(None).0;
+			let pair2 = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
-			let signature = pair.sign(msg);
-			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
+			let signature = pair1.sign(msg);
 
 			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
+			crypto::ed25519_batch_verify(&signature, msg, &pair1.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair2.public());
 
 			assert!(!crypto::finish_batch_verify());
 
@@ -1891,11 +1998,13 @@ mod tests {
 			// 1 valid sr25519, 1 invalid sr25519
 			crypto::start_batch_verify();
 
-			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let pair1 = sr25519::Pair::generate_with_phrase(None).0;
+			let pair2 = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkcel!";
-			let signature = pair.sign(msg);
-			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
+			let signature = pair1.sign(msg);
 
+			crypto::sr25519_batch_verify(&signature, msg, &pair1.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair2.public());
 			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 
 			assert!(!crypto::finish_batch_verify());
