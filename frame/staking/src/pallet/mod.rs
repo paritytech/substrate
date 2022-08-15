@@ -324,14 +324,6 @@ pub mod pallet {
 	pub type Nominators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
 
-		/// Get the nominator `who`, regardless of being decodable or not.
-		pub(crate) fn get_any(who: &T::AccountId) -> Option<UnboundedNominations<T>> {
-			frame_support::storage::unhashed::get::<UnboundedNominations<T>>(
-				&Nominators::<T>::hashed_key_for(who),
-			)
-		}
-	}
-
 	/// The maximum nominator count before we stop allowing new validators to join.
 	///
 	/// When this value is not set, no limits are enforced.
