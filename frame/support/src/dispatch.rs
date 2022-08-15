@@ -1787,9 +1787,11 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
-			{ $( $impl )* }
-			Ok(())
+			$crate::storage::with_storage_layer(|| {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+				{ $( $impl )* }
+				Ok(())
+			})
 		}
 	};
 
@@ -1805,8 +1807,10 @@ macro_rules! decl_module {
 	) => {
 		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
-			$( $impl )*
+			$crate::storage::with_storage_layer(|| {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+				$( $impl )*
+			})
 		}
 	};
 
@@ -2203,7 +2207,7 @@ macro_rules! decl_module {
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn count() -> usize { 1 }
-			fn accumulate(acc: &mut $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData>) {
+			fn infos() -> $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData> {
 				use $crate::traits::PalletInfoAccess;
 				let item = $crate::traits::PalletInfoData {
 					index: Self::index(),
@@ -2211,7 +2215,7 @@ macro_rules! decl_module {
 					module_name: Self::module_name(),
 					crate_version: Self::crate_version(),
 				};
-				acc.push(item);
+				vec![item]
 			}
 		}
 

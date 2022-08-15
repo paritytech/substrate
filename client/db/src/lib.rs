@@ -300,12 +300,12 @@ pub struct DatabaseSettings {
 	/// Block pruning mode.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	pub keep_blocks: KeepBlocks,
+	pub blocks_pruning: BlocksPruning,
 }
 
 /// Block pruning settings.
 #[derive(Debug, Clone, Copy)]
-pub enum KeepBlocks {
+pub enum BlocksPruning {
 	/// Keep full block history.
 	All,
 	/// Keep N recent finalized blocks.
@@ -1012,7 +1012,7 @@ pub struct Backend<Block: BlockT> {
 	shared_cache: SharedCache<Block>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
-	keep_blocks: KeepBlocks,
+	blocks_pruning: BlocksPruning,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
@@ -1043,21 +1043,21 @@ impl<Block: BlockT> Backend<Block> {
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
-		Self::new_test_with_tx_storage(keep_blocks, canonicalization_delay)
+	pub fn new_test(blocks_pruning: u32, canonicalization_delay: u64) -> Self {
+		Self::new_test_with_tx_storage(blocks_pruning, canonicalization_delay)
 	}
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_with_tx_storage(keep_blocks: u32, canonicalization_delay: u64) -> Self {
+	pub fn new_test_with_tx_storage(blocks_pruning: u32, canonicalization_delay: u64) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
 			state_cache_size: 16777216,
 			state_cache_child_ratio: Some((50, 100)),
-			state_pruning: Some(PruningMode::keep_blocks(keep_blocks)),
+			state_pruning: Some(PruningMode::blocks_pruning(blocks_pruning)),
 			source: DatabaseSource::Custom { db, require_create_flag: true },
-			keep_blocks: KeepBlocks::Some(keep_blocks),
+			blocks_pruning: BlocksPruning::Some(blocks_pruning),
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -1124,7 +1124,7 @@ impl<Block: BlockT> Backend<Block> {
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
-			keep_blocks: config.keep_blocks,
+			blocks_pruning: config.blocks_pruning,
 			genesis_state: RwLock::new(None),
 		};
 
@@ -1345,8 +1345,15 @@ impl<Block: BlockT> Backend<Block> {
 
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = *pending_block.header.number();
+			let highest_leaf = self
+				.blockchain
+				.leaves
+				.read()
+				.highest_leaf()
+				.map(|(n, _)| n)
+				.unwrap_or(Zero::zero());
 			let existing_header =
-				number <= best_num && self.blockchain.header(BlockId::hash(hash))?.is_some();
+				number <= highest_leaf && self.blockchain.header(BlockId::hash(hash))?.is_some();
 
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
@@ -1691,9 +1698,9 @@ impl<Block: BlockT> Backend<Block> {
 		finalized: NumberFor<Block>,
 		displaced: &FinalizationDisplaced<Block::Hash, NumberFor<Block>>,
 	) -> ClientResult<()> {
-		if let KeepBlocks::Some(keep_blocks) = self.keep_blocks {
+		if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
 			// Always keep the last finalized block
-			let keep = std::cmp::max(keep_blocks, 1);
+			let keep = std::cmp::max(blocks_pruning, 1);
 			if finalized >= keep.into() {
 				let number = finalized.saturating_sub(keep.into());
 				self.prune_block(transaction, BlockId::<Block>::number(number))?;
@@ -2458,9 +2465,9 @@ pub(crate) mod tests {
 			DatabaseSettings {
 				state_cache_size: 16777216,
 				state_cache_child_ratio: Some((50, 100)),
-				state_pruning: Some(PruningMode::keep_blocks(1)),
+				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
-				keep_blocks: KeepBlocks::All,
+				blocks_pruning: BlocksPruning::All,
 			},
 			0,
 		)
@@ -3534,7 +3541,24 @@ pub(crate) mod tests {
 			header.hash()
 		};
 
-		let block3_fork = insert_header_no_head(&backend, 3, block2, Default::default());
+		let block3_fork = {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			let header = Header {
+				number: 3,
+				parent_hash: block2,
+				state_root: BlakeTwo256::trie_root(Vec::new(), StateVersion::V1),
+				digest: Default::default(),
+				extrinsics_root: H256::from_low_u64_le(42),
+			};
+
+			op.set_block_data(header.clone(), Some(Vec::new()), None, None, NewBlockState::Normal)
+				.unwrap();
+
+			backend.commit_operation(op).unwrap();
+
+			header.hash()
+		};
 
 		assert!(backend.have_state_at(&block1, 1));
 		assert!(backend.have_state_at(&block2, 2));
@@ -3555,5 +3579,21 @@ pub(crate) mod tests {
 
 		assert_eq!(backend.blockchain.leaves().unwrap(), vec![block1]);
 		assert_eq!(1, backend.blockchain.leaves.read().highest_leaf().unwrap().0);
+	}
+
+	#[test]
+	fn test_no_duplicated_leaves_allowed() {
+		let backend: Backend<Block> = Backend::new_test(10, 10);
+		let block0 = insert_header(&backend, 0, Default::default(), None, Default::default());
+		let block1 = insert_header(&backend, 1, block0, None, Default::default());
+		// Add block 2 not as the best block
+		let block2 = insert_header_no_head(&backend, 2, block1, Default::default());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
+		assert_eq!(backend.blockchain().info().best_hash, block1);
+
+		// Add block 2 as the best block
+		let block2 = insert_header(&backend, 2, block1, None, Default::default());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
+		assert_eq!(backend.blockchain().info().best_hash, block2);
 	}
 }

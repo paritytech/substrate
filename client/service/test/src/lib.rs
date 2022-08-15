@@ -26,11 +26,12 @@ use sc_network::{
 	config::{NetworkConfiguration, TransportConfig},
 	multiaddr, Multiaddr,
 };
+use sc_network_common::service::{NetworkBlock, NetworkPeers, NetworkStateInfo};
 use sc_service::{
 	client::Client,
 	config::{BasePath, DatabaseSource, KeystoreConfig},
-	ChainSpecExtension, Configuration, Error, GenericChainSpec, KeepBlocks, Role, RuntimeGenesis,
-	SpawnTaskHandle, TaskManager,
+	BlocksPruning, ChainSpecExtension, Configuration, Error, GenericChainSpec, Role,
+	RuntimeGenesis, SpawnTaskHandle, TaskManager,
 };
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::BlockId;
@@ -234,7 +235,7 @@ fn node_config<
 		state_cache_size: 16777216,
 		state_cache_child_ratio: None,
 		state_pruning: Default::default(),
-		keep_blocks: KeepBlocks::All,
+		blocks_pruning: BlocksPruning::All,
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		wasm_runtime_overrides: Default::default(),
@@ -320,7 +321,7 @@ where
 
 			handle.spawn(service.clone().map_err(|_| ()));
 			let addr =
-				addr.with(multiaddr::Protocol::P2p((*service.network().local_peer_id()).into()));
+				addr.with(multiaddr::Protocol::P2p((service.network().local_peer_id()).into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -340,7 +341,7 @@ where
 
 			handle.spawn(service.clone().map_err(|_| ()));
 			let addr =
-				addr.with(multiaddr::Protocol::P2p((*service.network().local_peer_id()).into()));
+				addr.with(multiaddr::Protocol::P2p((service.network().local_peer_id()).into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -387,7 +388,7 @@ where
 			}
 
 			network.run_until_all_full(move |_index, service| {
-				let connected = service.network().num_connected();
+				let connected = service.network().sync_num_connected();
 				debug!("Got {}/{} full connections...", connected, expected_full_connections);
 				connected == expected_full_connections
 			});
@@ -422,7 +423,7 @@ where
 			}
 
 			network.run_until_all_full(move |_index, service| {
-				let connected = service.network().num_connected();
+				let connected = service.network().sync_num_connected();
 				debug!("Got {}/{} full connections...", connected, expected_full_connections);
 				connected == expected_full_connections
 			});

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use beefy_primitives::{crypto::Signature, BeefyApi, VersionedFinalityProof, BEEFY_ENGINE_ID};
+use beefy_primitives::{BeefyApi, BEEFY_ENGINE_ID};
 use codec::Encode;
 use log::error;
 use std::{collections::HashMap, sync::Arc};
@@ -34,7 +34,8 @@ use sc_client_api::backend::Backend;
 use sc_consensus::{BlockCheckParams, BlockImport, BlockImportParams, ImportResult};
 
 use crate::{
-	justification::decode_and_verify_commitment, notification::BeefySignedCommitmentSender,
+	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	notification::BeefyVersionedFinalityProofSender,
 };
 
 /// A block-import handler for BEEFY.
@@ -47,7 +48,7 @@ pub struct BeefyBlockImport<Block: BlockT, Backend, RuntimeApi, I> {
 	backend: Arc<Backend>,
 	runtime: Arc<RuntimeApi>,
 	inner: I,
-	justification_sender: BeefySignedCommitmentSender<Block>,
+	justification_sender: BeefyVersionedFinalityProofSender<Block>,
 }
 
 impl<Block: BlockT, BE, Runtime, I: Clone> Clone for BeefyBlockImport<Block, BE, Runtime, I> {
@@ -67,7 +68,7 @@ impl<Block: BlockT, BE, Runtime, I> BeefyBlockImport<Block, BE, Runtime, I> {
 		backend: Arc<BE>,
 		runtime: Arc<Runtime>,
 		inner: I,
-		justification_sender: BeefySignedCommitmentSender<Block>,
+		justification_sender: BeefyVersionedFinalityProofSender<Block>,
 	) -> BeefyBlockImport<Block, BE, Runtime, I> {
 		BeefyBlockImport { backend, runtime, inner, justification_sender }
 	}
@@ -85,7 +86,7 @@ where
 		encoded: &EncodedJustification,
 		number: NumberFor<Block>,
 		hash: <Block as BlockT>::Hash,
-	) -> Result<VersionedFinalityProof<NumberFor<Block>, Signature>, ConsensusError> {
+	) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
 		let block_id = BlockId::hash(hash);
 		let validator_set = self
 			.runtime
@@ -94,7 +95,7 @@ where
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
 			.ok_or_else(|| ConsensusError::ClientImport("Unknown validator set".to_string()))?;
 
-		decode_and_verify_commitment::<Block>(&encoded[..], number, &validator_set)
+		decode_and_verify_finality_proof::<Block>(&encoded[..], number, &validator_set)
 	}
 
 	/// Import BEEFY justification: Send it to worker for processing and also append it to backend.
@@ -105,7 +106,7 @@ where
 	fn import_beefy_justification_unchecked(
 		&self,
 		number: NumberFor<Block>,
-		justification: VersionedFinalityProof<NumberFor<Block>, Signature>,
+		justification: BeefyVersionedFinalityProof<Block>,
 	) {
 		// Append the justification to the block in the backend.
 		if let Err(e) = self.backend.append_justification(
@@ -115,14 +116,9 @@ where
 			error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, justification);
 		}
 		// Send the justification to the BEEFY voter for processing.
-		match justification {
-			// TODO #11838: Should not unpack, these channels should also use
-			// `VersionedFinalityProof`.
-			VersionedFinalityProof::V1(signed_commitment) => self
-				.justification_sender
-				.notify(|| Ok::<_, ()>(signed_commitment))
-				.expect("forwards closure result; the closure always returns Ok; qed."),
-		};
+		self.justification_sender
+			.notify(|| Ok::<_, ()>(justification))
+			.expect("forwards closure result; the closure always returns Ok; qed.");
 	}
 }
 

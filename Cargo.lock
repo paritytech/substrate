@@ -1789,6 +1789,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ed25519-zebra"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "403ef3e961ab98f0ba902771d29f842058578bb1ce7e3c59dad5a6a93e784c69"
+dependencies = [
+ "curve25519-dalek 3.0.2",
+ "hex",
+ "rand_core 0.6.2",
+ "sha2 0.9.8",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
 name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2250,6 +2264,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
+ "sp-api",
  "sp-arithmetic",
  "sp-core",
  "sp-core-hashing-proc-macro",
@@ -4686,6 +4701,7 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-rpc",
  "sc-service",
  "sc-service-test",
@@ -7518,9 +7534,9 @@ dependencies = [
 
 [[package]]
 name = "rpassword"
-version = "5.0.1"
+version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc936cf8a7ea60c58f030fd36a612a48f440610214dc54bc36431f9ea0c3efb"
+checksum = "26b763cb66df1c928432cc35053f8bd4cec3335d8559fc16010017d16b3c1680"
 dependencies = [
  "libc",
  "winapi",
@@ -7702,7 +7718,6 @@ dependencies = [
 name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
- "async-trait",
  "futures",
  "futures-timer",
  "ip_network",
@@ -7715,6 +7730,7 @@ dependencies = [
  "rand 0.7.3",
  "sc-client-api",
  "sc-network",
+ "sc-network-common",
  "sp-api",
  "sp-authority-discovery",
  "sp-blockchain",
@@ -8187,7 +8203,6 @@ dependencies = [
  "sc-allocator",
  "sp-maybe-compressed-blob",
  "sp-sandbox",
- "sp-serializer",
  "sp-wasm-interface",
  "thiserror",
  "wasm-instrument",
@@ -8316,7 +8331,7 @@ dependencies = [
  "log",
  "parity-util-mem",
  "sc-client-api",
- "sc-network",
+ "sc-network-common",
  "sc-transaction-pool-api",
  "sp-blockchain",
  "sp-runtime",
@@ -8398,7 +8413,9 @@ dependencies = [
 name = "sc-network-common"
 version = "0.10.0-dev"
 dependencies = [
+ "async-trait",
  "bitflags",
+ "bytes",
  "futures",
  "libp2p",
  "parity-scale-codec",
@@ -8409,6 +8426,7 @@ dependencies = [
  "sp-consensus",
  "sp-finality-grandpa",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -8424,6 +8442,7 @@ dependencies = [
  "lru",
  "quickcheck",
  "sc-network",
+ "sc-network-common",
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -8435,6 +8454,7 @@ name = "sc-network-light"
 version = "0.10.0-dev"
 dependencies = [
  "futures",
+ "hex",
  "libp2p",
  "log",
  "parity-scale-codec",
@@ -8455,6 +8475,7 @@ version = "0.10.0-dev"
 dependencies = [
  "fork-tree",
  "futures",
+ "hex",
  "libp2p",
  "log",
  "lru",
@@ -8531,6 +8552,7 @@ dependencies = [
  "sc-client-api",
  "sc-client-db",
  "sc-network",
+ "sc-network-common",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sc-utils",
@@ -8739,6 +8761,7 @@ dependencies = [
  "sc-consensus",
  "sc-executor",
  "sc-network",
+ "sc-network-common",
  "sc-service",
  "sc-transaction-pool-api",
  "sp-api",
@@ -9615,7 +9638,7 @@ dependencies = [
  "byteorder",
  "criterion",
  "dyn-clonable",
- "ed25519-dalek",
+ "ed25519-zebra",
  "futures",
  "hash-db",
  "hash256-std-hasher",
