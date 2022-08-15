@@ -110,6 +110,10 @@ impl_opaque_keys! {
 	}
 }
 
+parameter_types! {
+	pub const MaxValidators: u32 = 3072;
+}
+
 impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
@@ -120,6 +124,7 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 impl pallet_session::historical::Config for Test {
@@ -206,6 +211,7 @@ impl pallet_staking::Config for Test {
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 impl pallet_offences::Config for Test {
@@ -403,7 +409,7 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<AuthorityId>) -> sp_io::Tes
 		validator_count: 8,
 		force_era: pallet_staking::Forcing::ForceNew,
 		minimum_validator_count: 0,
-		invulnerables: vec![],
+		invulnerables: vec![].try_into().unwrap(),
 		..Default::default()
 	};
 

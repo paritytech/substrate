@@ -118,6 +118,7 @@ impl pallet_session::SessionHandler<AccountId> for TestSessionHandler {
 parameter_types! {
 	pub const Period: u64 = 1;
 	pub const Offset: u64 = 0;
+	pub const MaxValidators: u32 = 3072;
 }
 
 impl pallet_session::Config for Test {
@@ -130,6 +131,7 @@ impl pallet_session::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 pallet_staking_reward_curve::build! {
@@ -182,6 +184,7 @@ impl pallet_staking::Config for Test {
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
+	type MaxValidators = MaxValidators;
 }
 
 impl pallet_im_online::Config for Test {
