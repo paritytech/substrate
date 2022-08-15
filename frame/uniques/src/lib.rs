@@ -1506,7 +1506,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			price: Option<ItemPrice<T, I>>,
-			whitelisted_buyer: Option<<T::Lookup as StaticLookup>::Source>,
+			whitelisted_buyer: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let whitelisted_buyer = whitelisted_buyer.map(T::Lookup::lookup).transpose()?;

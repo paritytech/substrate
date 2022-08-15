@@ -147,7 +147,7 @@ benchmarks_instance_pallet! {
 	}
 
 	remove_other_vote {
-		let caller = funded_account::<T,I>("caller", 0);
+		let caller = funded_account::<T, I>("caller", 0);
 		let voter = funded_account::<T, I>("caller", 0);
 		let voter_lookup = T::Lookup::unlookup(voter.clone());
 		whitelist_account!(caller);
