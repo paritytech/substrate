@@ -109,7 +109,7 @@ where
 	}
 
 	pub(crate) fn should_self_vote(&self, round: &(P, NumberFor<B>)) -> bool {
-		Some(round.1.clone()) > self.best_done &&
+		Some(round.1) > self.best_done &&
 			self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
 	}
 

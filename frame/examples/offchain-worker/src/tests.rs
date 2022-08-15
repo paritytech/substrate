@@ -253,10 +253,9 @@ fn should_submit_unsigned_transaction_on_chain_for_any_account() {
 	)
 	.unwrap();
 
-	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+	let public_key = *SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
 		.get(0)
-		.unwrap()
-		.clone();
+		.unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
@@ -313,10 +312,9 @@ fn should_submit_unsigned_transaction_on_chain_for_all_accounts() {
 	)
 	.unwrap();
 
-	let public_key = SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
+	let public_key = *SyncCryptoStore::sr25519_public_keys(&keystore, crate::crypto::Public::ID)
 		.get(0)
-		.unwrap()
-		.clone();
+		.unwrap();
 
 	let mut t = sp_io::TestExternalities::default();
 	t.register_extension(OffchainWorkerExt::new(offchain));
