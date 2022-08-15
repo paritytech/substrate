@@ -720,7 +720,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 parameter_types! {
 	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
 	// TODO: revisit to see if we can generate separate thresholds here
-	pub const BagThresholdsBalance: &'static [u64] = &voter_bags::THRESHOLDS;
+	pub const BagThresholdsBalance: &'static [u128] = &voter_bags::THRESHOLDS_BALANCES;
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
