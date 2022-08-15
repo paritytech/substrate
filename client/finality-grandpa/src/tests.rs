@@ -210,7 +210,7 @@ impl GenesisAuthoritySetProvider<Block> for TestApi {
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
 fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
-	keys.iter().map(|key| (*key).public().into()).map(|id| (id, 1)).collect()
+	keys.iter().map(|&key| key.public().into()).map(|id| (id, 1)).collect()
 }
 
 fn create_keystore(authority: Ed25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
