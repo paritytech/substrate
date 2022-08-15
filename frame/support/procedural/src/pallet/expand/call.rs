@@ -140,6 +140,24 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
 
+	// Wrap all calls inside of storage layers
+	if let Some(syn::Item::Impl(item_impl)) = def
+		.call
+		.as_ref()
+		.map(|c| &mut def.item.content.as_mut().expect("Checked by def parser").1[c.index])
+	{
+		item_impl.items.iter_mut().for_each(|i| {
+			if let syn::ImplItem::Method(method) = i {
+				let block = &method.block;
+				method.block = syn::parse_quote! {{
+					// We execute all dispatchable in a new storage layer, allowing them
+					// to return an error at any point, and undoing any storage changes.
+					#frame_support::storage::with_storage_layer(|| #block)
+				}};
+			}
+		});
+	}
+
 	quote::quote_spanned!(span =>
 		#[doc(hidden)]
 		pub mod __substrate_call_check {
@@ -267,12 +285,8 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 							#frame_support::sp_tracing::enter_span!(
 								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
 							);
-							// We execute all dispatchable in a new storage layer, allowing them
-							// to return an error at any point, and undoing any storage changes.
-							#frame_support::storage::with_storage_layer(|| {
-								<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
-									.map(Into::into).map_err(Into::into)
-							})
+							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
+								.map(Into::into).map_err(Into::into)
 						},
 					)*
 					Self::__Ignore(_, _) => {

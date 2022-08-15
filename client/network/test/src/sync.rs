@@ -544,7 +544,7 @@ fn syncs_header_only_forks() {
 	sp_tracing::try_init_simple();
 	let mut net = TestNet::new(0);
 	net.add_full_peer_with_config(Default::default());
-	net.add_full_peer_with_config(FullPeerConfig { keep_blocks: Some(3), ..Default::default() });
+	net.add_full_peer_with_config(FullPeerConfig { blocks_pruning: Some(3), ..Default::default() });
 	net.peer(0).push_blocks(2, false);
 	net.peer(1).push_blocks(2, false);
 

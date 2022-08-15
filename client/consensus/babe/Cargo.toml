@@ -26,7 +26,6 @@ num-rational = "0.2.2"
 num-traits = "0.2.8"
 parking_lot = "0.12.0"
 rand = "0.7.2"
-retain_mut = "0.1.4"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0"

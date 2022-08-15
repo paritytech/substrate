@@ -376,16 +376,12 @@ fn decl_all_pallets<'a>(
 		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
 		let feature_set = feature_set.into_iter();
 		let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-		let pallets_tuple = names
-			.iter()
-			.filter(|n| **n != SYSTEM_PALLET_NAME)
-			.rev()
-			.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
+		let names = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME).rev();
 		quote! {
 			#attr
 			/// All pallets included in the runtime as a nested tuple of types.
 			/// Excludes the System pallet.
-			pub type AllPalletsWithoutSystem = ( #pallets_tuple );
+			pub type AllPalletsWithoutSystem = ( #(#names),* );
 		}
 	});
 
@@ -396,14 +392,11 @@ fn decl_all_pallets<'a>(
 		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
 		let feature_set = feature_set.into_iter();
 		let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-		let pallets_tuple = names
-			.iter()
-			.rev()
-			.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
+		let names = names.iter().rev();
 		quote! {
 			#attr
 			/// All pallets included in the runtime as a nested tuple of types.
-			pub type AllPalletsWithSystem = ( #pallets_tuple );
+			pub type AllPalletsWithSystem = ( #(#names),* );
 		}
 	});
 
@@ -416,15 +409,14 @@ fn decl_all_pallets<'a>(
 			let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
 			let feature_set = feature_set.into_iter();
 			let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-			let pallets_tuple = names
-				.iter()
-				.filter(|n| **n != SYSTEM_PALLET_NAME)
-				.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
+			let names = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME);
 			quote! {
 				#attr
 				/// All pallets included in the runtime as a nested tuple of types in reversed order.
 				/// Excludes the System pallet.
-				pub type AllPalletsWithoutSystemReversed = ( #pallets_tuple );
+				#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+				`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+				pub type AllPalletsWithoutSystemReversed = ( #(#names),* );
 			}
 		});
 
@@ -435,13 +427,12 @@ fn decl_all_pallets<'a>(
 		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
 		let feature_set = feature_set.into_iter();
 		let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-		let pallets_tuple = names
-			.iter()
-			.fold(TokenStream2::default(), |combined, name| quote!((#name, #combined)));
 		quote! {
 			#attr
 			/// All pallets included in the runtime as a nested tuple of types in reversed order.
-			pub type AllPalletsWithSystemReversed = ( #pallets_tuple );
+			#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+			`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+			pub type AllPalletsWithSystemReversed = ( #(#names),* );
 		}
 	});
 
@@ -452,7 +443,7 @@ fn decl_all_pallets<'a>(
 				return syn::Error::new(
 					proc_macro2::Span::call_site(),
 					"`System` pallet declaration is missing. \
-				 Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`",
+						 Please add this line: `System: frame_system,`",
 				)
 				.into_compile_error(),
 		};
@@ -481,10 +472,9 @@ fn decl_all_pallets<'a>(
 
 		/// All pallets included in the runtime as a nested tuple of types in reversed order.
 		/// With the system pallet first.
-		pub type AllPalletsReversedWithSystemFirst = (
-			#system_pallet,
-			AllPalletsWithoutSystemReversed
-		);
+		#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+		`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+		pub type AllPalletsReversedWithSystemFirst = ( #(#names_reversed_with_system_first),* );
 	)
 }
 
