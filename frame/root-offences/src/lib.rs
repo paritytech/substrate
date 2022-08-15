@@ -42,6 +42,17 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
+	#[pallet::event]
+	#[pallet::generate_deposit(pub(super) fn deposit_event)]
+	pub enum Event<T: Config> {
+		RootCreatedOffence { offenders: Vec<(T::AccountId, Perbill)> },
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		FailedToGetActiveEra,
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
 	where
@@ -63,49 +74,57 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			let slash_fractions = offenders
+			let slash_fraction = offenders
 				.clone()
 				.into_iter()
 				.map(|(_, fraction)| fraction)
 				.collect::<Vec<Perbill>>();
 
-			let active_era = Staking::<T>::active_era().ok_or(Error::<T>::FailedToGetActiveEra)?;
-			let now = active_era.index;
+			let offence_details = Self::get_offence_details(offenders.clone())?;
 
-			let offender_details: Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>> =
-				offenders
-					.clone()
-					.into_iter()
-					.map(|(o, _)| OffenceDetails::<T::AccountId, IdentificationTuple<T>> {
-						offender: (o.clone(), Staking::<T>::eras_stakers(now, o)),
-						reporters: vec![],
-					})
-					.collect();
-
-			let session_index = <pallet_session::Pallet<T> as frame_support::traits::ValidatorSet<T::AccountId>>::session_index();
-
-			<pallet_staking::Pallet<T> as OnOffenceHandler<
-				T::AccountId,
-				IdentificationTuple<T>,
-				Weight,
-			>>::on_offence(
-				&offender_details, &slash_fractions, session_index, DisableStrategy::WhenSlashed
-			);
+			Self::submit_offence(&offence_details, &slash_fraction);
 
 			Self::deposit_event(Event::RootCreatedOffence { offenders });
 			Ok(())
 		}
 	}
 
-	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
-		RootCreatedOffence { offenders: Vec<(T::AccountId, Perbill)> },
-	}
+	impl<T: Config> Pallet<T>
+	where
+		T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
+		T: pallet_session::historical::Config<
+			FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
+			FullIdentificationOf = ExposureOf<T>,
+		>,
+	{
+		fn submit_offence(
+			offenders: &[OffenceDetails<T::AccountId, IdentificationTuple<T>>],
+			slash_fraction: &[Perbill],
+		) {
+			let session_index = <pallet_session::Pallet<T> as frame_support::traits::ValidatorSet<T::AccountId>>::session_index();
 
-	#[pallet::error]
-	pub enum Error<T> {
-		FailedToGetActiveEra,
+			<pallet_staking::Pallet<T> as OnOffenceHandler<
+				T::AccountId,
+				IdentificationTuple<T>,
+				Weight,
+			>>::on_offence(&offenders, &slash_fraction, session_index, DisableStrategy::WhenSlashed);
+		}
+
+		fn get_offence_details(
+			offenders: Vec<(T::AccountId, Perbill)>,
+		) -> Result<Vec<OffenceDetails<T::AccountId, IdentificationTuple<T>>>, DispatchError> {
+			let active_era = Staking::<T>::active_era().ok_or(Error::<T>::FailedToGetActiveEra)?;
+			let now = active_era.index;
+
+			Ok(offenders
+				.clone()
+				.into_iter()
+				.map(|(o, _)| OffenceDetails::<T::AccountId, IdentificationTuple<T>> {
+					offender: (o.clone(), Staking::<T>::eras_stakers(now, o)),
+					reporters: vec![],
+				})
+				.collect())
+		}
 	}
 }
 
