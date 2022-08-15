@@ -210,7 +210,7 @@ pub mod pallet {
 		/// recorded. This implies that what comes out of iterating this list MIGHT NOT BE AN ACTIVE
 		/// VALIDATOR.
 		/// WIP
-		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>> = ();
+		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
 		/// determines how many unique eras a staker may be unbonding in.
