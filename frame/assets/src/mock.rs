@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_assets;
 
-use frame_support::{construct_runtime, parameter_types, traits::{ConstU32, ConstU64, GenesisBuild}};
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -98,15 +101,15 @@ impl Config for Test {
 	type Extra = ();
 }
 
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Hook {
 	Died(u32, u64),
 }
 parameter_types! {
-	pub static FROZEN: HashMap<(u32, u64), u64> = Default::default();
-	pub static HOOKS: Vec<Hook> = Default::default();
+	static FROZEN: HashMap<(u32, u64), u64> = Default::default();
+	static HOOKS: Vec<Hook> = Default::default();
 }
 
 pub struct TestFreezer;
