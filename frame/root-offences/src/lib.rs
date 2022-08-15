@@ -22,7 +22,7 @@
 
 use pallet_session::historical::IdentificationTuple;
 use pallet_staking::{BalanceOf, Exposure, ExposureOf, Pallet as Staking};
-use sp_runtime::{curve::PiecewiseLinear, traits::Convert, Perbill};
+use sp_runtime::{traits::Convert, Perbill};
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 
 pub use pallet::*;
@@ -119,12 +119,12 @@ mod tests {
 		assert_noop, assert_ok, ord_parameter_types, parameter_types,
 		traits::{ConstU32, ConstU64},
 	};
-	use frame_system::EnsureSignedBy;
 	use pallet_session::TestSessionHandler;
 	use sp_core::H256;
 	use sp_runtime::{
-		testing::{Header, UintAuthorityId},
-		traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+		testing::{Header},
+		traits::{BlakeTwo256, IdentityLookup},
+		curve::PiecewiseLinear,
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -278,7 +278,7 @@ mod tests {
 	}
 
 	#[test]
-	fn kill_name_should_work() {
+	fn test() {
 		assert_eq!(1, 1);
 	}
 }
