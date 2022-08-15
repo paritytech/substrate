@@ -20,7 +20,7 @@
 use super::*;
 use mock::*;
 
-use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::OnInitialize};
+use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use sp_runtime::traits::BadOrigin;
 
 type ScoredPool = Pallet<Test>;
@@ -308,11 +308,8 @@ fn pool_candidates_exceded() {
 			assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
 		}
 
-		let submit_candidacy_call =
-			mock::Call::ScoredPool(crate::Call::<Test>::submit_candidacy {});
-
 		assert_noop!(
-			submit_candidacy_call.dispatch(Origin::signed(8)),
+			ScoredPool::submit_candidacy(Origin::signed(8)),
 			Error::<Test, _>::TooManyMembers
 		);
 	});

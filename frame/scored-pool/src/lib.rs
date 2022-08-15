@@ -422,7 +422,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn change_member_count(origin: OriginFor<T>, count: u32) -> DispatchResult {
 			ensure_root(origin)?;
-			Self::update_member_count(count).map_err(|_| Error::<T, I>::TooManyMembers)?;
+			Self::update_member_count(count)?;
 			Ok(())
 		}
 	}
@@ -506,7 +506,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Make sure the new member count value does not exceed the MaximumMembers
 	fn update_member_count(new_member_count: u32) -> Result<(), Error<T, I>> {
-		ensure!(new_member_count < T::MaximumMembers::get(), Error::<T, I>::TooManyMembers);
+		ensure!(new_member_count <= T::MaximumMembers::get(), Error::<T, I>::TooManyMembers);
 		<MemberCount<T, I>>::put(new_member_count);
 		Ok(())
 	}

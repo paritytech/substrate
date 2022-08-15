@@ -96,16 +96,14 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-thread_local! {
-
-	pub static MEMBERS: RefCell<BoundedVec<u64,ConstU32<10_u32>>> = RefCell::new(bounded_vec![0,10]);
-
+parameter_types! {
+	pub static Members: BoundedVec<u64,ConstU32<10_u32>> = bounded_vec![0,10];
 }
 
 pub struct TestChangeMembers;
 impl ChangeMembers<u64> for TestChangeMembers {
 	fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
-		let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
+		let mut old_plus_incoming = Members::get().into_inner();
 		old_plus_incoming.extend_from_slice(incoming);
 		old_plus_incoming.sort();
 
@@ -115,18 +113,13 @@ impl ChangeMembers<u64> for TestChangeMembers {
 
 		assert_eq!(old_plus_incoming, new_plus_outgoing);
 
-		MEMBERS.with(|m| {
-			*m.borrow_mut() = <BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(new.to_vec())
-		});
+		Members::set(<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(new.to_vec()));
 	}
 }
 
 impl InitializeMembers<u64> for TestChangeMembers {
 	fn initialize_members(new_members: &[u64]) {
-		MEMBERS.with(|m| {
-			*m.borrow_mut() =
-				<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(new_members.to_vec())
-		});
+		Members::set(<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(new_members.to_vec()));
 	}
 }
 
@@ -146,7 +139,7 @@ impl Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let mut balances = vec![];
-	for i in 1..30 {
+	for i in 1..31 {
 		balances.push((i, 500_000));
 	}
 	balances.push((31, 500_000));
