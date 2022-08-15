@@ -141,7 +141,9 @@ pub(crate) fn hooks() -> Vec<Hook> {
 }
 
 pub(crate) fn take_hooks() -> Vec<Hook> {
-	HOOKS::get()
+	let result = HOOKS::get();
+	HOOKS::set(Default::default());
+	result
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
