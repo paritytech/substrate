@@ -1309,6 +1309,50 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 	}
 }
 
+/// A simple sorted list implementation that does not require any additional pallets. Note, this
+/// does not provided validators in sorted ordered. If you desire nominators in a sorted order take
+/// a look at [`pallet-bags-list].
+pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
+	type Error = ();
+
+	/// Returns iterator over voter list, which can have `take` called on it.
+	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
+		Box::new(Validators::<T>::iter().map(|(v, _)| v))
+	}
+	fn count() -> u32 {
+		Validators::<T>::count()
+	}
+	fn contains(id: &T::AccountId) -> bool {
+		Validators::<T>::contains_key(id)
+	}
+	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
+		// nothing to do on insert.
+		Ok(())
+	}
+	fn on_update(_: &T::AccountId, _weight: VoteWeight) {
+		// nothing to do on update.
+	}
+	fn on_remove(_: &T::AccountId) {
+		// nothing to do on remove.
+	}
+	fn unsafe_regenerate(
+		_: impl IntoIterator<Item = T::AccountId>,
+		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+	) -> u32 {
+		// nothing to do upon regenerate.
+		0
+	}
+	fn sanity_check() -> Result<(), &'static str> {
+		Ok(())
+	}
+
+	fn unsafe_clear() {
+		Validators::<T>::remove_all();
+	}
+}
+
+
 /// A simple voter list implementation that does not require any additional pallets. Note, this
 /// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list].
