@@ -47,7 +47,7 @@ fn scheduling_with_preimages_works() {
 	new_test_ext().execute_with(|| {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
-		let hashed = MaybeHashed::Hash(hash.clone());
+		let hashed = MaybeHashed::Hash(hash);
 		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
 		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
 		assert!(Preimage::preimage_requested(&hash));
@@ -67,7 +67,7 @@ fn scheduling_with_preimage_postpones_correctly() {
 	new_test_ext().execute_with(|| {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: 1000 });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
-		let hashed = MaybeHashed::Hash(hash.clone());
+		let hashed = MaybeHashed::Hash(hash);
 
 		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
 		assert!(Preimage::preimage_requested(&hash));

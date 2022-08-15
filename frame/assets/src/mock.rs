@@ -115,13 +115,14 @@ parameter_types! {
 pub struct TestFreezer;
 impl FrozenBalance<u32, u64, u64> for TestFreezer {
 	fn frozen_balance(asset: u32, who: &u64) -> Option<u64> {
-		FROZEN::get().get(&(asset, who.clone())).cloned()
+		FROZEN::get().get(&(asset, *who)).cloned()
 	}
 
 	fn died(asset: u32, who: &u64) {
 		let mut temp = HOOKS::get();
-		temp.push(Hook::Died(asset, who.clone()));
+		temp.push(Hook::Died(asset, *who));
 		HOOKS::set(temp);
+
 		// Sanity check: dead accounts have no balance.
 		assert!(Assets::balance(asset, *who).is_zero());
 	}
