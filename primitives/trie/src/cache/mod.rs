@@ -37,11 +37,11 @@
 use crate::{Error, NodeCodec};
 use hash_db::Hasher;
 use hashbrown::HashSet;
+use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, MutexGuard, RwLockReadGuard};
 use shared_cache::{SharedNodeCache, SharedValueCache, ValueCacheKey};
 use std::{
 	collections::{hash_map::Entry as MapEntry, HashMap},
-	mem,
 	sync::Arc,
 };
 use trie_db::{node::NodeOwned, CachedValue};
@@ -49,6 +49,8 @@ use trie_db::{node::NodeOwned, CachedValue};
 mod shared_cache;
 
 pub use shared_cache::SharedTrieCache;
+
+use self::shared_cache::ValueCacheKeyHash;
 
 const LOG_TARGET: &str = "trie-cache";
 
@@ -78,7 +80,7 @@ impl CacheSize {
 /// which could not be fullfilled by the [`SharedTrieCache`]. These locally cached items are merged
 /// back to the shared trie cache when this instance is dropped.
 ///
-/// When using [`Self::as_trie_db_cache`] or [`Self::as_trie_db_mut_cache`], it will lock mutexes.
+/// When using [`Self::as_trie_db_cache`] or [`Self::as_trie_db_mut_cache`], it will lock Mutexes.
 /// So, it is important that these methods are not called multiple times, because they otherwise
 /// deadlock.
 pub struct LocalTrieCache<H: Hasher> {
@@ -92,12 +94,23 @@ pub struct LocalTrieCache<H: Hasher> {
 	/// local instance is merged back to the shared cache.
 	shared_node_cache_access: Mutex<HashSet<H::Out>>,
 	/// The local cache for the values.
-	value_cache: Mutex<HashMap<ValueCacheKey<'static, H::Out>, CachedValue<H::Out>>>,
+	value_cache: Mutex<
+		HashMap<
+			ValueCacheKey<'static, H::Out>,
+			CachedValue<H::Out>,
+			BuildNoHashHasher<ValueCacheKey<'static, H::Out>>,
+		>,
+	>,
 	/// Keeps track of all values accessed in the shared cache.
 	///
 	/// This will be used to ensure that these nodes are brought to the front of the lru when this
-	/// local instance is merged back to the shared cache.
-	shared_value_cache_access: Mutex<HashSet<ValueCacheKey<'static, H::Out>>>,
+	/// local instance is merged back to the shared cache. This can actually lead to collision when
+	/// two [`ValueCacheKey`]s with different storage roots and keys map to the same hash. However,
+	/// as we only use this set to update the lru position it is fine, even if we bring the wrong
+	/// value to the top. The important part is that we always get the correct value from the value
+	/// cache for a given key.
+	shared_value_cache_access:
+		Mutex<HashSet<ValueCacheKeyHash, BuildNoHashHasher<ValueCacheKeyHash>>>,
 }
 
 impl<H: Hasher> LocalTrieCache<H> {
@@ -159,8 +172,18 @@ enum ValueCache<'a, H> {
 	/// The value cache is already bound to a specific storage root.
 	ForStorageRoot {
 		shared_value_cache: RwLockReadGuard<'a, SharedValueCache<H>>,
-		shared_value_cache_access: MutexGuard<'a, HashSet<ValueCacheKey<'static, H>>>,
-		local_value_cache: MutexGuard<'a, HashMap<ValueCacheKey<'static, H>, CachedValue<H>>>,
+		shared_value_cache_access: MutexGuard<
+			'a,
+			HashSet<ValueCacheKeyHash, nohash_hasher::BuildNoHashHasher<ValueCacheKeyHash>>,
+		>,
+		local_value_cache: MutexGuard<
+			'a,
+			HashMap<
+				ValueCacheKey<'static, H>,
+				CachedValue<H>,
+				nohash_hasher::BuildNoHashHasher<ValueCacheKey<'static, H>>,
+			>,
+		>,
 		storage_root: H,
 	},
 }
@@ -176,7 +199,7 @@ impl<H: AsRef<[u8]> + std::hash::Hash + Eq + Clone + Copy> ValueCache<'_, H> {
 				shared_value_cache_access,
 				storage_root,
 			} => {
-				let key = ValueCacheKey::Ref { storage_key: key, storage_root: *storage_root };
+				let key = ValueCacheKey::ref_(key, *storage_root);
 
 				// We first need to look up in the local cache and then the shared cache.
 				// It can happen that some value is cached in the shared cache, but the
@@ -185,23 +208,23 @@ impl<H: AsRef<[u8]> + std::hash::Hash + Eq + Clone + Copy> ValueCache<'_, H> {
 				//
 				// So, the logic of the trie would lookup the data and the node and store both
 				// in our local caches.
-				if let Some(val) = local_value_cache.get(unsafe {
-					// SAFETY
-					//
-					// We need to convert the lifetime to make the compiler happy. However, as
-					// we only use the `key` to looking up the value this lifetime conversion is
-					// safe.
-					mem::transmute::<&ValueCacheKey<'_, H>, &ValueCacheKey<'static, H>>(&key)
-				}) {
-					return Some(val)
-				} else if let Some(val) = shared_value_cache.get(&key).map(|v| {
-					shared_value_cache_access.insert(key.into_value());
-					v
-				}) {
-					Some(val)
-				} else {
-					None
-				}
+				local_value_cache
+					.get(unsafe {
+						// SAFETY
+						//
+						// We need to convert the lifetime to make the compiler happy. However, as
+						// we only use the `key` to looking up the value this lifetime conversion is
+						// safe.
+						std::mem::transmute::<&ValueCacheKey<'_, H>, &ValueCacheKey<'static, H>>(
+							&key,
+						)
+					})
+					.or_else(|| {
+						shared_value_cache.get(&key).map(|v| {
+							shared_value_cache_access.insert(key.get_hash());
+							v
+						})
+					})
 			},
 		}
 	}
@@ -213,11 +236,7 @@ impl<H: AsRef<[u8]> + std::hash::Hash + Eq + Clone + Copy> ValueCache<'_, H> {
 				map.insert(key.into(), value);
 			},
 			Self::ForStorageRoot { local_value_cache, storage_root, .. } => {
-				local_value_cache.insert(
-					ValueCacheKey::Ref { storage_root: *storage_root, storage_key: key }
-						.into_value(),
-					value,
-				);
+				local_value_cache.insert(ValueCacheKey::value(key, *storage_root), value);
 			},
 		}
 	}
@@ -247,10 +266,15 @@ impl<'a, H: Hasher> TrieCache<'a, H> {
 
 		if !cache.is_empty() {
 			let mut value_cache = local.value_cache.lock();
+			let partial_hash = ValueCacheKey::hash_partial_data(&storage_root);
 
 			cache
 				.into_iter()
-				.map(|(k, v)| (ValueCacheKey::Value { storage_root, storage_key: k }, v))
+				.map(|(k, v)| {
+					let hash =
+						ValueCacheKeyHash::from_hasher_and_storage_key(partial_hash.clone(), &k);
+					(ValueCacheKey::Value { storage_key: k, storage_root, hash }, v)
+				})
 				.for_each(|(k, v)| {
 					value_cache.insert(k, v);
 				});
@@ -387,7 +411,7 @@ mod tests {
 			.value_cache
 			.read()
 			.lru
-			.peek(&ValueCacheKey::Value { storage_root: root, storage_key: TEST_DATA[0].0.into() })
+			.peek(&ValueCacheKey::value(TEST_DATA[0].0, root))
 			.unwrap()
 			.clone();
 		assert_eq!(Bytes::from(TEST_DATA[0].1.to_vec()), cached_data.data().flatten().unwrap());
@@ -396,7 +420,7 @@ mod tests {
 
 		let local_cache = shared_cache.local_cache();
 		shared_cache.value_cache.write().lru.put(
-			ValueCacheKey::Value { storage_root: root, storage_key: TEST_DATA[1].0.into() },
+			ValueCacheKey::value(TEST_DATA[1].0, root),
 			(fake_data.clone(), Default::default()).into(),
 		);
 
@@ -442,7 +466,7 @@ mod tests {
 			.value_cache
 			.read()
 			.lru
-			.peek(&ValueCacheKey::Value { storage_root: new_root, storage_key: new_key.into() })
+			.peek(&ValueCacheKey::value(new_key, new_root))
 			.unwrap()
 			.clone();
 		assert_eq!(Bytes::from(new_value), cached_data.data().flatten().unwrap());
@@ -568,7 +592,7 @@ mod tests {
 			.lru
 			.iter()
 			.map(|d| d.0)
-			.all(|l| TEST_DATA.iter().any(|d| l.storage_key() == d.0)));
+			.all(|l| TEST_DATA.iter().any(|d| l.storage_key().unwrap() == d.0)));
 
 		{
 			let local_cache = shared_cache.local_cache();
@@ -589,7 +613,7 @@ mod tests {
 			.iter()
 			.take(2)
 			.map(|d| d.0)
-			.all(|l| { TEST_DATA.iter().take(2).any(|d| l.storage_key() == d.0) }));
+			.all(|l| { TEST_DATA.iter().take(2).any(|d| l.storage_key().unwrap() == d.0) }));
 
 		let most_recently_used_nodes = shared_cache
 			.node_cache
