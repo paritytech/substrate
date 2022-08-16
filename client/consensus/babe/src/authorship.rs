@@ -310,7 +310,7 @@ mod tests {
 
 		assert!(claim_slot(10.into(), &epoch, &keystore).is_none());
 
-		epoch.authorities.push((valid_public_key.clone().into(), 10));
+		epoch.authorities.push((valid_public_key.into(), 10));
 		assert_eq!(claim_slot(10.into(), &epoch, &keystore).unwrap().1, valid_public_key.into());
 	}
 }

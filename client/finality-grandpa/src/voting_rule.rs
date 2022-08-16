@@ -419,7 +419,7 @@ mod tests {
 		}
 
 		let best = client.header(&BlockId::Hash(client.info().best_hash)).unwrap().unwrap();
-		let best_number = best.number().clone();
+		let best_number = *best.number();
 
 		for i in 0u32..5 {
 			let base = client.header(&BlockId::Number(i.into())).unwrap().unwrap();
