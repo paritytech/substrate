@@ -519,7 +519,9 @@ pub trait SortedListProvider<AccountId> {
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score;
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
+		unimplemented!();
+	}
 }
 
 /// Something that can provide the `Score` of an account. Similar to [`ElectionProvider`] and
