@@ -349,7 +349,7 @@ impl DiscoveryBehaviour {
 		supported_protocols: impl Iterator<Item = impl AsRef<[u8]>>,
 		addr: Multiaddr,
 	) {
-		if !self.can_add_to_dht(&addr) {
+		if !self.allow_non_globals_in_dht && !self.can_add_to_dht(&addr) {
 			trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
 			return
 		}
@@ -457,7 +457,7 @@ impl DiscoveryBehaviour {
 				return true,
 			_ => return false,
 		};
-		ip.is_global() || self.allow_non_globals_in_dht
+		ip.is_global()
 	}
 
 	fn new_handler_with_replacement(

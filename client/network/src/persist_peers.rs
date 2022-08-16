@@ -70,7 +70,10 @@ impl PersistPeerAddrs {
 	) {
 		let protocol = String::from_utf8_lossy(protocol.as_ref()).into_owned();
 
-		eprintln!("PersistPeerAddrs report [peer-id: {:?}, protocol: {:?}, addr: {:?}]", peer_id, protocol, addr);
+		eprintln!(
+			"PersistPeerAddrs report [peer-id: {:?}, protocol: {:?}, addr: {:?}]",
+			peer_id, protocol, addr
+		);
 
 		let entries = self
 			.protocols
