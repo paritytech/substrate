@@ -691,7 +691,7 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::AllyElevated { ally: ally1 }.into());
 	}
 
-	retirement_notice {
+	give_retirement_notice {
 		set_members::<T, I>();
 		let fellow2 = fellow::<T, I>(2);
 
@@ -716,7 +716,7 @@ benchmarks_instance_pallet! {
 		assert!(Alliance::<T, I>::is_fellow(&fellow2));
 
 		assert_eq!(
-			Alliance::<T, I>::retirement_notice(
+			Alliance::<T, I>::give_retirement_notice(
 				SystemOrigin::Signed(fellow2.clone()).into()
 			),
 			Ok(())

@@ -60,7 +60,7 @@ pub trait WeightInfo {
 	fn join_alliance() -> Weight;
 	fn nominate_ally() -> Weight;
 	fn elevate_ally() -> Weight;
-	fn retirement_notice() -> Weight;
+	fn give_retirement_notice() -> Weight;
 	fn retire() -> Weight;
 	fn kick_member() -> Weight;
 	fn add_unscrupulous_items(n: u32, l: u32, ) -> Weight;
@@ -246,7 +246,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	// Storage: Alliance RetiringMembers (r:0 w:1)
-	fn retirement_notice() -> Weight {
+	fn give_retirement_notice() -> Weight {
 		(35_563_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(5 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
@@ -477,7 +477,7 @@ impl WeightInfo for () {
 	// Storage: AllianceMotion Members (r:0 w:1)
 	// Storage: AllianceMotion Prime (r:0 w:1)
 	// Storage: Alliance RetiringMembers (r:0 w:1)
-	fn retirement_notice() -> Weight {
+	fn give_retirement_notice() -> Weight {
 		(35_563_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))

@@ -396,12 +396,15 @@ fn elevate_ally_works() {
 }
 
 #[test]
-fn retirement_notice_work() {
+fn give_retirement_notice_work() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Alliance::retirement_notice(Origin::signed(4)), Error::<Test, ()>::NotMember);
+		assert_noop!(
+			Alliance::give_retirement_notice(Origin::signed(4)),
+			Error::<Test, ()>::NotMember
+		);
 
 		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
-		assert_ok!(Alliance::retirement_notice(Origin::signed(3)));
+		assert_ok!(Alliance::give_retirement_notice(Origin::signed(3)));
 		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
 		assert_eq!(Alliance::members(MemberRole::Retiring), vec![3]);
 		System::assert_last_event(mock::Event::Alliance(
@@ -409,7 +412,7 @@ fn retirement_notice_work() {
 		));
 
 		assert_noop!(
-			Alliance::retirement_notice(Origin::signed(3)),
+			Alliance::give_retirement_notice(Origin::signed(3)),
 			Error::<Test, ()>::AlreadyRetiring
 		);
 	});
@@ -429,7 +432,7 @@ fn retire_works() {
 		);
 
 		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
-		assert_ok!(Alliance::retirement_notice(Origin::signed(3)));
+		assert_ok!(Alliance::give_retirement_notice(Origin::signed(3)));
 		assert_noop!(
 			Alliance::retire(Origin::signed(3)),
 			Error::<Test, ()>::RetirementPeriodNotPassed

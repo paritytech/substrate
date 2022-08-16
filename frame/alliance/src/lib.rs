@@ -60,8 +60,8 @@
 //!
 //! #### For Members (All)
 //!
-//! - `retirement_notice` - Give a retirement notice and start a retirement period required to pass
-//!   in order to retire.
+//! - `give_retirement_notice` - Give a retirement notice and start a retirement period required to
+//!   pass in order to retire.
 //! - `retire` - Retire from the Alliance and release the caller's deposit.
 //!
 //! #### For Members (Founders/Fellows)
@@ -802,8 +802,8 @@ pub mod pallet {
 
 		/// As a member, give a retirement notice and start a retirement period required to pass in
 		/// order to retire.
-		#[pallet::weight(T::WeightInfo::retirement_notice())]
-		pub fn retirement_notice(origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::give_retirement_notice())]
+		pub fn give_retirement_notice(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
 			ensure!(!role.eq(&MemberRole::Retiring), Error::<T, I>::AlreadyRetiring);
