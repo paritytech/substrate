@@ -723,8 +723,7 @@ mod tests {
 
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
-			#[allow(clippy::redundant_closure)]
-			Box::new(move || time::Instant::now()),
+			Box::new(time::Instant::now),
 		);
 
 		let deadline = time::Duration::from_secs(9);
@@ -793,8 +792,7 @@ mod tests {
 		                         expected_pool_transactions| {
 			let proposer = proposer_factory.init_with_now(
 				&client.header(&BlockId::number(number)).unwrap().unwrap(),
-				#[allow(clippy::redundant_closure)]
-				Box::new(move || time::Instant::now()),
+				Box::new(time::Instant::now),
 			);
 
 			// when

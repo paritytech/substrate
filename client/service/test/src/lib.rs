@@ -452,8 +452,7 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 	let mut network = TestNet::new(
 		&temp,
 		spec,
-		#[allow(clippy::redundant_closure)]
-		(0..NUM_FULL_NODES).map(|_| |cfg| full_builder(cfg)),
+		(0..NUM_FULL_NODES).map(|_| &full_builder),
 		iter::empty::<(String, Fb)>(),
 		30500,
 	);
