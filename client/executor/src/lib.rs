@@ -82,7 +82,6 @@ mod tests {
 			8,
 			None,
 			2,
-			false,
 		);
 		let res = executor
 			.uncached_call(
