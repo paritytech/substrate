@@ -119,9 +119,7 @@ impl FrozenBalance<u32, u64, u64> for TestFreezer {
 	}
 
 	fn died(asset: u32, who: &u64) {
-		let mut temp = HOOKS::get();
-		temp.push(Hook::Died(asset, *who));
-		HOOKS::set(temp);
+		HOOKS::mutate(|v| v.push(Hook::Died(asset, *who)));
 
 		// Sanity check: dead accounts have no balance.
 		assert!(Assets::balance(asset, *who).is_zero());
@@ -129,15 +127,15 @@ impl FrozenBalance<u32, u64, u64> for TestFreezer {
 }
 
 pub(crate) fn set_frozen_balance(asset: u32, who: u64, amount: u64) {
-	let mut temp = FROZEN::get();
-	temp.insert((asset, who), amount);
-	FROZEN::set(temp)
+	FROZEN::mutate(|v| {
+		v.insert((asset, who), amount);
+	});
 }
 
 pub(crate) fn clear_frozen_balance(asset: u32, who: u64) {
-	let mut temp = FROZEN::get();
-	temp.remove(&(asset, who));
-	FROZEN::set(temp);
+	FROZEN::mutate(|v| {
+		v.remove(&(asset, who));
+	});
 }
 
 pub(crate) fn hooks() -> Vec<Hook> {
