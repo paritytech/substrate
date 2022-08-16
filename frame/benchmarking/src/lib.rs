@@ -547,7 +547,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
-		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
+		$name:ident { $( $code:tt )* }: _ $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
@@ -557,7 +557,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
-			$name { $( $code )* }: _ ( $origin $( , $arg )* )
+			$name { $( $code )* }: _ $(<$origin_type>)? ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
 		}
@@ -570,7 +570,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
-		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$name:ident { $( $code:tt )* }: $dispatch:ident $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
@@ -580,7 +580,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
-			$name { $( $code )* }: $dispatch ( $origin $( , $arg )* )
+			$name { $( $code )* }: $dispatch $(<$origin_type>)? ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
 		}
@@ -593,7 +593,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
-		$name:ident { $( $code:tt )* }: $eval:block
+		$name:ident { $( $code:tt )* }: $(<$origin_type:ty>)? $eval:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
@@ -603,7 +603,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
-			$name { $( $code )* }: $eval
+			$name { $( $code )* }: $(<$origin_type>)? $eval
 			verify { }
 			$( $rest )*
 		);
@@ -617,7 +617,7 @@ macro_rules! to_origin {
 		$origin.into()
 	};
 	($origin:expr, $origin_type:ty) => {
-		<T::Origin as From<$origin_type>>::from($origin)
+		<<T as frame_system::Config>::Origin as From<$origin_type>>::from($origin)
 	};
 }
 
