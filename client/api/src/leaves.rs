@@ -119,22 +119,34 @@ where
 	}
 
 	/// Update the leaf list on removal.
+	///
+	/// Note that the leaves set structure doesn't have the information to decide if the
+	/// leaf we're removing is the last children of the parent. Follows that this method requires
+	/// the caller to check this condition and optionally pass the `parent_hash` if `hash` is
+	/// its last child.
+	///
 	/// Returns `None` if no modifications are applied.
-	pub fn remove(&mut self, hash: H, number: N, parent_hash: H) -> Option<RemoveOutcome<H, N>> {
+	pub fn remove(
+		&mut self,
+		hash: H,
+		number: N,
+		parent_hash: Option<H>,
+	) -> Option<RemoveOutcome<H, N>> {
 		let number = Reverse(number);
 
 		if !self.remove_leaf(&number, &hash) {
 			return None
 		}
 
-		let inserted = if self.storage.get(&number).is_none() && number.0 != N::zero() {
-			// All leaves were removed, insert parent as a leaf
-			let parent_number = Reverse(number.0.clone() - N::one());
-			self.insert_leaf(parent_number, parent_hash.clone());
-			Some(parent_hash)
-		} else {
-			None
-		};
+		let inserted = parent_hash.and_then(|parent_hash| {
+			if number.0 != N::zero() {
+				let parent_number = Reverse(number.0.clone() - N::one());
+				self.insert_leaf(parent_number, parent_hash.clone());
+				Some(parent_hash)
+			} else {
+				None
+			}
+		});
 
 		Some(RemoveOutcome { inserted, removed: LeafSetItem { hash, number } })
 	}

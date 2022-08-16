@@ -2226,7 +2226,33 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			apply_state_commit(&mut transaction, commit);
 		}
 		transaction.remove(columns::KEY_LOOKUP, hash.as_ref());
-		let remove_outcome = leaves.remove(*hash, hdr.number, hdr.parent);
+
+		let children: Vec<_> = self
+			.blockchain()
+			.children(hdr.parent)?
+			.into_iter()
+			.filter(|child_hash| child_hash != hash)
+			.collect();
+		let parent_leaf = if children.is_empty() {
+			children::remove_children(
+				&mut transaction,
+				columns::META,
+				meta_keys::CHILDREN_PREFIX,
+				hdr.parent,
+			);
+			Some(hdr.parent)
+		} else {
+			children::write_children(
+				&mut transaction,
+				columns::META,
+				meta_keys::CHILDREN_PREFIX,
+				hdr.parent,
+				children,
+			);
+			None
+		};
+
+		let remove_outcome = leaves.remove(*hash, hdr.number, parent_leaf);
 		leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 		if let Err(e) = self.storage.db.commit(transaction) {
 			if let Some(outcome) = remove_outcome {
@@ -3381,7 +3407,21 @@ pub(crate) mod tests {
 			prev_hash = hash;
 		}
 
-		// insert a fork at block 2, which becomes best block
+		for i in 0..2 {
+			let hash = insert_block(
+				&backend,
+				2,
+				prev_hash,
+				None,
+				sp_core::H256::random(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+		}
+
+		// insert a fork at block 1, which becomes best block
 		let best_hash = insert_block(
 			&backend,
 			1,
@@ -3392,11 +3432,36 @@ pub(crate) mod tests {
 			None,
 		)
 		.unwrap();
+
+		assert_eq!(backend.blockchain().info().best_hash, best_hash);
 		assert!(backend.remove_leaf_block(&best_hash).is_err());
-		assert!(backend.have_state_at(&prev_hash, 1));
-		backend.remove_leaf_block(&prev_hash).unwrap();
-		assert_eq!(None, backend.blockchain().header(BlockId::hash(prev_hash.clone())).unwrap());
-		assert!(!backend.have_state_at(&prev_hash, 1));
+
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![blocks[2], blocks[3], best_hash]);
+		assert_eq!(backend.blockchain().children(blocks[1]).unwrap(), vec![blocks[2], blocks[3]]);
+
+		assert!(backend.have_state_at(&blocks[3], 2));
+		assert!(backend.blockchain().header(BlockId::hash(blocks[3])).unwrap().is_some());
+		backend.remove_leaf_block(&blocks[3]).unwrap();
+		assert!(!backend.have_state_at(&blocks[3], 2));
+		assert!(backend.blockchain().header(BlockId::hash(blocks[3])).unwrap().is_none());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![blocks[2], best_hash]);
+		assert_eq!(backend.blockchain().children(blocks[1]).unwrap(), vec![blocks[2]]);
+
+		assert!(backend.have_state_at(&blocks[2], 2));
+		assert!(backend.blockchain().header(BlockId::hash(blocks[2])).unwrap().is_some());
+		backend.remove_leaf_block(&blocks[2]).unwrap();
+		assert!(!backend.have_state_at(&blocks[2], 2));
+		assert!(backend.blockchain().header(BlockId::hash(blocks[2])).unwrap().is_none());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![best_hash, blocks[1]]);
+		assert_eq!(backend.blockchain().children(blocks[1]).unwrap(), vec![]);
+
+		assert!(backend.have_state_at(&blocks[1], 1));
+		assert!(backend.blockchain().header(BlockId::hash(blocks[1])).unwrap().is_some());
+		backend.remove_leaf_block(&blocks[1]).unwrap();
+		assert!(!backend.have_state_at(&blocks[1], 1));
+		assert!(backend.blockchain().header(BlockId::hash(blocks[1])).unwrap().is_none());
+		assert_eq!(backend.blockchain().leaves().unwrap(), vec![best_hash]);
+		assert_eq!(backend.blockchain().children(blocks[0]).unwrap(), vec![best_hash]);
 	}
 
 	#[test]
