@@ -520,7 +520,7 @@ mod tests {
 		// Register the remote peer.
 		event_sender
 			.start_send(Event::NotificationStreamOpened {
-				remote: remote_peer.clone(),
+				remote: remote_peer,
 				protocol: protocol.clone(),
 				negotiated_fallback: None,
 				role: ObservedRole::Authority,
@@ -532,7 +532,7 @@ mod tests {
 			.iter()
 			.cloned()
 			.map(|m| Event::NotificationsReceived {
-				remote: remote_peer.clone(),
+				remote: remote_peer,
 				messages: vec![(protocol.clone(), m.into())],
 			})
 			.collect::<Vec<_>>();
@@ -562,10 +562,7 @@ mod tests {
 			for subscriber in subscribers.iter_mut() {
 				assert_eq!(
 					subscriber.next(),
-					Some(TopicNotification {
-						message: message.clone(),
-						sender: Some(remote_peer.clone()),
-					}),
+					Some(TopicNotification { message: message.clone(), sender: Some(remote_peer) }),
 				);
 			}
 		}
@@ -661,7 +658,7 @@ mod tests {
 			// Create channels.
 			let (txs, mut rxs) = channels
 				.iter()
-				.map(|ChannelLengthAndTopic { length, topic }| (topic.clone(), channel(*length)))
+				.map(|ChannelLengthAndTopic { length, topic }| (*topic, channel(*length)))
 				.fold((vec![], vec![]), |mut acc, (topic, (tx, rx))| {
 					acc.0.push((topic, tx));
 					acc.1.push((topic, rx));
@@ -683,7 +680,7 @@ mod tests {
 			// Register the remote peer.
 			event_sender
 				.start_send(Event::NotificationStreamOpened {
-					remote: remote_peer.clone(),
+					remote: remote_peer,
 					protocol: protocol.clone(),
 					negotiated_fallback: None,
 					role: ObservedRole::Authority,
@@ -710,10 +707,7 @@ mod tests {
 					.collect();
 
 				event_sender
-					.start_send(Event::NotificationsReceived {
-						remote: remote_peer.clone(),
-						messages,
-					})
+					.start_send(Event::NotificationsReceived { remote: remote_peer, messages })
 					.expect("Event stream is unbounded; qed.");
 			}
 

@@ -318,7 +318,9 @@ benchmarks! {
 		for i in 0 .. p {
 			add_proposal::<T>(i)?;
 		}
-	}: _(RawOrigin::Root, 0)
+
+		let cancel_origin = T::CancelProposalOrigin::successful_origin();
+	}: _<T::Origin>(cancel_origin, 0)
 
 	cancel_referendum {
 		let referendum_index = add_referendum::<T>(0)?;
