@@ -133,11 +133,14 @@ impl DiscoveryConfig {
 		self
 	}
 
+	/// Set the directory where to persist the peers.
+	/// If set to None — the peers won't be persisted.
 	pub fn with_persist_addresses_dir(
 		&mut self,
-		persist_addresses_dir: impl AsRef<Path>,
+		persist_addresses_dir: Option<impl AsRef<Path>>,
 	) -> &mut Self {
-		self.persist_addresses_dir = Some(persist_addresses_dir.as_ref().to_owned());
+		self.persist_addresses_dir =
+			persist_addresses_dir.as_ref().map(AsRef::as_ref).map(ToOwned::to_owned);
 		self
 	}
 
