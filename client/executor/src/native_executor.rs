@@ -147,7 +147,6 @@ where
 		max_runtime_instances: usize,
 		cache_path: Option<PathBuf>,
 		runtime_cache_size: u8,
-		allow_missing_host_functions: bool,
 	) -> Self {
 		WasmExecutor {
 			method,
@@ -158,9 +157,13 @@ where
 				runtime_cache_size,
 			)),
 			cache_path,
-			allow_missing_host_functions,
+			allow_missing_host_functions: false,
 			phantom: PhantomData,
 		}
+	}
+
+	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
+		self.allow_missing_host_functions = allow_missing_host_functions
 	}
 
 	/// Execute the given closure `f` with the latest runtime (based on `runtime_code`).
@@ -426,7 +429,6 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 		runtime_cache_size: u8,
-		allow_missing_host_functions: bool,
 	) -> Self {
 		let wasm = WasmExecutor::new(
 			fallback_method,
@@ -434,7 +436,6 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 			max_runtime_instances,
 			None,
 			runtime_cache_size,
-			allow_missing_host_functions,
 		);
 
 		NativeElseWasmExecutor {
@@ -442,6 +443,10 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 			native_version: D::native_version(),
 			wasm,
 		}
+	}
+
+	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
+		self.wasm.allow_missing_host_functions = allow_missing_host_functions
 	}
 }
 
@@ -736,7 +741,6 @@ mod tests {
 			None,
 			8,
 			2,
-			false,
 		);
 
 		fn extract_host_functions<H>(
