@@ -1,4 +1,5 @@
 use assert_cmd::cargo::cargo_bin;
+use futures::future;
 use sc_network::{
 	config::identity::{ed25519, Keypair},
 	PeerId,
@@ -11,20 +12,31 @@ pub mod common;
 #[tokio::test]
 #[cfg(unix)]
 async fn purge_chain_works() {
+	// Start a series of nodes.
 	const NODES_COUNT: usize = 10;
+	// The first of them will be validators.
+	const VALIDATORS: &[&str] = &["--alice", "--bob", "--charlie"];
 
-	const IDX_GROUP_FIRST: usize = 0;
-	const IDX_GROUP_LAST: usize = NODES_COUNT - 3;
+	// The "positive case" node: the peers are persisted.
 	const IDX_POS: usize = NODES_COUNT - 1;
+	// The "negative case" node: the peers are not persisted.
 	const IDX_NEG: usize = NODES_COUNT - 2;
 
+	// The bootnode used for everyone except that very boot-node, and the postiive- and
+	// negative-case nodes.
+	const IDX_PRIMARY_BOOT_NODE: usize = 0; // Alice
+
+	// The bootnode used for the postivie- and negative-case nodes.
+	const IDX_SECONDARY_BOOT_NODE: usize = 2; // Charlie
+
+	// Define the nodes' start arguments.
 	let mut node_defs = (0..NODES_COUNT)
 		.map(|idx| {
 			let node_key = ed25519::SecretKey::generate();
 			let node_identity = Keypair::Ed25519(ed25519::Keypair::from(node_key.to_owned()))
 				.public()
 				.to_peer_id();
-			NodeDef {
+			Node {
 				var_run_dir: tempdir().expect("could not create a temp dir").into_path(),
 				node_key,
 				node_identity,
@@ -39,52 +51,90 @@ async fn purge_chain_works() {
 		})
 		.collect::<Vec<_>>();
 
-	let bootnode = node_defs[0].boot_addr();
-	node_defs.iter_mut().skip(1).for_each(|def| {
-		def.bootnodes = vec![bootnode.to_owned()];
-	});
-
-	node_defs[0].validator_name = Some("--alice");
-	node_defs[1].validator_name = Some("--bob");
-	node_defs[2].validator_name = Some("--charlie");
-
-	// node_defs[IDX_POS].bootnodes = vec![node_defs[IDX_ALT_BOOT].boot_addr()];
-	// node_defs[IDX_NEG].bootnodes = vec![node_defs[IDX_ALT_BOOT].boot_addr()];
+	// The negative-case node does not persist peers.
 	node_defs[IDX_NEG].disable_peers_persistence = true;
 
-	for idx in IDX_GROUP_FIRST..=IDX_GROUP_LAST {
-		node_defs[idx].start();
+	let bootnodes_primary = vec![node_defs[IDX_PRIMARY_BOOT_NODE].boot_addr()];
+	let bootnodes_secondary = vec![node_defs[IDX_SECONDARY_BOOT_NODE].boot_addr()];
+
+	// Set the bootnodes:
+	// - the primary bootnode does not need a bootnode;
+	// - the negative- and positive-case nodes use the secondary bootnode;
+	// - the rest of the nodes use the primary bootnode.
+	node_defs.iter_mut().enumerate().for_each(|(idx, node)| {
+		node.bootnodes = match idx {
+			IDX_PRIMARY_BOOT_NODE => vec![],
+			IDX_NEG | IDX_POS => bootnodes_secondary.to_owned(),
+			_ => bootnodes_primary.to_owned(),
+		}
+	});
+
+	// Set the validator args
+	for (idx, validator_key_arg) in VALIDATORS.into_iter().copied().enumerate() {
+		node_defs[idx].validator_name = Some(validator_key_arg);
 	}
 
-	tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-	assert!(wait_n_blocks_if_spawned(3, 30, &node_defs[..]).await);
+	// Start all the nodes except the negative- and positive-case nodes.
+	node_defs.iter_mut().enumerate().for_each(|(idx, node)| match idx {
+		IDX_POS | IDX_NEG => (),
+		_ => node.start(),
+	});
 
+	// Wait till the network initializes.
+	tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+	// Ensure that all the started nodes keep finalizing blocks.
+	assert!(wait_n_blocks_if_running(3, 30, &node_defs[..]).await);
+
+	// Start the positive- and negative-case nodes.
 	node_defs[IDX_POS].start();
 	node_defs[IDX_NEG].start();
 
+	// Give these nodes some time to initialize.
 	tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-	assert!(wait_n_blocks_if_spawned(3, 30, &node_defs[..]).await);
+	// Ensure that all the started nodes keep finalizing blocks.
+	assert!(wait_n_blocks_if_running(3, 30, &node_defs[..]).await);
 
+	// Terminate the secondary bootnode.
+	node_defs[IDX_SECONDARY_BOOT_NODE].stop();
+
+	// Stop the positive- and negative-case nodes.
 	node_defs[IDX_POS].stop();
 	node_defs[IDX_NEG].stop();
 
-	node_defs[IDX_POS].bootnodes = vec![];
-	node_defs[IDX_NEG].bootnodes = vec![];
+	// Change the positive- and negative-case nodes' ports, so that the remaining nodes won't drag
+	// them back into the network.
 	node_defs[IDX_POS].p2p_port += 3;
 	node_defs[IDX_NEG].p2p_port += 3;
+	// Start the positive- and negative-case nodes.
 	node_defs[IDX_POS].start();
 	node_defs[IDX_NEG].start();
+	// Give these nodes some time to initialize.
 	tokio::time::sleep(std::time::Duration::from_secs(30)).await;
 
-	assert!(wait_n_blocks_if_spawned(3, 30, &node_defs[IDX_GROUP_FIRST..=IDX_GROUP_LAST],).await);
-	assert!(wait_n_blocks_if_spawned(3, 30, std::iter::once(&node_defs[IDX_POS])).await);
-	assert!(!wait_n_blocks_if_spawned(3, 30, std::iter::once(&node_defs[IDX_NEG])).await);
+	// Expected:
+	// - positive-case node successfully catches up with the network;
+	// - negative-case node does not get updates on the finalized nodes;
+	// - the rest of the started nodes keep working.
+	let pos_queried = wait_n_blocks_if_running(3, 30, std::iter::once(&node_defs[IDX_POS]));
+	let neg_queried = wait_n_blocks_if_running(3, 30, std::iter::once(&node_defs[IDX_NEG]));
+	let the_rest_queried = wait_n_blocks_if_running(
+		3,
+		30,
+		node_defs.iter().enumerate().filter_map(|(idx, node)| match idx {
+			IDX_POS | IDX_NEG => None,
+			_ => Some(node),
+		}),
+	);
+	assert_eq!(
+		future::join(future::join(pos_queried, neg_queried), the_rest_queried).await,
+		((true, false), true)
+	);
 }
 
-async fn wait_n_blocks_if_spawned<'a, 'b>(
+async fn wait_n_blocks_if_running<'a, 'b>(
 	n_blocks: usize,
 	within_secs: u64,
-	node_defs: impl IntoIterator<Item = &'b NodeDef<'a>>,
+	node_defs: impl IntoIterator<Item = &'b Node<'a>>,
 ) -> bool
 where
 	'a: 'b,
@@ -102,13 +152,10 @@ where
 		}
 	});
 
-	futures::future::join_all(nodes_queried)
-		.await
-		.into_iter()
-		.all(std::convert::identity)
+	future::join_all(nodes_queried).await.into_iter().all(std::convert::identity)
 }
 
-struct NodeDef<'a> {
+struct Node<'a> {
 	var_run_dir: PathBuf,
 	node_key: ed25519::SecretKey,
 	node_identity: PeerId,
@@ -121,7 +168,7 @@ struct NodeDef<'a> {
 	running: Option<common::KillChildOnDrop>,
 }
 
-impl NodeDef<'_> {
+impl Node<'_> {
 	pub fn start(&mut self) {
 		assert!(self.running.is_none());
 
