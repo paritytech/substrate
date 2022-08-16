@@ -20,7 +20,10 @@ use crate::{
 	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
 use jsonrpsee::{
-	core::{async_trait, client::{Client, Subscription, SubscriptionClientT}},
+	core::{
+		async_trait,
+		client::{Client, Subscription, SubscriptionClientT},
+	},
 	ws_client::WsClientBuilder,
 };
 use parity_scale_codec::Decode;
@@ -30,9 +33,7 @@ use sc_service::Configuration;
 use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, One, Saturating};
-use std::{
-	collections::VecDeque, fmt::Debug, marker::PhantomData, ops::Sub, str::FromStr
-};
+use std::{collections::VecDeque, fmt::Debug, marker::PhantomData, ops::Sub, str::FromStr};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
@@ -60,28 +61,65 @@ async fn start_subscribing<Header: DeserializeOwned>(url: &str) -> (Client, Subs
 
 	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
 
-	let sub =
-		client.subscribe(SUB, None, UN_SUB).await.unwrap();
+	let sub = client.subscribe(SUB, None, UN_SUB).await.unwrap();
 	(client, sub)
 }
 
 /// Abstraction over RPC calling for headers.
 #[async_trait]
-trait HeaderProvider<Block: BlockT> where Block::Header: HeaderT {
+trait HeaderProvider<Block: BlockT>
+where
+	Block::Header: HeaderT,
+{
+	/// Awaits for the header of the block with hash `hash`.
 	async fn get_header(&self, hash: Block::Hash) -> Block::Header;
 }
 
-struct RpcHeaderProvider<Block: BlockT>{
+struct RpcHeaderProvider<Block: BlockT> {
 	uri: String,
 	_phantom: PhantomData<Block>,
 }
 
 #[async_trait]
 impl<Block: BlockT> HeaderProvider<Block> for RpcHeaderProvider<Block>
-	where Block::Header: DeserializeOwned
+where
+	Block::Header: DeserializeOwned,
 {
 	async fn get_header(&self, hash: Block::Hash) -> Block::Header {
 		rpc_api::get_header::<Block, _>(&self.uri, hash).await.unwrap()
+	}
+}
+
+/// Abstraction over RPC subscription for finalized headers.
+#[async_trait]
+trait HeaderSubscription<Block: BlockT>
+where
+	Block::Header: HeaderT,
+{
+	/// Await for the next finalized header from the subscription.
+	///
+	/// Returns `None` if either the subscription has been closed or there was an error when reading
+	/// an object from the client.
+	async fn next_header(&mut self) -> Option<Block::Header>;
+}
+
+#[async_trait]
+impl<Block: BlockT> HeaderSubscription<Block> for Subscription<Block::Header>
+where
+	Block::Header: DeserializeOwned,
+{
+	async fn next_header(&mut self) -> Option<Block::Header> {
+		match self.next().await {
+			Some(Ok(header)) => Some(header),
+			None => {
+				log::warn!("subscription closed");
+				None
+			},
+			Some(Err(why)) => {
+				log::warn!("subscription returned error: {:?}. Probably decoding has failed.", why);
+				None
+			},
+		}
 	}
 }
 
@@ -89,41 +127,24 @@ impl<Block: BlockT> HeaderProvider<Block> for RpcHeaderProvider<Block>
 ///
 /// Returned headers are guaranteed to be ordered. There are no missing headers (even if some of
 /// them lack justification).
-struct FinalizedHeaders<Block: BlockT, HP: HeaderProvider<Block>> {
-	subscription: Subscription<Block::Header>,
+struct FinalizedHeaders<Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>> {
 	header_provider: HP,
+	subscription: HS,
 	fetched_headers: VecDeque<Block::Header>,
 	last_returned: Option<<Block::Header as HeaderT>::Number>,
 }
 
-impl<Block: BlockT, HP: HeaderProvider<Block>> FinalizedHeaders<Block, HP>
+impl<Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
+	FinalizedHeaders<Block, HP, HS>
 where
-	<Block as BlockT>::Header: DeserializeOwned
+	<Block as BlockT>::Header: DeserializeOwned,
 {
-	pub fn new(subscription: Subscription<Block::Header>, header_provider: HP) -> Self {
+	pub fn new(subscription: HS, header_provider: HP) -> Self {
 		Self {
-			subscription,
 			header_provider,
+			subscription,
 			fetched_headers: VecDeque::new(),
 			last_returned: None,
-		}
-	}
-
-	/// Await for the next finalized header from the subscription.
-	///
-	/// Returns `None` if either the subscription has been closed or there was an error when reading
-	/// an object from the client.
-	async fn next_from_subscription(&mut self) -> Option<Block::Header> {
-		match self.subscription.next().await {
-			Some(Ok(header)) => Some(header),
-			None => {
-				log::warn!("subscription closed");
-				None
-			}
-			Some(Err(why)) => {
-				log::warn!("subscription returned error: {:?}. Probably decoding has failed.", why);
-				None
-			}
 		}
 	}
 
@@ -132,7 +153,7 @@ where
 	///
 	/// All fetched headers are stored in `self.fetched_headers`.
 	async fn fetch(&mut self) {
-		let last_finalized = match self.next_from_subscription().await {
+		let last_finalized = match self.subscription.next_header().await {
 			Some(header) => header,
 			None => return,
 		};
@@ -187,12 +208,13 @@ where
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
-	let header_provider: RpcHeaderProvider<Block> = RpcHeaderProvider {
-		uri: command.uri.clone(),
-		_phantom: PhantomData {}
-	};
-	let mut finalized_headers: FinalizedHeaders<Block, RpcHeaderProvider<Block>> =
-		FinalizedHeaders::new(subscription, header_provider);
+	let header_provider: RpcHeaderProvider<Block> =
+		RpcHeaderProvider { uri: command.uri.clone(), _phantom: PhantomData {} };
+	let mut finalized_headers: FinalizedHeaders<
+		Block,
+		RpcHeaderProvider<Block>,
+		Subscription<Block::Header>,
+	> = FinalizedHeaders::new(subscription, header_provider);
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
