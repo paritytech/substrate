@@ -617,7 +617,7 @@ macro_rules! to_origin {
 		$origin.into()
 	};
 	($origin:expr, $origin_type:ty) => {
-		<T::Origin as From<$origin_type>>::from($origin)
+		<<T as frame_system::Config>::Origin as From<$origin_type>>::from($origin)
 	};
 }
 
