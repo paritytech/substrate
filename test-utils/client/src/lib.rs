@@ -277,7 +277,7 @@ impl<Block: BlockT, D, Backend, G: GenesisInit>
 		Backend: sc_client_api::backend::Backend<Block> + 'static,
 	{
 		let executor = executor.into().unwrap_or_else(|| {
-			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2, false)
+			NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
 		});
 		let executor = LocalCallExecutor::new(
 			self.backend.clone(),

@@ -162,6 +162,7 @@ where
 		}
 	}
 
+	/// Ignore missing function imports if set true.
 	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
 		self.allow_missing_host_functions = allow_missing_host_functions
 	}
@@ -445,6 +446,7 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		}
 	}
 
+	/// Ignore missing function imports if set true.
 	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
 		self.wasm.allow_missing_host_functions = allow_missing_host_functions
 	}

@@ -406,7 +406,6 @@ impl BenchDb {
 				None,
 				8,
 				2,
-				false,
 			),
 			&keyring.generate_genesis(),
 			None,

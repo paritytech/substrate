@@ -294,6 +294,5 @@ pub fn new_native_executor() -> sc_executor::NativeElseWasmExecutor<LocalExecuto
 		None,
 		8,
 		2,
-		false,
 	)
 }
