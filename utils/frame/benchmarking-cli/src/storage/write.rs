@@ -203,14 +203,10 @@ fn measure_write<Block: BlockT>(
 	// Create a TX that will modify the Trie in the DB and
 	// calculate the root hash of the Trie after the modification.
 	let replace = vec![(key.as_ref(), Some(new_v.as_ref()))];
-	let stx;
-	if let Some(info) = child_info {
-		let (_, _, stx1) = trie.child_storage_root(info, replace.iter().cloned(), version);
-		stx = stx1;
-	} else {
-		let (_, stx2) = trie.storage_root(replace.iter().cloned(), version);
-		stx = stx2;
-	}
+	let stx = match child_info {
+		Some(info) => trie.child_storage_root(info, replace.iter().cloned(), version).2,
+		None => trie.storage_root(replace.iter().cloned(), version).1,
+	};
 	// Only the keep the insertions, since we do not want to benchmark pruning.
 	let tx = convert_tx::<Block>(db.clone(), stx.clone(), false, col);
 	db.commit(tx).map_err(|e| format!("Writing to the Database: {}", e))?;
@@ -235,14 +231,10 @@ fn check_new_value<Block: BlockT>(
 	child_info: Option<&ChildInfo>,
 ) -> bool {
 	let new_kv = vec![(key.as_ref(), Some(new_v.as_ref()))];
-	let mut stx;
-	if let Some(info) = child_info {
-		let (_, _, stx1) = trie.child_storage_root(&info, new_kv.iter().cloned(), version);
-		stx = stx1;
-	} else {
-		let (_, stx2) = trie.storage_root(new_kv.iter().cloned(), version);
-		stx = stx2;
-	}
+	let mut stx = match child_info {
+		Some(info) => trie.child_storage_root(info, new_kv.iter().cloned(), version).2,
+		None => trie.storage_root(new_kv.iter().cloned(), version).1,
+	};
 	for (mut k, (_, rc)) in stx.drain().into_iter() {
 		if rc > 0 {
 			db.sanitize_key(&mut k);
