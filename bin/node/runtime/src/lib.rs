@@ -565,7 +565,8 @@ impl pallet_staking::Config for Runtime {
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type VoterList = VoterBagsList;
-	type TargetList = TargetBagsList;
+	// This a placeholder, to be introduced in the next PR as an instance of bags-list
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type OnStakerSlash = NominationPools;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
@@ -719,7 +720,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 
 parameter_types! {
 	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
-	// TODO: revisit to see if we can generate separate thresholds here
+	// This parameter is going to be needed for the operational TargetList implementation
 	pub const BagThresholdsBalance: &'static [u128] = &voter_bags::THRESHOLDS_BALANCES;
 }
 
@@ -731,17 +732,6 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
-	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
-}
-
-type TargetBagsListInstance = pallet_bags_list::Instance2;
-impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
-	type Event = Event;
-	// The bags-list itself will be the source of truth about the approval stakes. This implies that
-	// staking should keep the approval stakes up to date at all times.
-	type ScoreProvider = TargetBagsList;
-	type BagThresholds = BagThresholdsBalance;
-	type Score = Balance;
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 }
 
@@ -1647,7 +1637,6 @@ construct_runtime!(
 		Uniques: pallet_uniques,
 		TransactionStorage: pallet_transaction_storage,
 		VoterBagsList: pallet_bags_list::<Instance1>,
-		TargetBagsList: pallet_bags_list::<Instance2>,
 		StateTrieMigration: pallet_state_trie_migration,
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,

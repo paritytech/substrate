@@ -1314,7 +1314,7 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 /// a look at [`pallet-bags-list].
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
-	type Score = VoteWeight;
+	type Score = ExtendedBalance;
 	type Error = ();
 
 	/// Returns iterator over voter list, which can have `take` called on it.

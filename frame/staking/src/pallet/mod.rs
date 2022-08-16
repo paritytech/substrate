@@ -192,6 +192,8 @@ pub mod pallet {
 		/// Invariant: what comes out of this list will always be a nominator.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
+		/// WIP: This is a noop as of now, the actual business logic that's described below is going
+		/// to be introduced in a follow-up PR.
 		/// Something that provides a best-effort sorted list of targets aka electable validators,
 		/// used for NPoS election.
 		///
@@ -209,7 +211,6 @@ pub mod pallet {
 		/// validators, they can chill at any point, and their approval stakes will still be
 		/// recorded. This implies that what comes out of iterating this list MIGHT NOT BE AN ACTIVE
 		/// VALIDATOR.
-		/// WIP
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
