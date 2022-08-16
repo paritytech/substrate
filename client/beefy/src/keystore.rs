@@ -23,7 +23,7 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use log::warn;
 
 use beefy_primitives::{
-	crypto::{Public, Signature},
+	crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
     bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
 	KEY_TYPE,
 };
@@ -33,62 +33,40 @@ use crate::error;
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate)  trait BeefyKeystore {
+pub(crate)  trait BeefyKeystore : From<Option<SyncCryptoStorePtr>> {
     type Signature;
     type Public;
-        pub fn authority_id(&self, keys: &[Public]) -> Option<Public>;
+        fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public>;
 
-	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<(Self::Signature),  error::Error>;
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<(Self::Signature),  error::Error>;
 
-	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error>;
+	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error>;
 
-	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool;
+	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool;
 	
 }
 
-
-//original pub(crate) struct BeefyKeystore(Option<SyncCryptoStorePtr>);
 
 struct BeefyECDSAKeystore (Option<SyncCryptoStorePtr>);
 
 struct BeefyBLSKeystore(Option<SyncCryptoStorePtr>);
-//impl BeefyKeystore for ECDSAKeystore..
 
-struct BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>)
-impl BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>) {
-    fn both(&self) -> (BeefyECDSAKeystore, BeefyBLSKeystore)
-        ( BeefyECDSAKeystore(self.0.clone()), BeefyBLSKeystore(self.0.clone()) )
-}
-    
+struct BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>);
 
-(ECDSASignature,BLSSignature);
-impl BeefyKeystore for BLSnECDSAKeystore {
-        type Signature = (ECDSASignature,BLSSignature);
-	pub fn authority_id(&self, keys: &[Public]) -> Option<Public>;
-
-	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<(Signature,AggregatableSignature),  error::Error>;
-
-	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error>;
-
-    pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
-    }
-	
-}
-    
-trait SimpleBeefyKeystore<AggregatableSignature> : BeefyKeystore<AggregatableSignature>;
-
-impl<AggregatableSignature> BeefyKeystore<AggregatableSignature> for SimpleBeefyKeystore<AggregatableSignature> {
+impl BeefyKeystore for BeefyECDSAKeystore {
+	type Public = ECDSAPublic;
+	type Signature = ECDSASignature;
 	/// Check if the keystore contains a private key for one of the public keys
 	/// contained in `keys`. A public key with a matching private key is known
 	/// as a local authority id.
 	///
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
-	pub fn authority_id(&self, keys: &[Public]) -> Option<Public> {
+	fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public> {
 		let store = self.0.clone()?;
 
 		// we do check for multiple private keys as a key store sanity check.
-		let public: Vec<Public> = keys
+		let public: Vec<Self::Public> = keys
 			.iter()
 			.filter(|k| SyncCryptoStore::has_keys(&*store, &[(k.to_raw_vec(), KEY_TYPE)]))
 			.cloned()
@@ -105,7 +83,7 @@ impl<AggregatableSignature> BeefyKeystore<AggregatableSignature> for SimpleBeefy
 	/// Note that `message` usually will be pre-hashed before being signed.
 	///
 	/// Return the message signature or an error in case of failure.
-	pub fn sign(&self, public: &Public, message: &[u8]) -> Result<(Signature,AggregatableSignature),  error::Error> {
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<Self::Signature,  error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let msg = keccak_256(message);
@@ -125,12 +103,12 @@ impl<AggregatableSignature> BeefyKeystore<AggregatableSignature> for SimpleBeefy
 
 	/// Returns a vector of [`beefy_primitives::crypto::Public`] keys which are currently supported
 	/// (i.e. found in the keystore).
-	pub fn public_keys(&self) -> Result<Vec<Public>, error::Error> {
+	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
-		let pk: Vec<Public> = SyncCryptoStore::ecdsa_public_keys(&*store, KEY_TYPE)
+		let pk: Vec<Self::Public> = SyncCryptoStore::ecdsa_public_keys(&*store, KEY_TYPE)
 			.drain(..)
-			.map(Public::from)
+			.map(Self::Public::from)
 			.collect();
 
 		Ok(pk)
@@ -139,7 +117,7 @@ impl<AggregatableSignature> BeefyKeystore<AggregatableSignature> for SimpleBeefy
 	/// Use the `public` key to verify that `sig` is a valid signature for `message`.
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
-	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
+	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool {
 		let msg = keccak_256(message);
 		let sig = sig.as_ref();
 		let public = public.as_ref();
@@ -148,28 +126,123 @@ impl<AggregatableSignature> BeefyKeystore<AggregatableSignature> for SimpleBeefy
 	}
 }
 
-impl From<Option<SyncCryptoStorePtr>> for BeefyKeystore {
-	fn from(store: Option<SyncCryptoStorePtr>) -> BeefyKeystore {
-		BeefyKeystore(store)
+//Implement BLSKeyStore
+impl BeefyKeystore for  BeefyBLSKeystore {
+	type Public = BLSPublic;
+	type Signature = BLSSignature;
+	/// Check if the keystore contains a private key for one of the public keys
+	/// contained in `keys`. A public key with a matching private key is known
+	/// as a local authority id.
+	///
+	/// Return the public key for which we also do have a private key. If no
+	/// matching private key is found, `None` will be returned.
+	fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public> {
+		let store = self.0.clone()?;
+
+		// we do check for multiple private keys as a key store sanity check.
+		let public: Vec<Self::Public> = keys
+			.iter()
+			.filter(|k| SyncCryptoStore::has_keys(&*store, &[(k.to_raw_vec(), KEY_TYPE)]))
+			.cloned()
+			.collect();
+
+		if public.len() > 1 {
+			warn!(target: "beefy", "🥩 Multiple private keys found for: {:?} ({})", public, public.len());
+		}
+
+		public.get(0).cloned()
 	}
+	
+	/// Sign `message` with the `public` key.
+	///
+	/// Note that `message` usually will be pre-hashed before being signed.
+	///
+	/// Return the message signature or an error in case of failure.
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<Self::Signature,  error::Error> {
+		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
+
+		let msg = keccak_256(message);
+		let public = public.as_ref();
+
+		let sig = SyncCryptoStore::bls_sign_prehashed(&*store, KEY_TYPE, public, &msg)
+			.map_err(|e| error::Error::Keystore(e.to_string()))?
+			.ok_or_else(|| error::Error::Signature("ecdsa_sign_prehashed() failed".to_string()))?;
+
+		// check that `sig` has the expected result type
+		let sig = sig.clone().try_into().map_err(|_| {
+			error::Error::Signature(format!("invalid signature {:?} for key {:?}", sig, public))
+		})?;
+
+		Ok(sig)
+	}
+
+	/// Returns a vector of [`beefy_primitives::crypto::Public`] keys which are currently supported
+	/// (i.e. found in the keystore).
+	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
+		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
+
+		let pk: Vec<Self::Public> = SyncCryptoStore::bls_public_keys(&*store, KEY_TYPE)
+			.drain(..)
+			.map(Self::Public::from)
+			.collect();
+
+		Ok(pk)
+	}
+
+	/// Use the `public` key to verify that `sig` is a valid signature for `message`.
+	///
+	/// Return `true` if the signature is authentic, `false` otherwise.
+	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool {
+		let msg = keccak_256(message);
+		let sig = sig.as_ref();
+		let public = public.as_ref();
+
+		sp_core::bls::Pair::verify_prehashed(sig, &msg, public)
+	}
+
+}
+impl BeefyBLSnECDSAKeystore {
+    fn both(&self) -> (BeefyECDSAKeystore, BeefyBLSKeystore) {
+            ( BeefyECDSAKeystore(self.0.clone()), BeefyBLSKeystore(self.0.clone()))
+    }
 }
 
-trait AggregatableBeefyKeyStore<TAggregatableSignature> : BeefyKeystore<AggregatableSignature>;
+impl BeefyKeystore for BeefyBLSnECDSAKeystore {
+        type Signature = (ECDSASignature,BLSSignature);
+	type Public = (ECDSAPublic,BLSPublic);
+	fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public> {
+		(self.both().0.authority_id, self.both().0.authority_id())
+		
+	}
 
-impl<AggretableSignature> BeefyKeystore for AggregatableBeefyKeyStore<AggregatableSignature> {
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<Self::Signature,  error::Error> {
+		let bls_n_ecdsa = self.both();
+		(bls_n_ecdsa.0.sign(bls_n_ecdsa.0.0,message),
+		 bls_n_ecdsa.1.sign(bls_n_ecdsa.1.0,message))
+	}
+								      
+	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
+				let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
+
+		let bls_n_ecdsa = self.both();
+		let pk: Vec<Self::Public> = bls_n_ecdsa.0.public_keys().iter().zip(bls_n_ecdsa.1.public_keys().iter()).collect();
+
+		Ok(pk)
+
+	}
+
+	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool {
+		(public.0.verify(public.0.0, sig.0, message),
+		 public.1.verify(public.1.0, sig.1, message))
+	}
 	
 }
-
-impl<AggretableSignature> BeefyKeystore for AggregatableBeefyKeyStore<AggregatableSignature> {
-	//TODO: We need to verify an aggregated_signature which needs all public keys at once and a bitfield.
-	//TODO: We need an aggregate function as well and that seems to be the keystore duty.
-
+    
+impl From<Option<SyncCryptoStorePtr>> for BeefyECDSAKeystore {
+	fn from(store: Option<SyncCryptoStorePtr>) -> BeefyECDSAKeystore {
+		BeefyECDSAKeystore(store)
+	}
 }
-pub(crate) NonaggregatableBeefyKeyStore(Option<SyncCryptoStorePtr>);
-
-impl BeefyKeystore for NonaggregatableBeefyKeyStore;
-
-pub(crate) BLSBeefyKeyStor(Option<SyncCryptoStorePtr>);
 
 #[cfg(test)]
 pub mod tests {
