@@ -349,10 +349,6 @@ impl DiscoveryBehaviour {
 		supported_protocols: impl Iterator<Item = impl AsRef<[u8]>>,
 		addr: Multiaddr,
 	) {
-		if let Some(persist_peer_addrs) = self.persist_peer_addrs.as_mut() {
-			persist_peer_addrs.report_peer_addr(peer_id, &addr);
-		}
-
 		if !self.can_add_to_dht(&addr) {
 			trace!(target: "sub-libp2p", "Ignoring self-reported non-global address {} from {}.", addr, peer_id);
 			return
@@ -368,6 +364,11 @@ impl DiscoveryBehaviour {
 						addr, peer_id, String::from_utf8_lossy(kademlia.protocol_name()),
 					);
 					kademlia.add_address(peer_id, addr.clone());
+
+					if let Some(persist_peer_addrs) = self.persist_peer_addrs.as_mut() {
+						persist_peer_addrs.report_peer_addr(peer_id, &protocol, &addr);
+					}
+
 					added = true;
 				}
 			}
@@ -578,7 +579,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		let last_resort_resolutions = self
 			.persist_peer_addrs
 			.as_mut()
-			.map(|persist_peer_addrs| persist_peer_addrs.peer_addrs(peer_id))
+			.map(|persist_peer_addrs| {
+				persist_peer_addrs
+					.peer_addrs(peer_id, self.kademlias.values().map(|k| k.protocol_name()))
+			})
 			.into_iter()
 			.flatten();
 

@@ -1,5 +1,5 @@
 use std::{
-	collections::HashSet,
+	collections::{HashMap, HashSet},
 	fmt,
 	future::Future,
 	io,
@@ -19,6 +19,7 @@ use crate::{Multiaddr, PeerId};
 
 type BoxedFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 type Never = std::convert::Infallible;
+type ProtocolType = String; // Vec<u8>;
 
 const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 const PEER_ADDRS_CACHE_SIZE: usize = 100;
@@ -26,7 +27,7 @@ const PEER_ADDRS_CACHE_SIZE: usize = 100;
 pub struct PersistPeerAddrs {
 	paths: Arc<Paths>,
 	flushed_at: Instant,
-	entries: LruCache<PeerId, HashSet<Multiaddr>>,
+	protocols: HashMap<ProtocolType, LruCache<PeerId, HashSet<Multiaddr>>>,
 	busy: Option<BoxedFuture<Result<(), io::Error>>>,
 }
 
@@ -34,37 +35,72 @@ impl PersistPeerAddrs {
 	pub fn load(dir: impl AsRef<Path>) -> Self {
 		let paths = Paths::new(dir, "peer-addrs");
 
-		let entries = match persist_peer_addrs::load(&paths.path) {
+		let protocols = match persist_peer_addrs::load(&paths.path) {
 			Ok(restored) => restored,
 			Err(reason) => {
 				log::warn!("Failed to load peer addresses: {:?}", reason);
-				vec![]
+				Default::default()
 			},
 		};
 
-		let entries = entries.into_iter().rev().fold(
-			LruCache::new(PEER_ADDRS_CACHE_SIZE),
-			|mut acc, persist_peer_addrs::PeerEntry { peer_id, addrs }| {
-				if let Ok(peer_id) = peer_id.parse() {
-					acc.push(peer_id, addrs.into_iter().collect::<HashSet<_>>());
-				}
-				acc
-			},
-		);
+		let protocols = protocols
+			.into_iter()
+			.map(|(protocol, entries)| {
+				let cache = entries.into_iter().rev().fold(
+					LruCache::new(PEER_ADDRS_CACHE_SIZE),
+					|mut acc, persist_peer_addrs::PeerEntry { peer_id, addrs }| {
+						if let Ok(peer_id) = peer_id.parse() {
+							acc.push(peer_id, addrs.into_iter().collect::<HashSet<_>>());
+						}
+						acc
+					},
+				);
+				(protocol, cache)
+			})
+			.collect();
 
-		Self { paths: Arc::new(paths), flushed_at: Instant::now(), entries, busy: None }
+		Self { paths: Arc::new(paths), flushed_at: Instant::now(), protocols, busy: None }
 	}
 
-	pub fn report_peer_addr(&mut self, peer_id: &PeerId, addr: &Multiaddr) {
-		if let Some(peer_addrs) = self.entries.get_mut(peer_id) {
+	pub fn report_peer_addr(
+		&mut self,
+		peer_id: &PeerId,
+		protocol: impl AsRef<[u8]>,
+		addr: &Multiaddr,
+	) {
+		let protocol = String::from_utf8_lossy(protocol.as_ref()).into_owned();
+
+		eprintln!("PersistPeerAddrs report [peer-id: {:?}, protocol: {:?}, addr: {:?}]", peer_id, protocol, addr);
+
+		let entries = self
+			.protocols
+			.entry(protocol)
+			.or_insert_with(|| LruCache::new(PEER_ADDRS_CACHE_SIZE));
+		if let Some(peer_addrs) = entries.get_mut(peer_id) {
 			peer_addrs.insert(addr.to_owned());
 		} else {
-			self.entries.push(peer_id.to_owned(), [addr.to_owned()].into_iter().collect());
+			entries.push(peer_id.to_owned(), [addr.to_owned()].into_iter().collect());
 		}
 	}
 
-	pub fn peer_addrs(&mut self, peer_id: &PeerId) -> impl Iterator<Item = &Multiaddr> {
-		self.entries.get(peer_id).map(IntoIterator::into_iter).into_iter().flatten()
+	pub fn peer_addrs<'a>(
+		&'a mut self,
+		peer_id: &'a PeerId,
+		protocols: impl IntoIterator<Item = impl AsRef<[u8]> + 'a>,
+	) -> impl Iterator<Item = &'a Multiaddr> {
+		let protocols = protocols.into_iter().collect::<Vec<_>>();
+
+		self.protocols
+			.iter_mut()
+			.filter_map(move |(protocol, entries)| {
+				if protocols.iter().any(|p| p.as_ref() == protocol.as_bytes()) {
+					Some(entries)
+				} else {
+					None
+				}
+			})
+			.flat_map(|entries| entries.get(peer_id).into_iter())
+			.flat_map(IntoIterator::into_iter)
 	}
 
 	pub fn poll(&mut self, cx: &mut Context) -> Poll<Never> {
@@ -79,15 +115,21 @@ impl PersistPeerAddrs {
 			}
 		} else if self.flushed_at.elapsed() > FLUSH_INTERVAL {
 			let entries = self
-				.entries
+				.protocols
 				.iter()
-				.map(|(peer_id, addrs)| {
-					let peer_id = peer_id.to_base58();
-					let addrs = addrs.into_iter().cloned().collect();
+				.map(|(protocol, entries)| {
+					let entries = entries
+						.iter()
+						.map(|(peer_id, addrs)| {
+							let peer_id = peer_id.to_base58();
+							let addrs = addrs.into_iter().cloned().collect();
 
-					persist_peer_addrs::PeerEntry { peer_id, addrs }
+							persist_peer_addrs::PeerEntry { peer_id, addrs }
+						})
+						.collect::<Vec<_>>();
+					(protocol.to_owned(), entries)
 				})
-				.collect::<Vec<_>>();
+				.collect();
 
 			let busy_future = persist_peer_addrs::persist(Arc::clone(&self.paths), entries).boxed();
 			self.busy = Some(busy_future);
@@ -108,14 +150,14 @@ mod persist_peer_addrs {
 
 	pub(super) async fn persist(
 		paths: Arc<Paths>,
-		entries: Vec<PeerEntry>,
+		protocols: HashMap<ProtocolType, Vec<PeerEntry>>,
 	) -> Result<(), io::Error> {
 		let mut tmp_file = tokio::fs::OpenOptions::new()
 			.create(true)
 			.write(true)
 			.open(&paths.tmp_path)
 			.await?;
-		let serialized = serde_json::to_vec_pretty(&entries)?;
+		let serialized = serde_json::to_vec_pretty(&protocols)?;
 
 		tmp_file.write_all(&serialized).await?;
 		tmp_file.flush().await?;
@@ -126,11 +168,13 @@ mod persist_peer_addrs {
 		Ok(())
 	}
 
-	pub(super) fn load(path: impl AsRef<Path>) -> Result<Vec<PeerEntry>, io::Error> {
+	pub(super) fn load(
+		path: impl AsRef<Path>,
+	) -> Result<HashMap<ProtocolType, Vec<PeerEntry>>, io::Error> {
 		let file = match std::fs::OpenOptions::new().read(true).open(path.as_ref()) {
 			Ok(file) => file,
 			Err(not_found) if not_found.kind() == std::io::ErrorKind::NotFound =>
-				return Ok(Vec::new()),
+				return Ok(Default::default()),
 			Err(reason) => return Err(reason),
 		};
 		let entries = serde_json::from_reader(file)?;
