@@ -23,7 +23,6 @@ use frame_support::{
 	ensure,
 	traits::{OnInitialize, PreimageProvider, PreimageRecipient},
 };
-use frame_system::RawOrigin;
 use sp_runtime::traits::Hash;
 use sp_std::{prelude::*, vec};
 
