@@ -224,7 +224,7 @@ frame_benchmarking::benchmarks! {
 			origin_weight
 		);
 
-		let max_additional = scenario.dest_weight.clone() - origin_weight;
+		let max_additional = scenario.dest_weight - origin_weight;
 		let joiner_free = CurrencyOf::<T>::minimum_balance() + max_additional;
 
 		let joiner: T::AccountId
@@ -243,7 +243,7 @@ frame_benchmarking::benchmarks! {
 	bond_extra_transfer {
 		let origin_weight = min_create_bond::<T>() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let extra = scenario.dest_weight.clone() - origin_weight;
+		let extra = scenario.dest_weight - origin_weight;
 
 		// creator of the src pool will bond-extra, bumping itself to dest bag.
 
@@ -258,7 +258,7 @@ frame_benchmarking::benchmarks! {
 	bond_extra_reward {
 		let origin_weight = min_create_bond::<T>() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let extra = (scenario.dest_weight.clone() - origin_weight).max(CurrencyOf::<T>::minimum_balance());
+		let extra = (scenario.dest_weight - origin_weight).max(CurrencyOf::<T>::minimum_balance());
 
 		// transfer exactly `extra` to the depositor of the src pool (1),
 		let reward_account1 = Pools::<T>::create_reward_account(1);
@@ -306,7 +306,7 @@ frame_benchmarking::benchmarks! {
 		// significantly higher than the first position in a list (e.g. the first bag threshold).
 		let origin_weight = min_create_bond::<T>() * 200u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, false)?;
-		let amount = origin_weight - scenario.dest_weight.clone();
+		let amount = origin_weight - scenario.dest_weight;
 
 		let scenario = scenario.add_joiner(amount);
 		let member_id = scenario.origin1_member.unwrap().clone();
@@ -316,7 +316,7 @@ frame_benchmarking::benchmarks! {
 	verify {
 		let bonded_after = T::StakingInterface::active_stake(&scenario.origin1).unwrap();
 		// We at least went down to the destination bag
-		assert!(bonded_after <= scenario.dest_weight.clone());
+		assert!(bonded_after <= scenario.dest_weight);
 		let member = PoolMembers::<T>::get(
 			&member_id
 		)

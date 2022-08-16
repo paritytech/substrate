@@ -3390,7 +3390,7 @@ pub(crate) mod tests {
 		assert!(backend.remove_leaf_block(&best_hash).is_err());
 		assert!(backend.have_state_at(&prev_hash, 1));
 		backend.remove_leaf_block(&prev_hash).unwrap();
-		assert_eq!(None, backend.blockchain().header(BlockId::hash(prev_hash.clone())).unwrap());
+		assert_eq!(None, backend.blockchain().header(BlockId::hash(prev_hash)).unwrap());
 		assert!(!backend.have_state_at(&prev_hash, 1));
 	}
 
