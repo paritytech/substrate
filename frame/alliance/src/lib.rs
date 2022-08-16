@@ -82,7 +82,7 @@
 //!
 //! #### Root Calls
 //!
-//! - `force_set_members` - Initialize the founding members.
+//! - `force_set_members` - Set the members via chain governance.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -620,7 +620,7 @@ pub mod pallet {
 		/// Resets members and removes all active proposals if alliance is already initialized.
 		///
 		/// Must be called by the Root origin.
-		/// To force reset the alliance witness data must be provider.
+		/// To force reset the Alliance, witness data must be provided.
 		#[pallet::weight(T::WeightInfo::force_set_members(
 			T::MaxFounders::get(),
 			T::MaxFellows::get(),

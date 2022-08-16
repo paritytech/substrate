@@ -94,7 +94,7 @@ impl Cid {
 	}
 }
 
-/// Witness data for force_set_members transactions.
+/// Witness data for the `force_set_members` call.
 /// Relevant only if executed on an initialized alliance to reset it.
 #[derive(
 	Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo, Default,
