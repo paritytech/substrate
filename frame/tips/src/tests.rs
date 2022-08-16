@@ -522,8 +522,7 @@ fn test_migration_v4() {
 		(pallet_tips::Tips::<Test>::hashed_key_for(hash1), tip.encode().to_vec()),
 	];
 
-	let mut s = Storage::default();
-	s.top = data.into_iter().collect();
+	let s = Storage { top: data.into_iter().collect(), ..Default::default() };
 
 	sp_io::TestExternalities::new(s).execute_with(|| {
 		use frame_support::traits::PalletInfoAccess;

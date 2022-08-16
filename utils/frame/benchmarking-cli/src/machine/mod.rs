@@ -119,7 +119,7 @@ impl MachineCmd {
 		info!("Running machine benchmarks...");
 		let mut results = Vec::new();
 		for requirement in &requirements.0 {
-			let result = self.run_benchmark(requirement, &dir)?;
+			let result = self.run_benchmark(requirement, dir)?;
 			results.push(result);
 		}
 		self.print_summary(requirements, results)

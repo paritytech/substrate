@@ -138,7 +138,7 @@ fn map_results(
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
 		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
 		let benchmark_data =
-			get_benchmark_data(batch, storage_info, &component_ranges, analysis_choice);
+			get_benchmark_data(batch, storage_info, component_ranges, analysis_choice);
 		let pallet_benchmarks = all_benchmarks.entry((pallet_string, instance_string)).or_default();
 		pallet_benchmarks.push(benchmark_data);
 	}

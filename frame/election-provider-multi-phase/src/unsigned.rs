@@ -1227,7 +1227,7 @@ mod tests {
 		// first, ensure that a successful execution releases the lock
 		let (mut ext, pool) = ExtBuilder::default().build_offchainify(0);
 		ext.execute_with(|| {
-			let guard = StorageValueRef::persistent(&OFFCHAIN_LOCK);
+			let guard = StorageValueRef::persistent(OFFCHAIN_LOCK);
 			let last_block = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 
 			roll_to(25);
@@ -1284,7 +1284,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+			let mut storage = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(24);
 			assert!(pool.read().transactions.len().is_zero());
@@ -1375,7 +1375,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+			let mut storage = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
@@ -1413,7 +1413,7 @@ mod tests {
 
 			// we must clear the offchain storage to ensure the offchain execution check doesn't get
 			// in the way.
-			let mut storage = StorageValueRef::persistent(&OFFCHAIN_LAST_BLOCK);
+			let mut storage = StorageValueRef::persistent(OFFCHAIN_LAST_BLOCK);
 
 			MultiPhase::offchain_worker(block_plus(-1));
 			assert!(pool.read().transactions.len().is_zero());
@@ -1429,7 +1429,7 @@ mod tests {
 			// remove the cached submitted tx
 			// this ensures that when the resubmit window rolls around, we're ready to regenerate
 			// from scratch if necessary
-			let mut call_cache = StorageValueRef::persistent(&OFFCHAIN_CACHED_CALL);
+			let mut call_cache = StorageValueRef::persistent(OFFCHAIN_CACHED_CALL);
 			assert!(matches!(call_cache.get::<Call<Runtime>>(), Ok(Some(_call))));
 			call_cache.clear();
 

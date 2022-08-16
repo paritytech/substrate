@@ -340,8 +340,8 @@ mod tests {
 	};
 	use tracing::{metadata::Kind, subscriber::Interest, Callsite, Level, Metadata};
 
-	const EXPECTED_LOG_MESSAGE: &'static str = "yeah logging works as expected";
-	const EXPECTED_NODE_NAME: &'static str = "THE_NODE";
+	const EXPECTED_LOG_MESSAGE: &str = "yeah logging works as expected";
+	const EXPECTED_NODE_NAME: &str = "THE_NODE";
 
 	fn init_logger(directives: &str) {
 		let _ = LoggerBuilder::new(directives).init().unwrap();
@@ -371,7 +371,7 @@ mod tests {
 		run_test_in_another_process("test_logger_filters", || {
 			let test_directives =
 				"afg=debug,sync=trace,client=warn,telemetry,something-with-dash=error";
-			init_logger(&test_directives);
+			init_logger(test_directives);
 
 			tracing::dispatcher::get_default(|dispatcher| {
 				let test_filter = |target, level| {
@@ -431,7 +431,7 @@ mod tests {
 	fn log_something_with_dash_target_name() {
 		if env::var("ENABLE_LOGGING").is_ok() {
 			let test_directives = "test-target=info";
-			let _guard = init_logger(&test_directives);
+			let _guard = init_logger(test_directives);
 
 			log::info!(target: "test-target", "{}", EXPECTED_LOG_MESSAGE);
 		}

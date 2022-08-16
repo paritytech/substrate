@@ -150,7 +150,7 @@ async fn author_should_watch_extrinsic() {
 
 #[tokio::test]
 async fn author_should_return_watch_validation_error() {
-	const METHOD: &'static str = "author_submitAndWatchExtrinsic";
+	const METHOD: &str = "author_submitAndWatchExtrinsic";
 
 	let api = TestSetup::into_rpc();
 	let failed_sub = api
@@ -179,7 +179,7 @@ async fn author_should_return_pending_extrinsics() {
 
 #[tokio::test]
 async fn author_should_remove_extrinsics() {
-	const METHOD: &'static str = "author_removeExtrinsic";
+	const METHOD: &str = "author_removeExtrinsic";
 	let setup = TestSetup::default();
 	let api = setup.author().into_rpc();
 

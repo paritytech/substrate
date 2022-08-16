@@ -1555,7 +1555,7 @@ where
 		}
 
 		for attempt in 0..2 {
-			match Self::try_mutate_account(
+			if let Ok((imbalance, not_slashed)) = Self::try_mutate_account(
 				who,
 				|account,
 				 _is_new|
@@ -1595,14 +1595,11 @@ where
 					}
 				},
 			) {
-				Ok((imbalance, not_slashed)) => {
-					Self::deposit_event(Event::Slashed {
-						who: who.clone(),
-						amount: value.saturating_sub(not_slashed),
-					});
-					return (imbalance, not_slashed)
-				},
-				Err(_) => (),
+				Self::deposit_event(Event::Slashed {
+					who: who.clone(),
+					amount: value.saturating_sub(not_slashed),
+				});
+				return (imbalance, not_slashed)
 			}
 		}
 
@@ -1773,7 +1770,7 @@ where
 				account.free.checked_sub(&value).ok_or(Error::<T, I>::InsufficientBalance)?;
 			account.reserved =
 				account.reserved.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
-			Self::ensure_can_withdraw(&who, value, WithdrawReasons::RESERVE, account.free)
+			Self::ensure_can_withdraw(who, value, WithdrawReasons::RESERVE, account.free)
 		})?;
 
 		Self::deposit_event(Event::Reserved { who: who.clone(), amount: value });
@@ -1831,7 +1828,7 @@ where
 		//   account is attempted to be illegally destroyed.
 
 		for attempt in 0..2 {
-			match Self::mutate_account(who, |account| {
+			if let Ok((imbalance, not_slashed)) = Self::mutate_account(who, |account| {
 				let best_value = match attempt {
 					0 => value,
 					// If acting as a critical provider (i.e. first attempt failed), then ensure
@@ -1848,14 +1845,11 @@ where
 				// underflow should never happen, but it if does, there's nothing to be done here.
 				(NegativeImbalance::new(actual), value - actual)
 			}) {
-				Ok((imbalance, not_slashed)) => {
-					Self::deposit_event(Event::Slashed {
-						who: who.clone(),
-						amount: value.saturating_sub(not_slashed),
-					});
-					return (imbalance, not_slashed)
-				},
-				Err(_) => (),
+				Self::deposit_event(Event::Slashed {
+					who: who.clone(),
+					amount: value.saturating_sub(not_slashed),
+				});
+				return (imbalance, not_slashed)
 			}
 		}
 		// Should never get here as we ensure that ED is left in the second attempt.

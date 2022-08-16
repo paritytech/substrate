@@ -39,7 +39,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 			syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
 				let maybe_field_tys = fields
 					.iter()
-					.map(|f| generate_field_types(f, &frame_support))
+					.map(|f| generate_field_types(f, frame_support))
 					.collect::<syn::Result<Vec<_>>>();
 				let field_tys = match maybe_field_tys {
 					Ok(tys) => tys.into_iter().flatten(),
@@ -59,7 +59,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 		syn::Data::Enum(syn::DataEnum { variants, .. }) => {
 			let field_tys = variants
 				.iter()
-				.map(|variant| generate_variant_field_types(variant, &frame_support))
+				.map(|variant| generate_variant_field_types(variant, frame_support))
 				.collect::<Result<Vec<Option<Vec<proc_macro2::TokenStream>>>, syn::Error>>();
 
 			let field_tys = match field_tys {

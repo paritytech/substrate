@@ -167,7 +167,7 @@ fn generate_versioned_api_traits(
 		// Add the methods from the current version and all previous one. Versions are sorted so
 		// it's safe to stop early.
 		for (_, m) in methods.iter().take_while(|(v, _)| v <= &version) {
-			versioned_trait.items.extend(m.iter().cloned().map(|m| TraitItem::Method(m)));
+			versioned_trait.items.extend(m.iter().cloned().map(TraitItem::Method));
 		}
 
 		result.push(versioned_trait);
@@ -231,8 +231,8 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 
 		// Process the items in the declaration. The filter_map function below does a lot of stuff
 		// because the method attributes are stripped at this point
-		decl.items.iter_mut().for_each(|i| match i {
-			TraitItem::Method(ref mut method) => {
+		decl.items.iter_mut().for_each(|i| {
+			if let TraitItem::Method(ref mut method) = i {
 				let method_attrs = remove_supported_attributes(&mut method.attrs);
 				let mut method_version = trait_api_version;
 				// validate the api version for the method (if any) and generate default
@@ -281,8 +281,7 @@ fn generate_runtime_decls(decls: &[ItemTrait]) -> Result<TokenStream> {
 					// partition methods by api version
 					methods_by_version.entry(method_version).or_default().push(method.clone());
 				}
-			},
-			_ => (),
+			}
 		});
 
 		let versioned_api_traits = generate_versioned_api_traits(decl.clone(), methods_by_version);
@@ -431,7 +430,7 @@ impl<'a> ToClientSideDecl<'a> {
 		for (_, a) in found_attributes.iter().filter(|a| a.0 == &RENAMED_ATTRIBUTE) {
 			match parse_renamed_attribute(a) {
 				Ok((old_name, version)) => {
-					renames.push((version, prefix_function_with_trait(&self.trait_, &old_name)));
+					renames.push((version, prefix_function_with_trait(self.trait_, &old_name)));
 				},
 				Err(e) => self.errors.push(e.to_compile_error()),
 			}
@@ -449,7 +448,7 @@ impl<'a> ToClientSideDecl<'a> {
 
 		// Generate the function name before we may rename it below to
 		// `function_name_before_version_{}`.
-		let function_name = prefix_function_with_trait(&self.trait_, &method.sig.ident);
+		let function_name = prefix_function_with_trait(self.trait_, &method.sig.ident);
 
 		// If the method has a `changed_in` attribute, we need to alter the method name to
 		// `method_before_version_VERSION`.

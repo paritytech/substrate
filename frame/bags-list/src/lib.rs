@@ -268,7 +268,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		new_score: T::Score,
 	) -> Result<Option<(T::Score, T::Score)>, ListError> {
 		// If no voter at that node, don't do anything. the caller just wasted the fee to call this.
-		let node = list::Node::<T, I>::get(&account).ok_or(ListError::NodeNotFound)?;
+		let node = list::Node::<T, I>::get(account).ok_or(ListError::NodeNotFound)?;
 		let maybe_movement = List::update_position_for(node, new_score);
 		if let Some((from, to)) = maybe_movement {
 			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });

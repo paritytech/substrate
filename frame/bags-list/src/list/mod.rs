@@ -278,7 +278,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		let thresholds = T::BagThresholds::get();
 		let idx = thresholds.partition_point(|&threshold| start_node_upper > threshold);
 		let leftover_bags = thresholds
-			.into_iter()
+			.iter()
 			.take(idx)
 			.copied()
 			.rev()
@@ -439,21 +439,21 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		lighter_id: &T::AccountId,
 		heavier_id: &T::AccountId,
 	) -> Result<(), ListError> {
-		let lighter_node = Node::<T, I>::get(&lighter_id).ok_or(ListError::NodeNotFound)?;
-		let heavier_node = Node::<T, I>::get(&heavier_id).ok_or(ListError::NodeNotFound)?;
+		let lighter_node = Node::<T, I>::get(lighter_id).ok_or(ListError::NodeNotFound)?;
+		let heavier_node = Node::<T, I>::get(heavier_id).ok_or(ListError::NodeNotFound)?;
 
 		ensure!(lighter_node.bag_upper == heavier_node.bag_upper, ListError::NotInSameBag);
 
 		// this is the most expensive check, so we do it last.
 		ensure!(
-			T::ScoreProvider::score(&heavier_id) > T::ScoreProvider::score(&lighter_id),
+			T::ScoreProvider::score(heavier_id) > T::ScoreProvider::score(lighter_id),
 			ListError::NotHeavier
 		);
 
 		// remove the heavier node from this list. Note that this removes the node from storage and
 		// decrements the node counter.
 		let _ =
-			Self::remove(&heavier_id).defensive_proof("both nodes have been checked to exist; qed");
+			Self::remove(heavier_id).defensive_proof("both nodes have been checked to exist; qed");
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.

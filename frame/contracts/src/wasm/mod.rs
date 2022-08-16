@@ -1156,7 +1156,7 @@ mod tests {
 	#[test]
 	fn contract_call_limited_gas() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(&CODE_TRANSFER_LIMITED_GAS, vec![], &mut mock_ext));
+		assert_ok!(execute(CODE_TRANSFER_LIMITED_GAS, vec![], &mut mock_ext));
 
 		assert_eq!(
 			&mock_ext.calls,
@@ -1203,7 +1203,7 @@ mod tests {
 	#[test]
 	fn contract_ecdsa_recover() {
 		let mut mock_ext = MockExt::default();
-		assert_ok!(execute(&CODE_ECDSA_RECOVER, vec![], &mut mock_ext));
+		assert_ok!(execute(CODE_ECDSA_RECOVER, vec![], &mut mock_ext));
 		assert_eq!(mock_ext.ecdsa_recover.into_inner(), [([1; 65], [1; 32])]);
 	}
 

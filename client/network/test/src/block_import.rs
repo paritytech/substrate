@@ -66,8 +66,7 @@ fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>)
 fn import_single_good_block_works() {
 	let (_, _hash, number, peer_id, block) = prepare_good_block();
 
-	let mut expected_aux = ImportedAux::default();
-	expected_aux.is_new_best = true;
+	let expected_aux = ImportedAux { is_new_best: true, ..Default::default() };
 
 	match block_on(import_single_block(
 		&mut substrate_test_runtime_client::new(),

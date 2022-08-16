@@ -1147,7 +1147,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1);
 
 		// keystore doesn't contain other keys than validators'
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), Ok(()));
@@ -1170,7 +1170,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1);
 
 		let (mut best_block_streams, mut finality_proofs) = get_beefy_streams(&mut net, keys);
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
@@ -1236,7 +1236,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1);
 
 		assert!(worker.voting_oracle.sessions.is_empty());
 
@@ -1270,7 +1270,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1, 0);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker(net.peer(0), &keys[0], 1);
 
 		fn new_vote(
 			block_number: NumberFor<Block>,

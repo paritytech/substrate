@@ -685,6 +685,6 @@ impl<T: Config> Pallet<T> {
 
 	/// Check that a user is a friend in the friends list.
 	fn is_friend(friends: &Vec<T::AccountId>, friend: &T::AccountId) -> bool {
-		friends.binary_search(&friend).is_ok()
+		friends.binary_search(friend).is_ok()
 	}
 }

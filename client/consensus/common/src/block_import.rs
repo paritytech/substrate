@@ -77,17 +77,14 @@ impl ImportResult {
 	) where
 		B: BlockT,
 	{
-		match self {
-			ImportResult::Imported(aux) => {
-				if aux.clear_justification_requests {
-					justification_sync_link.clear_justification_requests();
-				}
+		if let ImportResult::Imported(aux) = self {
+			if aux.clear_justification_requests {
+				justification_sync_link.clear_justification_requests();
+			}
 
-				if aux.needs_justification {
-					justification_sync_link.request_justification(hash, number);
-				}
-			},
-			_ => {},
+			if aux.needs_justification {
+				justification_sync_link.request_justification(hash, number);
+			}
 		}
 	}
 }

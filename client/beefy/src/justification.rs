@@ -60,7 +60,7 @@ fn verify_with_validator_set<Block: BlockT>(
 			let message = signed_commitment.commitment.encode();
 			let valid_signatures = validator_set
 				.validators()
-				.into_iter()
+				.iter()
 				.zip(signed_commitment.signatures.iter())
 				.filter(|(id, signature)| {
 					signature

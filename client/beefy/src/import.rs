@@ -165,28 +165,25 @@ where
 		// Run inner block import.
 		let inner_import_result = self.inner.import_block(block, new_cache).await?;
 
-		match (beefy_proof, &inner_import_result) {
-			(Some(proof), ImportResult::Imported(_)) => {
-				let status = self.backend.blockchain().info();
-				if number <= status.finalized_number &&
-					Some(hash) ==
-						self.backend
-							.blockchain()
-							.hash(number)
-							.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-				{
-					// The proof is valid and the block is imported and final, we can import.
-					self.import_beefy_justification_unchecked(number, proof);
-				} else {
-					error!(
-						target: "beefy",
-						"🥩 Cannot import justification: {:?} for, not yet final, block number {:?}",
-						proof,
-						number,
-					);
-				}
-			},
-			_ => (),
+		if let (Some(proof), ImportResult::Imported(_)) = (beefy_proof, &inner_import_result) {
+			let status = self.backend.blockchain().info();
+			if number <= status.finalized_number &&
+				Some(hash) ==
+					self.backend
+						.blockchain()
+						.hash(number)
+						.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
+			{
+				// The proof is valid and the block is imported and final, we can import.
+				self.import_beefy_justification_unchecked(number, proof);
+			} else {
+				error!(
+					target: "beefy",
+					"🥩 Cannot import justification: {:?} for, not yet final, block number {:?}",
+					proof,
+					number,
+				);
+			}
 		}
 
 		Ok(inner_import_result)

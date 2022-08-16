@@ -102,7 +102,7 @@ where
 			.await
 			.map_err(|e| {
 				e.into_pool_error()
-					.map(|e| Error::Pool(e))
+					.map(Error::Pool)
 					.unwrap_or_else(|e| Error::Verification(Box::new(e)))
 					.into()
 			})
@@ -179,7 +179,7 @@ where
 
 	fn watch_extrinsic(&self, mut sink: SubscriptionSink, xt: Bytes) -> SubscriptionResult {
 		let best_block_hash = self.client.info().best_hash;
-		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(|e| Error::from(e)) {
+		let dxt = match TransactionFor::<P>::decode(&mut &xt[..]).map_err(Error::from) {
 			Ok(dxt) => dxt,
 			Err(e) => {
 				let _ = sink.reject(JsonRpseeError::from(e));

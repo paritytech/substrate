@@ -88,7 +88,7 @@ impl<'a> ExportImportRevertExecutor<'a> {
 		// Setting base_path to be a temporary folder if we are importing blocks.
 		// This allows us to make sure we are importing from scratch.
 		let base_path = match sub_command {
-			SubCommand::ExportBlocks => &self.base_path.path(),
+			SubCommand::ExportBlocks => self.base_path.path(),
 			SubCommand::ImportBlocks => {
 				tmp = tempdir().unwrap();
 				tmp.path()

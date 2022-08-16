@@ -28,4 +28,20 @@ rustflags = [
   "-Aclippy::while_immutable_condition", # false positives
   "-Aclippy::needless_option_as_deref",  # false positives
   "-Aclippy::derivable_impls",           # false positives
+  
+  # opt into specific uncontravercial style category lints:
+  # (These lists have no downside)
+  "-Dclippy::field_reassign_with_default", 
+  "-Dclippy::into_iter_on_ref", 
+  "-Dclippy::iter_cloned_collect", 
+  "-Dclippy::manual_saturating_arithmetic", 
+  "-Dclippy::map_collect_result_unit", 
+  "-Dclippy::match_ref_pats", 
+  "-Dclippy::mem_replace_option_with_none", 
+  "-Dclippy::mem_replace_with_default", 
+  "-Dclippy::needless_borrow", 
+  "-Dclippy::redundant_static_lifetimes", 
+  "-Dclippy::single_match", 
+  "-Dclippy::unwrap_or_else_default",
+  "-Dclippy::redundant_closure", # may alter side-effect timing.
 ]

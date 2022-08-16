@@ -234,7 +234,7 @@ pub mod v2 {
 					let mut sum_paid_out = BalanceOf::<T>::zero();
 
 					members
-						.into_iter()
+						.iter()
 						.filter_map(|(who, points)| {
 							let bonded_pool = match BondedPool::<T>::get(id) {
 								Some(x) => x,
@@ -267,7 +267,7 @@ pub mod v2 {
 						.for_each(|(who, last_claim)| {
 							let outcome = T::Currency::transfer(
 								&reward_account,
-								&who,
+								who,
 								last_claim,
 								ExistenceRequirement::KeepAlive,
 							);

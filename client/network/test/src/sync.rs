@@ -1086,13 +1086,14 @@ fn syncs_state() {
 		genesis_storage
 			.children_default
 			.insert(child3.child_info.storage_key().to_vec(), child3);
-		let mut config_one = FullPeerConfig::default();
-		config_one.extra_storage = Some(genesis_storage.clone());
+		let config_one =
+			FullPeerConfig { extra_storage: Some(genesis_storage.clone()), ..Default::default() };
 		net.add_full_peer_with_config(config_one);
-		let mut config_two = FullPeerConfig::default();
-		config_two.extra_storage = Some(genesis_storage);
-		config_two.sync_mode =
-			SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false };
+		let config_two = FullPeerConfig {
+			extra_storage: Some(genesis_storage),
+			sync_mode: SyncMode::Fast { skip_proofs: *skip_proofs, storage_chain_mode: false },
+			..Default::default()
+		};
 		net.add_full_peer_with_config(config_two);
 		net.peer(0).push_blocks(64, false);
 		// Wait for peer 1 to sync header chain.

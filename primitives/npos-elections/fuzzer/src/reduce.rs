@@ -131,7 +131,7 @@ fn reduce_and_compare(assignment: &Vec<StakedAssignment<AccountId>>, winners: &V
 		num_changed,
 	);
 
-	assert_assignments_equal(&assignment, &altered_assignment);
+	assert_assignments_equal(assignment, &altered_assignment);
 }
 
 fn assignment_len(assignments: &[StakedAssignment<AccountId>]) -> u32 {

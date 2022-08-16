@@ -197,7 +197,7 @@ mod tests {
 		let (rpc, _) = setup_io_handler();
 		let request = r#"{"jsonrpc":"2.0","method":"beefy_getFinalizedHead","params":[],"id":1}"#;
 		let expected_response = r#"{"jsonrpc":"2.0","error":{"code":1,"message":"BEEFY RPC endpoint not ready"},"id":1}"#.to_string();
-		let (response, _) = rpc.raw_json_request(&request).await.unwrap();
+		let (response, _) = rpc.raw_json_request(request).await.unwrap();
 
 		assert_eq!(expected_response, response.result);
 	}

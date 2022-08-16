@@ -340,9 +340,9 @@ async fn system_network_reserved_peers() {
 
 #[test]
 fn test_add_reset_log_filter() {
-	const EXPECTED_BEFORE_ADD: &'static str = "EXPECTED_BEFORE_ADD";
-	const EXPECTED_AFTER_ADD: &'static str = "EXPECTED_AFTER_ADD";
-	const EXPECTED_WITH_TRACE: &'static str = "EXPECTED_WITH_TRACE";
+	const EXPECTED_BEFORE_ADD: &str = "EXPECTED_BEFORE_ADD";
+	const EXPECTED_AFTER_ADD: &str = "EXPECTED_AFTER_ADD";
+	const EXPECTED_WITH_TRACE: &str = "EXPECTED_WITH_TRACE";
 
 	// Enter log generation / filter reload
 	if std::env::var("TEST_LOG_FILTER").is_ok() {

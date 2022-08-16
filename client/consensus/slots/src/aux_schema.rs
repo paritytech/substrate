@@ -73,7 +73,7 @@ where
 
 	// Get headers of this slot.
 	let mut headers_with_sig =
-		load_decode::<_, Vec<(H, P)>>(backend, &curr_slot_key[..])?.unwrap_or_else(Vec::new);
+		load_decode::<_, Vec<(H, P)>>(backend, &curr_slot_key[..])?.unwrap_or_default();
 
 	// Get first slot saved.
 	let slot_header_start = SLOT_HEADER_START.to_vec();

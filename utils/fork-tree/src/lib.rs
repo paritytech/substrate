@@ -1522,7 +1522,7 @@ mod test {
 		assert_eq!(path, [0, 1, 0, 0, 0]);
 
 		// Post order traversal requirement for `import`
-		let res = tree.import(&"Z", 100, (), &is_descendent_of_for_post_order);
+		let res = tree.import("Z", 100, (), &is_descendent_of_for_post_order);
 		assert_eq!(res, Ok(false));
 		assert_eq!(
 			tree.iter().map(|node| *node.0).collect::<Vec<_>>(),

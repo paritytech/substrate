@@ -2998,7 +2998,7 @@ mod test {
 		let fork_blocks = {
 			let mut client = Arc::new(TestClientBuilder::new().build());
 			let fork_blocks = blocks[..MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2]
-				.into_iter()
+				.iter()
 				.inspect(|b| block_on(client.import(BlockOrigin::Own, (*b).clone())).unwrap())
 				.cloned()
 				.collect::<Vec<_>>();
@@ -3129,7 +3129,7 @@ mod test {
 		let fork_blocks = {
 			let mut client = Arc::new(TestClientBuilder::new().build());
 			let fork_blocks = blocks[..MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2]
-				.into_iter()
+				.iter()
 				.inspect(|b| block_on(client.import(BlockOrigin::Own, (*b).clone())).unwrap())
 				.cloned()
 				.collect::<Vec<_>>();

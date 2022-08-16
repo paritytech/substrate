@@ -578,7 +578,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn try_undelegate(who: T::AccountId, class: ClassOf<T, I>) -> Result<u32, DispatchError> {
 		let votes =
 			VotingFor::<T, I>::try_mutate(&who, &class, |voting| -> Result<u32, DispatchError> {
-				match sp_std::mem::replace(voting, Voting::default()) {
+				match sp_std::mem::take(voting) {
 					Voting::Delegating(Delegating {
 						balance,
 						target,

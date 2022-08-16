@@ -452,10 +452,9 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 	let mut network = TestNet::new(
 		&temp,
 		spec,
+		#[allow(clippy::redundant_closure)]
 		(0..NUM_FULL_NODES).map(|_| |cfg| full_builder(cfg)),
-		// Note: this iterator is empty but we can't just use `iter::empty()`, otherwise
-		// the type of the closure cannot be inferred.
-		(0..0).map(|_| (String::new(), { |cfg| full_builder(cfg) })),
+		iter::empty::<(String, Fb)>(),
 		30500,
 	);
 	info!("Checking block sync");

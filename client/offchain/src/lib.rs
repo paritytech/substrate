@@ -357,7 +357,7 @@ mod tests {
 			extrinsic: <Block as traits::Block>::Extrinsic,
 		) -> Result<(), ()> {
 			let source = sc_transaction_pool_api::TransactionSource::Local;
-			futures::executor::block_on(self.0.submit_one(&at, source, extrinsic))
+			futures::executor::block_on(self.0.submit_one(at, source, extrinsic))
 				.map(|_| ())
 				.map_err(|_| ())
 		}
@@ -413,7 +413,7 @@ mod tests {
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).unwrap());
+		assert_eq!(value, &offchain_db.get(sp_offchain::STORAGE_PREFIX, key).unwrap());
 
 		let mut block_builder = client.new_block(Default::default()).unwrap();
 		block_builder
@@ -425,6 +425,6 @@ mod tests {
 		let block = block_builder.build().unwrap().block;
 		block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-		assert!(offchain_db.get(sp_offchain::STORAGE_PREFIX, &key).is_none());
+		assert!(offchain_db.get(sp_offchain::STORAGE_PREFIX, key).is_none());
 	}
 }

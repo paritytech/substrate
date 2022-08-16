@@ -64,7 +64,7 @@ use crate::{
 	keystore::tests::Keyring as BeefyKeyring, BeefyRPCLinks, BeefyVoterLinks,
 };
 
-pub(crate) const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
+pub(crate) const BEEFY_PROTOCOL_NAME: &str = "/beefy/1";
 const GOOD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0xbf);
 const BAD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0x42);
 
@@ -502,12 +502,12 @@ fn finalize_block_and_wait_for_beefy(
 	if expected_beefy.is_empty() {
 		// run for quarter second then verify no new best beefy block available
 		let timeout = Some(Duration::from_millis(250));
-		streams_empty_after_timeout(best_blocks, &net, runtime, timeout);
-		streams_empty_after_timeout(versioned_finality_proof, &net, runtime, None);
+		streams_empty_after_timeout(best_blocks, net, runtime, timeout);
+		streams_empty_after_timeout(versioned_finality_proof, net, runtime, None);
 	} else {
 		// run until expected beefy blocks are received
-		wait_for_best_beefy_blocks(best_blocks, &net, runtime, expected_beefy);
-		wait_for_beefy_signed_commitments(versioned_finality_proof, &net, runtime, expected_beefy);
+		wait_for_best_beefy_blocks(best_blocks, net, runtime, expected_beefy);
+		wait_for_beefy_signed_commitments(versioned_finality_proof, net, runtime, expected_beefy);
 	}
 }
 

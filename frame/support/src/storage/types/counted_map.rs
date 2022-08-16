@@ -177,7 +177,7 @@ where
 		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
 	{
 		Self::try_mutate_exists(key, |option_value_ref| {
-			let option_value = core::mem::replace(option_value_ref, None);
+			let option_value = option_value_ref.take();
 			let mut query = <Self as MapWrapper>::Map::from_optional_value_to_query(option_value);
 			let res = f(&mut query);
 			let option_value = <Self as MapWrapper>::Map::from_query_to_optional_value(query);

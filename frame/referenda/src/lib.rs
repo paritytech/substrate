@@ -793,10 +793,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Option<(ReferendumIndex, ReferendumStatusOf<T, I>)> {
 		loop {
 			let (index, _) = track_queue.pop()?;
-			match Self::ensure_ongoing(index) {
-				Ok(s) => return Some((index, s)),
-				Err(_) => {}, // referendum already timedout or was cancelled.
+			if let Ok(s) = Self::ensure_ongoing(index) {
+				return Some((index, s))
 			}
+			// referendum already timedout or was cancelled.
 		}
 	}
 

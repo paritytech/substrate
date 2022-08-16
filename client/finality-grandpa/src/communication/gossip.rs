@@ -2262,10 +2262,10 @@ mod tests {
 
 		// add 60 peers, 30 authorities and 30 full nodes
 		let mut authorities = Vec::new();
-		authorities.resize_with(30, || PeerId::random());
+		authorities.resize_with(30, PeerId::random);
 
 		let mut full_nodes = Vec::new();
-		full_nodes.resize_with(30, || PeerId::random());
+		full_nodes.resize_with(30, PeerId::random);
 
 		for i in 0..30 {
 			val.inner.write().peers.new_peer(authorities[i], ObservedRole::Authority);

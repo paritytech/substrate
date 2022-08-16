@@ -199,7 +199,7 @@ fn block_production(c: &mut Criterion) {
 	block_builder.push(extrinsic_set_time(1)).unwrap();
 	import_block(client, block_builder.build().unwrap());
 
-	let (max_transfer_count, extrinsics) = prepare_benchmark(&client);
+	let (max_transfer_count, extrinsics) = prepare_benchmark(client);
 	log::info!("Maximum transfer count: {}", max_transfer_count);
 
 	let mut group = c.benchmark_group("Block production");

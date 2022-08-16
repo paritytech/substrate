@@ -102,7 +102,7 @@ fn combine_batches(
 }
 
 /// Explains possible reasons why the metadata for the benchmarking could not be found.
-const ERROR_METADATA_NOT_FOUND: &'static str = "Did not find the benchmarking metadata. \
+const ERROR_METADATA_NOT_FOUND: &str = "Did not find the benchmarking metadata. \
 This could mean that you either did not build the node correctly with the \
 `--features runtime-benchmarks` flag, or the chain spec that you are using was \
 not created by a node that was compiled with the flag";

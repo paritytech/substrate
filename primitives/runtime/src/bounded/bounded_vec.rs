@@ -229,7 +229,7 @@ where
 
 impl<'a, T: Ord, Bound: Get<u32>> Ord for BoundedSlice<'a, T, Bound> {
 	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
-		self.0.cmp(&other.0)
+		self.0.cmp(other.0)
 	}
 }
 

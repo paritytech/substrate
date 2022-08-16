@@ -48,7 +48,7 @@ where
 	let leaves_and_position_data = proof
 		.leaf_indices
 		.into_iter()
-		.map(|index| mmr_lib::leaf_index_to_pos(index))
+		.map(mmr_lib::leaf_index_to_pos)
 		.zip(leaves.into_iter())
 		.collect();
 
@@ -109,7 +109,7 @@ where
 		let leaves_positions_and_data = proof
 			.leaf_indices
 			.into_iter()
-			.map(|index| mmr_lib::leaf_index_to_pos(index))
+			.map(mmr_lib::leaf_index_to_pos)
 			.zip(leaves.into_iter().map(|leaf| Node::Data(leaf)))
 			.collect();
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;

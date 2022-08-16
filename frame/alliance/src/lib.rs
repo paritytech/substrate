@@ -905,7 +905,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Check if an account has a given role.
 	pub fn is_member_of(who: &T::AccountId, role: MemberRole) -> bool {
-		Members::<T, I>::get(role).contains(&who)
+		Members::<T, I>::get(role).contains(who)
 	}
 
 	/// Check if an account is a founder.

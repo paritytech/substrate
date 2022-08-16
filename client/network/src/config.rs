@@ -793,7 +793,7 @@ mod tests {
 
 	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
 		match kp {
-			Keypair::Ed25519(p) => p.secret().as_ref().iter().cloned().collect(),
+			Keypair::Ed25519(p) => p.secret().as_ref().to_vec(),
 			Keypair::Secp256k1(p) => p.secret().to_bytes().to_vec(),
 			_ => panic!("Unexpected keypair."),
 		}

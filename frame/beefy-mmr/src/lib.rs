@@ -215,7 +215,7 @@ where
 		let id = validator_set.id();
 		let beefy_addresses = validator_set
 			.validators()
-			.into_iter()
+			.iter()
 			.cloned()
 			.map(T::BeefyAuthorityToMerkleLeaf::convert)
 			.collect::<Vec<_>>();

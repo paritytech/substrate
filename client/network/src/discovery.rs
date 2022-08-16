@@ -1077,49 +1077,38 @@ mod tests {
 		let fut = futures::future::poll_fn(move |cx| {
 			'polling: loop {
 				for swarm_n in 0..swarms.len() {
-					match swarms[swarm_n].0.poll_next_unpin(cx) {
-						Poll::Ready(Some(e)) => {
-							match e {
-								SwarmEvent::Behaviour(behavior) => {
-									match behavior {
-										DiscoveryOut::UnroutablePeer(other) |
-										DiscoveryOut::Discovered(other) => {
-											// Call `add_self_reported_address` to simulate identify
-											// happening.
-											let addr = swarms
-												.iter()
-												.find_map(|(s, a)| {
-													if s.behaviour().local_peer_id == other {
-														Some(a.clone())
-													} else {
-														None
-													}
-												})
-												.unwrap();
-											swarms[swarm_n]
-												.0
-												.behaviour_mut()
-												.add_self_reported_address(
-													&other,
-													[protocol_name_from_protocol_id(&protocol_id)]
-														.iter(),
-													addr,
-												);
+					if let Poll::Ready(Some(e)) = swarms[swarm_n].0.poll_next_unpin(cx) {
+						if let SwarmEvent::Behaviour(behavior) = e {
+							match behavior {
+								DiscoveryOut::UnroutablePeer(other) |
+								DiscoveryOut::Discovered(other) => {
+									// Call `add_self_reported_address` to simulate identify
+									// happening.
+									let addr = swarms
+										.iter()
+										.find_map(|(s, a)| {
+											if s.behaviour().local_peer_id == other {
+												Some(a.clone())
+											} else {
+												None
+											}
+										})
+										.unwrap();
+									swarms[swarm_n].0.behaviour_mut().add_self_reported_address(
+										&other,
+										[protocol_name_from_protocol_id(&protocol_id)].iter(),
+										addr,
+									);
 
-											to_discover[swarm_n].remove(&other);
-										},
-										DiscoveryOut::RandomKademliaStarted(_) => {},
-										e => {
-											panic!("Unexpected event: {:?}", e)
-										},
-									}
+									to_discover[swarm_n].remove(&other);
 								},
-								// ignore non Behaviour events
-								_ => {},
+								DiscoveryOut::RandomKademliaStarted(_) => {},
+								e => {
+									panic!("Unexpected event: {:?}", e)
+								},
 							}
-							continue 'polling
-						},
-						_ => {},
+						} // else ignore non Behaviour events
+						continue 'polling
 					}
 				}
 				break

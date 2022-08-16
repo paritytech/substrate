@@ -134,7 +134,7 @@ impl RuntimeBuilder {
 				},
 			};
 
-			RuntimeBlob::uncompress_if_needed(&wasm)
+			RuntimeBlob::uncompress_if_needed(wasm)
 				.expect("failed to create a runtime blob out of test runtime")
 		};
 

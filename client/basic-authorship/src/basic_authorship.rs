@@ -723,6 +723,7 @@ mod tests {
 
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
+			#[allow(clippy::redundant_closure)]
 			Box::new(move || time::Instant::now()),
 		);
 
@@ -792,6 +793,7 @@ mod tests {
 		                         expected_pool_transactions| {
 			let proposer = proposer_factory.init_with_now(
 				&client.header(&BlockId::number(number)).unwrap().unwrap(),
+				#[allow(clippy::redundant_closure)]
 				Box::new(move || time::Instant::now()),
 			);
 
@@ -946,7 +948,7 @@ mod tests {
 				// add 2 * MAX_SKIPPED_TRANSACTIONS that exhaust resources
 				(0..MAX_SKIPPED_TRANSACTIONS * 2)
 					.into_iter()
-					.map(|i| exhausts_resources_extrinsic_from(i))
+					.map(exhausts_resources_extrinsic_from)
 					// and some transactions that are okay.
 					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
 					.collect(),
@@ -1009,7 +1011,7 @@ mod tests {
 				SOURCE,
 				(0..MAX_SKIPPED_TRANSACTIONS + 2)
 					.into_iter()
-					.map(|i| exhausts_resources_extrinsic_from(i))
+					.map(exhausts_resources_extrinsic_from)
 					// and some transactions that are okay.
 					.chain((0..MAX_SKIPPED_TRANSACTIONS).into_iter().map(|i| extrinsic(i as _)))
 					.collect(),

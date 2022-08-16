@@ -245,7 +245,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
-		let current_value = self.overlay.value_mut_or_insert_with(&key, || Default::default());
+		let current_value = self.overlay.value_mut_or_insert_with(&key, Default::default);
 		crate::ext::StorageAppend::new(current_value).append(value);
 	}
 
@@ -283,7 +283,7 @@ impl Externalities for BasicExternalities {
 			let delta =
 				data.into_iter().map(|(k, v)| (k.as_ref(), v.value().map(|v| v.as_slice())));
 			crate::in_memory_backend::new_in_mem::<Blake2Hasher, HashKey<_>>()
-				.child_storage_root(&child_info, delta, state_version)
+				.child_storage_root(child_info, delta, state_version)
 				.0
 		} else {
 			empty_child_trie_root::<LayoutV1<Blake2Hasher>>()

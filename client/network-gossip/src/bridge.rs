@@ -554,8 +554,7 @@ mod tests {
 
 		spawn(gossip_engine);
 
-		let mut subscribers =
-			subscribers.into_iter().map(|s| block_on_stream(s)).collect::<Vec<_>>();
+		let mut subscribers = subscribers.into_iter().map(block_on_stream).collect::<Vec<_>>();
 
 		// Expect each subscriber to receive both events.
 		for message in messages {
@@ -690,7 +689,7 @@ mod tests {
 			// Send messages into the network event stream.
 			for (i_notification, messages) in notifications.iter().enumerate() {
 				let messages = messages
-					.into_iter()
+					.iter()
 					.enumerate()
 					.map(|(i_message, Message { topic })| {
 						// Embed the topic in the first 256 bytes of the message to be extracted by
@@ -751,13 +750,13 @@ mod tests {
 			// Compare amount of expected messages with amount of received messages.
 			for (expected_topic, expected_num) in expected_msgs_per_topic_all_chan.iter() {
 				assert_eq!(
-					received_msgs_per_topic_all_chan.get(&expected_topic).unwrap_or(&0),
+					received_msgs_per_topic_all_chan.get(expected_topic).unwrap_or(&0),
 					expected_num,
 				);
 			}
 			for (received_topic, received_num) in expected_msgs_per_topic_all_chan.iter() {
 				assert_eq!(
-					expected_msgs_per_topic_all_chan.get(&received_topic).unwrap_or(&0),
+					expected_msgs_per_topic_all_chan.get(received_topic).unwrap_or(&0),
 					received_num,
 				);
 			}

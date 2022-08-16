@@ -85,7 +85,7 @@ pub mod test_utils {
 		});
 		let trie_id = Storage::<Test>::generate_trie_id(address, nonce);
 		set_balance(address, <Test as Config>::Currency::minimum_balance() * 10);
-		let contract = Storage::<Test>::new_contract(&address, trie_id, code_hash).unwrap();
+		let contract = Storage::<Test>::new_contract(address, trie_id, code_hash).unwrap();
 		<ContractInfoOf<Test>>::insert(address, contract);
 	}
 	pub fn set_balance(who: &AccountIdOf<Test>, amount: u64) {

@@ -595,11 +595,8 @@ mod tests {
 		let mut empty = TrieDBMut::<LayoutV1>::new(&mut db, &mut root);
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
-		let root2: Vec<u8> = LayoutV1::trie_root::<_, Vec<u8>, Vec<u8>>(std::iter::empty())
-			.as_ref()
-			.iter()
-			.cloned()
-			.collect();
+		let root2: Vec<u8> =
+			LayoutV1::trie_root::<_, Vec<u8>, Vec<u8>>(std::iter::empty()).as_ref().to_vec();
 
 		assert_eq!(root1, root2);
 	}

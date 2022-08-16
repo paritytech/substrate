@@ -194,7 +194,7 @@ fn no_author_vrf_output_for_secondary_plain() {
 fn authority_index() {
 	new_test_ext(4).execute_with(|| {
 		assert_eq!(
-			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).into_iter().cloned()),
+			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).iter().cloned()),
 			None,
 			"Trivially invalid authorities are ignored"
 		)
@@ -837,7 +837,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// generate an equivocation proof.
 		let equivocation_proof =
-			generate_equivocation_proof(0, &offending_authority_pair, CurrentSlot::<Test>::get());
+			generate_equivocation_proof(0, offending_authority_pair, CurrentSlot::<Test>::get());
 
 		// create the key ownership proof.
 		let key_owner_proof =

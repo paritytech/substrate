@@ -163,7 +163,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	let mut ext: sp_io::TestExternalities = storage.into();
 	// Clear thread local vars for https://github.com/paritytech/substrate/issues/10479.
-	ext.execute_with(|| take_hooks());
+	ext.execute_with(take_hooks);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }

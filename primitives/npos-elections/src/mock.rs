@@ -182,7 +182,7 @@ pub(crate) fn equalize_float<A, FS>(
 	for _i in 0..iterations {
 		let mut max_diff = 0.0;
 		for (voter, assignment) in assignments.iter_mut() {
-			let voter_budget = stake_of(&voter);
+			let voter_budget = stake_of(voter);
 			let diff = do_equalize_float(voter, voter_budget, assignment, supports, tolerance);
 			if diff > max_diff {
 				max_diff = diff;
@@ -226,10 +226,10 @@ where
 	if backing_backed_stake.len() > 0 {
 		let max_stake = backing_backed_stake
 			.iter()
-			.max_by(|x, y| x.partial_cmp(&y).unwrap_or(sp_std::cmp::Ordering::Equal))
+			.max_by(|x, y| x.partial_cmp(y).unwrap_or(sp_std::cmp::Ordering::Equal))
 			.expect("vector with positive length will have a max; qed");
 		let min_stake = backed_stakes_iter
-			.min_by(|x, y| x.partial_cmp(&y).unwrap_or(sp_std::cmp::Ordering::Equal))
+			.min_by(|x, y| x.partial_cmp(y).unwrap_or(sp_std::cmp::Ordering::Equal))
 			.expect("iterator with positive length will have a min; qed");
 
 		difference = max_stake - min_stake;
@@ -265,7 +265,7 @@ where
 			let stake_mul = stake * (idx as f64);
 			let stake_sub = stake_mul - cumulative_stake;
 			if stake_sub > budget {
-				last_index = idx.checked_sub(1).unwrap_or(0);
+				last_index = idx.saturating_sub(1);
 				return
 			}
 			cumulative_stake = cumulative_stake + stake;

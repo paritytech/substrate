@@ -995,8 +995,7 @@ mod tests {
 			// given
 			let (ready, is_ready) = std::sync::mpsc::sync_channel(0);
 			let (tx, rx) = std::sync::mpsc::sync_channel(1);
-			let mut api = TestApi::default();
-			api.delay = Arc::new(Mutex::new(rx.into()));
+			let api = TestApi { delay: Arc::new(Mutex::new(rx.into())), ..Default::default() };
 			let pool = Arc::new(Pool::new(Default::default(), true.into(), api.into()));
 
 			// when

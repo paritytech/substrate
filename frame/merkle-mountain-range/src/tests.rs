@@ -374,7 +374,7 @@ fn should_verify_batch_proofs() {
 
 	// verify that up to n=10, valid proofs are generated for all possible leaf combinations
 	for n in 0..10 {
-		ext.execute_with(|| new_block());
+		ext.execute_with(new_block);
 		ext.persist_offchain_overlay();
 
 		// generate powerset (skipping empty set) of all possible leaf combinations for mmr size n
@@ -389,7 +389,7 @@ fn should_verify_batch_proofs() {
 	// verify that up to n=15, valid proofs are generated for all possible 2-leaf combinations
 	for n in 10..15 {
 		// (MMR Leafs)
-		ext.execute_with(|| new_block());
+		ext.execute_with(new_block);
 		ext.persist_offchain_overlay();
 
 		// generate all possible 2-leaf combinations for mmr size n
@@ -424,7 +424,7 @@ fn verification_should_be_stateless() {
 		// when
 		crate::Pallet::<Test>::generate_batch_proof(vec![5]).unwrap()
 	});
-	let root = ext.execute_with(|| crate::Pallet::<Test>::mmr_root_hash());
+	let root = ext.execute_with(crate::Pallet::<Test>::mmr_root_hash);
 
 	// Verify proof without relying on any on-chain data.
 	let leaf = crate::primitives::DataOrHash::Data(leaves[0].clone());
@@ -451,16 +451,13 @@ fn should_verify_batch_proof_statelessly() {
 		// when
 		crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap()
 	});
-	let root = ext.execute_with(|| crate::Pallet::<Test>::mmr_root_hash());
+	let root = ext.execute_with(crate::Pallet::<Test>::mmr_root_hash);
 
 	// Verify proof without relying on any on-chain data.
 	assert_eq!(
 		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
 			root,
-			leaves
-				.into_iter()
-				.map(|leaf| crate::primitives::DataOrHash::Data(leaf))
-				.collect(),
+			leaves.into_iter().map(crate::primitives::DataOrHash::Data).collect(),
 			proof
 		),
 		Ok(())

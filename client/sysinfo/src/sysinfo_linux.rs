@@ -36,7 +36,7 @@ where
 {
 	Regex::new(regex)
 		.expect("regex is correct; qed")
-		.captures(&data)?
+		.captures(data)?
 		.get(1)?
 		.as_str()
 		.parse()

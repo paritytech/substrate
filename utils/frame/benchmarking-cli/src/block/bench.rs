@@ -37,7 +37,7 @@ use thousands::Separable;
 use crate::shared::{StatSelect, Stats};
 
 /// Log target for printing block weight info.
-const LOG_TARGET: &'static str = "benchmark::block::weight";
+const LOG_TARGET: &str = "benchmark::block::weight";
 
 /// Parameters for modifying the benchmark behaviour.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
@@ -114,7 +114,7 @@ where
 			let start = Instant::now();
 
 			runtime_api
-				.execute_block(&parent_num, block)
+				.execute_block(parent_num, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			record.push(start.elapsed().as_nanos() as NanoSeconds);
@@ -136,7 +136,7 @@ where
 
 		let mut raw_weight = &self
 			.client
-			.storage(&block, &key)?
+			.storage(block, &key)?
 			.ok_or(format!("Could not find System::BlockWeight for block: {}", block))?
 			.0[..];
 

@@ -1509,8 +1509,8 @@ fn grandpa_environment_never_overwrites_round_voter_state() {
 	let environment = test_environment(&link, Some(keystore), network_service.clone(), ());
 
 	let round_state = || finality_grandpa::round::State::genesis(Default::default());
-	let base = || Default::default();
-	let historical_votes = || finality_grandpa::HistoricalVotes::new();
+	let base = Default::default;
+	let historical_votes = finality_grandpa::HistoricalVotes::new;
 
 	let get_current_round = |n| {
 		let current_rounds = environment

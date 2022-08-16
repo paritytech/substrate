@@ -289,7 +289,7 @@ use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
 /// The log target of this pallet.
-pub const LOG_TARGET: &'static str = "runtime::nomination-pools";
+pub const LOG_TARGET: &str = "runtime::nomination-pools";
 
 // syntactic sugar for logging.
 #[macro_export]
@@ -871,7 +871,7 @@ impl<T: Config> BondedPool<T> {
 		// Cache the value
 		let bonded_account = self.bonded_account();
 		T::Currency::transfer(
-			&who,
+			who,
 			&bonded_account,
 			amount,
 			match ty {
@@ -1779,10 +1779,10 @@ pub mod pallet {
 				.iter()
 				.fold(BalanceOf::<T>::zero(), |accumulator, (era, unlocked_points)| {
 					sum_unlocked_points = sum_unlocked_points.saturating_add(*unlocked_points);
-					if let Some(era_pool) = sub_pools.with_era.get_mut(&era) {
+					if let Some(era_pool) = sub_pools.with_era.get_mut(era) {
 						let balance_to_unbond = era_pool.dissolve(*unlocked_points);
 						if era_pool.points.is_zero() {
-							sub_pools.with_era.remove(&era);
+							sub_pools.with_era.remove(era);
 						}
 						accumulator.saturating_add(balance_to_unbond)
 					} else {
@@ -2257,8 +2257,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let u256 = |x| T::BalanceToU256::convert(x);
-		let balance = |x| T::U256ToBalance::convert(x);
+		let u256 = T::BalanceToU256::convert;
+		let balance = T::U256ToBalance::convert;
 		match (current_balance.is_zero(), current_points.is_zero()) {
 			(_, true) => new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
@@ -2285,8 +2285,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		points: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let u256 = |x| T::BalanceToU256::convert(x);
-		let balance = |x| T::U256ToBalance::convert(x);
+		let u256 = T::BalanceToU256::convert;
+		let balance = T::U256ToBalance::convert;
 		if current_balance.is_zero() || current_points.is_zero() || points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero()
@@ -2327,7 +2327,7 @@ impl<T: Config> Pallet<T> {
 		// Transfer payout to the member.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
-			&member_account,
+			member_account,
 			pending_rewards,
 			ExistenceRequirement::AllowDeath,
 		)?;

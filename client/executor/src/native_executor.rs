@@ -639,8 +639,11 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 						);
 
 						used_native = true;
-						let res = with_externalities_safe(&mut **ext, move || (call)())
-							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(Error::ApiError));
+						let res =
+							with_externalities_safe(&mut **ext, call) // TODO: can I remove the move here???
+								.and_then(|r| {
+									r.map(NativeOrEncoded::Native).map_err(Error::ApiError)
+								});
 
 						Ok(res)
 					},

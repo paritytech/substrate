@@ -463,12 +463,10 @@ fn notifications_back_pressure() {
 
 	async_std::task::block_on(async move {
 		// Wait for the `NotificationStreamOpened`.
-		loop {
-			match events_stream1.next().await.unwrap() {
-				Event::NotificationStreamOpened { .. } => break,
-				_ => {},
-			};
-		}
+		while !matches!(
+			events_stream1.next().await.unwrap(),
+			Event::NotificationStreamOpened { .. }
+		) {}
 
 		// Sending!
 		for num in 0..TOTAL_NOTIFS {
@@ -528,14 +526,13 @@ fn fallback_name_working() {
 	let receiver = async_std::task::spawn(async move {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
-			match events_stream2.next().await.unwrap() {
-				Event::NotificationStreamOpened { protocol, negotiated_fallback, .. } => {
-					assert_eq!(protocol, PROTOCOL_NAME);
-					assert_eq!(negotiated_fallback, None);
-					break
-				},
-				_ => {},
-			};
+			if let Event::NotificationStreamOpened { protocol, negotiated_fallback, .. } =
+				events_stream2.next().await.unwrap()
+			{
+				assert_eq!(protocol, PROTOCOL_NAME);
+				assert_eq!(negotiated_fallback, None);
+				break
+			}
 		}
 	});
 

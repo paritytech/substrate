@@ -338,7 +338,7 @@ pub fn benchmark_disk_random_writes(
 			// Also the chunk's size is deliberately exactly half of a modern disk's
 			// sector size to trigger an RMW cycle.
 			let chunk = &buffer[position..position + 2048];
-			fp.write_all(&chunk)
+			fp.write_all(chunk)
 				.map_err(|error| format!("failed to write to the test file: {}", error))?;
 		}
 
@@ -381,7 +381,7 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> f64 {
 
 	let run = || -> Result<(), String> {
 		for (sig, msg) in sigs.iter().zip(msgs.iter()) {
-			let mut ok = sr25519_verify(&sig, &msg[..], &pair.public());
+			let mut ok = sr25519_verify(sig, &msg[..], &pair.public());
 			clobber_value(&mut ok);
 		}
 		Ok(())

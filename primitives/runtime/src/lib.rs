@@ -1066,7 +1066,7 @@ mod tests {
 		let msg = &b"test-message"[..];
 		let (pair, _) = ecdsa::Pair::generate();
 
-		let signature = pair.sign(&msg);
+		let signature = pair.sign(msg);
 		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
 
 		let multi_sig = MultiSignature::from(signature);
