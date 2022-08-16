@@ -1337,7 +1337,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	fn contains(id: &T::AccountId) -> bool {
 		Validators::<T>::contains_key(id)
 	}
-	fn on_insert(_: T::AccountId, _weight: VoteWeight) -> Result<(), Self::Error> {
+	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
@@ -1354,7 +1354,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	}
 	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
-		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
+		_: Box<dyn Fn(&T::AccountId) -> Self::Score>,
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0
