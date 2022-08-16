@@ -152,7 +152,7 @@ impl DummyProposer {
 			// that will re-check the randomness logic off-chain.
 			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
 				authorities: epoch.authorities.clone(),
-				randomness: epoch.randomness.clone(),
+				randomness: epoch.randomness,
 			})
 			.encode();
 			let digest = DigestItem::Consensus(BABE_ENGINE_ID, digest_data);

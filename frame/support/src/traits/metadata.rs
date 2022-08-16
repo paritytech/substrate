@@ -18,6 +18,7 @@
 //! Traits for managing information attached to pallets and their constituents.
 
 use codec::{Decode, Encode};
+use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 
@@ -70,40 +71,22 @@ pub trait PalletsInfoAccess {
 	///
 	/// You probably don't want this function but `infos()` instead.
 	fn count() -> usize {
-		0
+		// for backwards compatibility with XCM-3, Mark is deprecated.
+		Self::infos().len()
 	}
-
-	/// Extend the given vector by all of the pallets' information that this type represents.
-	///
-	/// You probably don't want this function but `infos()` instead.
-	fn accumulate(_accumulator: &mut Vec<PalletInfoData>) {}
 
 	/// All of the pallets' information that this type represents.
+	fn infos() -> Vec<PalletInfoData>;
+}
+
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+impl PalletsInfoAccess for Tuple {
 	fn infos() -> Vec<PalletInfoData> {
-		let mut result = Vec::with_capacity(Self::count());
-		Self::accumulate(&mut result);
-		result
-	}
-}
-
-impl PalletsInfoAccess for () {}
-impl<T: PalletsInfoAccess> PalletsInfoAccess for (T,) {
-	fn count() -> usize {
-		T::count()
-	}
-	fn accumulate(acc: &mut Vec<PalletInfoData>) {
-		T::accumulate(acc)
-	}
-}
-
-impl<T1: PalletsInfoAccess, T2: PalletsInfoAccess> PalletsInfoAccess for (T1, T2) {
-	fn count() -> usize {
-		T1::count() + T2::count()
-	}
-	fn accumulate(acc: &mut Vec<PalletInfoData>) {
-		// The AllPallets type tuplises the pallets in reverse order, so we unreverse them here.
-		T2::accumulate(acc);
-		T1::accumulate(acc);
+		let mut res = vec![];
+		for_tuples!( #( res.extend(Tuple::infos()); )* );
+		res
 	}
 }
 
