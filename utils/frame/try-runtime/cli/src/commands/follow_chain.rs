@@ -20,13 +20,14 @@ use crate::{
 	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
 use jsonrpsee::{
-	core::client::{Subscription, SubscriptionClientT},
+	core::client::{Client, Subscription, SubscriptionClientT},
 	ws_client::WsClientBuilder,
 };
 use parity_scale_codec::Decode;
 use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
+use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
@@ -42,33 +43,41 @@ pub struct FollowChainCmd {
 	uri: String,
 }
 
+/// Start listening for with `SUB` at `url`.
+///
+/// Returns a pair `(client, subscription)` - `subscription` alone will be useless, because it
+/// relies on the related alive `client`.
+async fn start_subscribing<Header: DeserializeOwned>(url: &str) -> (Client, Subscription<Header>) {
+	let client = WsClientBuilder::default()
+		.connection_timeout(std::time::Duration::new(20, 0))
+		.max_notifs_per_subscription(1024)
+		.max_request_body_size(u32::MAX)
+		.build(url)
+		.await
+		.unwrap();
+
+	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
+
+	let sub = client.subscribe(SUB, None, UN_SUB).await.unwrap();
+	(client, sub)
+}
+
 pub(crate) async fn follow_chain<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: FollowChainCmd,
 	config: Configuration,
 ) -> sc_cli::Result<()>
 where
-	Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
+	Block: BlockT<Hash = H256> + DeserializeOwned,
 	Block::Hash: FromStr,
-	Block::Header: serde::de::DeserializeOwned,
+	Block::Header: DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
 	let mut maybe_state_ext = None;
-
-	let client = WsClientBuilder::default()
-		.connection_timeout(std::time::Duration::new(20, 0))
-		.max_notifs_per_subscription(1024)
-		.max_request_body_size(u32::MAX)
-		.build(&command.uri)
-		.await
-		.unwrap();
-
-	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
-	let mut subscription: Subscription<Block::Header> =
-		client.subscribe(SUB, None, UN_SUB).await.unwrap();
+	let (_client, mut subscription) = start_subscribing::<Block::Header>(&command.uri).await;
 
 	let (code_key, code) = extract_code(&config.chain_spec)?;
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
