@@ -618,7 +618,7 @@ benchmarks_instance_pallet! {
 		let p in 0 .. T::MaxProposals::get();
 		let c in 0 .. T::MaxMembersCount::get();
 
-		let mut founders = (1 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let mut founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
 		let mut proposer = founders[0].clone();
 		let mut fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 		let mut allies = (0 .. z).map(ally::<T, I>).collect::<Vec<_>>();
