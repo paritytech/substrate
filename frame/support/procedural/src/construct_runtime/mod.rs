@@ -373,7 +373,7 @@ fn decl_all_pallets<'a>(
 		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
 		let feature_set = feature_set.into_iter();
 		let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-		let names = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME).rev();
+		let names = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME);
 		quote! {
 			#attr
 			/// All pallets included in the runtime as a nested tuple of types.
@@ -400,7 +400,7 @@ fn decl_all_pallets<'a>(
 			let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
 			let feature_set = feature_set.into_iter();
 			let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-			let names = names.iter().rev().filter(|n| **n != SYSTEM_PALLET_NAME);
+			let names = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME).rev();
 			quote! {
 				#attr
 				/// All pallets included in the runtime as a nested tuple of types in reversed order.
