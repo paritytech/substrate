@@ -108,8 +108,8 @@ pub enum Hook {
 	Died(u32, u64),
 }
 parameter_types! {
-	static FROZEN: HashMap<(u32, u64), u64> = Default::default();
-	static HOOKS: Vec<Hook> = Default::default();
+	static Frozen: HashMap<(u32, u64), u64> = Default::default();
+	static Hooks: Vec<Hook> = Default::default();
 }
 
 pub struct TestFreezer;
