@@ -368,9 +368,6 @@ fn decl_all_pallets<'a>(
 		}
 	}
 
-	// Make nested tuple structure like:
-	// `((FirstPallet, (SecondPallet, ( ... , LastPallet) ... ))))`
-	// But ignore the system pallet.
 	let all_pallets_without_system = names_by_feature.iter().map(|(feature_set, names)| {
 		let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
 		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
@@ -385,8 +382,6 @@ fn decl_all_pallets<'a>(
 		}
 	});
 
-	// Make nested tuple structure like:
-	// `((FirstPallet, (SecondPallet, ( ... , LastPallet) ... ))))`
 	let all_pallets_with_system = names_by_feature.iter().map(|(feature_set, names)| {
 		let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
 		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
@@ -400,9 +395,6 @@ fn decl_all_pallets<'a>(
 		}
 	});
 
-	// Make nested tuple structure like:
-	// `((LastPallet, (SecondLastPallet, ( ... , FirstPallet) ... ))))`
-	// But ignore the system pallet.
 	let all_pallets_without_system_reversed =
 		names_by_feature.iter().map(|(feature_set, names)| {
 			let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
@@ -420,8 +412,6 @@ fn decl_all_pallets<'a>(
 			}
 		});
 
-	// Make nested tuple structure like:
-	// `((LastPallet, (SecondLastPallet, ( ... , FirstPallet) ... ))))`
 	let all_pallets_with_system_reversed = names_by_feature.iter().map(|(feature_set, names)| {
 		let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
 		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
@@ -484,9 +474,9 @@ fn decl_all_pallets<'a>(
 
 		#( #all_pallets_without_system )*
 
-		#( #all_pallets_without_system_reversed )*
-
 		#( #all_pallets_with_system_reversed )*
+
+		#( #all_pallets_without_system_reversed )*
 
 		#( #all_pallets_reversed_with_system_first )*
 	)
