@@ -448,22 +448,23 @@ fn decl_all_pallets<'a>(
 				.into_compile_error(),
 		};
 
-	let all_pallets_reversed_with_system_first = names_by_feature.iter().map(|(feature_set, names)| {
-		let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
-		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
-		let feature_set = feature_set.into_iter();
-		let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-		let names =
-			std::iter::once(system_pallet).chain(names.iter().filter(|n| **n != SYSTEM_PALLET_NAME));
-		quote! {
-			#attr
-			/// All pallets included in the runtime as a nested tuple of types in reversed order.
-			/// With the system pallet first.
-			#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
-			`AllPalletWithSystem or AllPalletsWithoutSystem`")]
-			pub type AllPalletsWithSystemReversed = ( #(#names),* );
-		}
-	});
+	let all_pallets_reversed_with_system_first =
+		names_by_feature.iter().map(|(feature_set, names)| {
+			let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
+			let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
+			let feature_set = feature_set.into_iter();
+			let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
+			let names = std::iter::once(system_pallet)
+				.chain(names.iter().filter(|n| **n != SYSTEM_PALLET_NAME));
+			quote! {
+				#attr
+				/// All pallets included in the runtime as a nested tuple of types in reversed order.
+				/// With the system pallet first.
+				#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+				`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+				pub type AllPalletsWithSystemReversed = ( #(#names),* );
+			}
+		});
 
 	quote!(
 		#types
