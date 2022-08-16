@@ -422,8 +422,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn change_member_count(origin: OriginFor<T>, count: u32) -> DispatchResult {
 			ensure_root(origin)?;
-			Self::update_member_count(count)?;
-			Ok(())
+			Self::update_member_count(count).map_err(Into::into)
 		}
 	}
 }
