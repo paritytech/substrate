@@ -4651,6 +4651,7 @@ dependencies = [
  "frame-system",
  "frame-system-rpc-runtime-api",
  "futures",
+ "hex",
  "hex-literal",
  "jsonrpsee",
  "kitchensink-runtime",
