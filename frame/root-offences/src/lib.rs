@@ -17,6 +17,8 @@
 
 //! # Sudo Offences Pallet
 //! Pallet that allows the root to create an offence.
+//!
+//! NOTE: This pallet should be used for testing purposes.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -75,7 +77,7 @@ pub mod pallet {
 			Option<<T as frame_system::Config>::AccountId>,
 		>,
 	{
-		/// Allows the `root` to create an offence.
+		/// Allows the `root`, for example sudo to create an offence.
 		#[pallet::weight(10_000)]
 		pub fn create_offence(
 			origin: OriginFor<T>,
@@ -106,6 +108,7 @@ pub mod pallet {
 			FullIdentificationOf = ExposureOf<T>,
 		>,
 	{
+		/// Submits the offence by calling the `on_offence` function.
 		fn submit_offence(offenders: &[OffenceDetails<T>], slash_fraction: &[Perbill]) {
 			let session_index = <pallet_session::Pallet<T> as frame_support::traits::ValidatorSet<T::AccountId>>::session_index();
 
@@ -116,6 +119,7 @@ pub mod pallet {
 			>>::on_offence(&offenders, &slash_fraction, session_index, DisableStrategy::WhenSlashed);
 		}
 
+		/// Returns a vector of offenders that are going to be slashed.
 		fn get_offence_details(
 			offenders: Vec<(T::AccountId, Perbill)>,
 		) -> Result<Vec<OffenceDetails<T>>, DispatchError> {
