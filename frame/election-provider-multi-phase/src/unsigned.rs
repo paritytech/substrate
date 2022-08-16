@@ -20,6 +20,7 @@
 use crate::{
 	helpers, Call, Config, ElectionCompute, Error, FeasibilityError, Pallet, RawSolution,
 	ReadySolution, RoundSnapshot, SolutionAccuracyOf, SolutionOf, SolutionOrSnapshotSize, Weight,
+	WeightInfo,
 };
 use codec::Encode;
 use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, VoteWeight};
@@ -162,9 +163,18 @@ impl<T: Config> Pallet<T> {
 		let RoundSnapshot { voters, targets } =
 			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
 		let desired_targets = Self::desired_targets().ok_or(MinerError::SnapshotUnAvailable)?;
+
+		// THIS IS WRONG.
+		let weight = T::WeightInfo::submit_unsigned(
+			voters.len() as u32,
+			targets.len() as u32,
+			0,
+			desired_targets
+		);
+
 		let (solution, score, size) = Miner::<T::MinerConfig>::mine_solution_with_snapshot::<
 			T::Solver,
-		>(voters, targets, desired_targets)?;
+		>(voters, targets, desired_targets, weight)?;
 		let round = Self::round();
 		Ok((RawSolution { solution, score, round }, size))
 	}
@@ -365,16 +375,6 @@ impl<T: Config> Pallet<T> {
 pub trait MinerConfig {
 	/// The account id type.
 	type AccountId: Ord + Clone + codec::Codec + sp_std::fmt::Debug;
-	/// The solution that the miner is mining.
-	type Solution: codec::Codec
-		+ Default
-		+ PartialEq
-		+ Eq
-		+ Clone
-		+ sp_std::fmt::Debug
-		+ Ord
-		+ NposSolution
-		+ TypeInfo;
 	/// Maximum number of votes per voter in the snapshots.
 	type MaxVotesPerVoter;
 	/// Maximum length of the solution that the miner is allowed to generate.
@@ -387,10 +387,17 @@ pub trait MinerConfig {
 	///
 	/// The weight is computed using `solution_weight`.
 	type MaxWeight: Get<Weight>;
-	/// Something that can compute the weight of a solution.
-	///
-	/// This weight estimate is then used to trim the solution, based on [`MinerConfig::MaxWeight`].
-	fn solution_weight(voters: u32, targets: u32, active_voters: u32, degree: u32) -> Weight;
+
+	/// ...
+	type Solution: codec::Codec
+		+ Default
+		+ PartialEq
+		+ Eq
+		+ Clone
+		+ sp_std::fmt::Debug
+		+ Ord
+		+ NposSolution
+		+ TypeInfo;
 }
 
 /// A base miner, suitable to be used for both signed and unsigned submissions.
@@ -401,6 +408,7 @@ impl<T: MinerConfig> Miner<T> {
 		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
 		targets: Vec<T::AccountId>,
 		desired_targets: u32,
+		weight: Weight,
 	) -> Result<(SolutionOf<T>, ElectionScore, SolutionOrSnapshotSize), MinerError>
 	where
 		S: NposSolver<AccountId = T::AccountId>,
@@ -416,6 +424,7 @@ impl<T: MinerConfig> Miner<T> {
 					voters,
 					targets,
 					desired_targets,
+					weight,
 				)
 			})
 	}
@@ -429,6 +438,7 @@ impl<T: MinerConfig> Miner<T> {
 		voters: Vec<(T::AccountId, VoteWeight, BoundedVec<T::AccountId, T::MaxVotesPerVoter>)>,
 		targets: Vec<T::AccountId>,
 		desired_targets: u32,
+		weight: Weight,
 	) -> Result<(SolutionOf<T>, ElectionScore, SolutionOrSnapshotSize), MinerError> {
 		// now make some helper closures.
 		let cache = helpers::generate_voter_cache::<T>(&voters);
@@ -488,12 +498,15 @@ impl<T: MinerConfig> Miner<T> {
 		// trim assignments list for weight and length.
 		let size =
 			SolutionOrSnapshotSize { voters: voters.len() as u32, targets: targets.len() as u32 };
+
 		Self::trim_assignments_weight(
+			weight,
 			desired_targets,
 			size,
 			T::MaxWeight::get(),
 			&mut index_assignments,
 		);
+
 		Self::trim_assignments_length(
 			T::MaxLength::get(),
 			&mut index_assignments,
@@ -582,51 +595,20 @@ impl<T: MinerConfig> Miner<T> {
 		Ok(())
 	}
 
-	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
-	///
-	/// The weight of the solution is foremost a function of the number of voters (i.e.
-	/// `assignments.len()`). Aside from this, the other components of the weight are invariant. The
-	/// number of winners shall not be changed (otherwise the solution is invalid) and the
-	/// `ElectionSize` is merely a representation of the total number of stakers.
-	///
-	/// Thus, we reside to stripping away some voters from the `assignments`.
-	///
-	/// Note that the solution is already computed, and the winners are elected based on the merit
-	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
-	/// down the line.
-	///
-	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
-	/// much or remove a winner, then the solution must be discarded **after** this step.
-	pub fn trim_assignments_weight(
-		desired_targets: u32,
-		size: SolutionOrSnapshotSize,
-		max_weight: Weight,
-		assignments: &mut Vec<IndexAssignmentOf<T>>,
-	) {
-		let maximum_allowed_voters =
-			Self::maximum_voter_for_weight(desired_targets, size, max_weight);
-		let removing: usize =
-			assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
-		log_no_system!(
-			debug,
-			"from {} assignments, truncating to {} for weight, removing {}",
-			assignments.len(),
-			maximum_allowed_voters,
-			removing,
-		);
-		assignments.truncate(maximum_allowed_voters as usize);
-	}
-
 	/// Find the maximum `len` that a solution can have in order to fit into the block weight.
 	///
 	/// This only returns a value between zero and `size.nominators`.
 	pub fn maximum_voter_for_weight(
+		weight: Weight,
 		desired_winners: u32,
 		size: SolutionOrSnapshotSize,
 		max_weight: Weight,
 	) -> u32 {
+		todo!();
+
+		/*
 		if size.voters < 1 {
-			return size.voters
+			return size.voters;
 		}
 
 		let max_voters = size.voters.max(1);
@@ -634,7 +616,7 @@ impl<T: MinerConfig> Miner<T> {
 
 		// helper closures.
 		let weight_with = |active_voters: u32| -> Weight {
-			T::solution_weight(size.voters, size.targets, active_voters, desired_winners)
+			W::submit_unsigned(size.voters, size.targets, active_voters, desired_winners)
 		};
 
 		let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
@@ -687,6 +669,43 @@ impl<T: MinerConfig> Miner<T> {
 			max_weight,
 		);
 		final_decision
+		*/
+	}
+
+	/// Greedily reduce the size of the solution to fit into the block w.r.t. weight.
+	///
+	/// The weight of the solution is foremost a function of the number of voters (i.e.
+	/// `assignments.len()`). Aside from this, the other components of the weight are invariant. The
+	/// number of winners shall not be changed (otherwise the solution is invalid) and the
+	/// `ElectionSize` is merely a representation of the total number of stakers.
+	///
+	/// Thus, we reside to stripping away some voters from the `assignments`.
+	///
+	/// Note that the solution is already computed, and the winners are elected based on the merit
+	/// of the entire stake in the system. Nonetheless, some of the voters will be removed further
+	/// down the line.
+	///
+	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
+	/// much or remove a winner, then the solution must be discarded **after** this step.
+	pub fn trim_assignments_weight(
+		weight: Weight,
+		desired_targets: u32,
+		size: SolutionOrSnapshotSize,
+		max_weight: Weight,
+		assignments: &mut Vec<IndexAssignmentOf<T>>,
+	) {
+		let maximum_allowed_voters =
+			Self::maximum_voter_for_weight(weight, desired_targets, size, max_weight);
+		let removing: usize =
+			assignments.len().saturating_sub(maximum_allowed_voters.saturated_into());
+		log_no_system!(
+			debug,
+			"from {} assignments, truncating to {} for weight, removing {}",
+			assignments.len(),
+			maximum_allowed_voters,
+			removing,
+		);
+		assignments.truncate(maximum_allowed_voters as usize);
 	}
 }
 

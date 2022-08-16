@@ -490,7 +490,7 @@ impl<T: Config> Pallet<T> {
 		raw_solution: &RawSolution<SolutionOf<T::MinerConfig>>,
 		size: SolutionOrSnapshotSize,
 	) -> Weight {
-		T::MinerConfig::solution_weight(
+		T::WeightInfo::feasibility_check(
 			size.voters,
 			size.targets,
 			raw_solution.solution.voter_count() as u32,
