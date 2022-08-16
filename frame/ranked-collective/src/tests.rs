@@ -371,18 +371,12 @@ fn promote_demote_by_rank_works() {
 
 // --Testing ad_member_rank which require a Sudo account ----
 
-pub fn test_with_sudo(root_key:u64) -> sp_io::TestExternalities {
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_sudo::GenesisConfig::<Test> { key: Some(root_key) }.build();
-	let ext = sp_io::TestExternalities::new(t);
-	ext
-}
-
 #[test]
 pub fn add_member_to_rank_work(){
-	test_with_sudo(1).execute_with(||{
+	new_test_ext().execute_with(||{
 		assert_ok!(Club::add_member_to_rank(Origin::root(), 2,1));
-		assert_eq!(Sudo::key(),Some(1));
+		//-- Should fail ----------------------------------------
+		assert_noop!(Club::add_member_to_rank(Origin::signed(1),2,1), BadOrigin);
 	})
 }
 
