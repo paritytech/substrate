@@ -19,7 +19,7 @@
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use sp_application_crypto::{ecdsa, ed25519, sr25519, AppKey, AppPair, IsWrappedBy};
+use sp_application_crypto::{ecdsa, ed25519, sr25519, bls, AppKey, AppPair, IsWrappedBy};
 use sp_core::{
 	crypto::{
 		ByteArray, CryptoTypePublicPair, ExposeSecret, KeyTypeId, Pair as PairT, SecretString,
@@ -113,6 +113,20 @@ impl CryptoStore for LocalKeystore {
 	) -> std::result::Result<ecdsa::Public, TraitError> {
 		SyncCryptoStore::ecdsa_generate_new(self, id, seed)
 	}
+
+	async fn bls_public_keys(&self, id: KeyTypeId) -> Vec<bls::Public> {
+		SyncCryptoStore::bls_public_keys(self, id)
+	}
+
+	async fn bls_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bls::Public, TraitError> {
+		SyncCryptoStore::bls_generate_new(self, id, seed)
+	}
+
+	
 
 	async fn insert_unknown(
 		&self,
@@ -302,6 +316,33 @@ impl SyncCryptoStore for LocalKeystore {
 			Some(seed) =>
 				self.0.write().insert_ephemeral_from_seed_by_type::<ecdsa::Pair>(seed, id),
 			None => self.0.write().generate_by_type::<ecdsa::Pair>(id),
+		}
+		.map_err(|e| -> TraitError { e.into() })?;
+
+		Ok(pair.public())
+	}
+
+	fn bls_public_keys(&self, key_type: KeyTypeId) -> Vec<bls::Public> {
+		self.0
+			.read()
+			.raw_public_keys(key_type)
+			.map(|v| {
+				v.into_iter()
+					.filter_map(|k| bls::Public::from_slice(k.as_slice()).ok())
+					.collect()
+			})
+			.unwrap_or_default()
+	}
+
+	fn bls_generate_new(
+		&self,
+		id: KeyTypeId,
+		seed: Option<&str>,
+	) -> std::result::Result<bls::Public, TraitError> {
+		let pair = match seed {
+			Some(seed) =>
+				self.0.write().insert_ephemeral_from_seed_by_type::<bls::Pair>(seed, id),
+			None => self.0.write().generate_by_type::<bls::Pair>(id),
 		}
 		.map_err(|e| -> TraitError { e.into() })?;
 
