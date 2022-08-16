@@ -396,20 +396,20 @@ mod tests {
 		set.import(11_2, 11, 10_1);
 		set.import(12_1, 12, 11_1);
 
-		let outcome = set.remove(12_1, 12, 11_1).unwrap();
+		let outcome = set.remove(12_1, 12, Some(11_1)).unwrap();
 		assert_eq!(outcome.removed.hash, 12_1);
 		assert_eq!(outcome.inserted, Some(11_1));
 		assert_eq!(set.count(), 2);
 		assert!(set.contains(11, 11_1));
 		assert!(set.contains(11, 11_2));
 
-		let outcome = set.remove(11_1, 11, 10_1).unwrap();
+		let outcome = set.remove(11_1, 11, None).unwrap();
 		assert_eq!(outcome.removed.hash, 11_1);
 		assert_eq!(outcome.inserted, None);
 		assert_eq!(set.count(), 1);
 		assert!(set.contains(11, 11_2));
 
-		let outcome = set.remove(11_2, 11, 10_1).unwrap();
+		let outcome = set.remove(11_2, 11, Some(10_1)).unwrap();
 		assert_eq!(outcome.removed.hash, 11_2);
 		assert_eq!(outcome.inserted, Some(10_1));
 		assert_eq!(set.count(), 1);
