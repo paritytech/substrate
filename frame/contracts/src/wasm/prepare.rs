@@ -426,7 +426,7 @@ fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 		.saturating_add(original_code_len)
 		.saturating_add(<OwnerInfo<T>>::max_encoded_len()) as u32;
 	let deposit = Diff { bytes_added, items_added: 3, ..Default::default() }
-		.to_deposit::<T>()
+		.update_contract::<T>(None)
 		.charge_or_zero();
 
 	module.owner_info = Some(OwnerInfo { owner, deposit, refcount: 0 });

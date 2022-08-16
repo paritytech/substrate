@@ -808,7 +808,10 @@ where
 			// Storage limit is enforced as late as possible (when the last frame returns) so that
 			// the ordering of storage accesses does not matter.
 			if self.frames.is_empty() {
-				self.top_frame_mut().nested_storage.enforce_limit()?;
+				let frame = top_frame_mut!(self);
+				frame.contract_info.load(&frame.account_id);
+				let contract = frame.contract_info.as_contract();
+				frame.nested_storage.enforce_limit(contract)?;
 			}
 
 			// Additional work needs to be performed in case of an instantiation.
@@ -2346,10 +2349,10 @@ mod tests {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
 				let info = ctx.ext.contract_info();
-				assert_eq!(info.storage_deposit, 0);
-				info.storage_deposit = 42;
+				assert_eq!(info.storage_byte_deposit, 0);
+				info.storage_byte_deposit = 42;
 				assert_eq!(ctx.ext.call(0, CHARLIE, 0, vec![], true), exec_trapped());
-				assert_eq!(ctx.ext.contract_info().storage_deposit, 42);
+				assert_eq!(ctx.ext.contract_info().storage_byte_deposit, 42);
 			}
 			exec_success()
 		});

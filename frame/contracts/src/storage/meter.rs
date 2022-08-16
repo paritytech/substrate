@@ -26,7 +26,10 @@ use frame_support::{
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
 use sp_core::crypto::UncheckedFrom;
-use sp_runtime::traits::{Saturating, Zero};
+use sp_runtime::{
+	traits::{Saturating, Zero},
+	FixedPointNumber, FixedU128,
+};
 use sp_std::marker::PhantomData;
 
 /// Deposit that uses the native currency's balance type.
@@ -125,33 +128,64 @@ pub struct Diff {
 }
 
 impl Diff {
-	/// Calculate how much of a charge or refund results from applying the diff.
-	pub fn to_deposit<T: Config>(&self) -> DepositOf<T> {
-		let mut deposit = Deposit::default();
+	/// Calculate how much of a charge or refund results from applying the diff and store it
+	/// in the passed `info` if any.
+	///
+	/// # Note
+	///
+	/// In case `None` is passed for `info` only charges are calculated. This is because refunds
+	/// are calculated pro rata of the existing storage within a contract and hence need extract
+	/// this information from the passed `info`.
+	pub fn update_contract<T: Config>(&self, info: Option<&mut ContractInfo<T>>) -> DepositOf<T> {
 		let per_byte = T::DepositPerByte::get();
 		let per_item = T::DepositPerItem::get();
+		let bytes_added = self.bytes_added.saturating_sub(self.bytes_removed);
+		let items_added = self.items_added.saturating_sub(self.items_removed);
+		let mut bytes_deposit = Deposit::Charge(per_byte.saturating_mul((bytes_added).into()));
+		let mut items_deposit = Deposit::Charge(per_item.saturating_mul((items_added).into()));
 
-		if self.bytes_added > self.bytes_removed {
-			deposit = deposit.saturating_add(&Deposit::Charge(
-				per_byte.saturating_mul((self.bytes_added - self.bytes_removed).into()),
-			));
-		} else if self.bytes_removed > self.bytes_added {
-			deposit = deposit.saturating_add(&Deposit::Refund(
-				per_byte.saturating_mul((self.bytes_removed - self.bytes_added).into()),
-			));
+		// Without any contract info we can only calculate diffs which add storage
+		let info = if let Some(info) = info {
+			info
+		} else {
+			debug_assert_eq!(self.bytes_removed, 0);
+			debug_assert_eq!(self.items_removed, 0);
+			return bytes_deposit.saturating_add(&items_deposit)
+		};
+
+		// Refunds are calculated pro rata based on the accumulated storage within the contract
+		let bytes_removed = self.bytes_removed.saturating_sub(self.bytes_added);
+		let items_removed = self.items_removed.saturating_sub(self.items_added);
+		let ratio = FixedU128::checked_from_rational(bytes_removed, info.storage_bytes)
+			.unwrap_or_default()
+			.min(FixedU128::from_u32(1));
+		bytes_deposit = bytes_deposit
+			.saturating_add(&Deposit::Refund(ratio.saturating_mul_int(info.storage_byte_deposit)));
+		let ratio = FixedU128::checked_from_rational(items_removed, info.storage_items)
+			.unwrap_or_default()
+			.min(FixedU128::from_u32(1));
+		items_deposit = items_deposit
+			.saturating_add(&Deposit::Refund(ratio.saturating_mul_int(info.storage_item_deposit)));
+
+		// We need to update the contract info structure with the new deposits
+		info.storage_bytes =
+			info.storage_bytes.saturating_add(bytes_added).saturating_sub(bytes_removed);
+		info.storage_items =
+			info.storage_items.saturating_add(items_added).saturating_sub(items_removed);
+		match &bytes_deposit {
+			Deposit::Charge(amount) =>
+				info.storage_byte_deposit = info.storage_byte_deposit.saturating_add(*amount),
+			Deposit::Refund(amount) =>
+				info.storage_byte_deposit = info.storage_byte_deposit.saturating_sub(*amount),
+		}
+		match &items_deposit {
+			Deposit::Charge(amount) =>
+				info.storage_item_deposit = info.storage_item_deposit.saturating_add(*amount),
+			Deposit::Refund(amount) =>
+				info.storage_item_deposit = info.storage_item_deposit.saturating_sub(*amount),
 		}
 
-		if self.items_added > self.items_removed {
-			deposit = deposit.saturating_add(&Deposit::Charge(
-				per_item.saturating_mul((self.items_added - self.items_removed).into()),
-			));
-		} else if self.items_removed > self.items_added {
-			deposit = deposit.saturating_add(&Deposit::Refund(
-				per_item.saturating_mul((self.items_removed - self.items_added).into()),
-			));
-		}
-
-		deposit
+		bytes_deposit.saturating_add(&items_deposit)
 	}
 }
 
@@ -166,17 +200,25 @@ impl Diff {
 	}
 }
 
+/// Records the storage changes of a storage meter.
 #[derive(RuntimeDebugNoBound)]
 enum Contribution<T: Config> {
+	/// The contract the meter belongs to is alive and accumulates changes using a [`Diff`].
 	Alive(Diff),
+	/// The meter was checked against its limit using [`RawMeter::enforce_limit`] at the end of
+	/// its execution. In this process the [`Diff`] was converted into a [`Deposit`].
+	Checked(DepositOf<T>),
+	/// The contract was terminated. In this process the [`Diff`] was converted into a [`Deposit`]
+	/// in order to calculate the refund.
 	Terminated(DepositOf<T>),
 }
 
 impl<T: Config> Contribution<T> {
-	fn to_deposit(&self) -> DepositOf<T> {
+	/// See [`Diff::update_contract`].
+	fn update_contract(&self, info: Option<&mut ContractInfo<T>>) -> DepositOf<T> {
 		match self {
-			Self::Alive(diff) => diff.to_deposit::<T>(),
-			Self::Terminated(deposit) => deposit.clone(),
+			Self::Alive(diff) => diff.update_contract::<T>(info),
+			Self::Terminated(deposit) | Self::Checked(deposit) => deposit.clone(),
 		}
 	}
 }
@@ -222,40 +264,16 @@ where
 	/// `info`: The info of the contract in question. `None` if the contract was terminated.
 	pub fn absorb(
 		&mut self,
-		mut absorbed: RawMeter<T, E, Nested>,
+		absorbed: RawMeter<T, E, Nested>,
 		origin: &T::AccountId,
 		contract: &T::AccountId,
 		info: Option<&mut ContractInfo<T>>,
 	) {
-		let mut own_deposit = absorbed.own_contribution.to_deposit();
-		absorbed.total_deposit = absorbed.total_deposit.saturating_add(&own_deposit);
-
-		// Absorbing from an existing (non terminated) contract.
-		if let Some(info) = info {
-			match &mut own_deposit {
-				Deposit::Charge(amount) =>
-					info.storage_deposit = info.storage_deposit.saturating_add(*amount),
-				Deposit::Refund(amount) => {
-					// We need to make sure to never refund more than what was deposited and
-					// still leave the existential deposit inside the contract's account.
-					// This case can happen when costs change due to a runtime upgrade where
-					// increased costs could remove an account due to refunds.
-					let amount = {
-						let corrected_amount = (*amount).min(
-							info.storage_deposit.saturating_sub(T::Currency::minimum_balance()),
-						);
-						let correction = (*amount).saturating_sub(corrected_amount);
-						absorbed.total_deposit =
-							absorbed.total_deposit.saturating_sub(&Deposit::Refund(correction));
-						*amount = corrected_amount;
-						corrected_amount
-					};
-					info.storage_deposit = info.storage_deposit.saturating_sub(amount);
-				},
-			}
-		}
-
-		self.total_deposit = self.total_deposit.saturating_add(&absorbed.total_deposit);
+		let own_deposit = absorbed.own_contribution.update_contract(info);
+		self.total_deposit = self
+			.total_deposit
+			.saturating_add(&absorbed.total_deposit)
+			.saturating_add(&own_deposit);
 		if !own_deposit.is_zero() {
 			E::charge(origin, contract, &own_deposit, absorbed.is_terminated());
 		}
@@ -266,10 +284,12 @@ where
 		self.total_deposit.available(&self.limit)
 	}
 
+	/// True if the contract is alive.
 	fn is_alive(&self) -> bool {
 		matches!(self.own_contribution, Contribution::Alive(_))
 	}
 
+	/// True if the contract is terminated.
 	fn is_terminated(&self) -> bool {
 		matches!(self.own_contribution, Contribution::Terminated(_))
 	}
@@ -320,20 +340,6 @@ where
 		};
 	}
 
-	pub fn enforce_limit(&self) -> Result<(), DispatchError> {
-		if !self.is_alive() {
-			return Ok(())
-		}
-		let deposit = self.own_contribution.to_deposit();
-		let total_deposit = self.total_deposit.saturating_add(&deposit);
-		if let Deposit::Charge(amount) = total_deposit {
-			if amount > self.limit {
-				return Err(<Error<T>>::StorageDepositLimitExhausted.into())
-			}
-		}
-		Ok(())
-	}
-
 	/// Charge from `origin` a storage deposit for contract instantiation.
 	///
 	/// This immediately transfers the balance in order to create the account.
@@ -346,20 +352,19 @@ where
 		debug_assert!(self.is_alive());
 		let mut deposit =
 			Diff { bytes_added: info.encoded_size() as u32, items_added: 1, ..Default::default() }
-				.to_deposit::<T>();
+				.update_contract::<T>(None);
 
 		// Instantiate needs to transfer the minimum balance at least in order to pull the
 		// contract's account into existence.
 		deposit = deposit.max(Deposit::Charge(T::Currency::minimum_balance()));
-
-		// We do not increase `own_contribution` because this will be charged later when the
-		// contract execution does conclude.
-		let total_deposit = self.total_deposit.saturating_add(&deposit);
-		if total_deposit.charge_or_zero() > self.limit {
+		if deposit.charge_or_zero() > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
-		info.storage_deposit = info.storage_deposit.saturating_add(deposit.charge_or_zero());
-		self.total_deposit = total_deposit;
+
+		// We do not increase `own_contribution` because this will be charged later when the
+		// contract execution does conclude and hence would lead to a double charge.
+		self.total_deposit = deposit.clone();
+		info.storage_base_deposit = deposit.charge_or_zero();
 		if !deposit.is_zero() {
 			// We need to charge immediately so that the account is created before the `value`
 			// is transferred from the caller to the contract.
@@ -372,18 +377,34 @@ where
 	///
 	/// This will manipulate the meter so that all storage deposit accumulated in
 	/// `contract_info` will be refunded to the `origin` of the meter.
-	pub fn terminate(&mut self, contract_info: &ContractInfo<T>) {
+	pub fn terminate(&mut self, info: &ContractInfo<T>) {
 		debug_assert!(self.is_alive());
-		let refund = Deposit::Refund(contract_info.storage_deposit);
+		self.own_contribution = Contribution::Terminated(Deposit::Refund(info.total_deposit()));
+	}
 
-		// The deposit for `own_deposit` isn't persisted into the contract info until the current
-		// frame is dropped. This means that whatever changes were introduced during the
-		// current frame are discarded when terminating.
-		self.total_deposit = self
-			.total_deposit
-			.saturating_add(&refund)
-			.saturating_sub(&self.own_contribution.to_deposit());
-		self.own_contribution = Contribution::Terminated(refund);
+	/// [Self::charge`] does not enforce the storage limit since we want to do this check as late
+	/// as possible to allow later refunds to offset earlier charges.
+	///
+	/// # Note
+	///
+	/// We only need to call this **once** for every call stack and not for every cross contract
+	/// call. Hence this is only called when the last call frame returns.
+	pub fn enforce_limit(
+		&mut self,
+		info: Option<&mut ContractInfo<T>>,
+	) -> Result<(), DispatchError> {
+		let deposit = self.own_contribution.update_contract(info);
+		let total_deposit = self.total_deposit.saturating_add(&deposit);
+		// We don't want to override a `Terminated` with a `Checked`.
+		if self.is_alive() {
+			self.own_contribution = Contribution::Checked(deposit);
+		}
+		if let Deposit::Charge(amount) = total_deposit {
+			if amount > self.limit {
+				return Err(<Error<T>>::StorageDepositLimitExhausted.into())
+			}
+		}
+		Ok(())
 	}
 }
 
@@ -558,14 +579,26 @@ mod tests {
 		TEST_EXT.with(|ext| ext.borrow_mut().clear())
 	}
 
-	fn new_info(deposit: BalanceOf<Test>) -> ContractInfo<Test> {
+	#[derive(Default)]
+	struct StorageInfo {
+		bytes: u32,
+		items: u32,
+		bytes_deposit: BalanceOf<Test>,
+		items_deposit: BalanceOf<Test>,
+	}
+
+	fn new_info(info: StorageInfo) -> ContractInfo<Test> {
 		use crate::storage::Storage;
 		use sp_runtime::traits::Hash;
 
 		ContractInfo::<Test> {
 			trie_id: <Storage<Test>>::generate_trie_id(&ALICE, 42),
 			code_hash: <Test as frame_system::Config>::Hashing::hash(b"42"),
-			storage_deposit: deposit,
+			storage_bytes: info.bytes,
+			storage_items: info.items,
+			storage_byte_deposit: info.bytes_deposit,
+			storage_item_deposit: info.items_deposit,
+			storage_base_deposit: Default::default(),
 		}
 	}
 
@@ -596,7 +629,6 @@ mod tests {
 		// an empty charge does not create a `Charge` entry
 		let mut nested0 = meter.nested();
 		nested0.charge(&Default::default());
-		nested0.enforce_limit().unwrap();
 		meter.absorb(nested0, &ALICE, &BOB, None);
 
 		TEST_EXT.with(|ext| {
@@ -614,12 +646,11 @@ mod tests {
 	fn charging_works() {
 		clear_ext();
 
-		let min_balance = <Test as Config>::Currency::minimum_balance();
-
 		let mut meter = TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 		assert_eq!(meter.available(), 1_000);
 
-		let mut nested0_info = new_info(100);
+		let mut nested0_info =
+			new_info(StorageInfo { bytes: 100, items: 5, bytes_deposit: 100, items_deposit: 10 });
 		let mut nested0 = meter.nested();
 		nested0.charge(&Diff {
 			bytes_added: 10,
@@ -630,26 +661,24 @@ mod tests {
 		});
 		nested0.charge(&Diff { bytes_removed: 1, ..Default::default() });
 
-		let mut nested1_info = new_info(50);
+		let mut nested1_info =
+			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
 		let mut nested1 = nested0.nested();
 		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
-		nested1.enforce_limit().unwrap();
+		nested1.enforce_limit(Some(&mut nested1_info)).unwrap();
 		nested0.absorb(nested1, &ALICE, &CHARLIE, Some(&mut nested1_info));
 
-		// Trying to refund more than is available in the contract will cap the charge
-		// to (deposit_in_contract - ed).
-		let mut nested2_info = new_info(5);
+		let mut nested2_info =
+			new_info(StorageInfo { bytes: 100, items: 7, bytes_deposit: 100, items_deposit: 20 });
 		let mut nested2 = nested0.nested();
-		nested2.charge(&Diff { bytes_removed: 7, ..Default::default() });
-		nested2.enforce_limit().unwrap();
+		nested2.charge(&Diff { items_removed: 7, ..Default::default() });
 		nested0.absorb(nested2, &ALICE, &CHARLIE, Some(&mut nested2_info));
-		nested0.enforce_limit().unwrap();
 
 		meter.absorb(nested0, &ALICE, &BOB, Some(&mut nested0_info));
 
-		assert_eq!(nested0_info.storage_deposit, 102);
-		assert_eq!(nested1_info.storage_deposit, 40);
-		assert_eq!(nested2_info.storage_deposit, min_balance);
+		assert_eq!(nested0_info.extra_deposit(), 112);
+		assert_eq!(nested1_info.extra_deposit(), 110);
+		assert_eq!(nested2_info.extra_deposit(), 100);
 
 		TEST_EXT.with(|ext| {
 			assert_eq!(
@@ -666,7 +695,7 @@ mod tests {
 						Charge {
 							origin: ALICE,
 							contract: CHARLIE,
-							amount: Deposit::Refund(4),
+							amount: Deposit::Refund(20),
 							terminated: false
 						},
 						Charge {
@@ -698,13 +727,14 @@ mod tests {
 		});
 		nested0.charge(&Diff { items_added: 2, ..Default::default() });
 
-		let nested1_info = new_info(400);
+		let mut nested1_info =
+			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
 		let mut nested1 = nested0.nested();
 		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
 		nested1.charge(&Diff { bytes_added: 20, ..Default::default() });
 		nested1.terminate(&nested1_info);
+		nested0.enforce_limit(Some(&mut nested1_info)).unwrap();
 		nested0.absorb(nested1, &ALICE, &CHARLIE, None);
-		nested0.enforce_limit().unwrap();
 
 		meter.absorb(nested0, &ALICE, &BOB, None);
 		drop(meter);
@@ -718,7 +748,7 @@ mod tests {
 						Charge {
 							origin: ALICE,
 							contract: CHARLIE,
-							amount: Deposit::Refund(400),
+							amount: Deposit::Refund(120),
 							terminated: true
 						},
 						Charge {

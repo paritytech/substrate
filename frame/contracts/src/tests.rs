@@ -22,6 +22,7 @@ use crate::{
 	},
 	exec::{FixSizedKey, Frame},
 	storage::Storage,
+	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
 	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator,
@@ -75,7 +76,9 @@ frame_support::construct_runtime!(
 #[macro_use]
 pub mod test_utils {
 	use super::{Balances, Test};
-	use crate::{exec::AccountIdOf, storage::Storage, CodeHash, Config, ContractInfoOf, Nonce};
+	use crate::{
+		exec::AccountIdOf, storage::Storage, CodeHash, Config, ContractInfo, ContractInfoOf, Nonce,
+	};
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
@@ -88,18 +91,30 @@ pub mod test_utils {
 		let contract = Storage::<Test>::new_contract(&address, trie_id, code_hash).unwrap();
 		<ContractInfoOf<Test>>::insert(address, contract);
 	}
+
 	pub fn set_balance(who: &AccountIdOf<Test>, amount: u64) {
 		let imbalance = Balances::deposit_creating(who, amount);
 		drop(imbalance);
 	}
+
 	pub fn get_balance(who: &AccountIdOf<Test>) -> u64 {
 		Balances::free_balance(who)
 	}
+
+	pub fn get_contract(addr: &AccountIdOf<Test>) -> ContractInfo<Test> {
+		get_contract_checked(addr).unwrap()
+	}
+
+	pub fn get_contract_checked(addr: &AccountIdOf<Test>) -> Option<ContractInfo<Test>> {
+		ContractInfoOf::<Test>::get(addr)
+	}
+
 	macro_rules! assert_return_code {
 		( $x:expr , $y:expr $(,)? ) => {{
 			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
 		}};
 	}
+
 	macro_rules! assert_refcount {
 		( $code_hash:expr , $should:expr $(,)? ) => {{
 			let is = crate::OwnerInfoOf::<Test>::get($code_hash).map(|m| m.refcount()).unwrap();
@@ -672,7 +687,7 @@ fn instantiate_unique_trie_id() {
 			vec![],
 			vec![],
 		));
-		let trie_id = ContractInfoOf::<Test>::get(&addr).unwrap().trie_id;
+		let trie_id = get_contract(&addr).trie_id;
 
 		// Try to instantiate it again without termination should yield an error.
 		assert_err_ignore_postinfo!(
@@ -710,7 +725,7 @@ fn instantiate_unique_trie_id() {
 		));
 
 		// Trie ids shouldn't match or we might have a collision
-		assert_ne!(trie_id, ContractInfoOf::<Test>::get(&addr).unwrap().trie_id);
+		assert_ne!(trie_id, get_contract(&addr).trie_id);
 	});
 }
 
@@ -731,7 +746,7 @@ fn storage_max_value_limit() {
 			vec![],
 		));
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
-		ContractInfoOf::<Test>::get(&addr).unwrap();
+		get_contract(&addr);
 
 		// Call contract with allowed storage value.
 		assert_ok!(Contracts::call(
@@ -925,7 +940,7 @@ fn cannot_self_destruct_through_draning() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Check that the BOB contract has been instantiated.
-		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
+		get_contract(&addr);
 
 		// Call BOB which makes it send all funds to the zero address
 		// The contract code asserts that the transfer was successful
@@ -966,11 +981,11 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Check that the BOB contract has been instantiated and has the minimum balance
-		let info = ContractInfoOf::<Test>::get(&addr).unwrap();
-		assert_eq!(info.storage_deposit, min_balance);
+		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
+		assert_eq!(get_contract(&addr).extra_deposit(), 0);
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
 
-		// Create 100 bytes of storage with a price of per byte
+		// Create 100 bytes of storage with a price of per byte and a single storage item of price 2
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
 			addr.clone(),
@@ -979,9 +994,10 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 			None,
 			100u32.to_le_bytes().to_vec()
 		));
+		assert_eq!(get_contract(&addr).total_deposit(), min_balance + 102);
 
-		// Increase the byte price and trigger a refund. This could potentially destroy the account
-		// because the refund removes the reserved existential deposit. This should not happen.
+		// Increase the byte price and trigger a refund. This should not have any influence because
+		// the removal is pro rata and exactly those 100 bytes should have been removed.
 		DEPOSIT_PER_BYTE.with(|c| *c.borrow_mut() = 500);
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
@@ -995,8 +1011,9 @@ fn cannot_self_destruct_through_storage_refund_after_price_change() {
 		// Make sure the account wasn't removed by the refund
 		assert_eq!(
 			<Test as Config>::Currency::total_balance(&addr),
-			<Test as Config>::Currency::minimum_balance(),
+			get_contract(&addr).total_deposit(),
 		);
+		assert_eq!(get_contract(&addr).extra_deposit(), 2,);
 	});
 }
 
@@ -1049,9 +1066,6 @@ fn cannot_self_destruct_by_refund_after_slash() {
 		// Make sure the account kept the minimum balance and was not destroyed
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
 
-		// even though it was not charged it is still substracted from the storage deposit tracker
-		assert_eq!(ContractInfoOf::<Test>::get(&addr).unwrap().storage_deposit, 550);
-
 		assert_eq!(
 			System::events(),
 			vec![
@@ -1097,7 +1111,7 @@ fn cannot_self_destruct_while_live() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Check that the BOB contract has been instantiated.
-		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
+		get_contract(&addr);
 
 		// Call BOB with input data, forcing it make a recursive call to itself to
 		// self-destruct, resulting in a trap.
@@ -1107,7 +1121,7 @@ fn cannot_self_destruct_while_live() {
 		);
 
 		// Check that BOB is still there.
-		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
+		get_contract(&addr);
 	});
 }
 
@@ -1131,7 +1145,7 @@ fn self_destruct_works() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Check that the BOB contract has been instantiated.
-		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
+		get_contract(&addr);
 
 		// Drop all previous events
 		initialize_block(2);
@@ -1146,7 +1160,7 @@ fn self_destruct_works() {
 		assert_refcount!(&code_hash, 0);
 
 		// Check that account is gone
-		assert!(ContractInfoOf::<Test>::get(&addr).is_none());
+		assert!(get_contract_checked(&addr).is_none());
 		assert_eq!(Balances::total_balance(&addr), 0);
 
 		// check that the beneficiary (django) got remaining balance
@@ -1229,7 +1243,7 @@ fn destroy_contract_and_transfer_funds() {
 		let addr_charlie = Contracts::contract_address(&addr_bob, &callee_code_hash, &[0x47, 0x11]);
 
 		// Check that the CHARLIE contract has been instantiated.
-		assert_matches!(ContractInfoOf::<Test>::get(&addr_charlie), Some(_));
+		get_contract(&addr_charlie);
 
 		// Call BOB, which calls CHARLIE, forcing CHARLIE to self-destruct.
 		assert_ok!(Contracts::call(
@@ -1242,7 +1256,7 @@ fn destroy_contract_and_transfer_funds() {
 		));
 
 		// Check that CHARLIE has moved on to the great beyond (ie. died).
-		assert!(ContractInfoOf::<Test>::get(&addr_charlie).is_none());
+		assert!(get_contract_checked(&addr_charlie).is_none());
 	});
 }
 
@@ -1803,7 +1817,7 @@ fn lazy_removal_works() {
 		),);
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
-		let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
+		let info = get_contract(&addr);
 		let trie = &info.child_trie_info();
 
 		// Put value into the contracts child trie
@@ -1872,7 +1886,7 @@ fn lazy_batch_removal_works() {
 			),);
 
 			let addr = Contracts::contract_address(&ALICE, &hash, &[i]);
-			let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
+			let info = get_contract(&addr);
 			let trie = &info.child_trie_info();
 
 			// Put value into the contracts child trie
@@ -1934,7 +1948,7 @@ fn lazy_removal_partial_remove_works() {
 		),);
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
-		let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
+		let info = get_contract(&addr);
 
 		// Put value into the contracts child trie
 		for val in &vals {
@@ -2046,7 +2060,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 		),);
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
-		let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
+		let info = get_contract(&addr);
 		let trie = &info.child_trie_info();
 
 		// Put value into the contracts child trie
@@ -2114,7 +2128,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		),);
 
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
-		let info = <ContractInfoOf<Test>>::get(&addr).unwrap();
+		let info = get_contract(&addr);
 		let (weight_per_key, max_keys) = Storage::<Test>::deletion_budget(1, weight_limit);
 
 		// We create a contract with one less storage item than we can remove within the limit
@@ -2205,7 +2219,7 @@ fn deletion_queue_full() {
 		);
 
 		// Contract should exist because removal failed
-		<ContractInfoOf<Test>>::get(&addr).unwrap();
+		get_contract(&addr);
 	});
 }
 
@@ -2829,7 +2843,7 @@ fn instantiate_with_zero_balance_works() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Check that the BOB contract has been instantiated.
-		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
+		get_contract(&addr);
 
 		// Make sure the account exists even though no free balance was send
 		assert_eq!(<Test as Config>::Currency::free_balance(&addr), 0,);
@@ -2920,7 +2934,7 @@ fn instantiate_with_below_existential_deposit_works() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Check that the BOB contract has been instantiated.
-		assert_matches!(ContractInfoOf::<Test>::get(&addr), Some(_));
+		get_contract(&addr);
 
 		// Make sure the account exists even though no free balance was send
 		assert_eq!(<Test as Config>::Currency::free_balance(&addr), 50,);
@@ -3030,7 +3044,7 @@ fn storage_deposit_works() {
 		// 4 is for creating 2 storage items
 		let charged0 = 4 + 1_000 + 5_000;
 		deposit += charged0;
-		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().storage_deposit, deposit);
+		assert_eq!(get_contract(&addr).total_deposit(), deposit);
 
 		// Add more storage (but also remove some)
 		assert_ok!(Contracts::call(
@@ -3043,7 +3057,7 @@ fn storage_deposit_works() {
 		));
 		let charged1 = 1_000 - 100;
 		deposit += charged1;
-		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().storage_deposit, deposit);
+		assert_eq!(get_contract(&addr).total_deposit(), deposit);
 
 		// Remove more storage (but also add some)
 		assert_ok!(Contracts::call(
@@ -3054,9 +3068,10 @@ fn storage_deposit_works() {
 			None,
 			(2_100u32, 900u32).encode(),
 		));
-		let refunded0 = 4_000 - 100;
+		// -1 for numeric instability
+		let refunded0 = 4_000 - 100 - 1;
 		deposit -= refunded0;
-		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().storage_deposit, deposit);
+		assert_eq!(get_contract(&addr).total_deposit(), deposit);
 
 		assert_eq!(
 			System::events(),
@@ -3145,7 +3160,7 @@ fn set_code_extrinsic() {
 		// Drop previous events
 		initialize_block(2);
 
-		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_eq!(get_contract(&addr).code_hash, code_hash);
 		assert_refcount!(&code_hash, 1);
 		assert_refcount!(&new_code_hash, 0);
 
@@ -3154,7 +3169,7 @@ fn set_code_extrinsic() {
 			Contracts::set_code(Origin::signed(ALICE), addr.clone(), new_code_hash),
 			sp_runtime::traits::BadOrigin,
 		);
-		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_eq!(get_contract(&addr).code_hash, code_hash);
 		assert_refcount!(&code_hash, 1);
 		assert_refcount!(&new_code_hash, 0);
 		assert_eq!(System::events(), vec![],);
@@ -3164,7 +3179,7 @@ fn set_code_extrinsic() {
 			Contracts::set_code(Origin::root(), BOB, new_code_hash),
 			<Error<Test>>::ContractNotFound,
 		);
-		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_eq!(get_contract(&addr).code_hash, code_hash);
 		assert_refcount!(&code_hash, 1);
 		assert_refcount!(&new_code_hash, 0);
 		assert_eq!(System::events(), vec![],);
@@ -3174,14 +3189,14 @@ fn set_code_extrinsic() {
 			Contracts::set_code(Origin::root(), addr.clone(), Default::default()),
 			<Error<Test>>::CodeNotFound,
 		);
-		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, code_hash);
+		assert_eq!(get_contract(&addr).code_hash, code_hash);
 		assert_refcount!(&code_hash, 1);
 		assert_refcount!(&new_code_hash, 0);
 		assert_eq!(System::events(), vec![],);
 
 		// successful call
 		assert_ok!(Contracts::set_code(Origin::root(), addr.clone(), new_code_hash));
-		assert_eq!(<ContractInfoOf<Test>>::get(&addr).unwrap().code_hash, new_code_hash);
+		assert_eq!(get_contract(&addr).code_hash, new_code_hash);
 		assert_refcount!(&code_hash, 0);
 		assert_refcount!(&new_code_hash, 1);
 		assert_eq!(
@@ -3507,8 +3522,7 @@ fn storage_deposit_limit_is_enforced() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Check that the BOB contract has been instantiated and has the minimum balance
-		let info = ContractInfoOf::<Test>::get(&addr).unwrap();
-		assert_eq!(info.storage_deposit, min_balance);
+		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
 		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
 
 		// Create 100 bytes of storage with a price of per byte
