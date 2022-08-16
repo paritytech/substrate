@@ -211,7 +211,6 @@ pub fn generate_thresholds<T: pallet_staking::Config>(
 	writeln!(buf, "//! Total issuance: {}", &total_issuance)?;
 	writeln!(buf, "//! Minimum balance: {}", &minimum_balance)?;
 
-
 	writeln!(
 		buf,
 		"//! for the {} runtime.",

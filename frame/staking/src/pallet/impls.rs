@@ -1326,10 +1326,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	) -> Result<Box<dyn Iterator<Item = T::AccountId>>, Self::Error> {
 		if Validators::<T>::contains_key(start) {
 			let start_key = Validators::<T>::hashed_key_for(start);
-			Ok(Box::new(
-				Validators::<T>::iter_from(start_key)
-					.map(|(n, _)| n)
-			))
+			Ok(Box::new(Validators::<T>::iter_from(start_key).map(|(n, _)| n)))
 		} else {
 			Err(())
 		}
@@ -1371,7 +1368,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		Validators::<T>::remove_all();
 	}
 }
-
 
 /// A simple voter list implementation that does not require any additional pallets. Note, this
 /// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
