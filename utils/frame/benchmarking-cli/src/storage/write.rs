@@ -29,7 +29,7 @@ use sp_trie::PrefixedMemoryDB;
 
 use log::{info, trace};
 use rand::prelude::*;
-use sp_storage::{well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX, ChildInfo, StateVersion};
+use sp_storage::{ChildInfo, StateVersion};
 use std::{
 	fmt::Debug,
 	sync::Arc,
@@ -74,52 +74,51 @@ impl StorageCmd {
 		// Generate all random values first; Make sure there are no collisions with existing
 		// db entries, so we can rollback all additions without corrupting existing entries.
 		for (k, original_v) in kvs {
-			if self.params.include_child && k.starts_with(DEFAULT_CHILD_STORAGE_KEY_PREFIX) {
-				let trie_id = k
-					.strip_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
-					.expect("Checked above to exist");
-				let info = ChildInfo::new_default(trie_id);
-				let child_keys =
-					client.child_storage_keys_iter(&block, info.clone(), None, None)?;
-				for ck in child_keys {
-					child_nodes.push((ck.clone(), info.clone()));
-				}
-				continue // skip benchmarking child root
-			}
+			match (self.params.include_child_trees, self.is_child_key(k.to_vec())) {
+				(true, Some(info)) => {
+					let child_keys =
+						client.child_storage_keys_iter(&block, info.clone(), None, None)?;
+					for ck in child_keys {
+						child_nodes.push((ck.clone(), info.clone()));
+					}
+				},
+				_ => {
+					// regular key
+					let mut new_v = vec![0; original_v.len()];
+					loop {
+						// Create a random value to overwrite with.
+						// NOTE: We use a possibly higher entropy than the original value,
+						// could be improved but acts as an over-estimation which is fine for now.
+						rng.fill_bytes(&mut new_v[..]);
+						if check_new_value::<Block>(
+							db.clone(),
+							&trie,
+							&k.to_vec(),
+							&new_v,
+							self.state_version(),
+							state_col,
+							None,
+						) {
+							break
+						}
+					}
 
-			let mut new_v = vec![0; original_v.len()];
-			loop {
-				// Create a random value to overwrite with.
-				// NOTE: We use a possibly higher entropy than the original value,
-				// could be improved but acts as an over-estimation which is fine for now.
-				rng.fill_bytes(&mut new_v[..]);
-				if check_new_value::<Block>(
-					db.clone(),
-					&trie,
-					&k.to_vec(),
-					&new_v,
-					self.state_version(),
-					state_col,
-					None,
-				) {
-					break
-				}
+					// Write each value in one commit.
+					let (size, duration) = measure_write::<Block>(
+						db.clone(),
+						&trie,
+						k.to_vec(),
+						new_v.to_vec(),
+						self.state_version(),
+						state_col,
+						None,
+					)?;
+					record.append(size, duration)?;
+				},
 			}
-
-			// Write each value in one commit.
-			let (size, duration) = measure_write::<Block>(
-				db.clone(),
-				&trie,
-				k.to_vec(),
-				new_v.to_vec(),
-				self.state_version(),
-				state_col,
-				None,
-			)?;
-			record.append(size, duration)?;
 		}
 
-		if self.params.include_child {
+		if self.params.include_child_trees {
 			child_nodes.shuffle(&mut rng);
 			info!("Writing {} child keys", child_nodes.len());
 

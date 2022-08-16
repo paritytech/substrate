@@ -24,7 +24,7 @@ use sp_core::storage::StorageKey;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
-use sp_storage::StateVersion;
+use sp_storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 
 use clap::{Args, Parser};
 use log::info;
@@ -102,7 +102,7 @@ pub struct StorageParams {
 
 	/// Include child trees in benchmark.
 	#[clap(long)]
-	pub include_child: bool,
+	pub include_child_trees: bool,
 }
 
 impl StorageCmd {
@@ -157,6 +157,16 @@ impl StorageCmd {
 			1 => StateVersion::V1,
 			_ => unreachable!("Clap set to only allow 0 and 1"),
 		}
+	}
+
+	/// Returns Some if child node and None if regular
+	pub(crate) fn is_child_key(&self, key: Vec<u8>) -> Option<ChildInfo> {
+		if let Some((ChildType::ParentKeyId, storage_key)) =
+			ChildType::from_prefixed_key(&PrefixedStorageKey::new(key))
+		{
+			return Some(ChildInfo::new_default(storage_key))
+		}
+		None
 	}
 
 	/// Run some rounds of the (read) benchmark as warmup.
