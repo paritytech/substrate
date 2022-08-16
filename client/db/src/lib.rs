@@ -3411,7 +3411,7 @@ pub(crate) mod tests {
 			let hash = insert_block(
 				&backend,
 				2,
-				prev_hash,
+				blocks[1],
 				None,
 				sp_core::H256::random(),
 				vec![i.into()],

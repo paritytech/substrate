@@ -326,7 +326,7 @@ fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) 
 }
 
 pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
-	keys.iter().map(|key| key.clone().public().into()).collect()
+	keys.iter().map(|&key| key.public().into()).collect()
 }
 
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
