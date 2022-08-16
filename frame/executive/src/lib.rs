@@ -224,14 +224,18 @@ where
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
-	/// Execute given block, but don't do any of the `final_checks`.
+	/// Execute given block, but don't as strict is the normal block execution.
 	///
-	/// Should only be used for testing.
+	/// Some consensus related checks such as the state root check can be switched off via
+	/// `check_state_root`. Some additional non-consensus checks can be additionally enabled via
+	/// `sanity_checks`.
+	///
+	/// Should only be used for testing ONLY.
 	pub fn try_execute_block(
 		block: Block,
 		check_state_root: bool,
 		sanity_checks: frame_try_runtime::SanityCheckTargets,
-	) -> frame_support::weights::Weight {
+	) -> Result<frame_support::weights::Weight, &'static str> {
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
@@ -247,10 +251,10 @@ where
 		.map_err(|e| {
 			sp_runtime::print("failure:");
 			sp_runtime::print(e);
-		})
-		.expect("sanity-checks should not fail");
+			e
+		})?;
 
-		// do some of the checks that would normally happen in `final_checks`, but definitely skip
+		// do some of the checks that would normally happen in `final_checks`, but perhaps skip
 		// the state root check.
 		{
 			let new_header = <frame_system::Pallet<System>>::finalize();
@@ -275,7 +279,7 @@ where
 			);
 		}
 
-		frame_system::Pallet::<System>::block_weight().total()
+		Ok(frame_system::Pallet::<System>::block_weight().total())
 	}
 
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.

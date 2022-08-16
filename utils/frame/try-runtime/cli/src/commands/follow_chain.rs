@@ -45,7 +45,8 @@ pub struct FollowChainCmd {
 	#[clap(long)]
 	state_root_check: bool,
 
-	#[clap(long, default_value = "all")]
+	/// Which sanity checks to run.
+	#[clap(long, default_value = "none")]
 	sanity_check_targets: frame_try_runtime::SanityCheckTargets,
 }
 

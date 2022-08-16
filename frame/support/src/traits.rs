@@ -82,10 +82,10 @@ mod hooks;
 pub use hooks::GenesisBuild;
 pub use hooks::{
 	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
-	OnTimestampSet, SanityCheckTargets,
+	OnTimestampSet,
 };
 #[cfg(feature = "try-runtime")]
-pub use hooks::{OnRuntimeUpgradeHelpersExt, SanityCheck, ON_RUNTIME_UPGRADE_PREFIX}; // TODO: sanity-check-targets should also ideally be feature gated here.
+pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX, sanity_checks::*};
 
 pub mod schedule;
 mod storage;

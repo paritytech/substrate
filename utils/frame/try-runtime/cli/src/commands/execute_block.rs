@@ -40,7 +40,8 @@ pub struct ExecuteBlockCmd {
 	#[clap(long)]
 	no_state_root_check: bool,
 
-	#[clap(long, default_value = "all")]
+	/// Which sanity check targets to execute when running this command.
+	#[clap(long, default_value = "none")]
 	sanity_check_targets: frame_try_runtime::SanityCheckTargets,
 
 	/// The block hash at which to fetch the block.

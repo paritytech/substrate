@@ -318,7 +318,7 @@ pub type Executive = frame_executive::Executive<
 	Block,
 	frame_system::ChainContext<Runtime>,
 	Runtime,
-	AllPalletsWithSystemFlat,
+	AllPalletsWithSystem,
 >;
 
 #[cfg(feature = "runtime-benchmarks")]

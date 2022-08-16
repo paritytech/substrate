@@ -2074,7 +2074,7 @@ impl_runtime_apis! {
 				state_root_check,
 				sanity_checks,
 			);
-			Executive::try_execute_block(block, state_root_check, sanity_checks)
+			Executive::try_execute_block(block, state_root_check, sanity_checks).unwrap()
 		}
 	}
 

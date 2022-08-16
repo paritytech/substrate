@@ -20,6 +20,7 @@
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::prelude::*;
 
 /// The block initialization trait.
 ///
@@ -106,106 +107,128 @@ impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 	}
 }
 
-use sp_std::prelude::*;
+#[cfg(feature = "try-runtime")]
+pub mod sanity_checks {
+	use super::*;
 
-/// Which sanity checks to execute.
-#[derive(codec::Encode, codec::Decode, Clone)]
-pub enum SanityCheckTargets {
-	All,
-	None,
-	RoundRobin(u32),
-	Selected(Vec<Vec<u8>>),
-}
+	// Which sanity checks to execute.
+	#[derive(codec::Encode, codec::Decode, Clone)]
+	pub enum SanityCheckTargets {
+		/// None of them.
+		None,
+		/// All of them.
+		All,
+		/// Run a fixed number of them in a round robin manner.
+		RoundRobin(u32),
+		/// Run only pallets who's name matches the given list.
+		///
+		/// Pallet names are obtained from [`PalletInfoAccess`].
+		Selected(Vec<Vec<u8>>),
+	}
 
-impl sp_std::fmt::Debug for SanityCheckTargets {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		match self {
-			SanityCheckTargets::RoundRobin(x) => write!(f, "Random({})", x),
-			SanityCheckTargets::Selected(x) => write!(
-				f,
-				"Selected({:?})",
-				x.into_iter().map(|x| sp_std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
-			),
-			SanityCheckTargets::All => write!(f, "All"),
-			SanityCheckTargets::None => write!(f, "None"),
+	impl Default for SanityCheckTargets {
+		fn default() -> Self {
+			SanityCheckTargets::None
 		}
 	}
-}
 
-#[cfg(feature = "std")]
-impl sp_std::str::FromStr for SanityCheckTargets {
-	type Err = &'static str;
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s.as_ref() {
-			"all" | "All" => Ok(SanityCheckTargets::All),
-			"none" | "None" => Ok(SanityCheckTargets::None),
-			_ =>
-				if s.starts_with("rr-") {
-					let count = s
-						.split_once("-")
-						.and_then(|(_, count)| count.parse::<u32>().ok())
-						.ok_or("failed to parse count")?;
-					Ok(SanityCheckTargets::RoundRobin(count))
-				} else {
-					let pallets = s.split(",").map(|x| x.as_bytes().to_vec()).collect::<Vec<_>>();
-					Ok(SanityCheckTargets::Selected(pallets))
+	impl sp_std::fmt::Debug for SanityCheckTargets {
+		fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+			match self {
+				SanityCheckTargets::RoundRobin(x) => write!(f, "RoundRobin({})", x),
+				SanityCheckTargets::Selected(x) => write!(
+					f,
+					"Selected({:?})",
+					x.into_iter().map(|x| sp_std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
+				),
+				SanityCheckTargets::All => write!(f, "All"),
+				SanityCheckTargets::None => write!(f, "None"),
+			}
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl sp_std::str::FromStr for SanityCheckTargets {
+		type Err = &'static str;
+		fn from_str(s: &str) -> Result<Self, Self::Err> {
+			match s.as_ref() {
+				"all" | "All" => Ok(SanityCheckTargets::All),
+				"none" | "None" => Ok(SanityCheckTargets::None),
+				_ =>
+					if s.starts_with("rr-") {
+						let count = s
+							.split_once("-")
+							.and_then(|(_, count)| count.parse::<u32>().ok())
+							.ok_or("failed to parse count")?;
+						Ok(SanityCheckTargets::RoundRobin(count))
+					} else {
+						let pallets =
+							s.split(",").map(|x| x.as_bytes().to_vec()).collect::<Vec<_>>();
+						Ok(SanityCheckTargets::Selected(pallets))
+					},
+			}
+		}
+	}
+
+	/// Execute the sanity checks of this pallet, per block.
+	///
+	/// It should focus on certain checks to ensure that the state is sensible. Can consume as much
+	/// weight as it needs.
+	pub trait SanityCheck<BlockNumber> {
+		/// Execute the sanity-checks.
+		fn sanity_check(_: BlockNumber, _: SanityCheckTargets) -> Result<(), &'static str>;
+	}
+
+	#[cfg_attr(
+		all(feature = "try-runtime", not(feature = "tuples-96"), not(feature = "tuples-128")),
+		impl_for_tuples(64)
+	)]
+	#[cfg_attr(
+		all(feature = "try-runtime", feature = "tuples-96", not(feature = "tuples-128")),
+		impl_for_tuples(96)
+	)]
+	#[cfg_attr(all(feature = "try-runtime", feature = "tuples-128"), impl_for_tuples(128))]
+	impl<BlockNumber: Clone + AtLeast32BitUnsigned> SanityCheck<BlockNumber> for Tuple {
+		for_tuples!( where #( Tuple: crate::traits::PalletInfoAccess )* );
+		fn sanity_check(n: BlockNumber, targets: SanityCheckTargets) -> Result<(), &'static str> {
+			match targets {
+				SanityCheckTargets::None => Ok(()),
+				SanityCheckTargets::All => {
+					let mut result = Ok(());
+					for_tuples!( #( result = result.and(Tuple::sanity_check(n.clone(), targets.clone())); )* );
+					result
 				},
-		}
-	}
-}
-
-/// Execute the sanity checks of this pallet, per block.
-///
-/// It should focus on certain checks to ensure that the state is sensible. Can consume as much
-/// weight as it needs.
-#[cfg(feature = "try-runtime")]
-pub trait SanityCheck<BlockNumber> {
-	/// Execute the sanity-checks.
-	fn sanity_check(_: BlockNumber, _: SanityCheckTargets) -> Result<(), &'static str>;
-}
-
-#[cfg(feature = "try-runtime")]
-#[impl_for_tuples(100)]
-impl<BlockNumber: Clone + AtLeast32BitUnsigned> SanityCheck<BlockNumber> for Tuple {
-	for_tuples!( where #( Tuple: crate::traits::PalletInfoAccess )* );
-	fn sanity_check(n: BlockNumber, targets: SanityCheckTargets) -> Result<(), &'static str> {
-		match targets {
-			SanityCheckTargets::None => Ok(()),
-			SanityCheckTargets::All => {
-				let mut result = Ok(());
-				for_tuples!( #( result = result.and(Tuple::sanity_check(n.clone(), targets.clone())); )* );
-				result
-			},
-			SanityCheckTargets::RoundRobin(len) => {
-				let functions: &[fn(
-					BlockNumber,
-					SanityCheckTargets,
-				) -> Result<(), &'static str>] = &[for_tuples!(#( Tuple::sanity_check ),*)];
-				let skip = n.clone() % (len as u32).into();
-				let skip: u32 = skip.try_into().ok().expect("TODO");
-				let mut result = Ok(());
-				for sanity_check_fn in
-					functions.iter().cycle().skip(skip as usize).take(len as usize)
-				{
-					result = result.and(sanity_check_fn(n.clone(), targets.clone()));
-				}
-				result
-			},
-			SanityCheckTargets::Selected(ref pallet_names) => {
-				let functions: &[(
-					&'static str,
-					fn(BlockNumber, SanityCheckTargets) -> Result<(), &'static str>,
-				)] = &[for_tuples!(
-					#( (<Tuple as crate::traits::PalletInfoAccess>::name(), Tuple::sanity_check) ),*
-				)];
-				let mut result = Ok(());
-				for (name, sanity_check_fn) in functions {
-					if pallet_names.contains(&name.as_bytes().to_vec()) {
+				SanityCheckTargets::RoundRobin(len) => {
+					let functions: &[fn(
+						BlockNumber,
+						SanityCheckTargets,
+					) -> Result<(), &'static str>] = &[for_tuples!(#( Tuple::sanity_check ),*)];
+					let skip = n.clone() % (len as u32).into();
+					let skip: u32 = skip.try_into().ok().expect("TODO");
+					let mut result = Ok(());
+					for sanity_check_fn in
+						functions.iter().cycle().skip(skip as usize).take(len as usize)
+					{
 						result = result.and(sanity_check_fn(n.clone(), targets.clone()));
 					}
-				}
-				result
-			},
+					result
+				},
+				SanityCheckTargets::Selected(ref pallet_names) => {
+					let functions: &[(
+						&'static str,
+						fn(BlockNumber, SanityCheckTargets) -> Result<(), &'static str>,
+					)] = &[for_tuples!(
+						#( (<Tuple as crate::traits::PalletInfoAccess>::name(), Tuple::sanity_check) ),*
+					)];
+					let mut result = Ok(());
+					for (name, sanity_check_fn) in functions {
+						if pallet_names.contains(&name.as_bytes().to_vec()) {
+							result = result.and(sanity_check_fn(n.clone(), targets.clone()));
+						}
+					}
+					result
+				},
+			}
 		}
 	}
 }

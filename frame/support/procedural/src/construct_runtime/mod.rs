@@ -345,8 +345,6 @@ fn decl_all_pallets<'a>(
 		/// All pallets included in the runtime as a nested tuple of types.
 		pub type AllPalletsWithSystem = ( #(#names),* );
 
-		pub type AllPalletsWithSystemFlat = ( #(#names),* );
-
 		/// All pallets included in the runtime as a nested tuple of types.
 		/// Excludes the System pallet.
 		pub type AllPalletsWithoutSystem = ( #(#names_without_system),* );
