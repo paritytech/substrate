@@ -369,7 +369,7 @@ pub mod pallet {
 		AlreadyRetiring,
 		/// Account did not give a retirement notice required to retire.
 		RetirementNoticeNotGiven,
-		/// Retirement period is not passed.
+		/// Retirement period has not passed.
 		RetirementPeriodNotPassed,
 	}
 
@@ -396,7 +396,7 @@ pub mod pallet {
 		},
 		/// An ally has been elevated to Fellow.
 		AllyElevated { ally: T::AccountId },
-		/// A member gave retirement notice and retirement period started.
+		/// A member gave retirement notice and their retirement period started.
 		MemberRetirementPeriodStarted { member: T::AccountId },
 		/// A member has retired with its deposit unreserved.
 		MemberRetired { member: T::AccountId, unreserved: Option<BalanceOf<T, I>> },
