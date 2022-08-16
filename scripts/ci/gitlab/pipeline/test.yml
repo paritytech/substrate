@@ -61,10 +61,12 @@ cargo-check-benches:
     - .docker-env
     - .test-refs
     - .collect-artifacts
+    - .pipeline-stopper-artifacts
   before_script:
     # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
+    - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
     - if [ $CI_COMMIT_REF_NAME != "master" ]; then
         git fetch origin +master:master;
@@ -131,6 +133,7 @@ cargo-check-subkey:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   script:
     - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
@@ -199,6 +202,7 @@ test-linux-stable:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
@@ -299,6 +303,7 @@ test-linux-stable-int:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
@@ -328,6 +333,7 @@ check-tracing:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   script:
     - rusty-cachier snapshot create
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases

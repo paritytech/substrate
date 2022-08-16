@@ -85,16 +85,16 @@ pub type Votes = u32;
 	Decode,
 	MaxEncodedLen,
 )]
-#[scale_info(skip_type_params(M))]
+#[scale_info(skip_type_params(T, I, M))]
 #[codec(mel_bound())]
-pub struct Tally<M: GetMaxVoters> {
+pub struct Tally<T, I, M: GetMaxVoters> {
 	bare_ayes: MemberIndex,
 	ayes: Votes,
 	nays: Votes,
-	dummy: PhantomData<M>,
+	dummy: PhantomData<(T, I, M)>,
 }
 
-impl<M: GetMaxVoters> Tally<M> {
+impl<T: Config<I>, I: 'static, M: GetMaxVoters> Tally<T, I, M> {
 	pub fn from_parts(bare_ayes: MemberIndex, ayes: Votes, nays: Votes) -> Self {
 		Tally { bare_ayes, ayes, nays, dummy: PhantomData }
 	}
@@ -107,10 +107,10 @@ impl<M: GetMaxVoters> Tally<M> {
 
 // All functions of VoteTally now include the class as a param.
 
-pub type TallyOf<T, I = ()> = Tally<Pallet<T, I>>;
+pub type TallyOf<T, I = ()> = Tally<T, I, Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
 
-impl<M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<M> {
+impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<T, I, M> {
 	fn new(_: Rank) -> Self {
 		Self { bare_ayes: 0, ayes: 0, nays: 0, dummy: PhantomData }
 	}
@@ -142,6 +142,20 @@ impl<M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<M> {
 		let ayes = support * c;
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
 		Self { bare_ayes: ayes, ayes, nays, dummy: PhantomData }
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup(class: Rank, granularity: Perbill) {
+		if M::get_max_voters(class) == 0 {
+			let max_voters = granularity.saturating_reciprocal_mul(1u32);
+			for i in 0..max_voters {
+				let who: T::AccountId =
+					frame_benchmarking::account("ranked_collective_benchmarking", i, 0);
+				crate::Pallet::<T, I>::do_add_member_to_rank(who, class)
+					.expect("could not add members for benchmarks");
+			}
+			assert_eq!(M::get_max_voters(class), max_voters);
+		}
 	}
 }
 
@@ -241,6 +255,19 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		match Self::try_successful_origin() {
+			Ok(o) => o,
+			Err(()) => {
+				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
+				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
+					.expect("failed to add ranked member");
+				frame_system::RawOrigin::Signed(who).into()
+			},
+		}
+	}
 }
 
 /// Guard to ensure that the given origin is a member of the collective. The account ID of the
@@ -264,6 +291,19 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		match Self::try_successful_origin() {
+			Ok(o) => o,
+			Err(()) => {
+				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
+				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
+					.expect("failed to add ranked member");
+				frame_system::RawOrigin::Signed(who).into()
+			},
+		}
+	}
 }
 
 /// Guard to ensure that the given origin is a member of the collective. The pair of including both
@@ -286,6 +326,19 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	fn try_successful_origin() -> Result<T::Origin, ()> {
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> T::Origin {
+		match Self::try_successful_origin() {
+			Ok(o) => o,
+			Err(()) => {
+				let who: T::AccountId = frame_benchmarking::whitelisted_caller();
+				crate::Pallet::<T, I>::do_add_member_to_rank(who.clone(), MIN_RANK)
+					.expect("failed to add ranked member");
+				frame_system::RawOrigin::Signed(who).into()
+			},
+		}
 	}
 }
 
@@ -415,17 +468,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_member())]
 		pub fn add_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			let _ = T::PromoteOrigin::ensure_origin(origin)?;
-			ensure!(!Members::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
-			let index = MemberCount::<T, I>::get(0);
-			let count = index.checked_add(1).ok_or(Overflow)?;
-
-			Members::<T, I>::insert(&who, MemberRecord { rank: 0 });
-			IdToIndex::<T, I>::insert(0, &who, index);
-			IndexToId::<T, I>::insert(0, index, &who);
-			MemberCount::<T, I>::insert(0, count);
-			Self::deposit_event(Event::MemberAdded { who });
-
-			Ok(())
+			Self::do_add_member(who)
 		}
 
 		/// Increment the rank of an existing member by one.
@@ -437,17 +480,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
 		pub fn promote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
 			let max_rank = T::PromoteOrigin::ensure_origin(origin)?;
-			let record = Self::ensure_member(&who)?;
-			let rank = record.rank.checked_add(1).ok_or(Overflow)?;
-			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
-			let index = MemberCount::<T, I>::get(rank);
-			MemberCount::<T, I>::insert(rank, index.checked_add(1).ok_or(Overflow)?);
-			IdToIndex::<T, I>::insert(rank, &who, index);
-			IndexToId::<T, I>::insert(rank, index, &who);
-			Members::<T, I>::insert(&who, MemberRecord { rank });
-			Self::deposit_event(Event::RankChanged { who, rank });
-
-			Ok(())
+			Self::do_promote_member(who, Some(max_rank))
 		}
 
 		/// Decrement the rank of an existing member by one. If the member is already at rank zero,
@@ -624,6 +657,54 @@ pub mod pallet {
 				IndexToId::<T, I>::insert(rank, index, &last);
 			}
 			MemberCount::<T, I>::mutate(rank, |r| r.saturating_dec());
+			Ok(())
+		}
+
+		/// Adds a member into the ranked collective at level 0.
+		///
+		/// No origin checks are executed.
+		pub fn do_add_member(who: T::AccountId) -> DispatchResult {
+			ensure!(!Members::<T, I>::contains_key(&who), Error::<T, I>::AlreadyMember);
+			let index = MemberCount::<T, I>::get(0);
+			let count = index.checked_add(1).ok_or(Overflow)?;
+
+			Members::<T, I>::insert(&who, MemberRecord { rank: 0 });
+			IdToIndex::<T, I>::insert(0, &who, index);
+			IndexToId::<T, I>::insert(0, index, &who);
+			MemberCount::<T, I>::insert(0, count);
+			Self::deposit_event(Event::MemberAdded { who });
+			Ok(())
+		}
+
+		/// Promotes a member in the ranked collective into the next role.
+		///
+		/// A `maybe_max_rank` may be provided to check that the member does not get promoted beyond
+		/// a certain rank. Is `None` is provided, then the rank will be incremented without checks.
+		pub fn do_promote_member(
+			who: T::AccountId,
+			maybe_max_rank: Option<Rank>,
+		) -> DispatchResult {
+			let record = Self::ensure_member(&who)?;
+			let rank = record.rank.checked_add(1).ok_or(Overflow)?;
+			if let Some(max_rank) = maybe_max_rank {
+				ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
+			}
+			let index = MemberCount::<T, I>::get(rank);
+			MemberCount::<T, I>::insert(rank, index.checked_add(1).ok_or(Overflow)?);
+			IdToIndex::<T, I>::insert(rank, &who, index);
+			IndexToId::<T, I>::insert(rank, index, &who);
+			Members::<T, I>::insert(&who, MemberRecord { rank });
+			Self::deposit_event(Event::RankChanged { who, rank });
+			Ok(())
+		}
+
+		/// Add a member to the rank collective, and continue to promote them until a certain rank
+		/// is reached.
+		pub fn do_add_member_to_rank(who: T::AccountId, rank: Rank) -> DispatchResult {
+			Self::do_add_member(who.clone())?;
+			for _ in 0..rank {
+				Self::do_promote_member(who.clone(), None)?;
+			}
 			Ok(())
 		}
 	}

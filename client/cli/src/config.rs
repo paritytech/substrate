@@ -31,7 +31,7 @@ use sc_service::{
 		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
-	ChainSpec, KeepBlocks, TracingReceiver,
+	BlocksPruning, ChainSpec, TracingReceiver,
 };
 use sc_tracing::logging::LoggerBuilder;
 use std::{net::SocketAddr, path::PathBuf};
@@ -257,11 +257,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the block pruning mode.
 	///
 	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
-	/// `KeepBlocks::All`.
-	fn keep_blocks(&self) -> Result<KeepBlocks> {
+	/// `BlocksPruning::All`.
+	fn blocks_pruning(&self) -> Result<BlocksPruning> {
 		self.pruning_params()
-			.map(|x| x.keep_blocks())
-			.unwrap_or_else(|| Ok(KeepBlocks::All))
+			.map(|x| x.blocks_pruning())
+			.unwrap_or_else(|| Ok(BlocksPruning::All))
 	}
 
 	/// Get the chain ID (string).
@@ -536,7 +536,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			state_cache_size: self.state_cache_size()?,
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			state_pruning: self.state_pruning()?,
-			keep_blocks: self.keep_blocks()?,
+			blocks_pruning: self.blocks_pruning()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,

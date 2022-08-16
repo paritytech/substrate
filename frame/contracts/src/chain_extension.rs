@@ -38,7 +38,7 @@
 //!
 //! However, only extensions implementing [`RegisteredChainExtension`] can be put into a tuple.
 //! This is because the [`RegisteredChainExtension::ID`] is used to decide which of those extensions
-//! should should be used when the contract calls a chain extensions. Extensions which are generally
+//! should be used when the contract calls a chain extensions. Extensions which are generally
 //! useful should claim their `ID` with [the registry](https://github.com/paritytech/chainextension-registry)
 //! so that no collisions with other vendors will occur.
 //!
@@ -215,7 +215,7 @@ where
 	/// It returns the two least significant bytes of the `id` passed by a contract as the other
 	/// two bytes represent the chain extension itself (the code which is calling this function).
 	pub fn func_id(&self) -> u16 {
-		(self.inner.id & 0x00FF) as u16
+		(self.inner.id & 0x0000FFFF) as u16
 	}
 
 	/// The chain extension id within the `id` passed by a contract.

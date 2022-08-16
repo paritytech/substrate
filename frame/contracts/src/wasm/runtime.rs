@@ -26,7 +26,7 @@ use crate::{
 };
 
 use bitflags::bitflags;
-use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
+use codec::{Decode, DecodeLimit, Encode, MaxEncodedLen};
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use sp_core::{crypto::UncheckedFrom, Bytes};
@@ -35,6 +35,9 @@ use sp_runtime::traits::{Bounded, Zero};
 use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::ValueType;
+
+/// The maximum nesting depth a contract can use when encoding types.
+const MAX_DECODE_NESTING: u32 = 256;
 
 /// Type of a storage key.
 #[allow(dead_code)]
@@ -575,7 +578,7 @@ where
 		ptr: u32,
 	) -> Result<D, DispatchError> {
 		let buf = self.read_sandbox_memory(ptr, D::max_encoded_len() as u32)?;
-		let decoded = D::decode_all(&mut &buf[..])
+		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
 		Ok(decoded)
 	}
@@ -597,7 +600,7 @@ where
 		len: u32,
 	) -> Result<D, DispatchError> {
 		let buf = self.read_sandbox_memory(ptr, len)?;
-		let decoded = D::decode_all(&mut &buf[..])
+		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
 		Ok(decoded)
 	}
@@ -1209,7 +1212,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Parameters
 	//
-	// - flags: See [`CallFlags`] for a documenation of the supported flags.
+	// - flags: See [`CallFlags`] for a documentation of the supported flags.
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
 	// - gas: how much gas to devote to the execution.
@@ -1753,7 +1756,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity
+	// backwards compatibility
 	[seal0] seal_restore_to(
 		ctx,
 		_dest_ptr: u32,
@@ -1774,7 +1777,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity
+	// backwards compatibility
 	[seal1] seal_restore_to(
 		ctx,
 		_dest_ptr: u32,
@@ -1857,7 +1860,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity.
+	// backwards compatibility.
 	[seal0] seal_set_rent_allowance(ctx, _value_ptr: u32, _value_len: u32) => {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())
@@ -1868,7 +1871,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity.
+	// backwards compatibility.
 	[seal1] seal_set_rent_allowance(ctx, _value_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())
@@ -1879,7 +1882,7 @@ define_env!(Env, <E: Ext>,
 	// # Note
 	//
 	// The state rent functionality was removed. This is stub only exists for
-	// backwards compatiblity.
+	// backwards compatibility.
 	[seal0] seal_rent_allowance(ctx, out_ptr: u32, out_len_ptr: u32) => {
 		ctx.charge_gas(RuntimeCosts::Balance)?;
 		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
@@ -2085,15 +2088,15 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Return Value
 	//
-	// Returns `ReturnCode::Success` when the dispatchable was succesfully executed and
-	// returned `Ok`. When the dispatchable was exeuted but returned an error
+	// Returns `ReturnCode::Success` when the dispatchable was successfully executed and
+	// returned `Ok`. When the dispatchable was executed but returned an error
 	// `ReturnCode::CallRuntimeReturnedError` is returned. The full error is not
 	// provided because it is not guaranteed to be stable.
 	//
 	// # Comparison with `ChainExtension`
 	//
 	// Just as a chain extension this API allows the runtime to extend the functionality
-	// of contracts. While making use of this function is generelly easier it cannot be
+	// of contracts. While making use of this function is generally easier it cannot be
 	// used in call cases. Consider writing a chain extension if you need to do perform
 	// one of the following tasks:
 	//

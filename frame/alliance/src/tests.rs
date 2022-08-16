@@ -156,7 +156,7 @@ fn vote_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Alliance::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Alliance::vote(Origin::signed(2), hash, 0, true));
 
 		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
@@ -165,12 +165,12 @@ fn vote_works() {
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					threshold: 3
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 2,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0,
@@ -192,7 +192,7 @@ fn veto_works() {
 		));
 		// only set_rule/elevate_ally can be veto
 		assert_noop!(
-			Alliance::veto(Origin::signed(1), hash.clone()),
+			Alliance::veto(Origin::signed(1), hash),
 			Error::<Test, ()>::NotVetoableProposal
 		);
 
@@ -207,11 +207,11 @@ fn veto_works() {
 
 		// only founder have veto rights, 3 is fellow
 		assert_noop!(
-			Alliance::veto(Origin::signed(3), vetoable_hash.clone()),
+			Alliance::veto(Origin::signed(3), vetoable_hash),
 			Error::<Test, ()>::NotFounder
 		);
 
-		assert_ok!(Alliance::veto(Origin::signed(2), vetoable_hash.clone()));
+		assert_ok!(Alliance::veto(Origin::signed(2), vetoable_hash));
 		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
@@ -219,17 +219,17 @@ fn veto_works() {
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					threshold: 3
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 1,
-					proposal_hash: vetoable_hash.clone(),
+					proposal_hash: vetoable_hash,
 					threshold: 3
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Disapproved {
-					proposal_hash: vetoable_hash.clone()
+					proposal_hash: vetoable_hash
 				})),
 			]
 		);
@@ -247,16 +247,10 @@ fn close_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Alliance::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Alliance::vote(Origin::signed(2), hash.clone(), 0, true));
-		assert_ok!(Alliance::vote(Origin::signed(3), hash.clone(), 0, true));
-		assert_ok!(Alliance::close(
-			Origin::signed(1),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Alliance::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Alliance::vote(Origin::signed(2), hash, 0, true));
+		assert_ok!(Alliance::vote(Origin::signed(3), hash, 0, true));
+		assert_ok!(Alliance::close(Origin::signed(1), hash, 0, proposal_weight, proposal_len));
 
 		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
@@ -265,40 +259,40 @@ fn close_works() {
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					threshold: 3
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 1,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0,
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 2,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0,
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 3,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					voted: true,
 					yes: 3,
 					no: 0,
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Closed {
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					yes: 3,
 					no: 0,
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Approved {
-					proposal_hash: hash.clone()
+					proposal_hash: hash
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Executed {
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					result: Err(DispatchError::BadOrigin),
 				}))
 			]
