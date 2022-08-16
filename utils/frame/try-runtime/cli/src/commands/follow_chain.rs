@@ -20,7 +20,7 @@ use crate::{
 	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
 use jsonrpsee::{
-	core::client::{Client, Subscription, SubscriptionClientT},
+	core::{async_trait, client::{Client, Subscription, SubscriptionClientT}},
 	ws_client::WsClientBuilder,
 };
 use parity_scale_codec::Decode;
@@ -29,8 +29,10 @@ use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use serde::de::DeserializeOwned;
 use sp_core::H256;
-use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
-use std::{fmt::Debug, str::FromStr};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, One, Saturating};
+use std::{
+	collections::VecDeque, fmt::Debug, marker::PhantomData, ops::Sub, str::FromStr
+};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
@@ -58,8 +60,108 @@ async fn start_subscribing<Header: DeserializeOwned>(url: &str) -> (Client, Subs
 
 	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
 
-	let sub = client.subscribe(SUB, None, UN_SUB).await.unwrap();
+	let sub =
+		client.subscribe(SUB, None, UN_SUB).await.unwrap();
 	(client, sub)
+}
+
+/// Abstraction over RPC calling for headers.
+#[async_trait]
+trait HeaderProvider<Block: BlockT> where Block::Header: HeaderT {
+	async fn get_header(&self, hash: Block::Hash) -> Block::Header;
+}
+
+struct RpcHeaderProvider<Block: BlockT>{
+	uri: String,
+	_phantom: PhantomData<Block>,
+}
+
+#[async_trait]
+impl<Block: BlockT> HeaderProvider<Block> for RpcHeaderProvider<Block>
+	where Block::Header: DeserializeOwned
+{
+	async fn get_header(&self, hash: Block::Hash) -> Block::Header {
+		rpc_api::get_header::<Block, _>(&self.uri, hash).await.unwrap()
+	}
+}
+
+/// Stream of all finalized headers.
+///
+/// Returned headers are guaranteed to be ordered. There are no missing headers (even if some of
+/// them lack justification).
+struct FinalizedHeaders<Block: BlockT, HP: HeaderProvider<Block>> {
+	subscription: Subscription<Block::Header>,
+	header_provider: HP,
+	fetched_headers: VecDeque<Block::Header>,
+	last_returned: Option<<Block::Header as HeaderT>::Number>,
+}
+
+impl<Block: BlockT, HP: HeaderProvider<Block>> FinalizedHeaders<Block, HP>
+where
+	<Block as BlockT>::Header: DeserializeOwned
+{
+	pub fn new(subscription: Subscription<Block::Header>, header_provider: HP) -> Self {
+		Self {
+			subscription,
+			header_provider,
+			fetched_headers: VecDeque::new(),
+			last_returned: None,
+		}
+	}
+
+	/// Await for the next finalized header from the subscription.
+	///
+	/// Returns `None` if either the subscription has been closed or there was an error when reading
+	/// an object from the client.
+	async fn next_from_subscription(&mut self) -> Option<Block::Header> {
+		match self.subscription.next().await {
+			Some(Ok(header)) => Some(header),
+			None => {
+				log::warn!("subscription closed");
+				None
+			}
+			Some(Err(why)) => {
+				log::warn!("subscription returned error: {:?}. Probably decoding has failed.", why);
+				None
+			}
+		}
+	}
+
+	/// Reads next finalized header from the subscription. If some headers (without justification)
+	/// have been skipped, fetches them as well.
+	///
+	/// All fetched headers are stored in `self.fetched_headers`.
+	async fn fetch(&mut self) {
+		let last_finalized = match self.next_from_subscription().await {
+			Some(header) => header,
+			None => return,
+		};
+
+		let current_height = last_finalized.number();
+		let parent_height = current_height.sub(One::one());
+		let last_height = self.last_returned.unwrap_or(parent_height);
+
+		let mut parent_hash = last_finalized.parent_hash().clone();
+		for _ in 0u32..(parent_height.saturating_sub(last_height).try_into().unwrap_or_default()) {
+			let parent_header = self.header_provider.get_header(parent_hash).await;
+			self.fetched_headers.push_front(parent_header.clone());
+			parent_hash = *parent_header.parent_hash();
+		}
+	}
+
+	/// Get the next finalized header.
+	pub async fn next(&mut self) -> Option<Block::Header> {
+		if self.fetched_headers.is_empty() {
+			self.fetch().await;
+		}
+
+		if let Some(header) = self.fetched_headers.pop_front() {
+			self.last_returned = Some(*header.number());
+			Some(header)
+		} else {
+			None
+		}
+	}
 }
 
 pub(crate) async fn follow_chain<Block, ExecDispatch>(
@@ -77,25 +179,20 @@ where
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
 	let mut maybe_state_ext = None;
-	let (_client, mut subscription) = start_subscribing::<Block::Header>(&command.uri).await;
+	let (_client, subscription) = start_subscribing::<Block::Header>(&command.uri).await;
 
 	let (code_key, code) = extract_code(&config.chain_spec)?;
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
-	loop {
-		let header = match subscription.next().await {
-			Some(Ok(header)) => header,
-			None => {
-				log::warn!("subscription closed");
-				break
-			},
-			Some(Err(why)) => {
-				log::warn!("subscription returned error: {:?}. Probably decoding has failed.", why);
-				continue
-			},
-		};
+	let header_provider: RpcHeaderProvider<Block> = RpcHeaderProvider {
+		uri: command.uri.clone(),
+		_phantom: PhantomData {}
+	};
+	let mut finalized_headers: FinalizedHeaders<Block, RpcHeaderProvider<Block>> =
+		FinalizedHeaders::new(subscription, header_provider);
 
+	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
 		let number = header.number();
 
