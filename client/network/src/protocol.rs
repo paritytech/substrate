@@ -383,9 +383,11 @@ where
 			use sc_peerset::{ReputationChange, SetId};
 
 			for (peer_id, reputation, sets) in loaded_peerinfo {
-				eprintln!(
+				log::info!(
 					"Restoring {:?} with sets: {:?}, reputation: {:?}",
-					peer_id, sets, reputation
+					peer_id,
+					sets,
+					reputation
 				);
 				peerset.report_peer(
 					peer_id,
