@@ -21,9 +21,21 @@ use super::{CacheSize, LOG_TARGET};
 use hash_db::Hasher;
 use hashbrown::{hash_set::Entry as SetEntry, HashSet};
 use lru::LruCache;
+use nohash_hasher::BuildNoHashHasher;
 use parking_lot::RwLock;
-use std::{mem, sync::Arc};
+use std::{
+	hash::{BuildHasher, Hasher as _},
+	mem,
+	sync::Arc,
+};
 use trie_db::{node::NodeOwned, CachedValue};
+
+lazy_static::lazy_static! {
+	static ref RANDOM_STATE: ahash::RandomState = ahash::RandomState::default();
+}
+
+/// No hashing [`LruCache`].
+type NoHashingLruCache<K, T> = lru::LruCache<K, T, BuildNoHashHasher<K>>;
 
 /// The shared node cache.
 ///
@@ -109,12 +121,18 @@ impl<H: Hasher> SharedNodeCache<H> {
 
 /// The key type that is being used to uniquely address a [`CachedValue`].
 ///
-/// This type is implemented as enum to work around some limitations of the [`LruCache`] api
-/// when it comes to `peek`ing into the structure. Given current stable rust you can not implement
-/// `Borrow` properly for their wrapper type. For still supporting to `peek` into the [`LruCache`]
-/// that stores the [`CachedValue`]s without allocating an [`Arc<[u8]>`] this type has the `Ref`
-/// variant. We implement [`PartialEq`] and [`Hash`] manually to ensure that both variants can
-/// point to the same value as long as `storage_root` and `storage_hash` are equal.
+/// This type is implemented as enum to improve the performance when accessing the value cache. The
+/// problem being that we need to calculate the `hash` of [`Self`] in worst case three times when
+/// trying to find a value in the value cache. First to lookup the local cache, then the shared
+/// cache and if we found it in the shared cache a third time to insert it into the list of accessed
+/// values. To work around each variant stores the `hash` to identify a unique
+///
+///
+/// that when it comes to `peek`ing into the structure. Given current stable rust you
+/// can not implement `Borrow` properly for their wrapper type. For still supporting to `peek` into
+/// the [`LruCache`] that stores the [`CachedValue`]s without allocating an [`Arc<[u8]>`] this type
+/// has the `Ref` variant. We implement [`PartialEq`] and [`Hash`] manually to ensure that both
+/// variants can point to the same value as long as `storage_root` and `storage_hash` are equal.
 #[derive(Clone, Eq)]
 pub(super) enum ValueCacheKey<'a, H> {
 	/// Variant that stores the `storage_key` by value.
@@ -123,6 +141,8 @@ pub(super) enum ValueCacheKey<'a, H> {
 		storage_root: H,
 		/// The key to access the value in the storage.
 		storage_key: Arc<[u8]>,
+		/// The hash that identifying this instance of `storage_root` and `storage_key`.
+		hash: u64,
 	},
 	/// Variant that only references the `storage_key`.
 	Ref {
@@ -130,22 +150,72 @@ pub(super) enum ValueCacheKey<'a, H> {
 		storage_root: H,
 		/// The key to access the value in the storage.
 		storage_key: &'a [u8],
+		/// The hash that identifying this instance of `storage_root` and `storage_key`.
+		hash: u64,
 	},
 }
 
-impl<H> ValueCacheKey<'_, H> {
+impl<'a, H> ValueCacheKey<'a, H> {
+	/// Constructs [`Self::Value`].
+	pub fn value(storage_key: impl Into<Arc<[u8]>>, storage_root: H) -> Self
+	where
+		H: AsRef<[u8]>,
+	{
+		let storage_key = storage_key.into();
+		let hash = Self::hash_data(&storage_key, &storage_root);
+		Self::Value { storage_root, storage_key, hash }
+	}
+
+	pub fn ref_(storage_key: &'a [u8], storage_root: H) -> Self
+	where
+		H: AsRef<[u8]>,
+	{
+		let storage_key = storage_key.into();
+		let hash = Self::hash_data(storage_key, &storage_root);
+		Self::Ref { storage_root, storage_key, hash }
+	}
+
 	/// Convert `self` into `Self::Value`
 	pub fn into_value(self) -> ValueCacheKey<'static, H>
 	where
 		H: Clone,
 	{
 		match self {
-			Self::Value { storage_root, storage_key } =>
-				ValueCacheKey::Value { storage_root, storage_key },
-			Self::Ref { storage_root, storage_key } => ValueCacheKey::Value {
-				storage_root: storage_root.clone(),
-				storage_key: storage_key.into(),
-			},
+			Self::Value { storage_root, storage_key, hash } =>
+				ValueCacheKey::Value { storage_root, storage_key, hash },
+			Self::Ref { storage_root, storage_key, hash } =>
+				ValueCacheKey::Value { storage_root, storage_key: storage_key.into(), hash },
+		}
+	}
+
+	/// Returns a hasher prepared to build the final hash to identify [`Self`].
+	///
+	/// See [`Self::hash_data`] for building the hash directly.
+	pub fn hash_partial_data(storage_root: &H) -> impl std::hash::Hasher + Clone
+	where
+		H: AsRef<[u8]>,
+	{
+		let mut hasher = RANDOM_STATE.build_hasher();
+		hasher.write(storage_root.as_ref());
+		hasher
+	}
+
+	/// Hash the `key` and `storage_root` that identify [`Self`].
+	///
+	/// Returns a `u64` which represents the unique hash for the given inputs.
+	pub fn hash_data(key: &[u8], storage_root: &H) -> u64
+	where
+		H: AsRef<[u8]>,
+	{
+		let mut hasher = Self::hash_partial_data(storage_root);
+		hasher.write(key);
+		hasher.finish()
+	}
+
+	/// Returns the `hash` that identifies the current instance.
+	fn get_hash(&self) -> u64 {
+		match self {
+			Self::Value { hash, .. } | Self::Ref { hash, .. } => *hash,
 		}
 	}
 
@@ -166,26 +236,21 @@ impl<H> ValueCacheKey<'_, H> {
 	}
 }
 
-// Implement manually to ensure that the `Value` and `Ref` are treated equally.
+// Implement manually to ensure that the `Value` and `Hash` are treated equally.
 impl<H: std::hash::Hash> std::hash::Hash for ValueCacheKey<'_, H> {
 	fn hash<Hasher: std::hash::Hasher>(&self, state: &mut Hasher) {
-		match self {
-			Self::Ref { storage_root, storage_key } => {
-				storage_root.hash(state);
-				storage_key.hash(state);
-			},
-			Self::Value { storage_root, storage_key } => {
-				storage_root.hash(state);
-				storage_key.hash(state);
-			},
-		}
+		state.write_u64(self.get_hash());
 	}
 }
 
-// Implement manually to ensure that the `Value` and `Ref` are treated equally.
+impl<H> nohash_hasher::IsEnabled for ValueCacheKey<'_, H> {}
+
+// Implement manually to ensure that the `Value` and `Hash` are treated equally.
 impl<H: PartialEq> PartialEq for ValueCacheKey<'_, H> {
 	fn eq(&self, other: &Self) -> bool {
-		self.storage_root() == other.storage_root() && self.storage_key() == other.storage_key()
+		self.get_hash() == other.get_hash() &&
+			self.storage_root() == other.storage_root() &&
+			self.storage_key() == other.storage_key()
 	}
 }
 
@@ -194,7 +259,7 @@ impl<H: PartialEq> PartialEq for ValueCacheKey<'_, H> {
 /// The cache ensures that it stays in the configured size bounds.
 pub(super) struct SharedValueCache<H> {
 	/// The cached nodes, ordered by least recently used.
-	pub(super) lru: LruCache<ValueCacheKey<'static, H>, CachedValue<H>>,
+	pub(super) lru: NoHashingLruCache<ValueCacheKey<'static, H>, CachedValue<H>>,
 	/// The size of [`Self::lru`] in bytes.
 	pub(super) size_in_bytes: usize,
 	/// The maximum cache size of [`Self::lru`].
@@ -207,11 +272,11 @@ pub(super) struct SharedValueCache<H> {
 	known_storage_keys: HashSet<Arc<[u8]>>,
 }
 
-impl<H: Eq + std::hash::Hash + Clone + Copy> SharedValueCache<H> {
+impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 	/// Create a new instance.
 	fn new(cache_size: CacheSize) -> Self {
 		Self {
-			lru: LruCache::unbounded(),
+			lru: NoHashingLruCache::unbounded_with_hasher(Default::default()),
 			size_in_bytes: 0,
 			maximum_cache_size: cache_size,
 			known_storage_keys: Default::default(),
@@ -283,7 +348,8 @@ impl<H: Eq + std::hash::Hash + Clone + Copy> SharedValueCache<H> {
 			let (storage_root, storage_key) = match key.into_value() {
 				ValueCacheKey::Ref { .. } =>
 					unreachable!("We just converted the `ValueCacheKey` into a `Value`; qed"),
-				ValueCacheKey::Value { storage_root, storage_key } => (storage_root, storage_key),
+				ValueCacheKey::Value { storage_root, storage_key, .. } =>
+					(storage_root, storage_key),
 			};
 
 			let (size_update, storage_key) =
@@ -305,7 +371,7 @@ impl<H: Eq + std::hash::Hash + Clone + Copy> SharedValueCache<H> {
 			self.size_in_bytes += size_update;
 
 			if let Some((r_key, _)) =
-				self.lru.push(ValueCacheKey::Value { storage_root, storage_key }, value)
+				self.lru.push(ValueCacheKey::value(storage_key, storage_root), value)
 			{
 				if let ValueCacheKey::Value { storage_key, .. } = r_key {
 					update_size_in_bytes(
@@ -489,12 +555,10 @@ mod tests {
 			.is_none());
 
 		cache.update(
-			vec![
-				(
-					ValueCacheKey::Value { storage_key: vec![10; 10].into(), storage_root: root0 },
-					CachedValue::NonExisting,
-				)
-			],
+			vec![(
+				ValueCacheKey::Value { storage_key: vec![10; 10].into(), storage_root: root0 },
+				CachedValue::NonExisting,
+			)],
 			vec![],
 		);
 
