@@ -72,7 +72,7 @@ where
 	Block::Header: HeaderT,
 {
 	/// Awaits for the header of the block with hash `hash`.
-	async fn get_header(&self, hash: Block::Hash) -> Block::Header;
+	async fn get_header(&mut self, hash: Block::Hash) -> Block::Header;
 }
 
 struct RpcHeaderProvider<Block: BlockT> {
@@ -85,7 +85,7 @@ impl<Block: BlockT> HeaderProvider<Block> for RpcHeaderProvider<Block>
 where
 	Block::Header: DeserializeOwned,
 {
-	async fn get_header(&self, hash: Block::Hash) -> Block::Header {
+	async fn get_header(&mut self, hash: Block::Hash) -> Block::Header {
 		rpc_api::get_header::<Block, _>(&self.uri, hash).await.unwrap()
 	}
 }
@@ -139,7 +139,7 @@ impl<Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
 where
 	<Block as BlockT>::Header: DeserializeOwned,
 {
-	pub fn new(subscription: HS, header_provider: HP) -> Self {
+	pub fn new(header_provider: HP, subscription: HS) -> Self {
 		Self {
 			header_provider,
 			subscription,
@@ -214,7 +214,7 @@ where
 		Block,
 		RpcHeaderProvider<Block>,
 		Subscription<Block::Header>,
-	> = FinalizedHeaders::new(subscription, header_provider);
+	> = FinalizedHeaders::new(header_provider, subscription);
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
@@ -304,4 +304,64 @@ where
 
 	log::error!(target: LOG_TARGET, "ws subscription must have terminated.");
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_runtime::testing::{Block as TBlock, ExtrinsicWrapper, Header};
+
+	type Block = TBlock<ExtrinsicWrapper<()>>;
+	type BlockNumber = u64;
+	type Hash = H256;
+
+	struct MockHeaderProvider(pub VecDeque<BlockNumber>);
+
+	#[async_trait]
+	impl HeaderProvider<Block> for MockHeaderProvider {
+		async fn get_header(&mut self, _hash: Hash) -> Header {
+			let height = self.0.pop_front().unwrap();
+			Header::new_from_number(height)
+		}
+	}
+
+	struct MockHeaderSubscription(pub VecDeque<BlockNumber>);
+
+	#[async_trait]
+	impl HeaderSubscription<Block> for MockHeaderSubscription {
+		async fn next_header(&mut self) -> Option<Header> {
+			self.0.pop_front().map(|h| Header::new_from_number(h))
+		}
+	}
+
+	#[tokio::test]
+	async fn finalized_headers_works_when_every_block_comes_from_subscription() {
+		let heights = vec![4, 5, 6, 7];
+
+		let provider = MockHeaderProvider(vec![].into());
+		let subscription = MockHeaderSubscription(heights.clone().into());
+		let mut headers = FinalizedHeaders::new(provider, subscription);
+
+		for h in heights {
+			assert_eq!(h, headers.next().await.unwrap().number);
+		}
+		assert_eq!(None, headers.next().await);
+	}
+
+	#[tokio::test]
+	async fn finalized_headers_come_from_subscription_and_provider_if_in_need() {
+		let all_heights = 3..11;
+		let heights_in_subscription = vec![3, 4, 6, 10];
+		// Consecutive headers will be requested in the reversed order.
+		let heights_not_in_subscription = vec![5, 9, 8, 7];
+
+		let provider = MockHeaderProvider(heights_not_in_subscription.into());
+		let subscription = MockHeaderSubscription(heights_in_subscription.into());
+		let mut headers = FinalizedHeaders::new(provider, subscription);
+
+		for h in all_heights {
+			assert_eq!(h, headers.next().await.unwrap().number);
+		}
+		assert_eq!(None, headers.next().await);
+	}
 }
