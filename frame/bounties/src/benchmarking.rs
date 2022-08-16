@@ -100,7 +100,8 @@ benchmarks_instance_pallet! {
 		let (caller, curator, fee, value, reason) = setup_bounty::<T, I>(0, T::MaximumReasonLength::get());
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
-	}: _(RawOrigin::Root, bounty_id)
+		let approve_origin = T::ApproveOrigin::successful_origin();
+	}: _<T::Origin>(approve_origin, bounty_id)
 
 	propose_curator {
 		setup_pot_account::<T, I>();
