@@ -137,6 +137,8 @@ where
 			None => return,
 		};
 
+		self.fetched_headers.push_front(last_finalized.clone());
+
 		let current_height = last_finalized.number();
 		let parent_height = current_height.sub(One::one());
 		let last_height = self.last_returned.unwrap_or(parent_height);
