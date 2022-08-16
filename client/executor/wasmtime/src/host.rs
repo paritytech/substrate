@@ -276,12 +276,11 @@ impl<'a> Sandbox for HostContext<'a> {
 				.ok_or("Runtime doesn't have a table; sandbox is unavailable")?;
 			let table_item = table.get(&mut self.caller, dispatch_thunk_id);
 
-			table_item
+			*table_item
 				.ok_or("dispatch_thunk_id is out of bounds")?
 				.funcref()
 				.ok_or("dispatch_thunk_idx should be a funcref")?
 				.ok_or("dispatch_thunk_idx should point to actual func")?
-				.clone()
 		};
 
 		let guest_env = match sandbox::GuestEnvironment::decode(self.sandbox_store(), raw_env_def) {

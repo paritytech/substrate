@@ -73,7 +73,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let block2 = construct_block(
 		&mut tt,
 		2,
-		block1.1.clone(),
+		block1.1,
 		vec![
 			CheckedExtrinsic {
 				signed: None,

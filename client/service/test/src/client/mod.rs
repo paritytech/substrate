@@ -410,7 +410,7 @@ fn best_containing_with_genesis_block() {
 
 	assert_eq!(
 		genesis_hash.clone(),
-		block_on(longest_chain_select.finality_target(genesis_hash.clone(), None)).unwrap(),
+		block_on(longest_chain_select.finality_target(genesis_hash, None)).unwrap(),
 	);
 }
 
@@ -1333,9 +1333,9 @@ fn respects_block_rules() {
 			.block;
 
 		let params = BlockCheckParams {
-			hash: block_ok.hash().clone(),
+			hash: block_ok.hash(),
 			number: 0,
-			parent_hash: block_ok.header().parent_hash().clone(),
+			parent_hash: *block_ok.header().parent_hash(),
 			allow_missing_state: false,
 			allow_missing_parent: false,
 			import_existing: false,
@@ -1349,9 +1349,9 @@ fn respects_block_rules() {
 		let block_not_ok = block_not_ok.build().unwrap().block;
 
 		let params = BlockCheckParams {
-			hash: block_not_ok.hash().clone(),
+			hash: block_not_ok.hash(),
 			number: 0,
-			parent_hash: block_not_ok.header().parent_hash().clone(),
+			parent_hash: *block_not_ok.header().parent_hash(),
 			allow_missing_state: false,
 			allow_missing_parent: false,
 			import_existing: false,
@@ -1372,15 +1372,15 @@ fn respects_block_rules() {
 		let block_ok = block_ok.build().unwrap().block;
 
 		let params = BlockCheckParams {
-			hash: block_ok.hash().clone(),
+			hash: block_ok.hash(),
 			number: 1,
-			parent_hash: block_ok.header().parent_hash().clone(),
+			parent_hash: *block_ok.header().parent_hash(),
 			allow_missing_state: false,
 			allow_missing_parent: false,
 			import_existing: false,
 		};
 		if record_only {
-			fork_rules.push((1, block_ok.hash().clone()));
+			fork_rules.push((1, block_ok.hash()));
 		}
 		assert_eq!(block_on(client.check_block(params)).unwrap(), ImportResult::imported(false));
 
@@ -1391,9 +1391,9 @@ fn respects_block_rules() {
 		let block_not_ok = block_not_ok.build().unwrap().block;
 
 		let params = BlockCheckParams {
-			hash: block_not_ok.hash().clone(),
+			hash: block_not_ok.hash(),
 			number: 1,
-			parent_hash: block_not_ok.header().parent_hash().clone(),
+			parent_hash: *block_not_ok.header().parent_hash(),
 			allow_missing_state: false,
 			allow_missing_parent: false,
 			import_existing: false,
@@ -1457,9 +1457,9 @@ fn returns_status_for_pruned_blocks() {
 	let b1 = b1.build().unwrap().block;
 
 	let check_block_a1 = BlockCheckParams {
-		hash: a1.hash().clone(),
+		hash: a1.hash(),
 		number: 0,
-		parent_hash: a1.header().parent_hash().clone(),
+		parent_hash: *a1.header().parent_hash(),
 		allow_missing_state: false,
 		allow_missing_parent: false,
 		import_existing: false,
@@ -1494,9 +1494,9 @@ fn returns_status_for_pruned_blocks() {
 	block_on(client.import_as_final(BlockOrigin::Own, a2.clone())).unwrap();
 
 	let check_block_a2 = BlockCheckParams {
-		hash: a2.hash().clone(),
+		hash: a2.hash(),
 		number: 1,
-		parent_hash: a1.header().parent_hash().clone(),
+		parent_hash: *a1.header().parent_hash(),
 		allow_missing_state: false,
 		allow_missing_parent: false,
 		import_existing: false,
@@ -1528,9 +1528,9 @@ fn returns_status_for_pruned_blocks() {
 
 	block_on(client.import_as_final(BlockOrigin::Own, a3.clone())).unwrap();
 	let check_block_a3 = BlockCheckParams {
-		hash: a3.hash().clone(),
+		hash: a3.hash(),
 		number: 2,
-		parent_hash: a2.header().parent_hash().clone(),
+		parent_hash: *a2.header().parent_hash(),
 		allow_missing_state: false,
 		allow_missing_parent: false,
 		import_existing: false,
@@ -1563,9 +1563,9 @@ fn returns_status_for_pruned_blocks() {
 	);
 
 	let mut check_block_b1 = BlockCheckParams {
-		hash: b1.hash().clone(),
+		hash: b1.hash(),
 		number: 0,
-		parent_hash: b1.header().parent_hash().clone(),
+		parent_hash: *b1.header().parent_hash(),
 		allow_missing_state: false,
 		allow_missing_parent: false,
 		import_existing: false,

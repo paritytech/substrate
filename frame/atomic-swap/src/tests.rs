@@ -102,7 +102,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::create_swap(
 			Origin::signed(A),
 			B,
-			hashed_proof.clone(),
+			hashed_proof,
 			BalanceSwapAction::new(50),
 			1000,
 		)
@@ -117,7 +117,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::create_swap(
 			Origin::signed(B),
 			A,
-			hashed_proof.clone(),
+			hashed_proof,
 			BalanceSwapAction::new(75),
 			1000,
 		)
