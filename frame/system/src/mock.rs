@@ -79,13 +79,13 @@ parameter_types! {
 }
 
 parameter_types! {
-	pub static KILLED: Vec<u64> = vec![];
+	pub static Killed: Vec<u64> = vec![];
 }
 
 pub struct RecordKilled;
 impl OnKilledAccount<u64> for RecordKilled {
 	fn on_killed_account(who: &u64) {
-		KILLED::mutate(|r| r.push(*who))
+		Killed::mutate(|r| r.push(*who))
 	}
 }
 

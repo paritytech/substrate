@@ -55,9 +55,9 @@ fn stored_map_works() {
 		System::dec_consumers(&0);
 		assert!(!System::is_provider_required(&0));
 
-		assert!(KILLED::get().is_empty());
+		assert!(Killed::get().is_empty());
 		assert_ok!(System::remove(&0));
-		assert_eq!(KILLED::get(), vec![0u64]);
+		assert_eq!(Killed::get(), vec![0u64]);
 	});
 }
 

@@ -108,18 +108,18 @@ pub enum Hook {
 	Died(u32, u64),
 }
 parameter_types! {
-	static FROZEN: HashMap<(u32, u64), u64> = Default::default();
-	static HOOKS: Vec<Hook> = Default::default();
+	static Frozen: HashMap<(u32, u64), u64> = Default::default();
+	static Hooks: Vec<Hook> = Default::default();
 }
 
 pub struct TestFreezer;
 impl FrozenBalance<u32, u64, u64> for TestFreezer {
 	fn frozen_balance(asset: u32, who: &u64) -> Option<u64> {
-		FROZEN::get().get(&(asset, *who)).cloned()
+		Frozen::get().get(&(asset, *who)).cloned()
 	}
 
 	fn died(asset: u32, who: &u64) {
-		HOOKS::mutate(|v| v.push(Hook::Died(asset, *who)));
+		Hooks::mutate(|v| v.push(Hook::Died(asset, *who)));
 
 		// Sanity check: dead accounts have no balance.
 		assert!(Assets::balance(asset, *who).is_zero());
@@ -127,24 +127,24 @@ impl FrozenBalance<u32, u64, u64> for TestFreezer {
 }
 
 pub(crate) fn set_frozen_balance(asset: u32, who: u64, amount: u64) {
-	FROZEN::mutate(|v| {
+	Frozen::mutate(|v| {
 		v.insert((asset, who), amount);
 	});
 }
 
 pub(crate) fn clear_frozen_balance(asset: u32, who: u64) {
-	FROZEN::mutate(|v| {
+	Frozen::mutate(|v| {
 		v.remove(&(asset, who));
 	});
 }
 
 pub(crate) fn hooks() -> Vec<Hook> {
-	HOOKS::get().clone()
+	Hooks::get().clone()
 }
 
 pub(crate) fn take_hooks() -> Vec<Hook> {
-	let result = HOOKS::get();
-	HOOKS::set(Default::default());
+	let result = Hooks::get();
+	Hooks::set(Default::default());
 	result
 }
 
