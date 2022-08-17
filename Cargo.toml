@@ -116,6 +116,7 @@ members = [
 	"frame/nomination-pools",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
+	"frame/nomination-pools/runtime-api",
 	"frame/randomness-collective-flip",
 	"frame/ranked-collective",
 	"frame/recovery",
@@ -257,7 +258,7 @@ crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
-ed25519-dalek = { opt-level = 3 }
+ed25519-zebra = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }

@@ -276,5 +276,7 @@ fn storage_layer_in_decl_pallet_call() {
 
 		let call2 = Call::DeclPallet(decl_pallet::Call::set_value { value: 1 });
 		assert_noop!(call2.dispatch(Origin::signed(0)), "Revert!");
+		// Calling the function directly also works with storage layers.
+		assert_noop!(decl_pallet::Module::<Runtime>::set_value(Origin::signed(1), 1), "Revert!");
 	});
 }

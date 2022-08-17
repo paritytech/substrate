@@ -60,6 +60,18 @@ pub trait TestApi {
 		vec![0; 4 * 1024]
 	}
 
+	fn return_option_vec() -> Option<Vec<u8>> {
+		let mut vec = Vec::new();
+		vec.resize(16 * 1024, 0xAA);
+		Some(vec)
+	}
+
+	fn return_option_bytes() -> Option<bytes::Bytes> {
+		let mut vec = Vec::new();
+		vec.resize(16 * 1024, 0xAA);
+		Some(vec.into())
+	}
+
 	/// Set the storage at key with value.
 	fn set_storage(&mut self, key: &[u8], data: &[u8]) {
 		self.place_storage(key.to_vec(), Some(data.to_vec()));
@@ -299,5 +311,13 @@ wasm_export_functions! {
 		assert_eq!(b, res.1);
 		assert_eq!(c, res.2);
 		assert_eq!(d, res.3);
+	}
+
+	fn test_return_option_vec() {
+		test_api::return_option_vec();
+	}
+
+	fn test_return_option_bytes() {
+		test_api::return_option_bytes();
 	}
 }

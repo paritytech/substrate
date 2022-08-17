@@ -76,8 +76,6 @@ pub struct PeerInfo<Hash, Number> {
 pub enum NodeRole {
 	/// The node is a full node
 	Full,
-	/// The node is a light client
-	LightClient,
 	/// The node is an authority
 	Authority,
 }
@@ -90,10 +88,10 @@ pub struct SyncState<Number> {
 	pub starting_block: Number,
 	/// Height of the current best block of the node.
 	pub current_block: Number,
-	/// Height of the highest block learned from the network. Missing if no block is known yet.
-	#[serde(default = "Default::default", skip_serializing_if = "Option::is_none")]
-	pub highest_block: Option<Number>,
+	/// Height of the highest block in the network.
+	pub highest_block: Number,
 }
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -131,7 +129,7 @@ mod tests {
 			::serde_json::to_string(&SyncState {
 				starting_block: 12u32,
 				current_block: 50u32,
-				highest_block: Some(128u32),
+				highest_block: 128u32,
 			})
 			.unwrap(),
 			r#"{"startingBlock":12,"currentBlock":50,"highestBlock":128}"#,
@@ -141,10 +139,10 @@ mod tests {
 			::serde_json::to_string(&SyncState {
 				starting_block: 12u32,
 				current_block: 50u32,
-				highest_block: None,
+				highest_block: 50u32,
 			})
 			.unwrap(),
-			r#"{"startingBlock":12,"currentBlock":50}"#,
+			r#"{"startingBlock":12,"currentBlock":50,"highestBlock":50}"#,
 		);
 	}
 }
