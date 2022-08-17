@@ -127,20 +127,19 @@ pub fn run() -> sc_cli::Result<()> {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;
 						cmd.run(client)
 					},
-					#[allow(unused)]
+					#[cfg(not(feature = "runtime-benchmarks"))]
+					BenchmarkCmd::Storage(_) => Err(
+						"Storage benchmarking can be enabled with `--features runtime-benchmarks`."
+							.into(),
+					),
+					#[cfg(feature = "runtime-benchmarks")]
 					BenchmarkCmd::Storage(cmd) => {
-						#[cfg(not(feature = "runtime-benchmarks"))]
-						return Err("Storage benchmarking can be enabled with `--features runtime-benchmarks`.".into());
+						let PartialComponents { client, backend, .. } =
+							service::new_partial(&config)?;
+						let db = backend.expose_db();
+						let storage = backend.expose_storage();
 
-						#[cfg(feature = "runtime-benchmarks")]
-						{
-							let PartialComponents { client, backend, .. } =
-								service::new_partial(&config)?;
-							let db = backend.expose_db();
-							let storage = backend.expose_storage();
-
-							cmd.run(config, client, db, storage)
-						}
+						cmd.run(config, client, db, storage)
 					},
 					BenchmarkCmd::Overhead(cmd) => {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;

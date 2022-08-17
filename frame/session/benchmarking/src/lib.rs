@@ -21,7 +21,6 @@
 #![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(test)]
 mod mock;
 
 use sp_runtime::traits::{One, StaticLookup, TrailingZeroInput};

@@ -13,17 +13,8 @@ publish = false
 [dependencies]
 honggfuzz = "0.5"
 rand = { version = "0.8", features = ["std", "small_rng"] }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support" }
-# NOTE: These `runtime-benchmarks` dependencies here are clearly wrong.
-# However it has always been the case through transitive feature bleeding.
-# Since that is now fixed it needs to be happen explicitly and looks ugly.
-# The underlying reason is that `StakingMock::set_score_of` is only available in 
-# benchmarking and tests, which is called by `ExtBuilder::build_and_execute`.
-pallet-bags-list = { version = "4.0.0-dev", features = ["fuzz", "runtime-benchmarks"], path = ".." }
-pallet-collective = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../collective" }
-pallet-referenda = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../referenda" }
-pallet-conviction-voting = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../conviction-voting" }
-pallet-ranked-collective = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../../ranked-collective" }
+frame-election-provider-support = { version = "4.0.0-dev", features = ["fuzz"], path = "../../election-provider-support" }
+pallet-bags-list = { version = "4.0.0-dev", features = ["fuzz"], path = ".." }
 
 [[bin]]
 name = "bags-list"

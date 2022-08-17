@@ -52,7 +52,6 @@ rand_chacha = { version = "0.2" }
 [features]
 default = ["std"]
 std = [
-	"rand_chacha/std",
 	"frame-benchmarking?/std",
 	"serde",
 	"codec/std",
@@ -63,6 +62,7 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-session/std",
+	"pallet-bags-list/std",
 	"frame-system/std",
 	"pallet-authorship/std",
 	"sp-application-crypto/std",

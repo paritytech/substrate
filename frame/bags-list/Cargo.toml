@@ -74,5 +74,6 @@ fuzz = [
 	"sp-io",
 	"pallet-balances",
 	"sp-tracing",
+	"frame-election-provider-support/fuzz",
 ]
 try-runtime = [ "frame-support/try-runtime" ]

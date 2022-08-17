@@ -47,4 +47,6 @@ std = [
 runtime-benchmarks = [
 	"sp-staking/runtime-benchmarks",
 ]
-try-runtime = []
+try-runtime = [
+	"frame-support/try-runtime"
+]

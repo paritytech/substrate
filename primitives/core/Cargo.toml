@@ -80,7 +80,7 @@ bench = false
 default = ["std"]
 std = [
 	"parity-util-mem/std",
-	"merlin/std",
+	"merlin?/std",
 	"full_crypto",
 	"log/std",
 	"thiserror",

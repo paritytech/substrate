@@ -40,7 +40,7 @@ impl frame_election_provider_support::ScoreProvider<AccountId> for StakingMock {
 		*NextVoteWeightMap::get().get(id).unwrap_or(&NextVoteWeight::get())
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
 	fn set_score_of(id: &AccountId, weight: Self::Score) {
 		NEXT_VOTE_WEIGHT_MAP.with(|m| m.borrow_mut().insert(*id, weight));
 	}
@@ -108,6 +108,7 @@ pub struct ExtBuilder {
 	skip_genesis_ids: bool,
 }
 
+#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
 impl ExtBuilder {
 	/// Skip adding the default genesis ids to the list.
 	#[cfg(test)]
@@ -123,7 +124,6 @@ impl ExtBuilder {
 		self
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
@@ -145,7 +145,6 @@ impl ExtBuilder {
 		ext
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();

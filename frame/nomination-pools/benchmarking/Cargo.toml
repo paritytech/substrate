@@ -47,14 +47,14 @@ std = [
 	"frame-election-provider-support/std",
 	"frame-support/std",
 	"frame-system/std",
-	"pallet-staking/std",
 	"pallet-bags-list/std",
+	"pallet-staking/std",
 	"pallet-nomination-pools/std",
 	"sp-runtime/std",
 	"sp-runtime-interface/std",
 	"sp-io/std",
-	"sp-std/std",
 	"sp-staking/std",
+	"sp-std/std",	
 ]
 
 runtime-benchmarks = [
