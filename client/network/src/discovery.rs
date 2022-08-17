@@ -1000,8 +1000,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 }
 
-// NB: If this protocol name derivation is changed, check if
-// `DiscoveryBehaviour::new_handler` is still correct.
+// NB: If this protocol name derivation is changed, check if the following is still correct:
+// - `DiscoveryBehaviour::new_handler`;
+// - `crate::persist_peers::PersistPeerAddrs::report_peer_addr`.
 fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
 	let mut v = vec![b'/'];
 	v.extend_from_slice(id.as_ref().as_bytes());

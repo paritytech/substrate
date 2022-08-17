@@ -19,7 +19,7 @@ use crate::{Multiaddr, PeerId};
 
 type BoxedFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 type Never = std::convert::Infallible;
-type ProtocolType = String; // Vec<u8>;
+type ProtocolType = String;
 
 const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 const PEER_ADDRS_CACHE_SIZE: usize = 100;
@@ -68,11 +68,9 @@ impl PersistPeerAddrs {
 		protocol: impl AsRef<[u8]>,
 		addr: &Multiaddr,
 	) {
-		let protocol = String::from_utf8_lossy(protocol.as_ref()).into_owned();
-
-		eprintln!(
-			"PersistPeerAddrs report [peer-id: {:?}, protocol: {:?}, addr: {:?}]",
-			peer_id, protocol, addr
+		let protocol = String::from_utf8(protocol.as_ref().to_owned()).expect(
+			"According to the `crate::discovery::protocol_name_from_protocol_id` \
+					and `<ProtocolId as AsRef<str>>` it's a correct UTF-8 string",
 		);
 
 		let entries = self
