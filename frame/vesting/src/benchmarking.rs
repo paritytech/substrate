@@ -389,7 +389,7 @@ benchmarks! {
 		assert!(l <= u8::MAX.into());
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
-		
+
 		let per_block = T::MinVestedTransfer::get();
 		let transfer_amount = per_block.checked_mul(&20u32.into()).unwrap();
 		// 2 x transfer_amount because we will create 3 vesting schedules and remove one
