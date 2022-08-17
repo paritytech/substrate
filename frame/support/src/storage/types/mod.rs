@@ -22,7 +22,6 @@ use crate::metadata::{StorageEntryMetadata, StorageEntryModifier};
 use codec::FullCodec;
 use sp_std::prelude::*;
 
-mod counted_double_map;
 mod counted_map;
 mod counted_nmap;
 mod double_map;
@@ -31,7 +30,6 @@ mod map;
 mod nmap;
 mod value;
 
-pub use counted_double_map::{CountedStorageDoubleMap, CountedStorageDoubleMapInstance};
 pub use counted_map::{CountedStorageMap, CountedStorageMapInstance};
 pub use counted_nmap::{CountedStorageNMap, CountedStorageNMapInstance};
 pub use double_map::StorageDoubleMap;
