@@ -577,7 +577,7 @@ impl<T: Config> StakingLedger<T> {
 		let (remaining_ratio, slash_chunks_priority) = {
 			let mut affected_balance = BalanceOf::<T>::zero();
 			let mut first_chunk = None;
-			// the era of chunk is in increasing order within `unlocking`, thus searth in reverse
+			// the era of chunk is in increasing order within `unlocking`, thus searching in reverse
 			// order for the first chunk that after (or equal to) `slashable_chunks_start`
 			for (index, chunk) in self.unlocking.iter().enumerate().rev() {
 				if chunk.era < slashable_chunks_start {
