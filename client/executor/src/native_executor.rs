@@ -139,8 +139,6 @@ where
 	///   compiled execution method is used.
 	///
 	/// `runtime_cache_size` - The capacity of runtime cache.
-	///
-	/// `allow_missing_func_imports` - Ignore missing function imports.
 	pub fn new(
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
@@ -423,8 +421,6 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
 	///
 	/// `runtime_cache_size` - The capacity of runtime cache.
-	///
-	/// `allow_missing_func_imports` - Ignore missing function imports.
 	pub fn new(
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
