@@ -1354,7 +1354,7 @@ mod tests {
 	};
 	use assert_matches::assert_matches;
 	use codec::{Decode, Encode};
-	use frame_support::{assert_err, assert_ok};
+	use frame_support::{assert_err, assert_ok, parameter_types};
 	use frame_system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
@@ -1509,14 +1509,14 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		thread_local! {
-			static TEST_DATA: RefCell<Vec<usize>> = RefCell::new(vec![0]);
+		parameter_types! {
+			static TestData: Vec<usize> = vec![0];
 		}
 
 		let value = Default::default();
 		let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 		let exec_ch = MockLoader::insert(Call, |_ctx, _executable| {
-			TEST_DATA.with(|data| data.borrow_mut().push(1));
+			TestData::mutate(|data| data.push(1));
 			exec_success()
 		});
 
@@ -1540,7 +1540,7 @@ mod tests {
 			);
 		});
 
-		TEST_DATA.with(|data| assert_eq!(*data.borrow(), vec![0, 1]));
+		assert_eq!(TestData::get(), vec![0, 1]);
 	}
 
 	#[test]

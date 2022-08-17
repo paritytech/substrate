@@ -44,13 +44,13 @@ use std::cell::RefCell;
 
 pub struct OnOffenceHandler;
 
-thread_local! {
-	pub static ON_OFFENCE_PERBILL: RefCell<Vec<Perbill>> = RefCell::new(Default::default());
-	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
+parameter_types! {
+	pub static OnOffencePerBill: Vec<Perbill> = Default::default();
+	pub static OffenceWeight: Weight = Default::default();
 }
 
 impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
-	for OnOffenceHandler
+for OnOffenceHandler
 {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],
@@ -58,16 +58,17 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
 		_offence_session: SessionIndex,
 		_disable_strategy: DisableStrategy,
 	) -> Weight {
-		ON_OFFENCE_PERBILL.with(|f| {
-			*f.borrow_mut() = slash_fraction.to_vec();
+		OnOffencePerBill::mutate(|f| {
+			*f = slash_fraction.to_vec();
 		});
 
-		OFFENCE_WEIGHT.with(|w| *w.borrow())
+		OffenceWeight::get()
 	}
 }
 
-pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
-	ON_OFFENCE_PERBILL.with(|fractions| f(&mut fractions.borrow_mut()))
+pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> Vec<Perbill> {
+	OnOffencePerBill::mutate(|fractions| { f(fractions);});
+	OnOffencePerBill::get()
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
