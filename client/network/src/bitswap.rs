@@ -263,11 +263,11 @@ where
 		&self,
 		hash: <Block as BlockT>::Hash,
 	) -> sp_blockchain::Result<Option<Vec<u8>>> {
-		self.indexed_transaction(hash)
+		(**self).indexed_transaction(hash)
 	}
 
 	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)> {
-		self.ready_blocks()
+		(**self).ready_blocks()
 	}
 }
 
