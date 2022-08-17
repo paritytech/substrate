@@ -19,18 +19,19 @@
 //! CountedStoragePrefixedNMap traits and their methods directly.
 
 use crate::{
-	metadata::{StorageEntryMetadata, StorageEntryType},
+	metadata::StorageEntryMetadata,
 	storage::{
 		types::{
 			EncodeLikeTuple, HasKeyPrefix, HasReversibleKeyPrefix, OptionQuery, QueryKindTrait,
-			StorageEntryMetadataBuilder, StorageValue, TupleToEncodedIter, ValueQuery,
+			StorageEntryMetadataBuilder, StorageNMap, StorageValue, TupleToEncodedIter, ValueQuery,
 		},
-		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength, StoragePrefixedMap,
+		KeyGenerator, PrefixIterator, StorageAppend, StorageDecodeLength,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
+	Never,
 };
-use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
-use sp_runtime::{traits::Saturating, SaturatedConversion};
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
 /// A wrapper around a `StorageNMap` and a `StorageValue<Value=u32>` to keep track of how many items
@@ -68,7 +69,7 @@ trait MapWrapper {
 impl<P: CountedStorageNMapInstance, K, V, Q, O, M> MapWrapper
 	for CountedStorageNMap<P, K, V, Q, O, M>
 {
-	type Map = CountedStorageNMap<P, K, V, Q, O, M>;
+	type Map = StorageNMap<P, K, V, Q, O, M>;
 }
 
 type CounterFor<P> =
@@ -274,7 +275,8 @@ where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut QueryKind::Query) -> R,
 	{
-		<Self as MapWrapper>::Map::mutate(key, f)
+		Self::try_mutate(key, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
 	}
 
 	/// Mutate the value under the given keys when the closure returns `Ok`.
@@ -283,7 +285,14 @@ where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
 	{
-		<Self as MapWrapper>::Map::try_mutate(key, f)
+		Self::try_mutate_exists(key, |option_value_ref| {
+			let option_value = core::mem::replace(option_value_ref, None);
+			let mut query = QueryKind::from_optional_value_to_query(option_value);
+			let res = f(&mut query);
+			let option_value = QueryKind::from_query_to_optional_value(query);
+			let _ = core::mem::replace(option_value_ref, option_value);
+			res
+		})
 	}
 
 	/// Mutate the value under the given keys. Deletes the item if mutated to a `None`.
@@ -292,7 +301,8 @@ where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter,
 		F: FnOnce(&mut Option<Value>) -> R,
 	{
-		<Self as MapWrapper>::Map::mutate_exists(key, f)
+		Self::try_mutate_exists(key, |v| Ok::<R, Never>(f(v)))
+			.expect("`Never` can not be constructed; qed")
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
@@ -481,7 +491,10 @@ where
 	pub fn iter_prefix_from<KP>(
 		kp: KP,
 		starting_raw_key: Vec<u8>,
-	) -> crate::storage::PrefixIterator<(<Key as HasKeyPrefix<KP>>::Suffix, Value)>
+	) -> crate::storage::PrefixIterator<
+		(<Key as HasKeyPrefix<KP>>::Suffix, Value),
+		OnRemovalCounterUpdate<Prefix>,
+	>
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
@@ -523,7 +536,10 @@ where
 	/// results.
 	pub fn drain_prefix<KP>(
 		kp: KP,
-	) -> crate::storage::PrefixIterator<(<Key as HasKeyPrefix<KP>>::Suffix, Value)>
+	) -> crate::storage::PrefixIterator<
+		(<Key as HasKeyPrefix<KP>>::Suffix, Value),
+		OnRemovalCounterUpdate<Prefix>,
+	>
 	where
 		Key: HasReversibleKeyPrefix<KP>,
 	{
@@ -533,7 +549,8 @@ where
 	/// Enumerate all elements in the map in no particular order.
 	///
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
-	pub fn iter() -> crate::storage::PrefixIterator<(Key::Key, Value)> {
+	pub fn iter(
+	) -> crate::storage::PrefixIterator<(Key::Key, Value), OnRemovalCounterUpdate<Prefix>> {
 		<Self as MapWrapper>::Map::iter().convert_on_removal()
 	}
 
@@ -542,7 +559,7 @@ where
 	/// If you add or remove values to the map while doing this, you'll get undefined results.
 	pub fn iter_from(
 		starting_raw_key: Vec<u8>,
-	) -> crate::storage::PrefixIterator<(Key::Key, Value)> {
+	) -> crate::storage::PrefixIterator<(Key::Key, Value), OnRemovalCounterUpdate<Prefix>> {
 		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
 	}
 
@@ -565,7 +582,8 @@ where
 	/// Remove all elements from the map and iterate through them in no particular order.
 	///
 	/// If you add elements to the map while doing this, you'll get undefined results.
-	pub fn drain() -> crate::storage::PrefixIterator<(Key::Key, Value)> {
+	pub fn drain(
+	) -> crate::storage::PrefixIterator<(Key::Key, Value), OnRemovalCounterUpdate<Prefix>> {
 		<Self as MapWrapper>::Map::drain().convert_on_removal()
 	}
 
@@ -644,7 +662,7 @@ mod test {
 	use super::*;
 	use crate::{
 		hash::{StorageHasher as _, *},
-		metadata::{StorageEntryModifier, StorageHasher},
+		metadata::{StorageEntryModifier, StorageEntryType, StorageHasher},
 		storage::types::{Key as NMapKey, ValueQuery},
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
@@ -656,11 +674,716 @@ mod test {
 		}
 		const STORAGE_PREFIX: &'static str = "Foo";
 	}
+	impl CountedStorageNMapInstance for Prefix {
+		type CounterPrefix = Prefix;
+	}
 
-    struct ADefault;
+	struct ADefault;
 	impl crate::traits::Get<u32> for ADefault {
 		fn get() -> u32 {
 			98
 		}
+	}
+
+	#[test]
+	fn test_1_key() {
+		type A = CountedStorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, OptionQuery>;
+		type AValueQueryWithAnOnEmpty =
+			CountedStorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u32, ValueQuery, ADefault>;
+		type B = CountedStorageNMap<Prefix, NMapKey<Blake2_256, u16>, u32, ValueQuery>;
+		type C = CountedStorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, u8, ValueQuery>;
+		type WithLen = CountedStorageNMap<Prefix, NMapKey<Blake2_128Concat, u16>, Vec<u32>>;
+
+		TestExternalities::default().execute_with(|| {
+			let mut k: Vec<u8> = vec![];
+			k.extend(&twox_128(b"test"));
+			k.extend(&twox_128(b"Foo"));
+			k.extend(&3u16.blake2_128_concat());
+			assert_eq!(A::hashed_key_for((&3,)).to_vec(), k);
+
+			assert_eq!(A::contains_key((3,)), false);
+			assert_eq!(A::get((3,)), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 98);
+			assert_eq!(A::count(), 0);
+
+			A::insert((3,), 10);
+			assert_eq!(A::contains_key((3,)), true);
+			assert_eq!(A::get((3,)), Some(10));
+			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 10);
+			assert_eq!(A::count(), 1);
+
+			// {
+			// 	#[crate::storage_alias]
+			// 	type Foo = CountedStorageNMap<test, (NMapKey<Blake2_128Concat, u16>), u32>;
+
+			// 	assert_eq!(Foo::contains_key((3,)), true);
+			// 	assert_eq!(Foo::get((3,)), Some(10));
+			// 	assert_eq!(A::count(), 1);
+			// }
+
+			A::swap::<NMapKey<Blake2_128Concat, u16>, _, _>((3,), (2,));
+			assert_eq!(A::contains_key((3,)), false);
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((3,)), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get((3,)), 98);
+			assert_eq!(A::get((2,)), Some(10));
+			assert_eq!(AValueQueryWithAnOnEmpty::get((2,)), 10);
+			assert_eq!(A::count(), 1);
+
+			A::remove((2,));
+			assert_eq!(A::contains_key((2,)), false);
+			assert_eq!(A::get((2,)), None);
+			assert_eq!(A::count(), 0);
+
+			AValueQueryWithAnOnEmpty::mutate((2,), |v| *v = *v * 2);
+			AValueQueryWithAnOnEmpty::mutate((2,), |v| *v = *v * 2);
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(98 * 4));
+			assert_eq!(A::count(), 1);
+
+			A::remove((2,));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2,), |v| {
+				*v = *v * 2;
+				Ok(())
+			});
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2,), |v| {
+				*v = *v * 2;
+				Ok(())
+			});
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(98 * 4));
+			assert_eq!(A::count(), 1);
+
+			A::remove((2,));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2,), |v| {
+				*v = *v * 2;
+				Err(())
+			});
+			assert_eq!(A::contains_key((2,)), false);
+			assert_eq!(A::count(), 0);
+
+			A::remove((2,));
+			AValueQueryWithAnOnEmpty::mutate_exists((2,), |v| {
+				assert!(v.is_none());
+				*v = Some(10);
+			});
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(10));
+			AValueQueryWithAnOnEmpty::mutate_exists((2,), |v| {
+				*v = Some(v.unwrap() * 10);
+			});
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(100));
+			assert_eq!(A::count(), 1);
+
+			A::remove((2,));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2,), |v| {
+				assert!(v.is_none());
+				*v = Some(10);
+				Ok(())
+			});
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(10));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2,), |v| {
+				*v = Some(v.unwrap() * 10);
+				Ok(())
+			});
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(100));
+			assert_eq!(A::try_get((2,)), Ok(100));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2,), |v| {
+				*v = Some(v.unwrap() * 10);
+				Err(())
+			});
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(100));
+			assert_eq!(A::count(), 1);
+
+			A::insert((2,), 10);
+			assert_eq!(A::take((2,)), Some(10));
+			assert_eq!(A::contains_key((2,)), false);
+			assert_eq!(AValueQueryWithAnOnEmpty::take((2,)), 98);
+			assert_eq!(A::contains_key((2,)), false);
+			assert_eq!(A::try_get((2,)), Err(()));
+			assert_eq!(A::count(), 0);
+
+			B::insert((2,), 10);
+			assert_eq!(
+				A::migrate_keys((2,), (Box::new(|key| Blake2_256::hash(key).to_vec()),),),
+				Some(10)
+			);
+			assert_eq!(A::contains_key((2,)), true);
+			assert_eq!(A::get((2,)), Some(10));
+			assert_eq!(A::count(), 1);
+
+			A::insert((3,), 10);
+			A::insert((4,), 10);
+			let _ = A::clear(u32::max_value(), None);
+			assert_eq!(A::contains_key((3,)), false);
+			assert_eq!(A::contains_key((4,)), false);
+			assert_eq!(A::count(), 0);
+
+			A::insert((3,), 10);
+			A::insert((4,), 10);
+			assert_eq!(A::iter_values().collect::<Vec<_>>(), vec![10, 10]);
+			assert_eq!(A::count(), 2);
+
+			C::insert((3,), 10);
+			C::insert((4,), 10);
+			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 20), (3, 20)]);
+			assert_eq!(A::count(), 2);
+
+			A::insert((3,), 10);
+			A::insert((4,), 10);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 10), (3, 10)]);
+			assert_eq!(A::drain().collect::<Vec<_>>(), vec![(4, 10), (3, 10)]);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(A::count(), 0);
+
+			C::insert((3,), 10);
+			C::insert((4,), 10);
+			A::translate::<u8, _>(|k1, v| Some((k1 as u16 * v as u16).into()));
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![(4, 40), (3, 30)]);
+			assert_eq!(A::count(), 2);
+
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
+			// TODO: fix metadata test
+			// assert_eq!(
+			// 	entries,
+			// 	vec![
+			// 		StorageEntryMetadata {
+			// 			name: "Foo",
+			// 			modifier: StorageEntryModifier::Optional,
+			// 			ty: StorageEntryType::Map {
+			// 				hashers: vec![StorageHasher::Blake2_128Concat],
+			// 				key: scale_info::meta_type::<u16>(),
+			// 				value: scale_info::meta_type::<u32>(),
+			// 			},
+			// 			default: Option::<u32>::None.encode(),
+			// 			docs: vec![],
+			// 		},
+			// 		StorageEntryMetadata {
+			// 			name: "Foo",
+			// 			modifier: StorageEntryModifier::Default,
+			// 			ty: StorageEntryType::Map {
+			// 				hashers: vec![StorageHasher::Blake2_128Concat],
+			// 				key: scale_info::meta_type::<u16>(),
+			// 				value: scale_info::meta_type::<u32>(),
+			// 			},
+			// 			default: 98u32.encode(),
+			// 			docs: vec![],
+			// 		}
+			// 	]
+			// );
+
+			let _ = WithLen::clear(u32::max_value(), None);
+			assert_eq!(WithLen::decode_len((3,)), None);
+			WithLen::append((0,), 10);
+			assert_eq!(WithLen::decode_len((0,)), Some(1));
+		});
+	}
+
+	#[test]
+	fn test_2_keys() {
+		type A = CountedStorageNMap<
+			Prefix,
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
+			u32,
+			OptionQuery,
+		>;
+		type AValueQueryWithAnOnEmpty = CountedStorageNMap<
+			Prefix,
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
+			u32,
+			ValueQuery,
+			ADefault,
+		>;
+		type B = CountedStorageNMap<
+			Prefix,
+			(NMapKey<Blake2_256, u16>, NMapKey<Twox128, u8>),
+			u32,
+			ValueQuery,
+		>;
+		type C = CountedStorageNMap<
+			Prefix,
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
+			u8,
+			ValueQuery,
+		>;
+		type WithLen = CountedStorageNMap<
+			Prefix,
+			(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>),
+			Vec<u32>,
+		>;
+
+		TestExternalities::default().execute_with(|| {
+			let mut k: Vec<u8> = vec![];
+			k.extend(&twox_128(b"test"));
+			k.extend(&twox_128(b"Foo"));
+			k.extend(&3u16.blake2_128_concat());
+			k.extend(&30u8.twox_64_concat());
+			assert_eq!(A::hashed_key_for((3, 30)).to_vec(), k);
+
+			assert_eq!(A::contains_key((3, 30)), false);
+			assert_eq!(A::get((3, 30)), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get((3, 30)), 98);
+			assert_eq!(A::count(), 0);
+
+			A::insert((3, 30), 10);
+			assert_eq!(A::contains_key((3, 30)), true);
+			assert_eq!(A::get((3, 30)), Some(10));
+			assert_eq!(AValueQueryWithAnOnEmpty::get((3, 30)), 10);
+			assert_eq!(A::count(), 1);
+
+			A::swap::<(NMapKey<Blake2_128Concat, u16>, NMapKey<Twox64Concat, u8>), _, _>(
+				(3, 30),
+				(2, 20),
+			);
+			assert_eq!(A::contains_key((3, 30)), false);
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((3, 30)), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get((3, 30)), 98);
+			assert_eq!(A::get((2, 20)), Some(10));
+			assert_eq!(AValueQueryWithAnOnEmpty::get((2, 20)), 10);
+			assert_eq!(A::count(), 1);
+
+			A::remove((2, 20));
+			assert_eq!(A::contains_key((2, 20)), false);
+			assert_eq!(A::get((2, 20)), None);
+			assert_eq!(A::count(), 0);
+
+			AValueQueryWithAnOnEmpty::mutate((2, 20), |v| *v = *v * 2);
+			AValueQueryWithAnOnEmpty::mutate((2, 20), |v| *v = *v * 2);
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((2, 20)), Some(98 * 4));
+			assert_eq!(A::count(), 1);
+
+			A::remove((2, 20));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2, 20), |v| {
+				*v = *v * 2;
+				Err(())
+			});
+			assert_eq!(A::contains_key((2, 20)), false);
+			assert_eq!(A::count(), 0);
+
+			A::remove((2, 20));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2, 20), |v| {
+				*v = *v * 2;
+				Err(())
+			});
+			assert_eq!(A::contains_key((2, 20)), false);
+			assert_eq!(A::count(), 0);
+
+			A::remove((2, 20));
+			AValueQueryWithAnOnEmpty::mutate_exists((2, 20), |v| {
+				assert!(v.is_none());
+				*v = Some(10);
+			});
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((2, 20)), Some(10));
+			assert_eq!(A::count(), 1);
+			AValueQueryWithAnOnEmpty::mutate_exists((2, 20), |v| {
+				*v = Some(v.unwrap() * 10);
+			});
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((2, 20)), Some(100));
+			assert_eq!(A::count(), 1);
+
+			A::remove((2, 20));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20), |v| {
+				assert!(v.is_none());
+				*v = Some(10);
+				Ok(())
+			});
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((2, 20)), Some(10));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20), |v| {
+				*v = Some(v.unwrap() * 10);
+				Ok(())
+			});
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((2, 20)), Some(100));
+			assert_eq!(A::try_get((2, 20)), Ok(100));
+			assert_eq!(A::count(), 1);
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20), |v| {
+				*v = Some(v.unwrap() * 10);
+				Err(())
+			});
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((2, 20)), Some(100));
+			assert_eq!(A::count(), 1);
+
+			A::insert((2, 20), 10);
+			assert_eq!(A::take((2, 20)), Some(10));
+			assert_eq!(A::contains_key((2, 20)), false);
+			assert_eq!(AValueQueryWithAnOnEmpty::take((2, 20)), 98);
+			assert_eq!(A::contains_key((2, 20)), false);
+			assert_eq!(A::try_get((2, 20)), Err(()));
+			assert_eq!(A::count(), 0);
+
+			B::insert((2, 20), 10);
+			assert_eq!(
+				A::migrate_keys(
+					(2, 20),
+					(
+						Box::new(|key| Blake2_256::hash(key).to_vec()),
+						Box::new(|key| Twox128::hash(key).to_vec()),
+					),
+				),
+				Some(10)
+			);
+			assert_eq!(A::contains_key((2, 20)), true);
+			assert_eq!(A::get((2, 20)), Some(10));
+			assert_eq!(A::count(), 1);
+
+			A::insert((3, 30), 10);
+			A::insert((4, 40), 10);
+			let _ = A::clear(u32::max_value(), None);
+			assert_eq!(A::contains_key((3, 30)), false);
+			assert_eq!(A::contains_key((4, 40)), false);
+			assert_eq!(A::count(), 0);
+
+			A::insert((3, 30), 10);
+			A::insert((4, 40), 10);
+			assert_eq!(A::iter_values().collect::<Vec<_>>(), vec![10, 10]);
+			assert_eq!(A::count(), 2);
+
+			C::insert((3, 30), 10);
+			C::insert((4, 40), 10);
+			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 20), ((3, 30), 20)]);
+			assert_eq!(A::count(), 2);
+
+			A::insert((3, 30), 10);
+			A::insert((4, 40), 10);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 10), ((3, 30), 10)]);
+			assert_eq!(A::drain().collect::<Vec<_>>(), vec![((4, 40), 10), ((3, 30), 10)]);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(A::count(), 0);
+
+			C::insert((3, 30), 10);
+			C::insert((4, 40), 10);
+			A::translate::<u8, _>(|(k1, k2), v| Some((k1 * k2 as u16 * v as u16).into()));
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40), 1600), ((3, 30), 900)]);
+			assert_eq!(A::count(), 2);
+
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
+			// TODO: fix metadata
+			// assert_eq!(
+			// 	entries,
+			// 	vec![
+			// 		StorageEntryMetadata {
+			// 			name: "Foo",
+			// 			modifier: StorageEntryModifier::Optional,
+			// 			ty: StorageEntryType::Map {
+			// 				hashers: vec![
+			// 					StorageHasher::Blake2_128Concat,
+			// 					StorageHasher::Twox64Concat
+			// 				],
+			// 				key: scale_info::meta_type::<(u16, u8)>(),
+			// 				value: scale_info::meta_type::<u32>(),
+			// 			},
+			// 			default: Option::<u32>::None.encode(),
+			// 			docs: vec![],
+			// 		},
+			// 		StorageEntryMetadata {
+			// 			name: "Foo",
+			// 			modifier: StorageEntryModifier::Default,
+			// 			ty: StorageEntryType::Map {
+			// 				hashers: vec![
+			// 					StorageHasher::Blake2_128Concat,
+			// 					StorageHasher::Twox64Concat
+			// 				],
+			// 				key: scale_info::meta_type::<(u16, u8)>(),
+			// 				value: scale_info::meta_type::<u32>(),
+			// 			},
+			// 			default: 98u32.encode(),
+			// 			docs: vec![],
+			// 		}
+			// 	]
+			// );
+
+			let _ = WithLen::clear(u32::max_value(), None);
+			assert_eq!(WithLen::decode_len((3, 30)), None);
+			WithLen::append((0, 100), 10);
+			assert_eq!(WithLen::decode_len((0, 100)), Some(1));
+
+			A::insert((3, 30), 11);
+			A::insert((3, 31), 12);
+			A::insert((4, 40), 13);
+			A::insert((4, 41), 14);
+			assert_eq!(A::iter_prefix_values((3,)).collect::<Vec<_>>(), vec![12, 11]);
+			assert_eq!(A::iter_prefix_values((4,)).collect::<Vec<_>>(), vec![13, 14]);
+			assert_eq!(A::count(), 5);
+		});
+	}
+
+	#[test]
+	fn test_3_keys() {
+		type A = CountedStorageNMap<
+			Prefix,
+			(
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Twox64Concat, u16>,
+			),
+			u32,
+			OptionQuery,
+		>;
+		type AValueQueryWithAnOnEmpty = CountedStorageNMap<
+			Prefix,
+			(
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Twox64Concat, u16>,
+			),
+			u32,
+			ValueQuery,
+			ADefault,
+		>;
+		type B = CountedStorageNMap<
+			Prefix,
+			(NMapKey<Blake2_256, u16>, NMapKey<Blake2_256, u16>, NMapKey<Twox128, u16>),
+			u32,
+			ValueQuery,
+		>;
+		type C = CountedStorageNMap<
+			Prefix,
+			(
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Twox64Concat, u16>,
+			),
+			u8,
+			ValueQuery,
+		>;
+		type WithLen = CountedStorageNMap<
+			Prefix,
+			(
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Blake2_128Concat, u16>,
+				NMapKey<Twox64Concat, u16>,
+			),
+			Vec<u32>,
+		>;
+
+		TestExternalities::default().execute_with(|| {
+			let mut k: Vec<u8> = vec![];
+			k.extend(&twox_128(b"test"));
+			k.extend(&twox_128(b"Foo"));
+			k.extend(&1u16.blake2_128_concat());
+			k.extend(&10u16.blake2_128_concat());
+			k.extend(&100u16.twox_64_concat());
+			assert_eq!(A::hashed_key_for((1, 10, 100)).to_vec(), k);
+
+			assert_eq!(A::contains_key((1, 10, 100)), false);
+			assert_eq!(A::get((1, 10, 100)), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 98);
+			assert_eq!(A::count(), 0);
+
+			A::insert((1, 10, 100), 30);
+			assert_eq!(A::contains_key((1, 10, 100)), true);
+			assert_eq!(A::get((1, 10, 100)), Some(30));
+			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 30);
+			assert_eq!(A::count(), 1);
+
+			A::swap::<
+				(
+					NMapKey<Blake2_128Concat, u16>,
+					NMapKey<Blake2_128Concat, u16>,
+					NMapKey<Twox64Concat, u16>,
+				),
+				_,
+				_,
+			>((1, 10, 100), (2, 20, 200));
+			assert_eq!(A::contains_key((1, 10, 100)), false);
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((1, 10, 100)), None);
+			assert_eq!(AValueQueryWithAnOnEmpty::get((1, 10, 100)), 98);
+			assert_eq!(A::get((2, 20, 200)), Some(30));
+			assert_eq!(AValueQueryWithAnOnEmpty::get((2, 20, 200)), 30);
+			assert_eq!(A::count(), 1);
+
+			A::remove((2, 20, 200));
+			assert_eq!(A::contains_key((2, 20, 200)), false);
+			assert_eq!(A::get((2, 20, 200)), None);
+			assert_eq!(A::count(), 0);
+
+			AValueQueryWithAnOnEmpty::mutate((2, 20, 200), |v| *v = *v * 2);
+			AValueQueryWithAnOnEmpty::mutate((2, 20, 200), |v| *v = *v * 2);
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((2, 20, 200)), Some(98 * 4));
+			assert_eq!(A::count(), 1);
+
+			A::remove((2, 20, 200));
+			let _: Result<(), ()> = AValueQueryWithAnOnEmpty::try_mutate((2, 20, 200), |v| {
+				*v = *v * 2;
+				Err(())
+			});
+			assert_eq!(A::contains_key((2, 20, 200)), false);
+			assert_eq!(A::count(), 0);
+
+			A::remove((2, 20, 200));
+			AValueQueryWithAnOnEmpty::mutate_exists((2, 20, 200), |v| {
+				assert!(v.is_none());
+				*v = Some(10);
+			});
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((2, 20, 200)), Some(10));
+			assert_eq!(A::count(), 1);
+			AValueQueryWithAnOnEmpty::mutate_exists((2, 20, 200), |v| {
+				*v = Some(v.unwrap() * 10);
+			});
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((2, 20, 200)), Some(100));
+			assert_eq!(A::count(), 1);
+
+			A::remove((2, 20, 200));
+			let _: Result<(), ()> =
+				AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20, 200), |v| {
+					assert!(v.is_none());
+					*v = Some(10);
+					Ok(())
+				});
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((2, 20, 200)), Some(10));
+			let _: Result<(), ()> =
+				AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20, 200), |v| {
+					*v = Some(v.unwrap() * 10);
+					Ok(())
+				});
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((2, 20, 200)), Some(100));
+			assert_eq!(A::try_get((2, 20, 200)), Ok(100));
+			assert_eq!(A::count(), 1);
+			let _: Result<(), ()> =
+				AValueQueryWithAnOnEmpty::try_mutate_exists((2, 20, 200), |v| {
+					*v = Some(v.unwrap() * 10);
+					Err(())
+				});
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((2, 20, 200)), Some(100));
+			assert_eq!(A::count(), 1);
+
+			A::insert((2, 20, 200), 10);
+			assert_eq!(A::take((2, 20, 200)), Some(10));
+			assert_eq!(A::contains_key((2, 20, 200)), false);
+			assert_eq!(AValueQueryWithAnOnEmpty::take((2, 20, 200)), 98);
+			assert_eq!(A::contains_key((2, 20, 200)), false);
+			assert_eq!(A::try_get((2, 20, 200)), Err(()));
+			assert_eq!(A::count(), 0);
+
+			B::insert((2, 20, 200), 10);
+			assert_eq!(
+				A::migrate_keys(
+					(2, 20, 200),
+					(
+						Box::new(|key| Blake2_256::hash(key).to_vec()),
+						Box::new(|key| Blake2_256::hash(key).to_vec()),
+						Box::new(|key| Twox128::hash(key).to_vec()),
+					),
+				),
+				Some(10)
+			);
+			assert_eq!(A::contains_key((2, 20, 200)), true);
+			assert_eq!(A::get((2, 20, 200)), Some(10));
+			assert_eq!(A::count(), 1);
+
+			A::insert((3, 30, 300), 10);
+			A::insert((4, 40, 400), 10);
+			let _ = A::clear(u32::max_value(), None);
+			assert_eq!(A::contains_key((3, 30, 300)), false);
+			assert_eq!(A::contains_key((4, 40, 400)), false);
+			assert_eq!(A::count(), 0);
+
+			A::insert((3, 30, 300), 10);
+			A::insert((4, 40, 400), 10);
+			assert_eq!(A::iter_values().collect::<Vec<_>>(), vec![10, 10]);
+			assert_eq!(A::count(), 2);
+
+			C::insert((3, 30, 300), 10);
+			C::insert((4, 40, 400), 10);
+			A::translate_values::<u8, _>(|v| Some((v * 2).into()));
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 20), ((3, 30, 300), 20)]);
+			assert_eq!(A::count(), 2);
+
+			A::insert((3, 30, 300), 10);
+			A::insert((4, 40, 400), 10);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 10), ((3, 30, 300), 10)]);
+			assert_eq!(
+				A::drain().collect::<Vec<_>>(),
+				vec![((4, 40, 400), 10), ((3, 30, 300), 10)]
+			);
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![]);
+			assert_eq!(A::count(), 0);
+
+			C::insert((3, 30, 300), 10);
+			C::insert((4, 40, 400), 10);
+			A::translate::<u8, _>(|(k1, k2, k3), v| {
+				Some((k1 * k2 as u16 * v as u16 / k3 as u16).into())
+			});
+			assert_eq!(A::iter().collect::<Vec<_>>(), vec![((4, 40, 400), 4), ((3, 30, 300), 3)]);
+			assert_eq!(A::count(), 2);
+
+			let mut entries = vec![];
+			A::build_metadata(vec![], &mut entries);
+			AValueQueryWithAnOnEmpty::build_metadata(vec![], &mut entries);
+			// TODO: fix metadata
+			// assert_eq!(
+			// 	entries,
+			// 	vec![
+			// 		StorageEntryMetadata {
+			// 			name: "Foo",
+			// 			modifier: StorageEntryModifier::Optional,
+			// 			ty: StorageEntryType::Map {
+			// 				hashers: vec![
+			// 					StorageHasher::Blake2_128Concat,
+			// 					StorageHasher::Blake2_128Concat,
+			// 					StorageHasher::Twox64Concat
+			// 				],
+			// 				key: scale_info::meta_type::<(u16, u16, u16)>(),
+			// 				value: scale_info::meta_type::<u32>(),
+			// 			},
+			// 			default: Option::<u32>::None.encode(),
+			// 			docs: vec![],
+			// 		},
+			// 		StorageEntryMetadata {
+			// 			name: "Foo",
+			// 			modifier: StorageEntryModifier::Default,
+			// 			ty: StorageEntryType::Map {
+			// 				hashers: vec![
+			// 					StorageHasher::Blake2_128Concat,
+			// 					StorageHasher::Blake2_128Concat,
+			// 					StorageHasher::Twox64Concat
+			// 				],
+			// 				key: scale_info::meta_type::<(u16, u16, u16)>(),
+			// 				value: scale_info::meta_type::<u32>(),
+			// 			},
+			// 			default: 98u32.encode(),
+			// 			docs: vec![],
+			// 		}
+			// 	]
+			// );
+
+			let _ = WithLen::clear(u32::max_value(), None);
+			assert_eq!(WithLen::decode_len((3, 30, 300)), None);
+			WithLen::append((0, 100, 1000), 10);
+			assert_eq!(WithLen::decode_len((0, 100, 1000)), Some(1));
+
+			A::insert((3, 30, 300), 11);
+			A::insert((3, 30, 301), 12);
+			A::insert((4, 40, 400), 13);
+			A::insert((4, 40, 401), 14);
+			assert_eq!(A::iter_prefix_values((3,)).collect::<Vec<_>>(), vec![11, 12]);
+			assert_eq!(A::iter_prefix_values((4,)).collect::<Vec<_>>(), vec![14, 13]);
+			assert_eq!(A::iter_prefix_values((3, 30)).collect::<Vec<_>>(), vec![11, 12]);
+			assert_eq!(A::iter_prefix_values((4, 40)).collect::<Vec<_>>(), vec![14, 13]);
+			assert_eq!(A::count(), 5);
+		});
 	}
 }
