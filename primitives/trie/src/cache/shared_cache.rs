@@ -360,7 +360,7 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 		let update_size_in_bytes =
 			|size_in_bytes: &mut usize, r_key: Arc<[u8]>, known_keys: &mut HashSet<Arc<[u8]>>| {
 				// If the `strong_count == 2`, it means this is the last instance of the key.
-				// One being `r_key` and the other being stored in `keys`.
+				// One being `r_key` and the other being stored in `known_keys`.
 				let last_instance = Arc::strong_count(&r_key) == 2;
 
 				let key_len = if last_instance {
