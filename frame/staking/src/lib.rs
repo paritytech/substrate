@@ -572,7 +572,7 @@ impl<T: Config> StakingLedger<T> {
 
 		// `Some(ratio)` if this is proportional, with `ratio`, `None` otherwise. In both cases, we
 		// slash first the active chunk, and then `slash_chunks_priority`.
-		let (maybe_proportional, slash_chunks_priority) = {
+		let (remaining_ratio, slash_chunks_priority) = {
 			if let Some(first_slashable_index) =
 				self.unlocking.iter().position(|c| c.era >= slashable_chunks_start)
 			{
@@ -592,14 +592,17 @@ impl<T: Config> StakingLedger<T> {
 						}
 					});
 				let affected_balance = self.active.saturating_add(unbonding_affected_balance);
-				let ratio = Perquintill::from_rational(slash_amount, affected_balance);
+				let remaining_balance = affected_balance.saturating_sub(slash_amount);
+				let remaining_ratio =
+					Perquintill::from_rational(remaining_balance, affected_balance);
 				(
-					Some(ratio),
+					remaining_ratio,
 					affected_indices.chain((0..first_slashable_index).rev()).collect::<Vec<_>>(),
 				)
 			} else {
-				// We just slash from the last chunk to the most recent one, if need be.
-				(None, (0..self.unlocking.len()).rev().collect::<Vec<_>>())
+				// It is not a proportional slash, slash from the last chunk to the most recent one,
+				// always wipe chunks to 0, if need be, hence set the remaining ratio to zero
+				(Perquintill::zero(), (0..self.unlocking.len()).rev().collect::<Vec<_>>())
 			}
 		};
 
@@ -611,21 +614,19 @@ impl<T: Config> StakingLedger<T> {
 			slash_era,
 			self,
 			slash_chunks_priority,
-			maybe_proportional,
+			Perquintill::one() - remaining_ratio,
 		);
 
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
-			let mut slash_from_target = if let Some(ratio) = maybe_proportional {
-				ratio * (*target)
-			} else {
-				*slash_remaining
-			}
-			// this is the total that that the slash target has. We can't slash more than
-			// this anyhow!
-			.min(*target)
-			// this is the total amount that we would have wanted to slash
-			// non-proportionally, a proportional slash should never exceed this either!
-			.min(*slash_remaining);
+			let raw_remaining_balance = remaining_ratio * (*target);
+			let mut slash_from_target = (*target)
+				.saturating_sub(raw_remaining_balance)
+				// this is the total that that the slash target has. We can't slash more than
+				// this anyhow!
+				.min(*target)
+				// this is the total amount that we would have wanted to slash
+				// non-proportionally, a proportional slash should never exceed this either!
+				.min(*slash_remaining);
 
 			// slash out from *target exactly `slash_from_target`.
 			*target = *target - slash_from_target;
