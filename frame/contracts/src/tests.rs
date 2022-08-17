@@ -139,7 +139,7 @@ impl TestExtension {
 	}
 
 	fn last_seen_inputs() -> (u32, u32, u32, u32) {
-		TEST_EXTENSION.with(|e| e.borrow().last_seen_inputs.clone())
+		TEST_EXTENSION.with(|e| e.borrow().last_seen_inputs)
 	}
 }
 
@@ -3478,8 +3478,8 @@ fn set_code_hash() {
 				phase: Phase::Initialization,
 				event: Event::Contracts(crate::Event::ContractCodeUpdated {
 					contract: contract_addr.clone(),
-					new_code_hash: new_code_hash.clone(),
-					old_code_hash: code_hash.clone(),
+					new_code_hash,
+					old_code_hash: code_hash,
 				}),
 				topics: vec![],
 			},
