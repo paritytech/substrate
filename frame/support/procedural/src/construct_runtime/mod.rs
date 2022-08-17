@@ -445,7 +445,7 @@ fn decl_all_pallets<'a>(
 			let feature_set = feature_set.into_iter();
 			let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
 			let names = std::iter::once(system_pallet)
-				.chain(names.iter().rev(). filter(|n| **n != SYSTEM_PALLET_NAME));
+				.chain(names.iter().rev().filter(|n| **n != SYSTEM_PALLET_NAME));
 			quote! {
 				#attr
 				/// All pallets included in the runtime as a nested tuple of types in reversed order.
