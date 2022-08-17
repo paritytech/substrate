@@ -611,11 +611,8 @@ mod tests {
 
 		let value = ValueCacheKey::value(storage_key, storage_root);
 		// Ref gets the same hash, but a different storage key
-		let ref_ = ValueCacheKey::Ref {
-			storage_root,
-			storage_key: storage_key2,
-			hash: value.get_hash(),
-		};
+		let ref_ =
+			ValueCacheKey::Ref { storage_root, storage_key: storage_key2, hash: value.get_hash() };
 		let hash = ValueCacheKey::Hash {
 			hash: value.get_hash(),
 			_i_read_the_documentation: IReadTheDocumentation(()),
