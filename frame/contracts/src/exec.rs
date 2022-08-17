@@ -17,7 +17,7 @@
 use crate::{
 	CodeHash, Config, ContractAddressFor, Event, RawEvent, Trait,
 	TrieId, BalanceOf, ContractInfo, TrieIdGenerator,
-	gas::{Gas, GasMeter, Token}, rent, storage, Error, ContractInfoOf
+	gas::GasMeter, rent, storage, Error, ContractInfoOf
 };
 use bitflags::bitflags;
 use sp_std::prelude::*;
@@ -140,7 +140,6 @@ pub trait Ext {
 		&mut self,
 		to: &AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
-		gas_meter: &mut GasMeter<Self::T>,
 	) -> Result<(), DispatchError>;
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
@@ -153,7 +152,6 @@ pub trait Ext {
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-		gas_meter: &mut GasMeter<Self::T>,
 	) -> Result<(), DispatchError>;
 
 	/// Call (possibly transferring some amount of funds) into the specified account.
@@ -260,26 +258,6 @@ pub trait Vm<T: Trait> {
 	) -> ExecResult;
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
-#[derive(Copy, Clone)]
-pub enum ExecFeeToken {
-	/// Base fee charged for a call.
-	Call,
-	/// Base fee charged for a instantiate.
-	Instantiate,
-}
-
-impl<T: Trait> Token<T> for ExecFeeToken {
-	type Metadata = Config<T>;
-	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
-		match *self {
-			ExecFeeToken::Call => metadata.schedule.call_base_cost,
-			ExecFeeToken::Instantiate => metadata.schedule.instantiate_base_cost,
-		}
-	}
-}
-
 pub struct ExecutionContext<'a, T: Trait + 'a, V, L> {
 	pub caller: Option<&'a ExecutionContext<'a, T, V, L>>,
 	pub self_account: T::AccountId,
@@ -344,13 +322,6 @@ where
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
-		if gas_meter
-			.charge(self.config, ExecFeeToken::Call)
-			.is_out_of_gas()
-		{
-			Err(Error::<T>::OutOfGas)?
-		}
-
 		// Assumption: `collect_rent` doesn't collide with overlay because
 		// `collect_rent` will be done on first call and destination contract and balance
 		// cannot be changed before the first call
@@ -368,7 +339,6 @@ where
 		self.with_nested_context(dest.clone(), contract.trie_id.clone(), |nested| {
 			if value > BalanceOf::<T>::zero() {
 				transfer(
-					gas_meter,
 					TransferCause::Call,
 					transactor_kind,
 					&caller,
@@ -401,13 +371,6 @@ where
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
-		if gas_meter
-			.charge(self.config, ExecFeeToken::Instantiate)
-			.is_out_of_gas()
-		{
-			Err(Error::<T>::OutOfGas)?
-		}
-
 		let transactor_kind = self.transactor_kind();
 		let caller = self.self_account.clone();
 		let dest = T::DetermineContractAddress::contract_address_for(
@@ -434,7 +397,6 @@ where
 			// Send funds unconditionally here. If the `endowment` is below existential_deposit
 			// then error will be returned here.
 			transfer(
-				gas_meter,
 				TransferCause::Instantiate,
 				transactor_kind,
 				&caller,
@@ -520,31 +482,6 @@ where
 	}
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
-#[derive(Copy, Clone)]
-pub enum TransferFeeKind {
-	ContractInstantiate,
-	Transfer,
-}
-
-#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
-#[derive(Copy, Clone)]
-pub struct TransferFeeToken {
-	kind: TransferFeeKind,
-}
-
-impl<T: Trait> Token<T> for TransferFeeToken {
-	type Metadata = Config<T>;
-
-	#[inline]
-	fn calculate_amount(&self, metadata: &Config<T>) -> Gas {
-		match self.kind {
-			TransferFeeKind::ContractInstantiate => metadata.schedule.instantiate_cost,
-			TransferFeeKind::Transfer => metadata.schedule.transfer_cost,
-		}
-	}
-}
-
 /// Describes possible transfer causes.
 enum TransferCause {
 	Call,
@@ -554,22 +491,11 @@ enum TransferCause {
 
 /// Transfer some funds from `transactor` to `dest`.
 ///
-/// All balance changes are performed in the `overlay`.
-///
-/// This function also handles charging the fee. The fee depends
-/// on whether the transfer happening because of contract instantiation
-/// (transferring endowment) or because of a transfer via `call`. This
-/// is specified using the `cause` parameter.
-///
-/// NOTE: that the fee is denominated in `BalanceOf<T>` units, but
-/// charged in `Gas` from the provided `gas_meter`. This means
-/// that the actual amount charged might differ.
-///
-/// NOTE: that we allow for draining all funds of the contract so it
-/// can go below existential deposit, essentially giving a contract
-/// the chance to give up it's life.
+/// We only allow allow for draining all funds of the sender if `cause` is
+/// is specified as `Terminate`. Otherwise, any transfer that would bring the sender below the
+/// subsistence threshold (for contracts) or the existential deposit (for plain accounts)
+/// results in an error.
 fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
-	gas_meter: &mut GasMeter<T>,
 	cause: TransferCause,
 	origin: TransactorKind,
 	transactor: &T::AccountId,
@@ -578,26 +504,7 @@ fn transfer<'a, T: Trait, V: Vm<T>, L: Loader<T>>(
 	ctx: &mut ExecutionContext<'a, T, V, L>,
 ) -> Result<(), DispatchError> {
 	use self::TransferCause::*;
-	use self::TransferFeeKind::*;
 	use self::TransactorKind::*;
-
-	let token = {
-		let kind: TransferFeeKind = match cause {
-			// If this function is called from `Instantiate` routine, then we always
-			// charge contract account creation fee.
-			Instantiate => ContractInstantiate,
-
-			// Otherwise the fee is to transfer to an account.
-			Call | Terminate => TransferFeeKind::Transfer,
-		};
-		TransferFeeToken {
-			kind,
-		}
-	};
-
-	if gas_meter.charge(ctx.config, token).is_out_of_gas() {
-		Err(Error::<T>::OutOfGas)?
-	}
 
 	// Only seal_terminate is allowed to bring the sender below the subsistence
 	// threshold or even existential deposit.
@@ -690,14 +597,12 @@ where
 		&mut self,
 		to: &T::AccountId,
 		value: BalanceOf<T>,
-		gas_meter: &mut GasMeter<T>,
 	) -> Result<(), DispatchError> {
 		transfer(
-			gas_meter,
 			TransferCause::Call,
 			TransactorKind::Contract,
 			&self.ctx.self_account.clone(),
-			&to,
+			to,
 			value,
 			self.ctx,
 		)
@@ -706,7 +611,6 @@ where
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-		gas_meter: &mut GasMeter<Self::T>,
 	) -> Result<(), DispatchError> {
 		let self_id = self.ctx.self_account.clone();
 		let value = T::Currency::free_balance(&self_id);
@@ -718,7 +622,6 @@ where
 			}
 		}
 		transfer(
-			gas_meter,
 			TransferCause::Terminate,
 			TransactorKind::Contract,
 			&self_id,
@@ -865,8 +768,8 @@ fn deposit_event<T: Trait>(
 #[cfg(test)]
 mod tests {
 	use super::{
-		BalanceOf, Event, ExecFeeToken, ExecResult, ExecutionContext, Ext, Loader,
-		RawEvent, TransferFeeKind, TransferFeeToken, Vm, ReturnFlags, ExecError, ErrorOrigin
+		BalanceOf, Event, ExecResult, ExecutionContext, Ext, Loader,
+		RawEvent, Vm, ReturnFlags, ExecError, ErrorOrigin
 	};
 	use crate::{
 		gas::GasMeter, tests::{ExtBuilder, Test, MetaEvent},
@@ -1013,58 +916,6 @@ mod tests {
 	}
 
 	#[test]
-	fn base_fees() {
-		let origin = ALICE;
-		let dest = BOB;
-
-		// This test verifies that base fee for call is taken.
-		ExtBuilder::default().build().execute_with(|| {
-			let vm = MockVm::new();
-			let loader = MockLoader::empty();
-			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			set_balance(&origin, 100);
-			set_balance(&dest, 0);
-
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-
-			let result = super::transfer(
-				&mut gas_meter,
-				super::TransferCause::Call,
-				super::TransactorKind::PlainAccount,
-				&origin,
-				&dest,
-				0,
-				&mut ctx,
-			);
-			assert_matches!(result, Ok(_));
-
-			let mut toks = gas_meter.tokens().iter();
-			match_tokens!(toks, TransferFeeToken { kind: TransferFeeKind::Transfer },);
-		});
-
-		// This test verifies that base fee for instantiation is taken.
-		ExtBuilder::default().build().execute_with(|| {
-			let mut loader = MockLoader::empty();
-			let code = loader.insert(|_| exec_success());
-
-			let vm = MockVm::new();
-			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-
-			set_balance(&origin, 100);
-
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-
-			let result = ctx.instantiate(cfg.subsistence_threshold(), &mut gas_meter, &code, vec![]);
-			assert_matches!(result, Ok(_));
-
-			let mut toks = gas_meter.tokens().iter();
-			match_tokens!(toks, ExecFeeToken::Instantiate,);
-		});
-	}
-
-	#[test]
 	fn transfer_works() {
 		// This test verifies that a contract is able to transfer
 		// some funds to another account.
@@ -1080,10 +931,7 @@ mod tests {
 			set_balance(&origin, 100);
 			set_balance(&dest, 0);
 
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-
 			super::transfer(
-				&mut gas_meter,
 				super::TransferCause::Call,
 				super::TransactorKind::PlainAccount,
 				&origin,
@@ -1131,105 +979,6 @@ mod tests {
 	}
 
 	#[test]
-	fn transfer_fees() {
-		let origin = ALICE;
-		let dest = BOB;
-
-		// This test sends 50 units of currency to a non-existent account.
-		// This should lead to creation of a new account thus
-		// a fee should be charged.
-		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let vm = MockVm::new();
-			let loader = MockLoader::empty();
-			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			set_balance(&origin, 100);
-			set_balance(&dest, 0);
-
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-
-			let result = super::transfer(
-				&mut gas_meter,
-				super::TransferCause::Call,
-				super::TransactorKind::PlainAccount,
-				&origin,
-				&dest,
-				50,
-				&mut ctx,
-			);
-			assert_matches!(result, Ok(_));
-
-			let mut toks = gas_meter.tokens().iter();
-			match_tokens!(
-				toks,
-				TransferFeeToken {
-					kind: TransferFeeKind::Transfer,
-				},
-			);
-		});
-
-		// This one is similar to the previous one but transfer to an existing account.
-		// In this test we expect that a regular transfer fee is charged.
-		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let vm = MockVm::new();
-			let loader = MockLoader::empty();
-			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-			set_balance(&origin, 100);
-			set_balance(&dest, 15);
-
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-
-			let result = super::transfer(
-				&mut gas_meter,
-				super::TransferCause::Call,
-				super::TransactorKind::PlainAccount,
-				&origin,
-				&dest,
-				50,
-				&mut ctx,
-			);
-			assert_matches!(result, Ok(_));
-
-			let mut toks = gas_meter.tokens().iter();
-			match_tokens!(
-				toks,
-				TransferFeeToken {
-					kind: TransferFeeKind::Transfer,
-				},
-			);
-		});
-
-		// This test sends 50 units of currency as an endowment to a newly
-		// instantiated contract.
-		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
-			let mut loader = MockLoader::empty();
-			let code = loader.insert(|_| exec_success());
-
-			let vm = MockVm::new();
-			let cfg = Config::preload();
-			let mut ctx = ExecutionContext::top_level(origin, &cfg, &vm, &loader);
-
-			set_balance(&origin, 100);
-			set_balance(&dest, 15);
-
-			let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
-
-			let result = ctx.instantiate(50, &mut gas_meter, &code, vec![]);
-			assert_matches!(result, Ok(_));
-
-			let mut toks = gas_meter.tokens().iter();
-			match_tokens!(
-				toks,
-				ExecFeeToken::Instantiate,
-				TransferFeeToken {
-					kind: TransferFeeKind::ContractInstantiate,
-				},
-			);
-		});
-	}
-
-	#[test]
 	fn balance_too_low() {
 		// This test verifies that a contract can't send value if it's
 		// balance is too low.
@@ -1245,7 +994,6 @@ mod tests {
 			set_balance(&origin, 0);
 
 			let result = super::transfer(
-				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				super::TransferCause::Call,
 				super::TransactorKind::PlainAccount,
 				&origin,
@@ -1696,8 +1444,8 @@ mod tests {
 
 		let mut loader = MockLoader::empty();
 
-		let terminate_ch = loader.insert(|mut ctx| {
-			ctx.ext.terminate(&ALICE, &mut ctx.gas_meter).unwrap();
+		let terminate_ch = loader.insert(|ctx| {
+			ctx.ext.terminate(&ALICE).unwrap();
 			exec_success()
 		});
 

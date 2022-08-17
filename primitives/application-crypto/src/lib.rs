@@ -323,6 +323,14 @@ macro_rules! app_crypto_public_common {
 				)
 			}
 		}
+
+		impl<'a> $crate::TryFrom<&'a [u8]> for Public {
+			type Error = ();
+
+			fn try_from(data: &'a [u8]) -> Result<Self, Self::Error> {
+				<$public>::try_from(data).map(Into::into)
+			}
+		}
 	}
 }
 

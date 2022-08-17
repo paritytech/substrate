@@ -22,6 +22,7 @@ use std::{
 	marker::PhantomData,
 	collections::{HashSet, BTreeMap, HashMap},
 	sync::Arc, panic::UnwindSafe, result,
+	path::PathBuf
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -32,6 +33,8 @@ use sp_core::{
 	storage::{well_known_keys, ChildInfo, PrefixedStorageKey, StorageData, StorageKey},
 	ChangesTrieConfiguration, ExecutionContext, NativeOrEncoded,
 };
+#[cfg(feature="test-helpers")]
+use sp_keystore::SyncCryptoStorePtr;
 use sc_telemetry::{telemetry, SUBSTRATE_INFO};
 use sp_runtime::{
 	Justification, BuildStorage,
@@ -147,7 +150,7 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: &S,
-	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	config: ClientConfig,
@@ -179,6 +182,8 @@ pub struct ClientConfig {
 	pub offchain_worker_enabled: bool,
 	/// If true, allows access from the runtime to write into offchain worker db.
 	pub offchain_indexing_api: bool,
+	/// Path where WASM files exist to override the on-chain WASM.
+	pub wasm_runtime_overrides: Option<PathBuf>,
 }
 
 /// Create a client with the explicitly provided backend.
@@ -188,7 +193,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: &S,
-	keystore: Option<sp_core::traits::BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	config: ClientConfig,
@@ -199,7 +204,7 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 		Block: BlockT,
 		B: backend::LocalBackend<Block> + 'static,
 {
-	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone());
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor, spawn_handle, config.clone())?;
 	let extensions = ExecutionExtensions::new(Default::default(), keystore);
 	Client::new(
 		backend,

@@ -20,10 +20,11 @@
 
 // FIXME #1021 move this into sp-consensus
 
-use std::{time, sync::Arc};
+use std::{pin::Pin, time, sync::Arc};
 use sc_client_api::backend;
 use codec::Decode;
 use sp_consensus::{evaluation, Proposal, RecordProof};
+use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use log::{error, info, debug, trace, warn};
 use sp_runtime::{
@@ -34,7 +35,7 @@ use sp_transaction_pool::{TransactionPool, InPoolTransaction};
 use sc_telemetry::{telemetry, CONSENSUS_INFO};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sp_api::{ProvideRuntimeApi, ApiExt};
-use futures::{executor, future, future::Either};
+use futures::{future, future::{Future, FutureExt}, channel::oneshot, select};
 use sp_blockchain::{HeaderBackend, ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed};
 use std::marker::PhantomData;
 
@@ -43,6 +44,7 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
 /// Proposer factory.
 pub struct ProposerFactory<A, B, C> {
+	spawn_handle: Box<dyn SpawnNamed>,
 	/// The client instance.
 	client: Arc<C>,
 	/// The transaction pool.
@@ -55,11 +57,13 @@ pub struct ProposerFactory<A, B, C> {
 
 impl<A, B, C> ProposerFactory<A, B, C> {
 	pub fn new(
+		spawn_handle: impl SpawnNamed + 'static,
 		client: Arc<C>,
 		transaction_pool: Arc<A>,
 		prometheus: Option<&PrometheusRegistry>,
 	) -> Self {
 		ProposerFactory {
+			spawn_handle: Box::new(spawn_handle),
 			client,
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
@@ -90,6 +94,7 @@ impl<B, Block, C, A> ProposerFactory<A, B, C>
 		info!("🙌 Starting consensus session on top of parent {:?}", parent_hash);
 
 		let proposer = Proposer {
+			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
 			parent_hash,
 			parent_id: id,
@@ -129,6 +134,7 @@ impl<A, B, Block, C> sp_consensus::Environment<Block> for
 
 /// The proposer logic.
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool> {
+	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
 	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
@@ -151,9 +157,9 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 				+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
 	type Transaction = backend::TransactionFor<B, Block>;
-	type Proposal = tokio_executor::blocking::Blocking<
-		Result<Proposal<Block, Self::Transaction>, Self::Error>
-	>;
+	type Proposal = Pin<Box<dyn Future<
+		Output = Result<Proposal<Block, Self::Transaction>, Self::Error>
+	> + Send>>;
 	type Error = sp_blockchain::Error;
 
 	fn propose(
@@ -163,11 +169,29 @@ impl<A, B, Block, C> sp_consensus::Proposer<Block> for
 		max_duration: time::Duration,
 		record_proof: RecordProof,
 	) -> Self::Proposal {
-		tokio_executor::blocking::run(move || {
+		let (tx, rx) = oneshot::channel();
+		let spawn_handle = self.spawn_handle.clone();
+
+		spawn_handle.spawn_blocking("basic-authorship-proposer", Box::pin(async move {
 			// leave some time for evaluation and block finalization (33%)
 			let deadline = (self.now)() + max_duration - max_duration / 3;
-			self.propose_with(inherent_data, inherent_digests, deadline, record_proof)
-		})
+			let res = self.propose_with(
+				inherent_data,
+				inherent_digests,
+				deadline,
+				record_proof,
+			).await;
+			if tx.send(res).is_err() {
+				trace!("Could not send block production result to proposer!");
+			}
+		}));
+
+		async move {
+			match rx.await {
+				Ok(x) => x,
+				Err(err) => Err(sp_blockchain::Error::Msg(err.to_string()))
+			}
+		}.boxed()
 	}
 }
 
@@ -181,7 +205,7 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		C::Api: ApiExt<Block, StateBackend = backend::StateBackendFor<B, Block>>
 			+ BlockBuilderApi<Block, Error = sp_blockchain::Error>,
 {
-	fn propose_with(
+	async fn propose_with(
 		self,
 		inherent_data: InherentData,
 		inherent_digests: DigestFor<Block>,
@@ -218,18 +242,20 @@ impl<A, B, Block, C> Proposer<B, Block, C, A>
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
-		let pending_iterator = match executor::block_on(future::select(
-			self.transaction_pool.ready_at(self.parent_number),
-			futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8),
-		)) {
-			Either::Left((iterator, _)) => iterator,
-			Either::Right(_) => {
+
+		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
+		let mut t2 = futures_timer::Delay::new(deadline.saturating_duration_since((self.now)()) / 8).fuse();
+
+		let pending_iterator = select! {
+			res = t1 => res,
+			_ = t2 => {
 				log::warn!(
-					"Timeout fired waiting for transaction pool at block #{}. Proceeding with production.",
+					"Timeout fired waiting for transaction pool at block #{}. \
+					Proceeding with production.",
 					self.parent_number,
 				);
 				self.transaction_pool.ready()
-			}
+			},
 		};
 
 		debug!("Attempting to push transactions from the pool.");
@@ -360,7 +386,7 @@ mod tests {
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -376,7 +402,12 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
@@ -413,11 +444,16 @@ mod tests {
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let cell = Mutex::new((false, time::Instant::now()));
 		let proposer = proposer_factory.init_with_now(
@@ -448,7 +484,7 @@ mod tests {
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -467,7 +503,12 @@ mod tests {
 			))
 		);
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 
 		let proposer = proposer_factory.init_with_now(
 			&client.header(&block_id).unwrap().unwrap(),
@@ -510,7 +551,7 @@ mod tests {
 		let txpool = BasicPool::new_full(
 			Default::default(),
 			None,
-			spawner,
+			spawner.clone(),
 			client.clone(),
 		);
 
@@ -536,7 +577,12 @@ mod tests {
 			])
 		).unwrap();
 
-		let mut proposer_factory = ProposerFactory::new(client.clone(), txpool.clone(), None);
+		let mut proposer_factory = ProposerFactory::new(
+			spawner.clone(),
+			client.clone(),
+			txpool.clone(),
+			None,
+		);
 		let mut propose_block = |
 			client: &TestClient,
 			number,

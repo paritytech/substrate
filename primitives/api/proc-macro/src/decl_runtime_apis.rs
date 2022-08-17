@@ -912,6 +912,13 @@ impl CheckTraitDecl {
 				.entry(method.sig.ident.clone())
 				.or_default()
 				.push(changed_in);
+
+			if method.default.is_some() {
+				self.errors.push(Error::new(
+					method.default.span(),
+					"A runtime API function cannot have a default implementation!",
+				));
+			}
 		});
 
 		method_to_signature_changed.into_iter().for_each(|(f, changed)| {

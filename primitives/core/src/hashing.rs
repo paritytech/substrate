@@ -146,6 +146,15 @@ pub fn keccak_256(data: &[u8]) -> [u8; 32] {
 	output
 }
 
+/// Do a keccak 512-bit hash and return result.
+pub fn keccak_512(data: &[u8]) -> [u8; 64] {
+	let mut keccak = Keccak::v512();
+	keccak.update(data);
+	let mut output = [0u8; 64];
+	keccak.finalize(&mut output);
+	output
+}
+
 /// Do a sha2 256-bit hash and return result.
 pub fn sha2_256(data: &[u8]) -> [u8; 32] {
 	let mut hasher = Sha256::new();

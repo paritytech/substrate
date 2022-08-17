@@ -33,12 +33,12 @@ use sc_consensus_babe::{
 	register_babe_inherent_data_provider, INTERMEDIATE_KEY,
 };
 use sc_consensus_epochs::{SharedEpochChanges, descendent_query};
-use sc_keystore::KeyStorePtr;
 
 use sp_api::{ProvideRuntimeApi, TransactionFor};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_consensus::BlockImportParams;
 use sp_consensus_babe::{BabeApi, inherents::BabeInherentData};
+use sp_keystore::SyncCryptoStorePtr;
 use sp_inherents::{InherentDataProviders, InherentData, ProvideInherentData, InherentIdentifier};
 use sp_runtime::{
 	traits::{DigestItemFor, DigestFor, Block as BlockT, Header as _},
@@ -50,7 +50,7 @@ use sp_timestamp::{InherentType, InherentError, INHERENT_IDENTIFIER};
 /// Intended for use with BABE runtimes.
 pub struct BabeConsensusDataProvider<B: BlockT, C> {
 	/// shared reference to keystore
-	keystore: KeyStorePtr,
+	keystore: SyncCryptoStorePtr,
 
 	/// Shared reference to the client.
 	client: Arc<C>,
@@ -70,7 +70,7 @@ impl<B, C> BabeConsensusDataProvider<B, C>
 {
 	pub fn new(
 		client: Arc<C>,
-		keystore: KeyStorePtr,
+		keystore: SyncCryptoStorePtr,
 		provider: &InherentDataProviders,
 		epoch_changes: SharedEpochChanges<B, Epoch>,
 	) -> Result<Self, Error> {

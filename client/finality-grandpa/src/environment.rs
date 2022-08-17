@@ -42,8 +42,8 @@ use sp_runtime::traits::{
 use sc_telemetry::{telemetry, CONSENSUS_DEBUG, CONSENSUS_INFO};
 
 use crate::{
-	CommandOrError, Commit, Config, Error, Precommit, Prevote,
-	PrimaryPropose, SignedMessage, NewAuthoritySet, VoterCommand,
+	local_authority_id, CommandOrError, Commit, Config, Error, NewAuthoritySet, Precommit, Prevote,
+	PrimaryPropose, SignedMessage, VoterCommand,
 };
 
 use sp_consensus::SelectChain;
@@ -467,10 +467,18 @@ where
 	/// extrinsic to report the equivocation. In particular, the session membership
 	/// proof must be generated at the block at which the given set was active which
 	/// isn't necessarily the best block if there are pending authority set changes.
-	fn report_equivocation(
+	pub(crate) fn report_equivocation(
 		&self,
 		equivocation: Equivocation<Block::Hash, NumberFor<Block>>,
 	) -> Result<(), Error> {
+		if let Some(local_id) = local_authority_id(&self.voters, self.config.keystore.as_ref()) {
+			if *equivocation.offender() == local_id {
+				return Err(Error::Safety(
+					"Refraining from sending equivocation report for our own equivocation.".into(),
+				));
+			}
+		}
+
 		let is_descendent_of = is_descendent_of(&*self.client, None);
 
 		let best_header = self.select_chain
@@ -724,11 +732,11 @@ where
 		let prevote_timer = Delay::new(self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(self.config.gossip_duration * 4);
 
-		let local_key = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let has_voted = match self.voter_set_state.has_voted(round) {
 			HasVoted::Yes(id, vote) => {
-				if local_key.as_ref().map(|k| k == &id).unwrap_or(false) {
+				if local_id.as_ref().map(|k| k == &id).unwrap_or(false) {
 					HasVoted::Yes(id, vote)
 				} else {
 					HasVoted::No
@@ -739,7 +747,7 @@ where
 
 		// we can only sign when we have a local key in the authority set
 		// and we have a reference to the keystore.
-		let keystore = match (local_key.as_ref(), self.config.keystore.as_ref()) {
+		let keystore = match (local_id.as_ref(), self.config.keystore.as_ref()) {
 			(Some(id), Some(keystore)) => Some((id.clone(), keystore.clone()).into()),
 			_ => None,
 		};
@@ -767,7 +775,7 @@ where
 		let outgoing = Box::pin(outgoing.sink_err_into());
 
 		voter::RoundData {
-			voter_id: local_key,
+			voter_id: local_id,
 			prevote_timer: Box::pin(prevote_timer.map(Ok)),
 			precommit_timer: Box::pin(precommit_timer.map(Ok)),
 			incoming,
@@ -776,7 +784,7 @@ where
 	}
 
 	fn proposed(&self, round: RoundNumber, propose: PrimaryPropose<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -815,7 +823,7 @@ where
 	}
 
 	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block>) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -876,7 +884,7 @@ where
 		round: RoundNumber,
 		precommit: Precommit<Block>,
 	) -> Result<(), Self::Error> {
-		let local_id = crate::is_voter(&self.voters, self.config.keystore.as_ref());
+		let local_id = local_authority_id(&self.voters, self.config.keystore.as_ref());
 
 		let local_id = match local_id {
 			Some(id) => id,
@@ -1157,9 +1165,9 @@ where
 	let status = client.info();
 
 	if number <= status.finalized_number && client.hash(number)? == Some(hash) {
-		// This can happen after a forced change (triggered by the finality tracker when finality is stalled), since
-		// the voter will be restarted at the median last finalized block, which can be lower than the local best
-		// finalized block.
+		// This can happen after a forced change (triggered manually from the runtime when
+		// finality is stalled), since the voter will be restarted at the median last finalized
+		// block, which can be lower than the local best finalized block.
 		warn!(target: "afg", "Re-finalized block #{:?} ({:?}) in the canonical chain, current best finalized is #{:?}",
 				hash,
 				number,

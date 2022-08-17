@@ -1,0 +1,13 @@
+error: `BlockId` needs to be taken by reference and not by value!
+  --> $DIR/mock_advanced_block_id_by_value.rs:11:1
+   |
+11 | / sp_api::mock_impl_runtime_apis! {
+12 | |     impl Api<Block> for MockApi {
+13 | |         #[advanced]
+14 | |         fn test(&self, _: BlockId<Block>) -> Result<sp_core::NativeOrEncoded<()>, String> {
+...  |
+17 | |     }
+18 | | }
+   | |_^
+   |
+   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)

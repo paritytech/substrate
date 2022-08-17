@@ -1,0 +1,8 @@
+error: A runtime API function cannot have a default implementation!
+ --> $DIR/no_default_implementation.rs:3:13
+  |
+3 |           fn test() {
+  |  ___________________^
+4 | |             println!("Hey, I'm a default implementation!");
+5 | |         }
+  | |_________^

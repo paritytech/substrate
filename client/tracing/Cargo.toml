@@ -20,8 +20,8 @@ rustc-hash = "1.1.0"
 serde = "1.0.101"
 serde_json = "1.0.41"
 slog = { version = "2.5.2", features = ["nested-values"] }
-tracing = "0.1.19"
-tracing-core = "0.1.13"
-tracing-subscriber = "0.2.10"
+tracing = "0.1.21"
+tracing-core = "0.1.17"
+tracing-subscriber = "0.2.13"
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
 sc-telemetry = { version = "2.0.0", path = "../telemetry" }

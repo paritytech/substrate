@@ -89,7 +89,7 @@
 			(call $seal_instantiate
 				(i32.const 24)	;; Pointer to the code hash.
 				(i32.const 32)	;; Length of the code hash.
-				(i64.const 187500000) ;; Just enough to pay for the instantiate
+				(i64.const 1) ;; Supply too little gas
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 8)	;; Pointer to input data buffer address
@@ -206,7 +206,7 @@
 			(call $seal_call
 				(i32.const 16)	;; Pointer to "callee" address.
 				(i32.const 8)	;; Length of "callee" address.
-				(i64.const 117500000) ;; Just enough to make the call
+				(i64.const 1) ;; Supply too little gas
 				(i32.const 0)	;; Pointer to the buffer with value to transfer
 				(i32.const 8)	;; Length of the buffer with value to transfer.
 				(i32.const 8)	;; Pointer to input data buffer address

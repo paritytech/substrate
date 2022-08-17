@@ -1,0 +1,7 @@
+error[E0277]: the trait bound `<T as Trait>::C: std::clone::Clone` is not satisfied
+ --> $DIR/clone.rs:7:2
+  |
+7 |     c: T::C,
+  |     ^ the trait `std::clone::Clone` is not implemented for `<T as Trait>::C`
+  |
+  = note: required by `std::clone::Clone::clone`

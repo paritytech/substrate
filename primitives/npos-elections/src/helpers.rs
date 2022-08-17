@@ -27,7 +27,7 @@ use sp_std::prelude::*;
 ///
 /// Note that this will NOT attempt at normalizing the result.
 pub fn assignment_ratio_to_staked<A: IdentifierT, P: PerThing, FS>(
-	ratio: Vec<Assignment<A, P>>,
+	ratios: Vec<Assignment<A, P>>,
 	stake_of: FS,
 ) -> Vec<StakedAssignment<A>>
 where
@@ -35,7 +35,7 @@ where
 	P: sp_std::ops::Mul<ExtendedBalance, Output = ExtendedBalance>,
 	ExtendedBalance: From<InnerOf<P>>,
 {
-	ratio
+	ratios
 		.into_iter()
 		.map(|a| {
 			let stake = stake_of(&a.who);

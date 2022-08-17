@@ -268,13 +268,9 @@ where
 	match compact.len().checked_sub(maximum_allowed_voters as usize) {
 		Some(to_remove) if to_remove > 0 => {
 			// grab all voters and sort them by least stake.
+			let balance_of = <Module<T>>::slashable_balance_of_fn();
 			let mut voters_sorted = <Nominators<T>>::iter()
-				.map(|(who, _)| {
-					(
-						who.clone(),
-						<Module<T>>::slashable_balance_of_vote_weight(&who),
-					)
-				})
+				.map(|(who, _)| (who.clone(), balance_of(&who)))
 				.collect::<Vec<_>>();
 			voters_sorted.sort_by_key(|(_, y)| *y);
 
@@ -378,7 +374,7 @@ where
 	// convert into absolute value and to obtain the reduced version.
 	let mut staked = sp_npos_elections::assignment_ratio_to_staked(
 		assignments,
-		<Module<T>>::slashable_balance_of_vote_weight,
+		<Module<T>>::slashable_balance_of_fn(),
 	);
 
 	// reduce
@@ -423,8 +419,8 @@ where
 		let compact = compact.clone();
 		let assignments = compact.into_assignment(nominator_at, validator_at).unwrap();
 		let staked = sp_npos_elections::assignment_ratio_to_staked(
-			assignments,
-			<Module<T>>::slashable_balance_of_vote_weight,
+			assignments.clone(),
+			<Module<T>>::slashable_balance_of_fn(),
 		);
 
 		let support_map = build_support_map::<T::AccountId>(&winners, &staked)

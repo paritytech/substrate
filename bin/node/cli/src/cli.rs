@@ -59,9 +59,6 @@ pub enum Subcommand {
 	/// Build a chain specification.
 	BuildSpec(sc_cli::BuildSpecCmd),
 
-	/// Build a chain specification with a light client sync state.
-	BuildSyncSpec(sc_cli::BuildSyncSpecCmd),
-
 	/// Validate blocks.
 	CheckBlock(sc_cli::CheckBlockCmd),
 

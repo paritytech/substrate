@@ -55,7 +55,6 @@ pallet-contracts-primitives = { version = "2.0.0", default-features = false, pat
 pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "2.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-elections-phragmen = { version = "2.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
-pallet-finality-tracker = { version = "2.0.0", default-features = false, path = "../../../frame/finality-tracker" }
 pallet-grandpa = { version = "2.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "2.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "2.0.0", default-features = false, path = "../../../frame/indices" }
@@ -88,7 +87,7 @@ pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../f
 pallet-ddc-metrics-offchain-worker = { path = "../../../frame/ddc-metrics-offchain-worker", default-features = false }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
+wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner", path = "../../../utils/wasm-builder-runner" }
 
 [features]
 default = ["std"]
@@ -113,7 +112,6 @@ std = [
 	"pallet-chainbridge/std",
 	"pallet-erc721/std",
 	"pallet-erc20/std",
-	"pallet-finality-tracker/std",
 	"pallet-grandpa/std",
 	"pallet-im-online/std",
 	"pallet-indices/std",

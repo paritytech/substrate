@@ -1,0 +1,7 @@
+error[E0277]: can't compare `Foo<T>` with `Foo<T>`
+   --> $DIR/eq.rs:6:8
+    |
+6   | struct Foo<T: Trait> {
+    |        ^^^ no implementation for `Foo<T> == Foo<T>`
+    |
+    = help: the trait `std::cmp::PartialEq` is not implemented for `Foo<T>`

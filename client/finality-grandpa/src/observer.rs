@@ -26,7 +26,7 @@ use finality_grandpa::{
 	BlockNumberOps, Error as GrandpaError, voter, voter_set::VoterSet
 };
 use log::{debug, info, warn};
-use sp_core::traits::BareCryptoStorePtr;
+use sp_keystore::SyncCryptoStorePtr;
 use sp_consensus::SelectChain;
 use sc_client_api::backend::Backend;
 use sp_utils::mpsc::TracingUnboundedReceiver;
@@ -216,7 +216,7 @@ struct ObserverWork<B: BlockT, BE, Client, N: NetworkT<B>> {
 	client: Arc<Client>,
 	network: NetworkBridge<B, N>,
 	persistent_data: PersistentData<B>,
-	keystore: Option<BareCryptoStorePtr>,
+	keystore: Option<SyncCryptoStorePtr>,
 	voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 	justification_sender: Option<GrandpaJustificationSender<B>>,
 	_phantom: PhantomData<BE>,
@@ -234,7 +234,7 @@ where
 		client: Arc<Client>,
 		network: NetworkBridge<B, Network>,
 		persistent_data: PersistentData<B>,
-		keystore: Option<BareCryptoStorePtr>,
+		keystore: Option<SyncCryptoStorePtr>,
 		voter_commands_rx: TracingUnboundedReceiver<VoterCommand<B::Hash, NumberFor<B>>>,
 		justification_sender: Option<GrandpaJustificationSender<B>>,
 	) -> Self {

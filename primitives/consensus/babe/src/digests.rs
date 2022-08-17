@@ -110,6 +110,15 @@ impl PreDigest {
 			PreDigest::SecondaryPlain(_) | PreDigest::SecondaryVRF(_) => 0,
 		}
 	}
+
+	/// Returns the VRF output, if it exists.
+	pub fn vrf_output(&self) -> Option<&VRFOutput> {
+		match self {
+			PreDigest::Primary(primary) => Some(&primary.vrf_output),
+			PreDigest::SecondaryVRF(secondary) => Some(&secondary.vrf_output),
+			PreDigest::SecondaryPlain(_) => None,
+		}
+	}
 }
 
 /// Information about the next epoch. This is broadcast in the first block

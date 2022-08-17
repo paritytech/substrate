@@ -172,24 +172,24 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// A helper function that runs a node with tokio and stops if the process receives the signal
 	/// `SIGTERM` or `SIGINT`.
-	pub fn run_node_until_exit(
+	pub fn run_node_until_exit<F: Future<Output = sc_service::error::Result<TaskManager>>>(
 		mut self,
-		initialise: impl FnOnce(Configuration) -> sc_service::error::Result<TaskManager>,
+		initialize: impl FnOnce(Configuration) -> F,
 	) -> Result<()> {
 		self.print_node_infos();
-		let mut task_manager = initialise(self.config)?;
+		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		self.tokio_runtime.block_on(task_manager.clean_shutdown());
 		res.map_err(|e| e.to_string().into())
 	}
 
-	/// A helper function that runs a command with the configuration of this node
+	/// A helper function that runs a command with the configuration of this node.
 	pub fn sync_run(self, runner: impl FnOnce(Configuration) -> Result<()>) -> Result<()> {
 		runner(self.config)
 	}
 
 	/// A helper function that runs a future with tokio and stops if the process receives
-	/// the signal SIGTERM or SIGINT
+	/// the signal `SIGTERM` or `SIGINT`.
 	pub fn async_run<FUT>(
 		self, runner: impl FnOnce(Configuration) -> Result<(FUT, TaskManager)>,
 	) -> Result<()>

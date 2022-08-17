@@ -29,7 +29,6 @@ sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common
 sp-transaction-pool = { version = "2.0.0", path = "../../../primitives/transaction-pool" }
 sc-basic-authorship = { version = "0.8.0", path = "../../../client/basic-authorship" }
 sp-inherents = { version = "2.0.0", path = "../../../primitives/inherents" }
-sp-finality-tracker = { version = "2.0.0", default-features = false, path = "../../../primitives/finality-tracker" }
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../../primitives/timestamp" }
 sp-tracing = { version = "2.0.0", path = "../../../primitives/tracing" }
 hash-db = "0.15.2"
