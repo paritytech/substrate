@@ -46,10 +46,7 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
-use crate::{
-	persist_peers::{self, PersistPeerAddrs},
-	utils::LruHashSet,
-};
+use crate::{persist_peers::PersistPeerAddrs, utils::LruHashSet};
 
 use futures::prelude::*;
 use futures_timer::Delay;
