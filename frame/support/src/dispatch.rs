@@ -2207,7 +2207,7 @@ macro_rules! decl_module {
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn count() -> usize { 1 }
-			fn accumulate(acc: &mut $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData>) {
+			fn infos() -> $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData> {
 				use $crate::traits::PalletInfoAccess;
 				let item = $crate::traits::PalletInfoData {
 					index: Self::index(),
@@ -2215,7 +2215,7 @@ macro_rules! decl_module {
 					module_name: Self::module_name(),
 					crate_version: Self::crate_version(),
 				};
-				acc.push(item);
+				vec![item]
 			}
 		}
 

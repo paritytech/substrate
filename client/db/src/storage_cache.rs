@@ -1223,7 +1223,7 @@ mod tests {
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
-			Some(root_parent.clone()),
+			Some(root_parent),
 		);
 
 		let key = H256::random()[..].to_vec();
@@ -1307,14 +1307,14 @@ mod tests {
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
-			Some(root_parent.clone()),
+			Some(root_parent),
 		);
 		s.cache.sync_cache(
 			&[],
 			&[],
 			vec![(key.clone(), Some(vec![2]))],
 			vec![],
-			Some(h0.clone()),
+			Some(h0),
 			Some(0),
 			true,
 		);

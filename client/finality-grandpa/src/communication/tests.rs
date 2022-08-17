@@ -177,7 +177,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn send_message(&mut self, who: &PeerId, data: Vec<u8>) {
 		<Self as NetworkNotification>::write_notification(
 			self,
-			who.clone(),
+			*who,
 			grandpa_protocol_name::NAME.into(),
 			data,
 		);
@@ -280,7 +280,7 @@ pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork)
 }
 
 fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
-	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
+	keys.iter().map(|&key| key.public().into()).map(|id| (id, 1)).collect()
 }
 
 struct NoopContext;
@@ -305,8 +305,7 @@ fn good_commit_leads_to_relay() {
 		let target_hash: Hash = [1; 32].into();
 		let target_number = 500;
 
-		let precommit =
-			finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
+		let precommit = finality_grandpa::Precommit { target_hash, target_number };
 		let payload = sp_finality_grandpa::localized_payload(
 			round,
 			set_id,
@@ -362,19 +361,19 @@ fn good_commit_leads_to_relay() {
 			// asking for global communication will cause the test network
 			// to send us an event asking us for a stream. use it to
 			// send a message.
-			let sender_id = id.clone();
+			let sender_id = id;
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
 					// Add the sending peer and send the commit
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: sender_id.clone(),
+						remote: sender_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
-						remote: sender_id.clone(),
+						remote: sender_id,
 						messages: vec![(
 							grandpa_protocol_name::NAME.into(),
 							commit_to_send.clone().into(),
@@ -384,7 +383,7 @@ fn good_commit_leads_to_relay() {
 					// Add a random peer which will be the recipient of this message
 					let receiver_id = PeerId::random();
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: receiver_id.clone(),
+						remote: receiver_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
@@ -456,8 +455,7 @@ fn bad_commit_leads_to_report() {
 		let target_hash: Hash = [1; 32].into();
 		let target_number = 500;
 
-		let precommit =
-			finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
+		let precommit = finality_grandpa::Precommit { target_hash, target_number };
 		let payload = sp_finality_grandpa::localized_payload(
 			round,
 			set_id,
@@ -513,17 +511,17 @@ fn bad_commit_leads_to_report() {
 			// asking for global communication will cause the test network
 			// to send us an event asking us for a stream. use it to
 			// send a message.
-			let sender_id = id.clone();
+			let sender_id = id;
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: sender_id.clone(),
+						remote: sender_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
-						remote: sender_id.clone(),
+						remote: sender_id,
 						messages: vec![(
 							grandpa_protocol_name::NAME.into(),
 							commit_to_send.clone().into(),
