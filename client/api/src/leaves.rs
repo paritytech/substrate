@@ -83,17 +83,14 @@ where
 	pub fn read_from_db(db: &dyn Database<DbHash>, column: u32, prefix: &[u8]) -> Result<Self> {
 		let mut storage = BTreeMap::new();
 
-		match db.get(column, prefix) {
-			Some(leaves) => {
-				let vals: Vec<_> = match Decode::decode(&mut leaves.as_ref()) {
-					Ok(vals) => vals,
-					Err(_) => return Err(Error::Backend("Error decoding leaves".into())),
-				};
-				for (number, hashes) in vals.into_iter() {
-					storage.insert(Reverse(number), hashes);
-				}
-			},
-			None => {},
+		if let Some(leaves) = db.get(column, prefix) {
+			let vals: Vec<_> = match Decode::decode(&mut leaves.as_ref()) {
+				Ok(vals) => vals,
+				Err(_) => return Err(Error::Backend("Error decoding leaves".into())),
+			};
+			for (number, hashes) in vals.into_iter() {
+				storage.insert(Reverse(number), hashes);
+			}
 		}
 		Ok(Self { storage })
 	}
