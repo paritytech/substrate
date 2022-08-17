@@ -182,7 +182,6 @@ where
 		&self,
 		runtime_code: &RuntimeCode,
 		ext: &mut dyn Externalities,
-		allow_missing_host_functions: bool,
 		f: F,
 	) -> Result<R>
 	where
@@ -198,7 +197,7 @@ where
 			ext,
 			self.method,
 			self.default_heap_pages,
-			allow_missing_host_functions,
+			self.allow_missing_host_functions,
 			|module, instance, version, ext| {
 				let module = AssertUnwindSafe(module);
 				let instance = AssertUnwindSafe(instance);
@@ -361,7 +360,6 @@ where
 		let result = self.with_instance(
 			runtime_code,
 			ext,
-			self.allow_missing_host_functions,
 			|module, mut instance, _onchain_version, mut ext| {
 				with_externalities_safe(&mut **ext, move || {
 					preregister_builtin_ext(module.clone());
@@ -382,14 +380,9 @@ where
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.with_instance(
-			runtime_code,
-			ext,
-			self.allow_missing_host_functions,
-			|_module, _instance, version, _ext| {
-				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-			},
-		)
+		self.with_instance(runtime_code, ext, |_module, _instance, version, _ext| {
+			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+		})
 	}
 }
 
@@ -454,14 +447,9 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeElseWasmExecutor<D> 
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm.with_instance(
-			runtime_code,
-			ext,
-			self.wasm.allow_missing_host_functions,
-			|_module, _instance, version, _ext| {
-				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-			},
-		)
+		self.wasm.with_instance(runtime_code, ext, |_module, _instance, version, _ext| {
+			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+		})
 	}
 }
 
@@ -628,7 +616,6 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 		let result = self.wasm.with_instance(
 			runtime_code,
 			ext,
-			self.wasm.allow_missing_host_functions,
 			|module, mut instance, onchain_version, mut ext| {
 				let onchain_version =
 					onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;
