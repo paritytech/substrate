@@ -117,7 +117,7 @@ impl<H: Hasher> LocalTrieCache<H> {
 	/// Return self as a [`TrieDB`](trie_db::TrieDB) compatible cache.
 	///
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
-	pub fn as_trie_db_cache<'a>(&'a self, storage_root: H::Out) -> TrieCache<'a, H> {
+	pub fn as_trie_db_cache(&self, storage_root: H::Out) -> TrieCache<'_, H> {
 		let value_cache = ValueCache::ForStorageRoot {
 			storage_root,
 			local_value_cache: self.value_cache.lock(),
@@ -140,7 +140,7 @@ impl<H: Hasher> LocalTrieCache<H> {
 	/// cache instance. If the function is not called, cached data is just thrown away and not
 	/// propagated to the shared cache. So, accessing these new items will be slower, but nothing
 	/// would break because of this.
-	pub fn as_trie_db_mut_cache<'a>(&'a self) -> TrieCache<'a, H> {
+	pub fn as_trie_db_mut_cache(&self) -> TrieCache<'_, H> {
 		TrieCache {
 			shared_node_cache: self.shared.node_cache.read(),
 			local_cache: self.node_cache.lock(),

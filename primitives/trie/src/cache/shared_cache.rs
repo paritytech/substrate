@@ -120,7 +120,7 @@ impl<H: Hasher> SharedNodeCache<H> {
 }
 
 /// The hash of [`ValueCacheKey`].
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, Clone, Copy)]
 pub struct ValueCacheKeyHash(u64);
 
 impl ValueCacheKeyHash {
@@ -131,6 +131,12 @@ impl ValueCacheKeyHash {
 		hasher.write(storage_key);
 
 		Self(hasher.finish())
+	}
+}
+
+impl PartialEq for ValueCacheKeyHash {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
 	}
 }
 
@@ -255,7 +261,7 @@ impl<'a, H> ValueCacheKey<'a, H> {
 	pub fn storage_key(&self) -> Option<&[u8]> {
 		match self {
 			Self::Ref { storage_key, .. } => Some(&storage_key),
-			Self::Value { storage_key, .. } => Some(&*storage_key),
+			Self::Value { storage_key, .. } => Some(storage_key),
 			Self::Hash { .. } => None,
 		}
 	}
@@ -510,7 +516,7 @@ impl<H: Hasher> SharedTrieCache<H> {
 		}
 	}
 
-	/// Create a new [`LocalTrieCache`] instance from this shared cache.
+	/// Create a new [`LocalTrieCache`](super::LocalTrieCache) instance from this shared cache.
 	pub fn local_cache(&self) -> super::LocalTrieCache<H> {
 		super::LocalTrieCache {
 			shared: self.clone(),
