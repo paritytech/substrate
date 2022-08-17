@@ -333,7 +333,7 @@ pub mod pallet {
 			);
 
 			swap.action.cancel(&swap.source);
-			PendingSwaps::<T>::remove(&target, hashed_proof.clone());
+			PendingSwaps::<T>::remove(&target, hashed_proof);
 
 			Self::deposit_event(Event::SwapCancelled { account: target, proof: hashed_proof });
 
