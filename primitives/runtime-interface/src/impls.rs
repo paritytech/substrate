@@ -497,7 +497,7 @@ macro_rules! for_u128_i128 {
 			type Owned = ();
 
 			fn into_ffi_value(&self) -> WrappedFFIValue<u32> {
-				(*self as *const u8 as u32).into()
+				(self as *const $type as *const u8 as u32).into()
 			}
 		}
 
