@@ -20,7 +20,6 @@ linked-hash-map = "0.5.4"
 log = "0.4.17"
 parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
 parking_lot = "0.12.0"
-retain_mut = "0.1.4"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0.30"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }

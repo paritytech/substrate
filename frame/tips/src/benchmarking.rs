@@ -190,7 +190,8 @@ benchmarks_instance_pallet! {
 		let reason_hash = T::Hashing::hash(&reason[..]);
 		let hash = T::Hashing::hash_of(&(&reason_hash, &beneficiary));
 		ensure!(Tips::<T, I>::contains_key(hash), "tip does not exist");
-	}: _(RawOrigin::Root, hash)
+		let reject_origin = T::RejectOrigin::successful_origin();
+	}: _<T::Origin>(reject_origin, hash)
 
 	impl_benchmark_test_suite!(TipsMod, crate::tests::new_test_ext(), crate::tests::Test);
 }
