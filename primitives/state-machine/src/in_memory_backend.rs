@@ -110,7 +110,7 @@ where
 	KF: KeyFunction<H> + Send + Sync,
 {
 	fn clone(&self) -> Self {
-		TrieBackendBuilder::new(self.backend_storage().clone(), self.root().clone()).build()
+		TrieBackendBuilder::new(self.backend_storage().clone(), self.root()).build()
 	}
 }
 

@@ -118,15 +118,19 @@ impl<H: Hasher> LocalTrieCache<H> {
 	///
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
 	pub fn as_trie_db_cache(&self, storage_root: H::Out) -> TrieCache<'_, H> {
+		// The locking order here needs to be the same as in `LocalTrieCache::drop`.
+		let shared_node_cache = self.shared.node_cache.read();
+		let shared_value_cache = self.shared.value_cache.read();
+
 		let value_cache = ValueCache::ForStorageRoot {
 			storage_root,
 			local_value_cache: self.value_cache.lock(),
-			shared_value_cache: self.shared.value_cache.read(),
+			shared_value_cache,
 			shared_value_cache_access: self.shared_value_cache_access.lock(),
 		};
 
 		TrieCache {
-			shared_node_cache: self.shared.node_cache.read(),
+			shared_node_cache,
 			local_cache: self.node_cache.lock(),
 			value_cache,
 			shared_node_cache_access: self.shared_node_cache_access.lock(),
@@ -141,8 +145,10 @@ impl<H: Hasher> LocalTrieCache<H> {
 	/// propagated to the shared cache. So, accessing these new items will be slower, but nothing
 	/// would break because of this.
 	pub fn as_trie_db_mut_cache(&self) -> TrieCache<'_, H> {
+		let shared_node_cache = self.shared.node_cache.read();
+
 		TrieCache {
-			shared_node_cache: self.shared.node_cache.read(),
+			shared_node_cache,
 			local_cache: self.node_cache.lock(),
 			value_cache: ValueCache::Fresh(Default::default()),
 			shared_node_cache_access: self.shared_node_cache_access.lock(),
@@ -152,6 +158,8 @@ impl<H: Hasher> LocalTrieCache<H> {
 
 impl<H: Hasher> Drop for LocalTrieCache<H> {
 	fn drop(&mut self) {
+		// The locking order here needs to be the same as in `LocalTrieCache::as_trie_db_cache`.
+		//
 		// Lock both caches and then sync them. It is not strictly required to sync both in
 		// lockstep.
 		let mut node_cache = self.shared.node_cache.write();
