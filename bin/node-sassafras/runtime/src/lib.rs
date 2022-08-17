@@ -126,12 +126,6 @@ pub const DAYS: BlockNumber = HOURS * 24;
 
 pub const MAX_AUTHORITIES: u32 = 32;
 
-/// The Sassafras epoch configuration at genesis.
-pub const SASSAFRAS_GENESIS_EPOCH_CONFIG: sp_consensus_sassafras::SassafrasEpochConfiguration =
-	sp_consensus_sassafras::SassafrasEpochConfiguration {
-        // TODO-SASS-P2
-	};
-
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
 pub fn native_version() -> NativeVersion {
@@ -405,11 +399,11 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-		fn configuration() -> sp_consensus_sassafras::SassafrasGenesisConfiguration {
-			sp_consensus_sassafras::SassafrasGenesisConfiguration {
+		fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
+			sp_consensus_sassafras::SassafrasConfiguration {
 				slot_duration: Sassafras::slot_duration(),
 				epoch_length: EpochDuration::get(),
-				genesis_authorities: Sassafras::authorities().to_vec(),
+				authorities: Sassafras::authorities().to_vec(),
 				randomness: Sassafras::randomness(),
 			}
 		}

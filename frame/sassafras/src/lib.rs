@@ -203,10 +203,24 @@ pub mod pallet {
 	#[pallet::getter(fn initialized)]
 	pub type Initialized<T> = StorageValue<_, PreDigest>;
 
-	/// The configuration for the current epoch. Should never be `None` as it is initialized in
-	/// genesis.
+	/// The configuration for the current epoch.
 	#[pallet::storage]
+	#[pallet::getter(fn config)]
 	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration, ValueQuery>;
+
+	/// The configuration for the next epoch.
+	#[pallet::storage]
+	pub type NextEpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
+
+	/// Pending epoch configuration change that will be set as `NextEpochConfig` when the next
+	/// epoch is enacted.
+	/// TODO-SASS-P2: better doc? Double check if next epoch tickets were computed using NextEpoch
+	/// params in the native ecode.
+	/// In other words a config change submitted during session N will be enacted on session N+2.
+	/// This is to maintain coherence for already submitted tickets for epoch N+1 that where
+	/// computed using configuration parameters stored for session N+1.
+	#[pallet::storage]
+	pub(super) type PendingEpochConfigChange<T> = StorageValue<_, SassafrasEpochConfiguration>;
 
 	/// Stored tickets metadata.
 	#[pallet::storage]
@@ -300,6 +314,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit next epoch tickets.
+		/// TODO-SASS-P3: this is an unsigned extrinsic. Can we remov ethe weight?
 		#[pallet::weight(10_000)]
 		pub fn submit_tickets(
 			origin: OriginFor<T>,
@@ -315,6 +330,24 @@ pub mod pallet {
 			metadata.segments_count += 1;
 			NextTicketsSegments::<T>::insert(metadata.segments_count, tickets);
 			TicketsMeta::<T>::set(metadata);
+			Ok(())
+		}
+
+		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
+		/// the next call to `enact_epoch_change`. The config will be activated one epoch after.
+		/// Multiple calls to this method will replace any existing planned config change that had
+		/// not been enacted yet.
+		#[pallet::weight(10_000)]
+		pub fn plan_config_change(
+			origin: OriginFor<T>,
+			config: SassafrasEpochConfiguration,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			ensure!(
+				config.redundancy_factor != 0 && config.attempts_number != 0,
+				Error::<T>::InvalidConfiguration
+			);
+			PendingEpochConfigChange::<T>::put(config);
 			Ok(())
 		}
 	}
@@ -365,10 +398,11 @@ pub mod pallet {
 				// Check tickets are below threshold
 
 				let next_auth = NextAuthorities::<T>::get();
+				let epoch_config = EpochConfig::<T>::get();
 				let threshold = sp_consensus_sassafras::compute_threshold(
-					sp_consensus_sassafras::TICKET_REDUNDANCY_FACTOR,
+					epoch_config.redundancy_factor,
 					epoch_duration as u32,
-					sp_consensus_sassafras::TICKET_MAX_ATTEMPTS,
+					epoch_config.attempts_number,
 					next_auth.len() as u32,
 				);
 
@@ -488,24 +522,23 @@ impl<T: Config> Pallet<T> {
 		// Updates current epoch randomness and computes the *next* epoch randomness.
 		let next_randomness = Self::update_randomness(next_epoch_index);
 
+		if let Some(config) = NextEpochConfig::<T>::take() {
+			EpochConfig::<T>::put(config);
+		}
+
+		let next_config = PendingEpochConfigChange::<T>::take();
+		if let Some(next_config) = next_config.clone() {
+			NextEpochConfig::<T>::put(next_config);
+		}
+
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
 		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities.to_vec(),
 			randomness: next_randomness,
+			config: next_config,
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
-
-		// if let Some(next_config) = NextEpochConfig::<T>::get() {
-		// 	EpochConfig::<T>::put(next_config);
-		// }
-
-		// if let Some(pending_epoch_config_change) = PendingEpochConfigChange::<T>::take() {
-		// 	let next_epoch_config: BabeEpochConfiguration =
-		// 		pending_epoch_config_change.clone().into();
-		// 	NextEpochConfig::<T>::put(next_epoch_config);
-		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
-		// }
 
 		let epoch_key = (epoch_idx & 1) as u8;
 		let mut tickets_metadata = TicketsMeta::<T>::get();
@@ -585,6 +618,7 @@ impl<T: Config> Pallet<T> {
 		let next = NextEpochDescriptor {
 			authorities: Self::authorities().to_vec(),
 			randomness: Self::randomness(),
+			config: None,
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
 	}

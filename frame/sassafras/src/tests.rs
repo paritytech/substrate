@@ -156,6 +156,7 @@ fn on_first_block_after_genesis() {
 			sp_consensus_sassafras::digests::NextEpochDescriptor {
 				authorities: NextAuthorities::<Test>::get().to_vec(),
 				randomness: NextRandomness::<Test>::get(),
+				config: None,
 			},
 		);
 		let consensus_digest = DigestItem::Consensus(SASSAFRAS_ENGINE_ID, consensus_log.encode());

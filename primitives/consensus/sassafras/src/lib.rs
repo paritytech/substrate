@@ -83,34 +83,32 @@ pub type SassafrasBlockWeight = u32;
 
 /// Configuration data used by the Sassafras consensus engine.
 #[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
-pub struct SassafrasGenesisConfiguration {
+pub struct SassafrasConfiguration {
 	/// The slot duration in milliseconds for Sassafras.
 	pub slot_duration: u64,
 	/// The duration of epochs in slots.
 	pub epoch_length: u64,
 	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
 }
 
-/// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct SassafrasEpochConfiguration {
-	// TODO-SASS-P2
-	// x: redundancy_factor
-	// a: attempts number
-	// L: bound on aa number of tickets that can be gossiped
+impl SassafrasConfiguration {
+	/// Get the slot duration defined in the genesis configuration.
+	pub fn slot_duration(&self) -> SlotDuration {
+		SlotDuration::from_millis(self.slot_duration)
+	}
 }
 
-// Sensible defaults for Sassafras epoch configuration.
-impl Default for SassafrasEpochConfiguration {
-	fn default() -> Self {
-		SassafrasEpochConfiguration {
-            // TODO-SASS-P2
-        }
-	}
+/// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct SassafrasEpochConfiguration {
+	/// Redundancy factor.
+	pub redundancy_factor: u32,
+	/// Number of attempts for tickets generation.
+	pub attempts_number: u32,
 }
 
 /// Ticket type.
@@ -196,7 +194,7 @@ sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
 		 /// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
-		fn configuration() -> SassafrasGenesisConfiguration;
+		fn configuration() -> SassafrasConfiguration;
 
 		/// Submit next epoch validator tickets via an unsigned extrinsic.
 		/// This method returns `false` when creation of the extrinsics fails.
@@ -230,9 +228,3 @@ pub fn compute_threshold(redundancy: u32, slots: u32, attempts: u32, validators:
 pub fn check_threshold(ticket: &Ticket, threshold: U256) -> bool {
 	U256::from(ticket.as_bytes()) < threshold
 }
-
-/// TODO-SASS-P3: add to session config
-pub const TICKET_MAX_ATTEMPTS: u32 = 30;
-
-/// TODO-SASS-P3: add to session config
-pub const TICKET_REDUNDANCY_FACTOR: u32 = 1;

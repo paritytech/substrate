@@ -116,12 +116,12 @@ pub fn new_partial(
 	let justification_import = grandpa_block_import.clone();
 
 	let (sassafras_block_import, sassafras_link) = sc_consensus_sassafras::block_import(
-		sc_consensus_sassafras::Config::get(&*client)?,
+		sc_consensus_sassafras::configuration(&*client)?,
 		grandpa_block_import,
 		client.clone(),
 	)?;
 
-	let slot_duration = sassafras_link.config().slot_duration();
+	let slot_duration = sassafras_link.genesis_config().slot_duration();
 
 	let import_queue = sc_consensus_sassafras::import_queue(
 		sassafras_link.clone(),
@@ -269,7 +269,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		let can_author_with =
 			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
 
-		let slot_duration = sassafras_link.config().slot_duration();
+		let slot_duration = sassafras_link.genesis_config().slot_duration();
 
 		let sassafras_config = sc_consensus_sassafras::SassafrasParams {
 			client: client.clone(),

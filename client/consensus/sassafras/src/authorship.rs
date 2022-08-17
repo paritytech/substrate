@@ -16,19 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Sassafras authority selection and slot claiming.
+//! Types and functions related to authority selection and slot claiming.
 
-use crate::Epoch;
+use super::*;
 
-use scale_codec::Encode;
-use sp_application_crypto::AppKey;
 use sp_consensus_sassafras::{
 	digests::PreDigest, make_slot_transcript_data, make_ticket_transcript_data, AuthorityId, Slot,
 	Ticket, TicketInfo,
 };
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{twox_64, ByteArray};
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 /// Get secondary authority index for the given epoch and slot.
 #[inline]
@@ -85,13 +81,10 @@ pub fn claim_slot(
 /// Generate the tickets for the given epoch.
 /// Tickets additional information (i.e. `TicketInfo`) will be stored within the `Epoch`
 /// structure. The additional information will be used during epoch to claim slots.
-pub fn generate_epoch_tickets(
-	epoch: &mut Epoch,
-	max_attempts: u32,
-	redundancy_factor: u32,
-	keystore: &SyncCryptoStorePtr,
-) -> Vec<Ticket> {
+pub fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> Vec<Ticket> {
 	let mut tickets = vec![];
+	let max_attempts = epoch.config.attempts_number;
+	let redundancy_factor = epoch.config.redundancy_factor;
 
 	let threshold = sp_consensus_sassafras::compute_threshold(
 		redundancy_factor,
@@ -111,7 +104,7 @@ pub fn generate_epoch_tickets(
 
 		let make_ticket = |attempt| {
 			let transcript_data =
-				make_ticket_transcript_data(&epoch.randomness, attempt as u64, epoch.epoch_index);
+				make_ticket_transcript_data(&epoch.randomness, attempt, epoch.epoch_index);
 
 			// TODO-SASS-P4: can be a good idea to replace `vrf_sign` with `vrf_sign_after_check`,
 			// But we need to modify the CryptoStore interface first.
@@ -145,4 +138,428 @@ pub fn generate_epoch_tickets(
 		}
 	}
 	tickets
+}
+
+struct SassafrasSlotWorker<B: BlockT, C, E, I, SO, L> {
+	client: Arc<C>,
+	block_import: I,
+	env: E,
+	sync_oracle: SO,
+	justification_sync_link: L,
+	force_authoring: bool,
+	keystore: SyncCryptoStorePtr,
+	epoch_changes: SharedEpochChanges<B, Epoch>,
+	slot_notification_sinks: SlotNotificationSinks<B>,
+	genesis_config: SassafrasConfiguration,
+}
+
+#[async_trait::async_trait]
+impl<B, C, E, I, ER, SO, L> sc_consensus_slots::SimpleSlotWorker<B>
+	for SassafrasSlotWorker<B, C, E, I, SO, L>
+where
+	B: BlockT,
+	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B, Error = ClientError>,
+	C::Api: SassafrasApi<B>,
+	E: Environment<B, Error = ER> + Sync,
+	E::Proposer: Proposer<B, Error = ER, Transaction = sp_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync + 'static,
+	SO: SyncOracle + Send + Clone + Sync,
+	L: sc_consensus::JustificationSyncLink<B>,
+	ER: std::error::Error + Send + 'static,
+{
+	type EpochData = ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>;
+	type Claim = (PreDigest, AuthorityId);
+	type SyncOracle = SO;
+	type JustificationSyncLink = L;
+	type CreateProposer =
+		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
+	type Proposer = E::Proposer;
+	type BlockImport = I;
+
+	fn logging_target(&self) -> &'static str {
+		"sassafras"
+	}
+
+	fn block_import(&mut self) -> &mut Self::BlockImport {
+		&mut self.block_import
+	}
+
+	fn epoch_data(
+		&self,
+		parent: &B::Header,
+		slot: Slot,
+	) -> Result<Self::EpochData, ConsensusError> {
+		self.epoch_changes
+			.shared_data()
+			.epoch_descriptor_for_child_of(
+				descendent_query(&*self.client),
+				&parent.hash(),
+				*parent.number(),
+				slot,
+			)
+			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
+			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
+	}
+
+	fn authorities_len(&self, epoch_descriptor: &Self::EpochData) -> Option<usize> {
+		self.epoch_changes
+			.shared_data()
+			.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))
+			.map(|epoch| epoch.as_ref().authorities.len())
+	}
+
+	async fn claim_slot(
+		&self,
+		parent_header: &B::Header,
+		slot: Slot,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+	) -> Option<Self::Claim> {
+		debug!(target: "sassafras", "🌳 Attempting to claim slot {}", slot);
+
+		// Get the next slot ticket from the runtime.
+		let block_id = BlockId::Hash(parent_header.hash());
+		let ticket = self.client.runtime_api().slot_ticket(&block_id, slot).ok()?;
+
+		// TODO-SASS-P2
+		debug!(target: "sassafras", "🌳 parent {}", parent_header.hash());
+
+		let claim = authorship::claim_slot(
+			slot,
+			self.epoch_changes
+				.shared_data()
+				.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))?
+				.as_ref(),
+			ticket,
+			&self.keystore,
+		);
+		if claim.is_some() {
+			debug!(target: "sassafras", "🌳 Claimed slot {}", slot);
+		}
+		claim
+	}
+
+	fn notify_slot(
+		&self,
+		_parent_header: &B::Header,
+		slot: Slot,
+		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
+	) {
+		RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
+			match sink.try_send((slot, epoch_descriptor.clone())) {
+				Ok(()) => true,
+				Err(e) =>
+					if e.is_full() {
+						warn!(target: "sassafras", "🌳 Trying to notify a slot but the channel is full");
+						true
+					} else {
+						false
+					},
+			}
+		});
+	}
+
+	fn pre_digest_data(&self, _slot: Slot, claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {
+		vec![<DigestItem as CompatibleDigestItem>::sassafras_pre_digest(claim.0.clone())]
+	}
+
+	async fn block_import_params(
+		&self,
+		header: B::Header,
+		header_hash: &B::Hash,
+		body: Vec<B::Extrinsic>,
+		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		(_, public): Self::Claim,
+		epoch_descriptor: Self::EpochData,
+	) -> Result<
+		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+		sp_consensus::Error,
+	> {
+		// Sign the pre-sealed hash of the block and then add it to a digest item.
+		let public_type_pair = public.clone().into();
+		let public = public.to_raw_vec();
+		let signature = SyncCryptoStore::sign_with(
+			&*self.keystore,
+			<AuthorityId as AppKey>::ID,
+			&public_type_pair,
+			header_hash.as_ref(),
+		)
+		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+		.ok_or_else(|| {
+			sp_consensus::Error::CannotSign(
+				public.clone(),
+				"Could not find key in keystore.".into(),
+			)
+		})?;
+		let signature: AuthoritySignature = signature
+			.clone()
+			.try_into()
+			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+		let digest_item = <DigestItem as CompatibleDigestItem>::sassafras_seal(signature);
+
+		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+		import_block.post_digests.push(digest_item);
+		import_block.body = Some(body);
+		import_block.state_action =
+			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
+		import_block.intermediates.insert(
+			Cow::from(INTERMEDIATE_KEY),
+			Box::new(SassafrasIntermediate::<B> { epoch_descriptor }) as Box<_>,
+		);
+
+		Ok(import_block)
+	}
+
+	fn force_authoring(&self) -> bool {
+		self.force_authoring
+	}
+
+	fn should_backoff(&self, _slot: Slot, _chain_head: &B::Header) -> bool {
+		// TODO-SASS-P2
+		false
+	}
+
+	fn sync_oracle(&mut self) -> &mut Self::SyncOracle {
+		&mut self.sync_oracle
+	}
+
+	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink {
+		&mut self.justification_sync_link
+	}
+
+	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer {
+		Box::pin(
+			self.env
+				.init(block)
+				.map_err(|e| sp_consensus::Error::ClientImport(format!("{:?}", e))),
+		)
+	}
+
+	fn telemetry(&self) -> Option<TelemetryHandle> {
+		// TODO-SASS-P2
+		None
+	}
+
+	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration {
+		let parent_slot = find_pre_digest::<B>(&slot_info.chain_head).ok().map(|d| d.slot);
+
+		// TODO-SASS-P2 : clarify this field. In Sassafras this is part of 'self'
+		let block_proposal_slot_portion = sc_consensus_slots::SlotProportion::new(0.5);
+
+		sc_consensus_slots::proposing_remaining_duration(
+			parent_slot,
+			slot_info,
+			&block_proposal_slot_portion,
+			None,
+			sc_consensus_slots::SlotLenienceType::Exponential,
+			self.logging_target(),
+		)
+	}
+}
+
+async fn tickets_worker<B, C, SC>(
+	client: Arc<C>,
+	keystore: SyncCryptoStorePtr,
+	epoch_changes: SharedEpochChanges<B, Epoch>,
+	select_chain: SC,
+) where
+	B: BlockT,
+	C: BlockchainEvents<B> + ProvideRuntimeApi<B>,
+	C::Api: SassafrasApi<B>,
+	SC: SelectChain<B> + 'static,
+{
+	let mut notifications = client.import_notification_stream();
+	while let Some(notification) = notifications.next().await {
+		let epoch_desc = match find_next_epoch_digest::<B>(&notification.header) {
+			Ok(Some(epoch_desc)) => epoch_desc,
+			Err(err) => {
+				warn!(target: "sassafras", "🌳 Error fetching next epoch digest: {}", err);
+				continue
+			},
+			_ => continue,
+		};
+
+		debug!(target: "sassafras", "🌳 New epoch annouced {:x?}", epoch_desc);
+
+		let number = *notification.header.number();
+		let position = if number == One::one() {
+			EpochIdentifierPosition::Genesis1
+		} else {
+			EpochIdentifierPosition::Regular
+		};
+		let epoch_identifier = EpochIdentifier { position, hash: notification.hash, number };
+
+		let tickets = epoch_changes
+			.shared_data()
+			.epoch_mut(&epoch_identifier)
+			.map(|epoch| authorship::generate_epoch_tickets(epoch, &keystore))
+			.unwrap_or_default();
+
+		if tickets.is_empty() {
+			continue
+		}
+
+		// Get the best block on which we will build and send the tickets.
+		let best_id = match select_chain.best_chain().await {
+			Ok(header) => BlockId::Hash(header.hash()),
+			Err(err) => {
+				error!(target: "🌳 sassafras", "Error fetching best chain block id: {}", err);
+				continue
+			},
+		};
+
+		let err = match client.runtime_api().submit_tickets_unsigned_extrinsic(&best_id, tickets) {
+			Err(err) => Some(err.to_string()),
+			Ok(false) => Some("Unknown reason".to_string()),
+			_ => None,
+		};
+		if let Some(err) = err {
+			error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err);
+			// Remove tickets from epoch tree node.
+			epoch_changes
+				.shared_data()
+				.epoch_mut(&epoch_identifier)
+				.map(|epoch| epoch.tickets_info.clear());
+		}
+	}
+}
+
+/// Worker for Sassafras which implements `Future<Output=()>`. This must be polled.
+pub struct SassafrasWorker<B: BlockT> {
+	inner: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+	slot_notification_sinks: SlotNotificationSinks<B>,
+}
+
+impl<B: BlockT> SassafrasWorker<B> {
+	/// Return an event stream of notifications for when new slot happens, and the corresponding
+	/// epoch descriptor.
+	pub fn slot_notification_stream(
+		&self,
+	) -> Receiver<(Slot, ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>)> {
+		const CHANNEL_BUFFER_SIZE: usize = 1024;
+
+		let (sink, stream) = channel(CHANNEL_BUFFER_SIZE);
+		self.slot_notification_sinks.lock().push(sink);
+		stream
+	}
+}
+
+impl<B: BlockT> Future for SassafrasWorker<B> {
+	type Output = ();
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		self.inner.as_mut().poll(cx)
+	}
+}
+
+/// Slot notification sinks.
+type SlotNotificationSinks<B> = Arc<
+	Mutex<Vec<Sender<(Slot, ViableEpochDescriptor<<B as BlockT>::Hash, NumberFor<B>, Epoch>)>>>,
+>;
+
+/// Parameters for Sassafras.
+pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
+	/// The client to use
+	pub client: Arc<C>,
+	/// The keystore that manages the keys of the node.
+	pub keystore: SyncCryptoStorePtr,
+	/// The chain selection strategy
+	pub select_chain: SC,
+	/// The environment we are producing blocks for.
+	pub env: EN,
+	/// The underlying block-import object to supply our produced blocks to.
+	/// This must be a `SassafrasBlockImport` or a wrapper of it, otherwise
+	/// critical consensus logic will be omitted.
+	pub block_import: I,
+	/// A sync oracle
+	pub sync_oracle: SO,
+	/// Hook into the sync module to control the justification sync process.
+	pub justification_sync_link: L,
+	/// Something that can create the inherent data providers.
+	pub create_inherent_data_providers: CIDP,
+	/// Force authoring of blocks even if we are offline
+	pub force_authoring: bool,
+	/// The source of timestamps for relative slots
+	pub sassafras_link: SassafrasLink<B>,
+	/// Checks if the current native implementation can author with a runtime at a given block.
+	pub can_author_with: CAW,
+}
+
+/// Start the Sassafras worker.
+pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, CAW, L, ER>(
+	SassafrasParams {
+		client,
+		keystore,
+		select_chain,
+		env,
+		block_import,
+		sync_oracle,
+		justification_sync_link,
+		create_inherent_data_providers,
+		force_authoring,
+		sassafras_link,
+		can_author_with,
+	}: SassafrasParams<B, C, SC, EN, I, SO, L, CIDP, CAW>,
+) -> Result<SassafrasWorker<B>, sp_consensus::Error>
+where
+	B: BlockT,
+	C: ProvideRuntimeApi<B>
+		+ ProvideUncles<B>
+		+ BlockchainEvents<B>
+		+ PreCommitActions<B>
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = ClientError>
+		+ Send
+		+ Sync
+		+ 'static,
+	C::Api: SassafrasApi<B>,
+	SC: SelectChain<B> + 'static,
+	EN: Environment<B, Error = ER> + Send + Sync + 'static,
+	EN::Proposer: Proposer<B, Error = ER, Transaction = sp_api::TransactionFor<C, B>>,
+	I: BlockImport<B, Error = ConsensusError, Transaction = sp_api::TransactionFor<C, B>>
+		+ Send
+		+ Sync
+		+ 'static,
+	SO: SyncOracle + Send + Sync + Clone + 'static,
+	L: sc_consensus::JustificationSyncLink<B> + 'static,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+	CAW: CanAuthorWith<B> + Send + Sync + 'static,
+	ER: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
+{
+	info!(target: "sassafras", "🌳 🍁 Starting Sassafras Authorship worker");
+
+	let slot_notification_sinks = Arc::new(Mutex::new(Vec::new()));
+
+	let slot_worker = SassafrasSlotWorker {
+		client: client.clone(),
+		block_import,
+		env,
+		sync_oracle: sync_oracle.clone(),
+		justification_sync_link,
+		force_authoring,
+		keystore: keystore.clone(),
+		epoch_changes: sassafras_link.epoch_changes.clone(),
+		slot_notification_sinks: slot_notification_sinks.clone(),
+		genesis_config: sassafras_link.genesis_config.clone(),
+	};
+
+	let slot_worker = sc_consensus_slots::start_slot_worker(
+		sassafras_link.genesis_config.slot_duration(),
+		select_chain.clone(),
+		sc_consensus_slots::SimpleSlotWorkerToSlotWorker(slot_worker),
+		sync_oracle,
+		create_inherent_data_providers,
+		can_author_with,
+	);
+
+	let tickets_worker = tickets_worker(
+		client.clone(),
+		keystore,
+		sassafras_link.epoch_changes.clone(),
+		select_chain,
+	);
+
+	let inner = future::select(Box::pin(slot_worker), Box::pin(tickets_worker));
+
+	Ok(SassafrasWorker { inner: Box::pin(inner.map(|_| ())), slot_notification_sinks })
 }

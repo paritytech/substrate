@@ -3,13 +3,14 @@ use node_sassafras_runtime::{
 	SudoConfig, SystemConfig, WASM_BINARY,
 };
 use sc_service::ChainType;
-use sp_consensus_sassafras::AuthorityId as SassafrasId;
+use sp_consensus_sassafras::{AuthorityId as SassafrasId, SassafrasEpochConfiguration};
 use sp_core::{sr25519, Pair, Public};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
-// The URL for the telemetry server.
-// const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+// Genesis constants for Sassafras parameters configuration.
+const SASSAFRAS_TICKETS_MAX_ATTEMPTS_NUMBER: u32 = 32;
+const SASSAFRAS_TICKETS_REDUNDANCY_FACTOR: u32 = 1;
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
@@ -143,7 +144,10 @@ fn testnet_genesis(
 		},
 		sassafras: SassafrasConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone(), 0)).collect(),
-			epoch_config: node_sassafras_runtime::SASSAFRAS_GENESIS_EPOCH_CONFIG,
+			epoch_config: SassafrasEpochConfiguration {
+				attempts_number: SASSAFRAS_TICKETS_MAX_ATTEMPTS_NUMBER,
+				redundancy_factor: SASSAFRAS_TICKETS_REDUNDANCY_FACTOR,
+			},
 		},
 		grandpa: GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
