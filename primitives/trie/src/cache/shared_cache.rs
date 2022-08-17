@@ -193,7 +193,7 @@ pub(super) enum ValueCacheKey<'a, H> {
 
 impl<'a, H> ValueCacheKey<'a, H> {
 	/// Constructs [`Self::Value`].
-	pub fn value(storage_key: impl Into<Arc<[u8]>>, storage_root: H) -> Self
+	pub fn new_value(storage_key: impl Into<Arc<[u8]>>, storage_root: H) -> Self
 	where
 		H: AsRef<[u8]>,
 	{
@@ -203,7 +203,7 @@ impl<'a, H> ValueCacheKey<'a, H> {
 	}
 
 	/// Constructs [`Self::Ref`].
-	pub fn ref_(storage_key: &'a [u8], storage_root: H) -> Self
+	pub fn new_ref(storage_key: &'a [u8], storage_root: H) -> Self
 	where
 		H: AsRef<[u8]>,
 	{
@@ -360,7 +360,7 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 		let update_size_in_bytes =
 			|size_in_bytes: &mut usize, r_key: Arc<[u8]>, known_keys: &mut HashSet<Arc<[u8]>>| {
 				// If the `strong_count == 2`, it means this is the last instance of the key.
-				// One being `r_key` and the other being stored in `known_keys`.
+				// One being `r_key` and the other being stored in `known_storage_keys`.
 				let last_instance = Arc::strong_count(&r_key) == 2;
 
 				let key_len = if last_instance {
@@ -472,7 +472,13 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 ///
 /// The instance of this object can be shared between multiple threads.
 pub struct SharedTrieCache<H: Hasher> {
+	/// The shared node cache.
+	///
+	/// The mutex can be locked independently from the [`Self::value_cache`] mutex.
 	pub(super) node_cache: Arc<RwLock<SharedNodeCache<H>>>,
+	/// The shared value cache.
+	///
+	/// The mutex can be locked independently from the [`Self::value_cache`] mutex.
 	pub(super) value_cache: Arc<RwLock<SharedValueCache<H::Out>>>,
 }
 
@@ -561,8 +567,8 @@ mod tests {
 
 		cache.update(
 			vec![
-				(ValueCacheKey::value(&key[..], root0), CachedValue::NonExisting),
-				(ValueCacheKey::value(&key[..], root1), CachedValue::NonExisting),
+				(ValueCacheKey::new_value(&key[..], root0), CachedValue::NonExisting),
+				(ValueCacheKey::new_value(&key[..], root1), CachedValue::NonExisting),
 			],
 			vec![],
 		);
@@ -582,7 +588,7 @@ mod tests {
 		cache.update(
 			(1..10)
 				.map(|i| vec![i; 10])
-				.map(|key| (ValueCacheKey::value(&key[..], root0), CachedValue::NonExisting)),
+				.map(|key| (ValueCacheKey::new_value(&key[..], root0), CachedValue::NonExisting)),
 			vec![],
 		);
 
@@ -590,13 +596,13 @@ mod tests {
 		assert_eq!(2, Arc::strong_count(cache.known_storage_keys.get(&key[..]).unwrap()));
 		assert_eq!((base_size + key.len() + arc_size) * 10, cache.size_in_bytes);
 		assert!(matches!(
-			cache.get(&ValueCacheKey::ref_(&key, root0)).unwrap(),
+			cache.get(&ValueCacheKey::new_ref(&key, root0)).unwrap(),
 			CachedValue::<Hash>::NonExisting
 		));
-		assert!(cache.get(&ValueCacheKey::ref_(&key, root1)).is_none());
+		assert!(cache.get(&ValueCacheKey::new_ref(&key, root1)).is_none());
 
 		cache.update(
-			vec![(ValueCacheKey::value(vec![10; 10], root0), CachedValue::NonExisting)],
+			vec![(ValueCacheKey::new_value(vec![10; 10], root0), CachedValue::NonExisting)],
 			vec![],
 		);
 
@@ -609,7 +615,7 @@ mod tests {
 		let storage_key2 = &b"something2"[..];
 		let storage_root = Hash::random();
 
-		let value = ValueCacheKey::value(storage_key, storage_root);
+		let value = ValueCacheKey::new_value(storage_key, storage_root);
 		// Ref gets the same hash, but a different storage key
 		let ref_ =
 			ValueCacheKey::Ref { storage_root, storage_key: storage_key2, hash: value.get_hash() };

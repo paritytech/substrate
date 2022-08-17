@@ -17,7 +17,7 @@
 
 use sc_cli::Result;
 use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
-use sc_client_db::{DbHash, DbStateBuilder};
+use sc_client_db::{DbHash, DbState, DbStateBuilder};
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Transaction};

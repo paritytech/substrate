@@ -152,14 +152,15 @@ impl<H: Hasher> LocalTrieCache<H> {
 
 impl<H: Hasher> Drop for LocalTrieCache<H> {
 	fn drop(&mut self) {
-		self.shared
-			.node_cache
-			.write()
+		// Lock both caches and then sync them. It is not strictly required to sync both in
+		// lockstep.
+		let mut node_cache = self.shared.node_cache.write();
+		let mut value_cache = self.shared.value_cache.write();
+
+		node_cache
 			.update(self.node_cache.lock().drain(), self.shared_node_cache_access.lock().drain());
 
-		self.shared
-			.value_cache
-			.write()
+		value_cache
 			.update(self.value_cache.lock().drain(), self.shared_value_cache_access.lock().drain());
 	}
 }
@@ -199,7 +200,7 @@ impl<H: AsRef<[u8]> + std::hash::Hash + Eq + Clone + Copy> ValueCache<'_, H> {
 				shared_value_cache_access,
 				storage_root,
 			} => {
-				let key = ValueCacheKey::ref_(key, *storage_root);
+				let key = ValueCacheKey::new_ref(key, *storage_root);
 
 				// We first need to look up in the local cache and then the shared cache.
 				// It can happen that some value is cached in the shared cache, but the
@@ -236,7 +237,7 @@ impl<H: AsRef<[u8]> + std::hash::Hash + Eq + Clone + Copy> ValueCache<'_, H> {
 				map.insert(key.into(), value);
 			},
 			Self::ForStorageRoot { local_value_cache, storage_root, .. } => {
-				local_value_cache.insert(ValueCacheKey::value(key, *storage_root), value);
+				local_value_cache.insert(ValueCacheKey::new_value(key, *storage_root), value);
 			},
 		}
 	}
@@ -411,7 +412,7 @@ mod tests {
 			.value_cache
 			.read()
 			.lru
-			.peek(&ValueCacheKey::value(TEST_DATA[0].0, root))
+			.peek(&ValueCacheKey::new_value(TEST_DATA[0].0, root))
 			.unwrap()
 			.clone();
 		assert_eq!(Bytes::from(TEST_DATA[0].1.to_vec()), cached_data.data().flatten().unwrap());
@@ -420,7 +421,7 @@ mod tests {
 
 		let local_cache = shared_cache.local_cache();
 		shared_cache.value_cache.write().lru.put(
-			ValueCacheKey::value(TEST_DATA[1].0, root),
+			ValueCacheKey::new_value(TEST_DATA[1].0, root),
 			(fake_data.clone(), Default::default()).into(),
 		);
 
@@ -466,7 +467,7 @@ mod tests {
 			.value_cache
 			.read()
 			.lru
-			.peek(&ValueCacheKey::value(new_key, new_root))
+			.peek(&ValueCacheKey::new_value(new_key, new_root))
 			.unwrap()
 			.clone();
 		assert_eq!(Bytes::from(new_value), cached_data.data().flatten().unwrap());
