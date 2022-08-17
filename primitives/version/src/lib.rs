@@ -378,14 +378,14 @@ impl<T: GetRuntimeVersionAt<Block>, Block: BlockT> GetRuntimeVersionAt<Block>
 	for std::sync::Arc<T>
 {
 	fn runtime_version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, String> {
-		(&**self).runtime_version(at)
+		(**self).runtime_version(at)
 	}
 }
 
 #[cfg(feature = "std")]
 impl<T: GetNativeVersion> GetNativeVersion for std::sync::Arc<T> {
 	fn native_version(&self) -> &NativeVersion {
-		(&**self).native_version()
+		(**self).native_version()
 	}
 }
 

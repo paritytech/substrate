@@ -30,7 +30,7 @@ pub trait Chain<B: Block> {
 
 impl<T: Chain<B>, B: Block> Chain<B> for Arc<T> {
 	fn block_status(&self, id: &BlockId<B>) -> Result<BlockStatus, Box<dyn Error + Send>> {
-		(&**self).block_status(id)
+		(**self).block_status(id)
 	}
 }
 

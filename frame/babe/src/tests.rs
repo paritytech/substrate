@@ -194,7 +194,7 @@ fn no_author_vrf_output_for_secondary_plain() {
 fn authority_index() {
 	new_test_ext(4).execute_with(|| {
 		assert_eq!(
-			Babe::find_author((&[(BABE_ENGINE_ID, &[][..])]).iter().cloned()),
+			Babe::find_author([(BABE_ENGINE_ID, &[][..])].iter().cloned()),
 			None,
 			"Trivially invalid authorities are ignored"
 		)

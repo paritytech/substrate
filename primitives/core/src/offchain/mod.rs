@@ -671,11 +671,11 @@ pub trait DbExternalities: Send {
 
 impl<T: DbExternalities + ?Sized> DbExternalities for Box<T> {
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		(&mut **self).local_storage_set(kind, key, value)
+		(**self).local_storage_set(kind, key, value)
 	}
 
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		(&mut **self).local_storage_clear(kind, key)
+		(**self).local_storage_clear(kind, key)
 	}
 
 	fn local_storage_compare_and_set(
@@ -685,11 +685,11 @@ impl<T: DbExternalities + ?Sized> DbExternalities for Box<T> {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		(&mut **self).local_storage_compare_and_set(kind, key, old_value, new_value)
+		(**self).local_storage_compare_and_set(kind, key, old_value, new_value)
 	}
 
 	fn local_storage_get(&mut self, kind: StorageKind, key: &[u8]) -> Option<Vec<u8>> {
-		(&mut **self).local_storage_get(kind, key)
+		(**self).local_storage_get(kind, key)
 	}
 }
 
