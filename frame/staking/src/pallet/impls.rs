@@ -1381,6 +1381,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn score_update_worst_case(_who: &T::AccountId, _is_increase: bool) -> Self::Score {
+		unimplemented!();
+	}
 }
 
 impl<T: Config> StakingInterface for Pallet<T> {
