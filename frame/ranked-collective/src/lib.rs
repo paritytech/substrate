@@ -471,17 +471,6 @@ pub mod pallet {
 			Self::do_add_member(who)
 		}
 
-		// Only root account can add a member to
-		#[pallet::weight(100)]
-		pub fn add_member_to_rank(
-			origin: OriginFor<T>,
-			member: T::AccountId,
-			rank: Rank
-		) -> DispatchResult {
-			let _= ensure_root(origin)?;
-			Self::do_add_member_to_rank(member,rank)?;
-			Ok(())
-		}
 
 		/// Increment the rank of an existing member by one.
 		///
@@ -648,6 +637,19 @@ pub mod pallet {
 				pays_fee: Pays::No,
 			})
 		}
+
+		// Only root account can add a member to
+		#[pallet::weight(100)]
+		pub fn add_member_to_rank(
+			origin: OriginFor<T>,
+			member: T::AccountId,
+			rank: Rank
+		) -> DispatchResult {
+			let _= ensure_root(origin)?;
+			Self::do_add_member_to_rank(member,rank)?;
+			Ok(())
+		}
+
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
