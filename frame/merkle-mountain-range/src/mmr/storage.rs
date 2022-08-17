@@ -220,7 +220,7 @@ where
 		// Find out which leaf added node `pos` in the MMR.
 		let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos);
 
-		let window_size =
+		let window_size: u64 =
 			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
 		// Leaves older than this window should have been canonicalized.
 		if leaves.saturating_sub(ancestor_leaf_idx) > window_size {

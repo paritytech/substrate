@@ -226,10 +226,10 @@ where
 	if backing_backed_stake.len() > 0 {
 		let max_stake = backing_backed_stake
 			.iter()
-			.max_by(|x, y| x.partial_cmp(&y).unwrap_or(sp_std::cmp::Ordering::Equal))
+			.max_by(|x, y| x.partial_cmp(y).unwrap_or(sp_std::cmp::Ordering::Equal))
 			.expect("vector with positive length will have a max; qed");
 		let min_stake = backed_stakes_iter
-			.min_by(|x, y| x.partial_cmp(&y).unwrap_or(sp_std::cmp::Ordering::Equal))
+			.min_by(|x, y| x.partial_cmp(y).unwrap_or(sp_std::cmp::Ordering::Equal))
 			.expect("iterator with positive length will have a min; qed");
 
 		difference = max_stake - min_stake;
@@ -302,7 +302,7 @@ pub fn check_assignments_sum<T: PerThing>(assignments: &[Assignment<AccountId, T
 		distribution
 			.iter()
 			.for_each(|(_, p)| sum += p.deconstruct().saturated_into::<u128>());
-		assert_eq!(sum, T::ACCURACY.saturated_into(), "Assignment ratio sum is not 100%");
+		assert_eq!(sum, T::ACCURACY.saturated_into::<u128>(), "Assignment ratio sum is not 100%");
 	}
 }
 

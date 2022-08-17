@@ -463,7 +463,7 @@ where
 				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
 				// enough to do in the import queue that it's not worth kicking off
 				// an ancestor search, which is what we do in the next match case below.
-				if self.queue_blocks.len() > MAJOR_SYNC_BLOCKS.into() {
+				if self.queue_blocks.len() > MAJOR_SYNC_BLOCKS as usize {
 					debug!(
 						target:"sync",
 						"New peer with unknown best hash {} ({}), assuming common block.",
@@ -695,7 +695,7 @@ where
 			if best_queued.saturating_sub(peer.common_number) > MAX_BLOCKS_TO_LOOK_BACKWARDS.into() &&
 				best_queued < peer.best_number &&
 				peer.common_number < last_finalized &&
-				queue.len() <= MAJOR_SYNC_BLOCKS.into()
+				queue.len() <= MAJOR_SYNC_BLOCKS as usize
 			{
 				trace!(
 					target: "sync",

@@ -25,6 +25,7 @@ serde = { version = "1.0.136", features = ["derive"], optional = true }
 static_assertions = "1.1.0"
 sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+fixed = {package = "substrate-fixed", tag = "v0.5.9", default-features = false, git = "https://github.com/encointer/substrate-fixed"}
 
 [dev-dependencies]
 criterion = "0.3"
@@ -41,6 +42,7 @@ std = [
 	"serde",
 	"sp-debug-derive/std",
 	"sp-std/std",
+	"fixed/std"
 ]
 
 [[bench]]

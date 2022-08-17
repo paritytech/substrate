@@ -23,13 +23,13 @@ use crate::traits::{
 	Saturating, UniqueSaturatedInto, Unsigned, Zero,
 };
 use codec::{CompactAs, Encode};
+use fixed::{traits::LossyInto, types::I64F64};
 use num_traits::{Pow, SaturatingAdd, SaturatingSub};
 use sp_std::{
 	fmt, ops,
 	ops::{Add, AddAssign, Div, Rem, Sub},
 	prelude::*,
 };
-
 /// Get the inner type of a `PerThing`.
 pub type InnerOf<P> = <P as PerThing>::Inner;
 
@@ -1880,6 +1880,28 @@ macro_rules! implement_per_thing_with_perthousand {
 				const C1: $name = $name::from_perthousand(500);
 			}
 		}
+	}
+}
+
+impl Into<Perbill> for I64F64 {
+	fn into(self) -> Perbill {
+		if self <= I64F64::from_num(0i32) {
+			Perbill::zero()
+		} else if self >= I64F64::from_num(1i32) {
+			Perbill::one()
+		} else {
+			let per_bill = self
+				.checked_mul(I64F64::from_num(1_000_000_000i32))
+				.expect("0 < self < 1, cannot overflow; qed");
+			let rounded: i64 = per_bill.round().lossy_into();
+			Perbill::from_parts(rounded as u32)
+		}
+	}
+}
+
+impl From<Perbill> for I64F64 {
+	fn from(a: Perbill) -> Self {
+		I64F64::from_num(a.deconstruct() as u128).saturating_div(I64F64::from_num(1_000_000_000i32))
 	}
 }
 

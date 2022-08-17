@@ -1398,7 +1398,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57952ca27b5e3606ff4dd79b0020231aaf9d6aa76dc05fd30137538c50bd3ce8"
 dependencies = [
  "generic-array 0.14.4",
- "typenum",
+ "typenum 1.15.0",
 ]
 
 [[package]]
@@ -2610,7 +2610,7 @@ version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ffdf9f34f1447443d37393cc6c2b8313aebddcd96906caf34e54c68d8e57d7bd"
 dependencies = [
- "typenum",
+ "typenum 1.15.0",
 ]
 
 [[package]]
@@ -2619,7 +2619,7 @@ version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "501466ecc8a30d1d3b7fc9229b122b2ce8ed6e9d9223f1138d4babb253e51817"
 dependencies = [
- "typenum",
+ "typenum 1.15.0",
  "version_check",
 ]
 
@@ -4083,7 +4083,7 @@ dependencies = [
  "rand 0.8.4",
  "serde",
  "sha2 0.9.8",
- "typenum",
+ "typenum 1.15.0",
 ]
 
 [[package]]
@@ -4515,7 +4515,7 @@ dependencies = [
  "rand 0.8.4",
  "rand_distr",
  "simba",
- "typenum",
+ "typenum 1.15.0",
 ]
 
 [[package]]
@@ -6126,6 +6126,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "substrate-fixed",
 ]
 
 [[package]]
@@ -9502,6 +9503,7 @@ dependencies = [
  "sp-debug-derive",
  "sp-std",
  "static_assertions",
+ "substrate-fixed",
 ]
 
 [[package]]
@@ -10353,6 +10355,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-fixed"
+version = "0.5.9"
+source = "git+https://github.com/encointer/substrate-fixed?tag=v0.5.9#a4fb461aae6205ffc55bed51254a40c52be04e5d"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "typenum 1.16.0",
+]
+
+[[package]]
 name = "substrate-frame-cli"
 version = "4.0.0-dev"
 dependencies = [
@@ -11159,6 +11172,15 @@ name = "typenum"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
+
+[[package]]
+name = "typenum"
+version = "1.16.0"
+source = "git+https://github.com/encointer/typenum?tag=v1.16.0#4c8dddaa8bdd13130149e43b4085ad14e960617f"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+]
 
 [[package]]
 name = "ucd-trie"

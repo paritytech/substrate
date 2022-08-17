@@ -26,6 +26,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
+fixed = {package = "substrate-fixed", tag = "v0.5.9", default-features = false, git = "https://github.com/encointer/substrate-fixed"}
 
 [dev-dependencies]
 assert_matches = { version = "1.5" }
@@ -48,6 +49,7 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"fixed/std"
 ]
 runtime-benchmarks = [
 	"assert_matches",
