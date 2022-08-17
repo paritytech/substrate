@@ -1285,7 +1285,7 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 		Self::weight_of(who)
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz"))]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
 	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
