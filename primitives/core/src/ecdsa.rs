@@ -435,11 +435,11 @@ impl TraitPair for Pair {
 			SecretKey::from_slice(seed_slice).map_err(|_| SecretStringError::InvalidSeedLength)?;
 
 		#[cfg(feature = "std")]
-		let context = SECP256K1;
+		let context = *SECP256K1;
 		#[cfg(not(feature = "std"))]
 		let context = Secp256k1::signing_only();
 
-		let public = PublicKey::from_secret_key(context, &secret);
+		let public = PublicKey::from_secret_key(&context, &secret);
 		let public = Public(public.serialize());
 		Ok(Pair { public, secret })
 	}
