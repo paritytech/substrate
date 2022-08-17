@@ -436,23 +436,23 @@ pub trait Externalities: Send {
 
 impl<T: Externalities + ?Sized> Externalities for Box<T> {
 	fn is_validator(&self) -> bool {
-		(&**self).is_validator()
+		(**self).is_validator()
 	}
 
 	fn network_state(&self) -> Result<OpaqueNetworkState, ()> {
-		(&**self).network_state()
+		(**self).network_state()
 	}
 
 	fn timestamp(&mut self) -> Timestamp {
-		(&mut **self).timestamp()
+		(**self).timestamp()
 	}
 
 	fn sleep_until(&mut self, deadline: Timestamp) {
-		(&mut **self).sleep_until(deadline)
+		(**self).sleep_until(deadline)
 	}
 
 	fn random_seed(&mut self) -> [u8; 32] {
-		(&mut **self).random_seed()
+		(**self).random_seed()
 	}
 
 	fn http_request_start(
@@ -461,7 +461,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		uri: &str,
 		meta: &[u8],
 	) -> Result<HttpRequestId, ()> {
-		(&mut **self).http_request_start(method, uri, meta)
+		(**self).http_request_start(method, uri, meta)
 	}
 
 	fn http_request_add_header(
@@ -470,7 +470,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		name: &str,
 		value: &str,
 	) -> Result<(), ()> {
-		(&mut **self).http_request_add_header(request_id, name, value)
+		(**self).http_request_add_header(request_id, name, value)
 	}
 
 	fn http_request_write_body(
@@ -479,7 +479,7 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		chunk: &[u8],
 		deadline: Option<Timestamp>,
 	) -> Result<(), HttpError> {
-		(&mut **self).http_request_write_body(request_id, chunk, deadline)
+		(**self).http_request_write_body(request_id, chunk, deadline)
 	}
 
 	fn http_response_wait(
@@ -487,11 +487,11 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		ids: &[HttpRequestId],
 		deadline: Option<Timestamp>,
 	) -> Vec<HttpRequestStatus> {
-		(&mut **self).http_response_wait(ids, deadline)
+		(**self).http_response_wait(ids, deadline)
 	}
 
 	fn http_response_headers(&mut self, request_id: HttpRequestId) -> Vec<(Vec<u8>, Vec<u8>)> {
-		(&mut **self).http_response_headers(request_id)
+		(**self).http_response_headers(request_id)
 	}
 
 	fn http_response_read_body(
@@ -500,11 +500,11 @@ impl<T: Externalities + ?Sized> Externalities for Box<T> {
 		buffer: &mut [u8],
 		deadline: Option<Timestamp>,
 	) -> Result<usize, HttpError> {
-		(&mut **self).http_response_read_body(request_id, buffer, deadline)
+		(**self).http_response_read_body(request_id, buffer, deadline)
 	}
 
 	fn set_authorized_nodes(&mut self, nodes: Vec<OpaquePeerId>, authorized_only: bool) {
-		(&mut **self).set_authorized_nodes(nodes, authorized_only)
+		(**self).set_authorized_nodes(nodes, authorized_only)
 	}
 }
 
