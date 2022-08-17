@@ -533,7 +533,7 @@ pub trait ScoreProvider<AccountId> {
 
 	/// For tests, benchmarks and fuzzing, set the `score`.
 	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
-	fn set_score_of(_: &AccountId, _: Self::Score);
+	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }
 
 /// Something that can compute the result to an NPoS solution.
