@@ -3,7 +3,7 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
-	dispatch::{DispatchResult, IsSubType}, decl_module, decl_storage, decl_event, decl_error,
+	dispatch::{DispatchResult}, decl_module, decl_storage, decl_event, decl_error,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays, GetDispatchInfo},
 	ensure,
 	traits::{EnsureOrigin, Get},
@@ -552,7 +552,7 @@ impl<T: Trait> Module<T> {
             Error::<T>::ChainNotWhitelisted
         );
         ensure!(
-            Self::resource_exists(resource_id), 
+            Self::resource_exists(resource_id),
             Error::<T>::ResourceDoesNotExist
         );
         let nonce = Self::bump_nonce(dest_id);
@@ -579,7 +579,7 @@ impl<T: Trait> Module<T> {
             Error::<T>::ChainNotWhitelisted
         );
         ensure!(
-            Self::resource_exists(resource_id), 
+            Self::resource_exists(resource_id),
             Error::<T>::ResourceDoesNotExist
         );
         let nonce = Self::bump_nonce(dest_id);
@@ -605,7 +605,7 @@ impl<T: Trait> Module<T> {
             Error::<T>::ChainNotWhitelisted
         );
         ensure!(
-            Self::resource_exists(resource_id), 
+            Self::resource_exists(resource_id),
             Error::<T>::ResourceDoesNotExist
         );
         let nonce = Self::bump_nonce(dest_id);

@@ -26,7 +26,7 @@ use crate::{
 	balance,
 };
 use sp_arithmetic::{PerThing, InnerOf, Rational128, traits::Bounded};
-use sp_std::{prelude::*, rc::Rc};
+use sp_std::{prelude::*, rc::Rc, vec};
 
 /// Execute the phragmms method.
 ///

@@ -175,6 +175,7 @@ impl contracts::Trait for Test {
     type MaxDepth = MaxDepth;
     type MaxValueSize = MaxValueSize;
     type WeightPrice = Self; //pallet_transaction_payment::Module<Self>;
+    type WeightInfo = ();
 }
 
 parameter_types! {

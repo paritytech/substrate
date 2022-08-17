@@ -18,11 +18,12 @@
 
 use super::{TestExternalities, call_in_wasm};
 use crate::WasmExecutionMethod;
-use crate::test_wasm_execution;
 
 use codec::Encode;
+use test_case::test_case;
 
-test_wasm_execution!(sandbox_should_work);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -59,7 +60,8 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(sandbox_trap);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -85,7 +87,8 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(start_called);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn start_called(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -128,7 +131,8 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(invoke_args);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn invoke_args(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -167,7 +171,8 @@ fn invoke_args(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(return_val);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn return_val(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -194,7 +199,8 @@ fn return_val(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(unlinkable_module);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -219,7 +225,8 @@ fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(corrupted_module);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn corrupted_module(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -238,7 +245,8 @@ fn corrupted_module(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(start_fn_ok);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -266,7 +274,8 @@ fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(start_fn_traps);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -295,7 +304,8 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-test_wasm_execution!(get_global_val_works);
+#[test_case(WasmExecutionMethod::Interpreted)]
+#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
 fn get_global_val_works(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
