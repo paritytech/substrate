@@ -1815,16 +1815,15 @@ mod tests {
 	fn max_depth() {
 		// This test verifies that when we reach the maximal depth creation of an
 		// yet another context fails.
-		thread_local! {
-			static REACHED_BOTTOM: RefCell<bool> = RefCell::new(false);
+		parameter_types! {
+			static ReachedBottom: bool = false;
 		}
 		let value = Default::default();
 		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
 			let r = ctx.ext.call(0, BOB, 0, vec![], true);
 
-			REACHED_BOTTOM.with(|reached_bottom| {
-				let mut reached_bottom = reached_bottom.borrow_mut();
+			ReachedBottom::mutate(|reached_bottom| {
 				if !*reached_bottom {
 					// We are first time here, it means we just reached bottom.
 					// Verify that we've got proper error and set `reached_bottom`.
@@ -1865,15 +1864,15 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 
-		thread_local! {
-			static WITNESSED_CALLER_BOB: RefCell<Option<AccountIdOf<Test>>> = RefCell::new(None);
-			static WITNESSED_CALLER_CHARLIE: RefCell<Option<AccountIdOf<Test>>> = RefCell::new(None);
+		parameter_types! {
+			static WitnessedCallerBob: Option<AccountIdOf<Test>> = None;
+			static WitnessedCallerCharlie: Option<AccountIdOf<Test>> = None;
 		}
 
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for bob.
-			WITNESSED_CALLER_BOB
-				.with(|caller| *caller.borrow_mut() = Some(ctx.ext.caller().clone()));
+			WitnessedCallerBob
+				::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 
 			// Call into CHARLIE contract.
 			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true), Ok(_));
@@ -1881,8 +1880,8 @@ mod tests {
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for charlie.
-			WITNESSED_CALLER_CHARLIE
-				.with(|caller| *caller.borrow_mut() = Some(ctx.ext.caller().clone()));
+			WitnessedCallerCharlie
+				::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 			exec_success()
 		});
 
@@ -1906,8 +1905,8 @@ mod tests {
 			assert_matches!(result, Ok(_));
 		});
 
-		WITNESSED_CALLER_BOB.with(|caller| assert_eq!(*caller.borrow(), Some(origin)));
-		WITNESSED_CALLER_CHARLIE.with(|caller| assert_eq!(*caller.borrow(), Some(dest)));
+		assert_eq!(WitnessedCallerBob::get(), Some(origin));
+		assert_eq!(WitnessedCallerCharlie::get(), Some(dest));
 	}
 
 	#[test]

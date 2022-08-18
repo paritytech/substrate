@@ -108,10 +108,11 @@ pub mod test_utils {
 	}
 }
 
-thread_local! {
-	static TEST_EXTENSION: RefCell<TestExtension> = Default::default();
+parameter_types! {
+	static TestExtensionsTestValue: TestExtension = Default::default();
 }
 
+#[derive(Clone)]
 pub struct TestExtension {
 	enabled: bool,
 	last_seen_buffer: Vec<u8>,
@@ -131,15 +132,15 @@ pub struct TempStorageExtension {
 
 impl TestExtension {
 	fn disable() {
-		TEST_EXTENSION.with(|e| e.borrow_mut().enabled = false)
+		TestExtensionsTestValue::mutate(|e| e.enabled = false)
 	}
 
 	fn last_seen_buffer() -> Vec<u8> {
-		TEST_EXTENSION.with(|e| e.borrow().last_seen_buffer.clone())
+		TestExtensionsTestValue::get().last_seen_buffer.clone()
 	}
 
 	fn last_seen_inputs() -> (u32, u32, u32, u32) {
-		TEST_EXTENSION.with(|e| e.borrow().last_seen_inputs)
+		TestExtensionsTestValue::get().last_seen_inputs
 	}
 }
 
@@ -162,13 +163,13 @@ impl ChainExtension<Test> for TestExtension {
 				let mut env = env.buf_in_buf_out();
 				let input = env.read(8)?;
 				env.write(&input, false, None)?;
-				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
+				TestExtensionsTestValue::mutate(|e| e.last_seen_buffer = input);
 				Ok(RetVal::Converging(id))
 			},
 			0x8001 => {
 				let env = env.only_in();
-				TEST_EXTENSION.with(|e| {
-					e.borrow_mut().last_seen_inputs =
+				TestExtensionsTestValue::mutate(|e| {
+					e.last_seen_inputs =
 						(env.val0(), env.val1(), env.val2(), env.val3())
 				});
 				Ok(RetVal::Converging(id))
@@ -187,7 +188,7 @@ impl ChainExtension<Test> for TestExtension {
 	}
 
 	fn enabled() -> bool {
-		TEST_EXTENSION.with(|e| e.borrow().enabled)
+		TestExtensionsTestValue::get().enabled
 	}
 }
 
@@ -205,7 +206,7 @@ impl ChainExtension<Test> for RevertingExtension {
 	}
 
 	fn enabled() -> bool {
-		TEST_EXTENSION.with(|e| e.borrow().enabled)
+		TestExtensionsTestValue::get().enabled
 	}
 }
 
@@ -254,7 +255,7 @@ impl ChainExtension<Test> for TempStorageExtension {
 	}
 
 	fn enabled() -> bool {
-		TEST_EXTENSION.with(|e| e.borrow().enabled)
+		TestExtensionsTestValue::get().enabled
 	}
 }
 
@@ -339,19 +340,19 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 /// A filter whose filter function can be swapped at runtime.
 pub struct TestFilter;
 
-thread_local! {
-	static CALL_FILTER: RefCell<fn(&Call) -> bool> = RefCell::new(|_| true);
+parameter_types! {
+	static CallFilterTestValue: fn(&Call) -> bool = (|_| true);
 }
 
 impl TestFilter {
 	pub fn set_filter(filter: fn(&Call) -> bool) {
-		CALL_FILTER.with(|fltr| *fltr.borrow_mut() = filter);
+		CallFilterTestValue::mutate(|fltr| *fltr= filter);
 	}
 }
 
 impl Contains<Call> for TestFilter {
 	fn contains(call: &Call) -> bool {
-		CALL_FILTER.with(|fltr| fltr.borrow()(call))
+		CallFilterTestValue::get()(call)
 	}
 }
 

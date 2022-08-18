@@ -442,22 +442,22 @@ mod tests {
 		tests::{Test, ALICE, BOB, CHARLIE},
 	};
 	use pretty_assertions::assert_eq;
-	use std::cell::RefCell;
+	use frame_support::parameter_types;
 
 	type TestMeter = RawMeter<Test, TestExt, Root>;
 
-	thread_local! {
-		static TEST_EXT: RefCell<TestExt> = RefCell::new(Default::default());
+	parameter_types! {
+		static TestExtTestValue: TestExt = Default::default();
 	}
 
-	#[derive(Debug, PartialEq, Eq)]
+	#[derive(Debug, PartialEq, Eq, Clone)]
 	struct LimitCheck {
 		origin: AccountIdOf<Test>,
 		limit: BalanceOf<Test>,
 		min_leftover: BalanceOf<Test>,
 	}
 
-	#[derive(Debug, PartialEq, Eq)]
+	#[derive(Debug, PartialEq, Eq, Clone)]
 	struct Charge {
 		origin: AccountIdOf<Test>,
 		contract: AccountIdOf<Test>,
@@ -465,8 +465,8 @@ mod tests {
 		terminated: bool,
 	}
 
-	#[derive(Default, Debug, PartialEq, Eq)]
-	struct TestExt {
+	#[derive(Default, Debug, PartialEq, Eq, Clone)]
+	pub struct TestExt {
 		limit_checks: Vec<LimitCheck>,
 		charges: Vec<Charge>,
 	}
@@ -485,8 +485,8 @@ mod tests {
 			min_leftover: BalanceOf<Test>,
 		) -> Result<BalanceOf<Test>, DispatchError> {
 			let limit = limit.unwrap_or(42);
-			TEST_EXT.with(|ext| {
-				ext.borrow_mut().limit_checks.push(LimitCheck {
+			TestExtTestValue::mutate(|ext| {
+				ext.limit_checks.push(LimitCheck {
 					origin: origin.clone(),
 					limit,
 					min_leftover,
@@ -501,8 +501,8 @@ mod tests {
 			amount: &DepositOf<Test>,
 			terminated: bool,
 		) {
-			TEST_EXT.with(|ext| {
-				ext.borrow_mut().charges.push(Charge {
+			TestExtTestValue::mutate(|ext| {
+				ext.charges.push(Charge {
 					origin: origin.clone(),
 					contract: contract.clone(),
 					amount: amount.clone(),
@@ -513,7 +513,7 @@ mod tests {
 	}
 
 	fn clear_ext() {
-		TEST_EXT.with(|ext| ext.borrow_mut().clear())
+		TestExtTestValue::mutate(|ext| ext.clear())
 	}
 
 	fn new_info(deposit: BalanceOf<Test>) -> ContractInfo<Test> {
@@ -533,15 +533,15 @@ mod tests {
 
 		TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 
-		TEST_EXT.with(|ext| {
+
 			assert_eq!(
-				*ext.borrow(),
+				TestExtTestValue::get(),
 				TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					..Default::default()
 				}
 			)
-		});
+
 	}
 
 	#[test]
@@ -556,15 +556,14 @@ mod tests {
 		nested0.charge(&Default::default()).unwrap();
 		meter.absorb(nested0, &ALICE, &BOB, None);
 
-		TEST_EXT.with(|ext| {
 			assert_eq!(
-				*ext.borrow(),
+				TestExtTestValue::get(),
 				TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					..Default::default()
 				}
 			)
-		});
+
 	}
 
 	#[test]
@@ -582,9 +581,8 @@ mod tests {
 			.unwrap();
 		meter.absorb(nested0, &ALICE, &BOB, None);
 
-		TEST_EXT.with(|ext| {
 			assert_eq!(
-				*ext.borrow(),
+				TestExtTestValue::get(),
 				TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![Charge {
@@ -595,7 +593,7 @@ mod tests {
 					}]
 				}
 			)
-		});
+
 	}
 
 	#[test]
@@ -638,9 +636,8 @@ mod tests {
 		assert_eq!(nested1_info.storage_deposit, 40);
 		assert_eq!(nested2_info.storage_deposit, min_balance);
 
-		TEST_EXT.with(|ext| {
 			assert_eq!(
-				*ext.borrow(),
+				TestExtTestValue::get(),
 				TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![
@@ -665,7 +662,6 @@ mod tests {
 					]
 				}
 			)
-		});
 	}
 
 	#[test]
@@ -697,9 +693,8 @@ mod tests {
 		meter.absorb(nested0, &ALICE, &BOB, None);
 		drop(meter);
 
-		TEST_EXT.with(|ext| {
 			assert_eq!(
-				*ext.borrow(),
+				TestExtTestValue::get(),
 				TestExt {
 					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
 					charges: vec![
@@ -718,6 +713,5 @@ mod tests {
 					]
 				}
 			)
-		});
 	}
 }
