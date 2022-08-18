@@ -586,7 +586,7 @@ mod tests {
 
 		// Check that all items are there.
 		assert!(shared_cache
-				.read_lock_inner()
+			.read_lock_inner()
 			.value_cache()
 			.lru
 			.iter()
@@ -606,7 +606,7 @@ mod tests {
 
 		// Ensure that the accessed items are most recently used items of the shared value cache.
 		assert!(shared_cache
-				.read_lock_inner()
+			.read_lock_inner()
 			.value_cache()
 			.lru
 			.iter()

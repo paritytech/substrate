@@ -78,17 +78,16 @@ impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
 		added: impl IntoIterator<Item = (H, NodeOwned<H>)>,
 		accessed: impl IntoIterator<Item = H>,
 	) {
-		let update_size_in_bytes =
-			|size_in_bytes: &mut usize, key: &H, node: &NodeOwned<H>| {
-				if let Some(new_size_in_bytes) =
-					size_in_bytes.checked_sub(key.as_ref().len() + node.size_in_bytes())
-				{
-					*size_in_bytes = new_size_in_bytes;
-				} else {
-					*size_in_bytes = 0;
-					tracing::error!(target: LOG_TARGET, "`SharedNodeCache` underflow detected!",);
-				}
-			};
+		let update_size_in_bytes = |size_in_bytes: &mut usize, key: &H, node: &NodeOwned<H>| {
+			if let Some(new_size_in_bytes) =
+				size_in_bytes.checked_sub(key.as_ref().len() + node.size_in_bytes())
+			{
+				*size_in_bytes = new_size_in_bytes;
+			} else {
+				*size_in_bytes = 0;
+				tracing::error!(target: LOG_TARGET, "`SharedNodeCache` underflow detected!",);
+			}
+		};
 
 		accessed.into_iter().for_each(|key| {
 			// Access every node in the lru to put it to the front.
