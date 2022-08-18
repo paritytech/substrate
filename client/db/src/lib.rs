@@ -1616,7 +1616,7 @@ impl<Block: BlockT> Backend<Block> {
 				let number = header.number();
 				let hash = header.hash();
 
-				self.set_head_with_transaction(&mut transaction, hash.clone(), (*number, hash))?;
+				self.set_head_with_transaction(&mut transaction, hash, (*number, hash))?;
 
 				meta_updates.push(MetaUpdate {
 					hash,
@@ -2244,7 +2244,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		};
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
-				let root = genesis_state.root.clone();
+				let root = genesis_state.root;
 				let db_state = DbStateBuilder::<Block>::new(genesis_state.clone(), root)
 					.with_optional_cache(self.shared_trie_cache.as_ref().map(|c| c.local_cache()))
 					.build();

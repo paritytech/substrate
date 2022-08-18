@@ -551,7 +551,7 @@ mod tests {
 
 			let storage_proof = recorder.drain_storage_proof();
 			let mut memory_db: MemoryDB = storage_proof.into_memory_db();
-			let mut proof_root = root.clone();
+			let mut proof_root = root;
 
 			{
 				let mut trie =
@@ -619,7 +619,7 @@ mod tests {
 			.node_cache()
 			.lru
 			.iter()
-			.map(|d| d.0.clone())
+			.map(|d| *d.0)
 			.collect::<Vec<_>>();
 
 		// Delete the value cache, so that we access the nodes.
@@ -644,7 +644,7 @@ mod tests {
 				.node_cache()
 				.lru
 				.iter()
-				.map(|d| d.0.clone())
+				.map(|d| *d.0)
 				.collect::<Vec<_>>()
 		);
 	}

@@ -1055,11 +1055,11 @@ pub mod tests {
 			&b"doesnotexist2"[..],
 		];
 
-		fn check_estimation<'a>(
+		fn check_estimation(
 			backend: TrieBackend<
 				impl TrieBackendStorage<BlakeTwo256>,
 				BlakeTwo256,
-				&'a LocalTrieCache<BlakeTwo256>,
+				&'_ LocalTrieCache<BlakeTwo256>,
 			>,
 			has_cache: bool,
 		) {
