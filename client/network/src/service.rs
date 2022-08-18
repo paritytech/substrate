@@ -72,7 +72,6 @@ use sc_network_common::{
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	borrow::Cow,
@@ -81,7 +80,7 @@ use std::{
 	fs, iter,
 	marker::PhantomData,
 	num::NonZeroUsize,
-	pin::Pin,
+	pin::{self, Pin},
 	str,
 	sync::{
 		atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -134,7 +133,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + Send + Sync + 'static,
+	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	/// Creates the network service.
 	///
@@ -1300,7 +1299,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + Send + Sync + 'static,
+	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1333,7 +1332,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + Send + Sync + 'static,
+	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	type Output = ();
 
@@ -1366,7 +1365,6 @@ where
 				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			};
-
 			match msg {
 				ServiceToWorkerMsg::AnnounceBlock(hash, data) => this
 					.network_service
@@ -1979,7 +1977,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + Send + Sync + 'static,
+	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 }
 
@@ -1987,7 +1985,7 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + Send + Sync + 'static,
+	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -1995,7 +1993,7 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + Send + Sync + 'static,
+	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	fn blocks_processed(
 		&mut self,

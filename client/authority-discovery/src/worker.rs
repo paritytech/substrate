@@ -46,15 +46,13 @@ use rand::{seq::SliceRandom, thread_rng};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network_common::{
 	protocol::event::DhtEvent,
-	service::{
-		KademliaKey, NetworkDHTProvider, NetworkEventStream, NetworkSigner, NetworkStateInfo,
-		Signature,
-	},
+	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
 };
 use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
+use sp_blockchain::NetworkHeaderBackend;
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -178,7 +176,7 @@ impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtE
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscoveryWrapper<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	Client: AuthorityDiscoveryWrapper<Block> + Send + Sync + 'static + NetworkHeaderBackend<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].

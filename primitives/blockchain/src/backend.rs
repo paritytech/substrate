@@ -29,6 +29,43 @@ use crate::header_metadata::HeaderMetadata;
 
 use crate::error::{Error, Result};
 
+pub trait NetworkHeaderBackend<Block: BlockT>: Send + Sync {
+	fn header(&self, hash: <Block as BlockT>::Hash) -> Result<Option<<Block as BlockT>::Header>>;
+
+	fn info(&self) -> Info<Block>;
+
+	fn number(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
+
+	fn hash(&self, number: NumberFor<Block>) -> Result<Option<<Block as BlockT>::Hash>>;
+}
+
+impl<B: BlockT, T> NetworkHeaderBackend<B> for T
+where
+	T: HeaderBackend<B>,
+{
+	fn header(&self, hash: <B as BlockT>::Hash) -> Result<Option<<B as BlockT>::Header>> {
+		self.header(BlockId::Hash(hash))
+	}
+
+	fn info(&self) -> Info<B> {
+		self.info()
+	}
+
+	fn number(
+		&self,
+		hash: <B as BlockT>::Hash,
+	) -> Result<Option<<<B as BlockT>::Header as HeaderT>::Number>> {
+		self.number(hash)
+	}
+
+	fn hash(&self, number: NumberFor<B>) -> Result<Option<<B as BlockT>::Hash>> {
+		self.hash(number)
+	}
+}
+
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
