@@ -169,8 +169,7 @@ impl ChainExtension<Test> for TestExtension {
 			0x8001 => {
 				let env = env.only_in();
 				TestExtensionsTestValue::mutate(|e| {
-					e.last_seen_inputs =
-						(env.val0(), env.val1(), env.val2(), env.val3())
+					e.last_seen_inputs = (env.val0(), env.val1(), env.val2(), env.val3())
 				});
 				Ok(RetVal::Converging(id))
 			},
@@ -346,7 +345,7 @@ parameter_types! {
 
 impl TestFilter {
 	pub fn set_filter(filter: fn(&Call) -> bool) {
-		CallFilterTestValue::mutate(|fltr| *fltr= filter);
+		CallFilterTestValue::mutate(|fltr| *fltr = filter);
 	}
 }
 

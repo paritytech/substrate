@@ -1193,8 +1193,7 @@ mod tests {
 			assert!(!Executive::runtime_upgraded());
 
 			RuntimeVersionTestValues::mutate(|v| {
-				*v =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 			assert!(Executive::runtime_upgraded());
 			assert_eq!(
@@ -1203,7 +1202,7 @@ mod tests {
 			);
 
 			RuntimeVersionTestValues::mutate(|v| {
-				*v= sp_version::RuntimeVersion {
+				*v = sp_version::RuntimeVersion {
 					spec_version: 1,
 					spec_name: "test".into(),
 					..Default::default()
@@ -1265,8 +1264,7 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
 			RuntimeVersionTestValues::mutate(|v| {
-				*v =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			Executive::initialize_block(&Header::new(
@@ -1287,8 +1285,7 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
 			RuntimeVersionTestValues::mutate(|v| {
-				*v =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			// set block number to non zero so events are not excluded
@@ -1318,8 +1315,7 @@ mod tests {
 		let header = new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
 			RuntimeVersionTestValues::mutate(|v| {
-				*v =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			// Let's build some fake block.
@@ -1344,8 +1340,7 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
 			RuntimeVersionTestValues::mutate(|v| {
-				*v =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]));
@@ -1360,8 +1355,7 @@ mod tests {
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called for maximum complexity
 			RuntimeVersionTestValues::mutate(|v| {
-				*v =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			let block_number = 1;

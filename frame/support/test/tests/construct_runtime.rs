@@ -22,9 +22,11 @@
 #![recursion_limit = "128"]
 
 use codec::MaxEncodedLen;
-use frame_support::traits::{CrateVersion, PalletInfo as _};
+use frame_support::{
+	parameter_types,
+	traits::{CrateVersion, PalletInfo as _},
+};
 use scale_info::TypeInfo;
-use frame_support::parameter_types;
 use sp_core::{sr25519, H256};
 use sp_runtime::{
 	generic,

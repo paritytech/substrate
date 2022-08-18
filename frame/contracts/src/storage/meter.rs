@@ -441,8 +441,8 @@ mod tests {
 		exec::AccountIdOf,
 		tests::{Test, ALICE, BOB, CHARLIE},
 	};
-	use pretty_assertions::assert_eq;
 	use frame_support::parameter_types;
+	use pretty_assertions::assert_eq;
 
 	type TestMeter = RawMeter<Test, TestExt, Root>;
 
@@ -486,11 +486,8 @@ mod tests {
 		) -> Result<BalanceOf<Test>, DispatchError> {
 			let limit = limit.unwrap_or(42);
 			TestExtTestValue::mutate(|ext| {
-				ext.limit_checks.push(LimitCheck {
-					origin: origin.clone(),
-					limit,
-					min_leftover,
-				})
+				ext.limit_checks
+					.push(LimitCheck { origin: origin.clone(), limit, min_leftover })
 			});
 			Ok(limit)
 		}
@@ -533,15 +530,13 @@ mod tests {
 
 		TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
 
-
-			assert_eq!(
-				TestExtTestValue::get(),
-				TestExt {
-					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
-					..Default::default()
-				}
-			)
-
+		assert_eq!(
+			TestExtTestValue::get(),
+			TestExt {
+				limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
+				..Default::default()
+			}
+		)
 	}
 
 	#[test]
@@ -556,14 +551,13 @@ mod tests {
 		nested0.charge(&Default::default()).unwrap();
 		meter.absorb(nested0, &ALICE, &BOB, None);
 
-			assert_eq!(
-				TestExtTestValue::get(),
-				TestExt {
-					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
-					..Default::default()
-				}
-			)
-
+		assert_eq!(
+			TestExtTestValue::get(),
+			TestExt {
+				limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
+				..Default::default()
+			}
+		)
 	}
 
 	#[test]
@@ -581,19 +575,18 @@ mod tests {
 			.unwrap();
 		meter.absorb(nested0, &ALICE, &BOB, None);
 
-			assert_eq!(
-				TestExtTestValue::get(),
-				TestExt {
-					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
-					charges: vec![Charge {
-						origin: ALICE,
-						contract: BOB,
-						amount: Deposit::Charge(<Test as Config>::Currency::minimum_balance() * 2),
-						terminated: false,
-					}]
-				}
-			)
-
+		assert_eq!(
+			TestExtTestValue::get(),
+			TestExt {
+				limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
+				charges: vec![Charge {
+					origin: ALICE,
+					contract: BOB,
+					amount: Deposit::Charge(<Test as Config>::Currency::minimum_balance() * 2),
+					terminated: false,
+				}]
+			}
+		)
 	}
 
 	#[test]
@@ -636,32 +629,32 @@ mod tests {
 		assert_eq!(nested1_info.storage_deposit, 40);
 		assert_eq!(nested2_info.storage_deposit, min_balance);
 
-			assert_eq!(
-				TestExtTestValue::get(),
-				TestExt {
-					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
-					charges: vec![
-						Charge {
-							origin: ALICE,
-							contract: CHARLIE,
-							amount: Deposit::Refund(10),
-							terminated: false
-						},
-						Charge {
-							origin: ALICE,
-							contract: CHARLIE,
-							amount: Deposit::Refund(4),
-							terminated: false
-						},
-						Charge {
-							origin: ALICE,
-							contract: BOB,
-							amount: Deposit::Charge(2),
-							terminated: false
-						}
-					]
-				}
-			)
+		assert_eq!(
+			TestExtTestValue::get(),
+			TestExt {
+				limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
+				charges: vec![
+					Charge {
+						origin: ALICE,
+						contract: CHARLIE,
+						amount: Deposit::Refund(10),
+						terminated: false
+					},
+					Charge {
+						origin: ALICE,
+						contract: CHARLIE,
+						amount: Deposit::Refund(4),
+						terminated: false
+					},
+					Charge {
+						origin: ALICE,
+						contract: BOB,
+						amount: Deposit::Charge(2),
+						terminated: false
+					}
+				]
+			}
+		)
 	}
 
 	#[test]
@@ -693,25 +686,25 @@ mod tests {
 		meter.absorb(nested0, &ALICE, &BOB, None);
 		drop(meter);
 
-			assert_eq!(
-				TestExtTestValue::get(),
-				TestExt {
-					limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
-					charges: vec![
-						Charge {
-							origin: ALICE,
-							contract: CHARLIE,
-							amount: Deposit::Refund(400),
-							terminated: true
-						},
-						Charge {
-							origin: ALICE,
-							contract: BOB,
-							amount: Deposit::Charge(12),
-							terminated: false
-						}
-					]
-				}
-			)
+		assert_eq!(
+			TestExtTestValue::get(),
+			TestExt {
+				limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
+				charges: vec![
+					Charge {
+						origin: ALICE,
+						contract: CHARLIE,
+						amount: Deposit::Refund(400),
+						terminated: true
+					},
+					Charge {
+						origin: ALICE,
+						contract: BOB,
+						amount: Deposit::Charge(12),
+						terminated: false
+					}
+				]
+			}
+		)
 	}
 }

@@ -50,7 +50,7 @@ parameter_types! {
 }
 
 impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
-for OnOffenceHandler
+	for OnOffenceHandler
 {
 	fn on_offence(
 		_offenders: &[OffenceDetails<Reporter, Offender>],

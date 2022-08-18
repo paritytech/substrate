@@ -1454,11 +1454,7 @@ mod tests {
 			_gas_meter: &mut GasMeter<Test>,
 		) -> Result<Self, DispatchError> {
 			Loader::mutate(|loader| {
-				loader
-					.map
-					.get(&code_hash)
-					.cloned()
-					.ok_or(Error::<Test>::CodeNotFound.into())
+				loader.map.get(&code_hash).cloned().ok_or(Error::<Test>::CodeNotFound.into())
 			})
 		}
 
@@ -1871,8 +1867,7 @@ mod tests {
 
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for bob.
-			WitnessedCallerBob
-				::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
+			WitnessedCallerBob::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 
 			// Call into CHARLIE contract.
 			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true), Ok(_));
@@ -1880,8 +1875,7 @@ mod tests {
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for charlie.
-			WitnessedCallerCharlie
-				::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
+			WitnessedCallerCharlie::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 			exec_success()
 		});
 

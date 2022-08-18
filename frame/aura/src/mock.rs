@@ -118,7 +118,7 @@ pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
 	pallet_aura::GenesisConfig::<Test> {
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
 	}
-		.assimilate_storage(&mut t)
-		.unwrap();
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }
