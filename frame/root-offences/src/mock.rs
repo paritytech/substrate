@@ -4,7 +4,7 @@ use crate as root_offences;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, Hooks},
 };
 use pallet_session::TestSessionHandler;
 use pallet_staking::StakerStatus;
@@ -12,8 +12,9 @@ use sp_core::H256;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
+use sp_staking::SessionIndex;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -21,17 +22,22 @@ type AccountId = u64;
 type Balance = u64;
 type BlockNumber = u64;
 
+pub const INIT_TIMESTAMP: u64 = 30_000;
+pub const BLOCK_TIME: u64 = 1000;
+
 frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system,
-		Balances: pallet_balances,
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
+		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		RootOffences: root_offences,
-		Session: pallet_session,
-		Staking: pallet_staking,
+		Historical: pallet_session::historical::{Pallet, Storage},
 	}
 );
 
@@ -182,4 +188,40 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		pallet_staking::GenesisConfig::<Test> { stakers: stakers.clone(), ..Default::default() };
 
 	storage.into()
+}
+
+/// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
+pub(crate) fn start_session(session_index: SessionIndex) {
+	let end: u64 = if Offset::get().is_zero() {
+		(session_index as u64) * Period::get()
+	} else {
+		Offset::get() + (session_index.saturating_sub(1) as u64) * Period::get()
+	};
+	run_to_block(end);
+	// session must have progressed properly.
+	assert_eq!(
+		Session::current_index(),
+		session_index,
+		"current session index = {}, expected = {}",
+		Session::current_index(),
+		session_index,
+	);
+}
+
+/// Progress to the given block, triggering session and era changes as we progress.
+///
+/// This will finalize the previous block, initialize up to the given block, essentially simulating
+/// a block import/propose process where we first initialize the block, then execute some stuff (not
+/// in the function), and then finalize the block.
+pub(crate) fn run_to_block(n: BlockNumber) {
+	Staking::on_finalize(System::block_number());
+	for b in (System::block_number() + 1)..=n {
+		System::set_block_number(b);
+		Session::on_initialize(b);
+		<Staking as Hooks<u64>>::on_initialize(b);
+		Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
+		if b != n {
+			Staking::on_finalize(System::block_number());
+		}
+	}
 }
