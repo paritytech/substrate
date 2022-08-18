@@ -7,6 +7,7 @@ use frame_support::{
 	traits::{ConstU32, ConstU64},
 };
 use pallet_session::TestSessionHandler;
+use pallet_staking::StakerStatus;
 use sp_core::H256;
 use sp_runtime::{
 	curve::PiecewiseLinear,
@@ -165,9 +166,20 @@ impl Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 10), (2, 10)] }
-		.assimilate_storage(&mut t)
+	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+
+	pallet_balances::GenesisConfig::<Test> { balances: vec![(11, 550), (21, 1100)] }
+		.assimilate_storage(&mut storage)
 		.unwrap();
-	t.into()
+
+	let stakers = vec![
+		// (stash, ctrl, stake, status)
+		(11, 10, 500, StakerStatus::<AccountId>::Validator),
+		(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+	];
+
+	let _ =
+		pallet_staking::GenesisConfig::<Test> { stakers: stakers.clone(), ..Default::default() };
+
+	storage.into()
 }
