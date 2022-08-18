@@ -167,32 +167,6 @@ enum HostFnReturn {
 	ReturnCode,
 }
 
-/// Helper trait to convert a host function definition into its wasm signature.
-trait ToWasmSig {
-	fn to_wasm_sig(&self) -> TokenStream;
-}
-
-impl ToWasmSig for HostFn {
-	fn to_wasm_sig(&self) -> TokenStream {
-		let args = self.item.sig.inputs.iter().skip(1).filter_map(|a| match a {
-			syn::FnArg::Typed(pt) => Some(&pt.ty),
-			_ => None,
-		});
-		let returns = match &self.returns {
-			HostFnReturn::U32 => quote! { vec![ <u32>::VALUE_TYPE ] },
-			HostFnReturn::ReturnCode => quote! { vec![ <ReturnCode>::VALUE_TYPE ] },
-			HostFnReturn::Unit => quote! { vec![] },
-		};
-
-		quote! {
-			 wasm_instrument::parity_wasm::elements::FunctionType::new(
-				vec! [ #(<#args>::VALUE_TYPE),* ],
-				#returns,
-			)
-		}
-	}
-}
-
 impl ToTokens for HostFn {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		self.item.to_tokens(tokens);
@@ -213,31 +187,25 @@ impl HostFn {
 		}?;
 
 		let name = item.sig.ident.to_string();
-		let mut module = "seal0".to_string();
 		let attrs: Vec<&syn::Attribute> =
 			item.attrs.iter().filter(|m| !m.path.is_ident("doc")).collect();
 
-		match attrs.len() {
-			0 => (),
+		let module = match attrs.len() {
+			0 => Ok("seal0".to_string()),
 			1 => {
 				let attr = &attrs[0];
 				let ident = attr.path.get_ident().ok_or(err(span, msg))?.to_string();
 				match ident.as_str() {
 					"version" => {
 						let ver: syn::LitInt = attr.parse_args()?;
-						module = format!(
-							"seal{}",
-							ver.base10_parse::<u8>().map_err(|_| err(span, msg))?
-						);
+						Ok(format!("seal{}", ver.base10_parse::<u8>().map_err(|_| err(span, msg))?))
 					},
-					"unstable" => {
-						module = "__unstable__".to_string();
-					},
-					_ => return Err(err(span, msg)),
+					"unstable" => Ok("__unstable__".to_string()),
+					_ => Err(err(span, msg)),
 				}
 			},
-			_ => return Err(err(span, msg)),
-		}
+			_ => Err(err(span, msg)),
+		}?;
 
 		let msg = format!(
 			r#"Should return one of the following: 
@@ -253,13 +221,15 @@ impl HostFn {
 
 		match *ret_ty {
 			syn::Type::Path(tp) => {
-				let result = &tp.path.segments.first().ok_or(err(span, &msg))?;
+				let result = &tp.path.segments.last().ok_or(err(span, &msg))?;
 				let (id, span) = (result.ident.to_string(), result.ident.span());
 				id.eq(&"Result".to_string()).then_some(()).ok_or(err(span, &msg))?;
 
 				match &result.arguments {
 					syn::PathArguments::AngleBracketed(group) => {
-						group.args.len().eq(&2).then_some(42).ok_or(err(span, &msg))?;
+						if group.args.len() != 2 {
+							return Err(err(span, &msg))
+						};
 
 						let arg2 = group.args.last().ok_or(err(span, &msg))?;
 
@@ -292,7 +262,7 @@ impl HostFn {
 								.path
 								.segments
 								.first()
-								.ok_or(err(arg2.span(), &msg))?
+								.ok_or(err(arg1.span(), &msg))?
 								.ident
 								.to_string()),
 							syn::Type::Tuple(tt) => {
@@ -318,6 +288,25 @@ impl HostFn {
 			_ => Err(err(span, &msg)),
 		}
 	}
+
+	fn to_wasm_sig(&self) -> TokenStream {
+		let args = self.item.sig.inputs.iter().skip(1).filter_map(|a| match a {
+			syn::FnArg::Typed(pt) => Some(&pt.ty),
+			_ => None,
+		});
+		let returns = match &self.returns {
+			HostFnReturn::U32 => quote! { vec![ <u32>::VALUE_TYPE ] },
+			HostFnReturn::ReturnCode => quote! { vec![ <ReturnCode>::VALUE_TYPE ] },
+			HostFnReturn::Unit => quote! { vec![] },
+		};
+
+		quote! {
+			 wasm_instrument::parity_wasm::elements::FunctionType::new(
+				vec! [ #(<#args>::VALUE_TYPE),* ],
+				#returns,
+			)
+		}
+	}
 }
 impl EnvDef {
 	pub fn try_from(item: syn::ItemMod) -> syn::Result<Self> {
@@ -329,11 +318,10 @@ impl EnvDef {
 			.ok_or(err("Invalid environment definition, expected `mod` to be inlined."))?
 			.1;
 
-		let mut host_funcs = Vec::<HostFn>::default();
-
-		for i in items.iter() {
-			host_funcs.push(HostFn::try_from(i.clone())?);
-		}
+		let host_funcs = items
+			.iter()
+			.map(|i| HostFn::try_from(i.clone()))
+			.collect::<Result<Vec<_>, _>>()?;
 
 		Ok(Self { host_funcs })
 	}
@@ -397,47 +385,46 @@ fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// environment.
 fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 	let impls =  def.host_funcs.iter().map(|f| {
-	   let params = &f.item.sig.inputs.iter().skip(1).map(|arg| {
-		   match arg {
-			   syn::FnArg::Typed(pt) => {
-				   if let syn::Pat::Ident(ident) = &*pt.pat {
-					   let p_type = &pt.ty;
-					   let p_name = ident.ident.clone();
-					   quote! {
-						   let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
-						   args.next()
-						   .and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
-						   .expect(
-							   "precondition: all imports should be checked against the signatures of corresponding
-							   functions defined by `#[define_env]` proc macro by the user of the macro;
-							   thus this can never be `None`;
-							   qed;"
-						   );
-					   }
-				   } else { quote! { let err = "whoo!"; } }
-			   },
-			   _ => quote! { let err = "beee"; },
-		   }
-	   });
+		let params = &f.item.sig.inputs.iter().skip(1).map(|arg| {
+			match arg {
+				syn::FnArg::Typed(pt) => {
+					if let syn::Pat::Ident(ident) = &*pt.pat {
+						let p_type = &pt.ty;
+						let p_name = ident.ident.clone();
+						quote! {
+							let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
+							args.next()
+							.and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
+							.expect(
+								"precondition: all imports should be checked against the signatures of corresponding
+								functions defined by `#[define_env]` proc macro by the user of the macro;
+								thus this can never be `None`;
+								qed;"
+							);
+						}
+					} else { quote! { let err = "whoo!"; } }
+				},
+				_ => quote! { let err = "beee"; },
+			}
+		});
 
-	let outline = match &f.returns {
-	    HostFnReturn::Unit => quote! {
+		let outline = match &f.returns {
+			HostFnReturn::Unit => quote! {
 				body().map_err(|reason| {
 					ctx.set_trap_reason(reason);
 					sp_sandbox::HostError
 				})?;
 				return Ok(sp_sandbox::ReturnValue::Unit);
 			},
-
-		_ => quote! {
-				let r = body().map_err(|reason| {
-						ctx.set_trap_reason(reason);
-						sp_sandbox::HostError
-					})?;
+			_ => quote! {
+					let r = body().map_err(|reason| {
+							ctx.set_trap_reason(reason);
+							sp_sandbox::HostError
+						})?;
 					return Ok(sp_sandbox::ReturnValue::Value({
 						r.to_typed_value()
 					}));
-			},
+				},
 	};
 	let params = params.clone();
 	let (module, name, ident, body) = (&f.module, &f.name, &f.item.sig.ident, &f.item.block);
@@ -446,7 +433,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 		_ => quote! { },
 	};
 	quote! {
-	    #unstable_feat
+		#unstable_feat
 		f(#module.as_bytes(), #name.as_bytes(), {
 			fn #ident<E: Ext>(
 				ctx: &mut crate::wasm::Runtime<E>,
@@ -513,12 +500,12 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// ```nocompile
 /// #[define_env]
 /// pub mod some_env {
-///     #[version(1)]
+/// 	#[version(1)]
 /// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 ///
-///     #[unstable]
+/// 	#[unstable]
 /// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
