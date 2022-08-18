@@ -50,7 +50,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32,
 };
-use std:: sync::Arc;
+use std::sync::Arc;
 
 use crate as pallet_contracts;
 
