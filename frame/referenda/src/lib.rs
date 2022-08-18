@@ -796,7 +796,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if let Ok(s) = Self::ensure_ongoing(index) {
 				return Some((index, s))
 			}
-			// referendum already timedout or was cancelled.
+			// else: referendum already timedout or was cancelled.
 		}
 	}
 
