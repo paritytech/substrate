@@ -1,6 +1,6 @@
 use super::*;
-use frame_support::assert_err;
-use mock::{new_test_ext, start_session, Origin, RootOffences, Test};
+use frame_support::{assert_err, assert_ok};
+use mock::{new_test_ext, start_session, Origin, RootOffences};
 
 #[test]
 fn create_offence_fails_given_signed_origin() {
@@ -15,7 +15,8 @@ fn create_offence_fails_given_signed_origin() {
 fn create_offence_works_given_root_origin() {
 	new_test_ext().execute_with(|| {
 		start_session(1);
-		let _active_era = Staking::<Test>::active_era().unwrap();
-		//assert_ok!(RootOffences::create_offence(Origin::root(), offenders));
+		start_session(2);
+		let offenders = (&[]).to_vec();
+		assert_ok!(RootOffences::create_offence(Origin::root(), offenders));
 	})
 }
