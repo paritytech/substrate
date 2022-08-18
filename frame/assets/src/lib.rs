@@ -164,6 +164,8 @@ use frame_system::Config as SystemConfig;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -501,7 +503,7 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			admin: <T::Lookup as StaticLookup>::Source,
+			admin: AccountIdLookupOf<T>,
 			min_balance: T::Balance,
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
@@ -557,7 +559,7 @@ pub mod pallet {
 		pub fn force_create(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 			is_sufficient: bool,
 			#[pallet::compact] min_balance: T::Balance,
 		) -> DispatchResult {
@@ -623,7 +625,7 @@ pub mod pallet {
 		pub fn mint(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			beneficiary: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -651,7 +653,7 @@ pub mod pallet {
 		pub fn burn(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -684,7 +686,7 @@ pub mod pallet {
 		pub fn transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -716,7 +718,7 @@ pub mod pallet {
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
@@ -749,8 +751,8 @@ pub mod pallet {
 		pub fn force_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			source: <T::Lookup as StaticLookup>::Source,
-			dest: <T::Lookup as StaticLookup>::Source,
+			source: AccountIdLookupOf<T>,
+			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -775,7 +777,7 @@ pub mod pallet {
 		pub fn freeze(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -806,7 +808,7 @@ pub mod pallet {
 		pub fn thaw(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -891,7 +893,7 @@ pub mod pallet {
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
@@ -932,9 +934,9 @@ pub mod pallet {
 		pub fn set_team(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			issuer: AccountIdLookupOf<T>,
+			admin: AccountIdLookupOf<T>,
+			freezer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let issuer = T::Lookup::lookup(issuer)?;
@@ -1117,10 +1119,10 @@ pub mod pallet {
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
+			issuer: AccountIdLookupOf<T>,
+			admin: AccountIdLookupOf<T>,
+			freezer: AccountIdLookupOf<T>,
 			#[pallet::compact] min_balance: T::Balance,
 			is_sufficient: bool,
 			is_frozen: bool,
@@ -1167,7 +1169,7 @@ pub mod pallet {
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
@@ -1192,7 +1194,7 @@ pub mod pallet {
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
@@ -1225,8 +1227,8 @@ pub mod pallet {
 		pub fn force_cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
+			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			T::ForceOrigin::try_origin(origin)
@@ -1272,8 +1274,8 @@ pub mod pallet {
 		pub fn transfer_approved(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			destination: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
+			destination: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let delegate = ensure_signed(origin)?;
