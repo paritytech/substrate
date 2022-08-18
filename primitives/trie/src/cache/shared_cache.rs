@@ -22,7 +22,7 @@ use hash_db::Hasher;
 use hashbrown::{hash_set::Entry as SetEntry, HashSet};
 use lru::LruCache;
 use nohash_hasher::BuildNoHashHasher;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::{
 	hash::{BuildHasher, Hasher as _},
 	mem,
@@ -470,6 +470,34 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 	}
 }
 
+/// The inner of [`SharedTrieCache`].
+pub(super) struct SharedTrieCacheInner<H: Hasher> {
+	node_cache: SharedNodeCache<H>,
+	value_cache: SharedValueCache<H::Out>,
+}
+
+impl<H: Hasher> SharedTrieCacheInner<H> {
+	/// Returns a reference to the [`SharedValueCache`].
+	pub(super) fn value_cache(&self) -> &SharedValueCache<H::Out> {
+		&self.value_cache
+	}
+
+	/// Returns a mutable reference to the [`SharedValueCache`].
+	pub(super) fn value_cache_mut(&mut self) -> &mut SharedValueCache<H::Out> {
+		&mut self.value_cache
+	}
+
+	/// Returns a reference to the [`SharedNodeCache`].
+	pub(super) fn node_cache(&self) -> &SharedNodeCache<H> {
+		&self.node_cache
+	}
+
+	/// Returns a mutable reference to the [`SharedNodeCache`].
+	pub(super) fn node_cache_mut(&mut self) -> &mut SharedNodeCache<H> {
+		&mut self.node_cache
+	}
+}
+
 /// The shared trie cache.
 ///
 /// It should be instantiated once per node. It will hold the trie nodes and values of all
@@ -478,19 +506,12 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 ///
 /// The instance of this object can be shared between multiple threads.
 pub struct SharedTrieCache<H: Hasher> {
-	/// The shared node cache.
-	///
-	/// The mutex can be locked independently from the [`Self::value_cache`] mutex.
-	pub(super) node_cache: Arc<RwLock<SharedNodeCache<H>>>,
-	/// The shared value cache.
-	///
-	/// The mutex can be locked independently from the [`Self::value_cache`] mutex.
-	pub(super) value_cache: Arc<RwLock<SharedValueCache<H::Out>>>,
+	inner: Arc<RwLock<SharedTrieCacheInner<H>>>,
 }
 
 impl<H: Hasher> Clone for SharedTrieCache<H> {
 	fn clone(&self) -> Self {
-		Self { node_cache: self.node_cache.clone(), value_cache: self.value_cache.clone() }
+		Self { inner: self.inner.clone() }
 	}
 }
 
@@ -511,8 +532,10 @@ impl<H: Hasher> SharedTrieCache<H> {
 		};
 
 		Self {
-			node_cache: Arc::new(RwLock::new(SharedNodeCache::new(node_cache_size))),
-			value_cache: Arc::new(RwLock::new(SharedValueCache::new(value_cache_size))),
+			inner: Arc::new(RwLock::new(SharedTrieCacheInner {
+				node_cache: SharedNodeCache::new(node_cache_size),
+				value_cache: SharedValueCache::new(value_cache_size),
+			})),
 		}
 	}
 
@@ -529,26 +552,37 @@ impl<H: Hasher> SharedTrieCache<H> {
 
 	/// Returns the used memory size of this cache in bytes.
 	pub fn used_memory_size(&self) -> usize {
-		let value_cache_size = self.value_cache.read().size_in_bytes;
-		let node_cache_size = self.node_cache.read().size_in_bytes;
+		let inner = self.inner.read();
+		let value_cache_size = inner.value_cache.size_in_bytes;
+		let node_cache_size = inner.node_cache.size_in_bytes;
 
 		node_cache_size + value_cache_size
 	}
 
 	/// Reset the node cache.
 	pub fn reset_node_cache(&self) {
-		self.node_cache.write().reset();
+		self.inner.write().node_cache.reset();
 	}
 
 	/// Reset the value cache.
 	pub fn reset_value_cache(&self) {
-		self.value_cache.write().reset();
+		self.inner.write().value_cache.reset();
 	}
 
 	/// Reset the entire cache.
 	pub fn reset(&self) {
 		self.reset_node_cache();
 		self.reset_value_cache();
+	}
+
+	/// Returns the read locked inner.
+	pub(super) fn read_lock_inner(&self) -> RwLockReadGuard<'_, SharedTrieCacheInner<H>> {
+		self.inner.read()
+	}
+
+	/// Returns the write locked inner.
+	pub(super) fn write_lock_inner(&self) -> RwLockWriteGuard<'_, SharedTrieCacheInner<H>> {
+		self.inner.write()
 	}
 }
 

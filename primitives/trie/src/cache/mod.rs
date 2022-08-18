@@ -39,7 +39,7 @@ use hash_db::Hasher;
 use hashbrown::HashSet;
 use nohash_hasher::BuildNoHashHasher;
 use parking_lot::{Mutex, MutexGuard, RwLockReadGuard};
-use shared_cache::{SharedNodeCache, SharedValueCache, ValueCacheKey};
+use shared_cache::{SharedValueCache, ValueCacheKey};
 use std::{
 	collections::{hash_map::Entry as MapEntry, HashMap},
 	sync::Arc,
@@ -50,7 +50,7 @@ mod shared_cache;
 
 pub use shared_cache::SharedTrieCache;
 
-use self::shared_cache::ValueCacheKeyHash;
+use self::shared_cache::{SharedTrieCacheInner, ValueCacheKeyHash};
 
 const LOG_TARGET: &str = "trie-cache";
 
@@ -118,19 +118,16 @@ impl<H: Hasher> LocalTrieCache<H> {
 	///
 	/// The given `storage_root` needs to be the storage root of the trie this cache is used for.
 	pub fn as_trie_db_cache(&self, storage_root: H::Out) -> TrieCache<'_, H> {
-		// The locking order here needs to be the same as in `LocalTrieCache::drop`.
-		let shared_node_cache = self.shared.node_cache.read();
-		let shared_value_cache = self.shared.value_cache.read();
+		let shared_inner = self.shared.read_lock_inner();
 
 		let value_cache = ValueCache::ForStorageRoot {
 			storage_root,
 			local_value_cache: self.value_cache.lock(),
-			shared_value_cache,
 			shared_value_cache_access: self.shared_value_cache_access.lock(),
 		};
 
 		TrieCache {
-			shared_node_cache,
+			shared_inner,
 			local_cache: self.node_cache.lock(),
 			value_cache,
 			shared_node_cache_access: self.shared_node_cache_access.lock(),
@@ -145,10 +142,8 @@ impl<H: Hasher> LocalTrieCache<H> {
 	/// propagated to the shared cache. So, accessing these new items will be slower, but nothing
 	/// would break because of this.
 	pub fn as_trie_db_mut_cache(&self) -> TrieCache<'_, H> {
-		let shared_node_cache = self.shared.node_cache.read();
-
 		TrieCache {
-			shared_node_cache,
+			shared_inner: self.shared.read_lock_inner(),
 			local_cache: self.node_cache.lock(),
 			value_cache: ValueCache::Fresh(Default::default()),
 			shared_node_cache_access: self.shared_node_cache_access.lock(),
@@ -158,17 +153,14 @@ impl<H: Hasher> LocalTrieCache<H> {
 
 impl<H: Hasher> Drop for LocalTrieCache<H> {
 	fn drop(&mut self) {
-		// The locking order here needs to be the same as in `LocalTrieCache::as_trie_db_cache`.
-		//
-		// Lock both caches and then sync them. It is not strictly required to sync both in
-		// lockstep.
-		let mut node_cache = self.shared.node_cache.write();
-		let mut value_cache = self.shared.value_cache.write();
+		let mut shared_inner = self.shared.write_lock_inner();
 
-		node_cache
+		shared_inner
+			.node_cache_mut()
 			.update(self.node_cache.lock().drain(), self.shared_node_cache_access.lock().drain());
 
-		value_cache
+		shared_inner
+			.value_cache_mut()
 			.update(self.value_cache.lock().drain(), self.shared_value_cache_access.lock().drain());
 	}
 }
@@ -180,7 +172,6 @@ enum ValueCache<'a, H> {
 	Fresh(HashMap<Arc<[u8]>, CachedValue<H>>),
 	/// The value cache is already bound to a specific storage root.
 	ForStorageRoot {
-		shared_value_cache: RwLockReadGuard<'a, SharedValueCache<H>>,
 		shared_value_cache_access: MutexGuard<
 			'a,
 			HashSet<ValueCacheKeyHash, nohash_hasher::BuildNoHashHasher<ValueCacheKeyHash>>,
@@ -199,15 +190,14 @@ enum ValueCache<'a, H> {
 
 impl<H: AsRef<[u8]> + std::hash::Hash + Eq + Clone + Copy> ValueCache<'_, H> {
 	/// Get the value for the given `key`.
-	fn get(&mut self, key: &[u8]) -> Option<&CachedValue<H>> {
+	fn get<'a>(
+		&'a mut self,
+		key: &[u8],
+		shared_value_cache: &'a SharedValueCache<H>,
+	) -> Option<&CachedValue<H>> {
 		match self {
 			Self::Fresh(map) => map.get(key),
-			Self::ForStorageRoot {
-				local_value_cache,
-				shared_value_cache,
-				shared_value_cache_access,
-				storage_root,
-			} => {
+			Self::ForStorageRoot { local_value_cache, shared_value_cache_access, storage_root } => {
 				let key = ValueCacheKey::new_ref(key, *storage_root);
 
 				// We first need to look up in the local cache and then the shared cache.
@@ -257,7 +247,7 @@ impl<H: AsRef<[u8]> + std::hash::Hash + Eq + Clone + Copy> ValueCache<'_, H> {
 /// be merged back into the [`LocalTrieCache`] with [`Self::merge_into`] after all operations are
 /// done.
 pub struct TrieCache<'a, H: Hasher> {
-	shared_node_cache: RwLockReadGuard<'a, SharedNodeCache<H>>,
+	shared_inner: RwLockReadGuard<'a, SharedTrieCacheInner<H>>,
 	shared_node_cache_access: MutexGuard<'a, HashSet<H::Out>>,
 	local_cache: MutexGuard<'a, HashMap<H::Out, NodeOwned<H::Out>>>,
 	value_cache: ValueCache<'a, H::Out>,
@@ -297,7 +287,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 		hash: H::Out,
 		fetch_node: &mut dyn FnMut() -> trie_db::Result<NodeOwned<H::Out>, H::Out, Error<H::Out>>,
 	) -> trie_db::Result<&NodeOwned<H::Out>, H::Out, Error<H::Out>> {
-		if let Some(res) = self.shared_node_cache.get(&hash) {
+		if let Some(res) = self.shared_inner.node_cache().get(&hash) {
 			tracing::trace!(target: LOG_TARGET, ?hash, "Serving node from shared cache");
 			self.shared_node_cache_access.insert(hash);
 			return Ok(res)
@@ -324,7 +314,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 	}
 
 	fn get_node(&mut self, hash: &H::Out) -> Option<&NodeOwned<H::Out>> {
-		if let Some(node) = self.shared_node_cache.get(hash) {
+		if let Some(node) = self.shared_inner.node_cache().get(hash) {
 			tracing::trace!(target: LOG_TARGET, ?hash, "Getting node from shared cache");
 			self.shared_node_cache_access.insert(*hash);
 			return Some(node)
@@ -343,7 +333,7 @@ impl<'a, H: Hasher> trie_db::TrieCache<NodeCodec<H>> for TrieCache<'a, H> {
 	}
 
 	fn lookup_value_for_key(&mut self, key: &[u8]) -> Option<&CachedValue<H::Out>> {
-		let res = self.value_cache.get(key);
+		let res = self.value_cache.get(key, self.shared_inner.value_cache());
 
 		tracing::trace!(
 			target: LOG_TARGET,
