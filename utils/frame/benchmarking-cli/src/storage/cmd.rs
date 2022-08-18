@@ -24,7 +24,7 @@ use sp_core::storage::StorageKey;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
-use sp_storage::StateVersion;
+use sp_storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 
 use clap::{Args, Parser};
 use log::info;
@@ -99,6 +99,10 @@ pub struct StorageParams {
 	/// State cache size.
 	#[clap(long, default_value = "0")]
 	pub state_cache_size: usize,
+
+	/// Include child trees in benchmark.
+	#[clap(long)]
+	pub include_child_trees: bool,
 }
 
 impl StorageCmd {
@@ -155,6 +159,16 @@ impl StorageCmd {
 		}
 	}
 
+	/// Returns Some if child node and None if regular
+	pub(crate) fn is_child_key(&self, key: Vec<u8>) -> Option<ChildInfo> {
+		if let Some((ChildType::ParentKeyId, storage_key)) =
+			ChildType::from_prefixed_key(&PrefixedStorageKey::new(key))
+		{
+			return Some(ChildInfo::new_default(storage_key))
+		}
+		None
+	}
+
 	/// Run some rounds of the (read) benchmark as warmup.
 	/// See `frame_benchmarking_cli::storage::read::bench_read` for detailed comments.
 	fn bench_warmup<B, BA, C>(&self, client: &Arc<C>) -> Result<()>
@@ -171,7 +185,7 @@ impl StorageCmd {
 
 		for i in 0..self.params.warmups {
 			info!("Warmup round {}/{}", i + 1, self.params.warmups);
-			for key in keys.clone() {
+			for key in keys.as_slice() {
 				let _ = client
 					.storage(&block, &key)
 					.expect("Checked above to exist")

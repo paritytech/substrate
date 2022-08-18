@@ -1253,7 +1253,7 @@ mod mock {
 
 			weight_sum += StateTrieMigration::on_initialize(System::block_number());
 
-			root = System::finalize().state_root().clone();
+			root = *System::finalize().state_root();
 			System::on_finalize(System::block_number());
 		}
 		(root, weight_sum)
