@@ -14,7 +14,7 @@ fn create_offence_fails_given_signed_origin() {
 #[test]
 fn create_offence_works_given_root_origin() {
 	new_test_ext().execute_with(|| {
-		let active_era = Staking::<Test>::active_era().unwrap();
+		//let active_era = Staking::<Test>::active_era().unwrap();
 		//assert_ok!(RootOffences::create_offence(Origin::root(), offenders));
 	})
 }
