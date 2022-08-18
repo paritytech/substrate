@@ -8,7 +8,6 @@
   extends:
     - .kubernetes-env
     - .test-refs-no-trigger-prs-only
-    - .collect-artifacts
   script:
     - rm -rf .git/pipeline-scripts
     # FIXME: change source to https://github.com/paritytech/pipeline-scripts
