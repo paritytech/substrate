@@ -43,7 +43,11 @@
 
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{traits::Convert, ArithmeticError::Overflow, Perbill, RuntimeDebug};
+use sp_runtime::{
+	traits::{Convert, StaticLookup},
+	ArithmeticError::Overflow,
+	Perbill, RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
@@ -109,6 +113,7 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> Tally<T, I, M> {
 
 pub type TallyOf<T, I = ()> = Tally<T, I, Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<T, I, M> {
 	fn new(_: Rank) -> Self {
@@ -466,8 +471,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::add_member())]
-		pub fn add_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let _ = T::PromoteOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			Self::do_add_member(who)
 		}
 
@@ -478,8 +484,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
-		pub fn promote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn promote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::PromoteOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			Self::do_promote_member(who, Some(max_rank))
 		}
 
@@ -491,8 +498,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`, less if the member's index is highest in its rank.
 		#[pallet::weight(T::WeightInfo::demote_member(0))]
-		pub fn demote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn demote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			let mut record = Self::ensure_member(&who)?;
 			let rank = record.rank;
 			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
@@ -523,10 +531,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_member(*min_rank as u32))]
 		pub fn remove_member(
 			origin: OriginFor<T>,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 			min_rank: Rank,
 		) -> DispatchResultWithPostInfo {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
 			ensure!(min_rank >= rank, Error::<T, I>::InvalidWitness);
 			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);

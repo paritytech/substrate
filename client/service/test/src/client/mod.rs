@@ -1197,8 +1197,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 	let backend = Arc::new(
 		Backend::new(
 			DatabaseSettings {
-				state_cache_size: 1 << 20,
-				state_cache_child_ratio: None,
+				trie_cache_maximum_size: Some(1 << 20),
 				state_pruning: Some(PruningMode::ArchiveAll),
 				blocks_pruning: BlocksPruning::All,
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
@@ -1424,8 +1423,7 @@ fn returns_status_for_pruned_blocks() {
 	let backend = Arc::new(
 		Backend::new(
 			DatabaseSettings {
-				state_cache_size: 1 << 20,
-				state_cache_child_ratio: None,
+				trie_cache_maximum_size: Some(1 << 20),
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				blocks_pruning: BlocksPruning::All,
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
