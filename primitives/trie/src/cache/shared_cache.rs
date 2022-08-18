@@ -41,16 +41,16 @@ type NoHashingLruCache<K, T> = lru::LruCache<K, T, BuildNoHashHasher<K>>;
 ///
 /// Internally this stores all cached nodes in a [`LruCache`]. It ensures that when updating the
 /// cache, that the cache stays within its allowed bounds.
-pub(super) struct SharedNodeCache<H: Hasher> {
+pub(super) struct SharedNodeCache<H> {
 	/// The cached nodes, ordered by least recently used.
-	pub(super) lru: LruCache<H::Out, NodeOwned<H::Out>>,
+	pub(super) lru: LruCache<H, NodeOwned<H>>,
 	/// The size of [`Self::lru`] in bytes.
 	pub(super) size_in_bytes: usize,
 	/// The maximum cache size of [`Self::lru`].
 	maximum_cache_size: CacheSize,
 }
 
-impl<H: Hasher> SharedNodeCache<H> {
+impl<H: AsRef<[u8]> + Eq + std::hash::Hash> SharedNodeCache<H> {
 	/// Create a new instance.
 	fn new(cache_size: CacheSize) -> Self {
 		Self { lru: LruCache::unbounded(), size_in_bytes: 0, maximum_cache_size: cache_size }
@@ -59,7 +59,7 @@ impl<H: Hasher> SharedNodeCache<H> {
 	/// Get the node for `key`.
 	///
 	/// This doesn't change the least recently order in the internal [`LruCache`].
-	pub fn get(&self, key: &H::Out) -> Option<&NodeOwned<H::Out>> {
+	pub fn get(&self, key: &H) -> Option<&NodeOwned<H>> {
 		self.lru.peek(key)
 	}
 
@@ -75,11 +75,11 @@ impl<H: Hasher> SharedNodeCache<H> {
 	/// inside its bounds ([`Self::maximum_size_in_bytes`]).
 	pub fn update(
 		&mut self,
-		added: impl IntoIterator<Item = (H::Out, NodeOwned<H::Out>)>,
-		accessed: impl IntoIterator<Item = H::Out>,
+		added: impl IntoIterator<Item = (H, NodeOwned<H>)>,
+		accessed: impl IntoIterator<Item = H>,
 	) {
 		let update_size_in_bytes =
-			|size_in_bytes: &mut usize, key: &H::Out, node: &NodeOwned<H::Out>| {
+			|size_in_bytes: &mut usize, key: &H, node: &NodeOwned<H>| {
 				if let Some(new_size_in_bytes) =
 					size_in_bytes.checked_sub(key.as_ref().len() + node.size_in_bytes())
 				{
@@ -472,7 +472,7 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 
 /// The inner of [`SharedTrieCache`].
 pub(super) struct SharedTrieCacheInner<H: Hasher> {
-	node_cache: SharedNodeCache<H>,
+	node_cache: SharedNodeCache<H::Out>,
 	value_cache: SharedValueCache<H::Out>,
 }
 
@@ -488,12 +488,12 @@ impl<H: Hasher> SharedTrieCacheInner<H> {
 	}
 
 	/// Returns a reference to the [`SharedNodeCache`].
-	pub(super) fn node_cache(&self) -> &SharedNodeCache<H> {
+	pub(super) fn node_cache(&self) -> &SharedNodeCache<H::Out> {
 		&self.node_cache
 	}
 
 	/// Returns a mutable reference to the [`SharedNodeCache`].
-	pub(super) fn node_cache_mut(&mut self) -> &mut SharedNodeCache<H> {
+	pub(super) fn node_cache_mut(&mut self) -> &mut SharedNodeCache<H::Out> {
 		&mut self.node_cache
 	}
 }
