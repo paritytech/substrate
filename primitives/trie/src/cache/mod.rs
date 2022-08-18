@@ -399,16 +399,16 @@ mod tests {
 		}
 
 		// Local cache wasn't dropped yet, so there should nothing in the shared caches.
-		assert!(shared_cache.value_cache.read().lru.is_empty());
-		assert!(shared_cache.node_cache.read().lru.is_empty());
+		assert!(shared_cache.read_lock_inner().value_cache().lru.is_empty());
+		assert!(shared_cache.read_lock_inner().node_cache().lru.is_empty());
 
 		drop(local_cache);
 
 		// Now we should have the cached items in the shared cache.
-		assert!(shared_cache.node_cache.read().lru.len() >= 1);
+		assert!(shared_cache.read_lock_inner().node_cache().lru.len() >= 1);
 		let cached_data = shared_cache
-			.value_cache
-			.read()
+			.read_lock_inner()
+			.value_cache()
 			.lru
 			.peek(&ValueCacheKey::new_value(TEST_DATA[0].0, root))
 			.unwrap()
@@ -418,7 +418,7 @@ mod tests {
 		let fake_data = Bytes::from(&b"fake_data"[..]);
 
 		let local_cache = shared_cache.local_cache();
-		shared_cache.value_cache.write().lru.put(
+		shared_cache.write_lock_inner().value_cache_mut().lru.put(
 			ValueCacheKey::new_value(TEST_DATA[1].0, root),
 			(fake_data.clone(), Default::default()).into(),
 		);
@@ -462,8 +462,8 @@ mod tests {
 		// After the local cache is dropped, all changes should have been merged back to the shared
 		// cache.
 		let cached_data = shared_cache
-			.value_cache
-			.read()
+			.read_lock_inner()
+			.value_cache()
 			.lru
 			.peek(&ValueCacheKey::new_value(new_key, new_root))
 			.unwrap()
@@ -586,8 +586,8 @@ mod tests {
 
 		// Check that all items are there.
 		assert!(shared_cache
-			.value_cache
-			.read()
+				.read_lock_inner()
+			.value_cache()
 			.lru
 			.iter()
 			.map(|d| d.0)
@@ -606,8 +606,8 @@ mod tests {
 
 		// Ensure that the accessed items are most recently used items of the shared value cache.
 		assert!(shared_cache
-			.value_cache
-			.read()
+				.read_lock_inner()
+			.value_cache()
 			.lru
 			.iter()
 			.take(2)
@@ -615,8 +615,8 @@ mod tests {
 			.all(|l| { TEST_DATA.iter().take(2).any(|d| l.storage_key().unwrap() == d.0) }));
 
 		let most_recently_used_nodes = shared_cache
-			.node_cache
-			.read()
+			.read_lock_inner()
+			.node_cache()
 			.lru
 			.iter()
 			.map(|d| d.0.clone())
@@ -640,8 +640,8 @@ mod tests {
 		assert_ne!(
 			most_recently_used_nodes,
 			shared_cache
-				.node_cache
-				.read()
+				.read_lock_inner()
+				.node_cache()
 				.lru
 				.iter()
 				.map(|d| d.0.clone())
@@ -678,8 +678,8 @@ mod tests {
 			}
 		}
 
-		let node_cache_size = shared_cache.node_cache.read().size_in_bytes;
-		let value_cache_size = shared_cache.value_cache.read().size_in_bytes;
+		let node_cache_size = shared_cache.read_lock_inner().node_cache().size_in_bytes;
+		let value_cache_size = shared_cache.read_lock_inner().value_cache().size_in_bytes;
 
 		assert!(node_cache_size + value_cache_size < CACHE_SIZE_RAW);
 	}
