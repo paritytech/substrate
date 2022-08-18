@@ -40,7 +40,6 @@ use sp_staking::{
 	offence::{self, DisableStrategy, Kind, OffenceDetails},
 	SessionIndex,
 };
-use std::cell::RefCell;
 
 pub struct OnOffenceHandler;
 
