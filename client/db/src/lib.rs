@@ -34,8 +34,8 @@ pub mod bench;
 
 mod children;
 mod parity_db;
+mod record_stats_state;
 mod stats;
-mod storage_cache;
 #[cfg(any(feature = "rocksdb", test))]
 mod upgrade;
 mod utils;
@@ -51,8 +51,8 @@ use std::{
 };
 
 use crate::{
+	record_stats_state::RecordStatsState,
 	stats::StateUsageStats,
-	storage_cache::{new_shared_cache, CachingState, SharedCache, SyncingCachingState},
 	utils::{meta_keys, read_db, read_meta, DatabaseType, Meta},
 };
 use codec::{Decode, Encode};
@@ -83,10 +83,11 @@ use sp_runtime::{
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChildStorageCollection, DBValue, IndexOperation,
-	OffchainChangesCollection, StateMachineStats, StorageCollection, UsageInfo as StateUsageInfo,
+	backend::{AsTrieBackend, Backend as StateBackend},
+	ChildStorageCollection, DBValue, IndexOperation, OffchainChangesCollection, StateMachineStats,
+	StorageCollection, UsageInfo as StateUsageInfo,
 };
-use sp_trie::{prefixed_key, MemoryDB, PrefixedMemoryDB};
+use sp_trie::{cache::SharedTrieCache, prefixed_key, MemoryDB, PrefixedMemoryDB};
 
 // Re-export the Database trait so that one can pass an implementation of it.
 pub use sc_state_db::PruningMode;
@@ -96,12 +97,15 @@ pub use bench::BenchmarkingState;
 
 const CACHE_HEADERS: usize = 8;
 
-/// Default value for storage cache child ratio.
-const DEFAULT_CHILD_RATIO: (usize, usize) = (1, 10);
-
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState<B> =
 	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
+
+/// Builder for [`DbState`].
+pub type DbStateBuilder<B> = sp_state_machine::TrieBackendBuilder<
+	Arc<dyn sp_state_machine::Storage<HashFor<B>>>,
+	HashFor<B>,
+>;
 
 /// Length of a [`DbHash`].
 const DB_HASH_LEN: usize = 32;
@@ -172,6 +176,14 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		key: &[u8],
 	) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.state.child_storage(child_info, key)
+	}
+
+	fn child_storage_hash(
+		&self,
+		child_info: &ChildInfo,
+		key: &[u8],
+	) -> Result<Option<B::Hash>, Self::Error> {
+		self.state.child_storage_hash(child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -272,12 +284,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(
-		&self,
-	) -> Option<&sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
-		self.state.as_trie_backend()
-	}
-
 	fn register_overlay_stats(&self, stats: &StateMachineStats) {
 		self.state.register_overlay_stats(stats);
 	}
@@ -287,12 +293,22 @@ impl<B: BlockT> StateBackend<HashFor<B>> for RefTrackingState<B> {
 	}
 }
 
+impl<B: BlockT> AsTrieBackend<HashFor<B>> for RefTrackingState<B> {
+	type TrieBackendStorage = <DbState<B> as StateBackend<HashFor<B>>>::TrieBackendStorage;
+
+	fn as_trie_backend(
+		&self,
+	) -> &sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>> {
+		&self.state.as_trie_backend()
+	}
+}
+
 /// Database settings.
 pub struct DatabaseSettings {
-	/// State cache size.
-	pub state_cache_size: usize,
-	/// Ratio of cache size dedicated to child tries.
-	pub state_cache_child_ratio: Option<(usize, usize)>,
+	/// The maximum trie cache size in bytes.
+	///
+	/// If `None` is given, the cache is disabled.
+	pub trie_cache_maximum_size: Option<usize>,
 	/// Requested state pruning mode.
 	pub state_pruning: Option<PruningMode>,
 	/// Where to find the database.
@@ -730,7 +746,7 @@ impl<Block: BlockT> HeaderMetadata<Block> for BlockchainDb<Block> {
 
 /// Database transaction
 pub struct BlockImportOperation<Block: BlockT> {
-	old_state: SyncingCachingState<RefTrackingState<Block>, Block>,
+	old_state: RecordStatsState<RefTrackingState<Block>, Block>,
 	db_updates: PrefixedMemoryDB<HashFor<Block>>,
 	storage_updates: StorageCollection,
 	child_storage_updates: ChildStorageCollection,
@@ -800,7 +816,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 	for BlockImportOperation<Block>
 {
-	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
+	type State = RecordStatsState<RefTrackingState<Block>, Block>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -949,7 +965,7 @@ impl<Block: BlockT> EmptyStorage<Block> {
 		let mut root = Block::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<Block>>::default();
 		// both triedbmut are the same on empty storage.
-		sp_state_machine::TrieDBMutV1::<HashFor<Block>>::new(&mut mdb, &mut root);
+		sp_trie::trie_types::TrieDBMutBuilderV1::<HashFor<Block>>::new(&mut mdb, &mut root).build();
 		EmptyStorage(root)
 	}
 }
@@ -1009,13 +1025,13 @@ pub struct Backend<Block: BlockT> {
 	offchain_storage: offchain::LocalStorage,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
-	shared_cache: SharedCache<Block>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
 	blocks_pruning: BlocksPruning,
 	io_stats: FrozenForDuration<(kvdb::IoStats, StateUsageInfo)>,
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
+	shared_trie_cache: Option<sp_trie::cache::SharedTrieCache<HashFor<Block>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1053,8 +1069,7 @@ impl<Block: BlockT> Backend<Block> {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let db_setting = DatabaseSettings {
-			state_cache_size: 16777216,
-			state_cache_child_ratio: Some((50, 100)),
+			trie_cache_maximum_size: Some(16 * 1024 * 1024),
 			state_pruning: Some(PruningMode::blocks_pruning(blocks_pruning)),
 			source: DatabaseSource::Custom { db, require_create_flag: true },
 			blocks_pruning: BlocksPruning::Some(blocks_pruning),
@@ -1116,16 +1131,15 @@ impl<Block: BlockT> Backend<Block> {
 			offchain_storage,
 			blockchain,
 			canonicalization_delay,
-			shared_cache: new_shared_cache(
-				config.state_cache_size,
-				config.state_cache_child_ratio.unwrap_or(DEFAULT_CHILD_RATIO),
-			),
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
 			state_usage: Arc::new(StateUsageStats::new()),
 			blocks_pruning: config.blocks_pruning,
 			genesis_state: RwLock::new(None),
+			shared_trie_cache: config.trie_cache_maximum_size.map(|maximum_size| {
+				SharedTrieCache::new(sp_trie::cache::CacheSize::Maximum(maximum_size))
+			}),
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -1194,7 +1208,7 @@ impl<Block: BlockT> Backend<Block> {
 						(&r.number, &r.hash)
 					);
 
-					return Err(::sp_blockchain::Error::NotInFinalizedChain)
+					return Err(sp_blockchain::Error::NotInFinalizedChain)
 				}
 
 				retracted.push(r.hash);
@@ -1358,10 +1372,8 @@ impl<Block: BlockT> Backend<Block> {
 			// blocks are keyed by number + hash.
 			let lookup_key = utils::number_and_hash_to_lookup_key(number, hash)?;
 
-			let (enacted, retracted) = if pending_block.leaf_state.is_best() {
-				self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?
-			} else {
-				(Default::default(), Default::default())
+			if pending_block.leaf_state.is_best() {
+				self.set_head_with_transaction(&mut transaction, parent_hash, (number, hash))?;
 			};
 
 			utils::insert_hash_to_key_mapping(&mut transaction, columns::KEY_LOOKUP, number, hash)?;
@@ -1488,14 +1500,22 @@ impl<Block: BlockT> Backend<Block> {
 
 			let header = &pending_block.header;
 			let is_best = pending_block.leaf_state.is_best();
-			debug!(target: "db",
+			debug!(
+				target: "db",
 				"DB Commit {:?} ({}), best={}, state={}, existing={}, finalized={}",
-				hash, number, is_best, operation.commit_state, existing_header, finalized,
+				hash,
+				number,
+				is_best,
+				operation.commit_state,
+				existing_header,
+				finalized,
 			);
 
 			self.state_usage.merge_sm(operation.old_state.usage_info());
+
 			// release state reference so that it can be finalized
-			let cache = operation.old_state.into_cache_changes();
+			// VERY IMPORTANT
+			drop(operation.old_state);
 
 			if finalized {
 				// TODO: ensure best chain contains this block.
@@ -1584,20 +1604,20 @@ impl<Block: BlockT> Backend<Block> {
 				is_finalized: finalized,
 				with_state: operation.commit_state,
 			});
-			Some((pending_block.header, number, hash, enacted, retracted, is_best, cache))
+			Some((pending_block.header, hash))
 		} else {
 			None
 		};
 
-		let cache_update = if let Some(set_head) = operation.set_head {
+		if let Some(set_head) = operation.set_head {
 			if let Some(header) =
 				sc_client_api::blockchain::HeaderBackend::header(&self.blockchain, set_head)?
 			{
 				let number = header.number();
 				let hash = header.hash();
 
-				let (enacted, retracted) =
-					self.set_head_with_transaction(&mut transaction, hash, (*number, hash))?;
+				self.set_head_with_transaction(&mut transaction, hash, (*number, hash))?;
+
 				meta_updates.push(MetaUpdate {
 					hash,
 					number: *number,
@@ -1605,40 +1625,24 @@ impl<Block: BlockT> Backend<Block> {
 					is_finalized: false,
 					with_state: false,
 				});
-				Some((enacted, retracted))
 			} else {
 				return Err(sp_blockchain::Error::UnknownBlock(format!(
 					"Cannot set head {:?}",
 					set_head
 				)))
 			}
-		} else {
-			None
-		};
+		}
 
 		self.storage.db.commit(transaction)?;
 
 		// Apply all in-memory state changes.
 		// Code beyond this point can't fail.
 
-		if let Some((header, number, hash, enacted, retracted, is_best, mut cache)) = imported {
+		if let Some((header, hash)) = imported {
 			trace!(target: "db", "DB Commit done {:?}", hash);
 			let header_metadata = CachedHeaderMetadata::from(&header);
 			self.blockchain.insert_header_metadata(header_metadata.hash, header_metadata);
 			cache_header(&mut self.blockchain.header_cache.lock(), hash, Some(header));
-			cache.sync_cache(
-				&enacted,
-				&retracted,
-				operation.storage_updates,
-				operation.child_storage_updates,
-				Some(hash),
-				Some(number),
-				is_best,
-			);
-		}
-
-		if let Some((enacted, retracted)) = cache_update {
-			self.shared_cache.write().sync(&enacted, &retracted);
 		}
 
 		for m in meta_updates {
@@ -1770,17 +1774,13 @@ impl<Block: BlockT> Backend<Block> {
 		Ok(())
 	}
 
-	fn empty_state(&self) -> ClientResult<SyncingCachingState<RefTrackingState<Block>, Block>> {
+	fn empty_state(&self) -> ClientResult<RecordStatsState<RefTrackingState<Block>, Block>> {
 		let root = EmptyStorage::<Block>::new().0; // Empty trie
-		let db_state = DbState::<Block>::new(self.storage.clone(), root);
+		let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
+			.with_optional_cache(self.shared_trie_cache.as_ref().map(|c| c.local_cache()))
+			.build();
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-		let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
-		Ok(SyncingCachingState::new(
-			caching_state,
-			self.state_usage.clone(),
-			self.blockchain.meta.clone(),
-			self.import_lock.clone(),
-		))
+		Ok(RecordStatsState::new(state, None, self.state_usage.clone()))
 	}
 }
 
@@ -1902,16 +1902,13 @@ where
 impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
-	type State = SyncingCachingState<RefTrackingState<Block>, Block>;
+	type State = RecordStatsState<RefTrackingState<Block>, Block>;
 	type OffchainStorage = offchain::LocalStorage;
 
 	fn begin_operation(&self) -> ClientResult<Self::BlockImportOperation> {
-		let mut old_state = self.empty_state()?;
-		old_state.disable_syncing();
-
 		Ok(BlockImportOperation {
 			pending_block: None,
-			old_state,
+			old_state: self.empty_state()?,
 			db_updates: PrefixedMemoryDB::default(),
 			storage_updates: Default::default(),
 			child_storage_updates: Default::default(),
@@ -1934,7 +1931,6 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		} else {
 			operation.old_state = self.state_at(block)?;
 		}
-		operation.old_state.disable_syncing();
 
 		operation.commit_state = true;
 		Ok(())
@@ -2035,8 +2031,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			)
 		});
 		let database_cache = MemorySize::from_bytes(0);
-		let state_cache =
-			MemorySize::from_bytes(self.shared_cache.read().used_storage_cache_size());
+		let state_cache = MemorySize::from_bytes(
+			self.shared_trie_cache.as_ref().map_or(0, |c| c.used_memory_size()),
+		);
 		let state_db = self.storage.state_db.memory_info();
 
 		Some(UsageInfo {
@@ -2278,17 +2275,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		};
 		if is_genesis {
 			if let Some(genesis_state) = &*self.genesis_state.read() {
-				let db_state = DbState::<Block>::new(genesis_state.clone(), genesis_state.root);
+				let root = genesis_state.root;
+				let db_state = DbStateBuilder::<Block>::new(genesis_state.clone(), root)
+					.with_optional_cache(self.shared_trie_cache.as_ref().map(|c| c.local_cache()))
+					.build();
+
 				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-				let caching_state = CachingState::new(state, self.shared_cache.clone(), None);
-				let mut state = SyncingCachingState::new(
-					caching_state,
-					self.state_usage.clone(),
-					self.blockchain.meta.clone(),
-					self.import_lock.clone(),
-				);
-				state.disable_syncing();
-				return Ok(state)
+				return Ok(RecordStatsState::new(state, None, self.state_usage.clone()))
 			}
 		}
 
@@ -2309,16 +2302,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				}
 				if let Ok(()) = self.storage.state_db.pin(&hash) {
 					let root = hdr.state_root;
-					let db_state = DbState::<Block>::new(self.storage.clone(), root);
+					let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
+						.with_optional_cache(
+							self.shared_trie_cache.as_ref().map(|c| c.local_cache()),
+						)
+						.build();
 					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash));
-					let caching_state =
-						CachingState::new(state, self.shared_cache.clone(), Some(hash));
-					Ok(SyncingCachingState::new(
-						caching_state,
-						self.state_usage.clone(),
-						self.blockchain.meta.clone(),
-						self.import_lock.clone(),
-					))
+					Ok(RecordStatsState::new(state, Some(hash), self.state_usage.clone()))
 				} else {
 					Err(sp_blockchain::Error::UnknownBlock(format!(
 						"State already discarded for {:?}",
@@ -2494,8 +2484,7 @@ pub(crate) mod tests {
 
 		let backend = Backend::<Block>::new(
 			DatabaseSettings {
-				state_cache_size: 16777216,
-				state_cache_child_ratio: Some((50, 100)),
+				trie_cache_maximum_size: Some(16 * 1024 * 1024),
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
 				blocks_pruning: BlocksPruning::All,
