@@ -4,14 +4,14 @@ use crate as root_offences;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, Hooks},
+	traits::{ConstU32, ConstU64, Hooks, OneSessionHandler, GenesisBuild},
 };
 use pallet_session::TestSessionHandler;
 use pallet_staking::StakerStatus;
 use sp_core::H256;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::Header,
+	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
 use sp_staking::SessionIndex;
@@ -40,6 +40,32 @@ frame_support::construct_runtime!(
 		Historical: pallet_session::historical::{Pallet, Storage},
 	}
 );
+
+/// Another session handler struct to test on_disabled.
+pub struct OtherSessionHandler;
+impl OneSessionHandler<AccountId> for OtherSessionHandler {
+	type Key = UintAuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(_: I)
+	where
+		I: Iterator<Item = (&'a AccountId, Self::Key)>,
+		AccountId: 'a,
+	{
+	}
+
+	fn on_new_session<'a, I: 'a>(_: bool, _: I, _: I)
+	where
+		I: Iterator<Item = (&'a AccountId, Self::Key)>,
+		AccountId: 'a,
+	{
+	}
+
+	fn on_disabled(_validator_index: u32) {}
+}
+
+impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
+	type Public = UintAuthorityId;
+}
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -144,7 +170,7 @@ impl pallet_session::historical::Config for Test {
 
 sp_runtime::impl_opaque_keys! {
 	pub struct SessionKeys {
-		pub foo: sp_runtime::testing::UintAuthorityId,
+		pub other: OtherSessionHandler,
 	}
 }
 
@@ -186,6 +212,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	let _ =
 		pallet_staking::GenesisConfig::<Test> { stakers: stakers.clone(), ..Default::default() };
+
+	let _ = pallet_session::GenesisConfig::<Test> {
+		keys: stakers
+			.into_iter()
+			.map(|(id, ..)| (id, id, SessionKeys { other: id.into() }))
+			.collect()
+	}
+	.assimilate_storage(&mut storage);
 
 	storage.into()
 }
