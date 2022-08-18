@@ -66,9 +66,9 @@ for OnOffenceHandler
 	}
 }
 
-pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> Vec<Perbill> {
-	OnOffencePerBill::mutate(|fractions| { f(fractions);});
-	OnOffencePerBill::get()
+pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
+	OnOffencePerBill::mutate(|fractions| f(fractions))
+	//OnOffencePerBill::get()
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

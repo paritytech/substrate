@@ -440,10 +440,11 @@ macro_rules! parameter_types_impl_thread_local {
 					}
 
 					/// Mutate the internal value in place.
-					pub fn mutate<F: FnOnce(&mut $type) -> ()>(mutate: F) {
+					pub fn mutate<R, F: FnOnce(&mut $type) -> R>(mutate: F) -> R{
 						let mut current = Self::get();
-						mutate(&mut current);
+						let result = mutate(&mut current);
 						Self::set(current);
+						result
 					}
 				}
 			)*

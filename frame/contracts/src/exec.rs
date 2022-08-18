@@ -1371,8 +1371,8 @@ mod tests {
 
 	type MockStack<'a> = Stack<'a, Test, MockExecutable>;
 
-	thread_local! {
-		static LOADER: RefCell<MockLoader> = RefCell::new(MockLoader::default());
+	parameter_types! {
+		static Loader: MockLoader = MockLoader::default();
 	}
 
 	fn events() -> Vec<Event<Test>> {
@@ -1398,8 +1398,8 @@ mod tests {
 		refcount: u64,
 	}
 
-	#[derive(Default)]
-	struct MockLoader {
+	#[derive(Default, Clone)]
+	pub struct MockLoader {
 		map: HashMap<CodeHash<Test>, MockExecutable>,
 		counter: u64,
 	}
@@ -1409,8 +1409,7 @@ mod tests {
 			func_type: ExportedFunction,
 			f: impl Fn(MockCtx, &MockExecutable) -> ExecResult + 'static,
 		) -> CodeHash<Test> {
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				// Generate code hashes as monotonically increasing values.
 				let hash = <Test as frame_system::Config>::Hash::from_low_u64_be(loader.counter);
 				loader.counter += 1;
@@ -1423,8 +1422,7 @@ mod tests {
 		}
 
 		fn increment_refcount(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				match loader.map.entry(code_hash) {
 					Entry::Vacant(_) => Err(<Error<Test>>::CodeNotFound)?,
 					Entry::Occupied(mut entry) => entry.get_mut().refcount += 1,
@@ -1435,8 +1433,7 @@ mod tests {
 
 		fn decrement_refcount(code_hash: CodeHash<Test>) {
 			use std::collections::hash_map::Entry::Occupied;
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				let mut entry = match loader.map.entry(code_hash) {
 					Occupied(e) => e,
 					_ => panic!("code_hash does not exist"),
@@ -1456,9 +1453,8 @@ mod tests {
 			_schedule: &Schedule<Test>,
 			_gas_meter: &mut GasMeter<Test>,
 		) -> Result<Self, DispatchError> {
-			LOADER.with(|loader| {
+			Loader::mutate(|loader| {
 				loader
-					.borrow_mut()
 					.map
 					.get(&code_hash)
 					.cloned()

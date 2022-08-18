@@ -86,14 +86,14 @@ impl pallet_timestamp::Config for Test {
 }
 
 parameter_types! {
-	static DISABLED_VALIDATORS: Vec<AuthorityIndex> = Default::default();
+	static DisabledValidatorTestValue: Vec<AuthorityIndex> = Default::default();
 }
 
 pub struct MockDisabledValidators;
 
 impl MockDisabledValidators {
 	pub fn disable_validator(index: AuthorityIndex) {
-		DISABLED_VALIDATORS::mutate(|v| {
+		DisabledValidatorTestValue::mutate(|v| {
 			if let Err(i) = v.binary_search(&index) {
 				v.insert(i, index);
 			}
@@ -103,7 +103,7 @@ impl MockDisabledValidators {
 
 impl DisabledValidators for MockDisabledValidators {
 	fn is_disabled(index: AuthorityIndex) -> bool {
-		DISABLED_VALIDATORS::get().binary_search(&index).is_ok()
+		DisabledValidatorTestValue::get().binary_search(&index).is_ok()
 	}
 }
 
