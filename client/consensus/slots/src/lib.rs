@@ -376,11 +376,15 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
+		let header = block_import_params.post_header();
+		let post_hash = block_import_params.post_hash();
+		debug_assert_eq!(post_hash, header.hash());
+
 		info!(
 			target: logging_target,
 			"🔖 Pre-sealed block for proposal at {}. Hash now {:?}, previously {:?}.",
 			header_num,
-			block_import_params.post_hash(),
+			post_hash,
 			header_hash,
 		);
 
@@ -389,15 +393,14 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			CONSENSUS_INFO;
 			"slots.pre_sealed_block";
 			"header_num" => ?header_num,
-			"hash_now" => ?block_import_params.post_hash(),
+			"hash_now" => ?post_hash,
 			"hash_previously" => ?header_hash,
 		);
 
-		let header = block_import_params.post_header();
 		match self.block_import().import_block(block_import_params, Default::default()).await {
 			Ok(res) => {
 				res.handle_justification(
-					&header.hash(),
+					&post_hash,
 					*header.number(),
 					self.justification_sync_link(),
 				);
