@@ -44,15 +44,10 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Club: pallet_ranked_collective::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
-impl pallet_sudo::Config for Test {
-	type Event = Event;
-	type Call = Call;
-}
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =

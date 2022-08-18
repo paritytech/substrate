@@ -6055,7 +6055,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
- "pallet-sudo",
  "parity-scale-codec",
  "scale-info",
  "sp-arithmetic",
