@@ -99,12 +99,10 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	approvals: Vec<AccountId>,
 }
 
-type OpaqueCall<T> = WrapperKeepOpaque<<T as Config>::Call>;
-
 type CallHash = [u8; 32];
 
 enum CallOrHash<T: Config> {
-	Call(OpaqueCall<T>, bool),
+	Call(<T as Config>::Call),
 	Hash([u8; 32]),
 }
 
@@ -166,10 +164,6 @@ pub mod pallet {
 		[u8; 32],
 		Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId>,
 	>;
-
-	#[pallet::storage]
-	pub type Calls<T: Config> =
-		StorageMap<_, Identity, [u8; 32], (OpaqueCall<T>, T::AccountId, BalanceOf<T>)>;
 
 	#[pallet::error]
 	pub enum Error<T> {
@@ -342,13 +336,13 @@ pub mod pallet {
 		///   taken for its lifetime of `DepositBase + threshold * DepositFactor`.
 		/// -------------------------------
 		/// - DB Weight:
-		///     - Reads: Multisig Storage, [Caller Account], Calls (if `store_call`)
-		///     - Writes: Multisig Storage, [Caller Account], Calls (if `store_call`)
+		///     - Reads: Multisig Storage, [Caller Account]
+		///     - Writes: Multisig Storage, [Caller Account]
 		/// - Plus Call Weight
 		/// # </weight>
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
-			let z = call.encoded_len() as u32;
+			let z = call.using_encoded(|d| d.len()) as u32;
 
 			T::WeightInfo::as_multi_create(s, z)
 			.max(T::WeightInfo::as_multi_create_store(s, z))
@@ -361,8 +355,7 @@ pub mod pallet {
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-			call: OpaqueCall<T>,
-			store_call: bool,
+			call: Box<<T as Config>::Call>,
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -371,7 +364,7 @@ pub mod pallet {
 				threshold,
 				other_signatories,
 				maybe_timepoint,
-				CallOrHash::Call(call, store_call),
+				CallOrHash::Call(*call),
 				max_weight,
 			)
 		}
@@ -461,8 +454,8 @@ pub mod pallet {
 		/// - Storage: removes one item.
 		/// ----------------------------------
 		/// - DB Weight:
-		///     - Read: Multisig Storage, [Caller Account], Refund Account, Calls
-		///     - Write: Multisig Storage, [Caller Account], Refund Account, Calls
+		///     - Read: Multisig Storage, [Caller Account], Refund Account
+		///     - Write: Multisig Storage, [Caller Account], Refund Account
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::cancel_as_multi(other_signatories.len() as u32))]
 		pub fn cancel_as_multi(
@@ -488,7 +481,6 @@ pub mod pallet {
 			let err_amount = T::Currency::unreserve(&m.depositor, m.deposit);
 			debug_assert!(err_amount.is_zero());
 			<Multisigs<T>>::remove(&id, &call_hash);
-			Self::clear_call(&call_hash);
 
 			Self::deposit_event(Event::MultisigCancelled {
 				cancelling: who,
@@ -530,13 +522,12 @@ impl<T: Config> Pallet<T> {
 		let id = Self::multi_account_id(&signatories, threshold);
 
 		// Threshold > 1; this means it's a multi-step operation. We extract the `call_hash`.
-		let (call_hash, call_len, maybe_call, store) = match call_or_hash {
-			CallOrHash::Call(call, should_store) => {
-				let call_hash = blake2_256(call.encoded());
-				let call_len = call.encoded_len();
-				(call_hash, call_len, Some(call), should_store)
+		let (call_hash, call_len, maybe_call) = match call_or_hash {
+			CallOrHash::Call(call) => {
+				let (call_hash, call_len) = call.using_encoded(|d| (blake2_256(d), d.len()));
+				(call_hash, call_len, Some(call))
 			},
-			CallOrHash::Hash(h) => (h, 0, None, false),
+			CallOrHash::Hash(h) => (h, 0, None),
 		};
 
 		// Branch on whether the operation has already started or not.
@@ -555,20 +546,13 @@ impl<T: Config> Pallet<T> {
 			}
 
 			// We only bother fetching/decoding call if we know that we're ready to execute.
-			let maybe_approved_call = if approvals >= threshold {
-				Self::get_call(&call_hash, maybe_call.as_ref())
-			} else {
-				None
-			};
-
-			if let Some((call, call_len)) = maybe_approved_call {
+			if let Some(call) = maybe_call.filter(|_| approvals >= threshold) {
 				// verify weight
 				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::MaxWeightTooLow);
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.
 				<Multisigs<T>>::remove(&id, call_hash);
-				Self::clear_call(&call_hash);
 				T::Currency::unreserve(&m.depositor, m.deposit);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
@@ -592,19 +576,6 @@ impl<T: Config> Pallet<T> {
 				// We cannot dispatch the call now; either it isn't available, or it is, but we
 				// don't have threshold approvals even with our signature.
 
-				// Store the call if desired.
-				let stored = if let Some(data) = maybe_call.filter(|_| store) {
-					Self::store_call_and_reserve(
-						who.clone(),
-						&call_hash,
-						data,
-						BalanceOf::<T>::zero(),
-					)?;
-					true
-				} else {
-					false
-				};
-
 				if let Some(pos) = maybe_pos {
 					// Record approval.
 					m.approvals.insert(pos, who.clone());
@@ -618,17 +589,10 @@ impl<T: Config> Pallet<T> {
 				} else {
 					// If we already approved and didn't store the Call, then this was useless and
 					// we report an error.
-					ensure!(stored, Error::<T>::AlreadyApproved);
+					Err(Error::<T>::AlreadyApproved)?
 				}
 
-				let final_weight = if stored {
-					T::WeightInfo::as_multi_approve_store(
-						other_signatories_len as u32,
-						call_len as u32,
-					)
-				} else {
-					T::WeightInfo::as_multi_approve(other_signatories_len as u32, call_len as u32)
-				};
+				let final_weight = T::WeightInfo::as_multi_approve(other_signatories_len as u32, call_len as u32);
 				// Call is not made, so the actual weight does not include call
 				Ok(Some(final_weight).into())
 			}
@@ -638,15 +602,6 @@ impl<T: Config> Pallet<T> {
 
 			// Just start the operation by recording it in storage.
 			let deposit = T::DepositBase::get() + T::DepositFactor::get() * threshold.into();
-
-			// Store the call if desired.
-			let stored = if let Some(data) = maybe_call.filter(|_| store) {
-				Self::store_call_and_reserve(who.clone(), &call_hash, data, deposit)?;
-				true
-			} else {
-				T::Currency::reserve(&who, deposit)?;
-				false
-			};
 
 			<Multisigs<T>>::insert(
 				&id,
@@ -660,55 +615,9 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
 
-			let final_weight = if stored {
-				T::WeightInfo::as_multi_create_store(other_signatories_len as u32, call_len as u32)
-			} else {
-				T::WeightInfo::as_multi_create(other_signatories_len as u32, call_len as u32)
-			};
+			let final_weight = T::WeightInfo::as_multi_create(other_signatories_len as u32, call_len as u32);
 			// Call is not made, so the actual weight does not include call
 			Ok(Some(final_weight).into())
-		}
-	}
-
-	/// Place a call's encoded data in storage, reserving funds as appropriate.
-	///
-	/// We store `data` here because storing `call` would result in needing another `.encode`.
-	///
-	/// Returns a `bool` indicating whether the data did end up being stored.
-	fn store_call_and_reserve(
-		who: T::AccountId,
-		hash: &[u8; 32],
-		data: OpaqueCall<T>,
-		other_deposit: BalanceOf<T>,
-	) -> DispatchResult {
-		ensure!(!Calls::<T>::contains_key(hash), Error::<T>::AlreadyStored);
-		let deposit = other_deposit +
-			T::DepositBase::get() +
-			T::DepositFactor::get() *
-				BalanceOf::<T>::from(((data.encoded_len() + 31) / 32) as u32);
-		T::Currency::reserve(&who, deposit)?;
-		Calls::<T>::insert(&hash, (data, who, deposit));
-		Ok(())
-	}
-
-	/// Attempt to decode and return the call, provided by the user or from storage.
-	fn get_call(
-		hash: &[u8; 32],
-		maybe_known: Option<&OpaqueCall<T>>,
-	) -> Option<(<T as Config>::Call, usize)> {
-		maybe_known.map_or_else(
-			|| {
-				Calls::<T>::get(hash)
-					.and_then(|(data, ..)| Some((data.try_decode()?, data.encoded_len())))
-			},
-			|data| Some((data.try_decode()?, data.encoded_len())),
-		)
-	}
-
-	/// Attempt to remove a call from storage, returning any deposit on it to the owner.
-	fn clear_call(hash: &[u8; 32]) {
-		if let Some((_, who, deposit)) = Calls::<T>::take(hash) {
-			T::Currency::unreserve(&who, deposit);
 		}
 	}
 
