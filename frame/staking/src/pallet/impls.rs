@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, ExtendedBalance, ScoreProvider,
-	SortedListProvider, Supports, VoteWeight, VoterOf,
+	data_provider, ElectionDataProvider, ElectionProvider, ScoreProvider, SortedListProvider,
+	Supports, VoteWeight, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -1314,7 +1314,7 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 /// a look at [`pallet-bags-list].
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
-	type Score = ExtendedBalance;
+	type Score = BalanceOf<T>;
 	type Error = ();
 
 	/// Returns iterator over voter list, which can have `take` called on it.
