@@ -624,7 +624,7 @@ benchmarks_instance_pallet! {
 		let mut allies = (0 .. z).map(ally::<T, I>).collect::<Vec<_>>();
 		let witness = ForceSetWitness{
 			proposals: p,
-			votable_members: c,
+			members: c,
 		};
 
 		if c > 0 {
