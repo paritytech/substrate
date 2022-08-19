@@ -1824,7 +1824,7 @@ where
 								if let ConnectedPoint::Dialer { address, role_override: _ } =
 									endpoint
 								{
-									error!(
+									warn!(
 										"💔 The bootnode you want to connect to at `{}` provided a different peer ID `{}` than the one you expect `{}`.",
 										address,
 										obtained,
