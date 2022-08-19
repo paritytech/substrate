@@ -340,18 +340,18 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 pub struct TestFilter;
 
 parameter_types! {
-	static CallFilterTestValue: fn(&Call) -> bool = (|_| true);
+	static CallFilter: fn(&Call) -> bool = (|_| true);
 }
 
 impl TestFilter {
 	pub fn set_filter(filter: fn(&Call) -> bool) {
-		CallFilterTestValue::mutate(|fltr| *fltr = filter);
+		CallFilter::mutate(|fltr| *fltr = filter);
 	}
 }
 
 impl Contains<Call> for TestFilter {
 	fn contains(call: &Call) -> bool {
-		CallFilterTestValue::get()(call)
+		CallFilter::get()(call)
 	}
 }
 
