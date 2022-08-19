@@ -51,6 +51,7 @@ fn add_announcements<T: Config>(
 	maybe_real: Option<T::AccountId>,
 ) -> Result<(), &'static str> {
 	let caller = maybe_who.unwrap_or_else(|| account("caller", 0, SEED));
+	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 	let real = if let Some(real) = maybe_real {
 		real
@@ -59,16 +60,17 @@ fn add_announcements<T: Config>(
 		T::Currency::make_free_balance_be(&real, BalanceOf::<T>::max_value() / 2u32.into());
 		Proxy::<T>::add_proxy(
 			RawOrigin::Signed(real.clone()).into(),
-			caller.clone(),
+			caller_lookup,
 			T::ProxyType::default(),
 			T::BlockNumber::zero(),
 		)?;
 		real
 	};
+	let real_lookup = T::Lookup::unlookup(real);
 	for _ in 0..n {
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
-			real.clone(),
+			real_lookup.clone(),
 			T::CallHasher::hash_of(&("add_announcement", n)),
 		)?;
 	}
@@ -83,8 +85,9 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
+		let real_lookup = T::Lookup::unlookup(real);
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
-	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
+	}: _(RawOrigin::Signed(caller), real_lookup, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(Event::ProxyExecuted { result: Ok(()) }.into())
 	}
@@ -95,17 +98,19 @@ benchmarks! {
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("anonymous", 0, SEED);
 		let delegate: T::AccountId = account("target", p - 1, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
+		let real_lookup = T::Lookup::unlookup(real);
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(delegate.clone()).into(),
-			real.clone(),
+			real_lookup.clone(),
 			T::CallHasher::hash_of(&call),
 		)?;
 		add_announcements::<T>(a, Some(delegate.clone()), None)?;
-	}: _(RawOrigin::Signed(caller), delegate, real, Some(T::ProxyType::default()), Box::new(call))
+	}: _(RawOrigin::Signed(caller), delegate_lookup, real_lookup, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(Event::ProxyExecuted { result: Ok(()) }.into())
 	}
@@ -118,14 +123,15 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
+		let real_lookup = T::Lookup::unlookup(real);
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
-			real.clone(),
+			real_lookup.clone(),
 			T::CallHasher::hash_of(&call),
 		)?;
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
-	}: _(RawOrigin::Signed(caller.clone()), real, T::CallHasher::hash_of(&call))
+	}: _(RawOrigin::Signed(caller.clone()), real_lookup, T::CallHasher::hash_of(&call))
 	verify {
 		let (announcements, _) = Announcements::<T>::get(&caller);
 		assert_eq!(announcements.len() as u32, a);
@@ -136,17 +142,19 @@ benchmarks! {
 		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
 		let caller: T::AccountId = account("target", p - 1, SEED);
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
+		let real_lookup = T::Lookup::unlookup(real.clone());
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
-			real.clone(),
+			real_lookup,
 			T::CallHasher::hash_of(&call),
 		)?;
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
-	}: _(RawOrigin::Signed(real), caller.clone(), T::CallHasher::hash_of(&call))
+	}: _(RawOrigin::Signed(real), caller_lookup, T::CallHasher::hash_of(&call))
 	verify {
 		let (announcements, _) = Announcements::<T>::get(&caller);
 		assert_eq!(announcements.len() as u32, a);
@@ -160,10 +168,11 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
+		let real_lookup = T::Lookup::unlookup(real.clone());
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		let call_hash = T::CallHasher::hash_of(&call);
-	}: _(RawOrigin::Signed(caller.clone()), real.clone(), call_hash)
+	}: _(RawOrigin::Signed(caller.clone()), real_lookup, call_hash)
 	verify {
 		assert_last_event::<T>(Event::Announced { real, proxy: caller, call_hash }.into());
 	}
@@ -228,6 +237,7 @@ benchmarks! {
 		let p in 0 .. (T::MaxProxies::get() - 2);
 
 		let caller: T::AccountId = whitelisted_caller();
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		Pallet::<T>::anonymous(
 			RawOrigin::Signed(whitelisted_caller()).into(),
@@ -241,7 +251,7 @@ benchmarks! {
 
 		add_proxies::<T>(p, Some(anon.clone()))?;
 		ensure!(Proxies::<T>::contains_key(&anon), "anon proxy not created");
-	}: _(RawOrigin::Signed(anon.clone()), caller.clone(), T::ProxyType::default(), 0, height, ext_index)
+	}: _(RawOrigin::Signed(anon.clone()), caller_lookup, T::ProxyType::default(), 0, height, ext_index)
 	verify {
 		assert!(!Proxies::<T>::contains_key(&anon));
 	}

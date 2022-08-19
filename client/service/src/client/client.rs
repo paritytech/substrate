@@ -1327,7 +1327,7 @@ where
 			Some(&root),
 		)
 		.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
-		let proving_backend = sp_state_machine::TrieBackend::new(db, root);
+		let proving_backend = sp_state_machine::TrieBackendBuilder::new(db, root).build();
 		let state = read_range_proof_check_with_child_on_proving_backend::<HashFor<Block>>(
 			&proving_backend,
 			start_key,
@@ -1688,6 +1688,10 @@ where
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
+	}
+
+	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, sp_api::ApiError> {
+		self.state_at(at).map_err(Into::into)
 	}
 }
 

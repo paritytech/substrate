@@ -170,7 +170,7 @@ fn test_calculate_for_fraction_times_denominator() {
 	};
 
 	pub fn formal_calculate_for_fraction_times_denominator(n: u64, d: u64) -> u64 {
-		if n <= Perbill::from_parts(0_500_000_000) * d.clone() {
+		if n <= Perbill::from_parts(0_500_000_000) * d {
 			n + d / 2
 		} else {
 			(d as u128 * 2 - n as u128 * 2).try_into().unwrap()

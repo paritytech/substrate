@@ -19,9 +19,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+pub mod cache;
 mod error;
 mod node_codec;
 mod node_header;
+#[cfg(feature = "std")]
+pub mod recorder;
 mod storage_proof;
 mod trie_codec;
 mod trie_stream;
@@ -46,8 +50,8 @@ use trie_db::proof::{generate_proof, verify_proof};
 pub use trie_db::{
 	nibble_ops,
 	node::{NodePlan, ValuePlan},
-	CError, DBValue, Query, Recorder, Trie, TrieConfiguration, TrieDBIterator, TrieDBKeyIterator,
-	TrieLayout, TrieMut,
+	CError, DBValue, Query, Recorder, Trie, TrieCache, TrieConfiguration, TrieDBIterator,
+	TrieDBKeyIterator, TrieLayout, TrieMut, TrieRecorder,
 };
 /// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;
@@ -167,11 +171,15 @@ pub type MemoryDB<H> = memory_db::MemoryDB<H, memory_db::HashKey<H>, trie_db::DB
 pub type GenericMemoryDB<H, KF> = memory_db::MemoryDB<H, KF, trie_db::DBValue, MemTracker>;
 
 /// Persistent trie database read-access interface for the a given hasher.
-pub type TrieDB<'a, L> = trie_db::TrieDB<'a, L>;
+pub type TrieDB<'a, 'cache, L> = trie_db::TrieDB<'a, 'cache, L>;
+/// Builder for creating a [`TrieDB`].
+pub type TrieDBBuilder<'a, 'cache, L> = trie_db::TrieDBBuilder<'a, 'cache, L>;
 /// Persistent trie database write-access interface for the a given hasher.
 pub type TrieDBMut<'a, L> = trie_db::TrieDBMut<'a, L>;
+/// Builder for creating a [`TrieDBMut`].
+pub type TrieDBMutBuilder<'a, L> = trie_db::TrieDBMutBuilder<'a, L>;
 /// Querying interface, as in `trie_db` but less generic.
-pub type Lookup<'a, L, Q> = trie_db::Lookup<'a, L, Q>;
+pub type Lookup<'a, 'cache, L, Q> = trie_db::Lookup<'a, 'cache, L, Q>;
 /// Hash type for a trie layout.
 pub type TrieHash<L> = <<L as TrieLayout>::Hash as Hasher>::Out;
 /// This module is for non generic definition of trie type.
@@ -180,18 +188,23 @@ pub mod trie_types {
 	use super::*;
 
 	/// Persistent trie database read-access interface for the a given hasher.
+	///
 	/// Read only V1 and V0 are compatible, thus we always use V1.
-	pub type TrieDB<'a, H> = super::TrieDB<'a, LayoutV1<H>>;
+	pub type TrieDB<'a, 'cache, H> = super::TrieDB<'a, 'cache, LayoutV1<H>>;
+	/// Builder for creating a [`TrieDB`].
+	pub type TrieDBBuilder<'a, 'cache, H> = super::TrieDBBuilder<'a, 'cache, LayoutV1<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMutV0<'a, H> = super::TrieDBMut<'a, LayoutV0<H>>;
+	/// Builder for creating a [`TrieDBMutV0`].
+	pub type TrieDBMutBuilderV0<'a, H> = super::TrieDBMutBuilder<'a, LayoutV0<H>>;
 	/// Persistent trie database write-access interface for the a given hasher.
 	pub type TrieDBMutV1<'a, H> = super::TrieDBMut<'a, LayoutV1<H>>;
+	/// Builder for creating a [`TrieDBMutV1`].
+	pub type TrieDBMutBuilderV1<'a, H> = super::TrieDBMutBuilder<'a, LayoutV1<H>>;
 	/// Querying interface, as in `trie_db` but less generic.
-	pub type LookupV0<'a, H, Q> = trie_db::Lookup<'a, LayoutV0<H>, Q>;
-	/// Querying interface, as in `trie_db` but less generic.
-	pub type LookupV1<'a, H, Q> = trie_db::Lookup<'a, LayoutV1<H>, Q>;
+	pub type Lookup<'a, 'cache, H, Q> = trie_db::Lookup<'a, 'cache, LayoutV1<H>, Q>;
 	/// As in `trie_db`, but less generic, error type for the crate.
-	pub type TrieError<H> = trie_db::TrieError<H, super::Error>;
+	pub type TrieError<H> = trie_db::TrieError<H, super::Error<H>>;
 }
 
 /// Create a proof for a subset of keys in a trie.
@@ -213,9 +226,7 @@ where
 	K: 'a + AsRef<[u8]>,
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
-	// Can use default layout (read only).
-	let trie = TrieDB::<L>::new(db, &root)?;
-	generate_proof(&trie, keys)
+	generate_proof::<_, L, _, _>(db, &root, keys)
 }
 
 /// Verify a set of key-value pairs against a trie root and a proof.
@@ -245,6 +256,8 @@ pub fn delta_trie_root<L: TrieConfiguration, I, A, B, DB, V>(
 	db: &mut DB,
 	mut root: TrieHash<L>,
 	delta: I,
+	recorder: Option<&mut dyn trie_db::TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<TrieHash<L>, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -254,7 +267,10 @@ where
 	DB: hash_db::HashDB<L::Hash, trie_db::DBValue>,
 {
 	{
-		let mut trie = TrieDBMut::<L>::from_existing(db, &mut root)?;
+		let mut trie = TrieDBMutBuilder::<L>::from_existing(db, &mut root)
+			.with_optional_cache(cache)
+			.with_optional_recorder(recorder)
+			.build();
 
 		let mut delta = delta.into_iter().collect::<Vec<_>>();
 		delta.sort_by(|l, r| l.0.borrow().cmp(r.0.borrow()));
@@ -271,33 +287,32 @@ where
 }
 
 /// Read a value from the trie.
-pub fn read_trie_value<L, DB>(
+pub fn read_trie_value<L: TrieLayout, DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>>(
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],
-) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
-where
-	L: TrieConfiguration,
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
-{
-	TrieDB::<L>::new(db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
+) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
+	TrieDBBuilder::<L>::new(db, root)
+		.with_optional_cache(cache)
+		.with_optional_recorder(recorder)
+		.build()
+		.get(key)
 }
 
 /// Read a value from the trie with given Query.
-pub fn read_trie_value_with<L, Q, DB>(
+pub fn read_trie_value_with<
+	L: TrieLayout,
+	Q: Query<L::Hash, Item = Vec<u8>>,
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+>(
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],
 	query: Q,
-) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
-where
-	L: TrieConfiguration,
-	Q: Query<L::Hash, Item = DBValue>,
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
-{
-	TrieDB::<L>::new(db, root)?
-		.get_with(key, query)
-		.map(|x| x.map(|val| val.to_vec()))
+) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
+	TrieDBBuilder::<L>::new(db, root).build().get_with(key, query)
 }
 
 /// Determine the empty trie root.
@@ -328,6 +343,8 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	db: &mut DB,
 	root_data: RD,
 	delta: I,
+	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<<L::Hash as Hasher>::Out, Box<TrieError<L>>>
 where
 	I: IntoIterator<Item = (A, B)>,
@@ -341,32 +358,8 @@ where
 	// root is fetched from DB, not writable by runtime, so it's always valid.
 	root.as_mut().copy_from_slice(root_data.as_ref());
 
-	let mut db = KeySpacedDBMut::new(&mut *db, keyspace);
-	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta)
-}
-
-/// Record all keys for a given root.
-pub fn record_all_keys<L: TrieConfiguration, DB>(
-	db: &DB,
-	root: &TrieHash<L>,
-	recorder: &mut Recorder<TrieHash<L>>,
-) -> Result<(), Box<TrieError<L>>>
-where
-	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
-{
-	let trie = TrieDB::<L>::new(db, root)?;
-	let iter = trie.iter()?;
-
-	for x in iter {
-		let (key, _) = x?;
-
-		// there's currently no API like iter_with()
-		// => use iter to enumerate all keys AND lookup each
-		// key using get_with
-		trie.get_with(&key, &mut *recorder)?;
-	}
-
-	Ok(())
+	let mut db = KeySpacedDBMut::new(db, keyspace);
+	delta_trie_root::<L, _, _, _, _, _>(&mut db, root, delta, recorder, cache)
 }
 
 /// Read a value from the child trie.
@@ -375,12 +368,39 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	db: &DB,
 	root: &TrieHash<L>,
 	key: &[u8],
+	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>>
 where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
 	let db = KeySpacedDB::new(db, keyspace);
-	TrieDB::<L>::new(&db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
+	TrieDBBuilder::<L>::new(&db, &root)
+		.with_optional_recorder(recorder)
+		.with_optional_cache(cache)
+		.build()
+		.get(key)
+		.map(|x| x.map(|val| val.to_vec()))
+}
+
+/// Read a hash from the child trie.
+pub fn read_child_trie_hash<L: TrieConfiguration, DB>(
+	keyspace: &[u8],
+	db: &DB,
+	root: &TrieHash<L>,
+	key: &[u8],
+	recorder: Option<&mut dyn TrieRecorder<TrieHash<L>>>,
+	cache: Option<&mut dyn TrieCache<L::Codec>>,
+) -> Result<Option<TrieHash<L>>, Box<TrieError<L>>>
+where
+	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
+{
+	let db = KeySpacedDB::new(db, keyspace);
+	TrieDBBuilder::<L>::new(&db, &root)
+		.with_optional_recorder(recorder)
+		.with_optional_cache(cache)
+		.build()
+		.get_hash(key)
 }
 
 /// Read a value from the child trie with given query.
@@ -401,20 +421,21 @@ where
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(db, keyspace);
-	TrieDB::<L>::new(&db, &root)?
+	TrieDBBuilder::<L>::new(&db, &root)
+		.build()
 		.get_with(key, query)
 		.map(|x| x.map(|val| val.to_vec()))
 }
 
 /// `HashDB` implementation that append a encoded prefix (unique id bytes) in addition to the
 /// prefix of every key value.
-pub struct KeySpacedDB<'a, DB, H>(&'a DB, &'a [u8], PhantomData<H>);
+pub struct KeySpacedDB<'a, DB: ?Sized, H>(&'a DB, &'a [u8], PhantomData<H>);
 
 /// `HashDBMut` implementation that append a encoded prefix (unique id bytes) in addition to the
 /// prefix of every key value.
 ///
 /// Mutable variant of `KeySpacedDB`, see [`KeySpacedDB`].
-pub struct KeySpacedDBMut<'a, DB, H>(&'a mut DB, &'a [u8], PhantomData<H>);
+pub struct KeySpacedDBMut<'a, DB: ?Sized, H>(&'a mut DB, &'a [u8], PhantomData<H>);
 
 /// Utility function used to merge some byte data (keyspace) and `prefix` data
 /// before calling key value database primitives.
@@ -425,20 +446,14 @@ fn keyspace_as_prefix_alloc(ks: &[u8], prefix: Prefix) -> (Vec<u8>, Option<u8>) 
 	(result, prefix.1)
 }
 
-impl<'a, DB, H> KeySpacedDB<'a, DB, H>
-where
-	H: Hasher,
-{
+impl<'a, DB: ?Sized, H> KeySpacedDB<'a, DB, H> {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a DB, ks: &'a [u8]) -> Self {
 		KeySpacedDB(db, ks, PhantomData)
 	}
 }
 
-impl<'a, DB, H> KeySpacedDBMut<'a, DB, H>
-where
-	H: Hasher,
-{
+impl<'a, DB: ?Sized, H> KeySpacedDBMut<'a, DB, H> {
 	/// instantiate new keyspaced db
 	pub fn new(db: &'a mut DB, ks: &'a [u8]) -> Self {
 		KeySpacedDBMut(db, ks, PhantomData)
@@ -447,7 +462,7 @@ where
 
 impl<'a, DB, H, T> hash_db::HashDBRef<H, T> for KeySpacedDB<'a, DB, H>
 where
-	DB: hash_db::HashDBRef<H, T>,
+	DB: hash_db::HashDBRef<H, T> + ?Sized,
 	H: Hasher,
 	T: From<&'static [u8]>,
 {
@@ -550,7 +565,7 @@ mod tests {
 			let persistent = {
 				let mut memdb = MemoryDBMeta::default();
 				let mut root = Default::default();
-				let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root);
+				let mut t = TrieDBMutBuilder::<T>::new(&mut memdb, &mut root).build();
 				for (x, y) in input.iter().rev() {
 					t.insert(x, y).unwrap();
 				}
@@ -564,13 +579,13 @@ mod tests {
 		let mut memdb = MemoryDBMeta::default();
 		let mut root = Default::default();
 		{
-			let mut t = TrieDBMut::<T>::new(&mut memdb, &mut root);
+			let mut t = TrieDBMutBuilder::<T>::new(&mut memdb, &mut root).build();
 			for (x, y) in input.clone() {
 				t.insert(x, y).unwrap();
 			}
 		}
 		{
-			let t = TrieDB::<T>::new(&memdb, &root).unwrap();
+			let t = TrieDBBuilder::<T>::new(&memdb, &root).build();
 			assert_eq!(
 				input.iter().map(|(i, j)| (i.to_vec(), j.to_vec())).collect::<Vec<_>>(),
 				t.iter()
@@ -592,7 +607,7 @@ mod tests {
 	fn default_trie_root() {
 		let mut db = MemoryDB::default();
 		let mut root = TrieHash::<LayoutV1>::default();
-		let mut empty = TrieDBMut::<LayoutV1>::new(&mut db, &mut root);
+		let mut empty = TrieDBMutBuilder::<LayoutV1>::new(&mut db, &mut root).build();
 		empty.commit();
 		let root1 = empty.root().as_ref().to_vec();
 		let root2: Vec<u8> = LayoutV1::trie_root::<_, Vec<u8>, Vec<u8>>(std::iter::empty())
@@ -695,15 +710,12 @@ mod tests {
 		check_input(&input);
 	}
 
-	fn populate_trie<'db, T>(
+	fn populate_trie<'db, T: TrieConfiguration>(
 		db: &'db mut dyn HashDB<T::Hash, DBValue>,
 		root: &'db mut TrieHash<T>,
 		v: &[(Vec<u8>, Vec<u8>)],
-	) -> TrieDBMut<'db, T>
-	where
-		T: TrieConfiguration,
-	{
-		let mut t = TrieDBMut::<T>::new(db, root);
+	) -> TrieDBMut<'db, T> {
+		let mut t = TrieDBMutBuilder::<T>::new(db, root).build();
 		for i in 0..v.len() {
 			let key: &[u8] = &v[i].0;
 			let val: &[u8] = &v[i].1;
@@ -841,7 +853,7 @@ mod tests {
 		let mut root = Default::default();
 		let _ = populate_trie::<Layout>(&mut mdb, &mut root, &pairs);
 
-		let trie = TrieDB::<Layout>::new(&mdb, &root).unwrap();
+		let trie = TrieDBBuilder::<Layout>::new(&mdb, &root).build();
 
 		let iter = trie.iter().unwrap();
 		let mut iter_pairs = Vec::new();
@@ -954,12 +966,16 @@ mod tests {
 			&mut proof_db.clone(),
 			storage_root,
 			valid_delta,
+			None,
+			None,
 		)
 		.unwrap();
 		let second_storage_root = delta_trie_root::<LayoutV0, _, _, _, _, _>(
 			&mut proof_db.clone(),
 			storage_root,
 			invalid_delta,
+			None,
+			None,
 		)
 		.unwrap();
 

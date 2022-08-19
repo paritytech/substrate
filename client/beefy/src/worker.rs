@@ -1134,7 +1134,7 @@ pub(crate) mod tests {
 		let mmr_root_hash = H256::random();
 		header.digest_mut().push(DigestItem::Consensus(
 			BEEFY_ENGINE_ID,
-			ConsensusLog::<AuthorityId>::MmrRoot(mmr_root_hash.clone()).encode(),
+			ConsensusLog::<AuthorityId>::MmrRoot(mmr_root_hash).encode(),
 		));
 
 		// verify validator set is correctly extracted from digest
