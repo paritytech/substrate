@@ -268,7 +268,7 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 	let mut counter = 1;
 	group.bench_function(
 		format!("{} transfers from {} accounts", account_num * extrinsics_per_account, account_num),
-		move |b| {
+		|b| {
 			b.iter_batched(
 				|| {
 					let prepare_extrinsics = create_account_extrinsics(&node.client, &accounts);
@@ -283,6 +283,41 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 					})));
 
 					create_benchmark_extrinsics(&node.client, &accounts, extrinsics_per_account)
+				},
+				|extrinsics| {
+					runtime.block_on(future::join_all(extrinsics.into_iter().map(|tx| {
+						submit_tx_and_wait_for_inclusion(
+							&node.transaction_pool,
+							tx,
+							&node.client,
+							false,
+						)
+					})));
+
+					println!("Finished {}", counter);
+					counter += 1;
+				},
+				BatchSize::SmallInput,
+			)
+		},
+	);
+	group.bench_function(
+		format!("{} transfers from {} accounts with nonce reusing", account_num * extrinsics_per_account, account_num),
+		|b| {
+			b.iter_batched(
+				|| {
+					let prepare_extrinsics = create_account_extrinsics(&node.client, &accounts);
+
+					runtime.block_on(future::join_all(prepare_extrinsics.into_iter().map(|tx| {
+						submit_tx_and_wait_for_inclusion(
+							&node.transaction_pool,
+							tx,
+							&node.client,
+							true,
+						)
+					})));
+
+					create_benchmark_extrinsics_with_nonce_reusing(&node.client, &accounts, extrinsics_per_account)
 				},
 				|extrinsics| {
 					runtime.block_on(future::join_all(extrinsics.into_iter().map(|tx| {
