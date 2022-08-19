@@ -102,9 +102,6 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 parameter_types! {
-	static TentoFourteen: Vec<u128> = vec![10,11,12,13,14];
-}
-parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
 	pub static Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
