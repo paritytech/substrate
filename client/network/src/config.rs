@@ -81,6 +81,7 @@ where
 	/// Client that contains the blockchain.
 	pub chain: Arc<Client>,
 
+	/// Bitswap block request protocol implementation.
 	pub bitswap: Option<BitswapWrapper<B>>,
 
 	/// Pool of transactions.

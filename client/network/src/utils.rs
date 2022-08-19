@@ -19,11 +19,6 @@
 use futures::{stream::unfold, FutureExt, Stream, StreamExt};
 use futures_timer::Delay;
 use linked_hash_set::LinkedHashSet;
-use sc_client_api::HeaderBackend;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
-};
 use std::{hash::Hash, num::NonZeroUsize, time::Duration};
 
 /// Creates a stream that returns a new value every `duration`.

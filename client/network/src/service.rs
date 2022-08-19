@@ -80,7 +80,7 @@ use std::{
 	fs, iter,
 	marker::PhantomData,
 	num::NonZeroUsize,
-	pin::{self, Pin},
+	pin::Pin,
 	str,
 	sync::{
 		atomic::{AtomicBool, AtomicUsize, Ordering},

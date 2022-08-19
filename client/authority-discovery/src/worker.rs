@@ -43,7 +43,6 @@ use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
-use sc_client_api::blockchain::HeaderBackend;
 use sc_network_common::{
 	protocol::event::DhtEvent,
 	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
@@ -151,8 +150,11 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	phantom: PhantomData<Block>,
 }
 
+/// Wrapper for `AuthorityDiscovery` runtime API. Can be
+/// used to implement custom clients.
 #[async_trait::async_trait]
 pub trait AuthorityDiscoveryWrapper<Block: BlockT> {
+	/// Retrieve authority identifiers of the current and next authority set.
 	async fn authorities(&self, at: Block::Hash)
 		-> std::result::Result<Vec<AuthorityId>, ApiError>;
 }

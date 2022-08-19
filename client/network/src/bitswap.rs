@@ -178,6 +178,7 @@ impl Prefix {
 	}
 }
 
+/// Bitswap trait
 pub trait BitswapT<B: BlockT> {
 	/// Get single indexed transaction by content hash.
 	///
@@ -188,6 +189,7 @@ pub trait BitswapT<B: BlockT> {
 		hash: <B as BlockT>::Hash,
 	) -> sp_blockchain::Result<Option<Vec<u8>>>;
 
+	/// Queue of blocks ready to be sent out on `poll()`
 	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)>;
 }
 
@@ -222,8 +224,9 @@ where
 	}
 }
 
+/// Wrapper for bitswap trait object to implement NetworkBehaviour
 pub struct BitswapWrapper<Block: BlockT> {
-	bitswap: Box<dyn BitswapT<Block> + Sync + Send>,
+	inner: Box<dyn BitswapT<Block> + Sync + Send>,
 }
 
 impl<B, Client> From<Bitswap<B, Client>> for BitswapWrapper<B>
@@ -232,13 +235,14 @@ where
 	Client: BlockBackend<B> + Send + Sync + 'static,
 {
 	fn from(bitswap: Bitswap<B, Client>) -> Self {
-		Self { bitswap: Box::new(bitswap) as Box<_> }
+		Self { inner: Box::new(bitswap) as Box<_> }
 	}
 }
 
 impl<B: BlockT> BitswapWrapper<B> {
-	pub fn new(bs: Box<dyn BitswapT<B> + Sync + Send>) -> Self {
-		Self { bitswap: bs }
+	/// Create new Bitswap wrapper
+	pub fn new(bitswap: Box<dyn BitswapT<B> + Sync + Send>) -> Self {
+		Self { inner: bitswap }
 	}
 }
 
@@ -247,11 +251,11 @@ impl<Block: BlockT> BitswapT<Block> for BitswapWrapper<Block> {
 		&self,
 		hash: <Block as BlockT>::Hash,
 	) -> sp_blockchain::Result<Option<Vec<u8>>> {
-		self.bitswap.indexed_transaction(hash)
+		self.inner.indexed_transaction(hash)
 	}
 
 	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)> {
-		self.bitswap.ready_blocks()
+		self.inner.ready_blocks()
 	}
 }
 
@@ -296,6 +300,7 @@ where
 			debug!(target: LOG_TARGET, "Ignored request: queue is full");
 			return
 		}
+
 		let mut response = BitswapMessage {
 			wantlist: None,
 			blocks: Default::default(),

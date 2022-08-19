@@ -924,6 +924,7 @@ where
 pub struct NetworkStarter(oneshot::Sender<()>);
 
 impl NetworkStarter {
+	/// Create a new NetworkStarter
 	pub fn new(sender: oneshot::Sender<()>) -> Self {
 		NetworkStarter(sender)
 	}
