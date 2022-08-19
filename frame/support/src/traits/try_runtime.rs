@@ -85,7 +85,7 @@ impl sp_std::fmt::Debug for Select {
 			Select::Only(x) => write!(
 				f,
 				"Only({:?})",
-				x.into_iter().map(|x| sp_std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
+				x.iter().map(|x| sp_std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
 			),
 			Select::All => write!(f, "All"),
 			Select::None => write!(f, "None"),
@@ -97,18 +97,18 @@ impl sp_std::fmt::Debug for Select {
 impl sp_std::str::FromStr for Select {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s.as_ref() {
+		match s {
 			"all" | "All" => Ok(Select::All),
 			"none" | "None" => Ok(Select::None),
 			_ =>
 				if s.starts_with("rr-") {
 					let count = s
-						.split_once("-")
+						.split_once('-')
 						.and_then(|(_, count)| count.parse::<u32>().ok())
 						.ok_or("failed to parse count")?;
 					Ok(Select::RoundRobin(count))
 				} else {
-					let pallets = s.split(",").map(|x| x.as_bytes().to_vec()).collect::<Vec<_>>();
+					let pallets = s.split(',').map(|x| x.as_bytes().to_vec()).collect::<Vec<_>>();
 					Ok(Select::Only(pallets))
 				},
 		}
