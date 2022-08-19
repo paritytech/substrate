@@ -1549,19 +1549,19 @@ macro_rules! decl_module {
 		{}
 	};
 
-	(@impl_sanity_check_default
+	(@impl_try_state_default
 		{ $system:ident }
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
 		{ $( $other_where_bounds:tt )* }
 	) => {
 		#[cfg(feature = "try-runtime")]
 		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
-			$crate::traits::SanityCheck<<$trait_instance as $system::Config>::BlockNumber>
+			$crate::traits::TryState<<$trait_instance as $system::Config>::BlockNumber>
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			fn sanity_check(
+			fn try_state(
 				_: <$trait_instance as $system::Config>::BlockNumber,
-				_: $crate::traits::SanityCheckTargets
+				_: $crate::traits::TryStateSelect,
 			) -> Result<(), &'static str> {
 				let pallet_name = <<
 					$trait_instance
@@ -1570,7 +1570,7 @@ macro_rules! decl_module {
 				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
 				$crate::log::debug!(
 					target: $crate::LOG_TARGET,
-					"⚠️ pallet {} cannot have sanity-checks because it is using decl_module!",
+					"⚠️ pallet {} cannot have try-state because it is using decl_module!",
 					pallet_name,
 				);
 				Ok(())
@@ -2056,7 +2056,7 @@ macro_rules! decl_module {
 		}
 
 		$crate::decl_module! {
-			@impl_sanity_check_default
+			@impl_try_state_default
 			{ $system }
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
 			{ $( $other_where_bounds )* }

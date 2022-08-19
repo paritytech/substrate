@@ -213,7 +213,7 @@ impl<
 			+ OnIdle<System::BlockNumber>
 			+ OnFinalize<System::BlockNumber>
 			+ OffchainWorker<System::BlockNumber>
-			+ frame_support::traits::SanityCheck<System::BlockNumber>,
+			+ frame_support::traits::TryState<System::BlockNumber>,
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
@@ -227,15 +227,17 @@ where
 	/// Execute given block, but don't as strict is the normal block execution.
 	///
 	/// Some consensus related checks such as the state root check can be switched off via
-	/// `check_state_root`. Some additional non-consensus checks can be additionally enabled via
-	/// `sanity_checks`.
+	/// `try_state_root`. Some additional non-consensus checks can be additionally enabled via
+	/// `try_state`.
 	///
 	/// Should only be used for testing ONLY.
 	pub fn try_execute_block(
 		block: Block,
-		check_state_root: bool,
-		sanity_checks: frame_try_runtime::SanityCheckTargets,
+		try_state_root: bool,
+		select: frame_try_runtime::TryStateSelect,
 	) -> Result<frame_support::weights::Weight, &'static str> {
+		use frame_support::traits::TryState;
+
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
@@ -243,10 +245,10 @@ where
 
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
-		// run the sanity-checks of all pallets.
-		<AllPalletsWithSystem as frame_support::traits::SanityCheck<System::BlockNumber>>::sanity_check(
+		// run the try-state checks of all pallets.
+		<AllPalletsWithSystem as TryState<System::BlockNumber>>::try_state(
 			*header.number(),
-			sanity_checks,
+			select,
 		)
 		.map_err(|e| {
 			sp_runtime::print("failure:");
@@ -264,7 +266,7 @@ where
 				assert!(header_item == computed_item, "Digest item must match that calculated.");
 			}
 
-			if check_state_root {
+			if try_state_root {
 				let storage_root = new_header.state_root();
 				header.state_root().check_equal(storage_root);
 				assert!(

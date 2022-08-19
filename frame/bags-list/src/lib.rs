@@ -258,8 +258,8 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn sanity_check(_: BlockNumberFor<T>) -> Result<(), &'static str> {
-			<Self as SortedListProvider<T::AccountId>>::sanity_check()
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+			<Self as SortedListProvider<T::AccountId>>::try_state()
 		}
 	}
 }
@@ -338,8 +338,8 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::unsafe_regenerate(all, score_of)
 	}
 
-	fn sanity_check() -> Result<(), &'static str> {
-		List::<T, I>::sanity_check()
+	fn try_state() -> Result<(), &'static str> {
+		List::<T, I>::try_state()
 	}
 
 	fn unsafe_clear() {

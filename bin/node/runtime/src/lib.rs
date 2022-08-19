@@ -2067,14 +2067,19 @@ impl_runtime_apis! {
 			(weight, RuntimeBlockWeights::get().max_block)
 		}
 
-		fn execute_block(block: Block, state_root_check: bool, sanity_checks: frame_try_runtime::SanityCheckTargets) -> Weight {
+		fn execute_block(
+			block: Block,
+			state_root_check: bool,
+			select: frame_try_runtime::TryStateSelect
+		) -> Weight {
 			log::info!(
-				target: "node-runtime", "try-runtime: executing block {:?} / root checks: {:?} / sanity-checks: {:?}",
+				target: "node-runtime",
+				"try-runtime: executing block {:?} / root checks: {:?} / try-state-select: {:?}",
 				block.header.hash(),
 				state_root_check,
-				sanity_checks,
+				select,
 			);
-			Executive::try_execute_block(block, state_root_check, sanity_checks).unwrap()
+			Executive::try_execute_block(block, state_root_check, select).unwrap()
 		}
 	}
 

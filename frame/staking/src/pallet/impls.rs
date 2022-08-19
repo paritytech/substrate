@@ -789,7 +789,7 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
 		);
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+		debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -809,7 +809,7 @@ impl<T: Config> Pallet<T> {
 			false
 		};
 
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+		debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
@@ -837,7 +837,7 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
 		);
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+		debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 	}
 
 	/// This function will remove a validator from the `Validators` storage map.
@@ -856,7 +856,7 @@ impl<T: Config> Pallet<T> {
 			false
 		};
 
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+		debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
@@ -1369,7 +1369,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do upon regenerate.
 		0
 	}
-	fn sanity_check() -> Result<(), &'static str> {
+	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -1455,7 +1455,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 
 #[cfg(feature = "try-runtime")]
 impl<T: Config> Pallet<T> {
-	pub(crate) fn do_sanity_check(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
 		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;

@@ -58,7 +58,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 	};
 
-	let log_sanity_check = quote::quote! {
+	let log_try_state = quote::quote! {
 		let pallet_name = <
 			<T as #frame_system::Config>::PalletInfo
 			as
@@ -66,7 +66,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		>::name::<Self>().unwrap_or("<unknown pallet name>");
 		#frame_support::log::debug!(
 			target: #frame_support::LOG_TARGET,
-			"🩺 sanity-checking pallet {:?}",
+			"🩺 try-state pallet {:?}",
 			pallet_name,
 		);
 	};
@@ -206,16 +206,19 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 
 		#[cfg(feature = "try-runtime")]
 		impl<#type_impl_gen>
-			#frame_support::traits::SanityCheck<<T as #frame_system::Config>::BlockNumber>
+			#frame_support::traits::TryState<<T as #frame_system::Config>::BlockNumber>
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			fn sanity_check(n: <T as #frame_system::Config>::BlockNumber, _t: #frame_support::traits::SanityCheckTargets) -> Result<(), &'static str> {
-				#log_sanity_check
+			fn try_state(
+				n: <T as #frame_system::Config>::BlockNumber,
+				_s: #frame_support::traits::TryStateSelect
+			) -> Result<(), &'static str> {
+				#log_try_state
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber
 					>
-				>::sanity_check(n)
+				>::try_state(n)
 			}
 		}
 	)

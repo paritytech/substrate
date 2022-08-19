@@ -221,7 +221,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		}
 
 		#[cfg(feature = "std")]
-		debug_assert_eq!(Self::sanity_check(), Ok(()));
+		debug_assert_eq!(Self::try_state(), Ok(()));
 
 		num_affected
 	}
@@ -509,7 +509,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		node.put();
 	}
 
-	/// Sanity check the list.
+	/// Check the internal state of the list.
 	///
 	/// This should be called from the call-site, whenever one of the mutating apis (e.g. `insert`)
 	/// is being used, after all other staking data (such as counter) has been updated. It checks:
@@ -518,7 +518,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// * length of this list is in sync with `ListNodes::count()`,
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
-	pub(crate) fn sanity_check() -> Result<(), &'static str> {
+	pub(crate) fn try_state() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.id).all(|id| seen_in_list.insert(id)),
@@ -546,7 +546,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			thresholds.into_iter().filter_map(|t| Bag::<T, I>::get(t))
 		};
 
-		let _ = active_bags.clone().try_for_each(|b| b.sanity_check())?;
+		let _ = active_bags.clone().try_for_each(|b| b.try_state())?;
 
 		let nodes_in_bags_count =
 			active_bags.clone().fold(0u32, |acc, cur| acc + cur.iter().count() as u32);
@@ -557,7 +557,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		// check that all nodes are sane. We check the `ListNodes` storage item directly in case we
 		// have some "stale" nodes that are not in a bag.
 		for (_id, node) in crate::ListNodes::<T, I>::iter() {
-			node.sanity_check()?
+			node.try_state()?
 		}
 
 		Ok(())
@@ -748,7 +748,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		}
 	}
 
-	/// Sanity check this bag.
+	/// Check the internal state of the bag.
 	///
 	/// Should be called by the call-site, after any mutating operation on a bag. The call site of
 	/// this struct is always `List`.
@@ -756,7 +756,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
-	fn sanity_check(&self) -> Result<(), &'static str> {
+	fn try_state(&self) -> Result<(), &'static str> {
 		frame_support::ensure!(
 			self.head()
 				.map(|head| head.prev().is_none())
@@ -899,7 +899,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 		self.bag_upper
 	}
 
-	fn sanity_check(&self) -> Result<(), &'static str> {
+	fn try_state(&self) -> Result<(), &'static str> {
 		let expected_bag = Bag::<T, I>::get(self.bag_upper).ok_or("bag not found for node")?;
 
 		let id = self.id();

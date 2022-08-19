@@ -42,7 +42,7 @@ pub struct ExecuteBlockCmd {
 
 	/// Which sanity check targets to execute when running this command.
 	#[clap(long, default_value = "none")]
-	sanity_check_targets: frame_try_runtime::SanityCheckTargets,
+	try_state_targets: frame_try_runtime::TryStateSelect,
 
 	/// The block hash at which to fetch the block.
 	///
@@ -167,8 +167,7 @@ where
 	let (mut header, extrinsics) = block.deconstruct();
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
-	let payload =
-		(block.clone(), !command.no_state_root_check, command.sanity_check_targets).encode();
+	let payload = (block.clone(), !command.no_state_root_check, command.try_state_targets).encode();
 
 	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);

@@ -746,8 +746,8 @@ pub mod pallet {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn sanity_check(n: BlockNumberFor<T>) -> Result<(), &'static str> {
-			Self::do_sanity_check(n)
+		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state(n)
 		}
 	}
 
@@ -861,7 +861,7 @@ pub mod pallet {
 				if T::VoterList::contains(&stash) {
 					let _ =
 						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
-					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+					debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash, extra));
