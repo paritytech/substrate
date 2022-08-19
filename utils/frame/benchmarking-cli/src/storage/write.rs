@@ -17,7 +17,7 @@
 
 use sc_cli::Result;
 use sc_client_api::{Backend as ClientBackend, StorageProvider, UsageProvider};
-use sc_client_db::{DbHash, DbState};
+use sc_client_db::{DbHash, DbState, DbStateBuilder};
 use sp_api::StateBackend;
 use sp_blockchain::HeaderBackend;
 use sp_database::{ColumnId, Transaction};
@@ -60,7 +60,7 @@ impl StorageCmd {
 		let block = BlockId::Number(client.usage_info().chain.best_number);
 		let header = client.header(block)?.ok_or("Header not found")?;
 		let original_root = *header.state_root();
-		let trie = DbState::<Block>::new(storage.clone(), original_root);
+		let trie = DbStateBuilder::<Block>::new(storage.clone(), original_root).build();
 
 		info!("Preparing keys from block {}", block);
 		// Load all KV pairs and randomly shuffle them.
