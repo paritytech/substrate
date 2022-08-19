@@ -278,7 +278,7 @@ test-linux-stable-extra:
     - rusty-cachier cache upload
 
 # This job runs all benchmarks defined in the `/bin/node/runtime` once to check that there are no errors.
-short-benchmark:
+quick-benchmarks:
   stage:                           test
   extends:
     - .docker-env
@@ -287,11 +287,9 @@ short-benchmark:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
     RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
-    RUST_BACKTRACE:                1
+    RUST_BACKTRACE:                "full"
     WASM_BUILD_NO_COLOR:           1
     WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
-    # Ensure we run the UI tests.
-    RUN_UI_TESTS:                  1
   script:
     - rusty-cachier snapshot create
     - time cargo run --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
