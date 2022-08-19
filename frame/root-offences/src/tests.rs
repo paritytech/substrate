@@ -1,6 +1,8 @@
 use super::*;
 use frame_support::{assert_err, assert_ok};
-use mock::{new_test_ext, start_session, Origin, RootOffences, Balances};
+use mock::{
+	active_era, current_era, new_test_ext, start_session, Balances, Origin, RootOffences, System,
+};
 
 #[test]
 fn create_offence_fails_given_signed_origin() {
@@ -16,12 +18,14 @@ fn create_offence_works_given_root_origin() {
 	new_test_ext().execute_with(|| {
 		start_session(1);
 
-		assert_eq!(Balances::free_balance(11), 550);
-		
-		let offenders = [(11, Perbill::from_percent(50))].to_vec();
-		assert_ok!(RootOffences::create_offence(Origin::root(), offenders));
+		assert_eq!(active_era(), 0);
+		assert_eq!(current_era(), 0);
 
-		start_session(2);
 		assert_eq!(Balances::free_balance(11), 550);
+
+		let offenders = [(11, Perbill::from_percent(50))].to_vec();
+		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
+
+		System::assert_last_event(Event::CreatedOffence { offenders, unapplied_slash: 0 }.into());
 	})
 }

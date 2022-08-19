@@ -4,7 +4,7 @@ use crate as root_offences;
 use frame_election_provider_support::{onchain, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, Hooks, OneSessionHandler, GenesisBuild},
+	traits::{ConstU32, ConstU64, GenesisBuild, Hooks, OneSessionHandler},
 };
 use pallet_session::TestSessionHandler;
 use pallet_staking::StakerStatus;
@@ -14,7 +14,7 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
-use sp_staking::SessionIndex;
+use sp_staking::{EraIndex, SessionIndex};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -133,6 +133,9 @@ parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub static Offset: BlockNumber = 0;
 	pub const Period: BlockNumber = 1;
+	pub static SessionsPerEra: SessionIndex = 3;
+	pub static SlashDeferDuration: EraIndex = 0;
+	pub const BondingDuration: EraIndex = 3;
 }
 
 impl pallet_staking::Config for Test {
@@ -145,10 +148,10 @@ impl pallet_staking::Config for Test {
 	type Event = Event;
 	type Slash = ();
 	type Reward = ();
-	type SessionsPerEra = ();
-	type SlashDeferDuration = ();
+	type SessionsPerEra = SessionsPerEra;
+	type SlashDeferDuration = SlashDeferDuration;
 	type SlashCancelOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type BondingDuration = ();
+	type BondingDuration = BondingDuration;
 	type SessionInterface = Self;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
@@ -217,7 +220,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		keys: stakers
 			.into_iter()
 			.map(|(id, ..)| (id, id, SessionKeys { other: id.into() }))
-			.collect()
+			.collect(),
 	}
 	.assimilate_storage(&mut storage);
 
@@ -258,4 +261,12 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 			Staking::on_finalize(System::block_number());
 		}
 	}
+}
+
+pub(crate) fn active_era() -> EraIndex {
+	Staking::active_era().unwrap().index
+}
+
+pub(crate) fn current_era() -> EraIndex {
+	Staking::current_era().unwrap()
 }

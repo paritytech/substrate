@@ -52,7 +52,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		RootCreatedOffence { offenders: Vec<(T::AccountId, Perbill)> },
+		CreatedOffence { offenders: Vec<(T::AccountId, Perbill)>, unapplied_slash: Weight },
 	}
 
 	#[pallet::error]
@@ -93,9 +93,9 @@ pub mod pallet {
 
 			let offence_details = Self::get_offence_details(offenders.clone())?;
 
-			Self::submit_offence(&offence_details, &slash_fraction);
+			let unapplied_slash = Self::submit_offence(&offence_details, &slash_fraction)?;
 
-			Self::deposit_event(Event::RootCreatedOffence { offenders });
+			Self::deposit_event(Event::CreatedOffence { offenders, unapplied_slash });
 			Ok(())
 		}
 	}
@@ -109,14 +109,19 @@ pub mod pallet {
 		>,
 	{
 		/// Submits the offence by calling the `on_offence` function.
-		fn submit_offence(offenders: &[OffenceDetails<T>], slash_fraction: &[Perbill]) {
+		fn submit_offence(
+			offenders: &[OffenceDetails<T>],
+			slash_fraction: &[Perbill],
+		) -> Result<Weight, DispatchError> {
 			let session_index = <pallet_session::Pallet<T> as frame_support::traits::ValidatorSet<T::AccountId>>::session_index();
 
-			<pallet_staking::Pallet<T> as OnOffenceHandler<
+			Ok(<pallet_staking::Pallet<T> as OnOffenceHandler<
 				T::AccountId,
 				IdentificationTuple<T>,
 				Weight,
-			>>::on_offence(&offenders, &slash_fraction, session_index, DisableStrategy::WhenSlashed);
+			>>::on_offence(
+				&offenders, &slash_fraction, session_index, DisableStrategy::WhenSlashed
+			))
 		}
 
 		/// Returns a vector of offenders that are going to be slashed.
