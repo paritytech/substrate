@@ -89,7 +89,7 @@ pub mod pallet {
 				.clone()
 				.into_iter()
 				.map(|(_, fraction)| fraction)
-				.collect::<Vec<Perbill>>();
+				.collect::<Vec<_>>();
 
 			let offence_details = Self::get_offence_details(offenders.clone())?;
 
