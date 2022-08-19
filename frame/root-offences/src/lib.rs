@@ -60,10 +60,10 @@ pub mod pallet {
 		FailedToGetActiveEra,
 	}
 
-	#[allow(type_alias_bounds)]
-	type OffenceDetails<T: Config> =
-		sp_staking::offence::OffenceDetails<T::AccountId, IdentificationTuple<T>>;
-
+	type OffenceDetails<T> = sp_staking::offence::OffenceDetails<
+		<T as frame_system::Config>::AccountId,
+		IdentificationTuple<T>,
+	>;
 	#[pallet::call]
 	impl<T: Config> Pallet<T>
 	where
@@ -85,11 +85,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			let slash_fraction = offenders
-				.clone()
-				.into_iter()
-				.map(|(_, fraction)| fraction)
-				.collect::<Vec<_>>();
+			let slash_fraction =
+				offenders.clone().into_iter().map(|(_, fraction)| fraction).collect::<Vec<_>>();
 
 			let offence_details = Self::get_offence_details(offenders.clone())?;
 
@@ -128,7 +125,9 @@ pub mod pallet {
 		fn get_offence_details(
 			offenders: Vec<(T::AccountId, Perbill)>,
 		) -> Result<Vec<OffenceDetails<T>>, DispatchError> {
-			let now = Staking::<T>::active_era().map(|e| e.index).ok_or(Error::<T>::FailedToGetActiveEra)?;
+			let now = Staking::<T>::active_era()
+				.map(|e| e.index)
+				.ok_or(Error::<T>::FailedToGetActiveEra)?;
 
 			Ok(offenders
 				.clone()
