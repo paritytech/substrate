@@ -1082,9 +1082,12 @@ pub mod pallet {
 		///
 		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
 		SolutionStored { election_compute: ElectionCompute, prev_ejected: bool },
-		/// The election has been finalized, with `Some` of the given computation, or else if the
+		/// The election has been finalized, with `Some` of the given computation and score, or else if the
 		/// election failed, `None`.
-		ElectionFinalized { election_compute: Option<ElectionCompute> },
+		ElectionFinalized {
+			election_compute: Option<ElectionCompute>,
+			score: Option<ElectionScore>,
+		},
 		/// An account has been rewarded for their signed submission being finalized.
 		Rewarded { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// An account has been slashed for submitting an invalid signed submission.
@@ -1533,21 +1536,27 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.map_or_else(
 				|| {
-					T::Fallback::elect()
-						.map_err(|fe| ElectionError::Fallback(fe))
-						.map(|supports| (supports, ElectionCompute::Fallback))
+					T::Fallback::elect().map_err(|fe| ElectionError::Fallback(fe)).map(|supports| {
+						(supports.clone(), supports.evaluate(), ElectionCompute::Fallback)
+					})
 				},
-				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
+				|ReadySolution { supports, score, compute }| Ok((supports, score, compute)),
 			)
-			.map(|(supports, compute)| {
-				Self::deposit_event(Event::ElectionFinalized { election_compute: Some(compute) });
+			.map(|(supports, score, compute)| {
+				Self::deposit_event(Event::ElectionFinalized {
+					election_compute: Some(compute),
+					score: Some(score),
+				});
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
 				supports
 			})
 			.map_err(|err| {
-				Self::deposit_event(Event::ElectionFinalized { election_compute: None });
+				Self::deposit_event(Event::ElectionFinalized {
+					election_compute: None,
+					score: None,
+				});
 				if Self::round() != 1 {
 					log!(warn, "Failed to finalize election round. reason {:?}", err);
 				}
@@ -1968,7 +1977,14 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
+					Event::ElectionFinalized {
+						election_compute: Some(ElectionCompute::Fallback),
+						score: Some(ElectionScore {
+							minimal_stake: 40,
+							sum_stake: 100,
+							sum_stake_squared: 5200
+						})
+					}
 				],
 			);
 			// All storage items must be cleared.
@@ -2081,12 +2097,19 @@ mod tests {
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
 					Event::UnsignedPhaseStarted { round: 1 },
-					Event::ElectionFinalized { election_compute: None },
+					Event::ElectionFinalized { election_compute: None, score: None },
 					Event::SolutionStored {
 						election_compute: ElectionCompute::Fallback,
 						prev_ejected: false
 					},
-					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
+					Event::ElectionFinalized {
+						election_compute: Some(ElectionCompute::Fallback),
+						score: Some(ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						})
+					}
 				]
 			);
 		})
