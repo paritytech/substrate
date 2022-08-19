@@ -20,13 +20,13 @@ use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use futures::{future, StreamExt};
+use kitchensink_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
-use node_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
-		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
+		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
 		PruningMode, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	BasePath, Configuration, Role,
@@ -66,10 +66,9 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		keystore: KeystoreConfig::InMemory,
 		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
-		state_cache_size: 67108864,
-		state_cache_child_ratio: None,
+		trie_cache_maximum_size: Some(64 * 1024 * 1024),
 		state_pruning: Some(PruningMode::ArchiveAll),
-		keep_blocks: KeepBlocks::All,
+		blocks_pruning: BlocksPruning::All,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
 		// NOTE: we enforce the use of the native runtime to make the errors more debuggable

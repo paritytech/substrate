@@ -29,8 +29,6 @@ mod ext;
 mod in_memory_backend;
 pub(crate) mod overlayed_changes;
 #[cfg(feature = "std")]
-mod proving_backend;
-#[cfg(feature = "std")]
 mod read_only;
 mod stats;
 #[cfg(feature = "std")]
@@ -134,7 +132,7 @@ pub use crate::{
 		StorageTransactionCache, StorageValue,
 	},
 	stats::{StateMachineStats, UsageInfo, UsageUnit},
-	trie_backend::TrieBackend,
+	trie_backend::{TrieBackend, TrieBackendBuilder},
 	trie_backend_essence::{Storage, TrieBackendStorage},
 };
 
@@ -144,11 +142,9 @@ mod std_reexport {
 		basic::BasicExternalities,
 		error::{Error, ExecutionError},
 		in_memory_backend::{new_in_mem, new_in_mem_hash_key},
-		proving_backend::{
-			create_proof_check_backend, ProofRecorder, ProvingBackend, ProvingBackendRecorder,
-		},
 		read_only::{InspectState, ReadOnlyExternalities},
 		testing::TestExternalities,
+		trie_backend::create_proof_check_backend,
 	};
 	pub use sp_trie::{
 		trie_types::{TrieDBMutV0, TrieDBMutV1},
@@ -158,6 +154,8 @@ mod std_reexport {
 
 #[cfg(feature = "std")]
 mod execution {
+	use crate::backend::AsTrieBackend;
+
 	use super::*;
 	use codec::{Codec, Decode, Encode};
 	use hash_db::Hasher;
@@ -187,9 +185,6 @@ mod execution {
 
 	/// Trie backend with in-memory storage.
 	pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
-
-	/// Proving Trie backend with in-memory storage.
-	pub type InMemoryProvingBackend<'a, H> = ProvingBackend<'a, MemoryDB<H>, H>;
 
 	/// Strategy for executing a call into the runtime.
 	#[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -562,15 +557,13 @@ mod execution {
 		runtime_code: &RuntimeCode,
 	) -> Result<(Vec<u8>, StorageProof), Box<dyn Error>>
 	where
-		B: Backend<H>,
+		B: AsTrieBackend<H>,
 		H: Hasher,
 		H::Out: Ord + 'static + codec::Codec,
 		Exec: CodeExecutor + Clone + 'static,
 		Spawn: SpawnNamed + Send + 'static,
 	{
-		let trie_backend = backend
-			.as_trie_backend()
-			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
+		let trie_backend = backend.as_trie_backend();
 		prove_execution_on_trie_backend::<_, _, _, _>(
 			trie_backend,
 			overlay,
@@ -607,23 +600,31 @@ mod execution {
 		Exec: CodeExecutor + 'static + Clone,
 		Spawn: SpawnNamed + Send + 'static,
 	{
-		let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-		let mut sm = StateMachine::<_, H, Exec>::new(
-			&proving_backend,
-			overlay,
-			exec,
-			method,
-			call_data,
-			Extensions::default(),
-			runtime_code,
-			spawn_handle,
-		);
+		let proving_backend =
+			TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
 
-		let result = sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-			always_wasm(),
-			None,
-		)?;
-		let proof = sm.backend.extract_proof();
+		let result = {
+			let mut sm = StateMachine::<_, H, Exec>::new(
+				&proving_backend,
+				overlay,
+				exec,
+				method,
+				call_data,
+				Extensions::default(),
+				runtime_code,
+				spawn_handle,
+			);
+
+			sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
+				always_wasm(),
+				None,
+			)?
+		};
+
+		let proof = proving_backend
+			.extract_proof()
+			.expect("A recorder was set and thus, a storage proof can be extracted; qed");
+
 		Ok((result.into_encoded(), proof))
 	}
 
@@ -639,7 +640,7 @@ mod execution {
 		runtime_code: &RuntimeCode,
 	) -> Result<Vec<u8>, Box<dyn Error>>
 	where
-		H: Hasher,
+		H: Hasher + 'static,
 		Exec: CodeExecutor + Clone + 'static,
 		H::Out: Ord + 'static + codec::Codec,
 		Spawn: SpawnNamed + Send + 'static,
@@ -693,15 +694,13 @@ mod execution {
 	/// Generate storage read proof.
 	pub fn prove_read<B, H, I>(backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
 	where
-		B: Backend<H>,
+		B: AsTrieBackend<H>,
 		H: Hasher,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
-		let trie_backend = backend
-			.as_trie_backend()
-			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
+		let trie_backend = backend.as_trie_backend();
 		prove_read_on_trie_backend(trie_backend, keys)
 	}
 
@@ -829,13 +828,11 @@ mod execution {
 		start_at: &[Vec<u8>],
 	) -> Result<(StorageProof, u32), Box<dyn Error>>
 	where
-		B: Backend<H>,
+		B: AsTrieBackend<H>,
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
-		let trie_backend = backend
-			.as_trie_backend()
-			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
+		let trie_backend = backend.as_trie_backend();
 		prove_range_read_with_child_with_size_on_trie_backend(trie_backend, size_limit, start_at)
 	}
 
@@ -856,7 +853,9 @@ mod execution {
 			return Err(Box::new("Invalid start of range."))
 		}
 
-		let proving_backend = proving_backend::ProvingBackend::<S, H>::new(trie_backend);
+		let recorder = sp_trie::recorder::Recorder::default();
+		let proving_backend =
+			TrieBackendBuilder::wrap(trie_backend).with_recorder(recorder.clone()).build();
 		let mut count = 0;
 
 		let mut child_roots = HashSet::new();
@@ -924,7 +923,7 @@ mod execution {
 								// do not add two child trie with same root
 								true
 							}
-						} else if proving_backend.estimate_encoded_size() <= size_limit {
+						} else if recorder.estimate_encoded_size() <= size_limit {
 							count += 1;
 							true
 						} else {
@@ -948,7 +947,11 @@ mod execution {
 				start_at = None;
 			}
 		}
-		Ok((proving_backend.extract_proof(), count))
+
+		let proof = proving_backend
+			.extract_proof()
+			.expect("A recorder was set and thus, a storage proof can be extracted; qed");
+		Ok((proof, count))
 	}
 
 	/// Generate range storage read proof.
@@ -960,13 +963,11 @@ mod execution {
 		start_at: Option<&[u8]>,
 	) -> Result<(StorageProof, u32), Box<dyn Error>>
 	where
-		B: Backend<H>,
+		B: AsTrieBackend<H>,
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
-		let trie_backend = backend
-			.as_trie_backend()
-			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
+		let trie_backend = backend.as_trie_backend();
 		prove_range_read_with_size_on_trie_backend(
 			trie_backend,
 			child_info,
@@ -989,7 +990,9 @@ mod execution {
 		H: Hasher,
 		H::Out: Ord + Codec,
 	{
-		let proving_backend = proving_backend::ProvingBackend::<S, H>::new(trie_backend);
+		let recorder = sp_trie::recorder::Recorder::default();
+		let proving_backend =
+			TrieBackendBuilder::wrap(trie_backend).with_recorder(recorder.clone()).build();
 		let mut count = 0;
 		proving_backend
 			.apply_to_key_values_while(
@@ -997,7 +1000,7 @@ mod execution {
 				prefix,
 				start_at,
 				|_key, _value| {
-					if count == 0 || proving_backend.estimate_encoded_size() <= size_limit {
+					if count == 0 || recorder.estimate_encoded_size() <= size_limit {
 						count += 1;
 						true
 					} else {
@@ -1007,7 +1010,11 @@ mod execution {
 				false,
 			)
 			.map_err(|e| Box::new(e) as Box<dyn Error>)?;
-		Ok((proving_backend.extract_proof(), count))
+
+		let proof = proving_backend
+			.extract_proof()
+			.expect("A recorder was set and thus, a storage proof can be extracted; qed");
+		Ok((proof, count))
 	}
 
 	/// Generate child storage read proof.
@@ -1017,15 +1024,13 @@ mod execution {
 		keys: I,
 	) -> Result<StorageProof, Box<dyn Error>>
 	where
-		B: Backend<H>,
+		B: AsTrieBackend<H>,
 		H: Hasher,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
-		let trie_backend = backend
-			.as_trie_backend()
-			.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<dyn Error>)?;
+		let trie_backend = backend.as_trie_backend();
 		prove_child_read_on_trie_backend(trie_backend, child_info, keys)
 	}
 
@@ -1041,13 +1046,17 @@ mod execution {
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
-		let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
+		let proving_backend =
+			TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
 		for key in keys.into_iter() {
 			proving_backend
 				.storage(key.as_ref())
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 		}
-		Ok(proving_backend.extract_proof())
+
+		Ok(proving_backend
+			.extract_proof()
+			.expect("A recorder was set and thus, a storage proof can be extracted; qed"))
 	}
 
 	/// Generate storage read proof on pre-created trie backend.
@@ -1063,13 +1072,17 @@ mod execution {
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
 	{
-		let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
+		let proving_backend =
+			TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
 		for key in keys.into_iter() {
 			proving_backend
 				.child_storage(child_info, key.as_ref())
 				.map_err(|e| Box::new(e) as Box<dyn Error>)?;
 		}
-		Ok(proving_backend.extract_proof())
+
+		Ok(proving_backend
+			.extract_proof()
+			.expect("A recorder was set and thus, a storage proof can be extracted; qed"))
 	}
 
 	/// Check storage read proof, generated by `prove_read` call.
@@ -1079,7 +1092,7 @@ mod execution {
 		keys: I,
 	) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, Box<dyn Error>>
 	where
-		H: Hasher,
+		H: Hasher + 'static,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
@@ -1104,7 +1117,7 @@ mod execution {
 		start_at: &[Vec<u8>],
 	) -> Result<(KeyValueStates, usize), Box<dyn Error>>
 	where
-		H: Hasher,
+		H: Hasher + 'static,
 		H::Out: Ord + Codec,
 	{
 		let proving_backend = create_proof_check_backend::<H>(root, proof)?;
@@ -1121,7 +1134,7 @@ mod execution {
 		start_at: Option<&[u8]>,
 	) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, bool), Box<dyn Error>>
 	where
-		H: Hasher,
+		H: Hasher + 'static,
 		H::Out: Ord + Codec,
 	{
 		let proving_backend = create_proof_check_backend::<H>(root, proof)?;
@@ -1142,7 +1155,7 @@ mod execution {
 		keys: I,
 	) -> Result<HashMap<Vec<u8>, Option<Vec<u8>>>, Box<dyn Error>>
 	where
-		H: Hasher,
+		H: Hasher + 'static,
 		H::Out: Ord + Codec,
 		I: IntoIterator,
 		I::Item: AsRef<[u8]>,
@@ -1346,7 +1359,7 @@ mod execution {
 
 #[cfg(test)]
 mod tests {
-	use super::{ext::Ext, *};
+	use super::{backend::AsTrieBackend, ext::Ext, *};
 	use crate::{execution::CallResult, in_memory_backend::new_in_mem_hash_key};
 	use assert_matches::assert_matches;
 	use codec::{Decode, Encode};
@@ -1358,6 +1371,7 @@ mod tests {
 		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_runtime::traits::BlakeTwo256;
+	use sp_trie::trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1};
 	use std::{
 		collections::{BTreeMap, HashMap},
 		panic::UnwindSafe,
@@ -1419,7 +1433,7 @@ mod tests {
 		execute_works_inner(StateVersion::V1);
 	}
 	fn execute_works_inner(state_version: StateVersion) {
-		let backend = trie_backend::tests::test_trie(state_version);
+		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1447,7 +1461,7 @@ mod tests {
 		execute_works_with_native_else_wasm_inner(StateVersion::V1);
 	}
 	fn execute_works_with_native_else_wasm_inner(state_version: StateVersion) {
-		let backend = trie_backend::tests::test_trie(state_version);
+		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1476,7 +1490,7 @@ mod tests {
 	}
 	fn dual_execution_strategy_detects_consensus_failure_inner(state_version: StateVersion) {
 		let mut consensus_failed = false;
-		let backend = trie_backend::tests::test_trie(state_version);
+		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
@@ -1520,7 +1534,7 @@ mod tests {
 		};
 
 		// fetch execution proof from 'remote' full node
-		let mut remote_backend = trie_backend::tests::test_trie(state_version);
+		let mut remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 		let (remote_result, remote_proof) = prove_execution(
 			&mut remote_backend,
@@ -1560,7 +1574,7 @@ mod tests {
 			b"bbb".to_vec() => b"3".to_vec()
 		];
 		let state = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
-		let backend = state.as_trie_backend().unwrap();
+		let backend = state.as_trie_backend();
 
 		let mut overlay = OverlayedChanges::default();
 		overlay.set_storage(b"aba".to_vec(), Some(b"1312".to_vec()));
@@ -1716,7 +1730,7 @@ mod tests {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
 		let state = new_in_mem_hash_key::<BlakeTwo256>();
-		let backend = state.as_trie_backend().unwrap();
+		let backend = state.as_trie_backend();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
@@ -1732,7 +1746,7 @@ mod tests {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
 		let state = new_in_mem_hash_key::<BlakeTwo256>();
-		let backend = state.as_trie_backend().unwrap();
+		let backend = state.as_trie_backend();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
 		{
@@ -1769,7 +1783,7 @@ mod tests {
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
 		let state = new_in_mem_hash_key::<BlakeTwo256>();
-		let backend = state.as_trie_backend().unwrap();
+		let backend = state.as_trie_backend();
 		let mut overlay = OverlayedChanges::default();
 
 		// For example, block initialization with event.
@@ -1840,7 +1854,7 @@ mod tests {
 		let child_info = &child_info;
 		let missing_child_info = &missing_child_info;
 		// fetch read proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 		let remote_proof = prove_read(remote_backend, &[b"value2"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
@@ -1857,7 +1871,7 @@ mod tests {
 		);
 		assert_eq!(local_result2, false);
 		// on child trie
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 		let remote_proof = prove_child_read(remote_backend, child_info, &[b"value3"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
@@ -1924,8 +1938,8 @@ mod tests {
 
 			let trie: InMemoryBackend<BlakeTwo256> =
 				(storage.clone(), StateVersion::default()).into();
-			let trie_root = trie.root();
-			let backend = crate::ProvingBackend::new(&trie);
+			let trie_root = *trie.root();
+			let backend = TrieBackendBuilder::wrap(&trie).with_recorder(Default::default()).build();
 			let mut queries = Vec::new();
 			for c in 0..(5 + nb_child_trie / 2) {
 				// random existing query
@@ -1970,10 +1984,10 @@ mod tests {
 				}
 			}
 
-			let storage_proof = backend.extract_proof();
+			let storage_proof = backend.extract_proof().expect("Failed to extract proof");
 			let remote_proof = test_compact(storage_proof, &trie_root);
 			let proof_check =
-				create_proof_check_backend::<BlakeTwo256>(*trie_root, remote_proof).unwrap();
+				create_proof_check_backend::<BlakeTwo256>(trie_root, remote_proof).unwrap();
 
 			for (child_info, key, expected) in queries {
 				assert_eq!(
@@ -1987,7 +2001,7 @@ mod tests {
 	#[test]
 	fn prove_read_with_size_limit_works() {
 		let state_version = StateVersion::V0;
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(::std::iter::empty(), state_version).0;
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 0, None).unwrap();
@@ -1995,7 +2009,7 @@ mod tests {
 		assert_eq!(proof.into_memory_db::<BlakeTwo256>().drain().len(), 3);
 		assert_eq!(count, 1);
 
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 800, Some(&[])).unwrap();
 		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 9);
@@ -2018,7 +2032,7 @@ mod tests {
 		assert_eq!(results.len() as u32, 101);
 		assert_eq!(completed, false);
 
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let (proof, count) =
 			prove_range_read_with_size(remote_backend, None, None, 50000, Some(&[])).unwrap();
 		assert_eq!(proof.clone().into_memory_db::<BlakeTwo256>().drain().len(), 11);
@@ -2035,7 +2049,7 @@ mod tests {
 		let mut state_version = StateVersion::V0;
 		let (mut mdb, mut root) = trie_backend::tests::test_db(state_version);
 		{
-			let mut trie = TrieDBMutV0::from_existing(&mut mdb, &mut root).unwrap();
+			let mut trie = TrieDBMutBuilderV0::from_existing(&mut mdb, &mut root).build();
 			trie.insert(b"foo", vec![1u8; 1_000].as_slice()) // big inner hash
 				.expect("insert failed");
 			trie.insert(b"foo2", vec![3u8; 16].as_slice()) // no inner hash
@@ -2045,7 +2059,7 @@ mod tests {
 		}
 
 		let check_proof = |mdb, root, state_version| -> StorageProof {
-			let remote_backend = TrieBackend::new(mdb, root);
+			let remote_backend = TrieBackendBuilder::new(mdb, root).build();
 			let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 			let remote_proof = prove_read(remote_backend, &[b"foo222"]).unwrap();
 			// check proof locally
@@ -2069,7 +2083,7 @@ mod tests {
 		// do switch
 		state_version = StateVersion::V1;
 		{
-			let mut trie = TrieDBMutV1::from_existing(&mut mdb, &mut root).unwrap();
+			let mut trie = TrieDBMutBuilderV1::from_existing(&mut mdb, &mut root).build();
 			trie.insert(b"foo222", vec![5u8; 100].as_slice()) // inner hash
 				.expect("insert failed");
 			// update with same value do change
@@ -2088,10 +2102,10 @@ mod tests {
 	#[test]
 	fn prove_range_with_child_works() {
 		let state_version = StateVersion::V0;
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let remote_root = remote_backend.storage_root(std::iter::empty(), state_version).0;
 		let mut start_at = smallvec::SmallVec::<[Vec<u8>; 2]>::new();
-		let trie_backend = remote_backend.as_trie_backend().unwrap();
+		let trie_backend = remote_backend.as_trie_backend();
 		let max_iter = 1000;
 		let mut nb_loop = 0;
 		loop {
@@ -2138,7 +2152,7 @@ mod tests {
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let remote_backend = trie_backend::tests::test_trie(state_version);
+		let remote_backend = trie_backend::tests::test_trie(state_version, None, None);
 		let long_vec: Vec<u8> = (0..1024usize).map(|_| 8u8).collect();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
@@ -2170,9 +2184,9 @@ mod tests {
 			.into_iter(),
 			state_version,
 		);
-		let mut remote_storage = remote_backend.into_storage();
+		let mut remote_storage = remote_backend.backend_storage().clone();
 		remote_storage.consolidate(transaction);
-		let remote_backend = TrieBackend::new(remote_storage, remote_root);
+		let remote_backend = TrieBackendBuilder::new(remote_storage, remote_root).build();
 		let remote_proof = prove_child_read(remote_backend, &child_info1, &[b"key1"]).unwrap();
 		let size = remote_proof.encoded_size();
 		let remote_proof = test_compact(remote_proof, &remote_root);
@@ -2198,7 +2212,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 
 		let mut transaction = {
-			let backend = test_trie(state_version);
+			let backend = test_trie(state_version, None, None);
 			let mut cache = StorageTransactionCache::default();
 			let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
 			ext.set_child_storage(&child_info_1, b"abc".to_vec(), b"def".to_vec());
@@ -2224,7 +2238,7 @@ mod tests {
 			b"bbb".to_vec() => b"".to_vec()
 		];
 		let state = InMemoryBackend::<BlakeTwo256>::from((initial, StateVersion::default()));
-		let backend = state.as_trie_backend().unwrap();
+		let backend = state.as_trie_backend();
 
 		let mut overlay = OverlayedChanges::default();
 		overlay.start_transaction();
@@ -2255,7 +2269,7 @@ mod tests {
 			struct DummyExt(u32);
 		}
 
-		let backend = trie_backend::tests::test_trie(state_version);
+		let backend = trie_backend::tests::test_trie(state_version, None, None);
 		let mut overlayed_changes = Default::default();
 		let wasm_code = RuntimeCode::empty();
 
