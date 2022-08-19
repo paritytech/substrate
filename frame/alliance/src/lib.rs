@@ -128,7 +128,7 @@ pub use types::*;
 pub use weights::*;
 
 /// The log target of this pallet.
-pub const LOG_TARGET: &'static str = "runtime::alliance";
+pub const LOG_TARGET: &str = "runtime::alliance";
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -820,6 +820,7 @@ pub mod pallet {
 		}
 
 		/// As a member, retire from the alliance and unreserve the deposit.
+		/// This can only be done once you have `give_retirement_notice` and it has expired.
 		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
