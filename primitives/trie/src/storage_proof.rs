@@ -88,7 +88,7 @@ impl StorageProof {
 	pub fn into_compact_proof<H: Hasher>(
 		self,
 		root: H::Out,
-	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error>> {
+	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
 		crate::encode_compact::<Layout<H>>(self, root)
 	}
 
@@ -130,7 +130,7 @@ impl CompactProof {
 	pub fn to_storage_proof<H: Hasher>(
 		&self,
 		expected_root: Option<&H::Out>,
-	) -> Result<(StorageProof, H::Out), crate::CompactProofError<H::Out, crate::Error>> {
+	) -> Result<(StorageProof, H::Out), crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
 		let mut db = crate::MemoryDB::<H>::new(&[]);
 		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
@@ -157,7 +157,8 @@ impl CompactProof {
 	pub fn to_memory_db<H: Hasher>(
 		&self,
 		expected_root: Option<&H::Out>,
-	) -> Result<(crate::MemoryDB<H>, H::Out), crate::CompactProofError<H::Out, crate::Error>> {
+	) -> Result<(crate::MemoryDB<H>, H::Out), crate::CompactProofError<H::Out, crate::Error<H::Out>>>
+	{
 		let mut db = crate::MemoryDB::<H>::new(&[]);
 		let root = crate::decode_compact::<Layout<H>, _, _>(
 			&mut db,
