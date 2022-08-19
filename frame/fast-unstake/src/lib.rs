@@ -15,6 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! A pallet that's designed to ONLY do:
+//!
+//! If a nominator is not exposed at all in any `ErasStakers` (i.e. "has not backed any validators in the last 28 days"), then they can register themselves in this pallet, and move quickly into a nomination pool.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[frame_support::pallet]
@@ -45,20 +49,31 @@ pub mod pallet {
 		type SlashPerEra: Get<BalanceOf<Self>>;
 	}
 
+	/// One who wishes to be unstaked.
 	#[derive(Encode, Decode, Eq, PartialEq, Clone, scale_info::TypeInfo)]
 	pub struct Unstake<AccountId> {
+		/// Their stash account.
 		stash: AccountId,
+		/// The list of eras for which they have been checked.
 		checked: Vec<EraIndex>,
+		/// The pool they wish to join.
 		pool_id: PoolId,
 	}
 
+	/// The current "head of the queue" being unstaked.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	pub type Head<T: Config> = StorageValue<_, Unstake<T::AccountId>, OptionQuery>;
 
+	/// The map of all accounts wishing to be unstaked.
 	#[pallet::storage]
 	pub type Queue<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, PoolId>;
 
+	/// Number of eras to check per block.
+	///
+	/// If set to 0, this pallet does absolutely nothing.
+	///
+	/// Based on the amount of weight available ot `on_idle`, up to this many eras of a single nominator might be checked.
 	#[pallet::storage]
 	pub type ErasToCheckPerBlock<T: Config> = StorageValue<_, u32, ValueQuery>;
 
@@ -71,28 +86,51 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// enqueue oneself to be migrated from
 		#[pallet::weight(0)]
 		pub fn enqueue(origin: OriginFor<T>, pool_id: PoolId) -> DispatchResult {
-			// TODO: they must not already have any unbonding funds.
+			// TODO: they must not already have any unbonding funds, i.e. ledger.unlocking
+			// TODO: they should not be able to perform any actions in staking anymore once they are enqueued.. this might be a bit nasty. Should use a custom signed extension.
 			let who = ensure_signed(origin)?;
 			todo!();
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
-		fn process_head() {
-			let eras_to_check = ErasToCheckPerBlock::<T>::get();
-			let maybe_next = Head::<T>::take().or_else(|| {
+		fn get_unstake_head() -> Option<Unstake<T::AccountId>> {
+			Head::<T>::take().or_else(|| {
 				Queue::<T>::drain()
 					.take(1)
 					.map(|(stash, pool_id)| Unstake { stash, pool_id, checked: Default::default() })
 					.next()
-			});
+			})
+		}
+		/// process up to `remaining_weight`.
+		///
+		/// Returns the actual weight consumed.
+		fn process_head(remaining_weight: Weight) -> Weight {
+			let get_unstake_head_weight = T::DbWeight::get().reads(2);
+			if remaining_weight < get_unstake_head_weight {
+				// nothing can be done.
+				return 0;
+			}
 
-			let Unstake { stash, mut checked, pool_id } = match maybe_next {
-				None => return,
+
+			let Unstake { stash, mut checked, pool_id } = match Self::get_unstake_head() {
+				None => {
+					// There's no `Head` and nothing in the `Queue`, nothing to do here.
+					return get_unstake_head_weight;
+				},
 				Some(x) => x,
 			};
+
+			let weight_per_era_check = todo!("should come from our benchmarks");
+			let max_eras_to_check = remaining_weight.div(weight_per_era_check);
+			let final_eras_to_check = ErasToCheckPerBlock::<T>::get().min(max_eras_to_check);
+
+			if final_eras_to_check.is_zero() {
+				return get_unstake_head_weight + T::DbWeight::get().reads(1)
+			}
 
 			let slash_stash = |eras_checked: EraIndex| {
 				let slash_amount = T::SlashPerEra::get().saturating_mul(eras_checked.into());
@@ -108,10 +146,10 @@ pub mod pallet {
 			let now_check_range = total_check_range
 				.iter()
 				.filter(|e| !checked.contains(e))
-				.take(eras_to_check as usize)
+				.take(final_eras_to_check as usize)
 				.collect::<Vec<_>>();
 
-			if now_check_range.is_empty() && eras_to_check > 0 {
+			if now_check_range.is_empty() && final_eras_to_check > 0 {
 				// `stash` is not exposed in any era -- we can let go of them now.
 				let num_slashing_spans = 0; // TODO
 				let ctrl = pallet_staking::Bonded::<T>::get(&stash).unwrap();
@@ -127,19 +165,21 @@ pub mod pallet {
 					ledger.total,
 					pool_id,
 				).unwrap();
+				0 // TODO return weight, should be the weight of the code in this `if`
 			} else {
 				let is_exposed = now_check_range.iter().any(|e| Self::is_exposed_in_era(&stash, *e));
 				if is_exposed {
 					// this account was actually exposed in some era within the range -- slash them and
 					// remove them from the queue.
 					// TODO: slash
+					0 // TODO: return weight, should be 'now_check_range.count() * weight_per_era_check + slash_weight'
 				} else {
 					// Not exposed in these two eras.
 					checked.extend(now_check_range);
 					Head::<T>::put(Unstake { stash, checked, pool_id });
+					0 // TODO: return weight, should be 'now_check_range.count() * weight_per_era_check'
 				}
 			}
-
 		}
 
 		fn is_exposed_in_era(who: &T::AccountId, era: &EraIndex) -> bool {
