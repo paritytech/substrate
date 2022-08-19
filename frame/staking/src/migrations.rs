@@ -20,6 +20,42 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::OnRuntimeUpgrade;
 
+pub mod v11 {
+	use super::*;
+	use frame_support::{
+		storage::migration::move_pallet,
+		traits::{GetStorageVersion, PalletInfoAccess},
+	};
+
+	/// Migrate the entire storage of this pallet to a new prefix.
+	///
+	/// This new prefix must be the same as the one set in construct_runtime. For safety, use
+	/// `PalletInfo` to get it, as:
+	/// `<Runtime as frame_system::Config>::PalletInfo::name::<VoterBagsList>`.
+	///
+	/// The migration will look into the storage version in order to avoide triggering a migration
+	/// on an up to date storage.
+	pub fn migrate<T: Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
+		old_pallet_name: N,
+	) -> Weight {
+		let old_pallet_name = old_pallet_name.as_ref();
+		let new_pallet_name = <P as PalletInfoAccess>::name();
+
+		if new_pallet_name == old_pallet_name {
+			log!(warn, "new bags-list name is equal to the old one, no need to migrate");
+			return 0
+		}
+
+		if StorageVersion::<T>::get() == Releases::V10_0_0 {
+			move_pallet(old_pallet_name.as_bytes(), new_pallet_name.as_bytes());
+			<T as frame_system::Config>::BlockWeights::get().max_block
+		} else {
+			log!(warn, "v11::migrate should be removed.");
+			T::DbWeight::get().reads(1)
+		}
+	}
+}
+
 pub mod v10 {
 	use super::*;
 	use frame_support::storage_alias;

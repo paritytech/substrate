@@ -1342,7 +1342,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		Ok(())
 	}
 	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		Ok(Pallet::<T>::weight_of(id))
+		Ok(Pallet::<T>::weight_of(id).into())
 	}
 	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on update.
