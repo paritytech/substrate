@@ -128,8 +128,7 @@ pub mod pallet {
 		fn get_offence_details(
 			offenders: Vec<(T::AccountId, Perbill)>,
 		) -> Result<Vec<OffenceDetails<T>>, DispatchError> {
-			let active_era = Staking::<T>::active_era().ok_or(Error::<T>::FailedToGetActiveEra)?;
-			let now = active_era.index;
+			let now = Staking::<T>::active_era().map(|e| e.index).ok_or(Error::<T>::FailedToGetActiveEra)?;
 
 			Ok(offenders
 				.clone()
