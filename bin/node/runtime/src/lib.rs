@@ -1712,7 +1712,7 @@ mod benches {
 		[frame_benchmarking, BaselineBench::<Runtime>]
 		[pallet_assets, Assets]
 		[pallet_babe, Babe]
-		[pallet_bags_list, BagsList]
+		[pallet_bags_list, VoterBagsList]
 		[pallet_balances, Balances]
 		[pallet_bounties, Bounties]
 		[pallet_child_bounties, ChildBounties]
