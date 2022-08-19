@@ -331,7 +331,7 @@ pub struct AllocationStats {
 	/// The sum of every allocation ever made.
 	///
 	/// This increases every time a new allocation is made.
-	pub bytes_allocated_sum: u32,
+	pub bytes_allocated_sum: u128,
 
 	/// The amount of address space (in bytes) used by the allocator.
 	///
@@ -435,7 +435,7 @@ impl FreeingBumpHeapAllocator {
 		Header::Occupied(order).write_into(mem, header_ptr)?;
 
 		self.stats.bytes_allocated += order.size() + HEADER_SIZE;
-		self.stats.bytes_allocated_sum += order.size() + HEADER_SIZE;
+		self.stats.bytes_allocated_sum += u128::from(order.size() + HEADER_SIZE);
 		self.stats.bytes_allocated_peak =
 			std::cmp::max(self.stats.bytes_allocated_peak, self.stats.bytes_allocated);
 		self.stats.address_space_used = self.bumper - self.original_heap_base;

@@ -1082,10 +1082,7 @@ fn validator_payment_prefs_work() {
 	// This test will focus on validator payment.
 	ExtBuilder::default().build_and_execute(|| {
 		let commission = Perbill::from_percent(40);
-		<Validators<Test>>::insert(
-			&11,
-			ValidatorPrefs { commission: commission.clone(), ..Default::default() },
-		);
+		<Validators<Test>>::insert(&11, ValidatorPrefs { commission, ..Default::default() });
 
 		// Reward controller so staked ratio doesn't change.
 		<Payee<Test>>::insert(&11, RewardDestination::Controller);
