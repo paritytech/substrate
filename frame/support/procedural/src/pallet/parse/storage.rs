@@ -703,96 +703,90 @@ impl StorageDef {
 					TypePath,
 				};
 
-				match query_kind {
+				let result_query = match query_kind {
 					Type::Path(path)
 						if path
 							.path
 							.segments
 							.last()
 							.map_or(false, |s| s.ident == "OptionQuery") =>
-						Ok(Some(QueryKind::OptionQuery)),
+						return Ok(Some(QueryKind::OptionQuery)),
 					Type::Path(TypePath { path: Path { segments, .. }, .. })
 						if segments.last().map_or(false, |s| s.ident == "ResultQuery") =>
-					{
-						let result_query = segments
+						segments
 							.last()
-							.expect("segments is checked to have the last value; qed");
-						match &result_query.arguments {
-							PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-								args,
-								..
-							}) => {
-								if args.len() != 1 {
-									let msg = format!(
-										"Invalid pallet::storage, unexpected number of generic \
-										arguments for ResultQuery, expected 1 type argument, found \
-										{}",
-										args.len(),
-									);
-									return Err(syn::Error::new(args.span(), msg))
-								}
-
-								match &args[0] {
-									GenericArgument::Type(Type::Path(TypePath {
-										path: Path { segments: err_variant, leading_colon },
-										..
-									})) => {
-										if err_variant.len() < 2 {
-											let msg = format!(
-												"Invalid pallet::storage, unexpected number of \
-												path segments for the generics in ResultQuery, \
-												expected a path with at least 2 segments, found {}",
-												err_variant.len(),
-											);
-											return Err(syn::Error::new(err_variant.span(), msg))
-										}
-										let mut error = err_variant.clone();
-										let err_variant = error
-											.pop()
-											.expect("Checked to have at least 2; qed")
-											.into_value()
-											.ident;
-
-										// Necessary here to eliminate the last double colon
-										let last = error
-											.pop()
-											.expect("Checked to have at least 2; qed")
-											.into_value();
-										error.push_value(last);
-
-										Ok(Some(QueryKind::ResultQuery(
-											syn::Path {
-												leading_colon: leading_colon.clone(),
-												segments: error,
-											},
-											err_variant,
-										)))
-									},
-									gen_arg => {
-										let msg = format!(
-											"Invalid pallet::storage, unexpected generic argument \
-											kind, expected a type path to a `PalletError` enum \
-											variant, found `{}`",
-											gen_arg.to_token_stream().to_string(),
-										);
-										Err(syn::Error::new(gen_arg.span(), msg))
-									},
-								}
-							},
-							args => {
-								let msg = format!(
-									"Invalid pallet::storage, unexpected generic args for \
-									ResultQuery, expected angle-bracketed arguments, found `{}`",
-									args.to_token_stream().to_string()
-								);
-								Err(syn::Error::new(args.span(), msg))
-							},
-						}
-					},
+							.expect("segments is checked to have the last value; qed")
+							.clone(),
 					Type::Path(path)
 						if path.path.segments.last().map_or(false, |s| s.ident == "ValueQuery") =>
-						Ok(Some(QueryKind::ValueQuery)),
-					_ => Ok(None),
+						return Ok(Some(QueryKind::ValueQuery)),
+					_ => return Ok(None),
+				};
+
+				let error_type = match result_query.arguments {
+					PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+						args, ..
+					}) => {
+						if args.len() != 1 {
+							let msg = format!(
+								"Invalid pallet::storage, unexpected number of generic arguments \
+								for ResultQuery, expected 1 type argument, found {}",
+								args.len(),
+							);
+							return Err(syn::Error::new(args.span(), msg))
+						}
+
+						args[0].clone()
+					},
+					args => {
+						let msg = format!(
+							"Invalid pallet::storage, unexpected generic args for ResultQuery, \
+							expected angle-bracketed arguments, found `{}`",
+							args.to_token_stream().to_string()
+						);
+						return Err(syn::Error::new(args.span(), msg))
+					},
+				};
+
+				match error_type {
+					GenericArgument::Type(Type::Path(TypePath {
+						path: Path { segments: err_variant, leading_colon },
+						..
+					})) => {
+						if err_variant.len() < 2 {
+							let msg = format!(
+								"Invalid pallet::storage, unexpected number of path segments for \
+								the generics in ResultQuery, expected a path with at least 2 \
+								segments, found {}",
+								err_variant.len(),
+							);
+							return Err(syn::Error::new(err_variant.span(), msg))
+						}
+						let mut error = err_variant.clone();
+						let err_variant = error
+							.pop()
+							.expect("Checked to have at least 2; qed")
+							.into_value()
+							.ident;
+
+						// Necessary here to eliminate the last double colon
+						let last =
+							error.pop().expect("Checked to have at least 2; qed").into_value();
+						error.push_value(last);
+
+						Ok(Some(QueryKind::ResultQuery(
+							syn::Path { leading_colon: leading_colon.clone(), segments: error },
+							err_variant,
+						)))
+					},
+					gen_arg => {
+						let msg = format!(
+							"Invalid pallet::storage, unexpected generic argument kind, expected a \
+							type path to a `PalletError` enum variant, found `{}`",
+							gen_arg.to_token_stream().to_string(),
+						);
+						Err(syn::Error::new(gen_arg.span(), msg))
+					},
 				}
 			})
 			.transpose()?
