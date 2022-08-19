@@ -281,79 +281,85 @@ pub use frame_support_procedural::storage_alias;
 macro_rules! parameter_types {
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$vis:vis const $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL_CONST $name , $type , $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL_CONST $name , $type , $value, $( $($ty_params),* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis $name:ident: $type:ty = $value:expr;
+		$vis:vis $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL $name, $type, $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL $name, $type, $value, $( $($ty_params),* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis storage $name:ident: $type:ty = $value:expr;
+		$vis:vis storage $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value, $( $($ty_params),* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	() => ();
-	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL_CONST $name:ident, $type:ty, $value:expr, $($ty_params:ident),*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the value of this parameter type.
 			pub const fn get() -> $type {
 				$value
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type> $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
 			}
 		}
 
-		impl $crate::traits::TypedGet for $name {
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
 			type Type = $type;
 			fn get() -> $type {
 				Self::get()
 			}
 		}
 	};
-	(IMPL $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL $name:ident, $type:ty, $value:expr, $($ty_params:ident),*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the value of this parameter type.
 			pub fn get() -> $type {
 				$value
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type>, $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
 			}
 		}
 
-		impl $crate::traits::TypedGet for $name {
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
 			type Type = $type;
 			fn get() -> $type {
 				Self::get()
 			}
 		}
 	};
-	(IMPL_STORAGE $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL_STORAGE $name:ident, $type:ty, $value:expr, $($ty_params:ident),*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
@@ -379,13 +385,13 @@ macro_rules! parameter_types {
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type> $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
 			}
 		}
 
-		impl $crate::traits::TypedGet for $name {
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
 			type Type = $type;
 			fn get() -> $type {
 				Self::get()

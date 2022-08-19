@@ -272,8 +272,6 @@ pub fn process_generics(def: &mut Def) -> syn::Result<Vec<ResultOnEmptyStructMet
 				Metadata::DoubleMap { .. } => (5, 6, 7),
 			};
 
-			// #FIXME: Really stupid, the index and index_mut methods on syn::Punctuated don't
-			// return Options so we have to manually check whether they're over the length limit.
 			if query_idx < args.args.len() {
 				if let syn::GenericArgument::Type(query_kind) = args.args.index_mut(query_idx) {
 					set_result_query_type_parameter(query_kind)?;

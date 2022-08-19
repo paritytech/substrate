@@ -31,7 +31,7 @@ use sp_runtime::{DispatchError, ModuleError};
 #[frame_support::pallet]
 pub mod pallet {
 	use codec::MaxEncodedLen;
-	use frame_support::{pallet_prelude::*, scale_info};
+	use frame_support::{pallet_prelude::*, parameter_types, scale_info};
 	use frame_system::pallet_prelude::*;
 	use sp_std::any::TypeId;
 
@@ -130,6 +130,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Map2<T, I = ()> = StorageMap<_, Twox64Concat, u16, u32>;
 
+	parameter_types! {
+		pub const Map3Default<T, I>: Result<u64, Error<T, I>> = Ok(1337);
+	}
+
 	#[pallet::storage]
 	pub type Map3<T, I = ()> = StorageMap<
 		_,
@@ -137,6 +141,7 @@ pub mod pallet {
 		u32,
 		u64,
 		ResultQuery<Error<T, I>::NonExistentStorageValue>,
+		Map3Default<T, I>,
 	>;
 
 	#[pallet::storage]
@@ -472,10 +477,7 @@ fn storage_expand() {
 		k.extend(1u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(2u64));
 		assert_eq!(&k[..32], &<pallet::Map3<Runtime>>::final_prefix());
-		assert_eq!(
-			<pallet::Map3<Runtime>>::get(2),
-			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
-		);
+		assert_eq!(<pallet::Map3<Runtime>>::get(2), Ok(1337));
 
 		<pallet::DoubleMap<Runtime>>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"DoubleMap")].concat();
@@ -549,10 +551,7 @@ fn storage_expand() {
 		k.extend(1u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(2u64));
 		assert_eq!(&k[..32], &<pallet::Map3<Runtime, pallet::Instance1>>::final_prefix());
-		assert_eq!(
-			<pallet::Map3<Runtime, pallet::Instance1>>::get(2),
-			Err(pallet::Error::<Runtime, pallet::Instance1>::NonExistentStorageValue),
-		);
+		assert_eq!(<pallet::Map3<Runtime, pallet::Instance1>>::get(2), Ok(1337));
 
 		<pallet::DoubleMap<Runtime, pallet::Instance1>>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"Instance1Example"), twox_128(b"DoubleMap")].concat();
