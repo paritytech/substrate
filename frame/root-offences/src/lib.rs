@@ -29,7 +29,7 @@ mod tests;
 
 use pallet_session::historical::IdentificationTuple;
 use pallet_staking::{BalanceOf, Exposure, ExposureOf, Pallet as Staking};
-use sp_runtime::{traits::Convert, Perbill};
+use sp_runtime::Perbill;
 use sp_staking::offence::{DisableStrategy, OnOffenceHandler};
 
 pub use pallet::*;
@@ -41,7 +41,18 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + pallet_staking::Config {
+	pub trait Config:
+		frame_system::Config
+		+ pallet_staking::Config
+		+ pallet_session::Config<ValidatorId = <Self as frame_system::Config>::AccountId>
+		+ pallet_session::historical::Config<
+			FullIdentification = Exposure<
+				<Self as frame_system::Config>::AccountId,
+				BalanceOf<Self>,
+			>,
+			FullIdentificationOf = ExposureOf<Self>,
+		>
+	{
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
@@ -65,18 +76,7 @@ pub mod pallet {
 		IdentificationTuple<T>,
 	>;
 	#[pallet::call]
-	impl<T: Config> Pallet<T>
-	where
-		T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
-		T: pallet_session::historical::Config<
-			FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
-			FullIdentificationOf = ExposureOf<T>,
-		>,
-		T::ValidatorIdOf: Convert<
-			<T as frame_system::Config>::AccountId,
-			Option<<T as frame_system::Config>::AccountId>,
-		>,
-	{
+	impl<T: Config> Pallet<T> {
 		/// Allows the `root`, for example sudo to create an offence.
 		#[pallet::weight(10_000)]
 		pub fn create_offence(
@@ -97,14 +97,7 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> Pallet<T>
-	where
-		T: pallet_session::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
-		T: pallet_session::historical::Config<
-			FullIdentification = Exposure<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
-			FullIdentificationOf = ExposureOf<T>,
-		>,
-	{
+	impl<T: Config> Pallet<T> {
 		/// Submits the offence by calling the `on_offence` function.
 		fn submit_offence(
 			offenders: &[OffenceDetails<T>],
