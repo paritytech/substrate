@@ -570,46 +570,39 @@ impl<T: Config> StakingLedger<T> {
 		// (assuming 28 is the bonding duration) onwards should be slashed.
 		let slashable_chunks_start = slash_era + T::BondingDuration::get();
 
-		// if `remaining_ratio` is not zero this is a proportional slash, each chunk and
-		// `self.active` will be slashed proportionally based on the `remaining_ratio`, slashed to
-		// zero otherwise. In both cases, we slash first `self.active`, and then
-		// `slash_chunks_priority`.
+		// `Some(ratio)` if this is proportional, with `ratio`, `None` otherwise. In both cases, we
+		// slash first the active chunk, and then `slash_chunks_priority`.
 		let (remaining_ratio, slash_chunks_priority) = {
-			let mut affected_balance = BalanceOf::<T>::zero();
-			let mut first_chunk = None;
-			// the era of chunk is in increasing order within `unlocking`, thus searching in reverse
-			// order for the first chunk that after (or equal to) `slashable_chunks_start`
-			for (index, chunk) in self.unlocking.iter().enumerate().rev() {
-				if chunk.era < slashable_chunks_start {
-					break
-				}
-				first_chunk = Some(index);
-				affected_balance = affected_balance.saturating_add(chunk.value);
-			}
-			match first_chunk {
-				// If there exists a chunk who's after or equal to the `slashable_chunks_start`,
-				// then this is a proportional slash, because we want to slash active and these
-				// chunks proportionally.
-				Some(index) => {
-					affected_balance = affected_balance.saturating_add(self.active);
-					let remaining_balance = affected_balance.saturating_sub(slash_amount);
-					let remaining_ratio =
-						Perquintill::from_rational(remaining_balance, affected_balance);
-					(
-						remaining_ratio,
-						// The indices of the first slashable chunk up through the most recent
-						// chunk. (The most recent chunk is at greatest from this era), they are
-						// futher chained with the indices of the remaining chunks in case their
-						// balance can not cover the slash amount
-						(index..self.unlocking.len()).chain((0..index).rev()).collect::<Vec<_>>(),
-					)
-				},
-				None => {
-					// It is not a proportional slash, slash from the last chunk to the most recent
-					// one, chunks always wipe to 0, if need be, hence set the remaining ratio to
-					// zero
-					(Perquintill::zero(), (0..self.unlocking.len()).rev().collect::<Vec<_>>())
-				},
+			if let Some(first_slashable_index) =
+				self.unlocking.iter().position(|c| c.era >= slashable_chunks_start)
+			{
+				// If there exists a chunk who's after the first_slashable_start, then this is a
+				// proportional slash, because we want to slash active and these chunks
+				// proportionally.
+
+				// The indices of the first chunk after the slash up through the most recent chunk.
+				// (The most recent chunk is at greatest from this era)
+				let affected_indices = first_slashable_index..self.unlocking.len();
+				let unbonding_affected_balance =
+					affected_indices.clone().fold(BalanceOf::<T>::zero(), |sum, i| {
+						if let Some(chunk) = self.unlocking.get(i).defensive() {
+							sum.saturating_add(chunk.value)
+						} else {
+							sum
+						}
+					});
+				let affected_balance = self.active.saturating_add(unbonding_affected_balance);
+				let remaining_balance = affected_balance.saturating_sub(slash_amount);
+				let remaining_ratio =
+					Perquintill::from_rational(remaining_balance, affected_balance);
+				(
+					remaining_ratio,
+					affected_indices.chain((0..first_slashable_index).rev()).collect::<Vec<_>>(),
+				)
+			} else {
+				// It is not a proportional slash, slash from the last chunk to the most recent one,
+				// always wipe chunks to 0, if need be, hence set the remaining ratio to zero
+				(Perquintill::zero(), (0..self.unlocking.len()).rev().collect::<Vec<_>>())
 			}
 		};
 
