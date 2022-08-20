@@ -41,11 +41,11 @@ try-runtime = ["frame-support/try-runtime"]
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
+	"frame-support/std",
+    "frame-system/std",
 	"pallet-session/std",
 	"pallet-staking/std",
 	"pallet-offences/std",
-	"frame-support/std",
-    "frame-system/std",
+	"scale-info/std",
 	"sp-runtime/std",
 ]
