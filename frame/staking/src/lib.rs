@@ -777,7 +777,7 @@ where
 	}
 
 	fn validators() -> Vec<<T as frame_system::Config>::AccountId> {
-		<pallet_session::Pallet<T>>::validators().to_vec()
+		<pallet_session::Pallet<T>>::validators().into_inner()
 	}
 
 	fn prune_historical_up_to(up_to: SessionIndex) {

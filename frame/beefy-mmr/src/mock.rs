@@ -89,10 +89,6 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-parameter_types! {
-	pub const MaxValidators: u32 = 3072;
-}
-
 impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = u64;
@@ -103,7 +99,7 @@ impl pallet_session::Config for Test {
 	type SessionHandler = <MockSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = MockSessionKeys;
 	type WeightInfo = ();
-	type MaxValidators = MaxValidators;
+	type MaxValidators = ConstU32<3072>;
 }
 
 pub type MmrLeaf = beefy_primitives::mmr::MmrLeaf<

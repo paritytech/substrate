@@ -102,7 +102,6 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub static BondingDuration: u32 = 3;
-	pub const MaxValidators: u32 = 3072;
 }
 
 impl pallet_staking::Config for Runtime {
@@ -132,7 +131,7 @@ impl pallet_staking::Config for Runtime {
 	type OnStakerSlash = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type MaxValidators = MaxValidators;
+	type MaxValidators = ConstU32<3072>;
 }
 
 parameter_types! {

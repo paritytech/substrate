@@ -156,7 +156,6 @@ impl frame_system::Config for Runtime {
 parameter_types! {
 	pub const Period: u64 = 1;
 	pub const Offset: u64 = 0;
-	pub const MaxValidators: u32 = 3072;
 }
 
 impl pallet_session::Config for Runtime {
@@ -170,7 +169,7 @@ impl pallet_session::Config for Runtime {
 	type Event = Event;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
-	type MaxValidators = MaxValidators;
+	type MaxValidators = ConstU32<3072>;
 }
 
 impl pallet_session::historical::Config for Runtime {
