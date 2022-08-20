@@ -59,3 +59,24 @@ fn create_offence_wont_slash_non_active_validators() {
 		assert_eq!(Balances::free_balance(11), 800);
 	})
 }
+
+#[test]
+fn create_offence_wont_slash_idle() {
+	ExtBuilder::default().build_and_execute(|| {
+		start_session(1);
+
+		assert_eq!(active_era(), 0);
+		assert_eq!(current_era(), 0);
+
+		// 41 is idle.
+		assert_eq!(Balances::free_balance(41), 1000);
+
+		let offenders = [(41, Perbill::from_percent(50))].to_vec();
+		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
+
+		System::assert_last_event(Event::CreatedOffence { offenders, unapplied_slash: 0 }.into());
+
+		// 41 didn't get slashed.
+		assert_eq!(Balances::free_balance(41), 1000);
+	})
+}
