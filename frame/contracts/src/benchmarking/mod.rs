@@ -57,7 +57,7 @@ const INSTR_BENCHMARK_BATCHES: u32 = 50;
 struct Contract<T: Config> {
 	caller: T::AccountId,
 	account_id: T::AccountId,
-	addr: <T::Lookup as StaticLookup>::Source,
+	addr: AccountIdLookupOf<T>,
 	value: BalanceOf<T>,
 }
 

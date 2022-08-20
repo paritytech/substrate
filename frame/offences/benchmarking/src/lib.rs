@@ -305,7 +305,7 @@ benchmarks! {
 	verify {
 		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
 		let slash_amount = slash_fraction * bond_amount;
-		let reward_amount = slash_amount * (1 + n) / 2;
+		let reward_amount = slash_amount.saturating_mul(1 + n) / 2;
 		let reward = reward_amount / r;
 		let slash = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
