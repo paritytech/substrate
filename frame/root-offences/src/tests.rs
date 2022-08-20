@@ -26,8 +26,8 @@ fn create_offence_works_given_root_origin() {
 		let offenders = [(11, Perbill::from_percent(50))].to_vec();
 		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
 
-		// the slash should be applied, so the unapplied slash is zero.
-		System::assert_last_event(Event::CreatedOffence { offenders, unapplied_slash: 0 }.into());
+		System::assert_last_event(Event::CreatedOffence { offenders }.into());
+		// the slash should be applied right away.
 		assert_eq!(Balances::free_balance(11), 500);
 
 		// the other validator should keep his balance, because we only created
@@ -50,7 +50,7 @@ fn create_offence_wont_slash_non_active_validators() {
 		let offenders = [(31, Perbill::from_percent(20)), (11, Perbill::from_percent(20))].to_vec();
 		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
 
-		System::assert_last_event(Event::CreatedOffence { offenders, unapplied_slash: 0 }.into());
+		System::assert_last_event(Event::CreatedOffence { offenders }.into());
 
 		// so 31 didn't get slashed.
 		assert_eq!(Balances::free_balance(31), 500);
@@ -74,7 +74,7 @@ fn create_offence_wont_slash_idle() {
 		let offenders = [(41, Perbill::from_percent(50))].to_vec();
 		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
 
-		System::assert_last_event(Event::CreatedOffence { offenders, unapplied_slash: 0 }.into());
+		System::assert_last_event(Event::CreatedOffence { offenders }.into());
 
 		// 41 didn't get slashed.
 		assert_eq!(Balances::free_balance(41), 1000);

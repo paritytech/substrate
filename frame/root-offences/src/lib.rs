@@ -63,7 +63,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		CreatedOffence { offenders: Vec<(T::AccountId, Perbill)>, unapplied_slash: Weight },
+		CreatedOffence { offenders: Vec<(T::AccountId, Perbill)> },
 	}
 
 	#[pallet::error]
@@ -78,7 +78,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Allows the `root`, for example sudo to create an offence.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::DbWeight::get().reads(2))]
 		pub fn create_offence(
 			origin: OriginFor<T>,
 			offenders: Vec<(T::AccountId, Perbill)>,
@@ -90,30 +90,14 @@ pub mod pallet {
 
 			let offence_details = Self::get_offence_details(offenders.clone())?;
 
-			let unapplied_slash = Self::submit_offence(&offence_details, &slash_fraction)?;
+			Self::submit_offence(&offence_details, &slash_fraction);
 
-			Self::deposit_event(Event::CreatedOffence { offenders, unapplied_slash });
+			Self::deposit_event(Event::CreatedOffence { offenders });
 			Ok(())
 		}
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Submits the offence by calling the `on_offence` function.
-		fn submit_offence(
-			offenders: &[OffenceDetails<T>],
-			slash_fraction: &[Perbill],
-		) -> Result<Weight, DispatchError> {
-			let session_index = <pallet_session::Pallet<T> as frame_support::traits::ValidatorSet<T::AccountId>>::session_index();
-
-			Ok(<pallet_staking::Pallet<T> as OnOffenceHandler<
-				T::AccountId,
-				IdentificationTuple<T>,
-				Weight,
-			>>::on_offence(
-				&offenders, &slash_fraction, session_index, DisableStrategy::WhenSlashed
-			))
-		}
-
 		/// Returns a vector of offenders that are going to be slashed.
 		fn get_offence_details(
 			offenders: Vec<(T::AccountId, Perbill)>,
@@ -130,6 +114,17 @@ pub mod pallet {
 					reporters: vec![],
 				})
 				.collect())
+		}
+
+		/// Submits the offence by calling the `on_offence` function.
+		fn submit_offence(offenders: &[OffenceDetails<T>], slash_fraction: &[Perbill]) {
+			let session_index = <pallet_session::Pallet<T> as frame_support::traits::ValidatorSet<T::AccountId>>::session_index();
+
+			<pallet_staking::Pallet<T> as OnOffenceHandler<
+				T::AccountId,
+				IdentificationTuple<T>,
+				Weight,
+			>>::on_offence(&offenders, &slash_fraction, session_index, DisableStrategy::WhenSlashed);
 		}
 	}
 }
