@@ -6,7 +6,6 @@ use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, GenesisBuild, Hooks, OneSessionHandler},
 };
-use pallet_session::TestSessionHandler;
 use pallet_staking::StakerStatus;
 use sp_core::H256;
 use sp_runtime::{
@@ -181,11 +180,11 @@ impl pallet_session::Config for Test {
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, Staking>;
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
-	type SessionHandler = TestSessionHandler;
+	type SessionHandler = (OtherSessionHandler,);
 	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
 
@@ -203,18 +202,47 @@ impl Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	pallet_balances::GenesisConfig::<Test> { balances: vec![(11, 550), (21, 1100)] }
-		.assimilate_storage(&mut storage)
-		.unwrap();
+	pallet_balances::GenesisConfig::<Test> {
+		balances: vec![
+			//controllers
+			(10, 50),
+			(20, 50),
+			(30, 50),
+			(40, 50),
+			// stashes
+			(11, 1000),
+			(21, 1000),
+			(31, 500),
+			(41, 1000),
+		],
+	}
+	.assimilate_storage(&mut storage)
+	.unwrap();
 
 	let stakers = vec![
 		// (stash, ctrl, stake, status)
-		(11, 10, 500, StakerStatus::<AccountId>::Validator),
+		(11, 10, 1000, StakerStatus::<AccountId>::Validator),
 		(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+		// a loser validator
+		(31, 30, 500, StakerStatus::<AccountId>::Validator),
+		// an idle validator
+		(41, 40, 1000, StakerStatus::<AccountId>::Idle),
 	];
 
 	let _ =
 		pallet_staking::GenesisConfig::<Test> { stakers: stakers.clone(), ..Default::default() };
+
+	let _ = pallet_staking::GenesisConfig::<Test> {
+		stakers: stakers.clone(),
+		validator_count: 2,
+		minimum_validator_count: 0,
+		invulnerables: vec![],
+		slash_reward_fraction: Perbill::from_percent(10),
+		min_nominator_bond: 1,
+		min_validator_bond: 1,
+		..Default::default()
+	}
+	.assimilate_storage(&mut storage);
 
 	let _ = pallet_session::GenesisConfig::<Test> {
 		keys: stakers

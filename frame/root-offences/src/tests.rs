@@ -16,12 +16,15 @@ fn create_offence_fails_given_signed_origin() {
 #[test]
 fn create_offence_works_given_root_origin() {
 	new_test_ext().execute_with(|| {
+		// NOTE: this test is still WIP.
 		start_session(1);
+		start_session(2);
+		start_session(3);
 
-		assert_eq!(active_era(), 0);
-		assert_eq!(current_era(), 0);
+		assert_eq!(active_era(), 1);
+		assert_eq!(current_era(), 1);
 
-		assert_eq!(Balances::free_balance(11), 550);
+		assert_eq!(Balances::free_balance(11), 1000);
 
 		let offenders = [(11, Perbill::from_percent(50))].to_vec();
 		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
