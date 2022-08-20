@@ -795,7 +795,6 @@ mod tests {
 	use super::*;
 	use crate as pallet_transaction_payment;
 
-
 	use codec::Encode;
 
 	use sp_core::H256;

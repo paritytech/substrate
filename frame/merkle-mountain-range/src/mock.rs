@@ -19,8 +19,10 @@ use crate as pallet_mmr;
 use crate::*;
 
 use codec::{Decode, Encode};
-use frame_support::parameter_types;
-use frame_support::traits::{ConstU32, ConstU64};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_mmr_primitives::{Compact, LeafDataProvider};
 use sp_runtime::{

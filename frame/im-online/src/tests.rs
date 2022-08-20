@@ -447,8 +447,7 @@ fn should_handle_non_linear_session_progress() {
 
 		// if we have a valid current session progress then we'll heartbeat as soon
 		// as we're past 80% of the session regardless of the block number
-		MockCurrentSessionProgress
-			::mutate(|p| *p = Some(Some(Permill::from_percent(81))));
+		MockCurrentSessionProgress::mutate(|p| *p = Some(Some(Permill::from_percent(81))));
 
 		assert!(ImOnline::send_heartbeats(2).ok().is_some());
 	});
@@ -466,8 +465,7 @@ fn test_does_not_heartbeat_early_in_the_session() {
 	ext.execute_with(|| {
 		// mock current session progress as being 5%. we only randomly start
 		// heartbeating after 10% of the session has elapsed.
-		MockCurrentSessionProgress
-			::mutate(|p| *p = Some(Some(Permill::from_float(0.05))));
+		MockCurrentSessionProgress::mutate(|p| *p = Some(Some(Permill::from_float(0.05))));
 		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
 	});
 }
@@ -486,8 +484,7 @@ fn test_probability_of_heartbeating_increases_with_session_progress() {
 			// the average session length is 100 blocks, therefore the residual
 			// probability of sending a heartbeat is 1%
 			MockAverageSessionLength::mutate(|p| *p = Some(100));
-			MockCurrentSessionProgress
-				::mutate(|p| *p = Some(Some(Permill::from_float(progress))));
+			MockCurrentSessionProgress::mutate(|p| *p = Some(Some(Permill::from_float(progress))));
 
 			let mut seed = [0u8; 32];
 			let encoded = ((random * Permill::ACCURACY as f64) as u32).encode();

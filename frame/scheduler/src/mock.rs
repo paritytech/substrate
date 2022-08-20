@@ -39,9 +39,8 @@ use sp_runtime::{
 #[frame_support::pallet]
 pub mod logger {
 	use super::{OriginCaller, OriginTrait};
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, parameter_types};
 	use frame_system::pallet_prelude::*;
-	use frame_support::parameter_types;
 
 	parameter_types! {
 		static Log: Vec<(OriginCaller, u32)> = Vec::new();

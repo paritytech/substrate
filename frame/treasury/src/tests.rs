@@ -19,8 +19,6 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
-
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,

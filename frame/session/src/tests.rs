@@ -21,8 +21,8 @@ use super::*;
 use crate::mock::{
 	authorities, before_session_end_called, force_new_session, new_test_ext,
 	reset_before_session_end_called, session_changed, set_next_validators, set_session_length,
-	Origin, PreUpgradeMockSessionKeys, Session, System, Test, TestValidatorIdOf, SessionChanged,
-	TestSessionChanged,
+	Origin, PreUpgradeMockSessionKeys, Session, SessionChanged, System, Test, TestSessionChanged,
+	TestValidatorIdOf,
 };
 
 use codec::Decode;

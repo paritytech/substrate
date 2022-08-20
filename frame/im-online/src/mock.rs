@@ -19,7 +19,6 @@
 
 #![cfg(test)]
 
-
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -76,8 +75,7 @@ impl pallet_session::SessionManager<u64> for TestSessionManager {
 impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
 		Validators::mutate(|l| {
-			l.take()
-				.map(|validators| validators.iter().map(|v| (*v, *v)).collect())
+			l.take().map(|validators| validators.iter().map(|v| (*v, *v)).collect())
 		})
 	}
 	fn end_session(_: SessionIndex) {}
