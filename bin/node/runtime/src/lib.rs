@@ -720,8 +720,6 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 
 parameter_types! {
 	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
-	// This parameter is going to be needed for the operational TargetList implementation
-	pub const BagThresholdsBalance: &'static [u128] = &voter_bags::THRESHOLDS_BALANCES;
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;

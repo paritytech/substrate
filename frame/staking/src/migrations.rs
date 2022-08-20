@@ -48,6 +48,7 @@ pub mod v11 {
 
 		if StorageVersion::<T>::get() == Releases::V10_0_0 {
 			move_pallet(old_pallet_name.as_bytes(), new_pallet_name.as_bytes());
+			StorageVersion::<T>::put(Releases::V11_0_0);
 			<T as frame_system::Config>::BlockWeights::get().max_block
 		} else {
 			log!(warn, "v11::migrate should be removed.");
