@@ -16,19 +16,22 @@ fn create_offence_fails_given_signed_origin() {
 #[test]
 fn create_offence_works_given_root_origin() {
 	ExtBuilder::default().build_and_execute(|| {
-		// NOTE: this test is still WIP.
 		start_session(1);
-		start_session(2);
-		start_session(3);
 
-		assert_eq!(active_era(), 1);
-		assert_eq!(current_era(), 1);
+		assert_eq!(active_era(), 0);
+		assert_eq!(current_era(), 0);
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
 		let offenders = [(11, Perbill::from_percent(50))].to_vec();
 		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
 
+		// the slash should be applied, so the unapplied slash is zero.
 		System::assert_last_event(Event::CreatedOffence { offenders, unapplied_slash: 0 }.into());
+		assert_eq!(Balances::free_balance(11), 500);
+
+		// the other validator should keep his balance, because we only created
+		// an offences for the first validator.
+		assert_eq!(Balances::free_balance(21), 1000);
 	})
 }

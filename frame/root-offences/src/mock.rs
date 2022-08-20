@@ -14,6 +14,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, Zero},
 };
 use sp_staking::{EraIndex, SessionIndex};
+use sp_std::collections::btree_map::BTreeMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -128,6 +129,18 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 }
+
+pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
+impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
+	fn on_slash(
+		_pool_account: &AccountId,
+		slashed_bonded: Balance,
+		slashed_chunks: &BTreeMap<EraIndex, Balance>,
+	) {
+		LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
+	}
+}
+
 parameter_types! {
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub static Offset: BlockNumber = 0;
@@ -135,13 +148,15 @@ parameter_types! {
 	pub static SessionsPerEra: SessionIndex = 3;
 	pub static SlashDeferDuration: EraIndex = 0;
 	pub const BondingDuration: EraIndex = 3;
+	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
+	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
 }
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
-	type UnixTime = pallet_timestamp::Pallet<Self>;
+	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
 	type Event = Event;
@@ -155,12 +170,12 @@ impl pallet_staking::Config for Test {
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
-	type OffendingValidatorsThreshold = ();
+	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
-	type OnStakerSlash = ();
+	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
