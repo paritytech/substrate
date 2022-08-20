@@ -36,8 +36,8 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
 [features]
-runtime-benchmarks = []
-try-runtime = []
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+try-runtime = ["frame-support/try-runtime"]
 default = ["std"]
 std = [
 	"codec/std",

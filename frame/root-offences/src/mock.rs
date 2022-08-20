@@ -255,6 +255,7 @@ impl ExtBuilder {
 
 		let stakers = vec![
 			// (stash, ctrl, stake, status)
+			// these two will be elected in the default test where we elect 2.
 			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
 			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
 			// a loser validator
