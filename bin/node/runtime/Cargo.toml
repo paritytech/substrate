@@ -24,6 +24,7 @@ hex-literal = { version = "0.3.4", optional = true }
 log = { version = "0.4.17", default-features = false }
 
 # primitives
+sp-arithmetic ={ version = "5.0.0", default-features = false, path ="../../../primitives/arithmetic"}
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/authority-discovery" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/consensus/babe" }
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "4.0.0-dev" }
