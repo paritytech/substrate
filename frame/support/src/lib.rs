@@ -288,7 +288,7 @@ macro_rules! parameter_types {
 		$vis struct $name $(
 			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
-		$crate::parameter_types!(IMPL_CONST $name , $type , $value, $( $($ty_params),* )?);
+		$crate::parameter_types!(IMPL_CONST $name , $type , $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
@@ -300,7 +300,7 @@ macro_rules! parameter_types {
 		$vis struct $name $(
 			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
-		$crate::parameter_types!(IMPL $name, $type, $value, $( $($ty_params),* )?);
+		$crate::parameter_types!(IMPL $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
@@ -312,11 +312,11 @@ macro_rules! parameter_types {
 		$vis struct $name $(
 			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
 		)?;
-		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value, $( $($ty_params),* )?);
+		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	() => ();
-	(IMPL_CONST $name:ident, $type:ty, $value:expr, $($ty_params:ident),*) => {
+	(IMPL_CONST $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
 		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the value of this parameter type.
 			pub const fn get() -> $type {
@@ -337,7 +337,7 @@ macro_rules! parameter_types {
 			}
 		}
 	};
-	(IMPL $name:ident, $type:ty, $value:expr, $($ty_params:ident),*) => {
+	(IMPL $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
 		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the value of this parameter type.
 			pub fn get() -> $type {
@@ -358,7 +358,7 @@ macro_rules! parameter_types {
 			}
 		}
 	};
-	(IMPL_STORAGE $name:ident, $type:ty, $value:expr, $($ty_params:ident),*) => {
+	(IMPL_STORAGE $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
 		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
