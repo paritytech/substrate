@@ -199,60 +199,85 @@ impl Config for Test {
 	type Event = Event;
 }
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+pub struct ExtBuilder {
+	validator_count: u32,
+	minimum_validator_count: u32,
+	invulnerables: Vec<AccountId>,
+	balance_factor: Balance,
+}
 
-	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![
-			//controllers
-			(10, 50),
-			(20, 50),
-			(30, 50),
-			(40, 50),
-			// stashes
-			(11, 1000),
-			(21, 1000),
-			(31, 500),
-			(41, 1000),
-		],
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			validator_count: 2,
+			minimum_validator_count: 0,
+			invulnerables: vec![],
+			balance_factor: 1,
+		}
 	}
-	.assimilate_storage(&mut storage)
-	.unwrap();
+}
 
-	let stakers = vec![
-		// (stash, ctrl, stake, status)
-		(11, 10, 1000, StakerStatus::<AccountId>::Validator),
-		(21, 20, 1000, StakerStatus::<AccountId>::Validator),
-		// a loser validator
-		(31, 30, 500, StakerStatus::<AccountId>::Validator),
-		// an idle validator
-		(41, 40, 1000, StakerStatus::<AccountId>::Idle),
-	];
+impl ExtBuilder {
+	fn build(self) -> sp_io::TestExternalities {
+		let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
-	let _ =
-		pallet_staking::GenesisConfig::<Test> { stakers: stakers.clone(), ..Default::default() };
+		pallet_balances::GenesisConfig::<Test> {
+			balances: vec![
+				//controllers
+				(10, self.balance_factor * 50),
+				(20, self.balance_factor * 50),
+				(30, self.balance_factor * 50),
+				(40, self.balance_factor * 50),
+				// stashes
+				(11, self.balance_factor * 1000),
+				(21, self.balance_factor * 1000),
+				(31, self.balance_factor * 500),
+				(41, self.balance_factor * 1000),
+			],
+		}
+		.assimilate_storage(&mut storage)
+		.unwrap();
 
-	let _ = pallet_staking::GenesisConfig::<Test> {
-		stakers: stakers.clone(),
-		validator_count: 2,
-		minimum_validator_count: 0,
-		invulnerables: vec![],
-		slash_reward_fraction: Perbill::from_percent(10),
-		min_nominator_bond: 1,
-		min_validator_bond: 1,
-		..Default::default()
+		let stakers = vec![
+			// (stash, ctrl, stake, status)
+			(11, 10, 1000, StakerStatus::<AccountId>::Validator),
+			(21, 20, 1000, StakerStatus::<AccountId>::Validator),
+			// a loser validator
+			(31, 30, 500, StakerStatus::<AccountId>::Validator),
+			// an idle validator
+			(41, 40, 1000, StakerStatus::<AccountId>::Idle),
+		];
+
+		let _ = pallet_staking::GenesisConfig::<Test> {
+			stakers: stakers.clone(),
+			..Default::default()
+		};
+
+		let _ = pallet_staking::GenesisConfig::<Test> {
+			stakers: stakers.clone(),
+			validator_count: self.validator_count,
+			minimum_validator_count: self.minimum_validator_count,
+			invulnerables: self.invulnerables,
+			slash_reward_fraction: Perbill::from_percent(10),
+			..Default::default()
+		}
+		.assimilate_storage(&mut storage);
+
+		let _ = pallet_session::GenesisConfig::<Test> {
+			keys: stakers
+				.into_iter()
+				.map(|(id, ..)| (id, id, SessionKeys { other: id.into() }))
+				.collect(),
+		}
+		.assimilate_storage(&mut storage);
+
+		storage.into()
 	}
-	.assimilate_storage(&mut storage);
 
-	let _ = pallet_session::GenesisConfig::<Test> {
-		keys: stakers
-			.into_iter()
-			.map(|(id, ..)| (id, id, SessionKeys { other: id.into() }))
-			.collect(),
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		let mut ext = self.build();
+		ext.execute_with(test);
 	}
-	.assimilate_storage(&mut storage);
-
-	storage.into()
 }
 
 /// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
