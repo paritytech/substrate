@@ -42,7 +42,7 @@ pub struct ExecuteBlockCmd {
 
 	/// Which sanity check targets to execute when running this command.
 	#[clap(long, default_value = "none")]
-	try_state_targets: frame_try_runtime::TryStateSelect,
+	try_state: frame_try_runtime::TryStateSelect,
 
 	/// The block hash at which to fetch the block.
 	///
@@ -76,7 +76,7 @@ pub struct ExecuteBlockCmd {
 }
 
 impl ExecuteBlockCmd {
-	fn block_at<Block: BlockT>(&self) -> sc_cli::Result<Block::Hash>
+	async fn block_at<Block: BlockT>(&self, ws_uri: String) -> sc_cli::Result<Block::Hash>
 	where
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
@@ -86,6 +86,15 @@ impl ExecuteBlockCmd {
 			(Some(block_at), State::Live { .. }) => {
 				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live. the `Live::at` will be ignored");
 				hash_of::<Block>(block_at)
+			},
+			(None, State::Live { at: None, .. }) => {
+				log::warn!(
+					target: LOG_TARGET,
+					"No --block-at or --at provided, using the latest finalized block instead"
+				);
+				remote_externalities::rpc_api::get_finalized_head::<Block, _>(ws_uri)
+					.await
+					.map_err(Into::into)
 			},
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
 			_ => {
@@ -129,13 +138,14 @@ where
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
-	let block_at = command.block_at::<Block>()?;
 	let block_ws_uri = command.block_ws_uri::<Block>();
+	let block_at = command.block_at::<Block>(block_ws_uri.clone()).await?;
 	let block: Block = rpc_api::get_block::<Block, _>(block_ws_uri.clone(), block_at).await?;
 	let parent_hash = block.header().parent_hash();
 	log::info!(
 		target: LOG_TARGET,
-		"fetched block from {:?}, parent_hash to fetch the state {:?}",
+		"fetched block #{:?} from {:?}, parent_hash to fetch the state {:?}",
+		block.header().number(),
 		block_ws_uri,
 		parent_hash
 	);
@@ -167,7 +177,7 @@ where
 	let (mut header, extrinsics) = block.deconstruct();
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
-	let payload = (block.clone(), !command.no_state_root_check, command.try_state_targets).encode();
+	let payload = (block.clone(), !command.no_state_root_check, command.try_state).encode();
 
 	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);

@@ -47,7 +47,7 @@ pub struct FollowChainCmd {
 
 	/// Which sanity checks to run.
 	#[clap(long, default_value = "none")]
-	try_state_targets: frame_try_runtime::TryStateSelect,
+	try_state: frame_try_runtime::TryStateSelect,
 }
 
 pub(crate) async fn follow_chain<Block, ExecDispatch>(
@@ -148,7 +148,7 @@ where
 			&executor,
 			execution,
 			"TryRuntime_execute_block",
-			(block, command.state_root_check, command.try_state_targets.clone())
+			(block, command.state_root_check, command.try_state.clone())
 				.encode()
 				.as_ref(),
 			full_extensions(),
