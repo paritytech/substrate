@@ -58,8 +58,8 @@ frame_support::construct_runtime!(
 const CALL: &<Runtime as frame_system::Config>::Call =
 	&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
-thread_local! {
-	static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
+parameter_types! {
+	static ExtrinsicBaseWeight: u64 = 0;
 }
 
 pub struct BlockWeights;
@@ -68,7 +68,7 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 		frame_system::limits::BlockWeights::builder()
 			.base_block(0)
 			.for_class(DispatchClass::all(), |weights| {
-				weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
+				weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
 				weights.max_total = 1024.into();
@@ -229,7 +229,7 @@ impl ExtBuilder {
 		self
 	}
 	fn set_constants(&self) {
-		EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow_mut() = self.base_weight);
+		ExtrinsicBaseWeight::mutate(|v| *v = self.base_weight);
 		TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 		WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 	}

@@ -795,7 +795,6 @@ mod tests {
 	use super::*;
 	use crate as pallet_transaction_payment;
 
-	use std::cell::RefCell;
 
 	use codec::Encode;
 
@@ -835,8 +834,8 @@ mod tests {
 	const CALL: &<Runtime as frame_system::Config>::Call =
 		&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
-	thread_local! {
-		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
+	parameter_types! {
+		static ExtrinsicBaseWeight: u64 = 0;
 	}
 
 	pub struct BlockWeights;
@@ -845,7 +844,7 @@ mod tests {
 			frame_system::limits::BlockWeights::builder()
 				.base_block(0)
 				.for_class(DispatchClass::all(), |weights| {
-					weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
+					weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 				})
 				.for_class(DispatchClass::non_mandatory(), |weights| {
 					weights.max_total = 1024.into();
@@ -917,9 +916,9 @@ mod tests {
 		}
 	}
 
-	thread_local! {
-		static TIP_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
-		static FEE_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
+	parameter_types! {
+		static TipUnbalancedAmount: u64 = 0;
+		static FeeUnbalancedAmount: u64 = 0;
 	}
 
 	pub struct DealWithFees;
@@ -928,9 +927,9 @@ mod tests {
 			mut fees_then_tips: impl Iterator<Item = pallet_balances::NegativeImbalance<Runtime>>,
 		) {
 			if let Some(fees) = fees_then_tips.next() {
-				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() += fees.peek());
+				FeeUnbalancedAmount::mutate(|a| *a += fees.peek());
 				if let Some(tips) = fees_then_tips.next() {
-					TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() += tips.peek());
+					TipUnbalancedAmount::mutate(|a| *a += tips.peek());
 				}
 			}
 		}
@@ -976,7 +975,7 @@ mod tests {
 			self
 		}
 		fn set_constants(&self) {
-			EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow_mut() = self.base_weight);
+			ExtrinsicBaseWeight::mutate(|v| *v = self.base_weight);
 			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
@@ -1042,10 +1041,10 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
-				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5 + 5 + 10);
-				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 0);
+				assert_eq!(FeeUnbalancedAmount::get(), 5 + 5 + 10);
+				assert_eq!(TipUnbalancedAmount::get(), 0);
 
-				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() = 0);
+				FeeUnbalancedAmount::mutate(|a| *a = 0);
 
 				let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 					.pre_dispatch(&2, CALL, &info_from_weight(100), len)
@@ -1060,8 +1059,8 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 50 - 5);
-				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5 + 10 + 50);
-				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5);
+				assert_eq!(FeeUnbalancedAmount::get(), 5 + 10 + 50);
+				assert_eq!(TipUnbalancedAmount::get(), 5);
 			});
 	}
 
