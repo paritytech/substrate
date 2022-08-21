@@ -195,6 +195,14 @@ pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
 	fn to_asset_balance(balance: InBalance, asset_id: AssetId) -> Result<OutBalance, Self::Error>;
 }
 
+pub struct OneToOneBalanceConversion;
+impl<Balance, AssetId> BalanceConversion<Balance, AssetId, Balance> for OneToOneBalanceConversion {
+	type Error = DispatchError;
+	fn to_asset_balance(balance: Balance, _asset_id: AssetId) -> Result<Balance, Self::Error> {
+		Ok(balance)
+	}
+}
+
 /// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
 /// downstream to extend logic of Uniques current functionality.
 pub trait Locker<CollectionId, ItemId> {

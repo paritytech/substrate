@@ -1,7 +1,7 @@
 /// ! Traits and default implementation for paying transaction fees.
 use crate::Config;
 
-use codec::FullCodec;
+use codec::{FullCodec, MaxEncodedLen};
 use sp_runtime::{
 	traits::{
 		AtLeast32BitUnsigned, DispatchInfoOf, MaybeSerializeDeserialize, PostDispatchInfoOf,
@@ -28,7 +28,9 @@ pub trait OnChargeTransaction<T: Config> {
 		+ MaybeSerializeDeserialize
 		+ Debug
 		+ Default
-		+ scale_info::TypeInfo;
+		+ scale_info::TypeInfo
+		+ MaxEncodedLen
+		+ codec::EncodeLike;
 	type LiquidityInfo: Default;
 
 	/// Before the transaction is executed the payment of the transaction fees

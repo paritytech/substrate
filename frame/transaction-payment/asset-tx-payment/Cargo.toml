@@ -21,6 +21,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../../primiti
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../../benchmarking" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = ".." }
 
 # Other dependencies
@@ -53,3 +54,10 @@ std = [
 	"pallet-transaction-payment/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
+
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"pallet-transaction-payment/runtime-benchmarks",
+]

@@ -27,6 +27,8 @@
 //! amount by converting the fee calculated by [`pallet-transaction-payment`] into the desired
 //! asset.
 //!
+//! Optionally allows configure default payment asset per account.
+//!
 //! ## Integration
 
 //! This pallet wraps FRAME's transaction payment pallet and functions as a replacement. This means
@@ -40,15 +42,18 @@ use sp_std::prelude::*;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{DispatchInfo, DispatchResult, PostDispatchInfo},
+	pallet_prelude::*,
 	traits::{
 		tokens::{
-			fungibles::{Balanced, CreditOf, Inspect},
-			WithdrawConsequence,
+			fungibles::{Balanced, CreditOf, Inspect, MutateHold},
+			BalanceConversion, WithdrawConsequence,
 		},
-		IsType,
+		Get, IsSubType, IsType,
 	},
 	DefaultNoBound,
 };
+use frame_system::pallet_prelude::*;
+
 use pallet_transaction_payment::OnChargeTransaction;
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -62,8 +67,12 @@ use sp_runtime::{
 #[cfg(test)]
 mod tests;
 
+mod benchmarking;
+
 mod payment;
+pub mod weights;
 pub use payment::*;
+pub use weights::*;
 
 // Type aliases used for interaction with `OnChargeTransaction`.
 pub(crate) type OnChargeTransactionOf<T> =
@@ -108,6 +117,8 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use frame_support::{dispatch::GetDispatchInfo, traits::IsSubType};
+
 	use super::*;
 
 	#[pallet::config]
@@ -116,8 +127,45 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// The fungibles instance used to pay for transactions in assets.
 		type Fungibles: Balanced<Self::AccountId>;
+
 		/// The actual transaction charging logic that charges the fees.
 		type OnChargeAssetTransaction: OnChargeAssetTransaction<Self>;
+
+		/// Use configured default asset per user.
+		/// If true, each transaction will requires one storage access.
+		/// If false, it is zero cost, but user still allows to configure default per user asset.
+		/// That can be used by wallet to peek asset to send in header.
+		#[pallet::constant]
+		type UseUserConfiguration: Get<bool>;
+
+		type WeightInfo: WeightInfo;
+
+		/// origin allowed to reset payment asset for any account
+		type ConfigurationOrigin: EnsureOrigin<Self::Origin>;
+
+		/// Amount native assets to lock of ED.
+		/// Non native equivalent of asset is locked as defined by `BalanceConverter` at time of
+		/// call.
+		type ConfigurationExistentialDeposit: Get<BalanceOf<Self>>;
+
+		type PayableCall: Parameter
+			+ From<frame_system::Call<Self>>
+			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo, Info = DispatchInfo>
+			+ GetDispatchInfo
+			+ IsSubType<Call<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
+
+		type Lock: MutateHold<
+			Self::AccountId,
+			AssetId = ChargeAssetIdOf<Self>,
+			Balance = ChargeAssetBalanceOf<Self>,
+		>;
+		/// To covert ED to other asset amount.
+		type BalanceConverter: BalanceConversion<
+			BalanceOf<Self>,
+			ChargeAssetIdOf<Self>,
+			ChargeAssetBalanceOf<Self>,
+		>;
 	}
 
 	#[pallet::pallet]
@@ -136,6 +184,58 @@ pub mod pallet {
 			asset_id: Option<ChargeAssetIdOf<T>>,
 		},
 	}
+
+	/// Stores default payment asset of user with ED locked.
+	#[pallet::storage]
+	#[pallet::getter(fn payment_assets)]
+	pub type PaymentAssets<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		(ChargeAssetIdOf<T>, ChargeAssetBalanceOf<T>),
+		OptionQuery,
+	>;
+
+	#[pallet::call]
+	impl<T: Config> Pallet<T> {
+		/// Sets or resets payment asset.
+		///
+		/// If `asset_id` is `None`, then native asset is used.
+		/// Else new asset is configured and ED is on hold.
+		#[pallet::weight(T::WeightInfo::set_payment_asset())]
+		pub fn set_payment_asset(
+			origin: OriginFor<T>,
+			payer: T::AccountId,
+			asset_id: Option<ChargeAssetIdOf<T>>,
+		) -> DispatchResult {
+			// either configuration origin or owner of configuration
+			if let Err(origin) = T::ConfigurationOrigin::try_origin(origin) {
+				let who = ensure_signed(origin)?;
+				ensure!(who == payer, DispatchError::BadOrigin,)
+			};
+
+			// clean previous configuration
+			if let Some((asset_id, ed)) = <PaymentAssets<T>>::get(&payer) {
+				T::Lock::release(asset_id, &payer, ed, true)?;
+				<PaymentAssets<T>>::remove(&payer);
+			}
+
+			// configure new payment asset and hold some ed
+			if let Some(asset_id) = asset_id {
+				let ed = T::BalanceConverter::to_asset_balance(
+					T::ConfigurationExistentialDeposit::get(),
+					asset_id,
+				)
+				.map_err(|_| DispatchError::Other("Cannot convert ED to asset balance"))?;
+				T::Lock::hold(asset_id, &payer, ed)?;
+				<PaymentAssets<T>>::insert(payer, (asset_id, ed));
+			}
+
+			Ok(())
+		}
+	}
+
+	impl<T: Config> Pallet<T> {}
 }
 
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
@@ -172,12 +272,13 @@ where
 		call: &T::RuntimeCall,
 		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
+		asset_id: Option<ChargeAssetIdOf<T>>,
 	) -> Result<(BalanceOf<T>, InitialPayment<T>), TransactionValidityError> {
 		let fee = pallet_transaction_payment::Pallet::<T>::compute_fee(len as u32, info, self.tip);
 		debug_assert!(self.tip <= fee, "tip should be included in the computed fee");
 		if fee.is_zero() {
 			Ok((fee, InitialPayment::Nothing))
-		} else if let Some(asset_id) = self.asset_id {
+		} else if let Some(asset_id) = asset_id {
 			T::OnChargeAssetTransaction::withdraw_fee(
 				who,
 				call,
@@ -193,6 +294,29 @@ where
 			)
 			.map(|i| (fee, InitialPayment::Native(i)))
 			.map_err(|_| -> TransactionValidityError { InvalidTransaction::Payment.into() })
+		}
+	}
+
+	/// Get payment asset for this transaction.
+	///
+	/// Will pick asset id in next order:
+	/// - defined in extra
+	/// - defined in well known call
+	/// - defined in configuration
+	/// - native
+	fn get_payment_asset(
+		&self,
+		who: &T::AccountId,
+		call: &T::RuntimeCall,
+	) -> Option<ChargeAssetIdOf<T>> {
+		if self.asset_id.is_some() || !<T as Config>::UseUserConfiguration::get() {
+			return self.asset_id
+		}
+
+		let call = <T as Config>::PayableCall::from_ref(call);
+		match call.is_sub_type() {
+			Some(Call::set_payment_asset { asset_id, .. }) => asset_id.to_owned(),
+			_ => <PaymentAssets<T>>::get(who).map(|x| x.0),
 		}
 	}
 }
@@ -243,7 +367,8 @@ where
 		len: usize,
 	) -> TransactionValidity {
 		use pallet_transaction_payment::ChargeTransactionPayment;
-		let (fee, _) = self.withdraw_fee(who, call, info, len)?;
+		let asset_id = self.get_payment_asset(who, call);
+		let (fee, _) = self.withdraw_fee(who, call, info, len, asset_id)?;
 		let priority = ChargeTransactionPayment::<T>::get_priority(info, len, self.tip, fee);
 		Ok(ValidTransaction { priority, ..Default::default() })
 	}
@@ -255,8 +380,9 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> Result<Self::Pre, TransactionValidityError> {
-		let (_fee, initial_payment) = self.withdraw_fee(who, call, info, len)?;
-		Ok((self.tip, who.clone(), initial_payment, self.asset_id))
+		let asset_id = self.get_payment_asset(who, call);
+		let (_fee, initial_payment) = self.withdraw_fee(who, call, info, len, asset_id)?;
+		Ok((self.tip, who.clone(), initial_payment, asset_id))
 	}
 
 	fn post_dispatch(

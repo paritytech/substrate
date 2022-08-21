@@ -21,7 +21,10 @@ use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo},
 	pallet_prelude::*,
 	parameter_types,
-	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
+	traits::{
+		fungibles::Mutate, tokens::OneToOneBalanceConversion, ConstU32, ConstU64, ConstU8,
+		FindAuthor,
+	},
 	weights::{Weight, WeightToFee as WeightToFeeT},
 	ConsensusEngineId,
 };
@@ -39,6 +42,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type Balance = u64;
 type AccountId = u64;
+type AssetId = u32;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -51,7 +55,7 @@ frame_support::construct_runtime!(
 		TransactionPayment: pallet_transaction_payment::{Pallet, Storage, Event<T>},
 		Assets: pallet_assets::{Pallet, Call, Storage, Event<T>},
 		Authorship: pallet_authorship::{Pallet, Call, Storage},
-		AssetTxPayment: pallet_asset_tx_payment::{Pallet, Event<T>},
+		AssetTxPayment: pallet_asset_tx_payment,
 	}
 );
 
@@ -80,6 +84,7 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 parameter_types! {
 	pub static WeightToFee: u64 = 1;
 	pub static TransactionByteFee: u64 = 1;
+	pub static UseUserConfiguration: bool = true;
 }
 
 impl frame_system::Config for Runtime {
@@ -155,7 +160,7 @@ impl pallet_transaction_payment::Config for Runtime {
 impl pallet_assets::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
-	type AssetId = u32;
+	type AssetId = AssetId;
 	type Currency = Balances;
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDeposit = ConstU64<2>;
@@ -205,6 +210,13 @@ impl Config for Runtime {
 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
 		CreditToBlockAuthor,
 	>;
+	type UseUserConfiguration = UseUserConfiguration;
+	type WeightInfo = ();
+	type ConfigurationOrigin = EnsureRoot<AccountId>;
+	type PayableCall = RuntimeCall;
+	type ConfigurationExistentialDeposit = ConstU64<100>;
+	type BalanceConverter = OneToOneBalanceConversion;
+	type Lock = Assets;
 }
 
 pub struct ExtBuilder {
@@ -282,6 +294,13 @@ fn post_info_from_pays(p: Pays) -> PostDispatchInfo {
 
 fn default_post_info() -> PostDispatchInfo {
 	PostDispatchInfo { actual_weight: None, pays_fee: Default::default() }
+}
+
+pub fn new_test_ext() -> sp_io::TestExternalities {
+	ExtBuilder::default()
+		.balance_factor(100)
+		.base_weight(Weight::from_ref_time(5))
+		.build()
 }
 
 #[test]

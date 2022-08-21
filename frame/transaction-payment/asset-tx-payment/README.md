@@ -13,6 +13,8 @@ included [`FungiblesAdapter`] (implementing [`OnChargeAssetTransaction`]) determ
 amount by converting the fee calculated by [`pallet-transaction-payment`] into the desired
 asset.
 
+Optionally allows configure default payment asset per account.
+
 ### Integration
 This pallet wraps FRAME's transaction payment pallet and functions as a replacement. This means
 you should include both pallets in your `construct_runtime` macro, but only include this

@@ -17,7 +17,7 @@
 use super::*;
 use crate::Config;
 
-use codec::FullCodec;
+use codec::{EncodeLike, FullCodec, MaxEncodedLen};
 use frame_support::{
 	traits::{
 		fungibles::{Balanced, CreditOf, Inspect},
@@ -43,9 +43,18 @@ pub trait OnChargeAssetTransaction<T: Config> {
 		+ MaybeSerializeDeserialize
 		+ Debug
 		+ Default
-		+ TypeInfo;
+		+ TypeInfo
+		+ MaxEncodedLen
+		+ EncodeLike;
 	/// The type used to identify the assets used for transaction payment.
-	type AssetId: FullCodec + Copy + MaybeSerializeDeserialize + Debug + Default + Eq + TypeInfo;
+	type AssetId: FullCodec
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ Default
+		+ Eq
+		+ TypeInfo
+		+ MaxEncodedLen;
 	/// The type used to store the intermediate values between pre- and post-dispatch.
 	type LiquidityInfo;
 

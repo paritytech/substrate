@@ -32,9 +32,9 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		AsEnsureOriginWithArg, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
+		tokens::OneToOneBalanceConversion, AsEnsureOriginWithArg, ConstU128, ConstU16, ConstU32,
+		Currency, EitherOfDiverse, EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -459,13 +459,26 @@ impl pallet_transaction_payment::Config for Runtime {
 		TargetedFeeAdjustment<Self, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
 }
 
+parameter_types! {
+	pub const UseUserConfiguration: bool = false;
+}
+
+type AssetsBalances = pallet_asset_tx_payment::FungiblesAdapter<
+	pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
+	CreditToBlockAuthor,
+>;
+
 impl pallet_asset_tx_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
-	type OnChargeAssetTransaction = pallet_asset_tx_payment::FungiblesAdapter<
-		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,
-		CreditToBlockAuthor,
-	>;
+	type OnChargeAssetTransaction = AssetsBalances;
+	type UseUserConfiguration = UseUserConfiguration;
+	type WeightInfo = ();
+	type ConfigurationOrigin = EnsureRoot<AccountId>;
+	type PayableCall = RuntimeCall;
+	type ConfigurationExistentialDeposit = ConstU128<100>;
+	type BalanceConverter = OneToOneBalanceConversion;
+	type Lock = Assets;
 }
 
 parameter_types! {
