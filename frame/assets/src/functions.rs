@@ -628,6 +628,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///   this asset.
 	/// * `min_balance`: The minimum balance a user is allowed to have of this asset before they are
 	///   considered dust and cleaned up.
+	/// * `transferable`: Whether the new asset is transferable or not.
 	pub(super) fn do_force_create(
 		id: T::AssetId,
 		owner: T::AccountId,

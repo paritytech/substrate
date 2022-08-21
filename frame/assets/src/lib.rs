@@ -496,7 +496,8 @@ pub mod pallet {
 		/// member of the asset class's admin team.
 		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
-		///
+		/// - `transferable`: Whether the new asset is transferable or not.
+		/// 
 		/// Emits `Created` event when successful.
 		///
 		/// Weight: `O(1)`
@@ -554,7 +555,8 @@ pub mod pallet {
 		/// `transfer_ownership` and `set_team`.
 		/// - `min_balance`: The minimum balance of this new asset that any single account must
 		/// have. If an account's balance is reduced below this, then it collapses to zero.
-		///
+		///- `transferable`: Whether the asset is transferable or not.
+		/// 
 		/// Emits `ForceCreated` event when successful.
 		///
 		/// Weight: `O(1)`
