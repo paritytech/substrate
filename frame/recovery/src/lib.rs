@@ -225,7 +225,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -277,7 +277,7 @@ pub mod pallet {
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// A recovery process has been set up for an account.
 		RecoveryCreated { account: T::AccountId },
 		/// A recovery process has been initiated for lost account by rescuer account.
@@ -411,7 +411,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			// Create the recovery storage item.
 			<Proxy<T>>::insert(&rescuer, &lost);
-			Self::deposit_event(Event::<T>::AccountRecovered {
+			Self::deposit_event(PalletEvent::<T>::AccountRecovered {
 				lost_account: lost,
 				rescuer_account: rescuer,
 			});
@@ -470,7 +470,7 @@ pub mod pallet {
 			// Create the recovery configuration storage item
 			<Recoverable<T>>::insert(&who, recovery_config);
 
-			Self::deposit_event(Event::<T>::RecoveryCreated { account: who });
+			Self::deposit_event(PalletEvent::<T>::RecoveryCreated { account: who });
 			Ok(())
 		}
 
@@ -506,7 +506,7 @@ pub mod pallet {
 			};
 			// Create the active recovery storage item
 			<ActiveRecoveries<T>>::insert(&account, &who, recovery_status);
-			Self::deposit_event(Event::<T>::RecoveryInitiated {
+			Self::deposit_event(PalletEvent::<T>::RecoveryInitiated {
 				lost_account: account,
 				rescuer_account: who,
 			});
@@ -549,7 +549,7 @@ pub mod pallet {
 			}
 			// Update storage with the latest details
 			<ActiveRecoveries<T>>::insert(&lost, &rescuer, active_recovery);
-			Self::deposit_event(Event::<T>::RecoveryVouched {
+			Self::deposit_event(PalletEvent::<T>::RecoveryVouched {
 				lost_account: lost,
 				rescuer_account: rescuer,
 				sender: who,
@@ -591,7 +591,7 @@ pub mod pallet {
 			frame_system::Pallet::<T>::inc_consumers(&who).map_err(|_| Error::<T>::BadState)?;
 			// Create the recovery storage item
 			Proxy::<T>::insert(&who, &account);
-			Self::deposit_event(Event::<T>::AccountRecovered {
+			Self::deposit_event(PalletEvent::<T>::AccountRecovered {
 				lost_account: account,
 				rescuer_account: who,
 			});
@@ -624,7 +624,7 @@ pub mod pallet {
 				BalanceStatus::Free,
 			);
 			debug_assert!(res.is_ok());
-			Self::deposit_event(Event::<T>::RecoveryClosed {
+			Self::deposit_event(PalletEvent::<T>::RecoveryClosed {
 				lost_account: who,
 				rescuer_account: rescuer,
 			});
@@ -653,7 +653,7 @@ pub mod pallet {
 
 			// Unreserve the initial deposit for the recovery configuration.
 			T::Currency::unreserve(&who, recovery_config.deposit);
-			Self::deposit_event(Event::<T>::RecoveryRemoved { lost_account: who });
+			Self::deposit_event(PalletEvent::<T>::RecoveryRemoved { lost_account: who });
 			Ok(())
 		}
 

@@ -98,7 +98,7 @@ frame_support::construct_runtime!(
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
+		Session: pallet_session::{Pallet, Call, Storage, PalletEvent, Config<T>},
 		Historical: pallet_session::historical::{Pallet, Storage},
 		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
 	}
@@ -868,7 +868,7 @@ macro_rules! assert_session_era {
 	};
 }
 
-pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
+pub(crate) fn staking_events() -> Vec<crate::PalletEvent<Test>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -880,7 +880,7 @@ parameter_types! {
 	static StakingEventsIndex: usize = 0;
 }
 
-pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
+pub(crate) fn staking_events_since_last_call() -> Vec<crate::PalletEvent<Test>> {
 	let all: Vec<_> = System::events()
 		.into_iter()
 		.filter_map(|r| if let RuntimeEvent::Staking(inner) = r.event { Some(inner) } else { None })

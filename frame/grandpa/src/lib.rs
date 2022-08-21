@@ -87,7 +87,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The event type of this module.
-		type RuntimeEvent: From<Event>
+		type RuntimeEvent: From<PalletEvent>
 			+ Into<<Self as frame_system::Config>::RuntimeEvent>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -152,7 +152,7 @@ pub mod pallet {
 				// enact the change if we've reached the enacting block
 				if block_number == pending_change.scheduled_at + pending_change.delay {
 					Self::set_grandpa_authorities(&pending_change.next_authorities);
-					Self::deposit_event(Event::NewAuthorities {
+					Self::deposit_event(PalletEvent::NewAuthorities {
 						authority_set: pending_change.next_authorities.to_vec(),
 					});
 					<PendingChange<T>>::kill();
@@ -170,7 +170,7 @@ pub mod pallet {
 					// enact change to paused state
 					if block_number == scheduled_at + delay {
 						<State<T>>::put(StoredState::Paused);
-						Self::deposit_event(Event::Paused);
+						Self::deposit_event(PalletEvent::Paused);
 					}
 				},
 				StoredState::PendingResume { scheduled_at, delay } => {
@@ -182,7 +182,7 @@ pub mod pallet {
 					// enact change to live state
 					if block_number == scheduled_at + delay {
 						<State<T>>::put(StoredState::Live);
-						Self::deposit_event(Event::Resumed);
+						Self::deposit_event(PalletEvent::Resumed);
 					}
 				},
 				_ => {},
@@ -258,7 +258,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
-	pub enum Event {
+	pub enum PalletEvent {
 		/// New authority set has been applied.
 		NewAuthorities { authority_set: AuthorityList },
 		/// Current authority set has been paused.

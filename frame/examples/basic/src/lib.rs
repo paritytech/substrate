@@ -370,7 +370,7 @@ pub mod pallet {
 		type MagicNumber: Get<Self::Balance>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
@@ -525,7 +525,7 @@ pub mod pallet {
 			});
 
 			// Let's deposit an event to let the outside world know this happened.
-			Self::deposit_event(Event::AccumulateDummy { balance: increase_by });
+			Self::deposit_event(PalletEvent::AccumulateDummy { balance: increase_by });
 
 			// All good, no refund.
 			Ok(())
@@ -557,7 +557,7 @@ pub mod pallet {
 			// Put the new value into storage.
 			<Dummy<T>>::put(new_value);
 
-			Self::deposit_event(Event::SetDummy { balance: new_value });
+			Self::deposit_event(PalletEvent::SetDummy { balance: new_value });
 
 			// All good, no refund.
 			Ok(())
@@ -571,7 +571,7 @@ pub mod pallet {
 	/// This attribute generate the function `deposit_event` to deposit one of this pallet event,
 	/// it is optional, it is also possible to provide a custom implementation.
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		AccumulateDummy {

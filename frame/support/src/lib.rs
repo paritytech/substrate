@@ -1419,7 +1419,7 @@ pub mod pallet_prelude {
 /// I.e. a regular trait definition named `Config`, with supertrait `frame_system::Config`,
 /// optionally other supertrait and where clause.
 ///
-/// The associated type `Event` is reserved, if defined it must bounds `From<Event>` and
+/// The associated type `Event` is reserved, if defined it must bounds `From<PalletEvent>` and
 /// `IsType<<Self as frame_system::Config>::RuntimeEvent>`, see `#[pallet::event]` for more
 /// information.
 ///
@@ -1699,7 +1699,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::event]
 /// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
-/// pub enum Event<$some_generic> $optional_where_clause {
+/// pub enum PalletEvent<$some_generic> $optional_where_clause {
 /// 	/// Some doc
 /// 	$SomeName($SomeType, $YetanotherType, ...),
 /// 	...
@@ -1727,7 +1727,7 @@ pub mod pallet_prelude {
 /// * `#[derive(codec::Decode)]`,
 /// * `#[derive(frame_support::RuntimeDebugNoBound)]`
 ///
-/// Macro implements `From<Event<..>>` for ().
+/// Macro implements `From<PalletEvent<..>>` for ().
 ///
 /// Macro implements metadata function on `Event` returning the `EventMetadata`.
 ///
@@ -2028,7 +2028,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant] // put the constant in metadata
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+/// 		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 /// 	}
 ///
 /// 	// Define some additional constant to put into the constant metadata.
@@ -2090,7 +2090,7 @@ pub mod pallet_prelude {
 /// 	#[pallet::event]
 /// 	// Generate a funciton on Pallet to deposit an event.
 /// 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-/// 	pub enum Event<T: Config> {
+/// 	pub enum PalletEvent<T: Config> {
 /// 		/// doc comment put in metadata
 /// 		// `<T as frame_system::Config>::AccountId` is not defined in metadata list, the last
 /// 		// Thus the metadata is `<T as frame_system::Config>::AccountId`.
@@ -2217,7 +2217,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant]
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type RuntimeEvent: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+/// 		type RuntimeEvent: From<PalletEvent<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 /// 	}
 ///
 /// 	#[pallet::extra_constants]
@@ -2252,7 +2252,7 @@ pub mod pallet_prelude {
 ///
 /// 	#[pallet::event]
 /// 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-/// 	pub enum Event<T: Config<I>, I: 'static = ()> {
+/// 	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 /// 		/// doc comment put in metadata
 /// 		Proposed(<T as frame_system::Config>::AccountId),
 /// 		/// doc

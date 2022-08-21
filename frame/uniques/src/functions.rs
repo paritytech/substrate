@@ -51,7 +51,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Item::<T, I>::insert(&collection, &item, &details);
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 
-		Self::deposit_event(Event::Transferred {
+		Self::deposit_event(PalletEvent::Transferred {
 			collection,
 			item,
 			from: origin,
@@ -66,7 +66,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		admin: T::AccountId,
 		deposit: DepositBalanceOf<T, I>,
 		free_holding: bool,
-		event: Event<T, I>,
+		event: PalletEvent<T, I>,
 	) -> DispatchResult {
 		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::InUse);
 
@@ -93,7 +93,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
 		NextCollectionId::<T, I>::set(next_id);
 
-		Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
+		Self::deposit_event(PalletEvent::NextCollectionIdIncremented { next_id });
 		Self::deposit_event(event);
 		Ok(())
 	}
@@ -130,7 +130,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 			CollectionMaxSupply::<T, I>::remove(&collection);
 
-			Self::deposit_event(Event::Destroyed { collection });
+			Self::deposit_event(PalletEvent::Destroyed { collection });
 
 			Ok(DestroyWitness {
 				items: collection_details.items,
@@ -179,7 +179,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		)?;
 
-		Self::deposit_event(Event::Issued { collection, item, owner });
+		Self::deposit_event(PalletEvent::Issued { collection, item, owner });
 		Ok(())
 	}
 
@@ -209,7 +209,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Account::<T, I>::remove((&owner, &collection, &item));
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 
-		Self::deposit_event(Event::Burned { collection, item, owner });
+		Self::deposit_event(PalletEvent::Burned { collection, item, owner });
 		Ok(())
 	}
 
@@ -239,7 +239,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				&item,
 				(price.clone(), whitelisted_buyer.clone()),
 			);
-			Self::deposit_event(Event::ItemPriceSet {
+			Self::deposit_event(PalletEvent::ItemPriceSet {
 				collection,
 				item,
 				price: price.clone(),
@@ -247,7 +247,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			});
 		} else {
 			ItemPriceOf::<T, I>::remove(&collection, &item);
-			Self::deposit_event(Event::ItemPriceRemoved { collection, item });
+			Self::deposit_event(PalletEvent::ItemPriceRemoved { collection, item });
 		}
 
 		Ok(())
@@ -282,7 +282,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::do_transfer(collection, item, buyer.clone(), |_, _| Ok(()))?;
 
-		Self::deposit_event(Event::ItemBought {
+		Self::deposit_event(PalletEvent::ItemBought {
 			collection,
 			item,
 			price: price_info.0,

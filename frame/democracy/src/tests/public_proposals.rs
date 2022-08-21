@@ -100,7 +100,7 @@ fn cancel_proposal_should_work() {
 		assert_ok!(propose_set_balance_and_note(1, 4, 4));
 		assert_noop!(Democracy::cancel_proposal(Origin::signed(1), 0), BadOrigin);
 		assert_ok!(Democracy::cancel_proposal(Origin::root(), 0));
-		System::assert_last_event(crate::Event::ProposalCanceled { prop_index: 0 }.into());
+		System::assert_last_event(crate::PalletEvent::ProposalCanceled { prop_index: 0 }.into());
 		assert_eq!(Democracy::backing_for(0), None);
 		assert_eq!(Democracy::backing_for(1), Some(4));
 	});

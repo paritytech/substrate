@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use super::{Call, Event, *};
+use super::{Call, PalletEvent, *};
 use crate::mock::*;
 use codec::Encode;
 use fg_primitives::ScheduledChange;
@@ -57,7 +57,7 @@ fn authorities_change_logged() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: Event::NewAuthorities {
+				event: PalletEvent::NewAuthorities {
 					authority_set: to_authorities(vec![(4, 1), (5, 1), (6, 1)])
 				}
 				.into(),
@@ -96,7 +96,7 @@ fn authorities_change_logged_after_delay() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Finalization,
-				event: Event::NewAuthorities {
+				event: PalletEvent::NewAuthorities {
 					authority_set: to_authorities(vec![(4, 1), (5, 1), (6, 1)])
 				}
 				.into(),

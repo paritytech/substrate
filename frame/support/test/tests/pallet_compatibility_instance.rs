@@ -30,7 +30,7 @@ mod pallet_old {
 	pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
 		type SomeConst: Get<Self::Balance>;
 		type Balance: Parameter + codec::HasCompact + From<u32> + Into<Weight> + Default;
-		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self, I>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	decl_storage! {
@@ -45,7 +45,7 @@ mod pallet_old {
 	}
 
 	decl_event!(
-		pub enum Event<T, I = DefaultInstance>
+		pub enum PalletEvent<T, I = DefaultInstance>
 		where
 			Balance = <T as Config<I>>::Balance,
 		{
@@ -105,7 +105,7 @@ pub mod pallet {
 			+ scale_info::StaticTypeInfo;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
-		type RuntimeEvent: From<Event<Self, I>>
+		type RuntimeEvent: From<PalletEvent<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
@@ -135,7 +135,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			<Dummy<T, I>>::put(&new_value);
-			Self::deposit_event(Event::Dummy(new_value));
+			Self::deposit_event(PalletEvent::Dummy(new_value));
 
 			Ok(().into())
 		}
@@ -149,7 +149,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(T::Balance),
 	}
@@ -352,11 +352,11 @@ mod test {
 	#[test]
 	fn types() {
 		assert_eq!(
-			pallet_old::Event::<Runtime>::decode(
-				&mut &pallet::Event::<Runtime>::Dummy(10).encode()[..]
+			pallet_old::PalletEvent::<Runtime>::decode(
+				&mut &pallet::PalletEvent::<Runtime>::Dummy(10).encode()[..]
 			)
 			.unwrap(),
-			pallet_old::Event::<Runtime>::Dummy(10),
+			pallet_old::PalletEvent::<Runtime>::Dummy(10),
 		);
 
 		assert_eq!(

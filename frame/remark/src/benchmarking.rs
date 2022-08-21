@@ -40,7 +40,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
 	verify {
-		assert_last_event::<T>(Event::Stored { sender: caller, content_hash: sp_io::hashing::blake2_256(&vec![0u8; l as usize]).into() }.into());
+		assert_last_event::<T>(PalletEvent::Stored { sender: caller, content_hash: sp_io::hashing::blake2_256(&vec![0u8; l as usize]).into() }.into());
 	}
 
 	impl_benchmark_test_suite!(Remark, crate::mock::new_test_ext(), crate::mock::Test);

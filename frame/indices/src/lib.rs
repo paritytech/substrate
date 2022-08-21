@@ -67,7 +67,7 @@ pub mod pallet {
 		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -106,7 +106,7 @@ pub mod pallet {
 				*maybe_value = Some((who.clone(), T::Deposit::get(), false));
 				T::Currency::reserve(&who, T::Deposit::get())
 			})?;
-			Self::deposit_event(Event::IndexAssigned { who, index });
+			Self::deposit_event(PalletEvent::IndexAssigned { who, index });
 			Ok(())
 		}
 
@@ -147,7 +147,7 @@ pub mod pallet {
 				*maybe_value = Some((new.clone(), amount.saturating_sub(lost), false));
 				Ok(())
 			})?;
-			Self::deposit_event(Event::IndexAssigned { who: new, index });
+			Self::deposit_event(PalletEvent::IndexAssigned { who: new, index });
 			Ok(())
 		}
 
@@ -180,7 +180,7 @@ pub mod pallet {
 				T::Currency::unreserve(&who, amount);
 				Ok(())
 			})?;
-			Self::deposit_event(Event::IndexFreed { index });
+			Self::deposit_event(PalletEvent::IndexFreed { index });
 			Ok(())
 		}
 
@@ -220,7 +220,7 @@ pub mod pallet {
 				}
 				*maybe_value = Some((new.clone(), Zero::zero(), freeze));
 			});
-			Self::deposit_event(Event::IndexAssigned { who: new, index });
+			Self::deposit_event(PalletEvent::IndexAssigned { who: new, index });
 			Ok(())
 		}
 
@@ -254,14 +254,14 @@ pub mod pallet {
 				*maybe_value = Some((account, Zero::zero(), true));
 				Ok(())
 			})?;
-			Self::deposit_event(Event::IndexFrozen { index, who });
+			Self::deposit_event(PalletEvent::IndexFrozen { index, who });
 			Ok(())
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// A account index was assigned.
 		IndexAssigned { who: T::AccountId, index: T::AccountIndex },
 		/// A account index has been freed up (unassigned).

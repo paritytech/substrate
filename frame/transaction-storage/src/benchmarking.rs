@@ -132,7 +132,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
 	verify {
 		assert!(!BlockTransactions::<T>::get().is_empty());
-		assert_last_event::<T>(Event::Stored { index: 0 }.into());
+		assert_last_event::<T>(PalletEvent::Stored { index: 0 }.into());
 	}
 
 	renew {
@@ -145,7 +145,7 @@ benchmarks! {
 		run_to_block::<T>(1u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
 	verify {
-		assert_last_event::<T>(Event::Renewed { index: 0 }.into());
+		assert_last_event::<T>(PalletEvent::Renewed { index: 0 }.into());
 	}
 
 	check_proof_max {
@@ -163,7 +163,7 @@ benchmarks! {
 		let proof = TransactionStorageProof::decode(&mut encoded_proof).unwrap();
 	}: check_proof(RawOrigin::None, proof)
 	verify {
-		assert_last_event::<T>(Event::ProofChecked.into());
+		assert_last_event::<T>(PalletEvent::ProofChecked.into());
 	}
 
 	impl_benchmark_test_suite!(TransactionStorage, crate::mock::new_test_ext(), crate::mock::Test);

@@ -64,7 +64,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The maximum number of well known nodes that are allowed to set
 		#[pallet::constant]
@@ -127,7 +127,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// The given well known node was added.
 		NodeAdded { peer_id: PeerId, who: T::AccountId },
 		/// The given well known node was removed.
@@ -225,7 +225,7 @@ pub mod pallet {
 			WellKnownNodes::<T>::put(&nodes);
 			<Owners<T>>::insert(&node, &owner);
 
-			Self::deposit_event(Event::NodeAdded { peer_id: node, who: owner });
+			Self::deposit_event(PalletEvent::NodeAdded { peer_id: node, who: owner });
 			Ok(())
 		}
 
@@ -249,7 +249,7 @@ pub mod pallet {
 			<Owners<T>>::remove(&node);
 			AdditionalConnections::<T>::remove(&node);
 
-			Self::deposit_event(Event::NodeRemoved { peer_id: node });
+			Self::deposit_event(PalletEvent::NodeRemoved { peer_id: node });
 			Ok(())
 		}
 
@@ -285,7 +285,7 @@ pub mod pallet {
 			Owners::<T>::swap(&remove, &add);
 			AdditionalConnections::<T>::swap(&remove, &add);
 
-			Self::deposit_event(Event::NodeSwapped { removed: remove, added: add });
+			Self::deposit_event(PalletEvent::NodeSwapped { removed: remove, added: add });
 			Ok(())
 		}
 
@@ -306,7 +306,7 @@ pub mod pallet {
 
 			Self::initialize_nodes(&nodes);
 
-			Self::deposit_event(Event::NodesReset { nodes });
+			Self::deposit_event(PalletEvent::NodesReset { nodes });
 			Ok(())
 		}
 
@@ -322,7 +322,7 @@ pub mod pallet {
 			ensure!(!Owners::<T>::contains_key(&node), Error::<T>::AlreadyClaimed);
 
 			Owners::<T>::insert(&node, &sender);
-			Self::deposit_event(Event::NodeClaimed { peer_id: node, who: sender });
+			Self::deposit_event(PalletEvent::NodeClaimed { peer_id: node, who: sender });
 			Ok(())
 		}
 
@@ -343,7 +343,7 @@ pub mod pallet {
 			Owners::<T>::remove(&node);
 			AdditionalConnections::<T>::remove(&node);
 
-			Self::deposit_event(Event::ClaimRemoved { peer_id: node, who: sender });
+			Self::deposit_event(PalletEvent::ClaimRemoved { peer_id: node, who: sender });
 			Ok(())
 		}
 
@@ -365,7 +365,7 @@ pub mod pallet {
 
 			Owners::<T>::insert(&node, &owner);
 
-			Self::deposit_event(Event::NodeTransferred { peer_id: node, target: owner });
+			Self::deposit_event(PalletEvent::NodeTransferred { peer_id: node, target: owner });
 			Ok(())
 		}
 
@@ -396,7 +396,7 @@ pub mod pallet {
 
 			AdditionalConnections::<T>::insert(&node, nodes);
 
-			Self::deposit_event(Event::ConnectionsAdded {
+			Self::deposit_event(PalletEvent::ConnectionsAdded {
 				peer_id: node,
 				allowed_connections: connections,
 			});
@@ -427,7 +427,7 @@ pub mod pallet {
 
 			AdditionalConnections::<T>::insert(&node, nodes);
 
-			Self::deposit_event(Event::ConnectionsRemoved {
+			Self::deposit_event(PalletEvent::ConnectionsRemoved {
 				peer_id: node,
 				allowed_connections: connections,
 			});

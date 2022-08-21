@@ -59,12 +59,12 @@ pub mod logger {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		Logged(u32, Weight),
 	}
 
@@ -75,7 +75,7 @@ pub mod logger {
 	{
 		#[pallet::weight(*weight)]
 		pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
-			Self::deposit_event(Event::Logged(i, weight));
+			Self::deposit_event(PalletEvent::Logged(i, weight));
 			LOG.with(|log| {
 				log.borrow_mut().push((origin.caller().clone(), i));
 			});
@@ -84,7 +84,7 @@ pub mod logger {
 
 		#[pallet::weight(*weight)]
 		pub fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
-			Self::deposit_event(Event::Logged(i, weight));
+			Self::deposit_event(PalletEvent::Logged(i, weight));
 			LOG.with(|log| {
 				log.borrow_mut().push((origin.caller().clone(), i));
 			});

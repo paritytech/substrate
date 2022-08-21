@@ -103,7 +103,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
+		type RuntimeEvent: From<PalletEvent<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
@@ -190,7 +190,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 		/// Moved an account from one bag to another.
 		Rebagged { who: T::AccountId, from: T::Score, to: T::Score },
 		/// Updated the score of some account to the given amount.
@@ -272,9 +272,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let node = list::Node::<T, I>::get(&account).ok_or(ListError::NodeNotFound)?;
 		let maybe_movement = List::update_position_for(node, new_score);
 		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T, I>::Rebagged { who: account.clone(), from, to });
+			Self::deposit_event(PalletEvent::<T, I>::Rebagged { who: account.clone(), from, to });
 		};
-		Self::deposit_event(Event::<T, I>::ScoreUpdated { who: account.clone(), new_score });
+		Self::deposit_event(PalletEvent::<T, I>::ScoreUpdated { who: account.clone(), new_score });
 		Ok(maybe_movement)
 	}
 

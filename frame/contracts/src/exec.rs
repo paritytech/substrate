@@ -18,7 +18,7 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Event, Nonce,
+	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, PalletEvent, Nonce,
 	Pallet as Contracts, Schedule,
 };
 use frame_support::{
@@ -817,7 +817,7 @@ where
 				// Deposit an instantiation event.
 				deposit_event::<T>(
 					vec![],
-					Event::Instantiated {
+					PalletEvent::Instantiated {
 						deployer: self.caller().clone(),
 						contract: frame.account_id.clone(),
 					},
@@ -1134,7 +1134,7 @@ where
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
-		Contracts::<T>::deposit_event(Event::Terminated {
+		Contracts::<T>::deposit_event(PalletEvent::Terminated {
 			contract: frame.account_id.clone(),
 			beneficiary: beneficiary.clone(),
 		});
@@ -1244,7 +1244,7 @@ where
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
 		deposit_event::<Self::T>(
 			topics,
-			Event::ContractEmitted { contract: self.top_frame().account_id.clone(), data },
+			PalletEvent::ContractEmitted { contract: self.top_frame().account_id.clone(), data },
 		);
 	}
 
@@ -1304,7 +1304,7 @@ where
 		let prev_hash = top_frame.contract_info().code_hash;
 		E::remove_user(prev_hash);
 		top_frame.contract_info().code_hash = hash;
-		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
+		Contracts::<Self::T>::deposit_event(PalletEvent::ContractCodeUpdated {
 			contract: top_frame.account_id.clone(),
 			new_code_hash: hash,
 			old_code_hash: prev_hash,
@@ -1313,7 +1313,7 @@ where
 	}
 }
 
-fn deposit_event<T: Config>(topics: Vec<T::Hash>, event: Event<T>) {
+fn deposit_event<T: Config>(topics: Vec<T::Hash>, event: PalletEvent<T>) {
 	<frame_system::Pallet<T>>::deposit_event_indexed(
 		&topics,
 		<T as Config>::RuntimeEvent::from(event).into(),
@@ -2143,7 +2143,7 @@ mod tests {
 			);
 			assert_eq!(
 				&events(),
-				&[Event::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
+				&[PalletEvent::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
 			);
 		});
 	}
@@ -2244,7 +2244,7 @@ mod tests {
 			);
 			assert_eq!(
 				&events(),
-				&[Event::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
+				&[PalletEvent::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
 			);
 		});
 	}
@@ -2601,7 +2601,7 @@ mod tests {
 				System::events(),
 				vec![EventRecord {
 					phase: Phase::Initialization,
-					event: MetaEvent::System(frame_system::Event::Remarked {
+					event: MetaEvent::System(frame_system::PalletEvent::Remarked {
 						sender: BOB,
 						hash: remark_hash
 					}),
@@ -2673,7 +2673,7 @@ mod tests {
 				vec![
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::System(frame_system::Event::Remarked {
+						event: MetaEvent::System(frame_system::PalletEvent::Remarked {
 							sender: BOB,
 							hash: remark_hash
 						}),
@@ -2681,12 +2681,12 @@ mod tests {
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Utility(pallet_utility::Event::ItemCompleted),
+						event: MetaEvent::Utility(pallet_utility::PalletEvent::ItemCompleted),
 						topics: vec![],
 					},
 					EventRecord {
 						phase: Phase::Initialization,
-						event: MetaEvent::Utility(pallet_utility::Event::BatchInterrupted {
+						event: MetaEvent::Utility(pallet_utility::PalletEvent::BatchInterrupted {
 							index: 1,
 							error: frame_system::Error::<Test>::CallFiltered.into()
 						},),

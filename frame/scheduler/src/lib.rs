@@ -198,7 +198,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The aggregated origin which the dispatch will take.
 		type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin>
@@ -259,7 +259,7 @@ pub mod pallet {
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// Scheduled some task.
 		Scheduled { when: T::BlockNumber, index: u32 },
 		/// Canceled some task.
@@ -393,7 +393,7 @@ pub mod pallet {
 				total_weight.saturating_accrue(item_weight);
 				total_weight.saturating_accrue(actual_call_weight);
 
-				Self::deposit_event(Event::Dispatched {
+				Self::deposit_event(PalletEvent::Dispatched {
 					task: (now, index),
 					id: s.maybe_id.clone(),
 					result,
@@ -696,7 +696,7 @@ impl<T: Config> Pallet<T> {
 		});
 		Agenda::<T>::append(when, s);
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
-		Self::deposit_event(Event::Scheduled { when, index });
+		Self::deposit_event(PalletEvent::Scheduled { when, index });
 
 		Ok((when, index))
 	}
@@ -726,7 +726,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(id) = s.maybe_id {
 				Lookup::<T>::remove(id);
 			}
-			Self::deposit_event(Event::Canceled { when, index });
+			Self::deposit_event(PalletEvent::Canceled { when, index });
 			Ok(())
 		} else {
 			return Err(Error::<T>::NotFound.into())
@@ -751,8 +751,8 @@ impl<T: Config> Pallet<T> {
 		})?;
 
 		let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
-		Self::deposit_event(Event::Canceled { when, index });
-		Self::deposit_event(Event::Scheduled { when: new_time, index: new_index });
+		Self::deposit_event(PalletEvent::Canceled { when, index });
+		Self::deposit_event(PalletEvent::Scheduled { when: new_time, index: new_index });
 
 		Ok((new_time, new_index))
 	}
@@ -792,7 +792,7 @@ impl<T: Config> Pallet<T> {
 		let index = Agenda::<T>::decode_len(when).unwrap_or(1) as u32 - 1;
 		let address = (when, index);
 		Lookup::<T>::insert(&id, &address);
-		Self::deposit_event(Event::Scheduled { when, index });
+		Self::deposit_event(PalletEvent::Scheduled { when, index });
 
 		Ok(address)
 	}
@@ -816,7 +816,7 @@ impl<T: Config> Pallet<T> {
 					}
 					Ok(())
 				})?;
-				Self::deposit_event(Event::Canceled { when, index });
+				Self::deposit_event(PalletEvent::Canceled { when, index });
 				Ok(())
 			} else {
 				return Err(Error::<T>::NotFound.into())
@@ -848,8 +848,8 @@ impl<T: Config> Pallet<T> {
 				})?;
 
 				let new_index = Agenda::<T>::decode_len(new_time).unwrap_or(1) as u32 - 1;
-				Self::deposit_event(Event::Canceled { when, index });
-				Self::deposit_event(Event::Scheduled { when: new_time, index: new_index });
+				Self::deposit_event(PalletEvent::Canceled { when, index });
+				Self::deposit_event(PalletEvent::Scheduled { when: new_time, index: new_index });
 
 				*lookup = Some((new_time, new_index));
 

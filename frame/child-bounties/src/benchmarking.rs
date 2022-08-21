@@ -172,7 +172,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(bounty_setup.curator), bounty_setup.bounty_id,
 			bounty_setup.child_bounty_value, bounty_setup.reason.clone())
 	verify {
-		assert_last_event::<T>(Event::Added {
+		assert_last_event::<T>(PalletEvent::Added {
 			index: bounty_setup.bounty_id,
 			child_index: bounty_setup.child_bounty_id,
 		}.into())
@@ -235,7 +235,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(bounty_setup.child_curator), bounty_setup.bounty_id,
 			bounty_setup.child_bounty_id, beneficiary)
 	verify {
-		assert_last_event::<T>(Event::Awarded {
+		assert_last_event::<T>(PalletEvent::Awarded {
 			index: bounty_setup.bounty_id,
 			child_index: bounty_setup.child_bounty_id,
 			beneficiary: beneficiary_account
@@ -285,7 +285,7 @@ benchmarks! {
 	}: close_child_bounty(RawOrigin::Root, bounty_setup.bounty_id,
 		bounty_setup.child_bounty_id)
 	verify {
-		assert_last_event::<T>(Event::Canceled {
+		assert_last_event::<T>(PalletEvent::Canceled {
 			index: bounty_setup.bounty_id,
 			child_index: bounty_setup.child_bounty_id
 		}.into())
@@ -298,7 +298,7 @@ benchmarks! {
 		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	}: close_child_bounty(RawOrigin::Root, bounty_setup.bounty_id, bounty_setup.child_bounty_id)
 	verify {
-		assert_last_event::<T>(Event::Canceled {
+		assert_last_event::<T>(PalletEvent::Canceled {
 			index: bounty_setup.bounty_id,
 			child_index: bounty_setup.child_bounty_id,
 		}.into())

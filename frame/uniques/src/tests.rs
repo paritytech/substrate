@@ -17,7 +17,7 @@
 
 //! Tests for Uniques pallet.
 
-use crate::{mock::*, Event, *};
+use crate::{mock::*, PalletEvent, *};
 use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::Currency};
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
@@ -663,7 +663,7 @@ fn max_supply_should_work() {
 		));
 		assert_eq!(CollectionMaxSupply::<Test>::get(collection_id).unwrap(), max_supply);
 
-		assert!(events().contains(&Event::<Test>::CollectionMaxSupplySet {
+		assert!(events().contains(&PalletEvent::<Test>::CollectionMaxSupplySet {
 			collection: collection_id,
 			max_supply,
 		}));
@@ -703,9 +703,9 @@ fn try_increment_id_works() {
 
 		// create two collections & check for events.
 		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
-		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
+		assert!(events().contains(&PalletEvent::<Test>::NextCollectionIdIncremented { next_id: 1 }));
 		assert_ok!(Uniques::force_create(Origin::root(), 1, true));
-		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 2 }));
+		assert!(events().contains(&PalletEvent::<Test>::NextCollectionIdIncremented { next_id: 2 }));
 
 		// there are now two collections.
 		assert_eq!(Uniques::get_next_id(), 2);
@@ -716,7 +716,7 @@ fn try_increment_id_works() {
 		assert_ok!(Uniques::try_increment_id(Origin::signed(2)));
 
 		// `try_increment_id` should emit an event when successful.
-		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
+		assert!(events().contains(&PalletEvent::<Test>::NextCollectionIdIncremented { next_id: 1 }));
 
 		// because reset, the collections count should be now 1
 		assert_eq!(Uniques::get_next_id(), 1);
@@ -765,7 +765,7 @@ fn set_price_should_work() {
 		assert_eq!(item.0, 2);
 		assert_eq!(item.1, Some(3));
 
-		assert!(events().contains(&Event::<Test>::ItemPriceSet {
+		assert!(events().contains(&PalletEvent::<Test>::ItemPriceSet {
 			collection: collection_id,
 			item: item_1,
 			price: 1,
@@ -774,7 +774,7 @@ fn set_price_should_work() {
 
 		// validate we can unset the price
 		assert_ok!(Uniques::set_price(Origin::signed(user_id), collection_id, item_2, None, None));
-		assert!(events().contains(&Event::<Test>::ItemPriceRemoved {
+		assert!(events().contains(&PalletEvent::<Test>::ItemPriceRemoved {
 			collection: collection_id,
 			item: item_2
 		}));
@@ -852,7 +852,7 @@ fn buy_item_should_work() {
 		// can buy when I'm a whitelisted buyer
 		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2,));
 
-		assert!(events().contains(&Event::<Test>::ItemBought {
+		assert!(events().contains(&PalletEvent::<Test>::ItemBought {
 			collection: collection_id,
 			item: item_2,
 			price: price_2,

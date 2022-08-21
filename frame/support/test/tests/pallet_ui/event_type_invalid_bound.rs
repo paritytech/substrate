@@ -19,7 +19,7 @@ mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	#[pallet::event]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		B { b: T::Bar },
 	}
 }

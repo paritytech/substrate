@@ -84,7 +84,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
 		type Call: Parameter
@@ -106,7 +106,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event {
+	pub enum PalletEvent {
 		/// Batch of dispatches did not complete fully. Index of first failing dispatch given, as
 		/// well as the error.
 		BatchInterrupted { index: u32, error: DispatchError },
@@ -220,7 +220,7 @@ pub mod pallet {
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
-					Self::deposit_event(Event::BatchInterrupted {
+					Self::deposit_event(PalletEvent::BatchInterrupted {
 						index: index as u32,
 						error: e.error,
 					});
@@ -229,9 +229,9 @@ pub mod pallet {
 					// Return the actual used weight + base_weight of this call.
 					return Ok(Some(base_weight + weight).into())
 				}
-				Self::deposit_event(Event::ItemCompleted);
+				Self::deposit_event(PalletEvent::ItemCompleted);
 			}
-			Self::deposit_event(Event::BatchCompleted);
+			Self::deposit_event(PalletEvent::BatchCompleted);
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
 			Ok(Some(base_weight + weight).into())
 		}
@@ -348,9 +348,9 @@ pub mod pallet {
 					err.post_info = Some(base_weight + weight).into();
 					err
 				})?;
-				Self::deposit_event(Event::ItemCompleted);
+				Self::deposit_event(PalletEvent::ItemCompleted);
 			}
-			Self::deposit_event(Event::BatchCompleted);
+			Self::deposit_event(PalletEvent::BatchCompleted);
 			let base_weight = T::WeightInfo::batch_all(calls_len as u32);
 			Ok(Some(base_weight + weight).into())
 		}
@@ -382,7 +382,7 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter((*as_origin).into());
 
-			Self::deposit_event(Event::DispatchedAs {
+			Self::deposit_event(PalletEvent::DispatchedAs {
 				result: res.map(|_| ()).map_err(|e| e.error),
 			});
 			Ok(())
@@ -444,15 +444,15 @@ pub mod pallet {
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));
 				if let Err(e) = result {
 					has_error = true;
-					Self::deposit_event(Event::ItemFailed { error: e.error });
+					Self::deposit_event(PalletEvent::ItemFailed { error: e.error });
 				} else {
-					Self::deposit_event(Event::ItemCompleted);
+					Self::deposit_event(PalletEvent::ItemCompleted);
 				}
 			}
 			if has_error {
-				Self::deposit_event(Event::BatchCompletedWithErrors);
+				Self::deposit_event(PalletEvent::BatchCompletedWithErrors);
 			} else {
-				Self::deposit_event(Event::BatchCompleted);
+				Self::deposit_event(PalletEvent::BatchCompleted);
 			}
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
 			Ok(Some(base_weight + weight).into())

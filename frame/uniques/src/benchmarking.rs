@@ -143,7 +143,7 @@ benchmarks_instance_pallet! {
 		let call = Call::<T, I>::create { admin };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
+		assert_last_event::<T, I>(PalletEvent::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
 	}
 
 	force_create {
@@ -151,7 +151,7 @@ benchmarks_instance_pallet! {
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 	}: _(SystemOrigin::Root, caller_lookup, true)
 	verify {
-		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
+		assert_last_event::<T, I>(PalletEvent::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
 	}
 
 	destroy {
@@ -173,7 +173,7 @@ benchmarks_instance_pallet! {
 		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), collection, witness)
 	verify {
-		assert_last_event::<T, I>(Event::Destroyed { collection }.into());
+		assert_last_event::<T, I>(PalletEvent::Destroyed { collection }.into());
 	}
 
 	mint {
@@ -181,7 +181,7 @@ benchmarks_instance_pallet! {
 		let item = T::Helper::item(0);
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
+		assert_last_event::<T, I>(PalletEvent::Issued { collection, item, owner: caller }.into());
 	}
 
 	burn {
@@ -189,7 +189,7 @@ benchmarks_instance_pallet! {
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(caller_lookup))
 	verify {
-		assert_last_event::<T, I>(Event::Burned { collection, item, owner: caller }.into());
+		assert_last_event::<T, I>(PalletEvent::Burned { collection, item, owner: caller }.into());
 	}
 
 	transfer {
@@ -200,7 +200,7 @@ benchmarks_instance_pallet! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, target_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::Transferred { collection, item, from: caller, to: target }.into());
+		assert_last_event::<T, I>(PalletEvent::Transferred { collection, item, from: caller, to: target }.into());
 	}
 
 	redeposit {
@@ -219,7 +219,7 @@ benchmarks_instance_pallet! {
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
 	verify {
-		assert_last_event::<T, I>(Event::Redeposited { collection, successful_items: items }.into());
+		assert_last_event::<T, I>(PalletEvent::Redeposited { collection, successful_items: items }.into());
 	}
 
 	freeze {
@@ -227,7 +227,7 @@ benchmarks_instance_pallet! {
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::collection(0), T::Helper::item(0))
 	verify {
-		assert_last_event::<T, I>(Event::Frozen { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
+		assert_last_event::<T, I>(PalletEvent::Frozen { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
 	}
 
 	thaw {
@@ -240,14 +240,14 @@ benchmarks_instance_pallet! {
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item)
 	verify {
-		assert_last_event::<T, I>(Event::Thawed { collection, item }.into());
+		assert_last_event::<T, I>(PalletEvent::Thawed { collection, item }.into());
 	}
 
 	freeze_collection {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 	}: _(SystemOrigin::Signed(caller.clone()), collection)
 	verify {
-		assert_last_event::<T, I>(Event::CollectionFrozen { collection }.into());
+		assert_last_event::<T, I>(PalletEvent::CollectionFrozen { collection }.into());
 	}
 
 	thaw_collection {
@@ -256,7 +256,7 @@ benchmarks_instance_pallet! {
 		Uniques::<T, I>::freeze_collection(origin, collection)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection)
 	verify {
-		assert_last_event::<T, I>(Event::CollectionThawed { collection }.into());
+		assert_last_event::<T, I>(PalletEvent::CollectionThawed { collection }.into());
 	}
 
 	transfer_ownership {
@@ -268,7 +268,7 @@ benchmarks_instance_pallet! {
 		Uniques::<T, I>::set_accept_ownership(origin, Some(collection))?;
 	}: _(SystemOrigin::Signed(caller), collection, target_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::OwnerChanged { collection, new_owner: target }.into());
+		assert_last_event::<T, I>(PalletEvent::OwnerChanged { collection, new_owner: target }.into());
 	}
 
 	set_team {
@@ -278,7 +278,7 @@ benchmarks_instance_pallet! {
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
 	}: _(SystemOrigin::Signed(caller), collection, target0, target1, target2)
 	verify {
-		assert_last_event::<T, I>(Event::TeamChanged{
+		assert_last_event::<T, I>(PalletEvent::TeamChanged{
 			collection,
 			issuer: account("target", 0, SEED),
 			admin: account("target", 1, SEED),
@@ -300,7 +300,7 @@ benchmarks_instance_pallet! {
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::ItemStatusChanged { collection }.into());
+		assert_last_event::<T, I>(PalletEvent::ItemStatusChanged { collection }.into());
 	}
 
 	set_attribute {
@@ -312,7 +312,7 @@ benchmarks_instance_pallet! {
 		add_item_metadata::<T, I>(item);
 	}: _(SystemOrigin::Signed(caller), collection, Some(item), key.clone(), value.clone())
 	verify {
-		assert_last_event::<T, I>(Event::AttributeSet { collection, maybe_item: Some(item), key, value }.into());
+		assert_last_event::<T, I>(PalletEvent::AttributeSet { collection, maybe_item: Some(item), key, value }.into());
 	}
 
 	clear_attribute {
@@ -322,7 +322,7 @@ benchmarks_instance_pallet! {
 		let (key, ..) = add_item_attribute::<T, I>(item);
 	}: _(SystemOrigin::Signed(caller), collection, Some(item), key.clone())
 	verify {
-		assert_last_event::<T, I>(Event::AttributeCleared { collection, maybe_item: Some(item), key }.into());
+		assert_last_event::<T, I>(PalletEvent::AttributeCleared { collection, maybe_item: Some(item), key }.into());
 	}
 
 	set_metadata {
@@ -332,7 +332,7 @@ benchmarks_instance_pallet! {
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller), collection, item, data.clone(), false)
 	verify {
-		assert_last_event::<T, I>(Event::MetadataSet { collection, item, data, is_frozen: false }.into());
+		assert_last_event::<T, I>(PalletEvent::MetadataSet { collection, item, data, is_frozen: false }.into());
 	}
 
 	clear_metadata {
@@ -341,7 +341,7 @@ benchmarks_instance_pallet! {
 		add_item_metadata::<T, I>(item);
 	}: _(SystemOrigin::Signed(caller), collection, item)
 	verify {
-		assert_last_event::<T, I>(Event::MetadataCleared { collection, item }.into());
+		assert_last_event::<T, I>(PalletEvent::MetadataCleared { collection, item }.into());
 	}
 
 	set_collection_metadata {
@@ -350,7 +350,7 @@ benchmarks_instance_pallet! {
 		let (collection, caller, _) = create_collection::<T, I>();
 	}: _(SystemOrigin::Signed(caller), collection, data.clone(), false)
 	verify {
-		assert_last_event::<T, I>(Event::CollectionMetadataSet { collection, data, is_frozen: false }.into());
+		assert_last_event::<T, I>(PalletEvent::CollectionMetadataSet { collection, data, is_frozen: false }.into());
 	}
 
 	clear_collection_metadata {
@@ -358,7 +358,7 @@ benchmarks_instance_pallet! {
 		add_collection_metadata::<T, I>();
 	}: _(SystemOrigin::Signed(caller), collection)
 	verify {
-		assert_last_event::<T, I>(Event::CollectionMetadataCleared { collection }.into());
+		assert_last_event::<T, I>(PalletEvent::CollectionMetadataCleared { collection }.into());
 	}
 
 	approve_transfer {
@@ -368,7 +368,7 @@ benchmarks_instance_pallet! {
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, delegate_lookup)
 	verify {
-		assert_last_event::<T, I>(Event::ApprovedTransfer { collection, item, owner: caller, delegate }.into());
+		assert_last_event::<T, I>(PalletEvent::ApprovedTransfer { collection, item, owner: caller, delegate }.into());
 	}
 
 	cancel_approval {
@@ -380,7 +380,7 @@ benchmarks_instance_pallet! {
 		Uniques::<T, I>::approve_transfer(origin, collection, item, delegate_lookup.clone())?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(delegate_lookup))
 	verify {
-		assert_last_event::<T, I>(Event::ApprovalCancelled { collection, item, owner: caller, delegate }.into());
+		assert_last_event::<T, I>(PalletEvent::ApprovalCancelled { collection, item, owner: caller, delegate }.into());
 	}
 
 	set_accept_ownership {
@@ -389,7 +389,7 @@ benchmarks_instance_pallet! {
 		let collection = T::Helper::collection(0);
 	}: _(SystemOrigin::Signed(caller.clone()), Some(collection))
 	verify {
-		assert_last_event::<T, I>(Event::OwnershipAcceptanceChanged {
+		assert_last_event::<T, I>(PalletEvent::OwnershipAcceptanceChanged {
 			who: caller,
 			maybe_collection: Some(collection),
 		}.into());
@@ -399,7 +399,7 @@ benchmarks_instance_pallet! {
 		let (collection, caller, _) = create_collection::<T, I>();
 	}: _(SystemOrigin::Signed(caller.clone()), collection, u32::MAX)
 	verify {
-		assert_last_event::<T, I>(Event::CollectionMaxSupplySet {
+		assert_last_event::<T, I>(PalletEvent::CollectionMaxSupplySet {
 			collection,
 			max_supply: u32::MAX,
 		}.into());
@@ -410,7 +410,7 @@ benchmarks_instance_pallet! {
 		Uniques::<T, I>::set_next_id(0);
 	}: _(SystemOrigin::Signed(caller.clone()))
 	verify {
-		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
+		assert_last_event::<T, I>(PalletEvent::NextCollectionIdIncremented {
 			next_id: 1u32.into()
 	}.into());
   }
@@ -423,7 +423,7 @@ benchmarks_instance_pallet! {
 		let price = ItemPrice::<T, I>::from(100u32);
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(price), Some(delegate_lookup))
 	verify {
-		assert_last_event::<T, I>(Event::ItemPriceSet {
+		assert_last_event::<T, I>(PalletEvent::ItemPriceSet {
 			collection,
 			item,
 			price,
@@ -442,7 +442,7 @@ benchmarks_instance_pallet! {
 		T::Currency::make_free_balance_be(&buyer, DepositBalanceOf::<T, I>::max_value());
 	}: _(SystemOrigin::Signed(buyer.clone()), collection, item, price.clone())
 	verify {
-		assert_last_event::<T, I>(Event::ItemBought {
+		assert_last_event::<T, I>(PalletEvent::ItemBought {
 			collection,
 			item,
 			price,

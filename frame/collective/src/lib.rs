@@ -187,7 +187,7 @@ pub mod pallet {
 			+ GetDispatchInfo;
 
 		/// The outer event type.
-		type RuntimeEvent: From<Event<Self, I>>
+		type RuntimeEvent: From<PalletEvent<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The time-out for council motions.
@@ -278,7 +278,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
 		Proposed {
@@ -444,7 +444,7 @@ pub mod pallet {
 
 			let proposal_hash = T::Hashing::hash_of(&proposal);
 			let result = proposal.dispatch(RawOrigin::Member(who).into());
-			Self::deposit_event(Event::MemberExecuted {
+			Self::deposit_event(PalletEvent::MemberExecuted {
 				proposal_hash,
 				result: result.map(|_| ()).map_err(|e| e.error),
 			});
@@ -688,7 +688,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let seats = Self::members().len() as MemberCount;
 		let result = proposal.dispatch(RawOrigin::Members(1, seats).into());
-		Self::deposit_event(Event::Executed {
+		Self::deposit_event(PalletEvent::Executed {
 			proposal_hash,
 			result: result.map(|_| ()).map_err(|e| e.error),
 		});
@@ -723,7 +723,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 		<Voting<T, I>>::insert(proposal_hash, votes);
 
-		Self::deposit_event(Event::Proposed {
+		Self::deposit_event(PalletEvent::Proposed {
 			account: who,
 			proposal_index: index,
 			proposal_hash,
@@ -771,7 +771,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let yes_votes = voting.ayes.len() as MemberCount;
 		let no_votes = voting.nays.len() as MemberCount;
-		Self::deposit_event(Event::Voted {
+		Self::deposit_event(PalletEvent::Voted {
 			account: who,
 			proposal_hash: proposal,
 			voted: approve,
@@ -806,7 +806,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				length_bound,
 				proposal_weight_bound,
 			)?;
-			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
+			Self::deposit_event(PalletEvent::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			let (proposal_weight, proposal_count) =
 				Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 			return Ok((
@@ -818,7 +818,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 				.into())
 		} else if disapproved {
-			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
+			Self::deposit_event(PalletEvent::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 			return Ok((
 				Some(T::WeightInfo::close_early_disapproved(seats, proposal_count)),
@@ -848,7 +848,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				length_bound,
 				proposal_weight_bound,
 			)?;
-			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
+			Self::deposit_event(PalletEvent::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			let (proposal_weight, proposal_count) =
 				Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 			Ok((
@@ -860,7 +860,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 				.into())
 		} else {
-			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
+			Self::deposit_event(PalletEvent::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 			Ok((Some(T::WeightInfo::close_disapproved(seats, proposal_count)), Pays::No).into())
 		}
@@ -906,12 +906,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		proposal_hash: T::Hash,
 		proposal: <T as Config<I>>::Proposal,
 	) -> (Weight, u32) {
-		Self::deposit_event(Event::Approved { proposal_hash });
+		Self::deposit_event(PalletEvent::Approved { proposal_hash });
 
 		let dispatch_weight = proposal.get_dispatch_info().weight;
 		let origin = RawOrigin::Members(yes_votes, seats).into();
 		let result = proposal.dispatch(origin);
-		Self::deposit_event(Event::Executed {
+		Self::deposit_event(PalletEvent::Executed {
 			proposal_hash,
 			result: result.map(|_| ()).map_err(|e| e.error),
 		});
@@ -925,7 +925,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Removes a proposal from the pallet, and deposit the `Disapproved` event.
 	pub fn do_disapprove_proposal(proposal_hash: T::Hash) -> u32 {
 		// disapproved
-		Self::deposit_event(Event::Disapproved { proposal_hash });
+		Self::deposit_event(PalletEvent::Disapproved { proposal_hash });
 		Self::remove_proposal(proposal_hash)
 	}
 

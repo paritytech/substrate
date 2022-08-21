@@ -166,7 +166,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Swap action.
 		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter + MaxEncodedLen;
 		/// Limit of proof size.
@@ -220,7 +220,7 @@ pub mod pallet {
 	/// Event of atomic swap pallet.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// Swap created.
 		NewSwap { account: T::AccountId, proof: HashedProof, swap: PendingSwap<T> },
 		/// Swap claimed. The last parameter indicates whether the execution succeeds.
@@ -266,7 +266,7 @@ pub mod pallet {
 			};
 			PendingSwaps::<T>::insert(target.clone(), hashed_proof, swap.clone());
 
-			Self::deposit_event(Event::NewSwap { account: target, proof: hashed_proof, swap });
+			Self::deposit_event(PalletEvent::NewSwap { account: target, proof: hashed_proof, swap });
 
 			Ok(())
 		}
@@ -302,7 +302,7 @@ pub mod pallet {
 
 			PendingSwaps::<T>::remove(target.clone(), hashed_proof);
 
-			Self::deposit_event(Event::SwapClaimed {
+			Self::deposit_event(PalletEvent::SwapClaimed {
 				account: target,
 				proof: hashed_proof,
 				success: succeeded,
@@ -335,7 +335,7 @@ pub mod pallet {
 			swap.action.cancel(&swap.source);
 			PendingSwaps::<T>::remove(&target, hashed_proof.clone());
 
-			Self::deposit_event(Event::SwapCancelled { account: target, proof: hashed_proof });
+			Self::deposit_event(PalletEvent::SwapCancelled { account: target, proof: hashed_proof });
 
 			Ok(())
 		}

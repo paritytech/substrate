@@ -43,7 +43,7 @@ mod pallet_old {
 			+ Into<Weight>
 			+ Default
 			+ SomeAssociation;
-		type RuntimeEvent: From<Event<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	decl_storage! {
@@ -120,7 +120,7 @@ pub mod pallet {
 			+ scale_info::StaticTypeInfo;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -149,7 +149,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 
 			<Dummy<T>>::put(&new_value);
-			Self::deposit_event(Event::Dummy(new_value));
+			Self::deposit_event(PalletEvent::Dummy(new_value));
 
 			Ok(().into())
 		}
@@ -163,7 +163,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(T::Balance),
 	}
@@ -352,11 +352,11 @@ mod test {
 	#[test]
 	fn types() {
 		assert_eq!(
-			pallet_old::Event::<Runtime>::decode(
-				&mut &pallet::Event::<Runtime>::Dummy(10).encode()[..]
+			pallet_old::PalletEvent::<Runtime>::decode(
+				&mut &pallet::PalletEvent::<Runtime>::Dummy(10).encode()[..]
 			)
 			.unwrap(),
-			pallet_old::Event::<Runtime>::Dummy(10),
+			pallet_old::PalletEvent::<Runtime>::Dummy(10),
 		);
 
 		assert_eq!(

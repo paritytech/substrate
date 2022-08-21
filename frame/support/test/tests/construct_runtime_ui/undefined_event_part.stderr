@@ -41,7 +41,7 @@ help: if you import `Event`, refer to it directly
 53 -         UncheckedExtrinsic = UncheckedExtrinsic
 54 -     {
 55 -         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-56 -         Pallet: pallet::{Pallet, Event},
+56 -         Pallet: pallet::{Pallet, PalletEvent},
 57 -     }
 58 - }
    |
@@ -74,7 +74,7 @@ help: if you import `Event`, refer to it directly
 53 -         UncheckedExtrinsic = UncheckedExtrinsic
 54 -     {
 55 -         System: frame_system::{Pallet, Call, Storage, Config, Event<T>},
-56 -         Pallet: pallet::{Pallet, Event},
+56 -         Pallet: pallet::{Pallet, PalletEvent},
 57 -     }
 58 - }
    |

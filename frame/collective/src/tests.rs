@@ -61,7 +61,7 @@ mod mock_democracy {
 
 		#[pallet::config]
 		pub trait Config: frame_system::Config + Sized {
-			type RuntimeEvent: From<Event<Self>>
+			type RuntimeEvent: From<PalletEvent<Self>>
 				+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 			type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
 		}
@@ -71,14 +71,14 @@ mod mock_democracy {
 			#[pallet::weight(0)]
 			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
-				Self::deposit_event(Event::<T>::ExternalProposed);
+				Self::deposit_event(PalletEvent::<T>::ExternalProposed);
 				Ok(())
 			}
 		}
 
 		#[pallet::event]
 		#[pallet::generate_deposit(pub(super) fn deposit_event)]
-		pub enum Event<T: Config> {
+		pub enum PalletEvent<T: Config> {
 			ExternalProposed,
 		}
 	}
@@ -1014,7 +1014,7 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 				})),
 				record(RuntimeEvent::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
 				record(RuntimeEvent::Democracy(
-					mock_democracy::pallet::Event::<Test>::ExternalProposed
+					mock_democracy::pallet::PalletEvent::<Test>::ExternalProposed
 				)),
 				record(RuntimeEvent::Collective(CollectiveEvent::Executed {
 					proposal_hash: hash,

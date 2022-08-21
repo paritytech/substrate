@@ -124,7 +124,7 @@ benchmarks! {
 		rescuer.clone()
 	) verify {
 		assert_last_event::<T>(
-			Event::AccountRecovered {
+			PalletEvent::AccountRecovered {
 				lost_account: lost,
 				rescuer_account: rescuer,
 			}.into()
@@ -145,7 +145,7 @@ benchmarks! {
 		n as u16,
 		DEFAULT_DELAY.into()
 	) verify {
-		assert_last_event::<T>(Event::RecoveryCreated { account: caller }.into());
+		assert_last_event::<T>(PalletEvent::RecoveryCreated { account: caller }.into());
 	}
 
 	initiate_recovery {
@@ -160,7 +160,7 @@ benchmarks! {
 		lost_account.clone()
 	) verify {
 		assert_last_event::<T>(
-			Event::RecoveryInitiated {
+			PalletEvent::RecoveryInitiated {
 				lost_account: lost_account,
 				rescuer_account: caller,
 			}.into()
@@ -210,7 +210,7 @@ benchmarks! {
 		rescuer_account.clone()
 	) verify {
 		assert_last_event::<T>(
-			Event::RecoveryVouched {
+			PalletEvent::RecoveryVouched {
 				lost_account: lost_account,
 				rescuer_account: rescuer_account,
 				sender: caller,
@@ -260,7 +260,7 @@ benchmarks! {
 		lost_account.clone()
 	) verify {
 		assert_last_event::<T>(
-			Event::AccountRecovered {
+			PalletEvent::AccountRecovered {
 				lost_account: lost_account,
 				rescuer_account: caller,
 			}.into()
@@ -310,7 +310,7 @@ benchmarks! {
 		rescuer_account.clone()
 	) verify {
 		assert_last_event::<T>(
-			Event::RecoveryClosed {
+			PalletEvent::RecoveryClosed {
 				lost_account: caller,
 				rescuer_account: rescuer_account,
 			}.into()
@@ -347,7 +347,7 @@ benchmarks! {
 		RawOrigin::Signed(caller.clone())
 	) verify {
 		assert_last_event::<T>(
-			Event::RecoveryRemoved {
+			PalletEvent::RecoveryRemoved {
 				lost_account: caller
 			}.into()
 		);

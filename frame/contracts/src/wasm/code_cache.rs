@@ -32,7 +32,7 @@ use crate::{
 	gas::{GasMeter, Token},
 	wasm::{prepare, PrefabWasmModule},
 	weights::WeightInfo,
-	CodeHash, CodeStorage, Config, Error, Event, OwnerInfoOf, Pallet, PristineCode, Schedule,
+	CodeHash, CodeStorage, Config, Error, PalletEvent, OwnerInfoOf, Pallet, PristineCode, Schedule,
 	Weight,
 };
 use frame_support::{
@@ -96,7 +96,7 @@ where
 			<PristineCode<T>>::insert(&code_hash, orig_code);
 			<OwnerInfoOf<T>>::insert(&code_hash, owner_info);
 			*existing = Some(module);
-			<Pallet<T>>::deposit_event(Event::CodeStored { code_hash });
+			<Pallet<T>>::deposit_event(PalletEvent::CodeStored { code_hash });
 			Ok(())
 		},
 	})
@@ -142,7 +142,7 @@ pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> D
 			*existing = None;
 			<PristineCode<T>>::remove(&code_hash);
 			<CodeStorage<T>>::remove(&code_hash);
-			<Pallet<T>>::deposit_event(Event::CodeRemoved { code_hash });
+			<Pallet<T>>::deposit_event(PalletEvent::CodeRemoved { code_hash });
 			Ok(())
 		} else {
 			Err(<Error<T>>::CodeNotFound.into())

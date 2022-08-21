@@ -337,7 +337,7 @@ pub mod pallet {
 		type MaxPeerDataEncodingSize: Get<u32>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// A type for retrieving the validators supposed to be online in a session.
 		type ValidatorSet: ValidatorSetWithIdentification<Self::AccountId>;
@@ -371,7 +371,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// A new heartbeat was received from `AuthorityId`.
 		HeartbeatReceived { authority_id: T::AuthorityId },
 		/// At the end of the session, no offence was committed.
@@ -493,7 +493,7 @@ pub mod pallet {
 			let keys = Keys::<T>::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (false, Some(public)) = (exists, public) {
-				Self::deposit_event(Event::<T>::HeartbeatReceived { authority_id: public.clone() });
+				Self::deposit_event(PalletEvent::<T>::HeartbeatReceived { authority_id: public.clone() });
 
 				let network_state_bounded = BoundedOpaqueNetworkState::<
 					T::MaxPeerDataEncodingSize,
@@ -906,9 +906,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		AuthoredBlocks::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
 
 		if offenders.is_empty() {
-			Self::deposit_event(Event::<T>::AllGood);
+			Self::deposit_event(PalletEvent::<T>::AllGood);
 		} else {
-			Self::deposit_event(Event::<T>::SomeOffline { offline: offenders.clone() });
+			Self::deposit_event(PalletEvent::<T>::SomeOffline { offline: offenders.clone() });
 
 			let validator_set_count = keys.len() as u32;
 			let offence = UnresponsivenessOffence { session_index, validator_set_count, offenders };

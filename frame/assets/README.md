@@ -102,7 +102,7 @@ pub mod pallet {
             <Balances<T>>::insert((asset_id, &ACCOUNT_BOB), TOKENS_FIXED_SUPPLY / COUNT_AIRDROP_RECIPIENTS);
             <TotalSupply<T>>::insert(asset_id, TOKENS_FIXED_SUPPLY);
 
-            Self::deposit_event(Event::Issued(asset_id, sender, TOKENS_FIXED_SUPPLY));
+            Self::deposit_event(PalletEvent::Issued(asset_id, sender, TOKENS_FIXED_SUPPLY));
             Ok(())
         }
     }

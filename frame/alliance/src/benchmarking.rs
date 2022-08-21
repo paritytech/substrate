@@ -583,7 +583,7 @@ benchmarks_instance_pallet! {
 		founders.sort();
 		fellows.sort();
 		allies.sort();
-		assert_last_event::<T, I>(Event::MembersInitialized {
+		assert_last_event::<T, I>(PalletEvent::MembersInitialized {
 			founders: founders.clone(),
 			fellows: fellows.clone(),
 			allies: allies.clone(),
@@ -603,7 +603,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Alliance::<T, I>::rule(), Some(rule.clone()));
-		assert_last_event::<T, I>(Event::NewRuleSet { rule }.into());
+		assert_last_event::<T, I>(PalletEvent::NewRuleSet { rule }.into());
 	}
 
 	announce {
@@ -616,7 +616,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().contains(&announcement));
-		assert_last_event::<T, I>(Event::Announced { announcement }.into());
+		assert_last_event::<T, I>(PalletEvent::Announced { announcement }.into());
 	}
 
 	remove_announcement {
@@ -631,7 +631,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert!(Alliance::<T, I>::announcements().is_empty());
-		assert_last_event::<T, I>(Event::AnnouncementRemoved { announcement }.into());
+		assert_last_event::<T, I>(PalletEvent::AnnouncementRemoved { announcement }.into());
 	}
 
 	join_alliance {
@@ -645,7 +645,7 @@ benchmarks_instance_pallet! {
 		assert!(Alliance::<T, I>::is_member_of(&outsider, MemberRole::Ally)); // outsider is now an ally
 		assert_eq!(DepositOf::<T, I>::get(&outsider), Some(T::AllyDeposit::get())); // with a deposit
 		assert!(!Alliance::<T, I>::has_voting_rights(&outsider)); // allies don't have voting rights
-		assert_last_event::<T, I>(Event::NewAllyJoined {
+		assert_last_event::<T, I>(PalletEvent::NewAllyJoined {
 			ally: outsider,
 			nominator: None,
 			reserved: Some(T::AllyDeposit::get())
@@ -668,7 +668,7 @@ benchmarks_instance_pallet! {
 		assert!(Alliance::<T, I>::is_member_of(&outsider, MemberRole::Ally)); // outsider is now an ally
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None); // without a deposit
 		assert!(!Alliance::<T, I>::has_voting_rights(&outsider)); // allies don't have voting rights
-		assert_last_event::<T, I>(Event::NewAllyJoined {
+		assert_last_event::<T, I>(PalletEvent::NewAllyJoined {
 			ally: outsider,
 			nominator: Some(founder1),
 			reserved: None
@@ -688,7 +688,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(!Alliance::<T, I>::is_ally(&ally1));
 		assert!(Alliance::<T, I>::is_fellow(&ally1));
-		assert_last_event::<T, I>(Event::AllyElevated { ally: ally1 }.into());
+		assert_last_event::<T, I>(PalletEvent::AllyElevated { ally: ally1 }.into());
 	}
 
 	retire {
@@ -703,7 +703,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), None);
-		assert_last_event::<T, I>(Event::MemberRetired {
+		assert_last_event::<T, I>(PalletEvent::MemberRetired {
 			member: fellow2,
 			unreserved: Some(T::AllyDeposit::get())
 		}.into());
@@ -727,7 +727,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(!Alliance::<T, I>::is_member(&fellow2));
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), None);
-		assert_last_event::<T, I>(Event::MemberKicked {
+		assert_last_event::<T, I>(PalletEvent::MemberKicked {
 			member: fellow2,
 			slashed: Some(T::AllyDeposit::get())
 		}.into());
@@ -754,7 +754,7 @@ benchmarks_instance_pallet! {
 		let origin = T::AnnouncementOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::UnscrupulousItemAdded { items: unscrupulous_list }.into());
+		assert_last_event::<T, I>(PalletEvent::UnscrupulousItemAdded { items: unscrupulous_list }.into());
 	}
 
 	remove_unscrupulous_items {
@@ -784,7 +784,7 @@ benchmarks_instance_pallet! {
 		let origin = T::AnnouncementOrigin::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::UnscrupulousItemRemoved { items: unscrupulous_list }.into());
+		assert_last_event::<T, I>(PalletEvent::UnscrupulousItemRemoved { items: unscrupulous_list }.into());
 	}
 
 	impl_benchmark_test_suite!(Alliance, crate::mock::new_bench_ext(), crate::mock::Test);

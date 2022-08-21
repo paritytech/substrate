@@ -92,7 +92,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Utility: utility::{Pallet, Call, Event},
+		Utility: utility::{Pallet, Call, PalletEvent},
 		Example: example::{Pallet, Call},
 	}
 );
@@ -336,7 +336,7 @@ fn batch_with_signed_filters() {
 			vec![Call::Balances(pallet_balances::Call::transfer_keep_alive { dest: 2, value: 1 })]
 		),);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted {
+			utility::PalletEvent::BatchInterrupted {
 				index: 0,
 				error: frame_system::Error::<Test>::CallFiltered.into(),
 			}
@@ -411,7 +411,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
@@ -426,7 +426,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
@@ -439,7 +439,7 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::Event::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
 		);
 		assert_eq!(
 			extract_actual_weight(&result, &info),
@@ -587,7 +587,7 @@ fn batch_all_does_not_nest() {
 		// and balances.
 		assert_ok!(Utility::batch_all(Origin::signed(1), vec![batch_nested]));
 		System::assert_has_event(
-			utility::Event::BatchInterrupted {
+			utility::PalletEvent::BatchInterrupted {
 				index: 0,
 				error: frame_system::Error::<Test>::CallFiltered.into(),
 			}
@@ -621,9 +621,9 @@ fn force_batch_works() {
 				call_transfer(2, 5),
 			]
 		),);
-		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
+		System::assert_last_event(utility::PalletEvent::BatchCompletedWithErrors.into());
 		System::assert_has_event(
-			utility::Event::ItemFailed { error: DispatchError::Other("") }.into(),
+			utility::PalletEvent::ItemFailed { error: DispatchError::Other("") }.into(),
 		);
 		assert_eq!(Balances::free_balance(1), 0);
 		assert_eq!(Balances::free_balance(2), 20);
@@ -632,9 +632,9 @@ fn force_batch_works() {
 			Origin::signed(2),
 			vec![call_transfer(1, 5), call_transfer(1, 5),]
 		),);
-		System::assert_last_event(utility::Event::BatchCompleted.into());
+		System::assert_last_event(utility::PalletEvent::BatchCompleted.into());
 
 		assert_ok!(Utility::force_batch(Origin::signed(1), vec![call_transfer(2, 50),]),);
-		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
+		System::assert_last_event(utility::PalletEvent::BatchCompletedWithErrors.into());
 	});
 }

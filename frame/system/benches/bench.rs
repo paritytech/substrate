@@ -34,12 +34,12 @@ mod module {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event {
+	pub enum PalletEvent {
 		Complex(Vec<u8>, u32, u16, u128),
 	}
 }
@@ -54,7 +54,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Module: module::{Pallet, Event},
+		Module: module::{Pallet, PalletEvent},
 	}
 );
 
@@ -110,7 +110,7 @@ fn deposit_events(n: usize) {
 	let mut t = new_test_ext();
 	t.execute_with(|| {
 		for _ in 0..n {
-			module::Pallet::<Runtime>::deposit_event(module::Event::Complex(
+			module::Pallet::<Runtime>::deposit_event(module::PalletEvent::Complex(
 				vec![1, 2, 3],
 				2,
 				3,

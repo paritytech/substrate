@@ -39,7 +39,7 @@ pub mod logger {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -58,7 +58,7 @@ pub mod logger {
 			// Ensure that the `origin` is `Root`.
 			ensure_root(origin)?;
 			<I32Log<T>>::append(i);
-			Self::deposit_event(Event::AppendI32 { value: i, weight });
+			Self::deposit_event(PalletEvent::AppendI32 { value: i, weight });
 			Ok(().into())
 		}
 
@@ -72,14 +72,14 @@ pub mod logger {
 			let sender = ensure_signed(origin)?;
 			<I32Log<T>>::append(i);
 			<AccountLog<T>>::append(sender.clone());
-			Self::deposit_event(Event::AppendI32AndAccount { sender, value: i, weight });
+			Self::deposit_event(PalletEvent::AppendI32AndAccount { sender, value: i, weight });
 			Ok(().into())
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		AppendI32 { value: i32, weight: Weight },
 		AppendI32AndAccount { sender: T::AccountId, value: i32, weight: Weight },
 	}

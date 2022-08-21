@@ -76,7 +76,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Weight information for this pallet.
 		type WeightInfo: weights::WeightInfo;
@@ -104,7 +104,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// A preimage has been noted.
 		Noted { hash: T::Hash },
 		/// A preimage has been requested.
@@ -233,7 +233,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		PreimageFor::<T>::insert(hash, preimage);
-		Self::deposit_event(Event::Noted { hash });
+		Self::deposit_event(PalletEvent::Noted { hash });
 
 		Ok(was_requested)
 	}
@@ -257,7 +257,7 @@ impl<T: Config> Pallet<T> {
 		});
 		StatusFor::<T>::insert(hash, RequestStatus::Requested(count));
 		if count == 1 {
-			Self::deposit_event(Event::Requested { hash: *hash });
+			Self::deposit_event(PalletEvent::Requested { hash: *hash });
 		}
 	}
 
@@ -281,7 +281,7 @@ impl<T: Config> Pallet<T> {
 		}
 		StatusFor::<T>::remove(hash);
 		PreimageFor::<T>::remove(hash);
-		Self::deposit_event(Event::Cleared { hash: *hash });
+		Self::deposit_event(PalletEvent::Cleared { hash: *hash });
 		Ok(())
 	}
 
@@ -296,7 +296,7 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(count == 1, "preimage request counter at zero?");
 				PreimageFor::<T>::remove(hash);
 				StatusFor::<T>::remove(hash);
-				Self::deposit_event(Event::Cleared { hash: *hash });
+				Self::deposit_event(PalletEvent::Cleared { hash: *hash });
 			},
 			RequestStatus::Unrequested(_) => return Err(Error::<T>::NotRequested.into()),
 		}

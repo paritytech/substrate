@@ -904,7 +904,7 @@ impl<T: Config> BondedPool<T> {
 	fn set_state(&mut self, state: PoolState) {
 		if self.state != state {
 			self.state = state;
-			Pallet::<T>::deposit_event(Event::<T>::StateChanged {
+			Pallet::<T>::deposit_event(PalletEvent::<T>::StateChanged {
 				pool_id: self.id,
 				new_state: state,
 			});
@@ -1146,7 +1146,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
@@ -1335,7 +1335,7 @@ pub mod pallet {
 	/// Events of this pallet.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// A pool has been created.
 		Created { depositor: T::AccountId, pool_id: PoolId },
 		/// A member has became bonded in a pool.
@@ -1517,7 +1517,7 @@ pub mod pallet {
 				},
 			);
 
-			Self::deposit_event(Event::<T>::Bonded {
+			Self::deposit_event(PalletEvent::<T>::Bonded {
 				member: who,
 				pool_id,
 				bonded: amount,
@@ -1568,7 +1568,7 @@ pub mod pallet {
 			bonded_pool.ok_to_be_open(bonded)?;
 			member.points = member.points.saturating_add(points_issued);
 
-			Self::deposit_event(Event::<T>::Bonded {
+			Self::deposit_event(PalletEvent::<T>::Bonded {
 				member: who.clone(),
 				pool_id: member.pool_id,
 				bonded,
@@ -1679,7 +1679,7 @@ pub mod pallet {
 			// Try and unbond in the member map.
 			member.try_unbond(unbonding_points, points_unbonded, unbond_era)?;
 
-			Self::deposit_event(Event::<T>::Unbonded {
+			Self::deposit_event(PalletEvent::<T>::Unbonded {
 				member: member_account.clone(),
 				pool_id: member.pool_id,
 				points: points_unbonded,
@@ -1808,7 +1808,7 @@ pub mod pallet {
 			)
 			.defensive()?;
 
-			Self::deposit_event(Event::<T>::Withdrawn {
+			Self::deposit_event(PalletEvent::<T>::Withdrawn {
 				member: member_account.clone(),
 				pool_id: member.pool_id,
 				points: sum_unlocked_points,
@@ -1818,7 +1818,7 @@ pub mod pallet {
 			let post_info_weight = if member.total_points().is_zero() {
 				// member being reaped.
 				PoolMembers::<T>::remove(&member_account);
-				Self::deposit_event(Event::<T>::MemberRemoved {
+				Self::deposit_event(PalletEvent::<T>::MemberRemoved {
 					pool_id: member.pool_id,
 					member: member_account.clone(),
 				});
@@ -1920,12 +1920,12 @@ pub mod pallet {
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
 
-			Self::deposit_event(Event::<T>::Created {
+			Self::deposit_event(PalletEvent::<T>::Created {
 				depositor: who.clone(),
 				pool_id: pool_id.clone(),
 			});
 
-			Self::deposit_event(Event::<T>::Bonded {
+			Self::deposit_event(PalletEvent::<T>::Bonded {
 				member: who,
 				pool_id,
 				bonded: amount,
@@ -2102,7 +2102,7 @@ pub mod pallet {
 				ConfigOp::Set(v) => bonded_pool.roles.state_toggler = Some(v),
 			};
 
-			Self::deposit_event(Event::<T>::RolesUpdated {
+			Self::deposit_event(PalletEvent::<T>::RolesUpdated {
 				root: bonded_pool.roles.root.clone(),
 				nominator: bonded_pool.roles.nominator.clone(),
 				state_toggler: bonded_pool.roles.state_toggler.clone(),
@@ -2212,7 +2212,7 @@ impl<T: Config> Pallet<T> {
 		T::Currency::make_free_balance_be(&reward_account, Zero::zero());
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
-		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
+		Self::deposit_event(PalletEvent::<T>::Destroyed { pool_id: bonded_pool.id });
 		bonded_pool.remove();
 	}
 
@@ -2335,7 +2335,7 @@ impl<T: Config> Pallet<T> {
 			ExistenceRequirement::AllowDeath,
 		)?;
 
-		Self::deposit_event(Event::<T>::PaidOut {
+		Self::deposit_event(PalletEvent::<T>::PaidOut {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
@@ -2484,7 +2484,7 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 			for (era, slashed_balance) in slashed_unlocking.iter() {
 				if let Some(pool) = sub_pools.with_era.get_mut(era) {
 					pool.balance = *slashed_balance;
-					Self::deposit_event(Event::<T>::UnbondingPoolSlashed {
+					Self::deposit_event(PalletEvent::<T>::UnbondingPoolSlashed {
 						era: *era,
 						pool_id,
 						balance: *slashed_balance,
@@ -2492,7 +2492,7 @@ impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 				}
 			}
 
-			Self::deposit_event(Event::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
+			Self::deposit_event(PalletEvent::<T>::PoolSlashed { pool_id, balance: slashed_bonded });
 			SubPoolsStorage::<T>::insert(pool_id, sub_pools);
 		}
 	}

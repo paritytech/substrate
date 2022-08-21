@@ -242,7 +242,7 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
 		type Call: Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
@@ -630,7 +630,7 @@ pub mod pallet {
 				};
 				<PrefabWasmModule<T>>::add_user(code_hash)?;
 				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
-				Self::deposit_event(Event::ContractCodeUpdated {
+				Self::deposit_event(PalletEvent::ContractCodeUpdated {
 					contract: dest.clone(),
 					new_code_hash: code_hash,
 					old_code_hash: contract.code_hash,
@@ -643,7 +643,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// Contract deployed by address at the specified address.
 		Instantiated { deployer: T::AccountId, contract: T::AccountId },
 

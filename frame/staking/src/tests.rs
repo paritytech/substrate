@@ -17,7 +17,7 @@
 
 //! Tests for the module.
 
-use super::{ConfigOp, Event, MaxUnlockingChunks, *};
+use super::{ConfigOp, PalletEvent, MaxUnlockingChunks, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
@@ -307,7 +307,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPaid(0, total_payout_0, maximum_payout - total_payout_0)
+			PalletEvent::EraPaid(0, total_payout_0, maximum_payout - total_payout_0)
 		);
 		mock::make_all_reward_payment(0);
 
@@ -345,7 +345,7 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPaid(1, total_payout_1, maximum_payout - total_payout_1)
+			PalletEvent::EraPaid(1, total_payout_1, maximum_payout - total_payout_1)
 		);
 		mock::make_all_reward_payment(1);
 
@@ -517,7 +517,7 @@ fn no_candidate_emergency_condition() {
 
 			// try trigger new era
 			mock::run_to_block(20);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakingElectionFailed);
+			assert_eq!(*staking_events().last().unwrap(), PalletEvent::StakingElectionFailed);
 			// No new era is created
 			assert_eq!(current_era, CurrentEra::<Test>::get());
 
@@ -1613,7 +1613,7 @@ fn rebond_emits_right_value_in_event() {
 			})
 		);
 		// Event emitted should be correct
-		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 100));
+		assert_eq!(*staking_events().last().unwrap(), PalletEvent::Bonded(11, 100));
 
 		// Re-bond way more than available
 		Staking::rebond(Origin::signed(10), 100_000).unwrap();
@@ -1628,7 +1628,7 @@ fn rebond_emits_right_value_in_event() {
 			})
 		);
 		// Event emitted should be correct, only 800
-		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 800));
+		assert_eq!(*staking_events().last().unwrap(), PalletEvent::Bonded(11, 800));
 	});
 }
 
@@ -2789,10 +2789,10 @@ fn deferred_slashes_are_deferred() {
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
-				Event::StakersElected,
-				Event::EraPaid(3, 11075, 33225),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				PalletEvent::StakersElected,
+				PalletEvent::EraPaid(3, 11075, 33225),
+				PalletEvent::Slashed(11, 100),
+				PalletEvent::Slashed(101, 12)
 			]
 		);
 	})
@@ -2820,10 +2820,10 @@ fn retroactive_deferred_slashes_two_eras_before() {
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
-				Event::StakersElected,
-				Event::EraPaid(3, 7100, 21300),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				PalletEvent::StakersElected,
+				PalletEvent::EraPaid(3, 7100, 21300),
+				PalletEvent::Slashed(11, 100),
+				PalletEvent::Slashed(101, 12)
 			]
 		);
 	})
@@ -2854,7 +2854,7 @@ fn retroactive_deferred_slashes_one_before() {
 		mock::start_active_era(4);
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![Event::StakersElected, Event::EraPaid(3, 11075, 33225)]
+			vec![PalletEvent::StakersElected, PalletEvent::EraPaid(3, 11075, 33225)]
 		);
 
 		assert_eq!(Staking::ledger(10).unwrap().total, 1000);
@@ -2863,10 +2863,10 @@ fn retroactive_deferred_slashes_one_before() {
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
-				Event::StakersElected,
-				Event::EraPaid(4, 11075, 33225),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				PalletEvent::StakersElected,
+				PalletEvent::EraPaid(4, 11075, 33225),
+				PalletEvent::Slashed(11, 100),
+				PalletEvent::Slashed(101, 12)
 			]
 		);
 
@@ -3007,10 +3007,10 @@ fn remove_deferred() {
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
-				Event::StakersElected,
-				Event::EraPaid(3, 11075, 33225),
-				Event::Slashed(11, 50),
-				Event::Slashed(101, 7)
+				PalletEvent::StakersElected,
+				PalletEvent::EraPaid(3, 11075, 33225),
+				PalletEvent::Slashed(11, 50),
+				PalletEvent::Slashed(101, 7)
 			]
 		);
 
@@ -4438,7 +4438,7 @@ mod election_data_provider {
 			run_to_block(20);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 45);
 			assert_eq!(staking_events().len(), 1);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+			assert_eq!(*staking_events().last().unwrap(), PalletEvent::StakersElected);
 
 			for b in 21..45 {
 				run_to_block(b);
@@ -4449,7 +4449,7 @@ mod election_data_provider {
 			run_to_block(45);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 70);
 			assert_eq!(staking_events().len(), 3);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+			assert_eq!(*staking_events().last().unwrap(), PalletEvent::StakersElected);
 
 			Staking::force_no_eras(Origin::root()).unwrap();
 			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
@@ -4472,7 +4472,7 @@ mod election_data_provider {
 			run_to_block(55);
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 55 + 25);
 			assert_eq!(staking_events().len(), 6);
-			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
+			assert_eq!(*staking_events().last().unwrap(), PalletEvent::StakersElected);
 			// The new era has been planned, forcing is changed from `ForceNew` to `NotForcing`.
 			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 		})
@@ -4806,7 +4806,7 @@ fn min_commission_works() {
 		// event emitted should be correct
 		assert_eq!(
 			*staking_events().last().unwrap(),
-			Event::ValidatorPrefsSet(
+			PalletEvent::ValidatorPrefsSet(
 				11,
 				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 			)

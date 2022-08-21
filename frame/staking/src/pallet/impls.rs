@@ -173,14 +173,14 @@ impl<T: Config> Pallet<T> {
 		let validator_exposure_part = Perbill::from_rational(exposure.own, exposure.total);
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
-		Self::deposit_event(Event::<T>::PayoutStarted(era, ledger.stash.clone()));
+		Self::deposit_event(PalletEvent::<T>::PayoutStarted(era, ledger.stash.clone()));
 
 		let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
 		// We can now make total validator payout:
 		if let Some(imbalance) =
 			Self::make_payout(&ledger.stash, validator_staking_payout + validator_commission_payout)
 		{
-			Self::deposit_event(Event::<T>::Rewarded(ledger.stash, imbalance.peek()));
+			Self::deposit_event(PalletEvent::<T>::Rewarded(ledger.stash, imbalance.peek()));
 			total_imbalance.subsume(imbalance);
 		}
 
@@ -200,7 +200,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
 				// Note: this logic does not count payouts for `RewardDestination::None`.
 				nominator_payout_count += 1;
-				let e = Event::<T>::Rewarded(nominator.who.clone(), imbalance.peek());
+				let e = PalletEvent::<T>::Rewarded(nominator.who.clone(), imbalance.peek());
 				Self::deposit_event(e);
 				total_imbalance.subsume(imbalance);
 			}
@@ -224,7 +224,7 @@ impl<T: Config> Pallet<T> {
 		let chilled_as_validator = Self::do_remove_validator(stash);
 		let chilled_as_nominator = Self::do_remove_nominator(stash);
 		if chilled_as_validator || chilled_as_nominator {
-			Self::deposit_event(Event::<T>::Chilled(stash.clone()));
+			Self::deposit_event(PalletEvent::<T>::Chilled(stash.clone()));
 		}
 	}
 
@@ -385,7 +385,7 @@ impl<T: Config> Pallet<T> {
 			let issuance = T::Currency::total_issuance();
 			let (validator_payout, rest) = T::EraPayout::era_payout(staked, issuance, era_duration);
 
-			Self::deposit_event(Event::<T>::EraPaid(active_era.index, validator_payout, rest));
+			Self::deposit_event(PalletEvent::<T>::EraPaid(active_era.index, validator_payout, rest));
 
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
@@ -437,12 +437,12 @@ impl<T: Config> Pallet<T> {
 		let election_result = if is_genesis {
 			T::GenesisElectionProvider::elect().map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
-				Self::deposit_event(Event::StakingElectionFailed);
+				Self::deposit_event(PalletEvent::StakingElectionFailed);
 			})
 		} else {
 			T::ElectionProvider::elect().map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);
-				Self::deposit_event(Event::StakingElectionFailed);
+				Self::deposit_event(PalletEvent::StakingElectionFailed);
 			})
 		}
 		.ok()?;
@@ -470,11 +470,11 @@ impl<T: Config> Pallet<T> {
 				_ => (),
 			}
 
-			Self::deposit_event(Event::StakingElectionFailed);
+			Self::deposit_event(PalletEvent::StakingElectionFailed);
 			return None
 		}
 
-		Self::deposit_event(Event::StakersElected);
+		Self::deposit_event(PalletEvent::StakersElected);
 		Some(Self::trigger_new_era(start_session_index, exposures))
 	}
 

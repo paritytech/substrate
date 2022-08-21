@@ -244,7 +244,7 @@ parameter_types! {
 	static ObservedEventsBalances: usize = 0;
 }
 
-pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Event<Runtime>> {
+pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::PalletEvent<Runtime>> {
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -255,7 +255,7 @@ pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Even
 	events.into_iter().skip(already_seen).collect()
 }
 
-pub(crate) fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runtime>> {
+pub(crate) fn staking_events_since_last_call() -> Vec<pallet_staking::PalletEvent<Runtime>> {
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)

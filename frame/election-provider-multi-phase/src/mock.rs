@@ -81,7 +81,7 @@ frame_election_provider_support::generate_solution_type!(
 );
 
 /// All events of this pallet.
-pub(crate) fn multi_phase_events() -> Vec<super::Event<Runtime>> {
+pub(crate) fn multi_phase_events() -> Vec<super::PalletEvent<Runtime>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)

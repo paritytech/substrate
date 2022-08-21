@@ -126,7 +126,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + pallet_treasury::Config<I> {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
+		type RuntimeEvent: From<PalletEvent<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Maximum acceptable reason length.
@@ -184,7 +184,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 		/// A new tip suggestion has been opened.
 		NewTip { tip_hash: T::Hash },
 		/// A tip suggestion has reached threshold and is closing.
@@ -267,7 +267,7 @@ pub mod pallet {
 				finders_fee: true,
 			};
 			Tips::<T, I>::insert(&hash, tip);
-			Self::deposit_event(Event::NewTip { tip_hash: hash });
+			Self::deposit_event(PalletEvent::NewTip { tip_hash: hash });
 			Ok(())
 		}
 
@@ -302,7 +302,7 @@ pub mod pallet {
 				let err_amount = T::Currency::unreserve(&who, tip.deposit);
 				debug_assert!(err_amount.is_zero());
 			}
-			Self::deposit_event(Event::TipRetracted { tip_hash: hash });
+			Self::deposit_event(PalletEvent::TipRetracted { tip_hash: hash });
 			Ok(())
 		}
 
@@ -342,7 +342,7 @@ pub mod pallet {
 			let hash = T::Hashing::hash_of(&(&reason_hash, &who));
 
 			Reasons::<T, I>::insert(&reason_hash, &reason);
-			Self::deposit_event(Event::NewTip { tip_hash: hash });
+			Self::deposit_event(PalletEvent::NewTip { tip_hash: hash });
 			let tips = vec![(tipper.clone(), tip_value)];
 			let tip = OpenTip {
 				reason: reason_hash,
@@ -392,7 +392,7 @@ pub mod pallet {
 
 			let mut tip = Tips::<T, I>::get(hash).ok_or(Error::<T, I>::UnknownTip)?;
 			if Self::insert_tip_and_check_closing(&mut tip, tipper, tip_value) {
-				Self::deposit_event(Event::TipClosing { tip_hash: hash });
+				Self::deposit_event(PalletEvent::TipClosing { tip_hash: hash });
 			}
 			Tips::<T, I>::insert(&hash, tip);
 			Ok(())
@@ -451,7 +451,7 @@ pub mod pallet {
 				T::OnSlash::on_unbalanced(imbalance);
 			}
 			Reasons::<T, I>::remove(&tip.reason);
-			Self::deposit_event(Event::TipSlashed {
+			Self::deposit_event(PalletEvent::TipSlashed {
 				tip_hash: hash,
 				finder: tip.finder,
 				deposit: tip.deposit,
@@ -550,7 +550,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// same as above: best-effort only.
 		let res = T::Currency::transfer(&treasury, &tip.who, payout, KeepAlive);
 		debug_assert!(res.is_ok());
-		Self::deposit_event(Event::TipClosed { tip_hash: hash, who: tip.who, payout });
+		Self::deposit_event(PalletEvent::TipClosed { tip_hash: hash, who: tip.who, payout });
 	}
 
 	pub fn migrate_retract_tip_for_tip_new(module: &[u8], item: &[u8]) {

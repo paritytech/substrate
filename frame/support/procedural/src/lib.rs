@@ -312,7 +312,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         Test: path::to::test::{Pallet, Call} = 1,
 ///
 ///         // Pallets with instances
-///         Test2_Instance1: test2::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
+///         Test2_Instance1: test2::<Instance1>::{Pallet, Call, Storage, PalletEvent<T, I>, Config<T, I>, Origin<T, I>},
 ///         Test2_DefaultInstance: test2::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///
 ///         // Pallets declared with `pallet` attribute macro: no need to define the parts

@@ -204,7 +204,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the elections-phragmen pallet's lock
 		#[pallet::constant]
@@ -443,7 +443,7 @@ pub mod pallet {
 				Renouncing::Member => {
 					let _ = Self::remove_and_replace_member(&who, false)
 						.map_err(|_| Error::<T>::InvalidRenouncing)?;
-					Self::deposit_event(Event::Renounced { candidate: who });
+					Self::deposit_event(PalletEvent::Renounced { candidate: who });
 				},
 				Renouncing::RunnerUp => {
 					<RunnersUp<T>>::try_mutate::<_, Error<T>, _>(|runners_up| {
@@ -455,7 +455,7 @@ pub mod pallet {
 						let SeatHolder { deposit, .. } = runners_up.remove(index);
 						let _remainder = T::Currency::unreserve(&who, deposit);
 						debug_assert!(_remainder.is_zero());
-						Self::deposit_event(Event::Renounced { candidate: who });
+						Self::deposit_event(PalletEvent::Renounced { candidate: who });
 						Ok(())
 					})?;
 				},
@@ -468,7 +468,7 @@ pub mod pallet {
 						let (_removed, deposit) = candidates.remove(index);
 						let _remainder = T::Currency::unreserve(&who, deposit);
 						debug_assert!(_remainder.is_zero());
-						Self::deposit_event(Event::Renounced { candidate: who });
+						Self::deposit_event(PalletEvent::Renounced { candidate: who });
 						Ok(())
 					})?;
 				},
@@ -509,7 +509,7 @@ pub mod pallet {
 			let who = T::Lookup::lookup(who)?;
 
 			let _ = Self::remove_and_replace_member(&who, slash_bond)?;
-			Self::deposit_event(Event::MemberKicked { member: who });
+			Self::deposit_event(PalletEvent::MemberKicked { member: who });
 
 			if rerun_election {
 				Self::do_phragmen();
@@ -546,7 +546,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// A new term with new_members. This indicates that enough candidates existed to run
 		/// the election, not that enough have has been elected. The inner value must be examined
 		/// for this purpose. A `NewTerm(\[\])` indicates that some candidates got their bond
@@ -761,7 +761,7 @@ impl<T: Config> Pallet<T> {
 				let (imbalance, _remainder) = T::Currency::slash_reserved(who, removed.deposit);
 				debug_assert!(_remainder.is_zero());
 				T::LoserCandidate::on_unbalanced(imbalance);
-				Self::deposit_event(Event::SeatHolderSlashed {
+				Self::deposit_event(PalletEvent::SeatHolderSlashed {
 					seat_holder: who.clone(),
 					amount: removed.deposit,
 				});
@@ -898,7 +898,7 @@ impl<T: Config> Pallet<T> {
 		candidates_and_deposit.append(&mut Self::implicit_candidates_with_deposit());
 
 		if candidates_and_deposit.len().is_zero() {
-			Self::deposit_event(Event::EmptyTerm);
+			Self::deposit_event(PalletEvent::EmptyTerm);
 			return T::DbWeight::get().reads(3)
 		}
 
@@ -929,7 +929,7 @@ impl<T: Config> Pallet<T> {
 					target: "runtime::elections-phragmen",
 					"Failed to run election. Number of voters exceeded",
 				);
-				Self::deposit_event(Event::ElectionError);
+				Self::deposit_event(PalletEvent::ElectionError);
 				return T::DbWeight::get().reads(3 + MAX_VOTERS as u64)
 			},
 		}
@@ -1042,7 +1042,7 @@ impl<T: Config> Pallet<T> {
 						{
 							let (imbalance, _) = T::Currency::slash_reserved(c, *d);
 							T::LoserCandidate::on_unbalanced(imbalance);
-							Self::deposit_event(Event::CandidateSlashed {
+							Self::deposit_event(PalletEvent::CandidateSlashed {
 								candidate: c.clone(),
 								amount: *d,
 							});
@@ -1086,7 +1086,7 @@ impl<T: Config> Pallet<T> {
 					// clean candidates.
 					<Candidates<T>>::kill();
 
-					Self::deposit_event(Event::NewTerm { new_members: new_members_sorted_by_id });
+					Self::deposit_event(PalletEvent::NewTerm { new_members: new_members_sorted_by_id });
 					<ElectionRounds<T>>::mutate(|v| *v += 1);
 				})
 				.map_err(|e| {
@@ -1095,7 +1095,7 @@ impl<T: Config> Pallet<T> {
 						"Failed to run election [{:?}].",
 						e,
 					);
-					Self::deposit_event(Event::ElectionError);
+					Self::deposit_event(PalletEvent::ElectionError);
 				});
 
 		T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges)
@@ -2193,7 +2193,7 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(RuntimeEvent::Elections(super::Event::EmptyTerm));
+			System::assert_last_event(RuntimeEvent::Elections(super::PalletEvent::EmptyTerm));
 		})
 	}
 
@@ -2209,7 +2209,7 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::PalletEvent::NewTerm {
 				new_members: vec![(4, 35), (5, 45)],
 			}));
 
@@ -2222,7 +2222,7 @@ mod tests {
 			System::set_block_number(10);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::PalletEvent::NewTerm {
 				new_members: vec![],
 			}));
 
@@ -2294,7 +2294,7 @@ mod tests {
 			assert_eq!(Elections::election_rounds(), 1);
 			assert!(members_ids().is_empty());
 
-			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::PalletEvent::NewTerm {
 				new_members: vec![],
 			}));
 		});
@@ -2602,7 +2602,7 @@ mod tests {
 			// 5 is an outgoing loser. will also get slashed.
 			assert_eq!(balances(&5), (45, 2));
 
-			System::assert_has_event(RuntimeEvent::Elections(super::Event::NewTerm {
+			System::assert_has_event(RuntimeEvent::Elections(super::PalletEvent::NewTerm {
 				new_members: vec![(4, 35), (5, 45)],
 			}));
 		})

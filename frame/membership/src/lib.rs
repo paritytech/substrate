@@ -52,7 +52,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
+		type RuntimeEvent: From<PalletEvent<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Required origin for adding a member (though can always be Root).
@@ -133,7 +133,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 		/// The given member was added; see the transaction for who.
 		MemberAdded,
 		/// The given member was removed; see the transaction for who.
@@ -177,7 +177,7 @@ pub mod pallet {
 
 			T::MembershipChanged::change_members_sorted(&[who], &[], &members[..]);
 
-			Self::deposit_event(Event::MemberAdded);
+			Self::deposit_event(PalletEvent::MemberAdded);
 			Ok(())
 		}
 
@@ -197,7 +197,7 @@ pub mod pallet {
 			T::MembershipChanged::change_members_sorted(&[], &[who], &members[..]);
 			Self::rejig_prime(&members);
 
-			Self::deposit_event(Event::MemberRemoved);
+			Self::deposit_event(PalletEvent::MemberRemoved);
 			Ok(())
 		}
 
@@ -229,7 +229,7 @@ pub mod pallet {
 			T::MembershipChanged::change_members_sorted(&[add], &[remove], &members[..]);
 			Self::rejig_prime(&members);
 
-			Self::deposit_event(Event::MembersSwapped);
+			Self::deposit_event(PalletEvent::MembersSwapped);
 			Ok(())
 		}
 
@@ -250,7 +250,7 @@ pub mod pallet {
 				*m = members;
 			});
 
-			Self::deposit_event(Event::MembersReset);
+			Self::deposit_event(PalletEvent::MembersReset);
 			Ok(())
 		}
 
@@ -285,7 +285,7 @@ pub mod pallet {
 				}
 			}
 
-			Self::deposit_event(Event::KeyChanged);
+			Self::deposit_event(PalletEvent::KeyChanged);
 			Ok(())
 		}
 

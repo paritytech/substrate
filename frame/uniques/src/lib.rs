@@ -89,7 +89,7 @@ pub mod pallet {
 	/// The module configuration trait.
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
+		type RuntimeEvent: From<PalletEvent<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the collection of item.
@@ -280,7 +280,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 		/// A `collection` was created.
 		Created { collection: T::CollectionId, creator: T::AccountId, owner: T::AccountId },
 		/// A `collection` was force-created.
@@ -479,7 +479,7 @@ pub mod pallet {
 				admin.clone(),
 				T::CollectionDeposit::get(),
 				false,
-				Event::Created { collection, creator: owner, owner: admin },
+				PalletEvent::Created { collection, creator: owner, owner: admin },
 			)
 		}
 
@@ -516,7 +516,7 @@ pub mod pallet {
 				owner.clone(),
 				Zero::zero(),
 				free_holding,
-				Event::ForceCreated { collection, owner },
+				PalletEvent::ForceCreated { collection, owner },
 			)
 		}
 
@@ -541,7 +541,7 @@ pub mod pallet {
 
 			let next_id = NextCollectionId::<T, I>::get().saturating_add(1u32.into());
 			NextCollectionId::<T, I>::set(next_id);
-			Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
+			Self::deposit_event(PalletEvent::NextCollectionIdIncremented { next_id });
 			Ok(())
 		}
 
@@ -738,7 +738,7 @@ pub mod pallet {
 			}
 			Collection::<T, I>::insert(&collection, &collection_details);
 
-			Self::deposit_event(Event::<T, I>::Redeposited {
+			Self::deposit_event(PalletEvent::<T, I>::Redeposited {
 				collection,
 				successful_items: successful,
 			});
@@ -773,7 +773,7 @@ pub mod pallet {
 			details.is_frozen = true;
 			Item::<T, I>::insert(&collection, &item, &details);
 
-			Self::deposit_event(Event::<T, I>::Frozen { collection, item });
+			Self::deposit_event(PalletEvent::<T, I>::Frozen { collection, item });
 			Ok(())
 		}
 
@@ -804,7 +804,7 @@ pub mod pallet {
 			details.is_frozen = false;
 			Item::<T, I>::insert(&collection, &item, &details);
 
-			Self::deposit_event(Event::<T, I>::Thawed { collection, item });
+			Self::deposit_event(PalletEvent::<T, I>::Thawed { collection, item });
 			Ok(())
 		}
 
@@ -830,7 +830,7 @@ pub mod pallet {
 
 				details.is_frozen = true;
 
-				Self::deposit_event(Event::<T, I>::CollectionFrozen { collection });
+				Self::deposit_event(PalletEvent::<T, I>::CollectionFrozen { collection });
 				Ok(())
 			})
 		}
@@ -857,7 +857,7 @@ pub mod pallet {
 
 				details.is_frozen = false;
 
-				Self::deposit_event(Event::<T, I>::CollectionThawed { collection });
+				Self::deposit_event(PalletEvent::<T, I>::CollectionThawed { collection });
 				Ok(())
 			})
 		}
@@ -904,7 +904,7 @@ pub mod pallet {
 				details.owner = owner.clone();
 				OwnershipAcceptance::<T, I>::remove(&owner);
 
-				Self::deposit_event(Event::OwnerChanged { collection, new_owner: owner });
+				Self::deposit_event(PalletEvent::OwnerChanged { collection, new_owner: owner });
 				Ok(())
 			})
 		}
@@ -942,7 +942,7 @@ pub mod pallet {
 				details.admin = admin.clone();
 				details.freezer = freezer.clone();
 
-				Self::deposit_event(Event::TeamChanged { collection, issuer, admin, freezer });
+				Self::deposit_event(PalletEvent::TeamChanged { collection, issuer, admin, freezer });
 				Ok(())
 			})
 		}
@@ -985,7 +985,7 @@ pub mod pallet {
 			Item::<T, I>::insert(&collection, &item, &details);
 
 			let delegate = details.approved.expect("set as Some above; qed");
-			Self::deposit_event(Event::ApprovedTransfer {
+			Self::deposit_event(PalletEvent::ApprovedTransfer {
 				collection,
 				item,
 				owner: details.owner,
@@ -1037,7 +1037,7 @@ pub mod pallet {
 			}
 
 			Item::<T, I>::insert(&collection, &item, &details);
-			Self::deposit_event(Event::ApprovalCancelled {
+			Self::deposit_event(PalletEvent::ApprovalCancelled {
 				collection,
 				item,
 				owner: details.owner,
@@ -1090,7 +1090,7 @@ pub mod pallet {
 				CollectionAccount::<T, I>::remove(&old_owner, &collection);
 				CollectionAccount::<T, I>::insert(&new_owner, &collection, ());
 
-				Self::deposit_event(Event::ItemStatusChanged { collection });
+				Self::deposit_event(PalletEvent::ItemStatusChanged { collection });
 				Ok(())
 			})
 		}
@@ -1156,7 +1156,7 @@ pub mod pallet {
 
 			Attribute::<T, I>::insert((&collection, maybe_item, &key), (&value, deposit));
 			Collection::<T, I>::insert(collection, &collection_details);
-			Self::deposit_event(Event::AttributeSet { collection, maybe_item, key, value });
+			Self::deposit_event(PalletEvent::AttributeSet { collection, maybe_item, key, value });
 			Ok(())
 		}
 
@@ -1201,7 +1201,7 @@ pub mod pallet {
 				collection_details.total_deposit.saturating_reduce(deposit);
 				T::Currency::unreserve(&collection_details.owner, deposit);
 				Collection::<T, I>::insert(collection, &collection_details);
-				Self::deposit_event(Event::AttributeCleared { collection, maybe_item, key });
+				Self::deposit_event(PalletEvent::AttributeCleared { collection, maybe_item, key });
 			}
 			Ok(())
 		}
@@ -1267,7 +1267,7 @@ pub mod pallet {
 				*metadata = Some(ItemMetadata { deposit, data: data.clone(), is_frozen });
 
 				Collection::<T, I>::insert(&collection, &collection_details);
-				Self::deposit_event(Event::MetadataSet { collection, item, data, is_frozen });
+				Self::deposit_event(PalletEvent::MetadataSet { collection, item, data, is_frozen });
 				Ok(())
 			})
 		}
@@ -1313,7 +1313,7 @@ pub mod pallet {
 				collection_details.total_deposit.saturating_reduce(deposit);
 
 				Collection::<T, I>::insert(&collection, &collection_details);
-				Self::deposit_event(Event::MetadataCleared { collection, item });
+				Self::deposit_event(PalletEvent::MetadataCleared { collection, item });
 				Ok(())
 			})
 		}
@@ -1374,7 +1374,7 @@ pub mod pallet {
 
 				*metadata = Some(CollectionMetadata { deposit, data: data.clone(), is_frozen });
 
-				Self::deposit_event(Event::CollectionMetadataSet { collection, data, is_frozen });
+				Self::deposit_event(PalletEvent::CollectionMetadataSet { collection, data, is_frozen });
 				Ok(())
 			})
 		}
@@ -1412,7 +1412,7 @@ pub mod pallet {
 
 				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownCollection)?.deposit;
 				T::Currency::unreserve(&details.owner, deposit);
-				Self::deposit_event(Event::CollectionMetadataCleared { collection });
+				Self::deposit_event(PalletEvent::CollectionMetadataCleared { collection });
 				Ok(())
 			})
 		}
@@ -1448,7 +1448,7 @@ pub mod pallet {
 			} else {
 				OwnershipAcceptance::<T, I>::remove(&who);
 			}
-			Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_collection });
+			Self::deposit_event(PalletEvent::OwnershipAcceptanceChanged { who, maybe_collection });
 			Ok(())
 		}
 
@@ -1487,7 +1487,7 @@ pub mod pallet {
 			ensure!(details.items <= max_supply, Error::<T, I>::MaxSupplyTooSmall);
 
 			CollectionMaxSupply::<T, I>::insert(&collection, max_supply);
-			Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
+			Self::deposit_event(PalletEvent::CollectionMaxSupplySet { collection, max_supply });
 			Ok(())
 		}
 

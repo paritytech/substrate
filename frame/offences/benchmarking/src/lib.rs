@@ -43,7 +43,7 @@ use pallet_session::{
 	Config as SessionConfig, SessionManager,
 };
 use pallet_staking::{
-	Config as StakingConfig, Event as StakingEvent, Exposure, IndividualExposure,
+	Config as StakingConfig, PalletEvent as StakingEvent, Exposure, IndividualExposure,
 	Pallet as Staking, RewardDestination, ValidatorPrefs,
 };
 
@@ -311,13 +311,13 @@ benchmarks! {
 			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
 		);
 		let balance_slash = |id| core::iter::once(
-			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
+			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::PalletEvent::<T>::Slashed{who: id, amount: slash_amount.into()})
 		);
 		let chill = |id| core::iter::once(
 			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled(id))
 		);
 		let balance_deposit = |id, amount: u32|
-			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});
+			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::PalletEvent::<T>::Deposit{who: id, amount: amount.into()});
 		let mut first = true;
 		let slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
@@ -338,9 +338,9 @@ benchmarks! {
 					let mut reward_events = reporters.clone().into_iter()
 						.flat_map(|reporter| vec![
 							balance_deposit(reporter.clone(), reward).into(),
-							frame_system::Event::<T>::NewAccount { account: reporter.clone() }.into(),
+							frame_system::PalletEvent::<T>::NewAccount { account: reporter.clone() }.into(),
 							<T as BalancesConfig>::RuntimeEvent::from(
-								pallet_balances::Event::<T>::Endowed{account: reporter, free_balance: reward.into()}
+								pallet_balances::PalletEvent::<T>::Endowed{account: reporter, free_balance: reward.into()}
 							).into(),
 						])
 						.collect::<Vec<_>>();
@@ -367,7 +367,7 @@ benchmarks! {
 				std::iter::empty()
 					.chain(slash_events.into_iter().map(Into::into))
 					.chain(std::iter::once(<T as OffencesConfig>::RuntimeEvent::from(
-						pallet_offences::Event::Offence{
+						pallet_offences::PalletEvent::Offence{
 							kind: UnresponsivenessOffence::<T>::ID,
 							timeslot: 0_u32.to_le_bytes().to_vec(),
 						}

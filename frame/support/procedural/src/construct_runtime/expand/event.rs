@@ -48,10 +48,10 @@ pub fn expand_outer_event(
 
 			let part_is_generic = !generics.params.is_empty();
 			let pallet_event = match (instance, part_is_generic) {
-				(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
-				(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
-				(None, true) => quote!(#path::Event::<#runtime>),
-				(None, false) => quote!(#path::Event),
+				(Some(inst), true) => quote!(#path::PalletEvent::<#runtime, #path::#inst>),
+				(Some(inst), false) => quote!(#path::PalletEvent::<#path::#inst>),
+				(None, true) => quote!(#path::PalletEvent::<#runtime>),
+				(None, false) => quote!(#path::PalletEvent),
 			};
 
 			event_variants.extend(expand_event_variant(
@@ -100,16 +100,16 @@ fn expand_event_variant(
 
 	match instance {
 		Some(inst) if part_is_generic => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
+			quote!(#[codec(index = #index)] #variant_name(#path::PalletEvent<#runtime, #path::#inst>),)
 		},
 		Some(inst) => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
+			quote!(#[codec(index = #index)] #variant_name(#path::PalletEvent<#path::#inst>),)
 		},
 		None if part_is_generic => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime>),)
+			quote!(#[codec(index = #index)] #variant_name(#path::PalletEvent<#runtime>),)
 		},
 		None => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event),)
+			quote!(#[codec(index = #index)] #variant_name(#path::PalletEvent),)
 		},
 	}
 }

@@ -361,7 +361,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			details.supply = details.supply.saturating_add(amount);
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Issued {
+		Self::deposit_event(PalletEvent::Issued {
 			asset_id: id,
 			owner: beneficiary.clone(),
 			total_supply: amount,
@@ -441,7 +441,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Ok(())
 		})?;
-		Self::deposit_event(Event::Burned { asset_id: id, owner: target.clone(), balance: actual });
+		Self::deposit_event(PalletEvent::Burned { asset_id: id, owner: target.clone(), balance: actual });
 		Ok(actual)
 	}
 
@@ -611,7 +611,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		Self::deposit_event(Event::Transferred {
+		Self::deposit_event(PalletEvent::Transferred {
 			asset_id: id,
 			from: source.clone(),
 			to: dest.clone(),
@@ -654,7 +654,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				is_frozen: false,
 			},
 		);
-		Self::deposit_event(Event::ForceCreated { asset_id: id, owner });
+		Self::deposit_event(PalletEvent::ForceCreated { asset_id: id, owner });
 		Ok(())
 	}
 
@@ -702,7 +702,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
 					T::Currency::unreserve(&owner, approval.deposit);
 				}
-				Self::deposit_event(Event::Destroyed { asset_id: id });
+				Self::deposit_event(PalletEvent::Destroyed { asset_id: id });
 
 				Ok(DestroyWitness {
 					accounts: details.accounts,
@@ -754,7 +754,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		)?;
 		Asset::<T, I>::insert(id, d);
-		Self::deposit_event(Event::ApprovedTransfer {
+		Self::deposit_event(PalletEvent::ApprovedTransfer {
 			asset_id: id,
 			source: owner.clone(),
 			delegate: delegate.clone(),
@@ -850,7 +850,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				is_frozen: false,
 			});
 
-			Self::deposit_event(Event::MetadataSet {
+			Self::deposit_event(PalletEvent::MetadataSet {
 				asset_id: id,
 				name,
 				symbol,

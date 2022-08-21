@@ -228,7 +228,7 @@ pub mod pallet {
 		type DataDepositPerByte: Get<BalanceOf<Self, I>>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
+		type RuntimeEvent: From<PalletEvent<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Maximum acceptable reason length.
@@ -273,7 +273,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 		/// New bounty proposal.
 		BountyProposed { index: BountyIndex },
 		/// A bounty proposal was rejected; funds were slashed.
@@ -584,7 +584,7 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			Self::deposit_event(Event::<T, I>::BountyAwarded { index: bounty_id, beneficiary });
+			Self::deposit_event(PalletEvent::<T, I>::BountyAwarded { index: bounty_id, beneficiary });
 			Ok(())
 		}
 
@@ -637,7 +637,7 @@ pub mod pallet {
 
 					BountyDescriptions::<T, I>::remove(bounty_id);
 
-					Self::deposit_event(Event::<T, I>::BountyClaimed {
+					Self::deposit_event(PalletEvent::<T, I>::BountyClaimed {
 						index: bounty_id,
 						payout,
 						beneficiary,
@@ -688,7 +688,7 @@ pub mod pallet {
 							T::OnSlash::on_unbalanced(imbalance);
 							*maybe_bounty = None;
 
-							Self::deposit_event(Event::<T, I>::BountyRejected {
+							Self::deposit_event(PalletEvent::<T, I>::BountyRejected {
 								index: bounty_id,
 								bond: value,
 							});
@@ -735,7 +735,7 @@ pub mod pallet {
 					debug_assert!(res.is_ok());
 					*maybe_bounty = None;
 
-					Self::deposit_event(Event::<T, I>::BountyCanceled { index: bounty_id });
+					Self::deposit_event(PalletEvent::<T, I>::BountyCanceled { index: bounty_id });
 					Ok(Some(<T as Config<I>>::WeightInfo::close_bounty_active()).into())
 				},
 			)
@@ -775,7 +775,7 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			Self::deposit_event(Event::<T, I>::BountyExtended { index: bounty_id });
+			Self::deposit_event(PalletEvent::<T, I>::BountyExtended { index: bounty_id });
 			Ok(())
 		}
 	}
@@ -842,7 +842,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Bounties::<T, I>::insert(index, &bounty);
 		BountyDescriptions::<T, I>::insert(index, bounded_description);
 
-		Self::deposit_event(Event::<T, I>::BountyProposed { index });
+		Self::deposit_event(PalletEvent::<T, I>::BountyProposed { index });
 
 		Ok(())
 	}
@@ -876,7 +876,7 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
 								bounty.value,
 							));
 
-							Self::deposit_event(Event::<T, I>::BountyBecameActive { index });
+							Self::deposit_event(PalletEvent::<T, I>::BountyBecameActive { index });
 							false
 						} else {
 							*missed_any = true;

@@ -61,7 +61,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let event_where_clause = &event.where_clause;
 
 	// NOTE: actually event where clause must be a subset of config where clause because of
-	// `type Event: From<Event<Self>>`. But we merge either way for potential better error message
+	// `type Event: From<PalletEvent<Self>>`. But we merge either way for potential better error message
 	let completed_where_clause =
 		super::merge_where_clauses(&[&event.where_clause, &def.config.where_clause]);
 
@@ -134,10 +134,10 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 
 		quote::quote_spanned!(*fn_span =>
 			impl<#type_impl_gen> Pallet<#type_use_gen> #completed_where_clause {
-				#fn_vis fn deposit_event(event: Event<#event_use_gen>) {
+				#fn_vis fn deposit_event(event: PalletEvent<#event_use_gen>) {
 					let event = <
 						<T as Config #trait_use_gen>::RuntimeEvent as
-						From<Event<#event_use_gen>>
+						From<PalletEvent<#event_use_gen>>
 					>::from(event);
 
 					let event = <

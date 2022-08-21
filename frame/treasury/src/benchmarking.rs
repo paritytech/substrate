@@ -80,7 +80,7 @@ benchmarks_instance_pallet! {
 	}
 	verify {
 		if origin.is_ok() {
-			assert_last_event::<T, I>(Event::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into())
+			assert_last_event::<T, I>(PalletEvent::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into())
 		}
 	}
 

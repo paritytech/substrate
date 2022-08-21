@@ -27,7 +27,7 @@
 ///
 /// ```rust
 /// frame_support::decl_event!(
-///    pub enum Event {
+///    pub enum PalletEvent {
 ///       Success,
 ///       Failure(String),
 ///    }
@@ -91,7 +91,7 @@
 ///
 /// // For module with instances, DefaultInstance is optional
 /// frame_support::decl_event!(
-///    pub enum Event<T, I: Instance = DefaultInstance> where
+///    pub enum PalletEvent<T, I: Instance = DefaultInstance> where
 ///       <T as Config>::Balance,
 ///       <T as Config>::Token
 ///    {
@@ -104,7 +104,7 @@
 macro_rules! decl_event {
 	(
 		$(#[$attr:meta])*
-		pub enum Event<$evt_generic_param:ident $(, $instance:ident $(: $instantiable:ident)? $( = $event_default_instance:path)? )?> where
+		pub enum PalletEvent<$evt_generic_param:ident $(, $instance:ident $(: $instantiable:ident)? $( = $event_default_instance:path)? )?> where
 			$( $tt:tt )*
 	) => {
 		$crate::__decl_generic_event!(
@@ -116,7 +116,7 @@ macro_rules! decl_event {
 	};
 	(
 		$(#[$attr:meta])*
-		pub enum Event {
+		pub enum PalletEvent {
 			$(
 				$events:tt
 			)*
@@ -134,12 +134,12 @@ macro_rules! decl_event {
 		/// Events for this module.
 		///
 		$(#[$attr])*
-		pub enum Event {
+		pub enum PalletEvent {
 			$(
 				$events
 			)*
 		}
-		impl From<Event> for () {
+		impl From<PalletEvent> for () {
 			fn from(_: Event) -> () { () }
 		}
 	}

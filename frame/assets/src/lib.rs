@@ -178,7 +178,7 @@ pub mod pallet {
 	/// The module configuration trait.
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
+		type RuntimeEvent: From<PalletEvent<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The units in which we record balances.
@@ -374,7 +374,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config<I>, I: 'static = ()> {
+	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
 		/// Some asset class was created.
 		Created { asset_id: T::AssetId, creator: T::AccountId, owner: T::AccountId },
 		/// Some assets were issued.
@@ -531,7 +531,7 @@ pub mod pallet {
 					is_frozen: false,
 				},
 			);
-			Self::deposit_event(Event::Created { asset_id: id, creator: owner, owner: admin });
+			Self::deposit_event(PalletEvent::Created { asset_id: id, creator: owner, owner: admin });
 			Ok(())
 		}
 
@@ -789,7 +789,7 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			Self::deposit_event(Event::<T, I>::Frozen { asset_id: id, who });
+			Self::deposit_event(PalletEvent::<T, I>::Frozen { asset_id: id, who });
 			Ok(())
 		}
 
@@ -820,7 +820,7 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			Self::deposit_event(Event::<T, I>::Thawed { asset_id: id, who });
+			Self::deposit_event(PalletEvent::<T, I>::Thawed { asset_id: id, who });
 			Ok(())
 		}
 
@@ -846,7 +846,7 @@ pub mod pallet {
 
 				d.is_frozen = true;
 
-				Self::deposit_event(Event::<T, I>::AssetFrozen { asset_id: id });
+				Self::deposit_event(PalletEvent::<T, I>::AssetFrozen { asset_id: id });
 				Ok(())
 			})
 		}
@@ -873,7 +873,7 @@ pub mod pallet {
 
 				d.is_frozen = false;
 
-				Self::deposit_event(Event::<T, I>::AssetThawed { asset_id: id });
+				Self::deposit_event(PalletEvent::<T, I>::AssetThawed { asset_id: id });
 				Ok(())
 			})
 		}
@@ -912,7 +912,7 @@ pub mod pallet {
 
 				details.owner = owner.clone();
 
-				Self::deposit_event(Event::OwnerChanged { asset_id: id, owner });
+				Self::deposit_event(PalletEvent::OwnerChanged { asset_id: id, owner });
 				Ok(())
 			})
 		}
@@ -950,7 +950,7 @@ pub mod pallet {
 				details.admin = admin.clone();
 				details.freezer = freezer.clone();
 
-				Self::deposit_event(Event::TeamChanged { asset_id: id, issuer, admin, freezer });
+				Self::deposit_event(PalletEvent::TeamChanged { asset_id: id, issuer, admin, freezer });
 				Ok(())
 			})
 		}
@@ -1007,7 +1007,7 @@ pub mod pallet {
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
 				T::Currency::unreserve(&d.owner, deposit);
-				Self::deposit_event(Event::MetadataCleared { asset_id: id });
+				Self::deposit_event(PalletEvent::MetadataCleared { asset_id: id });
 				Ok(())
 			})
 		}
@@ -1054,7 +1054,7 @@ pub mod pallet {
 					is_frozen,
 				});
 
-				Self::deposit_event(Event::MetadataSet {
+				Self::deposit_event(PalletEvent::MetadataSet {
 					asset_id: id,
 					name,
 					symbol,
@@ -1087,7 +1087,7 @@ pub mod pallet {
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
 				T::Currency::unreserve(&d.owner, deposit);
-				Self::deposit_event(Event::MetadataCleared { asset_id: id });
+				Self::deposit_event(PalletEvent::MetadataCleared { asset_id: id });
 				Ok(())
 			})
 		}
@@ -1139,7 +1139,7 @@ pub mod pallet {
 				asset.is_frozen = is_frozen;
 				*maybe_asset = Some(asset);
 
-				Self::deposit_event(Event::AssetStatusChanged { asset_id: id });
+				Self::deposit_event(PalletEvent::AssetStatusChanged { asset_id: id });
 				Ok(())
 			})
 		}
@@ -1205,7 +1205,7 @@ pub mod pallet {
 			d.approvals.saturating_dec();
 			Asset::<T, I>::insert(id, d);
 
-			Self::deposit_event(Event::ApprovalCancelled { asset_id: id, owner, delegate });
+			Self::deposit_event(PalletEvent::ApprovalCancelled { asset_id: id, owner, delegate });
 			Ok(())
 		}
 
@@ -1247,7 +1247,7 @@ pub mod pallet {
 			d.approvals.saturating_dec();
 			Asset::<T, I>::insert(id, d);
 
-			Self::deposit_event(Event::ApprovalCancelled { asset_id: id, owner, delegate });
+			Self::deposit_event(PalletEvent::ApprovalCancelled { asset_id: id, owner, delegate });
 			Ok(())
 		}
 

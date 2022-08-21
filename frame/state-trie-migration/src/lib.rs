@@ -422,7 +422,7 @@ pub mod pallet {
 	/// Inner events of this pallet.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum Event<T: Config> {
+	pub enum PalletEvent<T: Config> {
 		/// Given number of `(top, child)` keys were migrated respectively, with the given
 		/// `compute`.
 		Migrated { top: u32, child: u32, compute: MigrationCompute },
@@ -449,7 +449,7 @@ pub mod pallet {
 		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency provider type.
 		type Currency: Currency<Self::AccountId>;
@@ -615,12 +615,12 @@ pub mod pallet {
 			if real_size_upper < task.dyn_size {
 				// let the imbalance burn.
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
-				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
+				Self::deposit_event(PalletEvent::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
 				return Err(Error::<T>::SizeUpperBoundExceeded.into())
 			}
 
-			Self::deposit_event(Event::<T>::Migrated {
+			Self::deposit_event(PalletEvent::<T>::Migrated {
 				top: task.dyn_top_items,
 				child: task.dyn_child_items,
 				compute: MigrationCompute::Signed,
@@ -677,11 +677,11 @@ pub mod pallet {
 
 			if dyn_size > witness_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
-				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
+				Self::deposit_event(PalletEvent::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
 				Err("wrong witness data".into())
 			} else {
-				Self::deposit_event(Event::<T>::Migrated {
+				Self::deposit_event(PalletEvent::<T>::Migrated {
 					top: keys.len() as u32,
 					child: 0,
 					compute: MigrationCompute::Signed,
@@ -740,7 +740,7 @@ pub mod pallet {
 			if dyn_size != total_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
-				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
+				Self::deposit_event(PalletEvent::<T>::Slashed { who, amount: deposit });
 				Err(DispatchErrorWithPostInfo {
 					error: "bad witness".into(),
 					post_info: PostDispatchInfo {
@@ -749,7 +749,7 @@ pub mod pallet {
 					},
 				})
 			} else {
-				Self::deposit_event(Event::<T>::Migrated {
+				Self::deposit_event(PalletEvent::<T>::Migrated {
 					top: 0,
 					child: child_keys.len() as u32,
 					compute: MigrationCompute::Signed,
@@ -819,10 +819,10 @@ pub mod pallet {
 				);
 
 				if task.finished() {
-					Self::deposit_event(Event::<T>::AutoMigrationFinished);
+					Self::deposit_event(PalletEvent::<T>::AutoMigrationFinished);
 					AutoLimits::<T>::kill();
 				} else {
-					Self::deposit_event(Event::<T>::Migrated {
+					Self::deposit_event(PalletEvent::<T>::Migrated {
 						top: task.dyn_top_items,
 						child: task.dyn_child_items,
 						compute: MigrationCompute::Auto,
@@ -852,7 +852,7 @@ pub mod pallet {
 		fn halt<E: sp_std::fmt::Debug + ?Sized>(msg: &E) {
 			log!(error, "migration halted due to: {:?}", msg);
 			AutoLimits::<T>::kill();
-			Self::deposit_event(Event::<T>::Halted);
+			Self::deposit_event(PalletEvent::<T>::Halted);
 		}
 
 		/// Convert a child root key, aka. "Child-bearing top key" into the proper format.
@@ -1296,7 +1296,7 @@ mod test {
 				Some(2000000),
 			);
 			// The auto migration halted.
-			System::assert_last_event(crate::Event::Halted {}.into());
+			System::assert_last_event(crate::PalletEvent::Halted {}.into());
 			// Limits are killed.
 			assert!(AutoLimits::<Test>::get().is_none());
 
@@ -1333,7 +1333,7 @@ mod test {
 				Some(2000000),
 			);
 			// The auto migration halted.
-			System::assert_last_event(crate::Event::Halted {}.into());
+			System::assert_last_event(crate::PalletEvent::Halted {}.into());
 			// Limits are killed.
 			assert!(AutoLimits::<Test>::get().is_none());
 
