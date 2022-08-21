@@ -31,11 +31,11 @@ fn discards_data() {
 		run_to_block(1, || None);
 		let caller = 1;
 		assert_ok!(TransactionStorage::<Test>::store(
-			RawOrigin::Signed(caller.clone()).into(),
+			RawOrigin::Signed(caller).into(),
 			vec![0u8; 2000 as usize]
 		));
 		assert_ok!(TransactionStorage::<Test>::store(
-			RawOrigin::Signed(caller.clone()).into(),
+			RawOrigin::Signed(caller).into(),
 			vec![0u8; 2000 as usize]
 		));
 		let proof_provider = || {
@@ -74,7 +74,7 @@ fn burns_fee() {
 			Error::<Test>::InsufficientFunds,
 		);
 		assert_ok!(TransactionStorage::<Test>::store(
-			RawOrigin::Signed(caller.clone()).into(),
+			RawOrigin::Signed(caller).into(),
 			vec![0u8; 2000 as usize]
 		));
 		assert_eq!(Balances::free_balance(1), 1_000_000_000 - 2000 * 2 - 200);
@@ -87,7 +87,7 @@ fn checks_proof() {
 		run_to_block(1, || None);
 		let caller = 1;
 		assert_ok!(TransactionStorage::<Test>::store(
-			RawOrigin::Signed(caller.clone()).into(),
+			RawOrigin::Signed(caller).into(),
 			vec![0u8; MAX_DATA_SIZE as usize]
 		));
 		run_to_block(10, || None);
@@ -119,13 +119,13 @@ fn renews_data() {
 		run_to_block(1, || None);
 		let caller = 1;
 		assert_ok!(TransactionStorage::<Test>::store(
-			RawOrigin::Signed(caller.clone()).into(),
+			RawOrigin::Signed(caller).into(),
 			vec![0u8; 2000]
 		));
 		let info = BlockTransactions::<Test>::get().last().unwrap().clone();
 		run_to_block(6, || None);
 		assert_ok!(TransactionStorage::<Test>::renew(
-			RawOrigin::Signed(caller.clone()).into(),
+			RawOrigin::Signed(caller).into(),
 			1, // block
 			0, // transaction
 		));

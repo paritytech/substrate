@@ -543,7 +543,7 @@ fn anonymous_works() {
 		let anon = Proxy::anonymous_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(
 			ProxyEvent::AnonymousCreated {
-				anonymous: anon.clone(),
+				anonymous: anon,
 				who: 1,
 				proxy_type: ProxyType::Any,
 				disambiguation_index: 0,

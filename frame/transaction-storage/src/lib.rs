@@ -245,9 +245,11 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 			let transactions = <Transactions<T>>::get(block).ok_or(Error::<T>::RenewedNotFound)?;
 			let info = transactions.get(index as usize).ok_or(Error::<T>::RenewedNotFound)?;
+			let extrinsic_index =
+				<frame_system::Pallet<T>>::extrinsic_index().ok_or(Error::<T>::BadContext)?;
+
 			Self::apply_fee(sender, info.size)?;
 
-			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index().unwrap();
 			sp_io::transaction_index::renew(extrinsic_index, info.content_hash.into());
 
 			let mut index = 0;

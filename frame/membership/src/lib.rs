@@ -27,6 +27,7 @@ use frame_support::{
 	traits::{ChangeMembers, Contains, Get, InitializeMembers, SortedMembers},
 	BoundedVec,
 };
+use sp_runtime::traits::StaticLookup;
 use sp_std::prelude::*;
 
 pub mod migrations;
@@ -34,6 +35,8 @@ pub mod weights;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -164,8 +167,9 @@ pub mod pallet {
 		///
 		/// May only be called from `T::AddOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn add_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).err().ok_or(Error::<T, I>::AlreadyMember)?;
@@ -185,8 +189,9 @@ pub mod pallet {
 		///
 		/// May only be called from `T::RemoveOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn remove_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn remove_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::RemoveOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 
 			let mut members = <Members<T, I>>::get();
 			let location = members.binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
@@ -209,10 +214,12 @@ pub mod pallet {
 		#[pallet::weight(50_000_000)]
 		pub fn swap_member(
 			origin: OriginFor<T>,
-			remove: T::AccountId,
-			add: T::AccountId,
+			remove: AccountIdLookupOf<T>,
+			add: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			T::SwapOrigin::ensure_origin(origin)?;
+			let remove = T::Lookup::lookup(remove)?;
+			let add = T::Lookup::lookup(add)?;
 
 			if remove == add {
 				return Ok(())
@@ -260,8 +267,9 @@ pub mod pallet {
 		///
 		/// Prime membership is passed from the origin account to `new`, if extant.
 		#[pallet::weight(50_000_000)]
-		pub fn change_key(origin: OriginFor<T>, new: T::AccountId) -> DispatchResult {
+		pub fn change_key(origin: OriginFor<T>, new: AccountIdLookupOf<T>) -> DispatchResult {
 			let remove = ensure_signed(origin)?;
+			let new = T::Lookup::lookup(new)?;
 
 			if remove != new {
 				let mut members = <Members<T, I>>::get();
@@ -293,8 +301,9 @@ pub mod pallet {
 		///
 		/// May only be called from `T::PrimeOrigin`.
 		#[pallet::weight(50_000_000)]
-		pub fn set_prime(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn set_prime(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::PrimeOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			Self::members().binary_search(&who).ok().ok_or(Error::<T, I>::NotMember)?;
 			Prime::<T, I>::put(&who);
 			T::MembershipChanged::set_prime(Some(who));
@@ -356,7 +365,8 @@ mod benchmark {
 
 		assert_ok!(<Membership<T, I>>::reset_members(reset_origin, members.clone()));
 		if let Some(prime) = prime.map(|i| members[i].clone()) {
-			assert_ok!(<Membership<T, I>>::set_prime(prime_origin, prime));
+			let prime_lookup = T::Lookup::unlookup(prime);
+			assert_ok!(<Membership<T, I>>::set_prime(prime_origin, prime_lookup));
 		} else {
 			assert_ok!(<Membership<T, I>>::clear_prime(prime_origin));
 		}
@@ -369,8 +379,9 @@ mod benchmark {
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			set_members::<T, I>(members, None);
 			let new_member = account::<T::AccountId>("add", m, SEED);
+			let new_member_lookup = T::Lookup::unlookup(new_member.clone());
 		}: {
-			assert_ok!(<Membership<T, I>>::add_member(T::AddOrigin::successful_origin(), new_member.clone()));
+			assert_ok!(<Membership<T, I>>::add_member(T::AddOrigin::successful_origin(), new_member_lookup));
 		}
 		verify {
 			assert!(<Members<T, I>>::get().contains(&new_member));
@@ -386,8 +397,9 @@ mod benchmark {
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 
 			let to_remove = members.first().cloned().unwrap();
+			let to_remove_lookup = T::Lookup::unlookup(to_remove.clone());
 		}: {
-			assert_ok!(<Membership<T, I>>::remove_member(T::RemoveOrigin::successful_origin(), to_remove.clone()));
+			assert_ok!(<Membership<T, I>>::remove_member(T::RemoveOrigin::successful_origin(), to_remove_lookup));
 		} verify {
 			assert!(!<Members<T, I>>::get().contains(&to_remove));
 			// prime is rejigged
@@ -402,12 +414,14 @@ mod benchmark {
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 			let add = account::<T::AccountId>("member", m, SEED);
+			let add_lookup = T::Lookup::unlookup(add.clone());
 			let remove = members.first().cloned().unwrap();
+			let remove_lookup = T::Lookup::unlookup(remove.clone());
 		}: {
 			assert_ok!(<Membership<T, I>>::swap_member(
 				T::SwapOrigin::successful_origin(),
-				remove.clone(),
-				add.clone(),
+				remove_lookup,
+				add_lookup,
 			));
 		} verify {
 			assert!(!<Members<T, I>>::get().contains(&remove));
@@ -443,9 +457,10 @@ mod benchmark {
 			set_members::<T, I>(members.clone(), Some(members.len() - 1));
 
 			let add = account::<T::AccountId>("member", m, SEED);
+			let add_lookup = T::Lookup::unlookup(add.clone());
 			whitelist!(prime);
 		}: {
-			assert_ok!(<Membership<T, I>>::change_key(RawOrigin::Signed(prime.clone()).into(), add.clone()));
+			assert_ok!(<Membership<T, I>>::change_key(RawOrigin::Signed(prime.clone()).into(), add_lookup));
 		} verify {
 			assert!(!<Members<T, I>>::get().contains(&prime));
 			assert!(<Members<T, I>>::get().contains(&add));
@@ -458,9 +473,10 @@ mod benchmark {
 			let m in 1 .. T::MaxMembers::get();
 			let members = (0..m).map(|i| account("member", i, SEED)).collect::<Vec<T::AccountId>>();
 			let prime = members.last().cloned().unwrap();
+			let prime_lookup = T::Lookup::unlookup(prime.clone());
 			set_members::<T, I>(members, None);
 		}: {
-			assert_ok!(<Membership<T, I>>::set_prime(T::PrimeOrigin::successful_origin(), prime));
+			assert_ok!(<Membership<T, I>>::set_prime(T::PrimeOrigin::successful_origin(), prime_lookup));
 		} verify {
 			assert!(<Prime<T, I>>::get().is_some());
 			assert!(<T::MembershipChanged>::get_prime().is_some());

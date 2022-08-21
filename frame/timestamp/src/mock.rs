@@ -101,7 +101,7 @@ pub(crate) fn clear_captured_moment() {
 }
 
 pub(crate) fn get_captured_moment() -> Option<Moment> {
-	CAPTURED_MOMENT.with(|x| x.borrow().clone())
+	CAPTURED_MOMENT.with(|x| *x.borrow())
 }
 
 pub(crate) fn new_test_ext() -> TestExternalities {

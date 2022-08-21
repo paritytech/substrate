@@ -17,14 +17,13 @@
 
 //! Basic implementation for Externalities.
 
-use crate::{Backend, StorageKey, StorageValue};
+use crate::{Backend, OverlayedChanges, StorageKey, StorageValue};
 use codec::Encode;
 use hash_db::Hasher;
 use log::warn;
 use sp_core::{
 	storage::{
-		well_known_keys::is_child_storage_key, ChildInfo, StateVersion, Storage, StorageChild,
-		TrackedStorageKey,
+		well_known_keys::is_child_storage_key, ChildInfo, StateVersion, Storage, TrackedStorageKey,
 	},
 	traits::Externalities,
 	Blake2Hasher,
@@ -35,20 +34,19 @@ use std::{
 	any::{Any, TypeId},
 	collections::BTreeMap,
 	iter::FromIterator,
-	ops::Bound,
 };
 
 /// Simple Map-based Externalities impl.
 #[derive(Debug)]
 pub struct BasicExternalities {
-	inner: Storage,
+	overlay: OverlayedChanges,
 	extensions: Extensions,
 }
 
 impl BasicExternalities {
 	/// Create a new instance of `BasicExternalities`
 	pub fn new(inner: Storage) -> Self {
-		BasicExternalities { inner, extensions: Default::default() }
+		BasicExternalities { overlay: inner.into(), extensions: Default::default() }
 	}
 
 	/// New basic externalities with empty storage.
@@ -57,13 +55,34 @@ impl BasicExternalities {
 	}
 
 	/// Insert key/value
-	pub fn insert(&mut self, k: StorageKey, v: StorageValue) -> Option<StorageValue> {
-		self.inner.top.insert(k, v)
+	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
+		self.overlay.set_storage(k, Some(v));
 	}
 
 	/// Consume self and returns inner storages
 	pub fn into_storages(self) -> Storage {
-		self.inner
+		Storage {
+			top: self
+				.overlay
+				.changes()
+				.filter_map(|(k, v)| v.value().map(|v| (k.to_vec(), v.to_vec())))
+				.collect(),
+			children_default: self
+				.overlay
+				.children()
+				.map(|(iter, i)| {
+					(
+						i.storage_key().to_vec(),
+						sp_core::storage::StorageChild {
+							data: iter
+								.filter_map(|(k, v)| v.value().map(|v| (k.to_vec(), v.to_vec())))
+								.collect(),
+							child_info: i.clone(),
+						},
+					)
+				})
+				.collect(),
+		}
 	}
 
 	/// Execute the given closure `f` with the externalities set and initialized with `storage`.
@@ -73,13 +92,7 @@ impl BasicExternalities {
 		storage: &mut sp_core::storage::Storage,
 		f: impl FnOnce() -> R,
 	) -> R {
-		let mut ext = Self {
-			inner: Storage {
-				top: std::mem::take(&mut storage.top),
-				children_default: std::mem::take(&mut storage.children_default),
-			},
-			extensions: Default::default(),
-		};
+		let mut ext = Self::new(std::mem::take(storage));
 
 		let r = ext.execute_with(f);
 
@@ -108,15 +121,26 @@ impl BasicExternalities {
 
 impl PartialEq for BasicExternalities {
 	fn eq(&self, other: &BasicExternalities) -> bool {
-		self.inner.top.eq(&other.inner.top) &&
-			self.inner.children_default.eq(&other.inner.children_default)
+		self.overlay.changes().map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>() ==
+			other.overlay.changes().map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>() &&
+			self.overlay
+				.children()
+				.map(|(iter, i)| (i, iter.map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>()))
+				.collect::<BTreeMap<_, _>>() ==
+				other
+					.overlay
+					.children()
+					.map(|(iter, i)| {
+						(i, iter.map(|(k, v)| (k, v.value())).collect::<BTreeMap<_, _>>())
+					})
+					.collect::<BTreeMap<_, _>>()
 	}
 }
 
 impl FromIterator<(StorageKey, StorageValue)> for BasicExternalities {
 	fn from_iter<I: IntoIterator<Item = (StorageKey, StorageValue)>>(iter: I) -> Self {
 		let mut t = Self::default();
-		t.inner.top.extend(iter);
+		iter.into_iter().for_each(|(k, v)| t.insert(k, v));
 		t
 	}
 }
@@ -128,11 +152,8 @@ impl Default for BasicExternalities {
 }
 
 impl From<BTreeMap<StorageKey, StorageValue>> for BasicExternalities {
-	fn from(hashmap: BTreeMap<StorageKey, StorageValue>) -> Self {
-		BasicExternalities {
-			inner: Storage { top: hashmap, children_default: Default::default() },
-			extensions: Default::default(),
-		}
+	fn from(map: BTreeMap<StorageKey, StorageValue>) -> Self {
+		Self::from_iter(map.into_iter())
 	}
 }
 
@@ -140,7 +161,7 @@ impl Externalities for BasicExternalities {
 	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {}
 
 	fn storage(&self, key: &[u8]) -> Option<StorageValue> {
-		self.inner.top.get(key).cloned()
+		self.overlay.storage(key).and_then(|v| v.map(|v| v.to_vec()))
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -148,11 +169,7 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
-		self.inner
-			.children_default
-			.get(child_info.storage_key())
-			.and_then(|child| child.data.get(key))
-			.cloned()
+		self.overlay.child_storage(child_info, key).and_then(|v| v.map(|v| v.to_vec()))
 	}
 
 	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
@@ -160,16 +177,13 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {
-		let range = (Bound::Excluded(key), Bound::Unbounded);
-		self.inner.top.range::<[u8], _>(range).next().map(|(k, _)| k).cloned()
+		self.overlay.iter_after(key).find_map(|(k, v)| v.value().map(|_| k.to_vec()))
 	}
 
 	fn next_child_storage_key(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageKey> {
-		let range = (Bound::Excluded(key), Bound::Unbounded);
-		self.inner
-			.children_default
-			.get(child_info.storage_key())
-			.and_then(|child| child.data.range::<[u8], _>(range).next().map(|(k, _)| k).cloned())
+		self.overlay
+			.child_iter_after(child_info.storage_key(), key)
+			.find_map(|(k, v)| v.value().map(|_| k.to_vec()))
 	}
 
 	fn place_storage(&mut self, key: StorageKey, maybe_value: Option<StorageValue>) {
@@ -178,14 +192,7 @@ impl Externalities for BasicExternalities {
 			return
 		}
 
-		match maybe_value {
-			Some(value) => {
-				self.inner.top.insert(key, value);
-			},
-			None => {
-				self.inner.top.remove(&key);
-			},
-		}
+		self.overlay.set_storage(key, maybe_value)
 	}
 
 	fn place_child_storage(
@@ -194,19 +201,7 @@ impl Externalities for BasicExternalities {
 		key: StorageKey,
 		value: Option<StorageValue>,
 	) {
-		let child_map = self
-			.inner
-			.children_default
-			.entry(child_info.storage_key().to_vec())
-			.or_insert_with(|| StorageChild {
-				data: Default::default(),
-				child_info: child_info.to_owned(),
-			});
-		if let Some(value) = value {
-			child_map.data.insert(key, value);
-		} else {
-			child_map.data.remove(&key);
-		}
+		self.overlay.set_child_storage(child_info, key, value);
 	}
 
 	fn kill_child_storage(
@@ -215,12 +210,7 @@ impl Externalities for BasicExternalities {
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
 	) -> MultiRemovalResults {
-		let count = self
-			.inner
-			.children_default
-			.remove(child_info.storage_key())
-			.map(|c| c.data.len())
-			.unwrap_or(0) as u32;
+		let count = self.overlay.clear_child_storage(child_info);
 		MultiRemovalResults { maybe_cursor: None, backend: count, unique: count, loops: count }
 	}
 
@@ -239,19 +229,7 @@ impl Externalities for BasicExternalities {
 			return MultiRemovalResults { maybe_cursor, backend: 0, unique: 0, loops: 0 }
 		}
 
-		let to_remove = self
-			.inner
-			.top
-			.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
-			.map(|(k, _)| k)
-			.take_while(|k| k.starts_with(prefix))
-			.cloned()
-			.collect::<Vec<_>>();
-
-		let count = to_remove.len() as u32;
-		for key in to_remove {
-			self.inner.top.remove(&key);
-		}
+		let count = self.overlay.clear_prefix(prefix);
 		MultiRemovalResults { maybe_cursor: None, backend: count, unique: count, loops: count }
 	}
 
@@ -262,56 +240,37 @@ impl Externalities for BasicExternalities {
 		_maybe_limit: Option<u32>,
 		_maybe_cursor: Option<&[u8]>,
 	) -> MultiRemovalResults {
-		if let Some(child) = self.inner.children_default.get_mut(child_info.storage_key()) {
-			let to_remove = child
-				.data
-				.range::<[u8], _>((Bound::Included(prefix), Bound::Unbounded))
-				.map(|(k, _)| k)
-				.take_while(|k| k.starts_with(prefix))
-				.cloned()
-				.collect::<Vec<_>>();
-
-			let count = to_remove.len() as u32;
-			for key in to_remove {
-				child.data.remove(&key);
-			}
-			MultiRemovalResults { maybe_cursor: None, backend: count, unique: count, loops: count }
-		} else {
-			MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
-		}
+		let count = self.overlay.clear_child_prefix(child_info, prefix);
+		MultiRemovalResults { maybe_cursor: None, backend: count, unique: count, loops: count }
 	}
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
-		let current = self.inner.top.entry(key).or_default();
-		crate::ext::StorageAppend::new(current).append(value);
+		let current_value = self.overlay.value_mut_or_insert_with(&key, || Default::default());
+		crate::ext::StorageAppend::new(current_value).append(value);
 	}
 
 	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
-		let mut top = self.inner.top.clone();
-		let prefixed_keys: Vec<_> = self
-			.inner
-			.children_default
-			.iter()
-			.map(|(_k, v)| (v.child_info.prefixed_storage_key(), v.child_info.clone()))
-			.collect();
+		let mut top = self
+			.overlay
+			.changes()
+			.filter_map(|(k, v)| v.value().map(|v| (k.clone(), v.clone())))
+			.collect::<BTreeMap<_, _>>();
 		// Single child trie implementation currently allows using the same child
 		// empty root for all child trie. Using null storage key until multiple
 		// type of child trie support.
 		let empty_hash = empty_child_trie_root::<LayoutV1<Blake2Hasher>>();
-		for (prefixed_storage_key, child_info) in prefixed_keys {
+		for child_info in self.overlay.children().map(|d| d.1.clone()).collect::<Vec<_>>() {
 			let child_root = self.child_storage_root(&child_info, state_version);
 			if empty_hash[..] == child_root[..] {
-				top.remove(prefixed_storage_key.as_slice());
+				top.remove(child_info.prefixed_storage_key().as_slice());
 			} else {
-				top.insert(prefixed_storage_key.into_inner(), child_root);
+				top.insert(child_info.prefixed_storage_key().into_inner(), child_root);
 			}
 		}
 
 		match state_version {
-			StateVersion::V0 =>
-				LayoutV0::<Blake2Hasher>::trie_root(self.inner.top.clone()).as_ref().into(),
-			StateVersion::V1 =>
-				LayoutV1::<Blake2Hasher>::trie_root(self.inner.top.clone()).as_ref().into(),
+			StateVersion::V0 => LayoutV0::<Blake2Hasher>::trie_root(top).as_ref().into(),
+			StateVersion::V1 => LayoutV1::<Blake2Hasher>::trie_root(top).as_ref().into(),
 		}
 	}
 
@@ -320,10 +279,11 @@ impl Externalities for BasicExternalities {
 		child_info: &ChildInfo,
 		state_version: StateVersion,
 	) -> Vec<u8> {
-		if let Some(child) = self.inner.children_default.get(child_info.storage_key()) {
-			let delta = child.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref())));
+		if let Some((data, child_info)) = self.overlay.child_changes(child_info.storage_key()) {
+			let delta =
+				data.into_iter().map(|(k, v)| (k.as_ref(), v.value().map(|v| v.as_slice())));
 			crate::in_memory_backend::new_in_mem::<Blake2Hasher, HashKey<_>>()
-				.child_storage_root(&child.child_info, delta, state_version)
+				.child_storage_root(&child_info, delta, state_version)
 				.0
 		} else {
 			empty_child_trie_root::<LayoutV1<Blake2Hasher>>()
@@ -332,15 +292,15 @@ impl Externalities for BasicExternalities {
 	}
 
 	fn storage_start_transaction(&mut self) {
-		unimplemented!("Transactions are not supported by BasicExternalities");
+		self.overlay.start_transaction()
 	}
 
 	fn storage_rollback_transaction(&mut self) -> Result<(), ()> {
-		unimplemented!("Transactions are not supported by BasicExternalities");
+		self.overlay.rollback_transaction().map_err(drop)
 	}
 
 	fn storage_commit_transaction(&mut self) -> Result<(), ()> {
-		unimplemented!("Transactions are not supported by BasicExternalities");
+		self.overlay.commit_transaction().map_err(drop)
 	}
 
 	fn wipe(&mut self) {}

@@ -289,6 +289,9 @@ impl<Class> VoteTally<u32, Class> for Tally {
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
 		Self { ayes, nays }
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup(_: Class, _: Perbill) {}
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {

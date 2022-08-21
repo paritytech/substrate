@@ -210,6 +210,8 @@ pub enum UnscrupulousItem<AccountId, Url> {
 type UnscrupulousItemOf<T, I> =
 	UnscrupulousItem<<T as frame_system::Config>::AccountId, UrlOf<T, I>>;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -745,10 +747,7 @@ pub mod pallet {
 		/// A founder or fellow can nominate someone to join the alliance as an Ally.
 		/// There is no deposit required to the nominator or nominee.
 		#[pallet::weight(T::WeightInfo::nominate_ally())]
-		pub fn nominate_ally(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn nominate_ally(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let nominator = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&nominator), Error::<T, I>::NoVotingRights);
 			let who = T::Lookup::lookup(who)?;
@@ -772,10 +771,7 @@ pub mod pallet {
 
 		/// Elevate an ally to fellow.
 		#[pallet::weight(T::WeightInfo::elevate_ally())]
-		pub fn elevate_ally(
-			origin: OriginFor<T>,
-			ally: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn elevate_ally(origin: OriginFor<T>, ally: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
 			let ally = T::Lookup::lookup(ally)?;
 			ensure!(Self::is_ally(&ally), Error::<T, I>::NotAlly);
@@ -808,10 +804,7 @@ pub mod pallet {
 
 		/// Kick a member from the alliance and slash its deposit.
 		#[pallet::weight(T::WeightInfo::kick_member())]
-		pub fn kick_member(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn kick_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
 			let member = T::Lookup::lookup(who)?;
 

@@ -48,7 +48,7 @@ pub fn read_uri(uri: Option<&String>) -> error::Result<String> {
 			uri.into()
 		}
 	} else {
-		rpassword::read_password_from_tty(Some("URI: "))?
+		rpassword::prompt_password("URI: ")?
 	};
 
 	Ok(uri)

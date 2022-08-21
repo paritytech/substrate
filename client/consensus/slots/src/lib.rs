@@ -490,7 +490,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
 	slot_duration: SlotDuration,
 	client: C,
 	mut worker: W,
-	mut sync_oracle: SO,
+	sync_oracle: SO,
 	create_inherent_data_providers: CIDP,
 	can_author_with: CAW,
 ) where

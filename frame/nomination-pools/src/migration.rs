@@ -244,7 +244,7 @@ pub mod v2 {
 								},
 							};
 
-							total_value_locked += bonded_pool.points_to_balance(points.clone());
+							total_value_locked += bonded_pool.points_to_balance(*points);
 							let portion = Perbill::from_rational(*points, bonded_pool.points);
 							let last_claim = portion * accumulated_reward;
 

@@ -455,3 +455,20 @@ fn ensure_ranked_works() {
 		assert_eq!(Rank4::try_origin(Origin::signed(3)).unwrap_err().as_signed().unwrap(), 3);
 	});
 }
+
+#[test]
+fn do_add_member_to_rank_works() {
+	new_test_ext().execute_with(|| {
+		let max_rank = 9u16;
+		assert_ok!(Club::do_add_member_to_rank(69, max_rank / 2));
+		assert_ok!(Club::do_add_member_to_rank(1337, max_rank));
+		for i in 0..=max_rank {
+			if i <= max_rank / 2 {
+				assert_eq!(member_count(i), 2);
+			} else {
+				assert_eq!(member_count(i), 1);
+			}
+		}
+		assert_eq!(member_count(max_rank + 1), 0);
+	})
+}
