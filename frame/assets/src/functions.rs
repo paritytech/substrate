@@ -633,6 +633,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		owner: T::AccountId,
 		is_sufficient: bool,
 		min_balance: T::Balance,
+		transferable: bool,
 	) -> DispatchResult {
 		ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
 		ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
@@ -652,6 +653,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				sufficients: 0,
 				approvals: 0,
 				is_frozen: false,
+				is_transferable: transferable,
 			},
 		);
 		Self::deposit_event(Event::ForceCreated { asset_id: id, owner });
