@@ -140,7 +140,7 @@ macro_rules! decl_event {
 			)*
 		}
 		impl From<PalletEvent> for () {
-			fn from(_: Event) -> () { () }
+			fn from(_: PalletEvent) -> () { () }
 		}
 	}
 }
@@ -259,7 +259,7 @@ macro_rules! __decl_generic_event {
 		///
 		/// [`RawEvent`]: enum.RawEvent.html
 		/// [`Config`]: trait.Config.html
-		pub type Event<$event_generic_param $(, $instance $( = $event_default_instance)? )?> = RawEvent<$( $generic_type ),* $(, $instance)? >;
+		pub type PalletEvent<$event_generic_param $(, $instance $( = $event_default_instance)? )?> = RawEvent<$( $generic_type ),* $(, $instance)? >;
 
 		#[derive(
 			Clone, PartialEq, Eq,

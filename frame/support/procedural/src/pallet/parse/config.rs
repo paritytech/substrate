@@ -46,7 +46,7 @@ pub struct ConfigDef {
 	/// Whether the trait has the associated type `PalletEvent`, note that those bounds are
 	/// checked:
 	/// * `IsType<Self as frame_system::Config>::RuntimeEvent`
-	/// * `From<PalletEvent>` or `From<Event<T>>` or `From<PalletEvent<T, I>>`
+	/// * `From<PalletEvent>` or `From<PalletEvent<T>>` or `From<PalletEvent<T, I>>`
 	pub has_event_type: bool,
 	/// The where clause on trait definition but modified so `Self` is `T`.
 	pub where_clause: Option<syn::WhereClause>,
