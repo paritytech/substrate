@@ -510,7 +510,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Will fail if the amount transferred is so small that it cannot create the destination due
 	/// to minimum balance requirements.
-	pub(super) fn do_transfer(
+	pub fn do_transfer(
 		id: T::AssetId,
 		source: &T::AccountId,
 		dest: &T::AccountId,
