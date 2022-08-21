@@ -17,7 +17,7 @@
 
 //! Tests for the module.
 
-use super::{ConfigOp, PalletEvent, MaxUnlockingChunks, *};
+use super::{ConfigOp, MaxUnlockingChunks, PalletEvent, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,

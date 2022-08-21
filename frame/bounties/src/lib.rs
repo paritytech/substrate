@@ -586,7 +586,10 @@ pub mod pallet {
 				Ok(())
 			})?;
 
-			Self::deposit_event(PalletEvent::<T, I>::BountyAwarded { index: bounty_id, beneficiary });
+			Self::deposit_event(PalletEvent::<T, I>::BountyAwarded {
+				index: bounty_id,
+				beneficiary,
+			});
 			Ok(())
 		}
 

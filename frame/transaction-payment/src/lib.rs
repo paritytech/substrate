@@ -250,7 +250,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for withdrawing, refunding and depositing the transaction fee.
 		/// Transaction fees are withdrawn before the transaction is executed.
@@ -771,7 +772,11 @@ where
 			T::OnChargeTransaction::correct_and_deposit_fee(
 				&who, info, post_info, actual_fee, tip, imbalance,
 			)?;
-			Pallet::<T>::deposit_event(PalletEvent::<T>::TransactionFeePaid { who, actual_fee, tip });
+			Pallet::<T>::deposit_event(PalletEvent::<T>::TransactionFeePaid {
+				who,
+				actual_fee,
+				tip,
+			});
 		}
 		Ok(())
 	}
@@ -1426,9 +1431,9 @@ mod tests {
 					pallet_balances::PalletEvent::Transfer { from: 2, to: 3, amount: 80 },
 				));
 				// Killed Event
-				System::assert_has_event(RuntimeEvent::System(system::PalletEvent::KilledAccount {
-					account: 2,
-				}));
+				System::assert_has_event(RuntimeEvent::System(
+					system::PalletEvent::KilledAccount { account: 2 },
+				));
 			});
 	}
 

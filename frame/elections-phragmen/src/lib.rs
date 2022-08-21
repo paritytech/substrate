@@ -195,7 +195,8 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the elections-phragmen pallet's lock
 		#[pallet::constant]
@@ -1096,7 +1097,9 @@ impl<T: Config> Pallet<T> {
 					// clean candidates.
 					<Candidates<T>>::kill();
 
-					Self::deposit_event(PalletEvent::NewTerm { new_members: new_members_sorted_by_id });
+					Self::deposit_event(PalletEvent::NewTerm {
+						new_members: new_members_sorted_by_id,
+					});
 					<ElectionRounds<T>>::mutate(|v| *v += 1);
 				})
 				.map_err(|e| {

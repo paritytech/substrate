@@ -1138,7 +1138,10 @@ pub mod pallet {
 			}
 
 			<SuspendedMembers<T, I>>::remove(&who);
-			Self::deposit_event(PalletEvent::<T, I>::SuspendedMemberJudgement { who, judged: forgive });
+			Self::deposit_event(PalletEvent::<T, I>::SuspendedMemberJudgement {
+				who,
+				judged: forgive,
+			});
 			Ok(())
 		}
 
@@ -1581,7 +1584,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				<Head<T, I>>::put(&primary);
 
 				T::MembershipChanged::change_members_sorted(&accounts, &[], members);
-				Self::deposit_event(PalletEvent::<T, I>::Inducted { primary, candidates: accounts });
+				Self::deposit_event(PalletEvent::<T, I>::Inducted {
+					primary,
+					candidates: accounts,
+				});
 			}
 
 			// Bump the pot by at most PeriodSpend, but less if there's not very much left in our

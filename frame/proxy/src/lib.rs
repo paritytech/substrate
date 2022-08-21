@@ -110,7 +110,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
 		type Call: Parameter
@@ -840,6 +841,8 @@ impl<T: Config> Pallet<T> {
 			}
 		});
 		let e = call.dispatch(origin);
-		Self::deposit_event(PalletEvent::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
+		Self::deposit_event(PalletEvent::ProxyExecuted {
+			result: e.map(|_| ()).map_err(|e| e.error),
+		});
 	}
 }

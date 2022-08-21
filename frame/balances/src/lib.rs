@@ -343,7 +343,11 @@ pub mod pallet {
 				mem::drop(NegativeImbalance::<T, I>::new(old_reserved - new_reserved));
 			}
 
-			Self::deposit_event(PalletEvent::BalanceSet { who, free: new_free, reserved: new_reserved });
+			Self::deposit_event(PalletEvent::BalanceSet {
+				who,
+				free: new_free,
+				reserved: new_reserved,
+			});
 			Ok(().into())
 		}
 
@@ -739,7 +743,10 @@ pub struct DustCleaner<T: Config<I>, I: 'static = ()>(
 impl<T: Config<I>, I: 'static> Drop for DustCleaner<T, I> {
 	fn drop(&mut self) {
 		if let Some((who, dust)) = self.0.take() {
-			Pallet::<T, I>::deposit_event(PalletEvent::DustLost { account: who, amount: dust.peek() });
+			Pallet::<T, I>::deposit_event(PalletEvent::DustLost {
+				account: who,
+				amount: dust.peek(),
+			});
 			T::DustRemoval::on_unbalanced(dust);
 		}
 	}
@@ -937,7 +944,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		result.map(|(maybe_endowed, maybe_dust, result)| {
 			if let Some(endowed) = maybe_endowed {
-				Self::deposit_event(PalletEvent::Endowed { account: who.clone(), free_balance: endowed });
+				Self::deposit_event(PalletEvent::Endowed {
+					account: who.clone(),
+					free_balance: endowed,
+				});
 			}
 			let dust_cleaner = DustCleaner(maybe_dust.map(|dust| (who.clone(), dust)));
 			(result, dust_cleaner)

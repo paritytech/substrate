@@ -533,7 +533,11 @@ pub mod pallet {
 					is_frozen: false,
 				},
 			);
-			Self::deposit_event(PalletEvent::Created { asset_id: id, creator: owner, owner: admin });
+			Self::deposit_event(PalletEvent::Created {
+				asset_id: id,
+				creator: owner,
+				owner: admin,
+			});
 			Ok(())
 		}
 
@@ -952,7 +956,12 @@ pub mod pallet {
 				details.admin = admin.clone();
 				details.freezer = freezer.clone();
 
-				Self::deposit_event(PalletEvent::TeamChanged { asset_id: id, issuer, admin, freezer });
+				Self::deposit_event(PalletEvent::TeamChanged {
+					asset_id: id,
+					issuer,
+					admin,
+					freezer,
+				});
 				Ok(())
 			})
 		}

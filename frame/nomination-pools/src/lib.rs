@@ -1151,7 +1151,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
@@ -1930,10 +1931,7 @@ pub mod pallet {
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
 
-			Self::deposit_event(PalletEvent::<T>::Created {
-				depositor: who.clone(),
-				pool_id: pool_id,
-			});
+			Self::deposit_event(PalletEvent::<T>::Created { depositor: who.clone(), pool_id });
 
 			Self::deposit_event(PalletEvent::<T>::Bonded {
 				member: who,

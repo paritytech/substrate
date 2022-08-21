@@ -43,7 +43,8 @@ pub struct ConfigDef {
 	pub has_instance: bool,
 	/// Const associated type.
 	pub consts_metadata: Vec<ConstMetadataDef>,
-	/// Whether the trait has the associated type `PalletEvent`, note that those bounds are checked:
+	/// Whether the trait has the associated type `PalletEvent`, note that those bounds are
+	/// checked:
 	/// * `IsType<Self as frame_system::Config>::RuntimeEvent`
 	/// * `From<PalletEvent>` or `From<Event<T>>` or `From<PalletEvent<T, I>>`
 	pub has_event_type: bool,

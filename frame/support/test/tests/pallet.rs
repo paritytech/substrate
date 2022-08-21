@@ -125,7 +125,8 @@ pub mod pallet {
 
 		type Balance: Parameter + Default + TypeInfo;
 
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::extra_constants]

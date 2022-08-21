@@ -902,7 +902,12 @@ pub mod pallet {
 				details.admin = admin.clone();
 				details.freezer = freezer.clone();
 
-				Self::deposit_event(PalletEvent::TeamChanged { collection, issuer, admin, freezer });
+				Self::deposit_event(PalletEvent::TeamChanged {
+					collection,
+					issuer,
+					admin,
+					freezer,
+				});
 				Ok(())
 			})
 		}
@@ -1334,7 +1339,11 @@ pub mod pallet {
 
 				*metadata = Some(CollectionMetadata { deposit, data: data.clone(), is_frozen });
 
-				Self::deposit_event(PalletEvent::CollectionMetadataSet { collection, data, is_frozen });
+				Self::deposit_event(PalletEvent::CollectionMetadataSet {
+					collection,
+					data,
+					is_frozen,
+				});
 				Ok(())
 			})
 		}

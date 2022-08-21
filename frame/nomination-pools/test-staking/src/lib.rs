@@ -22,8 +22,8 @@ mod mock;
 use frame_support::{assert_noop, assert_ok, bounded_btree_map, traits::Currency};
 use mock::*;
 use pallet_nomination_pools::{
-	BondedPools, Error as PoolsError, PalletEvent as PoolsEvent, LastPoolId, PoolMember, PoolMembers,
-	PoolState,
+	BondedPools, Error as PoolsError, LastPoolId, PalletEvent as PoolsEvent, PoolMember,
+	PoolMembers, PoolState,
 };
 use pallet_staking::{CurrentEra, PalletEvent as StakingEvent, Payee, RewardDestination};
 use sp_runtime::traits::Zero;

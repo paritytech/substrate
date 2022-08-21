@@ -411,7 +411,8 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }
+				.into(),
 		);
 		// No weight is refunded
 		assert_eq!(extract_actual_weight(&result, &info), info.weight);
@@ -426,7 +427,8 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }
+				.into(),
 		);
 		assert_eq!(extract_actual_weight(&result, &info), info.weight - diff * batch_len);
 
@@ -439,7 +441,8 @@ fn batch_handles_weight_refund() {
 		let result = call.dispatch(Origin::signed(1));
 		assert_ok!(result);
 		System::assert_last_event(
-			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }.into(),
+			utility::PalletEvent::BatchInterrupted { index: 1, error: DispatchError::Other("") }
+				.into(),
 		);
 		assert_eq!(
 			extract_actual_weight(&result, &info),

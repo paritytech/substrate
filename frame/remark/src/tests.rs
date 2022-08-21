@@ -17,7 +17,7 @@
 
 //! Tests for remarks pallet.
 
-use super::{Error, PalletEvent, Pallet as Remark};
+use super::{Error, Pallet as Remark, PalletEvent};
 use crate::mock::*;
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;

@@ -413,8 +413,11 @@ pub mod pallet {
 			let now = frame_system::Pallet::<T>::block_number();
 			let (info, _, branch) = Self::service_referendum(now, index, status);
 			ReferendumInfoFor::<T, I>::insert(index, info);
-			let e =
-				PalletEvent::<T, I>::DecisionDepositPlaced { index, who, amount: track.decision_deposit };
+			let e = PalletEvent::<T, I>::DecisionDepositPlaced {
+				index,
+				who,
+				amount: track.decision_deposit,
+			};
 			Self::deposit_event(e);
 			Ok(branch.weight_of_deposit::<T, I>().into())
 		}
@@ -928,7 +931,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				if status.deciding.is_none() && now >= timeout {
 					// Too long without being decided - end it.
 					Self::ensure_no_alarm(&mut status);
-					Self::deposit_event(PalletEvent::<T, I>::TimedOut { index, tally: status.tally });
+					Self::deposit_event(PalletEvent::<T, I>::TimedOut {
+						index,
+						tally: status.tally,
+					});
 					return (
 						ReferendumInfo::TimedOut(
 							now,
@@ -991,7 +997,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// Failed!
 						Self::ensure_no_alarm(&mut status);
 						Self::note_one_fewer_deciding(status.track);
-						Self::deposit_event(PalletEvent::<T, I>::Rejected { index, tally: status.tally });
+						Self::deposit_event(PalletEvent::<T, I>::Rejected {
+							index,
+							tally: status.tally,
+						});
 						return (
 							ReferendumInfo::Rejected(
 								now,

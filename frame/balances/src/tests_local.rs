@@ -159,8 +159,15 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 			events(),
 			[
 				RuntimeEvent::System(system::PalletEvent::NewAccount { account: 1 }),
-				RuntimeEvent::Balances(crate::PalletEvent::Endowed { account: 1, free_balance: 100 }),
-				RuntimeEvent::Balances(crate::PalletEvent::BalanceSet { who: 1, free: 100, reserved: 0 }),
+				RuntimeEvent::Balances(crate::PalletEvent::Endowed {
+					account: 1,
+					free_balance: 100
+				}),
+				RuntimeEvent::Balances(crate::PalletEvent::BalanceSet {
+					who: 1,
+					free: 100,
+					reserved: 0
+				}),
 			]
 		);
 

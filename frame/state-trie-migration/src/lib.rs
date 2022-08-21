@@ -452,7 +452,8 @@ pub mod pallet {
 		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency provider type.
 		type Currency: Currency<Self::AccountId>;
@@ -963,7 +964,7 @@ mod benchmarks {
 			);
 
 			frame_system::Pallet::<T>::assert_last_event(
-				<T as Config>::Event::from(crate::Event::Slashed {
+				<T as Config>::RuntimeEvent::from(crate::PalletEvent::Slashed {
 					who: caller.clone(),
 					amount: T::SignedDepositBase::get()
 						.saturating_add(T::SignedDepositPerItem::get().saturating_mul(1u32.into())),

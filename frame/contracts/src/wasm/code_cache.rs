@@ -32,7 +32,7 @@ use crate::{
 	gas::{GasMeter, Token},
 	wasm::{prepare, PrefabWasmModule},
 	weights::WeightInfo,
-	CodeHash, CodeStorage, Config, Error, PalletEvent, OwnerInfoOf, Pallet, PristineCode, Schedule,
+	CodeHash, CodeStorage, Config, Error, OwnerInfoOf, Pallet, PalletEvent, PristineCode, Schedule,
 	Weight,
 };
 use frame_support::{

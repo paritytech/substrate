@@ -441,7 +441,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Ok(())
 		})?;
-		Self::deposit_event(PalletEvent::Burned { asset_id: id, owner: target.clone(), balance: actual });
+		Self::deposit_event(PalletEvent::Burned {
+			asset_id: id,
+			owner: target.clone(),
+			balance: actual,
+		});
 		Ok(actual)
 	}
 

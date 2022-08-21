@@ -117,7 +117,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
 		type Call: Parameter
@@ -658,7 +659,11 @@ impl<T: Config> Pallet<T> {
 					approvals: vec![who.clone()],
 				},
 			);
-			Self::deposit_event(PalletEvent::NewMultisig { approving: who, multisig: id, call_hash });
+			Self::deposit_event(PalletEvent::NewMultisig {
+				approving: who,
+				multisig: id,
+				call_hash,
+			});
 
 			let final_weight = if stored {
 				T::WeightInfo::as_multi_create_store(other_signatories_len as u32, call_len as u32)

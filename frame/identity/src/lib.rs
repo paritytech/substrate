@@ -105,7 +105,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -889,7 +890,11 @@ pub mod pallet {
 				sub_ids.try_push(sub.clone()).expect("sub ids length checked above; qed");
 				*subs_deposit = subs_deposit.saturating_add(deposit);
 
-				Self::deposit_event(PalletEvent::SubIdentityAdded { sub, main: sender.clone(), deposit });
+				Self::deposit_event(PalletEvent::SubIdentityAdded {
+					sub,
+					main: sender.clone(),
+					deposit,
+				});
 				Ok(())
 			})
 		}

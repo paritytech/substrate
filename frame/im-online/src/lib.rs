@@ -337,7 +337,8 @@ pub mod pallet {
 		type MaxPeerDataEncodingSize: Get<u32>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// A type for retrieving the validators supposed to be online in a session.
 		type ValidatorSet: ValidatorSetWithIdentification<Self::AccountId>;
@@ -493,7 +494,9 @@ pub mod pallet {
 			let keys = Keys::<T>::get();
 			let public = keys.get(heartbeat.authority_index as usize);
 			if let (false, Some(public)) = (exists, public) {
-				Self::deposit_event(PalletEvent::<T>::HeartbeatReceived { authority_id: public.clone() });
+				Self::deposit_event(PalletEvent::<T>::HeartbeatReceived {
+					authority_id: public.clone(),
+				});
 
 				let network_state_bounded = BoundedOpaqueNetworkState::<
 					T::MaxPeerDataEncodingSize,

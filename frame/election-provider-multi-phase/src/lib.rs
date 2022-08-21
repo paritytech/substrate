@@ -1540,7 +1540,9 @@ impl<T: Config> Pallet<T> {
 				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
 			)
 			.map(|(supports, compute)| {
-				Self::deposit_event(PalletEvent::ElectionFinalized { election_compute: Some(compute) });
+				Self::deposit_event(PalletEvent::ElectionFinalized {
+					election_compute: Some(compute),
+				});
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
@@ -1968,7 +1970,9 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					PalletEvent::SignedPhaseStarted { round: 1 },
-					PalletEvent::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
+					PalletEvent::ElectionFinalized {
+						election_compute: Some(ElectionCompute::Fallback)
+					}
 				],
 			);
 			// All storage items must be cleared.
@@ -2086,7 +2090,9 @@ mod tests {
 						election_compute: ElectionCompute::Fallback,
 						prev_ejected: false
 					},
-					PalletEvent::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
+					PalletEvent::ElectionFinalized {
+						election_compute: Some(ElectionCompute::Fallback)
+					}
 				]
 			);
 		})

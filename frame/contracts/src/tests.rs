@@ -1067,12 +1067,14 @@ fn cannot_self_destruct_by_refund_after_slash() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::ReserveRepatriated {
-						from: addr.clone(),
-						to: ALICE,
-						amount: 10,
-						destination_status: BalanceStatus::Free,
-					}),
+					event: RuntimeEvent::Balances(
+						pallet_balances::PalletEvent::ReserveRepatriated {
+							from: addr.clone(),
+							to: ALICE,
+							amount: 10,
+							destination_status: BalanceStatus::Free,
+						}
+					),
 					topics: vec![],
 				},
 			]
@@ -1183,12 +1185,14 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::ReserveRepatriated {
-						from: addr.clone(),
-						to: ALICE,
-						amount: 1_000,
-						destination_status: BalanceStatus::Free,
-					}),
+					event: RuntimeEvent::Balances(
+						pallet_balances::PalletEvent::ReserveRepatriated {
+							from: addr.clone(),
+							to: ALICE,
+							amount: 1_000,
+							destination_status: BalanceStatus::Free,
+						}
+					),
 					topics: vec![],
 				},
 			],
@@ -3112,12 +3116,14 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::ReserveRepatriated {
-						from: addr.clone(),
-						to: ALICE,
-						amount: refunded0,
-						destination_status: BalanceStatus::Free,
-					}),
+					event: RuntimeEvent::Balances(
+						pallet_balances::PalletEvent::ReserveRepatriated {
+							from: addr.clone(),
+							to: ALICE,
+							amount: refunded0,
+							destination_status: BalanceStatus::Free,
+						}
+					),
 					topics: vec![],
 				},
 			]
@@ -3194,11 +3200,13 @@ fn set_code_extrinsic() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: RuntimeEvent::Contracts(pallet_contracts::PalletEvent::ContractCodeUpdated {
-					contract: addr,
-					new_code_hash,
-					old_code_hash: code_hash,
-				}),
+				event: RuntimeEvent::Contracts(
+					pallet_contracts::PalletEvent::ContractCodeUpdated {
+						contract: addr,
+						new_code_hash,
+						old_code_hash: code_hash,
+					}
+				),
 				topics: vec![],
 			},]
 		);

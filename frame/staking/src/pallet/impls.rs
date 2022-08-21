@@ -385,7 +385,11 @@ impl<T: Config> Pallet<T> {
 			let issuance = T::Currency::total_issuance();
 			let (validator_payout, rest) = T::EraPayout::era_payout(staked, issuance, era_duration);
 
-			Self::deposit_event(PalletEvent::<T>::EraPaid(active_era.index, validator_payout, rest));
+			Self::deposit_event(PalletEvent::<T>::EraPaid(
+				active_era.index,
+				validator_payout,
+				rest,
+			));
 
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);

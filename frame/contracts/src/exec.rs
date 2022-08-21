@@ -18,8 +18,8 @@
 use crate::{
 	gas::GasMeter,
 	storage::{self, Storage, WriteOutcome},
-	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, PalletEvent, Nonce,
-	Pallet as Contracts, Schedule,
+	BalanceOf, CodeHash, Config, ContractInfo, ContractInfoOf, Error, Nonce, Pallet as Contracts,
+	PalletEvent, Schedule,
 };
 use frame_support::{
 	crypto::ecdsa::ECDSAExt,
@@ -2138,7 +2138,10 @@ mod tests {
 			);
 			assert_eq!(
 				&events(),
-				&[PalletEvent::Instantiated { deployer: ALICE, contract: instantiated_contract_address }]
+				&[PalletEvent::Instantiated {
+					deployer: ALICE,
+					contract: instantiated_contract_address
+				}]
 			);
 		});
 	}
@@ -2238,7 +2241,10 @@ mod tests {
 			);
 			assert_eq!(
 				&events(),
-				&[PalletEvent::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
+				&[PalletEvent::Instantiated {
+					deployer: BOB,
+					contract: instantiated_contract_address
+				}]
 			);
 		});
 	}

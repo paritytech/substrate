@@ -98,7 +98,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type that this works on.
 		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
@@ -437,7 +438,11 @@ pub mod pallet {
 			});
 
 			T::Currency::unreserve(&bid.who, bid.amount);
-			Self::deposit_event(PalletEvent::BidRetracted { who: bid.who, amount: bid.amount, duration });
+			Self::deposit_event(PalletEvent::BidRetracted {
+				who: bid.who,
+				amount: bid.amount,
+				duration,
+			});
 
 			Ok(().into())
 		}
@@ -635,8 +640,12 @@ pub mod pallet {
 								totals.proportion =
 									totals.proportion.defensive_saturating_add(proportion);
 								totals.index += 1;
-								let e =
-									PalletEvent::GiltIssued { index, expiry, who: who.clone(), amount };
+								let e = PalletEvent::GiltIssued {
+									index,
+									expiry,
+									who: who.clone(),
+									amount,
+								};
 								Self::deposit_event(e);
 								let gilt = ActiveGilt { amount, proportion, who, expiry };
 								Active::<T>::insert(index, gilt);

@@ -254,7 +254,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Sized {
 		type Proposal: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self>>;
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
@@ -653,7 +654,10 @@ pub mod pallet {
 
 			<PublicProps<T>>::append((index, proposal_hash, who));
 
-			Self::deposit_event(PalletEvent::<T>::Proposed { proposal_index: index, deposit: value });
+			Self::deposit_event(PalletEvent::<T>::Proposed {
+				proposal_index: index,
+				deposit: value,
+			});
 			Ok(())
 		}
 
@@ -1393,7 +1397,11 @@ impl<T: Config> Pallet<T> {
 						votes.insert(i, (ref_index, vote));
 					},
 				}
-				Self::deposit_event(PalletEvent::<T>::Voted { voter: who.clone(), ref_index, vote });
+				Self::deposit_event(PalletEvent::<T>::Voted {
+					voter: who.clone(),
+					ref_index,
+					vote,
+				});
 				// Shouldn't be possible to fail, but we handle it gracefully.
 				status.tally.add(vote).ok_or(ArithmeticError::Overflow)?;
 				if let Some(approve) = vote.as_standard() {
@@ -1684,7 +1692,11 @@ impl<T: Config> Pallet<T> {
 			if let Ok(proposal) = T::Proposal::decode(&mut &data[..]) {
 				let err_amount = T::Currency::unreserve(&provider, deposit);
 				debug_assert!(err_amount.is_zero());
-				Self::deposit_event(PalletEvent::<T>::PreimageUsed { proposal_hash, provider, deposit });
+				Self::deposit_event(PalletEvent::<T>::PreimageUsed {
+					proposal_hash,
+					provider,
+					deposit,
+				});
 
 				let res = proposal
 					.dispatch(frame_system::RawOrigin::Root.into())
@@ -1702,7 +1714,10 @@ impl<T: Config> Pallet<T> {
 				Err(Error::<T>::PreimageInvalid.into())
 			}
 		} else {
-			Self::deposit_event(PalletEvent::<T>::PreimageMissing { proposal_hash, ref_index: index });
+			Self::deposit_event(PalletEvent::<T>::PreimageMissing {
+				proposal_hash,
+				ref_index: index,
+			});
 			Err(Error::<T>::PreimageMissing.into())
 		}
 	}

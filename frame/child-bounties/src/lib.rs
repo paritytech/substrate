@@ -146,7 +146,8 @@ pub mod pallet {
 		type ChildBountyValueMinimum: Get<BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -805,7 +806,10 @@ impl<T: Config> Pallet<T> {
 		};
 		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
 		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
-		Self::deposit_event(PalletEvent::Added { index: parent_bounty_id, child_index: child_bounty_id });
+		Self::deposit_event(PalletEvent::Added {
+			index: parent_bounty_id,
+			child_index: child_bounty_id,
+		});
 	}
 
 	fn ensure_bounty_active(

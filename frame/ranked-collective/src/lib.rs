@@ -682,7 +682,7 @@ pub mod pallet {
 			IdToIndex::<T, I>::insert(0, &who, index);
 			IndexToId::<T, I>::insert(0, index, &who);
 			MemberCount::<T, I>::insert(0, count);
-			Self::deposit_event(Event::MemberAdded { who });
+			Self::deposit_event(PalletEvent::MemberAdded { who });
 			Ok(())
 		}
 
@@ -704,7 +704,7 @@ pub mod pallet {
 			IdToIndex::<T, I>::insert(rank, &who, index);
 			IndexToId::<T, I>::insert(rank, index, &who);
 			Members::<T, I>::insert(&who, MemberRecord { rank });
-			Self::deposit_event(Event::RankChanged { who, rank });
+			Self::deposit_event(PalletEvent::RankChanged { who, rank });
 			Ok(())
 		}
 

@@ -166,7 +166,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<PalletEvent<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Swap action.
 		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter + MaxEncodedLen;
 		/// Limit of proof size.
@@ -266,7 +267,11 @@ pub mod pallet {
 			};
 			PendingSwaps::<T>::insert(target.clone(), hashed_proof, swap.clone());
 
-			Self::deposit_event(PalletEvent::NewSwap { account: target, proof: hashed_proof, swap });
+			Self::deposit_event(PalletEvent::NewSwap {
+				account: target,
+				proof: hashed_proof,
+				swap,
+			});
 
 			Ok(())
 		}
@@ -335,7 +340,10 @@ pub mod pallet {
 			swap.action.cancel(&swap.source);
 			PendingSwaps::<T>::remove(&target, hashed_proof);
 
-			Self::deposit_event(PalletEvent::SwapCancelled { account: target, proof: hashed_proof });
+			Self::deposit_event(PalletEvent::SwapCancelled {
+				account: target,
+				proof: hashed_proof,
+			});
 
 			Ok(())
 		}

@@ -737,7 +737,9 @@ fn metadata() {
 			],
 		}),
 		calls: Some(scale_info::meta_type::<pallet::Call<Runtime>>().into()),
-		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet::PalletEvent<Runtime>>() }),
+		event: Some(PalletEventMetadata {
+			ty: scale_info::meta_type::<pallet::PalletEvent<Runtime>>(),
+		}),
 		constants: vec![PalletConstantMetadata {
 			name: "MyGetParam",
 			ty: scale_info::meta_type::<u32>(),
@@ -758,7 +760,8 @@ fn metadata() {
 	}
 	match example_pallet_instance1_metadata.event {
 		Some(ref mut event_meta) => {
-			event_meta.ty = scale_info::meta_type::<pallet::PalletEvent<Runtime, pallet::Instance1>>();
+			event_meta.ty =
+				scale_info::meta_type::<pallet::PalletEvent<Runtime, pallet::Instance1>>();
 		},
 		_ => unreachable!(),
 	}

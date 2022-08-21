@@ -43,8 +43,8 @@ use pallet_session::{
 	Config as SessionConfig, SessionManager,
 };
 use pallet_staking::{
-	Config as StakingConfig, PalletEvent as StakingEvent, Exposure, IndividualExposure,
-	Pallet as Staking, RewardDestination, ValidatorPrefs,
+	Config as StakingConfig, Exposure, IndividualExposure, Pallet as Staking,
+	PalletEvent as StakingEvent, RewardDestination, ValidatorPrefs,
 };
 
 const SEED: u32 = 0;
