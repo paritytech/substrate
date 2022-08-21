@@ -490,7 +490,7 @@ fn pool_slash_proportional() {
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				// This pool got slashed 12.5, which rounded down to 13.
+				// This pool got slashed 12.5, which rounded up to 13.
 				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 128, balance: 7 },
 				// This pool got slashed 12 instead of 12.5 because earlier chunk got 0.5 more
 				// slashed, and 12 is all the remaining slash
