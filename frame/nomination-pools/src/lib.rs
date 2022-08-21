@@ -2402,9 +2402,8 @@ impl<T: Config> Pallet<T> {
 		let reward_pools = RewardPools::<T>::iter_keys().collect::<Vec<_>>();
 		assert_eq!(bonded_pools, reward_pools);
 
-		// all pools have a metadata. Once https://github.com/paritytech/substrate/issues/12077 is
-		// solved, ensure they are simply the same.
-		assert!(bonded_pools.iter().all(|b| Metadata::<T>::contains_key(b)));
+		// TODO: can't check this right now: https://github.com/paritytech/substrate/issues/12077
+		// assert!(Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
 		assert!(SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
 
 		assert!(MaxPools::<T>::get().map_or(true, |max| bonded_pools.len() <= (max as usize)));
