@@ -47,7 +47,7 @@
 /// mod event1 {
 ///     // Event that specifies the generic parameter explicitly (`Balance`).
 ///     frame_support::decl_event!(
-///        pub enum Event<T> where Balance = <T as super::Config>::Balance {
+///        pub enum PalletEvent<T> where Balance = <T as super::Config>::Balance {
 ///           Message(Balance),
 ///        }
 ///     );
@@ -58,7 +58,7 @@
 ///     // If no name for the generic parameter is specified explicitly,
 ///     // the name will be taken from the type name of the trait.
 ///     frame_support::decl_event!(
-///        pub enum Event<T> where <T as super::Config>::Balance {
+///        pub enum PalletEvent<T> where <T as super::Config>::Balance {
 ///           Message(Balance),
 ///        }
 ///     );
@@ -67,7 +67,7 @@
 /// mod event3 {
 ///     // And we even support declaring multiple generic parameters!
 ///     frame_support::decl_event!(
-///        pub enum Event<T> where <T as super::Config>::Balance, <T as super::Config>::Token {
+///        pub enum PalletEvent<T> where <T as super::Config>::Balance, <T as super::Config>::Token {
 ///           Message(Balance, Token),
 ///        }
 ///     );

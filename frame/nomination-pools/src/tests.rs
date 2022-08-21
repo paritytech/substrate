@@ -18,7 +18,7 @@
 use super::*;
 use crate::{mock::*, PalletEvent};
 use frame_support::{assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_btree_map};
-use pallet_balances::Event as BEvent;
+use pallet_balances::PalletEvent as BEvent;
 use sp_runtime::traits::Dispatchable;
 
 macro_rules! unbonding_pools_with_era {
@@ -4250,7 +4250,7 @@ mod set_configs {
 
 mod bond_extra {
 	use super::*;
-	use crate::Event;
+	use crate::PalletEvent;
 
 	#[test]
 	fn bond_extra_from_free_balance_creator() {

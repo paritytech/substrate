@@ -47,7 +47,7 @@ impl<T: Config> Module<T> {
 }
 
 frame_support::decl_event!(
-	pub enum Event<T>
+	pub enum PalletEvent<T>
 	where
 		BlockNumber = <T as Config>::BlockNumber,
 	{

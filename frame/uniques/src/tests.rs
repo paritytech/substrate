@@ -70,7 +70,7 @@ fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
 	s
 }
 
-fn events() -> Vec<Event<Test>> {
+fn events() -> Vec<PalletEvent<Test>> {
 	let result = System::events()
 		.into_iter()
 		.map(|r| r.event)

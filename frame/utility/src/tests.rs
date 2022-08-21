@@ -92,7 +92,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Utility: utility::{Pallet, Call, PalletEvent},
+		Utility: utility::{Pallet, Call, Event},
 		Example: example::{Pallet, Call},
 	}
 );

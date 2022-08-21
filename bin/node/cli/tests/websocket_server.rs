@@ -242,7 +242,7 @@ impl WsServer {
 
 /// Event that has happened on a [`WsServer`].
 #[derive(Debug)]
-pub enum Event {
+pub enum PalletEvent {
 	/// A new TCP connection has arrived on the listening socket.
 	///
 	/// The connection *must* be accepted or rejected using [`WsServer::accept`] or

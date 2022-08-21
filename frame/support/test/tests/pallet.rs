@@ -1378,7 +1378,7 @@ fn metadata() {
 				],
 			}),
 			calls: None,
-			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
+			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::PalletEvent>() }),
 			constants: vec![],
 			error: None,
 		},

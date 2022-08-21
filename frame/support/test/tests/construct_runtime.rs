@@ -262,10 +262,10 @@ frame_support::construct_runtime!(
 	{
 		System: system::{Pallet, Call, Event<T>, Origin<T>} = 30,
 		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
-		Module2: module2::{Pallet, Call, Storage, PalletEvent, Origin},
+		Module2: module2::{Pallet, Call, Storage, Event, Origin},
 		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event<T>, Origin<T>},
-		NestedModule3: nested::module3::{Pallet, Call, Config, Storage, PalletEvent, Origin},
-		Module3: self::module3::{Pallet, Call, Config, Storage, PalletEvent, Origin<T>},
+		NestedModule3: nested::module3::{Pallet, Call, Config, Storage, Event, Origin},
+		Module3: self::module3::{Pallet, Call, Config, Storage, Event, Origin<T>},
 		Module1_3: module1::<Instance3>::{Pallet, Storage} = 6,
 		Module1_4: module1::<Instance4>::{Pallet, Call} = 3,
 		Module1_5: module1::<Instance5>::{Pallet, Event<T>},
@@ -282,96 +282,94 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, 
 
 #[test]
 fn check_modules_error_type() {
-	sp_io::TestExternalities::default().execute_with(|| {
-		assert_eq!(
-			Module1_1::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 31,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module2::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 32,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module1_2::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 33,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 34,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module1_3::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 6,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module1_4::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 3,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module1_5::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 4,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module1_6::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 1,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module1_7::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 2,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module1_8::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 12,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-		assert_eq!(
-			Module1_9::fail(system::Origin::<Runtime>::Root.into()),
-			Err(DispatchError::Module(ModuleError {
-				index: 13,
-				error: [0; 4],
-				message: Some("Something")
-			})),
-		);
-	});
+	assert_eq!(
+		Module1_1::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 31,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module2::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 32,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module1_2::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 33,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 34,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module1_3::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 6,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module1_4::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 3,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module1_5::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 4,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module1_6::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 1,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module1_7::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 2,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module1_8::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 12,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
+	assert_eq!(
+		Module1_9::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module(ModuleError {
+			index: 13,
+			error: [0; 4],
+			message: Some("Something")
+		})),
+	);
 }
 
 #[test]

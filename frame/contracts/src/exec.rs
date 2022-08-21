@@ -1376,7 +1376,7 @@ mod tests {
 		static LOADER: RefCell<MockLoader> = RefCell::new(MockLoader::default());
 	}
 
-	fn events() -> Vec<Event<Test>> {
+	fn events() -> Vec<PalletEvent<Test>> {
 		System::events()
 			.into_iter()
 			.filter_map(|meta| match meta.event {

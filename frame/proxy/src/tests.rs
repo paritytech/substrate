@@ -48,7 +48,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Proxy: proxy::{Pallet, Call, Storage, Event<T>},
-		Utility: pallet_utility::{Pallet, Call, PalletEvent},
+		Utility: pallet_utility::{Pallet, Call, Event},
 	}
 );
 
@@ -543,7 +543,7 @@ fn anonymous_works() {
 		let anon = Proxy::anonymous_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(
 			ProxyEvent::AnonymousCreated {
-				anonymous: anon,
+				anonymous: anon.clone(),
 				who: 1,
 				proxy_type: ProxyType::Any,
 				disambiguation_index: 0,

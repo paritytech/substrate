@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{Event as CollectiveEvent, *};
+use super::{PalletEvent as CollectiveEvent, *};
 use crate as pallet_collective;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,

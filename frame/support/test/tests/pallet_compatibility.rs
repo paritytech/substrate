@@ -61,7 +61,7 @@ mod pallet_old {
 	}
 
 	decl_event!(
-		pub enum Event<T>
+		pub enum PalletEvent<T>
 		where
 			Balance = <T as Config>::Balance,
 		{
