@@ -1,8 +1,6 @@
 use super::*;
 use frame_support::{assert_err, assert_ok};
-use mock::{
-	active_era, current_era, start_session, Balances, ExtBuilder, Origin, RootOffences, System,
-};
+use mock::{active_era, start_session, Balances, ExtBuilder, Origin, RootOffences, System};
 
 #[test]
 fn create_offence_fails_given_signed_origin() {
@@ -19,7 +17,6 @@ fn create_offence_works_given_root_origin() {
 		start_session(1);
 
 		assert_eq!(active_era(), 0);
-		assert_eq!(current_era(), 0);
 
 		assert_eq!(Balances::free_balance(11), 1000);
 
@@ -42,7 +39,6 @@ fn create_offence_wont_slash_non_active_validators() {
 		start_session(1);
 
 		assert_eq!(active_era(), 0);
-		assert_eq!(current_era(), 0);
 
 		// 31 is not an active validator.
 		assert_eq!(Balances::free_balance(31), 500);
@@ -66,7 +62,6 @@ fn create_offence_wont_slash_idle() {
 		start_session(1);
 
 		assert_eq!(active_era(), 0);
-		assert_eq!(current_era(), 0);
 
 		// 41 is idle.
 		assert_eq!(Balances::free_balance(41), 1000);

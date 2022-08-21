@@ -335,7 +335,3 @@ pub(crate) fn run_to_block(n: BlockNumber) {
 pub(crate) fn active_era() -> EraIndex {
 	Staking::active_era().unwrap().index
 }
-
-pub(crate) fn current_era() -> EraIndex {
-	Staking::current_era().unwrap()
-}
