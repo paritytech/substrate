@@ -790,7 +790,7 @@ fn metadata() {
 						value: scale_info::meta_type::<u64>(),
 						hashers: vec![StorageHasher::Blake2_128Concat],
 					},
-					default: vec![1, 1],
+					default: vec![0, 57, 5, 0, 0, 0, 0, 0, 0],
 					docs: vec![],
 				},
 				StorageEntryMetadata {
