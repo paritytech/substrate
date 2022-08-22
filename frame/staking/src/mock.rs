@@ -898,15 +898,3 @@ pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
 	(Balances::free_balance(who), Balances::reserved_balance(who))
 }
-
-pub(crate) fn validator_ids() -> Vec<AccountId> {
-	Validators::<Test>::iter().map(|(v, _)| v).collect::<Vec<_>>()
-}
-
-pub(crate) fn nominator_ids() -> Vec<AccountId> {
-	Nominators::<Test>::iter().map(|(n, _)| n).collect::<Vec<_>>()
-}
-
-pub(crate) fn nominator_targets(who: AccountId) -> Vec<AccountId> {
-	Nominators::<Test>::get(&who).map(|n| n.targets).unwrap().into_inner()
-}
