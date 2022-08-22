@@ -179,7 +179,7 @@ impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtE
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + Send + Sync + 'static + NetworkHeaderBackend<Block>,
+	Client: AuthorityDiscovery<Block> + NetworkHeaderBackend<Block> + 'static,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
