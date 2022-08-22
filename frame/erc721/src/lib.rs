@@ -3,7 +3,7 @@
 
 use sp_std::marker::PhantomData;
 use frame_support::{
-	dispatch::{DispatchResult, IsSubType}, decl_module, decl_storage, decl_event, decl_error,
+	dispatch::{DispatchResult}, decl_module, decl_storage, decl_event, decl_error,
 	ensure,
 	traits::Get,
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays},

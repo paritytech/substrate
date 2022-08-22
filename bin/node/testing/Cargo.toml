@@ -40,7 +40,6 @@ pallet-timestamp = { version = "2.0.0", path = "../../../frame/timestamp" }
 pallet-transaction-payment = { version = "2.0.0", path = "../../../frame/transaction-payment" }
 pallet-treasury = { version = "2.0.0", path = "../../../frame/treasury" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
-sp-finality-tracker = { version = "2.0.0", default-features = false, path = "../../../primitives/finality-tracker" }
 sp-timestamp = { version = "2.0.0", default-features = false, path = "../../../primitives/timestamp" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sc-block-builder = { version = "0.8.0", path = "../../../client/block-builder" }

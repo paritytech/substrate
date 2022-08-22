@@ -180,7 +180,7 @@ fn basic_works() {
 	});
 
 	async_std::task::block_on(async move {
-		let (sender, bg_future) =
+		let (mut sender, bg_future) =
 			QueuedSender::new(node1, node2_id, ENGINE_ID, NUM_NOTIFS, |msg| msg);
 		async_std::task::spawn(bg_future);
 

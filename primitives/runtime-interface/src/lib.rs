@@ -312,7 +312,7 @@ pub mod pass_by;
 
 mod util;
 
-pub use util::unpack_ptr_and_len;
+pub use util::{unpack_ptr_and_len, pack_ptr_and_len};
 
 /// Something that can be used by the runtime interface as type to communicate between wasm and the
 /// host.

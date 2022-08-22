@@ -38,9 +38,27 @@ use frame_support::StorageMap;
 /// This function instruments the given code and caches it in the storage.
 pub fn save<T: Trait>(
 	original_code: Vec<u8>,
-	schedule: &Schedule,
+	schedule: &Schedule<T>,
 ) -> Result<CodeHash<T>, &'static str> {
-	let prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
+	let prefab_module = prepare::prepare_contract::<Env, T>(&original_code, schedule)?;
+	let code_hash = T::Hashing::hash(&original_code);
+
+	<CodeStorage<T>>::insert(code_hash, prefab_module);
+	<PristineCode<T>>::insert(code_hash, original_code);
+
+	Ok(code_hash)
+}
+
+/// Version of `save` to be used in runtime benchmarks.
+//
+/// This version neither checks nor instruments the passed in code. This is useful
+/// when code needs to be benchmarked without the injected instrumentation.
+#[cfg(feature = "runtime-benchmarks")]
+pub fn save_raw<T: Trait>(
+	original_code: Vec<u8>,
+	schedule: &Schedule<T>,
+) -> Result<CodeHash<T>, &'static str> {
+	let prefab_module = prepare::benchmarking::prepare_contract::<T>(&original_code, schedule)?;
 	let code_hash = T::Hashing::hash(&original_code);
 
 	<CodeStorage<T>>::insert(code_hash, prefab_module);
@@ -56,7 +74,7 @@ pub fn save<T: Trait>(
 /// re-instrumentation and update the cache in the storage.
 pub fn load<T: Trait>(
 	code_hash: &CodeHash<T>,
-	schedule: &Schedule,
+	schedule: &Schedule<T>,
 ) -> Result<PrefabWasmModule, &'static str> {
 	let mut prefab_module =
 		<CodeStorage<T>>::get(code_hash).ok_or_else(|| "code is not found")?;
@@ -68,7 +86,7 @@ pub fn load<T: Trait>(
 		// We need to re-instrument the code with the latest schedule here.
 		let original_code =
 			<PristineCode<T>>::get(code_hash).ok_or_else(|| "pristine code is not found")?;
-		prefab_module = prepare::prepare_contract::<Env>(&original_code, schedule)?;
+		prefab_module = prepare::prepare_contract::<Env, T>(&original_code, schedule)?;
 		<CodeStorage<T>>::insert(&code_hash, &prefab_module);
 	}
 	Ok(prefab_module)

@@ -74,7 +74,7 @@ pub trait Trait: pallet_timestamp::Trait {
 decl_storage! {
 	trait Store for Module<T: Trait> as Aura {
 		/// The last timestamp.
-		LastTimestamp get(fn last) build(|_| 0u32.into()): T::Moment;
+		LastTimestamp get(fn last): T::Moment;
 
 		/// The current authorities
 		pub Authorities get(fn authorities): Vec<T::AuthorityId>;
@@ -162,7 +162,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	}
 }
 
-/// We can not implement `FindAuthor` twice, because the compiler does not know if 
+/// We can not implement `FindAuthor` twice, because the compiler does not know if
 /// `u32 == T::AuthorityId` and thus, prevents us to implement the trait twice.
 #[doc(hidden)]
 pub struct FindAccountFromAuthorIndex<T, Inner>(sp_std::marker::PhantomData<(T, Inner)>);

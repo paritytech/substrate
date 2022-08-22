@@ -355,7 +355,7 @@ pub fn new_light() -> (
 		executor,
 		Box::new(sp_core::testing::TaskExecutor::new()),
 		Default::default(),
-	);
+	).expect("Creates LocalCallExecutor");
 	let call_executor = LightExecutor::new(
 		backend.clone(),
 		local_call_executor,

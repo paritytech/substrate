@@ -20,14 +20,17 @@ sc-client-api = { version = "2.0.0", path = "../../../client/api" }
 sc-consensus-babe = { version = "0.8.0", path = "../../../client/consensus/babe" }
 sc-consensus-babe-rpc = { version = "0.8.0", path = "../../../client/consensus/babe/rpc" }
 sc-consensus-epochs = { version = "0.8.0", path = "../../../client/consensus/epochs" }
+sc-chain-spec = { version = "2.0.0", path = "../../../client/chain-spec" }
 sc-finality-grandpa = { version = "0.8.0", path = "../../../client/finality-grandpa" }
 sc-finality-grandpa-rpc = { version = "0.8.0", path = "../../../client/finality-grandpa/rpc" }
 sc-keystore = { version = "2.0.0", path = "../../../client/keystore" }
 sc-rpc-api = { version = "0.8.0", path = "../../../client/rpc-api" }
 sc-rpc = { version = "2.0.0", path = "../../../client/rpc" }
+sc-sync-state-rpc = { version = "0.8.0", path = "../../../client/sync-state-rpc" }
 sp-api = { version = "2.0.0", path = "../../../primitives/api" }
 sp-block-builder = { version = "2.0.0", path = "../../../primitives/block-builder" }
 sp-blockchain = { version = "2.0.0", path = "../../../primitives/blockchain" }
+sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
 sp-consensus = { version = "0.8.0", path = "../../../primitives/consensus/common" }
 sp-consensus-babe = { version = "0.8.0", path = "../../../primitives/consensus/babe" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }

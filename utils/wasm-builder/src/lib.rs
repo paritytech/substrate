@@ -92,7 +92,7 @@
 //! as well. For example if installing the rust nightly from 20.02.2020 using `rustup install nightly-2020-02-20`,
 //! the wasm target needs to be installed as well `rustup target add wasm32-unknown-unknown --toolchain nightly-2020-02-20`.
 
-use std::{env, fs, path::PathBuf, process::{Command, self}, io::BufRead};
+use std::{env, fs, path::{PathBuf, Path}, process::{Command, self}, io::BufRead};
 
 mod prerequisites;
 mod wasm_project;
@@ -158,14 +158,18 @@ pub fn build_project_with_default_rustflags(
 		panic!("'{}' no valid path to a `Cargo.toml`!", cargo_manifest.display());
 	}
 
-	if let Some(err_msg) = prerequisites::check() {
-		eprintln!("{}", err_msg);
-		process::exit(1);
-	}
+	let cargo_cmd = match prerequisites::check() {
+		Ok(cmd) => cmd,
+		Err(err_msg) => {
+			eprintln!("{}", err_msg);
+			process::exit(1);
+		},
+	};
 
 	let (wasm_binary, bloaty) = wasm_project::create_and_compile(
 		&cargo_manifest,
 		default_rustflags,
+		cargo_cmd,
 	);
 
 	let (wasm_binary, wasm_binary_bloaty) = if let Some(wasm_binary) = wasm_binary {
@@ -181,16 +185,16 @@ pub fn build_project_with_default_rustflags(
 	};
 
 	write_file_if_changed(
-			file_name.into(),
-			format!(
-				r#"
-					pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
-					pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
-				"#,
-				wasm_binary = wasm_binary,
-				wasm_binary_bloaty = wasm_binary_bloaty,
-			),
-		);
+		file_name,
+		format!(
+			r#"
+				pub const WASM_BINARY: Option<&[u8]> = Some(include_bytes!("{wasm_binary}"));
+				pub const WASM_BINARY_BLOATY: Option<&[u8]> = Some(include_bytes!("{wasm_binary_bloaty}"));
+			"#,
+			wasm_binary = wasm_binary,
+			wasm_binary_bloaty = wasm_binary_bloaty,
+		),
+	);
 }
 
 /// Checks if the build of the WASM binary should be skipped.
@@ -199,9 +203,10 @@ fn check_skip_build() -> bool {
 }
 
 /// Write to the given `file` if the `content` is different.
-fn write_file_if_changed(file: PathBuf, content: String) {
-	if fs::read_to_string(&file).ok().as_ref() != Some(&content) {
-		fs::write(&file, content).unwrap_or_else(|_| panic!("Writing `{}` can not fail!", file.display()));
+fn write_file_if_changed(file: impl AsRef<Path>, content: impl AsRef<str>) {
+	if fs::read_to_string(file.as_ref()).ok().as_deref() != Some(content.as_ref()) {
+		fs::write(file.as_ref(), content.as_ref())
+			.unwrap_or_else(|_| panic!("Writing `{}` can not fail!", file.as_ref().display()));
 	}
 }
 
@@ -268,7 +273,7 @@ fn get_rustup_nightly(selected: Option<String>) -> Option<CargoCommand> {
 	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
 }
 
-/// Builder for cargo commands
+/// Wraps a specific command which represents a cargo invocation.
 #[derive(Debug)]
 struct CargoCommand {
 	program: String,
@@ -307,6 +312,34 @@ impl CargoCommand {
 				.and_then(|o| String::from_utf8(o.stdout).map_err(|_| ()))
 				.unwrap_or_default()
 				.contains("-nightly")
+	}
+}
+
+/// Wraps a [`CargoCommand`] and the version of `rustc` the cargo command uses.
+struct CargoCommandVersioned {
+	command: CargoCommand,
+	version: String,
+}
+
+impl CargoCommandVersioned {
+	fn new(command: CargoCommand, version: String) -> Self {
+		Self {
+			command,
+			version,
+		}
+	}
+
+	/// Returns the `rustc` version.
+	fn rustc_version(&self) -> &str {
+		&self.version
+	}
+}
+
+impl std::ops::Deref for CargoCommandVersioned {
+	type Target = CargoCommand;
+
+	fn deref(&self) -> &CargoCommand {
+		&self.command
 	}
 }
 

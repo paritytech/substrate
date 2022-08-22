@@ -18,7 +18,7 @@
 
 use sp_consensus::BlockOrigin;
 use std::time::Duration;
-use futures::executor::block_on;
+use futures::{Future, executor::block_on};
 use super::*;
 use sp_consensus::block_validation::Validation;
 use substrate_test_runtime::Header;
@@ -693,14 +693,7 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	let fork_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 2, false);
 	net.peer(1).push_blocks_at(BlockId::Number(0), 2, false);
 	// wait for connection
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		if net.peer(0).num_peers() == 0  || net.peer(1).num_peers() == 0 {
-			Poll::Pending
-		} else {
-			Poll::Ready(())
-		}
-	}));
+	net.block_until_connected();
 
 	// both peers re-org to the same fork without notifying each other
 	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
@@ -720,8 +713,8 @@ impl BlockAnnounceValidator<Block> for NewBestBlockAnnounceValidator {
 		&mut self,
 		_: &Header,
 		_: &[u8],
-	) -> Result<Validation, Box<dyn std::error::Error + Send>> {
-		Ok(Validation::Success { is_new_best: true })
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+		async { Ok(Validation::Success { is_new_best: true }) }.boxed()
 	}
 }
 
@@ -749,4 +742,40 @@ fn sync_blocks_when_block_announce_validator_says_it_is_new_best() {
 	// as new best. However, peer2 has a special block announcement validator
 	// that flags all blocks as `is_new_best` and thus, it should have synced the blocks.
 	assert!(!net.peer(1).has_block(&block_hash));
+}
+
+/// Waits for some time until the validation is successfull.
+struct DeferredBlockAnnounceValidator;
+
+impl BlockAnnounceValidator<Block> for DeferredBlockAnnounceValidator {
+	fn validate(
+		&mut self,
+		_: &Header,
+		_: &[u8],
+	) -> Pin<Box<dyn Future<Output = Result<Validation, Box<dyn std::error::Error + Send>>> + Send>> {
+		async {
+			futures_timer::Delay::new(std::time::Duration::from_millis(500)).await;
+			Ok(Validation::Success { is_new_best: false })
+		}.boxed()
+	}
+}
+
+#[test]
+fn wait_until_deferred_block_announce_validation_is_ready() {
+	sp_tracing::try_init_simple();
+	log::trace!(target: "sync", "Test");
+	let mut net = TestNet::with_fork_choice(ForkChoiceStrategy::Custom(false));
+	net.add_full_peer_with_config(Default::default());
+	net.add_full_peer_with_config(FullPeerConfig {
+		block_announce_validator: Some(Box::new(NewBestBlockAnnounceValidator)),
+		..Default::default()
+	});
+
+	net.block_until_connected();
+
+	let block_hash = net.peer(0).push_blocks(1, true);
+
+	while !net.peer(1).has_block(&block_hash) {
+		net.block_until_idle();
+	}
 }

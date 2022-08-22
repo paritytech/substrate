@@ -133,8 +133,10 @@ impl core::Benchmark for ImportBenchmark {
 		let elapsed = start.elapsed();
 
 		// Sanity checks.
-		context.client.state_at(&BlockId::number(1)).expect("state_at failed for block#1")
-			.inspect_with(|| {
+		context.client
+			.state_at(&BlockId::number(1))
+			.expect("state_at failed for block#1")
+			.inspect_state(|| {
 				match self.block_type {
 					BlockType::RandomTransfersKeepAlive => {
 						// should be 5 per signed extrinsic + 1 per unsigned

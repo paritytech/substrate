@@ -61,7 +61,7 @@ benchmarks! {
 	}
 
 	set_changes_trie_config {
-		let d in 0 .. 1000;
+		let d = 1000;
 
 		let digest_item = DigestItemOf::<T>::Other(vec![]);
 

@@ -19,7 +19,7 @@
 use std::{str, cell::RefCell, sync::Arc};
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder, ModuleRef,
-	memory_units::Pages,
+	FuncInstance, memory_units::Pages,
 	RuntimeValue::{I32, I64, self},
 };
 use codec::{Encode, Decode};
@@ -29,7 +29,7 @@ use sp_wasm_interface::{
 	FunctionContext, Pointer, WordSize, Sandbox, MemoryId, Result as WResult, Function,
 };
 use sp_runtime_interface::unpack_ptr_and_len;
-use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance};
+use sc_executor_common::wasm_runtime::{WasmModule, WasmInstance, InvokeMethod};
 use sc_executor_common::{
 	error::{Error, WasmError},
 	sandbox,
@@ -434,7 +434,7 @@ fn get_heap_base(module: &ModuleRef) -> Result<u32, Error> {
 fn call_in_wasm_module(
 	module_instance: &ModuleRef,
 	memory: &MemoryRef,
-	method: &str,
+	method: InvokeMethod,
 	data: &[u8],
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
@@ -446,24 +446,49 @@ fn call_in_wasm_module(
 		.and_then(|e| e.as_table().cloned());
 	let heap_base = get_heap_base(module_instance)?;
 
-	let mut fec = FunctionExecutor::new(
+	let mut function_executor = FunctionExecutor::new(
 		memory.clone(),
 		heap_base,
-		table,
+		table.clone(),
 		host_functions,
 		allow_missing_func_imports,
 		missing_functions,
 	)?;
 
 	// Write the call data
-	let offset = fec.allocate_memory(data.len() as u32)?;
-	fec.write_memory(offset, data)?;
+	let offset = function_executor.allocate_memory(data.len() as u32)?;
+	function_executor.write_memory(offset, data)?;
 
-	let result = module_instance.invoke_export(
-		method,
-		&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
-		&mut fec,
-	);
+	let result = match method {
+		InvokeMethod::Export(method) => {
+			module_instance.invoke_export(
+				method,
+				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
+				&mut function_executor,
+			)
+		},
+		InvokeMethod::Table(func_ref) => {
+			let func = table.ok_or(Error::NoTable)?
+				.get(func_ref)?
+				.ok_or(Error::NoTableEntryWithIndex(func_ref))?;
+			FuncInstance::invoke(
+				&func,
+				&[I32(u32::from(offset) as i32), I32(data.len() as i32)],
+				&mut function_executor,
+			).map_err(Into::into)
+		},
+		InvokeMethod::TableWithWrapper { dispatcher_ref, func } => {
+			let dispatcher = table.ok_or(Error::NoTable)?
+				.get(dispatcher_ref)?
+				.ok_or(Error::NoTableEntryWithIndex(dispatcher_ref))?;
+
+			FuncInstance::invoke(
+				&dispatcher,
+				&[I32(func as _), I32(u32::from(offset) as i32), I32(data.len() as i32)],
+				&mut function_executor,
+			).map_err(Into::into)
+		},
+	};
 
 	match result {
 		Ok(Some(I64(r))) => {
@@ -474,7 +499,7 @@ fn call_in_wasm_module(
 			trace!(
 				target: "wasm-executor",
 				"Failed to execute code with {} pages",
-				memory.current_size().0
+				memory.current_size().0,
 			);
 			Err(e.into())
 		},
@@ -677,7 +702,7 @@ pub struct WasmiInstance {
 unsafe impl Send for WasmiInstance {}
 
 impl WasmInstance for WasmiInstance {
-	fn call(&self, method: &str, data: &[u8]) -> Result<Vec<u8>, Error> {
+	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>, Error> {
 		// We reuse a single wasm instance for multiple calls and a previous call (if any)
 		// altered the state. Therefore, we need to restore the instance to original state.
 

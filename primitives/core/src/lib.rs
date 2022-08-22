@@ -72,8 +72,6 @@ mod changes_trie;
 #[cfg(feature = "std")]
 pub mod traits;
 pub mod testing;
-#[cfg(feature = "std")]
-pub mod vrf;
 
 pub use self::hash::{H160, H256, H512, convert_hash};
 pub use self::uint::{U256, U512};
@@ -196,6 +194,13 @@ pub enum NativeOrEncoded<R> {
 	Native(R),
 	/// The encoded representation.
 	Encoded(Vec<u8>)
+}
+
+#[cfg(feature = "std")]
+impl<R> From<R> for NativeOrEncoded<R> {
+	fn from(val: R) -> Self {
+		Self::Native(val)
+	}
 }
 
 #[cfg(feature = "std")]

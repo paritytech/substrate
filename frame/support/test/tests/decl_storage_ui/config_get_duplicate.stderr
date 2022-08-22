@@ -1,5 +1,5 @@
 error: `config()`/`get()` with the same name already defined.
-  --> $DIR/config_get_duplicate.rs:30:21
+  --> $DIR/config_get_duplicate.rs:27:21
    |
-30 |         pub Value2 config(value): u32;
+27 |         pub Value2 config(value): u32;
    |                           ^^^^^

@@ -51,6 +51,8 @@ pub enum Error {
 		/// Maximum allowed value
 		max: u32,
 	},
+	/// Call to an unsafe RPC was denied.
+	UnsafeRpcCalled(crate::policy::UnsafeRpcError),
 }
 
 impl std::error::Error for Error {

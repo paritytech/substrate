@@ -70,7 +70,7 @@ impl GenerateCmd {
 				mnemonic.phrase(),
 				password,
 				self.network_scheme.network.clone(),
-				output
+				output,
 			)
 		);
 		Ok(())

@@ -3,15 +3,17 @@ use frame_system::Trait as FST;
 use pallet_contracts::Gas;
 use pallet_contracts::{self as contracts, ContractAddressFor, Trait as CT};
 use sp_core::{
-    offchain::{testing, OffchainExt, Timestamp as OCWTimestamp, TransactionPoolExt},
-    testing::KeyStore,
-    traits::KeystoreExt,
+    offchain::{testing, OffchainExt, Timestamp as OCWTimestamp, TransactionPoolExt}
 };
 use sp_runtime::{traits::Hash, AccountId32, RuntimeAppPublic};
 use test_runtime::{
     AccountId, Balance, Balances, Contracts, DdcMetricsOffchainWorker, Origin, System, Test,
     Timestamp,
 };
+
+use sp_keystore::{KeystoreExt, testing::KeyStore};
+use sp_keystore::SyncCryptoStore;
+use std::sync::Arc;
 
 use crate::{
     CURRENT_PERIOD_MS, FINALIZE_METRIC_PERIOD, REPORT_DDN_STATUS_SELECTOR, REPORT_METRICS_SELECTOR,
@@ -179,7 +181,7 @@ fn build_ext_for_contracts() -> sp_io::TestExternalities {
     pallet_balances::GenesisConfig::<Test> { balances: vec![] }
         .assimilate_storage(&mut t)
         .unwrap();
-    contracts::GenesisConfig {
+    contracts::GenesisConfig::<Test> {
         current_schedule: contracts::Schedule {
             enable_println: true,
             ..Default::default()
@@ -206,13 +208,12 @@ fn should_submit_signed_transaction_on_chain() {
         "news slush supreme milk chapter athlete soap sausage put clutch what kitten";
     let keystore = KeyStore::new();
     keystore
-        .write()
         .sr25519_generate_new(
             crate::crypto::Public::ID,
             Some(&format!("{}/hunter1", PHRASE)),
         )
         .unwrap();
-    t.register_extension(KeystoreExt(keystore));
+    t.register_extension(KeystoreExt(Arc::new(keystore)));
 
     let (offchain, offchain_state) = testing::TestOffchainExt::new();
     t.register_extension(OffchainExt::new(offchain));
@@ -406,7 +407,7 @@ fn deploy_contract() -> AccountId {
             Origin::signed(alice.clone()),
             contract_id.clone(),
             0,
-            100_000_000_000,
+            1_000_000_000_000,
             call_data,
         );
         results.unwrap();

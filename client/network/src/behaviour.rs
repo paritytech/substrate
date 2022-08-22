@@ -429,7 +429,7 @@ impl<B: BlockT, H: ExHashT> NetworkBehaviourEventProcess<block_requests::Event<B
 					result: Ok(total_handling_time),
 				});
 			},
-			block_requests::Event::Response { peer, original_request: _, response, request_duration } => {
+			block_requests::Event::Response { peer, response, request_duration } => {
 				self.events.push_back(BehaviourOut::OpaqueRequestFinished {
 					peer: peer.clone(),
 					protocol: self.block_requests.protocol_name().to_owned(),

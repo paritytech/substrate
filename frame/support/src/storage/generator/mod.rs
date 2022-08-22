@@ -40,19 +40,24 @@ mod tests {
 	use crate::storage::{unhashed, generator::StorageValue, IterableStorageMap};
 	use crate::{assert_noop, assert_ok};
 
-	struct Runtime {}
-	pub trait Trait {
+	struct Runtime;
+
+	pub trait Trait: 'static {
 		type Origin;
 		type BlockNumber;
+		type PalletInfo: crate::traits::PalletInfo;
+		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	impl Trait for Runtime {
 		type Origin = u32;
 		type BlockNumber = u32;
+		type PalletInfo = ();
+		type DbWeight = ();
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	crate::decl_storage! {

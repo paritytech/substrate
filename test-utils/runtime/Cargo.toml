@@ -56,7 +56,7 @@ sc-executor = { version = "0.8.0", path = "../../client/executor" }
 substrate-test-runtime-client = { version = "2.0.0", path = "./client" }
 
 [build-dependencies]
-wasm-builder-runner = { version = "1.0.5", package = "substrate-wasm-builder-runner", path = "../../utils/wasm-builder-runner" }
+wasm-builder-runner = { version = "2.0.0", package = "substrate-wasm-builder-runner", path = "../../utils/wasm-builder-runner" }
 
 [features]
 default = [

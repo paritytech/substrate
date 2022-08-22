@@ -27,18 +27,14 @@ use frame_support::{
 use sp_core::H256;
 use sp_io;
 use sp_npos_elections::{
-	build_support_map, evaluate_support, reduce, ElectionScore, ExtendedBalance, StakedAssignment,
+	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
 };
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	testing::{Header, TestXt, UintAuthorityId},
-	traits::{Convert, IdentityLookup, SaturatedConversion, Zero},
-	Perbill,
+	traits::{IdentityLookup, Zero},
 };
-use sp_staking::{
-	offence::{OffenceDetails, OnOffenceHandler},
-	SessionIndex,
-};
+use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use std::{cell::RefCell, collections::HashSet};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
@@ -48,19 +44,6 @@ pub(crate) type AccountId = u64;
 pub(crate) type AccountIndex = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
-
-/// Simple structure that exposes how u64 currency can be represented as... u64.
-pub struct CurrencyToVoteHandler;
-impl Convert<Balance, u64> for CurrencyToVoteHandler {
-	fn convert(x: Balance) -> u64 {
-		x.saturated_into()
-	}
-}
-impl Convert<u128, Balance> for CurrencyToVoteHandler {
-	fn convert(x: u128) -> Balance {
-		x
-	}
-}
 
 thread_local! {
 	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
@@ -319,7 +302,7 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 impl Trait for Test {
 	type Currency = Balances;
 	type UnixTime = Timestamp;
-	type CurrencyToVote = CurrencyToVoteHandler;
+	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
 	type Event = MetaEvent;
 	type Slash = ();
@@ -926,7 +909,7 @@ pub(crate) fn prepare_submission_with(
 
 	let mut staked = sp_npos_elections::assignment_ratio_to_staked(
 		assignments,
-		Staking::slashable_balance_of_vote_weight,
+		Staking::slashable_balance_of_fn(),
 	);
 
 	// apply custom tweaks. awesome for testing.
@@ -964,7 +947,7 @@ pub(crate) fn prepare_submission_with(
 	let score = if compute_real_score {
 		let staked = sp_npos_elections::assignment_ratio_to_staked(
 			assignments_reduced.clone(),
-			Staking::slashable_balance_of_vote_weight,
+			Staking::slashable_balance_of_fn(),
 		);
 
 		let support_map = build_support_map::<AccountId>(
@@ -978,9 +961,7 @@ pub(crate) fn prepare_submission_with(
 
 	let compact =
 		CompactAssignments::from_assignment(assignments_reduced, nominator_index, validator_index)
-			.map_err(|e| { println!("error in compact: {:?}", e); e })
 			.expect("Failed to create compact");
-
 
 	// winner ids to index
 	let winners = winners.into_iter().map(|w| validator_index(&w).unwrap()).collect::<Vec<_>>();
