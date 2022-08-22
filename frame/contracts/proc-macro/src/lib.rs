@@ -402,9 +402,9 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 								qed;"
 							);
 						}
-					} else { quote! { let err = "whoo!"; } }
+					} else { quote! { } }
 				},
-				_ => quote! { let err = "beee"; },
+				_ => quote! { },
 			}
 		});
 
