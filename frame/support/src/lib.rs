@@ -1429,7 +1429,7 @@ pub mod pallet_prelude {
 /// I.e. a regular trait definition named `Config`, with supertrait `frame_system::Config`,
 /// optionally other supertrait and where clause.
 ///
-/// The associated type `Event` is reserved, if defined it must bounds `From<PalletEvent>` and
+/// The associated type `RuntimeEvent` is reserved, if defined it must bounds `From<PalletEvent>` and
 /// `IsType<<Self as frame_system::Config>::RuntimeEvent>`, see `#[pallet::event]` for more
 /// information.
 ///
