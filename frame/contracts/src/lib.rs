@@ -87,12 +87,12 @@
 mod gas;
 mod benchmarking;
 mod exec;
+mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
-pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -126,6 +126,7 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
 	exec::{Frame, VarSizedKey as StorageKey},
+	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
@@ -225,7 +226,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(8);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]

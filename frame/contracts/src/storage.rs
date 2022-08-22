@@ -39,32 +39,31 @@ use sp_runtime::{
 };
 use sp_std::{marker::PhantomData, prelude::*};
 
-pub type ContractInfo<T> = RawContractInfo<CodeHash<T>, BalanceOf<T>>;
-
 /// Information for managing an account and its sub trie abstraction.
 /// This is the required info to cache for an account.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct RawContractInfo<CodeHash, Balance> {
+#[scale_info(skip_type_params(T))]
+pub struct ContractInfo<T: Config> {
 	/// Unique ID for the subtree encoded as a bytes vector.
 	pub trie_id: TrieId,
 	/// The code associated with a given account.
-	pub code_hash: CodeHash,
+	pub code_hash: CodeHash<T>,
 	/// How many bytes of storage are accumulated in this contract's child trie.
 	pub storage_bytes: u32,
 	/// How many items of storage are accumulated in this contract's child trie.
 	pub storage_items: u32,
 	/// This records to how much deposit the accumulated `storage_bytes` amount to.
-	pub storage_byte_deposit: Balance,
+	pub storage_byte_deposit: BalanceOf<T>,
 	/// This records to how much deposit the accumulated `storage_items` amount to.
-	pub storage_item_deposit: Balance,
+	pub storage_item_deposit: BalanceOf<T>,
 	/// This records how much deposit is put down in order to pay for the contract itself.
 	///
 	/// We need to store this information separately so it is not used when calculating any refunds
 	/// since the base deposit can only ever be refunded on contract termination.
-	pub storage_base_deposit: Balance,
+	pub storage_base_deposit: BalanceOf<T>,
 }
 
-impl<CodeHash, Balance: Saturating + Copy> RawContractInfo<CodeHash, Balance> {
+impl<T: Config> ContractInfo<T> {
 	/// Associated child trie unique id is built from the hash part of the trie id.
 	#[cfg(test)]
 	pub fn child_trie_info(&self) -> ChildInfo {
@@ -72,12 +71,12 @@ impl<CodeHash, Balance: Saturating + Copy> RawContractInfo<CodeHash, Balance> {
 	}
 
 	/// The deposit paying for the accumulated storage generated within the contract's child trie.
-	pub fn extra_deposit(&self) -> Balance {
+	pub fn extra_deposit(&self) -> BalanceOf<T> {
 		self.storage_byte_deposit.saturating_add(self.storage_item_deposit)
 	}
 
 	/// Same as [`Self::extra_deposit`] but including the base deposit.
-	pub fn total_deposit(&self) -> Balance {
+	pub fn total_deposit(&self) -> BalanceOf<T> {
 		self.extra_deposit().saturating_add(self.storage_base_deposit)
 	}
 }
