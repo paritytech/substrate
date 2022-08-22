@@ -138,6 +138,10 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
+	fn ongoing() -> bool {
+		false
+	}
+
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
 		// testing)
@@ -166,6 +170,10 @@ impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
 	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
 	type Error = Error;
 	type DataProvider = T::DataProvider;
+
+	fn ongoing() -> bool {
+		false
+	}
 
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))

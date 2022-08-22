@@ -16,16 +16,20 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 log = { version = "0.4.17", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
-frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
+
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
+
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { default-features = false, path = "../../primitives/staking" }
+
 pallet-staking = { default-features = false, path = "../staking" }
 pallet-nomination-pools = { default-features = false, path = "../nomination-pools" }
+frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
+
+frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 
 [dev-dependencies]
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
@@ -34,17 +38,22 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 default = ["std"]
 std = [
 	"codec/std",
-	"frame-benchmarking/std",
+	"log/std",
+	"scale-info/std",
+
 	"frame-support/std",
 	"frame-system/std",
-	"log/std",
-	"pallet-balances/std",
-	"scale-info/std",
+
 	"sp-io/std",
 	"sp-staking/std",
 	"sp-runtime/std",
 	"sp-std/std",
+
 	"pallet-staking/std",
+	"pallet-nomination-pools/std",
+	"frame-election-provider-support/std",
+
+	"frame-benchmarking/std",
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

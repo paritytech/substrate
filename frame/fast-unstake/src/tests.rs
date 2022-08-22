@@ -119,82 +119,27 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 #[test]
-fn it_works_for_optional_value() {
-	new_test_ext().execute_with(|| {
-		// Check that GenesisBuilder works properly.
-		let val1 = 42;
-		let val2 = 27;
-		assert_eq!(Example::dummy(), Some(val1));
+fn cannot_register_if_in_queue() {
 
-		// Check that accumulate works when we have Some value in Dummy already.
-		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val2));
-		assert_eq!(Example::dummy(), Some(val1 + val2));
-
-		// Check that accumulate works when we Dummy has None in it.
-		<Example as OnInitialize<u64>>::on_initialize(2);
-		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val1));
-		assert_eq!(Example::dummy(), Some(val1 + val2 + val1));
-	});
 }
 
 #[test]
-fn it_works_for_default_value() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(Example::foo(), 24);
-		assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
-		assert_eq!(Example::foo(), 25);
-	});
+fn cannot_register_if_head() {
+
 }
 
 #[test]
-fn set_dummy_works() {
-	new_test_ext().execute_with(|| {
-		let test_val = 133;
-		assert_ok!(Example::set_dummy(Origin::root(), test_val.into()));
-		assert_eq!(Example::dummy(), Some(test_val));
-	});
+fn cannot_register_if_partially_unbonded() {
+
 }
 
 #[test]
-fn signed_ext_watch_dummy_works() {
-	new_test_ext().execute_with(|| {
-		let call = pallet_example_basic::Call::set_dummy { new_value: 10 }.into();
-		let info = DispatchInfo::default();
+fn cannot_register_if_not_bonded() {
 
-		assert_eq!(
-			WatchDummy::<Test>(PhantomData)
-				.validate(&1, &call, &info, 150)
-				.unwrap()
-				.priority,
-			u64::MAX,
-		);
-		assert_eq!(
-			WatchDummy::<Test>(PhantomData).validate(&1, &call, &info, 250),
-			InvalidTransaction::ExhaustsResources.into(),
-		);
-	})
 }
 
-#[test]
-fn counted_map_works() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(CountedMap::<Test>::count(), 0);
-		CountedMap::<Test>::insert(3, 3);
-		assert_eq!(CountedMap::<Test>::count(), 1);
-	})
-}
 
 #[test]
-fn weights_work() {
-	// must have a defined weight.
-	let default_call = pallet_example_basic::Call::<Test>::accumulate_dummy { increase_by: 10 };
-	let info1 = default_call.get_dispatch_info();
-	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert!(info1.weight > 0);
-
-	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
-	//   should be less.
-	let custom_call = pallet_example_basic::Call::<Test>::set_dummy { new_value: 20 };
-	let info2 = custom_call.get_dispatch_info();
-	assert!(info1.weight > info2.weight);
+fn unstake_paused_mid_election() {
+	todo!("a dude is being unstaked, midway being checked, election happens, they are still not exposed, but a new era needs to be checked, therefore this unstake takes longer than expected.")
 }

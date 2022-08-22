@@ -136,7 +136,7 @@
 //!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
-//!
+//! 	        fn ongoing() -> bool { false }
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
 //!             Self::DataProvider::electable_targets(None)
 //!                 .map_err(|_| "failed to elect")
@@ -370,6 +370,9 @@ pub trait ElectionProvider {
 		BlockNumber = Self::BlockNumber,
 	>;
 
+	/// Indicate if this election provider is currently ongoing an asynchronous election or not.
+	fn ongoing() -> bool;
+
 	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
 	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
@@ -419,6 +422,10 @@ where
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Err("<NoElection as ElectionProvider> cannot do anything.")
+	}
+
+	fn ongoing() -> bool {
+		false
 	}
 }
 

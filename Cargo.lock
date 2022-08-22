@@ -5686,10 +5686,10 @@ name = "pallet-fast-unstake"
 version = "4.0.0-dev"
 dependencies = [
  "frame-benchmarking",
+ "frame-election-provider-support",
  "frame-support",
  "frame-system",
  "log",
- "pallet-balances",
  "pallet-nomination-pools",
  "pallet-staking",
  "parity-scale-codec",
