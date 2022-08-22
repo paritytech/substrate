@@ -810,7 +810,7 @@ mod tests {
 			.on_incoming(
 				&mut network,
 				// Unregistered peer.
-				remote.clone(),
+				remote,
 				vec![vec![1, 2, 3]],
 			);
 

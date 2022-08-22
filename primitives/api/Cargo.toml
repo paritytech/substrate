@@ -20,6 +20,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 sp-version = { version = "5.0.0", default-features = false, path = "../version" }
 sp-state-machine = { version = "0.12.0", optional = true, path = "../state-machine" }
+sp-trie = { version = "6.0.0", optional = true, path = "../trie" }
 hash-db = { version = "0.15.2", optional = true }
 thiserror = { version = "1.0.30", optional = true }
 
@@ -36,6 +37,7 @@ std = [
 	"sp-std/std",
 	"sp-runtime/std",
 	"sp-state-machine",
+	"sp-trie",
 	"sp-version/std",
 	"hash-db",
 	"thiserror",

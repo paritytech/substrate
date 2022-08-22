@@ -587,7 +587,7 @@ mod tests {
 
 		fn import_header(&self, header: Header) {
 			let hash = header.hash();
-			let number = header.number().clone();
+			let number = *header.number();
 
 			self.known_blocks.lock().insert(hash, number);
 			self.sender
@@ -608,7 +608,7 @@ mod tests {
 
 	impl BlockStatusT<Block> for TestBlockStatus {
 		fn block_number(&self, hash: Hash) -> Result<Option<u64>, Error> {
-			Ok(self.inner.lock().get(&hash).map(|x| x.clone()))
+			Ok(self.inner.lock().get(&hash).map(|x| *x))
 		}
 	}
 
