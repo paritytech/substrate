@@ -29,8 +29,10 @@ pub mod pallet {
 
 	use frame_support::traits::Currency;
 	use pallet_nomination_pools::PoolId;
-	use sp_runtime::traits::Saturating;
+	use sp_runtime::traits::{Saturating, Zero};
 	use sp_staking::EraIndex;
+
+	use sp_std::{ops::Div, vec::Vec};
 
 	type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
 		<T as frame_system::Config>::AccountId,
@@ -92,11 +94,18 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
-			/// TODO: iterate remaining weight and process outstanding `Unstake` requests.
-			/// -> Start and Head
-			/// -> Process entries of Queue as long as remaining_weight allows
-			/// -> update Head
-			0
+			// We'll call `process_head` until 0 weight is returned
+			let mut remaining = remaining_weight;
+			loop {
+				// process head and
+				let last_consumed_weight = Self::process_head(remaining_weight);
+				// if nothing was done, break loop
+				if last_consumed_weight == Weight::from(0 as u64) {
+					break
+				}
+				remaining = remaining.saturating_sub(last_consumed_weight);
+			}
+			remaining
 		}
 	}
 
@@ -146,9 +155,9 @@ pub mod pallet {
 			};
 
 			// determine the amount of eras to check.
-			let weight_per_era_check = todo!("should come from our benchmarks");
+			let weight_per_era_check: Weight = todo!("should come from our benchmarks");
 			let max_eras_to_check = remaining_weight.div(weight_per_era_check);
-			let final_eras_to_check = ErasToCheckPerBlock::<T>::get().min(max_eras_to_check);
+			let final_eras_to_check = ErasToCheckPerBlock::<T>::get().min(max_eras_to_check as u32);
 
 			// return weight consumed if no eras to check (1 read).
 			if final_eras_to_check.is_zero() {
@@ -157,8 +166,7 @@ pub mod pallet {
 
 			let slash_stash = |eras_checked: EraIndex| {
 				let slash_amount = T::SlashPerEra::get().saturating_mul(eras_checked.into());
-				let (_, imbalance) =
-					<T as pallet_staking::Config>::Currency::slash(&stash, slash_amount);
+				let (_, imbalance) = <T as pallet_staking::Config>::Currency::slash(&stash, slash_amount);
 			};
 
 			let current_era = pallet_staking::CurrentEra::<T>::get().unwrap_or_default();
@@ -198,8 +206,7 @@ pub mod pallet {
 				0
 			} else {
 				// eras remaining to be checked.
-				let is_exposed =
-					now_check_range.iter().any(|e| Self::is_exposed_in_era(&stash, *e));
+				let is_exposed = now_check_range.iter().any(|e| Self::is_exposed_in_era(&stash, *e));
 				if is_exposed {
 					// this account was actually exposed in some era within the range -- slash them
 					// and remove them from the queue.
