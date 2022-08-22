@@ -856,7 +856,7 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
-		bitswap: config.network.ipfs_server.then(|| Bitswap::new(client.clone()).into()),
+		bitswap: config.network.ipfs_server.then(|| Bitswap::from_client(client.clone())),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,

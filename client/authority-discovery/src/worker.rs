@@ -44,6 +44,7 @@ use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_network_common::{
+	header_backend::NetworkHeaderBackend,
 	protocol::event::DhtEvent,
 	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
 };
@@ -51,7 +52,7 @@ use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
-use sc_network_common::header_backend::NetworkHeaderBackend;
+
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -150,17 +151,17 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	phantom: PhantomData<Block>,
 }
 
-/// Wrapper for `AuthorityDiscovery` runtime API. Can be
-/// used to implement custom clients.
+/// Wrapper for [`AuthorityDiscoveryApi`](sp_authority_discovery::AuthorityDiscoveryApi). Can be
+/// be implemented by any struct without dependency on the runtime.
 #[async_trait::async_trait]
-pub trait AuthorityDiscoveryWrapper<Block: BlockT> {
+pub trait AuthorityDiscovery<Block: BlockT> {
 	/// Retrieve authority identifiers of the current and next authority set.
 	async fn authorities(&self, at: Block::Hash)
 		-> std::result::Result<Vec<AuthorityId>, ApiError>;
 }
 
 #[async_trait::async_trait]
-impl<Block, T> AuthorityDiscoveryWrapper<Block> for T
+impl<Block, T> AuthorityDiscovery<Block> for T
 where
 	T: ProvideRuntimeApi<Block> + Send + Sync,
 	T::Api: AuthorityDiscoveryApi<Block>,
@@ -178,7 +179,7 @@ impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtE
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscoveryWrapper<Block> + Send + Sync + 'static + NetworkHeaderBackend<Block>,
+	Client: AuthorityDiscovery<Block> + Send + Sync + 'static + NetworkHeaderBackend<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].

@@ -134,7 +134,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
@@ -1300,7 +1300,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1333,7 +1333,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + 'static,
 {
 	type Output = ();
 
@@ -1978,7 +1978,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + 'static,
 {
 }
 
@@ -1986,7 +1986,7 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -1994,7 +1994,7 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + 'static,
 {
 	fn blocks_processed(
 		&mut self,

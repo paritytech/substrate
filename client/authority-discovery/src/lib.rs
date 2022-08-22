@@ -29,7 +29,7 @@
 
 pub use crate::{
 	service::Service,
-	worker::{AuthorityDiscoveryWrapper, NetworkProvider, Role, Worker},
+	worker::{AuthorityDiscovery, NetworkProvider, Role, Worker},
 };
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
@@ -122,7 +122,7 @@ pub fn new_worker_and_service<Client, Network, Block, DhtEventStream>(
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscoveryWrapper<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	Client: AuthorityDiscovery<Block> + Send + Sync + 'static + HeaderBackend<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	new_worker_and_service_with_config(
@@ -149,7 +149,7 @@ pub fn new_worker_and_service_with_config<Client, Network, Block, DhtEventStream
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscoveryWrapper<Block> + Send + Sync + 'static + NetworkHeaderBackend<Block>,
+	Client: AuthorityDiscovery<Block> + Send + Sync + 'static + NetworkHeaderBackend<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	let (to_worker, from_service) = mpsc::channel(0);

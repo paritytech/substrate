@@ -194,20 +194,20 @@ pub trait BitswapT<B: BlockT> {
 }
 
 /// Network behaviour that handles sending and receiving IPFS blocks.
-pub struct Bitswap<B, Client> {
+struct BitswapInternal<B, Client> {
 	client: Arc<Client>,
 	ready_blocks: VecDeque<(PeerId, BitswapMessage)>,
 	_block: PhantomData<B>,
 }
 
-impl<B, Client> Bitswap<B, Client> {
+impl<B, Client> BitswapInternal<B, Client> {
 	/// Create a new instance of the bitswap protocol handler.
 	pub fn new(client: Arc<Client>) -> Self {
 		Self { client, ready_blocks: Default::default(), _block: PhantomData::default() }
 	}
 }
 
-impl<Block, Client> BitswapT<Block> for Bitswap<Block, Client>
+impl<Block, Client> BitswapT<Block> for BitswapInternal<Block, Client>
 where
 	Block: BlockT,
 	Client: BlockBackend<Block>,
@@ -224,29 +224,22 @@ where
 	}
 }
 
-/// Wrapper for bitswap trait object so we can implement NetworkBehaviour
-pub struct BitswapWrapper<Block: BlockT> {
+/// Wrapper for bitswap trait object  implement NetworkBehaviour
+pub struct Bitswap<Block: BlockT> {
 	inner: Box<dyn BitswapT<Block> + Sync + Send>,
 }
 
-impl<B, Client> From<Bitswap<B, Client>> for BitswapWrapper<B>
-where
-	B: BlockT,
-	Client: BlockBackend<B> + Send + Sync + 'static,
-{
-	fn from(bitswap: Bitswap<B, Client>) -> Self {
-		Self { inner: Box::new(bitswap) as Box<_> }
-	}
-}
-
-impl<B: BlockT> BitswapWrapper<B> {
+impl<B: BlockT> Bitswap<B> {
 	/// Create new Bitswap wrapper
-	pub fn new(bitswap: Box<dyn BitswapT<B> + Sync + Send>) -> Self {
-		Self { inner: bitswap }
+	pub fn from_client<Client: BlockBackend<B> + Send + Sync + 'static>(
+		client: Arc<Client>,
+	) -> Self {
+		let inner = Box::new(BitswapInternal::new(client)) as Box<_>;
+		Self { inner }
 	}
 }
 
-impl<Block: BlockT> BitswapT<Block> for BitswapWrapper<Block> {
+impl<Block: BlockT> BitswapT<Block> for Bitswap<Block> {
 	fn indexed_transaction(
 		&self,
 		hash: <Block as BlockT>::Hash,
@@ -275,7 +268,7 @@ where
 	}
 }
 
-impl<B> NetworkBehaviour for BitswapWrapper<B>
+impl<B> NetworkBehaviour for Bitswap<B>
 where
 	B: BlockT,
 {

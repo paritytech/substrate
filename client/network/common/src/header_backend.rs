@@ -21,6 +21,8 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 };
 
+/// Wrapper trait for [`HeaderBackend`](sp_blockchain::HeaderBackend) narrower parameter.
+/// Takes hash instead of [`BlockId`](sp_runtime::generic::BlockId) as parameter.
 pub trait NetworkHeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
 	fn header(&self, hash: <Block as BlockT>::Hash) -> Result<Option<<Block as BlockT>::Header>>;

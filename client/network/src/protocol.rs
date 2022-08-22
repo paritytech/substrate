@@ -260,7 +260,7 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 impl<B, Client> Protocol<B, Client>
 where
 	B: BlockT,
-	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + 'static,
 {
 	/// Create a new instance.
 	pub fn new(
@@ -1310,7 +1310,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 impl<B, Client> NetworkBehaviour for Protocol<B, Client>
 where
 	B: BlockT,
-	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + 'static,
 {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;
