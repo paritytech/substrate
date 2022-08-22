@@ -207,12 +207,10 @@ impl HostFn {
 			_ => Err(err(span, msg)),
 		}?;
 
-		let msg = format!(
-			r#"Should return one of the following: 
-								  - Result<(), TrapReason>,
-								  - Result<ReturnCode, TrapReason>,
-								  - Result<u32, TrapReason>"#
-		);
+		let msg = r#"Should return one of the following:
+				- Result<(), TrapReason>,
+				- Result<ReturnCode, TrapReason>,
+				- Result<u32, TrapReason>"#;
 
 		let ret_ty = match item.clone().sig.output {
 			syn::ReturnType::Type(_, ty) => Ok(ty.clone()),
