@@ -309,6 +309,15 @@ fn promote_demote_works() {
 }
 
 #[test]
+pub fn add_member_to_rank_work(){
+	new_test_ext().execute_with(||{
+		assert_ok!(Club::add_member_to_rank(Origin::root(), 2,1));
+		//-- Should fail ----------------------------------------
+		assert_noop!(Club::add_member_to_rank(Origin::signed(1),2,1), BadOrigin);
+	})
+}
+
+#[test]
 fn promote_demote_by_rank_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Club::add_member(Origin::root(), 1));

@@ -644,6 +644,17 @@ pub mod pallet {
 				pays_fee: Pays::No,
 			})
 		}
+
+		#[pallet::weight(100)]
+		pub fn add_member_to_rank(
+			origin: OriginFor<T>,
+			member: T::AccountId,
+			rank: Rank
+		) -> DispatchResult {
+			let _= ensure_root(origin)?;
+			Self::do_add_member_to_rank(member,rank)?;
+			Ok(())
+		}
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
