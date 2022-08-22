@@ -224,7 +224,7 @@ where
 	}
 }
 
-/// Wrapper for bitswap trait object to implement NetworkBehaviour
+/// Wrapper for bitswap trait object so we can implement NetworkBehaviour
 pub struct BitswapWrapper<Block: BlockT> {
 	inner: Box<dyn BitswapT<Block> + Sync + Send>,
 }
