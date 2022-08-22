@@ -1,4 +1,4 @@
-error: expected `Event`
+error: expected `PalletEvent`
   --> $DIR/event_wrong_item_name.rs:19:11
    |
 19 |     pub enum Foo {}
