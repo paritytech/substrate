@@ -61,10 +61,12 @@ cargo-check-benches:
     - .docker-env
     - .test-refs
     - .collect-artifacts
+    - .pipeline-stopper-artifacts
   before_script:
     # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
+    - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
     - if [ $CI_COMMIT_REF_NAME != "master" ]; then
         git fetch origin +master:master;
@@ -131,6 +133,7 @@ cargo-check-subkey:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   script:
     - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
@@ -181,13 +184,13 @@ test-deterministic-wasm:
   script:
     - rusty-cachier snapshot create
     # build runtime
-    - cargo build --verbose --release -p node-runtime
+    - cargo build --verbose --release -p kitchensink-runtime
     # make checksum
-    - sha256sum $CARGO_TARGET_DIR/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum $CARGO_TARGET_DIR/release/wbuild/kitchensink-runtime/target/wasm32-unknown-unknown/release/kitchensink_runtime.wasm > checksum.sha256
     # clean up
     - rm -rf $CARGO_TARGET_DIR/release/wbuild
     # build again
-    - cargo build --verbose --release -p node-runtime
+    - cargo build --verbose --release -p kitchensink-runtime
     # confirm checksum
     - sha256sum -c ./checksum.sha256
     # clean up again, don't put release binaries into the cache
@@ -199,6 +202,7 @@ test-linux-stable:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
@@ -273,6 +277,24 @@ test-linux-stable-extra:
     - time cargo test --doc --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
     - rusty-cachier cache upload
 
+# This job runs all benchmarks defined in the `/bin/node/runtime` once to check that there are no errors.
+quick-benchmarks:
+  stage:                           test
+  extends:
+    - .docker-env
+    - .test-refs
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                "full"
+    WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+  script:
+    - rusty-cachier snapshot create
+    - time cargo run --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
+    - rusty-cachier cache upload
+
 test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test
@@ -299,6 +321,7 @@ test-linux-stable-int:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
@@ -328,6 +351,7 @@ check-tracing:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   script:
     - rusty-cachier snapshot create
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases

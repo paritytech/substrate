@@ -42,9 +42,11 @@ use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
+use sc_network_common::service::NetworkBlock;
 use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
+use sp_consensus::SyncOracle;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT},
@@ -60,7 +62,7 @@ pub use self::{
 	error::Error,
 };
 pub use config::{
-	BasePath, Configuration, DatabaseSource, KeepBlocks, PruningMode, Role, RpcMethods, TaskType,
+	BasePath, BlocksPruning, Configuration, DatabaseSource, PruningMode, Role, RpcMethods, TaskType,
 };
 pub use sc_chain_spec::{
 	ChainSpec, ChainType, Extension as ChainSpecExtension, GenericChainSpec, NoExtension,
@@ -101,7 +103,10 @@ impl RpcHandlers {
 		&self,
 		json_query: &str,
 	) -> Result<(String, mpsc::UnboundedReceiver<String>), JsonRpseeError> {
-		self.0.raw_json_request(json_query).await
+		self.0
+			.raw_json_request(json_query)
+			.await
+			.map(|(method_res, recv)| (method_res.result, recv))
 	}
 
 	/// Provides access to the underlying `RpcModule`
@@ -261,10 +266,12 @@ async fn build_network_future<
 					sc_rpc::system::Request::SyncState(sender) => {
 						use sc_rpc::system::SyncState;
 
+						let best_number = client.info().best_number;
+
 						let _ = sender.send(SyncState {
 							starting_block,
-							current_block: client.info().best_number,
-							highest_block: network.best_seen_block(),
+							current_block: best_number,
+							highest_block: network.best_seen_block().unwrap_or(best_number),
 						});
 					}
 				}

@@ -31,7 +31,7 @@ use sc_service::{
 		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
-	ChainSpec, KeepBlocks, TracingReceiver,
+	BlocksPruning, ChainSpec, TracingReceiver,
 };
 use sc_tracing::logging::LoggerBuilder;
 use std::{net::SocketAddr, path::PathBuf};
@@ -230,18 +230,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		})
 	}
 
-	/// Get the state cache size.
+	/// Get the trie cache maximum size.
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
-	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.import_params().map(|x| x.state_cache_size()).unwrap_or_default())
-	}
-
-	/// Get the state cache child ratio (if any).
-	///
-	/// By default this is `None`.
-	fn state_cache_child_ratio(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+	/// If `None` is returned the trie cache is disabled.
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
 	}
 
 	/// Get the state pruning mode.
@@ -257,11 +251,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the block pruning mode.
 	///
 	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
-	/// `KeepBlocks::All`.
-	fn keep_blocks(&self) -> Result<KeepBlocks> {
+	/// `BlocksPruning::All`.
+	fn blocks_pruning(&self) -> Result<BlocksPruning> {
 		self.pruning_params()
-			.map(|x| x.keep_blocks())
-			.unwrap_or_else(|| Ok(KeepBlocks::All))
+			.map(|x| x.blocks_pruning())
+			.unwrap_or_else(|| Ok(BlocksPruning::All))
 	}
 
 	/// Get the chain ID (string).
@@ -533,10 +527,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			keystore_remote,
 			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
-			state_cache_size: self.state_cache_size()?,
-			state_cache_child_ratio: self.state_cache_child_ratio()?,
+			trie_cache_maximum_size: self.trie_cache_maximum_size()?,
 			state_pruning: self.state_pruning()?,
-			keep_blocks: self.keep_blocks()?,
+			blocks_pruning: self.blocks_pruning()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,

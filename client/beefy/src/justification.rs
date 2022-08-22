@@ -25,17 +25,17 @@ use codec::{Decode, Encode};
 use sp_consensus::Error as ConsensusError;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
-/// A commitment with matching BEEFY authorities' signatures.
-pub type BeefySignedCommitment<Block> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::crypto::Signature>;
+/// A finality proof with matching BEEFY authorities' signatures.
+pub type BeefyVersionedFinalityProof<Block> =
+	beefy_primitives::VersionedFinalityProof<NumberFor<Block>, Signature>;
 
-/// Decode and verify a Beefy SignedCommitment.
-pub(crate) fn decode_and_verify_commitment<Block: BlockT>(
+/// Decode and verify a Beefy FinalityProof.
+pub(crate) fn decode_and_verify_finality_proof<Block: BlockT>(
 	encoded: &[u8],
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthorityId>,
-) -> Result<VersionedFinalityProof<NumberFor<Block>, Signature>, ConsensusError> {
-	let proof = <VersionedFinalityProof<NumberFor<Block>, Signature>>::decode(&mut &*encoded)
+) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
+	let proof = <BeefyVersionedFinalityProof<Block>>::decode(&mut &*encoded)
 		.map_err(|_| ConsensusError::InvalidJustification)?;
 	verify_with_validator_set::<Block>(target_number, validator_set, &proof).map(|_| proof)
 }
@@ -44,7 +44,7 @@ pub(crate) fn decode_and_verify_commitment<Block: BlockT>(
 fn verify_with_validator_set<Block: BlockT>(
 	target_number: NumberFor<Block>,
 	validator_set: &ValidatorSet<AuthorityId>,
-	proof: &VersionedFinalityProof<NumberFor<Block>, Signature>,
+	proof: &BeefyVersionedFinalityProof<Block>,
 ) -> Result<(), ConsensusError> {
 	match proof {
 		VersionedFinalityProof::V1(signed_commitment) => {
@@ -80,17 +80,19 @@ fn verify_with_validator_set<Block: BlockT>(
 
 #[cfg(test)]
 pub(crate) mod tests {
-	use beefy_primitives::{known_payload_ids, Commitment, Payload, SignedCommitment};
+	use beefy_primitives::{
+		known_payload_ids, Commitment, Payload, SignedCommitment, VersionedFinalityProof,
+	};
 	use substrate_test_runtime_client::runtime::Block;
 
 	use super::*;
 	use crate::{keystore::tests::Keyring, tests::make_beefy_ids};
 
-	pub(crate) fn new_signed_commitment(
+	pub(crate) fn new_finality_proof(
 		block_num: NumberFor<Block>,
 		validator_set: &ValidatorSet<AuthorityId>,
 		keys: &[Keyring],
-	) -> BeefySignedCommitment<Block> {
+	) -> BeefyVersionedFinalityProof<Block> {
 		let commitment = Commitment {
 			payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
 			block_number: block_num,
@@ -98,7 +100,7 @@ pub(crate) mod tests {
 		};
 		let message = commitment.encode();
 		let signatures = keys.iter().map(|key| Some(key.sign(&message))).collect();
-		SignedCommitment { commitment, signatures }
+		VersionedFinalityProof::V1(SignedCommitment { commitment, signatures })
 	}
 
 	#[test]
@@ -108,7 +110,7 @@ pub(crate) mod tests {
 
 		// build valid justification
 		let block_num = 42;
-		let proof = new_signed_commitment(block_num, &validator_set, keys);
+		let proof = new_finality_proof(block_num, &validator_set, keys);
 
 		let good_proof = proof.clone().into();
 		// should verify successfully
@@ -132,7 +134,10 @@ pub(crate) mod tests {
 		// wrong signatures length -> should fail verification
 		let mut bad_proof = proof.clone();
 		// change length of signatures
-		bad_proof.signatures.pop().flatten().unwrap();
+		let bad_signed_commitment = match bad_proof {
+			VersionedFinalityProof::V1(ref mut sc) => sc,
+		};
+		bad_signed_commitment.signatures.pop().flatten().unwrap();
 		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
@@ -140,8 +145,11 @@ pub(crate) mod tests {
 
 		// not enough signatures -> should fail verification
 		let mut bad_proof = proof.clone();
+		let bad_signed_commitment = match bad_proof {
+			VersionedFinalityProof::V1(ref mut sc) => sc,
+		};
 		// remove a signature (but same length)
-		*bad_proof.signatures.first_mut().unwrap() = None;
+		*bad_signed_commitment.signatures.first_mut().unwrap() = None;
 		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
@@ -149,9 +157,12 @@ pub(crate) mod tests {
 
 		// not enough _correct_ signatures -> should fail verification
 		let mut bad_proof = proof.clone();
+		let bad_signed_commitment = match bad_proof {
+			VersionedFinalityProof::V1(ref mut sc) => sc,
+		};
 		// change a signature to a different key
-		*bad_proof.signatures.first_mut().unwrap() =
-			Some(Keyring::Dave.sign(&proof.commitment.encode()));
+		*bad_signed_commitment.signatures.first_mut().unwrap() =
+			Some(Keyring::Dave.sign(&bad_signed_commitment.commitment.encode()));
 		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
@@ -159,19 +170,19 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn should_decode_and_verify_commitment() {
+	fn should_decode_and_verify_finality_proof() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let block_num = 1;
 
 		// build valid justification
-		let proof = new_signed_commitment(block_num, &validator_set, keys);
-		let versioned_proof: VersionedFinalityProof<NumberFor<Block>, Signature> = proof.into();
+		let proof = new_finality_proof(block_num, &validator_set, keys);
+		let versioned_proof: BeefyVersionedFinalityProof<Block> = proof.into();
 		let encoded = versioned_proof.encode();
 
 		// should successfully decode and verify
 		let verified =
-			decode_and_verify_commitment::<Block>(&encoded, block_num, &validator_set).unwrap();
+			decode_and_verify_finality_proof::<Block>(&encoded, block_num, &validator_set).unwrap();
 		assert_eq!(verified, versioned_proof);
 	}
 }

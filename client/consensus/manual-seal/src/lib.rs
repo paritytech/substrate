@@ -355,7 +355,7 @@ mod tests {
 		assert_eq!(
 			created_block,
 			CreatedBlock {
-				hash: created_block.hash.clone(),
+				hash: created_block.hash,
 				aux: ImportedAux {
 					header_only: false,
 					clear_justification_requests: false,
@@ -422,7 +422,7 @@ mod tests {
 		assert_eq!(
 			created_block,
 			CreatedBlock {
-				hash: created_block.hash.clone(),
+				hash: created_block.hash,
 				aux: ImportedAux {
 					header_only: false,
 					clear_justification_requests: false,
@@ -502,7 +502,7 @@ mod tests {
 		assert_eq!(
 			created_block,
 			CreatedBlock {
-				hash: created_block.hash.clone(),
+				hash: created_block.hash,
 				aux: ImportedAux {
 					header_only: false,
 					clear_justification_requests: false,
