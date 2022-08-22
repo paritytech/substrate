@@ -120,7 +120,8 @@ benchmarks! {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		ensure!(Registrars::<T>::get().len() as u32 == r, "Registrars not set up correctly.");
 		let origin = T::RegistrarOrigin::successful_origin();
-	}: _<T::Origin>(origin, account("registrar", r + 1, SEED))
+		let account = T::Lookup::unlookup(account("registrar", r + 1, SEED));
+	}: _<T::Origin>(origin, account)
 	verify {
 		ensure!(Registrars::<T>::get().len() as u32 == r + 1, "Registrars not added.");
 	}
@@ -287,7 +288,8 @@ benchmarks! {
 		Identity::<T>::add_registrar(registrar_origin, caller_lookup)?;
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().account == caller, "id not set.");
-	}: _(RawOrigin::Signed(caller), r, account("new", 0, SEED))
+		let new_account = T::Lookup::unlookup(account("new", 0, SEED));
+	}: _(RawOrigin::Signed(caller), r, new_account)
 	verify {
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().account == account("new", 0, SEED), "id not changed.");
