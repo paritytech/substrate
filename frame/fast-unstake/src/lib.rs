@@ -177,7 +177,7 @@ pub mod pallet {
 				.rev()
 				.collect::<Vec<_>>();
 
-			// remove eras that do not exist in `checked`.
+			// remove eras that exist in `checked`.
 			let now_check_range = total_check_range
 				.iter()
 				.filter(|e| !checked.contains(e))
