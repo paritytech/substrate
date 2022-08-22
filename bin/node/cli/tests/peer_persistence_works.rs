@@ -10,8 +10,7 @@ use tempfile::tempdir;
 pub mod common;
 
 #[tokio::test]
-#[cfg(unix)]
-async fn purge_chain_works() {
+async fn peer_persistence_works() {
 	// Start a series of nodes.
 	const NODES_COUNT: usize = 10;
 	// The first of them will be validators.
@@ -213,8 +212,6 @@ impl Node<'_> {
 		if self.disable_peers_persistence {
 			cmd.args(&["--disable-peers-persistence"]);
 		}
-
-		eprintln!("CMD: {:#?}", cmd);
 
 		cmd
 	}

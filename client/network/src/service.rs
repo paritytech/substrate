@@ -311,7 +311,6 @@ where
 					params
 						.network_config
 						.net_config_path
-						.as_ref()
 						.filter(|_| params.network_config.persist_peers),
 				);
 				config.with_permanent_addresses(known_addresses);

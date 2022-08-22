@@ -297,7 +297,6 @@ pub struct DiscoveryBehaviour {
 	allow_non_globals_in_dht: bool,
 	/// A cache of discovered external addresses. Only used for logging purposes.
 	known_external_addresses: LruHashSet<Multiaddr>,
-
 	/// A persistent cache of addresses of peers.
 	persist_peer_addrs: Option<PersistPeerAddrs>,
 }
@@ -573,18 +572,19 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			list.extend(list_to_filter);
 		}
 
-		let last_resort_resolutions = self
-			.persist_peer_addrs
-			.as_mut()
-			.map(|persist_peer_addrs| {
-				persist_peer_addrs
-					.peer_addrs(peer_id, self.kademlias.values().map(|k| k.protocol_name()))
-			})
-			.into_iter()
-			.flatten();
-
 		if list.is_empty() {
 			warn!(target: "sub-libp2p", "Used last-resort-resolutions for {:?}", peer_id);
+
+			let last_resort_resolutions = self
+				.persist_peer_addrs
+				.as_mut()
+				.map(|persist_peer_addrs| {
+					persist_peer_addrs
+						.peer_addrs(peer_id, self.kademlias.values().map(|k| k.protocol_name()))
+				})
+				.into_iter()
+				.flatten();
+
 			list.extend(last_resort_resolutions.cloned());
 		}
 

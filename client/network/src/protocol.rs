@@ -393,7 +393,7 @@ where
 					peer_id,
 					ReputationChange {
 						value: reputation,
-						reason: "Restoring from previous node incrnatation",
+						reason: "Restoring from previous node incarnation",
 					},
 				);
 

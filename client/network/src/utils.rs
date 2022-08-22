@@ -57,12 +57,6 @@ impl<T: Hash + Eq> LruHashSet<T> {
 	}
 }
 
-impl<T: Hash + Eq> AsRef<LinkedHashSet<T>> for LruHashSet<T> {
-	fn as_ref(&self) -> &LinkedHashSet<T> {
-		&self.set
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
