@@ -43,7 +43,7 @@ use libp2p::{Multiaddr, PeerId};
 use sc_client_api::blockchain::HeaderBackend;
 use sc_network_common::protocol::event::DhtEvent;
 use sp_authority_discovery::AuthorityId;
-use sp_blockchain::NetworkHeaderBackend;
+use sc_network_common::header_backend::NetworkHeaderBackend;
 use sp_runtime::traits::Block as BlockT;
 
 mod error;

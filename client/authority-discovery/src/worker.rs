@@ -51,7 +51,7 @@ use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
-use sp_blockchain::NetworkHeaderBackend;
+use sc_network_common::header_backend::NetworkHeaderBackend;
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};

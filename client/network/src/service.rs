@@ -60,6 +60,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
+	header_backend::NetworkHeaderBackend,
 	protocol::event::{DhtEvent, Event},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
@@ -133,7 +134,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	/// Creates the network service.
 	///
@@ -1299,7 +1300,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1332,7 +1333,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	type Output = ();
 
@@ -1977,7 +1978,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 }
 
@@ -1985,7 +1986,7 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -1993,7 +1994,7 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	fn blocks_processed(
 		&mut self,

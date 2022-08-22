@@ -43,6 +43,7 @@ use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Regi
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
+	header_backend::NetworkHeaderBackend,
 	request_responses::RequestFailure,
 	sync::{
 		message::{
@@ -259,7 +260,7 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 impl<B, Client> Protocol<B, Client>
 where
 	B: BlockT,
-	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	/// Create a new instance.
 	pub fn new(
@@ -1309,7 +1310,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 impl<B, Client> NetworkBehaviour for Protocol<B, Client>
 where
 	B: BlockT,
-	Client: sp_blockchain::NetworkHeaderBackend<B> + Send + Sync + 'static,
+	Client: NetworkHeaderBackend<B> + Send + Sync + 'static,
 {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;

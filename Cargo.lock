@@ -7855,7 +7855,6 @@ dependencies = [
 name = "sc-client-api"
 version = "4.0.0-dev"
 dependencies = [
- "async-trait",
  "fnv",
  "futures",
  "hash-db",
@@ -8429,6 +8428,7 @@ dependencies = [
  "sc-consensus",
  "sc-peerset",
  "smallvec",
+ "sp-blockchain",
  "sp-consensus",
  "sp-finality-grandpa",
  "sp-runtime",
