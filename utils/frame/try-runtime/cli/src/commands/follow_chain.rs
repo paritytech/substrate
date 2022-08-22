@@ -32,8 +32,8 @@ use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use serde::de::DeserializeOwned;
 use sp_core::H256;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, One, Saturating};
-use std::{collections::VecDeque, fmt::Debug, marker::PhantomData, ops::Sub, str::FromStr};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use std::{collections::VecDeque, fmt::Debug, marker::PhantomData, str::FromStr};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
@@ -50,19 +50,24 @@ pub struct FollowChainCmd {
 ///
 /// Returns a pair `(client, subscription)` - `subscription` alone will be useless, because it
 /// relies on the related alive `client`.
-async fn start_subscribing<Header: DeserializeOwned>(url: &str) -> (Client, Subscription<Header>) {
+async fn start_subscribing<Header: DeserializeOwned>(
+	url: &str,
+) -> sc_cli::Result<(Client, Subscription<Header>)> {
 	let client = WsClientBuilder::default()
 		.connection_timeout(std::time::Duration::new(20, 0))
 		.max_notifs_per_subscription(1024)
 		.max_request_body_size(u32::MAX)
 		.build(url)
 		.await
-		.unwrap();
+		.map_err(|e| sc_cli::Error::Application(e.into()))?;
 
 	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
 
-	let sub = client.subscribe(SUB, None, UN_SUB).await.unwrap();
-	(client, sub)
+	let sub = client
+		.subscribe(SUB, None, UN_SUB)
+		.await
+		.map_err(|e| sc_cli::Error::Application(e.into()))?;
+	Ok((client, sub))
 }
 
 /// Abstraction over RPC calling for headers.
@@ -131,7 +136,7 @@ struct FinalizedHeaders<Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubs
 	header_provider: HP,
 	subscription: HS,
 	fetched_headers: VecDeque<Block::Header>,
-	last_returned: Option<<Block::Header as HeaderT>::Number>,
+	last_returned: Option<<Block::Header as HeaderT>::Hash>,
 }
 
 impl<Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
@@ -149,27 +154,27 @@ where
 	}
 
 	/// Reads next finalized header from the subscription. If some headers (without justification)
-	/// have been skipped, fetches them as well.
+	/// have been skipped, fetches them as well. Returns number of headers that have been fetched.
 	///
 	/// All fetched headers are stored in `self.fetched_headers`.
-	async fn fetch(&mut self) {
+	async fn fetch(&mut self) -> usize {
 		let last_finalized = match self.subscription.next_header().await {
 			Some(header) => header,
-			None => return,
+			None => return 0,
 		};
 
 		self.fetched_headers.push_front(last_finalized.clone());
 
-		let current_height = last_finalized.number();
-		let parent_height = current_height.sub(One::one());
-		let last_height = self.last_returned.unwrap_or(parent_height);
+		let mut last_finalized_parent = *last_finalized.parent_hash();
+		let last_returned = self.last_returned.unwrap_or(last_finalized_parent.clone());
 
-		let mut parent_hash = last_finalized.parent_hash().clone();
-		for _ in 0u32..(parent_height.saturating_sub(last_height).try_into().unwrap_or_default()) {
-			let parent_header = self.header_provider.get_header(parent_hash).await;
+		while last_finalized_parent != last_returned {
+			let parent_header = self.header_provider.get_header(last_finalized_parent).await;
 			self.fetched_headers.push_front(parent_header.clone());
-			parent_hash = *parent_header.parent_hash();
+			last_finalized_parent = *parent_header.parent_hash();
 		}
+
+		self.fetched_headers.len()
 	}
 
 	/// Get the next finalized header.
@@ -179,7 +184,7 @@ where
 		}
 
 		if let Some(header) = self.fetched_headers.pop_front() {
-			self.last_returned = Some(*header.number());
+			self.last_returned = Some(header.hash());
 			Some(header)
 		} else {
 			None
@@ -202,7 +207,7 @@ where
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
 	let mut maybe_state_ext = None;
-	let (_client, subscription) = start_subscribing::<Block::Header>(&command.uri).await;
+	let (_client, subscription) = start_subscribing::<Block::Header>(&command.uri).await?;
 
 	let (code_key, code) = extract_code(&config.chain_spec)?;
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
@@ -317,11 +322,22 @@ mod tests {
 
 	struct MockHeaderProvider(pub VecDeque<BlockNumber>);
 
+	fn headers() -> Vec<Header> {
+		let mut headers = vec![Header::new_from_number(0)];
+		for n in 1..11 {
+			headers.push(Header {
+				parent_hash: headers.last().unwrap().hash(),
+				..Header::new_from_number(n)
+			})
+		}
+		headers
+	}
+
 	#[async_trait]
 	impl HeaderProvider<Block> for MockHeaderProvider {
 		async fn get_header(&mut self, _hash: Hash) -> Header {
 			let height = self.0.pop_front().unwrap();
-			Header::new_from_number(height)
+			headers()[height as usize].clone()
 		}
 	}
 
@@ -330,7 +346,7 @@ mod tests {
 	#[async_trait]
 	impl HeaderSubscription<Block> for MockHeaderSubscription {
 		async fn next_header(&mut self) -> Option<Header> {
-			self.0.pop_front().map(|h| Header::new_from_number(h))
+			self.0.pop_front().map(|h| headers()[h as usize].clone())
 		}
 	}
 
