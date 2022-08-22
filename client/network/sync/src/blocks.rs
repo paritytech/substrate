@@ -290,51 +290,51 @@ mod test {
 		let peer2 = PeerId::random();
 
 		let blocks = generate_blocks(150);
-		assert_eq!(bc.needed_blocks(peer0.clone(), 40, 150, 0, 1, 200), Some(1..41));
-		assert_eq!(bc.needed_blocks(peer1.clone(), 40, 150, 0, 1, 200), Some(41..81));
-		assert_eq!(bc.needed_blocks(peer2.clone(), 40, 150, 0, 1, 200), Some(81..121));
+		assert_eq!(bc.needed_blocks(peer0, 40, 150, 0, 1, 200), Some(1..41));
+		assert_eq!(bc.needed_blocks(peer1, 40, 150, 0, 1, 200), Some(41..81));
+		assert_eq!(bc.needed_blocks(peer2, 40, 150, 0, 1, 200), Some(81..121));
 
 		bc.clear_peer_download(&peer1);
-		bc.insert(41, blocks[41..81].to_vec(), peer1.clone());
+		bc.insert(41, blocks[41..81].to_vec(), peer1);
 		assert_eq!(bc.ready_blocks(1), vec![]);
-		assert_eq!(bc.needed_blocks(peer1.clone(), 40, 150, 0, 1, 200), Some(121..151));
+		assert_eq!(bc.needed_blocks(peer1, 40, 150, 0, 1, 200), Some(121..151));
 		bc.clear_peer_download(&peer0);
-		bc.insert(1, blocks[1..11].to_vec(), peer0.clone());
+		bc.insert(1, blocks[1..11].to_vec(), peer0);
 
-		assert_eq!(bc.needed_blocks(peer0.clone(), 40, 150, 0, 1, 200), Some(11..41));
+		assert_eq!(bc.needed_blocks(peer0, 40, 150, 0, 1, 200), Some(11..41));
 		assert_eq!(
 			bc.ready_blocks(1),
 			blocks[1..11]
 				.iter()
-				.map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) })
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer0) })
 				.collect::<Vec<_>>()
 		);
 
 		bc.clear_peer_download(&peer0);
-		bc.insert(11, blocks[11..41].to_vec(), peer0.clone());
+		bc.insert(11, blocks[11..41].to_vec(), peer0);
 
 		let ready = bc.ready_blocks(12);
 		assert_eq!(
 			ready[..30],
 			blocks[11..41]
 				.iter()
-				.map(|b| BlockData { block: b.clone(), origin: Some(peer0.clone()) })
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer0) })
 				.collect::<Vec<_>>()[..]
 		);
 		assert_eq!(
 			ready[30..],
 			blocks[41..81]
 				.iter()
-				.map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) })
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer1) })
 				.collect::<Vec<_>>()[..]
 		);
 
 		bc.clear_peer_download(&peer2);
-		assert_eq!(bc.needed_blocks(peer2.clone(), 40, 150, 80, 1, 200), Some(81..121));
+		assert_eq!(bc.needed_blocks(peer2, 40, 150, 80, 1, 200), Some(81..121));
 		bc.clear_peer_download(&peer2);
-		bc.insert(81, blocks[81..121].to_vec(), peer2.clone());
+		bc.insert(81, blocks[81..121].to_vec(), peer2);
 		bc.clear_peer_download(&peer1);
-		bc.insert(121, blocks[121..150].to_vec(), peer1.clone());
+		bc.insert(121, blocks[121..150].to_vec(), peer1);
 
 		assert_eq!(bc.ready_blocks(80), vec![]);
 		let ready = bc.ready_blocks(81);
@@ -342,14 +342,14 @@ mod test {
 			ready[..40],
 			blocks[81..121]
 				.iter()
-				.map(|b| BlockData { block: b.clone(), origin: Some(peer2.clone()) })
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer2) })
 				.collect::<Vec<_>>()[..]
 		);
 		assert_eq!(
 			ready[40..],
 			blocks[121..150]
 				.iter()
-				.map(|b| BlockData { block: b.clone(), origin: Some(peer1.clone()) })
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer1) })
 				.collect::<Vec<_>>()[..]
 		);
 	}
@@ -365,10 +365,10 @@ mod test {
 		bc.blocks.insert(114305, BlockRangeState::Complete(blocks));
 
 		let peer0 = PeerId::random();
-		assert_eq!(bc.needed_blocks(peer0.clone(), 128, 10000, 000, 1, 200), Some(1..100));
-		assert_eq!(bc.needed_blocks(peer0.clone(), 128, 10000, 600, 1, 200), None); // too far ahead
+		assert_eq!(bc.needed_blocks(peer0, 128, 10000, 000, 1, 200), Some(1..100));
+		assert_eq!(bc.needed_blocks(peer0, 128, 10000, 600, 1, 200), None); // too far ahead
 		assert_eq!(
-			bc.needed_blocks(peer0.clone(), 128, 10000, 600, 1, 200000),
+			bc.needed_blocks(peer0, 128, 10000, 600, 1, 200000),
 			Some(100 + 128..100 + 128 + 128)
 		);
 	}
@@ -382,11 +382,11 @@ mod test {
 		let blocks = generate_blocks(10);
 
 		// count = 5, peer_best = 50, common = 39, max_parallel = 0, max_ahead = 200
-		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(40..45));
+		assert_eq!(bc.needed_blocks(peer, 5, 50, 39, 0, 200), Some(40..45));
 
 		// got a response on the request for `40..45`
 		bc.clear_peer_download(&peer);
-		bc.insert(40, blocks[..5].to_vec(), peer.clone());
+		bc.insert(40, blocks[..5].to_vec(), peer);
 
 		// our "node" started on a fork, with its current best = 47, which is > common
 		let ready = bc.ready_blocks(48);
@@ -394,11 +394,11 @@ mod test {
 			ready,
 			blocks[..5]
 				.iter()
-				.map(|b| BlockData { block: b.clone(), origin: Some(peer.clone()) })
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer) })
 				.collect::<Vec<_>>()
 		);
 
-		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(45..50));
+		assert_eq!(bc.needed_blocks(peer, 5, 50, 39, 0, 200), Some(45..50));
 	}
 
 	#[test]
@@ -410,12 +410,12 @@ mod test {
 		let blocks = generate_blocks(10);
 
 		// Request 2 ranges
-		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(40..45));
-		assert_eq!(bc.needed_blocks(peer.clone(), 5, 50, 39, 0, 200), Some(45..50));
+		assert_eq!(bc.needed_blocks(peer, 5, 50, 39, 0, 200), Some(40..45));
+		assert_eq!(bc.needed_blocks(peer, 5, 50, 39, 0, 200), Some(45..50));
 
 		// got a response on the request for `40..50`
 		bc.clear_peer_download(&peer);
-		bc.insert(40, blocks.to_vec(), peer.clone());
+		bc.insert(40, blocks.to_vec(), peer);
 
 		// request any blocks starting from 1000 or lower.
 		let ready = bc.ready_blocks(1000);
@@ -423,7 +423,7 @@ mod test {
 			ready,
 			blocks
 				.iter()
-				.map(|b| BlockData { block: b.clone(), origin: Some(peer.clone()) })
+				.map(|b| BlockData { block: b.clone(), origin: Some(peer) })
 				.collect::<Vec<_>>()
 		);
 

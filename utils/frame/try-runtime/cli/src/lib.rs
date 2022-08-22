@@ -293,7 +293,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	DeserializeOwned,
 };
-use sp_state_machine::{InMemoryProvingBackend, OverlayedChanges, StateMachine};
+use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 mod commands;
@@ -746,9 +746,11 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 
 	let mut changes = Default::default();
 	let backend = ext.backend.clone();
-	let proving_backend = InMemoryProvingBackend::new(&backend);
+	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 
-	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&proving_backend);
+	let proving_backend =
+		TrieBackendBuilder::wrap(&backend).with_recorder(Default::default()).build();
+
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
 	let pre_root = *backend.root();
@@ -767,7 +769,9 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
-	let proof = proving_backend.extract_proof();
+	let proof = proving_backend
+		.extract_proof()
+		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()
