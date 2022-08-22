@@ -64,6 +64,11 @@ pub mod pallet {
 	use sp_std::{ops::Div, vec::Vec};
 
 	pub trait WeightInfo {
+		fn register_fast_unstake() -> Weight;
+		fn deregister() -> Weight;
+		fn control() -> Weight;
+
+		// TODO: maybe not needed.
 		fn weight_per_era_check() -> Weight;
 		fn do_slash() -> Weight;
 	}
@@ -241,6 +246,8 @@ pub mod pallet {
 				return 0
 			}
 
+			// TODO ROSS: sum up all the weights consumed in the worse case execution of this code, if it is too much, early exit.
+
 			if <T as pallet_staking::Config>::ElectionProvider::ongoing() {
 				// NOTE: we assume `ongoing` does not consume any weight.
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
@@ -255,6 +262,7 @@ pub mod pallet {
 
 			let UnstakeRequest { stash, mut checked, maybe_pool_id } = match Head::<T>::take()
 				.or_else(|| {
+					// TODO: this is purely unordered. If there is an attack, this could
 					Queue::<T>::drain()
 						.take(1)
 						.map(|(stash, maybe_pool_id)| UnstakeRequest {
@@ -287,6 +295,7 @@ pub mod pallet {
 
 			// return weight consumed if no eras to check..
 			if final_eras_to_check.is_zero() {
+				// TODO: if ErasToCheckPerBlock == 0 preferably don't consume any weight.
 				return consumed_weight
 			}
 

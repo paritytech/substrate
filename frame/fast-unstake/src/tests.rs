@@ -118,25 +118,19 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	t.into()
 }
 
-#[test]
-fn cannot_register_if_in_queue() {
-
-}
+// NOTE ROSS: Every error that can ve returned can be a test.
 
 #[test]
-fn cannot_register_if_head() {
-
-}
+fn cannot_register_if_in_queue() {}
 
 #[test]
-fn cannot_register_if_partially_unbonded() {
-
-}
+fn cannot_register_if_head() {}
 
 #[test]
-fn cannot_register_if_not_bonded() {
+fn cannot_register_if_has_unlocking_chunks() {}
 
-}
+#[test]
+fn cannot_register_if_not_bonded() {}
 
 
 #[test]
