@@ -36,7 +36,7 @@
 /// # fn main() {}
 /// ```
 ///
-/// # Generic Event Example:
+/// # Generic PalletEvent Example:
 ///
 /// ```rust
 /// trait Config {
