@@ -122,6 +122,7 @@ members = [
 	"frame/recovery",
 	"frame/referenda",
 	"frame/remark",
+	"frame/safe-mode",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",

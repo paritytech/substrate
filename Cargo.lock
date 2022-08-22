@@ -6133,6 +6133,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-safe-mode"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+]
+
+[[package]]
 name = "pallet-scheduler"
 version = "4.0.0-dev"
 dependencies = [
