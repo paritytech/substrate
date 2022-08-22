@@ -98,7 +98,7 @@ pub mod pallet {
 			let mut remaining = remaining_weight;
 			loop {
 				// process head and
-				let last_consumed_weight = Self::process_head(remaining_weight);
+				let last_consumed_weight = Self::process_head(remaining);
 				// if nothing was done, break loop
 				if last_consumed_weight == Weight::from(0 as u64) {
 					break
