@@ -755,18 +755,32 @@ impl<T: Config> Pallet<T> {
 	/// Get the targets for an upcoming npos election.
 	///
 	/// This function is self-weighing as [`DispatchClass::Mandatory`].
-	pub fn get_npos_targets() -> Vec<T::AccountId> {
-		let mut validator_count = 0u32;
-		let targets = Validators::<T>::iter()
-			.map(|(v, _)| {
-				validator_count.saturating_inc();
-				v
-			})
-			.collect::<Vec<_>>();
+	pub fn get_npos_targets(maybe_max_len: Option<usize>) -> Vec<T::AccountId> {
+		let max_allowed_len = maybe_max_len.unwrap_or_else(|| T::TargetList::count() as usize);
+		let mut all_targets = Vec::<T::AccountId>::with_capacity(max_allowed_len);
+		let mut targets_seen = 0;
 
-		Self::register_weight(T::WeightInfo::get_npos_targets(validator_count));
+		let mut targets_iter = T::TargetList::iter();
+		while all_targets.len() < max_allowed_len &&
+			targets_seen < (NPOS_MAX_ITERATIONS_COEFFICIENT * max_allowed_len as u32)
+		{
+			let target = match targets_iter.next() {
+				Some(target) => {
+					targets_seen.saturating_inc();
+					target
+				},
+				None => break,
+			};
 
-		targets
+			if Validators::<T>::contains_key(&target) {
+				all_targets.push(target);
+			}
+		}
+
+		Self::register_weight(T::WeightInfo::get_npos_targets(all_targets.len() as u32));
+		log!(info, "generated {} npos targets", all_targets.len());
+
+		all_targets
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
@@ -902,7 +916,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			return Err("Target snapshot too big")
 		}
 
-		Ok(Self::get_npos_targets())
+		Ok(Self::get_npos_targets(None))
 	}
 
 	fn next_election_prediction(now: T::BlockNumber) -> T::BlockNumber {

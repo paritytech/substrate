@@ -845,7 +845,7 @@ benchmarks! {
 			v, n, T::MaxNominations::get() as usize, false, None
 		)?;
 	}: {
-		let targets = <Staking<T>>::get_npos_targets();
+		let targets = <Staking<T>>::get_npos_targets(None);
 		assert_eq!(targets.len() as u32, v);
 	}
 
