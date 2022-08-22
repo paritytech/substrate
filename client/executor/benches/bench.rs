@@ -65,6 +65,7 @@ fn initialize(
 			heap_pages,
 			host_functions,
 			allow_missing_func_imports,
+			None,
 		)
 		.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
 		#[cfg(feature = "wasmtime")]
@@ -73,7 +74,7 @@ fn initialize(
 				allow_missing_func_imports,
 				cache_path: None,
 				semantics: sc_executor_wasmtime::Semantics {
-					extra_heap_pages: heap_pages,
+					extra_heap_pages: heap_pages as u64,
 					instantiation_strategy,
 					deterministic_stack_limit: None,
 					canonicalize_nans: false,
