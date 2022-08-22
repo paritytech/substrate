@@ -108,8 +108,7 @@ impl EntryPoint {
 	) -> std::result::Result<Self, &'static str> {
 		let entrypoint = func
 			.typed::<(u32, u32), u64, _>(ctx)
-			.map_err(|_| "Invalid signature for direct entry point")?
-			.clone();
+			.map_err(|_| "Invalid signature for direct entry point")?;
 		Ok(Self { call_type: EntryPointType::Direct { entrypoint } })
 	}
 
@@ -120,8 +119,7 @@ impl EntryPoint {
 	) -> std::result::Result<Self, &'static str> {
 		let dispatcher = dispatcher
 			.typed::<(u32, u32, u32), u64, _>(ctx)
-			.map_err(|_| "Invalid signature for wrapped entry point")?
-			.clone();
+			.map_err(|_| "Invalid signature for wrapped entry point")?;
 		Ok(Self { call_type: EntryPointType::Wrapped { func, dispatcher } })
 	}
 }
@@ -250,9 +248,8 @@ impl InstanceWrapper {
 						Error::from(format!("Exported method {} is not found", method))
 					})?;
 				let func = extern_func(&export)
-					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?
-					.clone();
-				EntryPoint::direct(func, &self.store).map_err(|_| {
+					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?;
+				EntryPoint::direct(*func, &self.store).map_err(|_| {
 					Error::from(format!("Exported function '{}' has invalid signature.", method))
 				})?
 			},
@@ -267,10 +264,9 @@ impl InstanceWrapper {
 				let func = val
 					.funcref()
 					.ok_or(Error::TableElementIsNotAFunction(func_ref))?
-					.ok_or(Error::FunctionRefIsNull(func_ref))?
-					.clone();
+					.ok_or(Error::FunctionRefIsNull(func_ref))?;
 
-				EntryPoint::direct(func, &self.store).map_err(|_| {
+				EntryPoint::direct(*func, &self.store).map_err(|_| {
 					Error::from(format!(
 						"Function @{} in exported table has invalid signature for direct call.",
 						func_ref,
@@ -288,10 +284,9 @@ impl InstanceWrapper {
 				let dispatcher = val
 					.funcref()
 					.ok_or(Error::TableElementIsNotAFunction(dispatcher_ref))?
-					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?
-					.clone();
+					.ok_or(Error::FunctionRefIsNull(dispatcher_ref))?;
 
-				EntryPoint::wrapped(dispatcher, func, &self.store).map_err(|_| {
+				EntryPoint::wrapped(*dispatcher, func, &self.store).map_err(|_| {
 					Error::from(format!(
 						"Function @{} in exported table has invalid signature for wrapped call.",
 						dispatcher_ref,
@@ -351,9 +346,8 @@ fn get_linear_memory(instance: &Instance, ctx: impl AsContextMut) -> Result<Memo
 		.get_export(ctx, "memory")
 		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
 
-	let memory = extern_memory(&memory_export)
-		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?
-		.clone();
+	let memory = *extern_memory(&memory_export)
+		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?;
 
 	Ok(memory)
 }

@@ -228,6 +228,11 @@ impl PalletCmd {
 		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
 
 		for (pallet, extrinsic, components) in benchmarks_to_run {
+			log::info!(
+				"Starting benchmark: {}::{}",
+				String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
+				String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
+			);
 			let all_components = if components.is_empty() {
 				vec![Default::default()]
 			} else {

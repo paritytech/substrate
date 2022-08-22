@@ -50,7 +50,9 @@ use libp2p::{
 		NetworkBehaviourAction, PollParameters,
 	},
 };
-use sc_network_common::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
+use sc_network_common::request_responses::{
+	IfDisconnected, IncomingRequest, OutgoingResponse, ProtocolConfig, RequestFailure,
+};
 use std::{
 	borrow::Cow,
 	collections::{hash_map::Entry, HashMap},
@@ -115,26 +117,6 @@ struct ProtocolRequestId {
 impl From<(Cow<'static, str>, RequestId)> for ProtocolRequestId {
 	fn from((protocol, request_id): (Cow<'static, str>, RequestId)) -> Self {
 		Self { protocol, request_id }
-	}
-}
-
-/// When sending a request, what to do on a disconnected recipient.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IfDisconnected {
-	/// Try to connect to the peer.
-	TryConnect,
-	/// Just fail if the destination is not yet connected.
-	ImmediateError,
-}
-
-/// Convenience functions for `IfDisconnected`.
-impl IfDisconnected {
-	/// Shall we connect to a disconnected peer?
-	pub fn should_connect(self) -> bool {
-		match self {
-			Self::TryConnect => true,
-			Self::ImmediateError => false,
-		}
 	}
 }
 
@@ -785,23 +767,6 @@ pub enum RegisterError {
 	/// A protocol has been specified multiple times.
 	#[error("{0}")]
 	DuplicateProtocol(Cow<'static, str>),
-}
-
-/// Error in a request.
-#[derive(Debug, thiserror::Error)]
-#[allow(missing_docs)]
-pub enum RequestFailure {
-	#[error("We are not currently connected to the requested peer.")]
-	NotConnected,
-	#[error("Given protocol hasn't been registered.")]
-	UnknownProtocol,
-	#[error("Remote has closed the substream before answering, thereby signaling that it considers the request as valid, but refused to answer it.")]
-	Refused,
-	#[error("The remote replied, but the local node is no longer interested in the response.")]
-	Obsolete,
-	/// Problem on the network.
-	#[error("Problem on the network: {0}")]
-	Network(OutboundFailure),
 }
 
 /// Error when processing a request sent by a remote.
