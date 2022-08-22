@@ -166,7 +166,7 @@ where
 		self.fetched_headers.push_front(last_finalized.clone());
 
 		let mut last_finalized_parent = *last_finalized.parent_hash();
-		let last_returned = self.last_returned.unwrap_or(last_finalized_parent.clone());
+		let last_returned = self.last_returned.unwrap_or(last_finalized_parent);
 
 		while last_finalized_parent != last_returned {
 			let parent_header = self.header_provider.get_header(last_finalized_parent).await;
