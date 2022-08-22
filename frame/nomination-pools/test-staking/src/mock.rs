@@ -18,6 +18,7 @@
 use frame_election_provider_support::VoteWeight;
 use frame_support::{
 	assert_ok,
+	instances::Instance1,
 	pallet_prelude::*,
 	parameter_types,
 	traits::{ConstU64, ConstU8},
@@ -138,7 +139,8 @@ parameter_types! {
 	pub static BagThresholds: &'static [VoteWeight] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 }
 
-impl pallet_bags_list::Config for Runtime {
+type VoterBagsListInstance = pallet_bags_list::Instance1;
+impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
