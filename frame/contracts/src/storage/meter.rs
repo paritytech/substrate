@@ -657,7 +657,6 @@ mod tests {
 			bytes_removed: 5,
 			items_added: 1,
 			items_removed: 2,
-			..Default::default()
 		});
 		nested0.charge(&Diff { bytes_removed: 1, ..Default::default() });
 
@@ -723,7 +722,6 @@ mod tests {
 			bytes_removed: 1,
 			items_added: 3,
 			items_removed: 1,
-			..Default::default()
 		});
 		nested0.charge(&Diff { items_added: 2, ..Default::default() });
 
