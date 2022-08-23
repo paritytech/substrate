@@ -15,15 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{
 	pallet_prelude::*,
 	traits::{CallMetadata, Contains, GetCallMetadata},
 };
-use frame_system::pallet_prelude::OriginFor;
-use sp_std::convert::TryInto;
+use frame_system::pallet_prelude::*;
+use sp_std::{convert::TryInto, prelude::*};
 
 mod benchmarking;
 mod mock;
@@ -51,11 +50,11 @@ pub mod pallet {
 		type BanOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The only origin that can un-ban calls.
-		type UnBanOrigin: EnsureOrigin<Self::Origin>;
+		type UnbanOrigin: EnsureOrigin<Self::Origin>;
 
 		/// Pallets that are safe and can never be banned.
 		///
-		/// The safe-mode pallet is assumed to be safe itself and does not need to be added here.
+		/// The safe-mode pallet is always assumed to be safe itself.
 		type SafePallets: Contains<PalletNameOf<Self>>;
 
 		/// Maximum length for pallet- and extrinsic-names.
@@ -65,12 +64,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNameLen: Get<u32>;
 
-		/// Defines if extrinsics and pallets with too long names should be treated as banned.
+		/// Specifies if extrinsics and pallets with too long names should be treated as banned.
 		///
-		/// `true` means that overflowing names will be handled as banned.
-		/// Setting this to `true` ensures that all extrinsics that
+		/// Setting this to `true` ensures that all calls that
 		/// are callable, are also ban-able.
-		/// Otherwise there could be a situation where an extrinsic
+		/// Otherwise there could be a situation where a call
 		/// is callable but not ban-able, which would could be exploited.
 		#[pallet::constant]
 		type BanTooLongNames: Get<bool>;
@@ -83,22 +81,19 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// The call is banned.
 		IsBanned,
-
 		/// The call is not banned.
 		IsNotBanned,
-
-		/// The call is listed as safe and cannot be banned.
+		/// The call is listed as safe.
 		IsSafe,
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The call was banned.
+		/// This call got banned.
 		CallBanned(PalletNameOf<T>, ExtrinsicNameOf<T>),
-
-		/// The call was un-banned.
-		CallUnBanned(PalletNameOf<T>, ExtrinsicNameOf<T>),
+		/// This call got un-banned.
+		CallUnbanned(PalletNameOf<T>, ExtrinsicNameOf<T>),
 	}
 
 	/// The set of calls that are explicitly banned.
@@ -129,19 +124,19 @@ pub mod pallet {
 
 		/// Un-ban a call.
 		///
-		/// Can only be called by [`Config::UnBanOrigin`].
-		/// Emits an [`Event::CallUnBanned`] event on success.
+		/// Can only be called by [`Config::UnbanOrigin`].
+		/// Emits an [`Event::CallUnbanned`] event on success.
 		#[pallet::weight(0)]
 		pub fn unban_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
 			extrinsic: ExtrinsicNameOf<T>,
 		) -> DispatchResult {
-			T::UnBanOrigin::ensure_origin(origin)?;
+			T::UnbanOrigin::ensure_origin(origin)?;
 
 			Self::ensure_can_unban(&pallet, &extrinsic)?;
 			BannedCalls::<T>::remove((&pallet, &extrinsic));
-			Self::deposit_event(Event::CallUnBanned(pallet, extrinsic));
+			Self::deposit_event(Event::CallUnbanned(pallet, extrinsic));
 
 			Ok(())
 		}
@@ -162,17 +157,6 @@ impl<T: Config> Pallet<T> {
 
 	/// Return whether the call is banned.
 	pub fn is_banned(pallet: &PalletNameOf<T>, extrinsic: &ExtrinsicNameOf<T>) -> bool {
-		/*
-		TODO: These checks should be superfluous since we use `ensure_can_ban`.
-		// The safe-mode pallet is never banned.
-		if pallet.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
-			return false
-		}
-		// Any `safe` pallet is never banned.
-		if T::SafePallets::contains(&pallet) {
-			return false
-		}
-		*/
 		<BannedCalls<T>>::contains_key((pallet, extrinsic))
 	}
 

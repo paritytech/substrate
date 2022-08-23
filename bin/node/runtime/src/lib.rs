@@ -201,10 +201,10 @@ const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO
 
 impl pallet_safe_mode::Config for Runtime {
 	type Event = Event;
-	// TODO: add some safe pallet like governance
+	// TODO: add some safe pallets like governance.
 	type SafePallets = Nothing;
 	type BanOrigin = EnsureRoot<AccountId>;
-	type UnBanOrigin = EnsureRoot<AccountId>;
+	type UnbanOrigin = EnsureRoot<AccountId>;
 	type MaxNameLen = ConstU32<256>;
 	type BanTooLongNames = ConstBool<true>;
 }
