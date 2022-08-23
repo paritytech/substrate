@@ -17,6 +17,9 @@
 
 //! Utils for parsing user input
 
+use std::num::ParseIntError;
+use sp_version::StateVersion;
+
 pub(crate) fn hash(block_hash: &str) -> Result<String, String> {
 	let (block_hash, offset) = if let Some(block_hash) = block_hash.strip_prefix("0x") {
 		(block_hash, 2)
@@ -40,5 +43,13 @@ pub(crate) fn url(s: &str) -> Result<String, &'static str> {
 		Ok(s.to_string())
 	} else {
 		Err("not a valid WS(S) url: must start with 'ws://' or 'wss://'")
+	}
+}
+
+pub(crate) fn state_version(s: &str) -> Result<StateVersion, &'static str> {
+	match s.parse::<u32>() {
+		Ok(0) => Ok(StateVersion::V0),
+		Ok(1) => Ok(StateVersion::V1),
+		_ => Err("State version couldn't have been parsed.")
 	}
 }

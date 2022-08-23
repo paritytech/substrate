@@ -295,6 +295,7 @@ use sp_runtime::{
 };
 use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
+use sp_version::StateVersion;
 
 mod commands;
 pub(crate) mod parse;
@@ -421,6 +422,10 @@ pub struct SharedParams {
 	/// When enabled, the spec name check will not panic, and instead only show a warning.
 	#[clap(long)]
 	pub no_spec_name_check: bool,
+
+	/// State version that is used by the chain.
+	#[clap(long, default_value = "1", parse(try_from_str = parse::state_version))]
+	pub state_version: StateVersion,
 }
 
 /// Our `try-runtime` command.
