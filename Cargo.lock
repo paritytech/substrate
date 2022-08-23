@@ -6515,9 +6515,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.3.13"
+version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55a7901b85874402471e131de3332dde0e51f38432c69a3853627c8e25433048"
+checksum = "2bb474d0ed0836e185cb998a6b140ed1073d1fbf27d690ecf9ede8030289382c"
 dependencies = [
  "blake2-rfc",
  "crc32fast",
