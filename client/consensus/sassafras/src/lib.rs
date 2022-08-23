@@ -193,14 +193,8 @@ pub struct Epoch {
 	pub epoch_index: u64,
 	/// The starting slot of the epoch.
 	pub start_slot: Slot,
-	/// The duration of this epoch in slots.
-	pub duration: u64,
-	/// The authorities and their weights.
-	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
-	/// Randomness for this epoch.
-	pub randomness: [u8; VRF_OUTPUT_LENGTH],
-	/// Configuration parameters of the epoch.
-	pub config: SassafrasEpochConfiguration,
+	/// Epoch configuration
+	pub config: SassafrasConfiguration,
 	/// Tickets metadata.
 	pub tickets_info: BTreeMap<Ticket, TicketInfo>,
 }
@@ -210,13 +204,17 @@ impl EpochT for Epoch {
 	type Slot = Slot;
 
 	fn increment(&self, descriptor: NextEpochDescriptor) -> Epoch {
-		Epoch {
-			epoch_index: self.epoch_index + 1,
-			start_slot: self.start_slot + self.duration,
-			duration: self.duration,
+		let config = SassafrasConfiguration {
+			slot_duration: self.config.slot_duration,
+			epoch_duration: self.config.epoch_duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
-			config: descriptor.config.unwrap_or(self.config.clone()),
+			threshold_params: descriptor.config.unwrap_or(self.config.threshold_params.clone()),
+		};
+		Epoch {
+			epoch_index: self.epoch_index + 1,
+			start_slot: self.start_slot + self.config.slot_duration,
+			config,
 			tickets_info: BTreeMap::new(),
 		}
 	}
@@ -226,7 +224,7 @@ impl EpochT for Epoch {
 	}
 
 	fn end_slot(&self) -> Slot {
-		self.start_slot + self.duration
+		self.start_slot + self.config.slot_duration
 	}
 }
 
@@ -237,10 +235,7 @@ impl Epoch {
 		Epoch {
 			epoch_index: 0,
 			start_slot: slot,
-			duration: config.epoch_length,
-			authorities: config.authorities.clone(),
-			randomness: config.randomness,
-			config: config.threshold_params.clone(),
+			config: config.clone(),
 			tickets_info: BTreeMap::new(),
 		}
 	}

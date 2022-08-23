@@ -81,15 +81,15 @@ pub type SassafrasBlockWeight = u32;
 /// Configuration data used by the Sassafras consensus engine.
 #[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
 pub struct SassafrasConfiguration {
-	/// The slot duration in milliseconds for Sassafras.
+	/// The slot duration in milliseconds.
 	pub slot_duration: u64,
 	/// The duration of epochs in slots.
-	pub epoch_length: u64,
-	/// The authorities for the genesis epoch.
+	pub epoch_duration: u64,
+	/// The authorities for the epoch.
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
-	/// The randomness for the genesis epoch.
+	/// The randomness for the epoch.
 	pub randomness: Randomness,
-	/// Threshold params
+	/// Tickets threshold parameters.
 	pub threshold_params: SassafrasEpochConfiguration,
 }
 

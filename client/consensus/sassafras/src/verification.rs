@@ -56,13 +56,14 @@ pub fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
 	let VerificationParams { mut header, pre_digest, slot_now, epoch, ticket } = params;
+	let config = &epoch.config;
 
 	// Check that the slot is not in the future, with some drift being allowed.
 	if pre_digest.slot > slot_now + MAX_SLOT_DRIFT {
 		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
 	}
 
-	let author = match epoch.authorities.get(pre_digest.authority_index as usize) {
+	let author = match config.authorities.get(pre_digest.authority_index as usize) {
 		Some(author) => author.0.clone(),
 		None => return Err(sassafras_err(Error::SlotAuthorNotFound)),
 	};
@@ -93,14 +94,14 @@ pub fn check_header<B: BlockT + Sized>(
 				log::error!(target: "sassafras", "🌳 Wrong primary authority index");
 			}
 			let transcript =
-				make_ticket_transcript(&epoch.randomness, ticket_info.attempt, epoch.epoch_index);
+				make_ticket_transcript(&config.randomness, ticket_info.attempt, epoch.epoch_index);
 			schnorrkel::PublicKey::from_bytes(author.as_slice())
 				.and_then(|p| p.vrf_verify(transcript, &ticket, &ticket_info.proof))
 				.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 		},
 		(None, None) => {
 			log::debug!(target: "sassafras", "🌳 checking secondary");
-			let idx = authorship::secondary_authority_index(pre_digest.slot, params.epoch);
+			let idx = authorship::secondary_authority_index(pre_digest.slot, config);
 			if idx != pre_digest.authority_index as u64 {
 				log::error!(target: "sassafras", "🌳 Wrong secondary authority index");
 			}
@@ -119,7 +120,7 @@ pub fn check_header<B: BlockT + Sized>(
 
 	// Check slot-vrf proof
 
-	let transcript = make_slot_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+	let transcript = make_slot_transcript(&config.randomness, pre_digest.slot, epoch.epoch_index);
 	schnorrkel::PublicKey::from_bytes(author.as_slice())
 		.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
 		.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;

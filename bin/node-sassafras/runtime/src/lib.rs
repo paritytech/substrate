@@ -402,7 +402,7 @@ impl_runtime_apis! {
 		fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
 			sp_consensus_sassafras::SassafrasConfiguration {
 				slot_duration: Sassafras::slot_duration(),
-				epoch_length: EpochDuration::get(),
+				epoch_duration: EpochDuration::get(),
 				authorities: Sassafras::authorities().to_vec(),
 				randomness: Sassafras::randomness(),
 				threshold_params: Sassafras::config(),

@@ -28,9 +28,9 @@ use sp_consensus_sassafras::{
 use sp_core::{twox_64, ByteArray};
 
 /// Get secondary authority index for the given epoch and slot.
-pub(crate) fn secondary_authority_index(slot: Slot, epoch: &Epoch) -> u64 {
-	u64::from_le_bytes((epoch.randomness, slot).using_encoded(twox_64)) %
-		epoch.authorities.len() as u64
+pub(crate) fn secondary_authority_index(slot: Slot, config: &SassafrasConfiguration) -> u64 {
+	u64::from_le_bytes((config.randomness, slot).using_encoded(twox_64)) %
+		config.authorities.len() as u64
 }
 
 /// Try to claim an epoch slot.
@@ -41,6 +41,7 @@ fn claim_slot(
 	ticket: Option<Ticket>,
 	keystore: &SyncCryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
+	let config = &epoch.config;
 	let (authority_index, ticket_info) = match ticket {
 		Some(ticket) => {
 			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
@@ -52,13 +53,13 @@ fn claim_slot(
 		},
 		None => {
 			log::debug!(target: "sassafras", "🌳 [TRY SECONDARY]");
-			(secondary_authority_index(slot, epoch), None)
+			(secondary_authority_index(slot, config), None)
 		},
 	};
 
-	let authority_id = epoch.authorities.get(authority_index as usize).map(|auth| &auth.0)?;
+	let authority_id = config.authorities.get(authority_index as usize).map(|auth| &auth.0)?;
 
-	let transcript_data = make_slot_transcript_data(&epoch.randomness, slot, epoch.epoch_index);
+	let transcript_data = make_slot_transcript_data(&config.randomness, slot, epoch.epoch_index);
 	let signature = SyncCryptoStore::sr25519_vrf_sign(
 		&**keystore,
 		AuthorityId::ID,
@@ -83,20 +84,21 @@ fn claim_slot(
 /// Tickets additional information (i.e. `TicketInfo`) will be stored within the `Epoch`
 /// structure. The additional information will be used during epoch to claim slots.
 pub fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> Vec<Ticket> {
+	let config = &epoch.config;
+	let max_attempts = config.threshold_params.attempts_number;
+	let redundancy_factor = config.threshold_params.redundancy_factor;
 	let mut tickets = vec![];
-	let max_attempts = epoch.config.attempts_number;
-	let redundancy_factor = epoch.config.redundancy_factor;
 
 	let threshold = sp_consensus_sassafras::compute_threshold(
 		redundancy_factor,
-		epoch.duration as u32,
+		config.epoch_duration as u32,
 		max_attempts,
-		epoch.authorities.len() as u32,
+		config.authorities.len() as u32,
 	);
 	// TODO-SASS-P4 remove me
 	log::debug!(target: "sassafras", "🌳 Tickets threshold: {:032x}", threshold);
 
-	let authorities = epoch.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
+	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
 	for (authority_index, authority_id) in authorities {
 		if !SyncCryptoStore::has_keys(&**keystore, &[(authority_id.to_raw_vec(), AuthorityId::ID)])
 		{
@@ -105,7 +107,7 @@ pub fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) 
 
 		let make_ticket = |attempt| {
 			let transcript_data =
-				make_ticket_transcript_data(&epoch.randomness, attempt, epoch.epoch_index);
+				make_ticket_transcript_data(&config.randomness, attempt, epoch.epoch_index);
 
 			// TODO-SASS-P4: can be a good idea to replace `vrf_sign` with `vrf_sign_after_check`,
 			// But we need to modify the CryptoStore interface first.
@@ -206,7 +208,7 @@ where
 		self.epoch_changes
 			.shared_data()
 			.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))
-			.map(|epoch| epoch.as_ref().authorities.len())
+			.map(|epoch| epoch.as_ref().config.authorities.len())
 	}
 
 	async fn claim_slot(
