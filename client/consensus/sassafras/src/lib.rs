@@ -213,7 +213,7 @@ impl EpochT for Epoch {
 		};
 		Epoch {
 			epoch_index: self.epoch_index + 1,
-			start_slot: self.start_slot + self.config.slot_duration,
+			start_slot: self.start_slot + config.epoch_duration,
 			config,
 			tickets_info: BTreeMap::new(),
 		}
