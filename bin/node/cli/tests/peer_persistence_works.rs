@@ -79,7 +79,6 @@ async fn peer_persistence_works() {
 		_ => node.start(),
 	});
 
-	
 	// Ensure that all the started nodes keep finalizing blocks.
 	assert!(wait_n_blocks_if_running(3, 60, &node_defs[..]).await);
 
@@ -104,7 +103,7 @@ async fn peer_persistence_works() {
 	// Start the positive- and negative-case nodes.
 	node_defs[IDX_POS].start();
 	node_defs[IDX_NEG].start();
-	
+
 	// Expected:
 	// - positive-case node successfully catches up with the network;
 	// - negative-case node does not get updates on the finalized nodes;
