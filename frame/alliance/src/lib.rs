@@ -210,6 +210,8 @@ pub enum UnscrupulousItem<AccountId, Url> {
 type UnscrupulousItemOf<T, I> =
 	UnscrupulousItem<<T as frame_system::Config>::AccountId, UrlOf<T, I>>;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -311,7 +313,9 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
 		/// The founders/fellows/allies have already been initialized.
-		MembersAlreadyInitialized,
+		AllianceAlreadyInitialized,
+		/// The Alliance has not been initialized yet, therefore accounts cannot join it.
+		AllianceNotYetInitialized,
 		/// Account is already a member.
 		AlreadyMember,
 		/// Account is not a member.
@@ -434,6 +438,11 @@ pub mod pallet {
 				Members::<T, I>::insert(MemberRole::Fellow, members);
 			}
 			if !self.allies.is_empty() {
+				// Only allow Allies if the Alliance is "initialized".
+				assert!(
+					Pallet::<T, I>::is_initialized(),
+					"Alliance must have Founders or Fellows to have Allies"
+				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
 					self.allies.clone().try_into().expect("Too many genesis allies");
 				Members::<T, I>::insert(MemberRole::Ally, members);
@@ -612,6 +621,11 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
+			// Cannot be called if the Alliance already has Founders or Fellows.
+			// TODO: Remove check and allow Root to set members at any time.
+			// https://github.com/paritytech/substrate/issues/11928
+			ensure!(!Self::is_initialized(), Error::<T, I>::AllianceAlreadyInitialized);
+
 			let mut founders: BoundedVec<T::AccountId, T::MaxMembersCount> =
 				founders.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
 			let mut fellows: BoundedVec<T::AccountId, T::MaxMembersCount> =
@@ -619,12 +633,6 @@ pub mod pallet {
 			let mut allies: BoundedVec<T::AccountId, T::MaxMembersCount> =
 				allies.try_into().map_err(|_| Error::<T, I>::TooManyMembers)?;
 
-			ensure!(
-				!Self::has_member(MemberRole::Founder) &&
-					!Self::has_member(MemberRole::Fellow) &&
-					!Self::has_member(MemberRole::Ally),
-				Error::<T, I>::MembersAlreadyInitialized
-			);
 			for member in founders.iter().chain(fellows.iter()).chain(allies.iter()) {
 				Self::has_identity(member)?;
 			}
@@ -705,6 +713,15 @@ pub mod pallet {
 		pub fn join_alliance(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
+			// We don't want anyone to join as an Ally before the Alliance has been initialized via
+			// Root call. The reasons are two-fold:
+			//
+			// 1. There is no `Rule` or admission criteria, so the joiner would be an ally to
+			//    nought, and
+			// 2. It adds complexity to the initialization, namely deciding to overwrite accounts
+			//    that already joined as an Ally.
+			ensure!(Self::is_initialized(), Error::<T, I>::AllianceNotYetInitialized);
+
 			// Unscrupulous accounts are non grata.
 			ensure!(!Self::is_unscrupulous_account(&who), Error::<T, I>::AccountNonGrata);
 			ensure!(!Self::is_member(&who), Error::<T, I>::AlreadyMember);
@@ -729,10 +746,7 @@ pub mod pallet {
 		/// A founder or fellow can nominate someone to join the alliance as an Ally.
 		/// There is no deposit required to the nominator or nominee.
 		#[pallet::weight(T::WeightInfo::nominate_ally())]
-		pub fn nominate_ally(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn nominate_ally(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let nominator = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&nominator), Error::<T, I>::NoVotingRights);
 			let who = T::Lookup::lookup(who)?;
@@ -756,10 +770,7 @@ pub mod pallet {
 
 		/// Elevate an ally to fellow.
 		#[pallet::weight(T::WeightInfo::elevate_ally())]
-		pub fn elevate_ally(
-			origin: OriginFor<T>,
-			ally: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn elevate_ally(origin: OriginFor<T>, ally: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
 			let ally = T::Lookup::lookup(ally)?;
 			ensure!(Self::is_ally(&ally), Error::<T, I>::NotAlly);
@@ -792,10 +803,7 @@ pub mod pallet {
 
 		/// Kick a member from the alliance and slash its deposit.
 		#[pallet::weight(T::WeightInfo::kick_member())]
-		pub fn kick_member(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn kick_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
 			let member = T::Lookup::lookup(who)?;
 
@@ -867,6 +875,11 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Check if the Alliance has been initialized.
+	fn is_initialized() -> bool {
+		Self::has_member(MemberRole::Founder) || Self::has_member(MemberRole::Fellow)
+	}
+
 	/// Check if a given role has any members.
 	fn has_member(role: MemberRole) -> bool {
 		Members::<T, I>::decode_len(role).unwrap_or_default() > 0

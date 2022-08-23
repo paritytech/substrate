@@ -26,7 +26,7 @@ pub use sp_runtime::{
 use sp_std::convert::{TryFrom, TryInto};
 
 pub use frame_support::{
-	assert_ok, ord_parameter_types, parameter_types,
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{EitherOfDiverse, GenesisBuild, SortedMembers},
 	BoundedVec,
 };
@@ -290,6 +290,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		assert_ok!(Identity::set_identity(Origin::signed(5), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 5, Judgement::KnownGood));
 		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
+
+		// Joining before init should fail.
+		assert_noop!(
+			Alliance::join_alliance(Origin::signed(1)),
+			Error::<Test, ()>::AllianceNotYetInitialized
+		);
 
 		assert_ok!(Alliance::init_members(Origin::root(), vec![1, 2], vec![3], vec![]));
 

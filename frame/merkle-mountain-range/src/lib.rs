@@ -351,7 +351,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(), primitives::Error> {
 		if proof.leaf_count > Self::mmr_leaves() ||
 			proof.leaf_count == 0 ||
-			proof.items.len() as u32 > mmr::utils::NodesUtils::new(proof.leaf_count).depth()
+			(proof.items.len().saturating_add(leaves.len())) as u64 > proof.leaf_count
 		{
 			return Err(primitives::Error::Verify
 				.log_debug("The proof has incorrect number of leaves or proof items."))

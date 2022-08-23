@@ -27,6 +27,7 @@ sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../..
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
+sc-network-common = { version = "0.10.0-dev", path = "../../network/common" }
 sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }

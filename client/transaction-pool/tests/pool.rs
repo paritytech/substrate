@@ -254,7 +254,7 @@ fn should_resubmit_from_retracted_during_maintenance() {
 	let header = api.push_block(1, vec![], true);
 	let fork_header = api.push_block(1, vec![], false);
 
-	let event = block_event_with_retracted(header, fork_header.hash(), &*pool.api());
+	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 
 	block_on(pool.maintain(event));
 	assert_eq!(pool.status().ready, 1);
@@ -272,7 +272,7 @@ fn should_not_resubmit_from_retracted_during_maintenance_if_tx_is_also_in_enacte
 	let header = api.push_block(1, vec![xt.clone()], true);
 	let fork_header = api.push_block(1, vec![xt], false);
 
-	let event = block_event_with_retracted(header, fork_header.hash(), &*pool.api());
+	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 
 	block_on(pool.maintain(event));
 	assert_eq!(pool.status().ready, 0);
@@ -292,7 +292,7 @@ fn should_not_retain_invalid_hashes_from_retracted() {
 	let fork_header = api.push_block(1, vec![xt.clone()], false);
 	api.add_invalid(&xt);
 
-	let event = block_event_with_retracted(header, fork_header.hash(), &*pool.api());
+	let event = block_event_with_retracted(header, fork_header.hash(), pool.api());
 	block_on(pool.maintain(event));
 
 	assert_eq!(
@@ -387,7 +387,7 @@ fn should_push_watchers_during_maintenance() {
 	let header_hash = header.hash();
 	block_on(pool.maintain(block_event(header)));
 
-	let event = ChainEvent::Finalized { hash: header_hash.clone(), tree_route: Arc::from(vec![]) };
+	let event = ChainEvent::Finalized { hash: header_hash, tree_route: Arc::from(vec![]) };
 	block_on(pool.maintain(event));
 
 	// then
@@ -398,24 +398,24 @@ fn should_push_watchers_during_maintenance() {
 		futures::executor::block_on_stream(watcher0).collect::<Vec<_>>(),
 		vec![
 			TransactionStatus::Ready,
-			TransactionStatus::InBlock(header_hash.clone()),
-			TransactionStatus::Finalized(header_hash.clone())
+			TransactionStatus::InBlock(header_hash),
+			TransactionStatus::Finalized(header_hash)
 		],
 	);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher1).collect::<Vec<_>>(),
 		vec![
 			TransactionStatus::Ready,
-			TransactionStatus::InBlock(header_hash.clone()),
-			TransactionStatus::Finalized(header_hash.clone())
+			TransactionStatus::InBlock(header_hash),
+			TransactionStatus::Finalized(header_hash)
 		],
 	);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher2).collect::<Vec<_>>(),
 		vec![
 			TransactionStatus::Ready,
-			TransactionStatus::InBlock(header_hash.clone()),
-			TransactionStatus::Finalized(header_hash.clone())
+			TransactionStatus::InBlock(header_hash),
+			TransactionStatus::Finalized(header_hash)
 		],
 	);
 }
@@ -533,7 +533,7 @@ fn fork_aware_finalization() {
 		let header = pool.api().push_block(3, vec![from_charlie.clone()], true);
 
 		canon_watchers.push((watcher, header.hash()));
-		let event = block_event_with_retracted(header.clone(), d2, &*pool.api());
+		let event = block_event_with_retracted(header.clone(), d2, pool.api());
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
 
@@ -573,7 +573,7 @@ fn fork_aware_finalization() {
 	for (canon_watcher, h) in canon_watchers {
 		let mut stream = futures::executor::block_on_stream(canon_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(h.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(h)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(h)));
 		assert_eq!(stream.next(), None);
 	}
@@ -581,22 +581,22 @@ fn fork_aware_finalization() {
 	{
 		let mut stream = futures::executor::block_on_stream(from_dave_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c2.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c2)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(c2)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1)));
 		assert_eq!(stream.next(), None);
 	}
 
 	{
 		let mut stream = futures::executor::block_on_stream(from_bob_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d2.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d2)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(d2)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1)));
 		assert_eq!(stream.next(), None);
 	}
 }
@@ -633,7 +633,7 @@ fn prune_and_retract_tx_at_same_time() {
 		let header = pool.api().push_block(2, vec![from_alice.clone()], false);
 		assert_eq!(pool.status().ready, 0);
 
-		let event = block_event_with_retracted(header.clone(), b1, &*pool.api());
+		let event = block_event_with_retracted(header.clone(), b1, pool.api());
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 0);
 
@@ -646,9 +646,9 @@ fn prune_and_retract_tx_at_same_time() {
 	{
 		let mut stream = futures::executor::block_on_stream(watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b1)));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2.clone())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b2)));
 		assert_eq!(stream.next(), None);
 	}
@@ -708,7 +708,7 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 	// Block D2
 	{
 		let header = pool.api().push_block(2, vec![], false);
-		let event = block_event_with_retracted(header, d0, &*pool.api());
+		let event = block_event_with_retracted(header, d0, pool.api());
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 2);
 	}
@@ -781,7 +781,7 @@ fn resubmit_from_retracted_fork() {
 	let e1 = {
 		let _ = block_on(pool.submit_and_watch(&BlockId::number(1), SOURCE, tx4.clone()))
 			.expect("1. Imported");
-		let header = pool.api().push_block_with_parent(d1.clone(), vec![tx4.clone()], true);
+		let header = pool.api().push_block_with_parent(d1, vec![tx4.clone()], true);
 		assert_eq!(pool.status().ready, 2);
 		header.hash()
 	};
@@ -790,7 +790,7 @@ fn resubmit_from_retracted_fork() {
 	let f1_header = {
 		let _ = block_on(pool.submit_and_watch(&BlockId::number(1), SOURCE, tx5.clone()))
 			.expect("1. Imported");
-		let header = pool.api().push_block_with_parent(e1.clone(), vec![tx5.clone()], true);
+		let header = pool.api().push_block_with_parent(e1, vec![tx5.clone()], true);
 		// Don't announce the block event to the pool directly, because we will
 		// re-org to this block.
 		assert_eq!(pool.status().ready, 3);
@@ -801,7 +801,7 @@ fn resubmit_from_retracted_fork() {
 	let expected_ready = vec![tx3, tx4, tx5].iter().map(Encode::encode).collect::<BTreeSet<_>>();
 	assert_eq!(expected_ready, ready);
 
-	let event = block_event_with_retracted(f1_header, f0, &*pool.api());
+	let event = block_event_with_retracted(f1_header, f0, pool.api());
 	block_on(pool.maintain(event));
 
 	assert_eq!(pool.status().ready, 3);

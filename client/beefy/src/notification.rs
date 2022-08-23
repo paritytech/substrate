@@ -17,11 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use sc_utils::notification::{NotificationSender, NotificationStream, TracingKeyStr};
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::Block as BlockT;
 
-/// A commitment with matching BEEFY authorities' signatures.
-pub type BeefySignedCommitment<Block> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::crypto::Signature>;
+use crate::justification::BeefyVersionedFinalityProof;
 
 /// The sending half of the notifications channel(s) used to send
 /// notifications about best BEEFY block from the gadget side.
@@ -33,13 +31,14 @@ pub type BeefyBestBlockStream<Block> =
 	NotificationStream<<Block as BlockT>::Hash, BeefyBestBlockTracingKey>;
 
 /// The sending half of the notifications channel(s) used to send notifications
-/// about signed commitments generated at the end of a BEEFY round.
-pub type BeefySignedCommitmentSender<Block> = NotificationSender<BeefySignedCommitment<Block>>;
+/// about versioned finality proof generated at the end of a BEEFY round.
+pub type BeefyVersionedFinalityProofSender<Block> =
+	NotificationSender<BeefyVersionedFinalityProof<Block>>;
 
 /// The receiving half of a notifications channel used to receive notifications
-/// about signed commitments generated at the end of a BEEFY round.
-pub type BeefySignedCommitmentStream<Block> =
-	NotificationStream<BeefySignedCommitment<Block>, BeefySignedCommitmentTracingKey>;
+/// about versioned finality proof generated at the end of a BEEFY round.
+pub type BeefyVersionedFinalityProofStream<Block> =
+	NotificationStream<BeefyVersionedFinalityProof<Block>, BeefyVersionedFinalityProofTracingKey>;
 
 /// Provides tracing key for BEEFY best block stream.
 #[derive(Clone)]
@@ -48,9 +47,9 @@ impl TracingKeyStr for BeefyBestBlockTracingKey {
 	const TRACING_KEY: &'static str = "mpsc_beefy_best_block_notification_stream";
 }
 
-/// Provides tracing key for BEEFY signed commitments stream.
+/// Provides tracing key for BEEFY versioned finality proof stream.
 #[derive(Clone)]
-pub struct BeefySignedCommitmentTracingKey;
-impl TracingKeyStr for BeefySignedCommitmentTracingKey {
-	const TRACING_KEY: &'static str = "mpsc_beefy_signed_commitments_notification_stream";
+pub struct BeefyVersionedFinalityProofTracingKey;
+impl TracingKeyStr for BeefyVersionedFinalityProofTracingKey {
+	const TRACING_KEY: &'static str = "mpsc_beefy_versioned_finality_proof_notification_stream";
 }
