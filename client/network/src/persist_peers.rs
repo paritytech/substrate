@@ -32,7 +32,7 @@ use lru::LruCache;
 
 use sc_peerset::PeersetHandle;
 
-use crate::{Multiaddr, PeerId};
+use crate::{utils, Multiaddr, PeerId};
 
 type BoxedFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
 type Never = std::convert::Infallible;
@@ -43,7 +43,6 @@ const PEER_ADDRS_CACHE_SIZE: usize = 100;
 
 const PEER_ADDRS_FILENAME: &str = "peer-addrs.json";
 const PEER_SETS_FILENAME: &str = "peer-sets.json";
-const EXTENSION_TMP: &str = "tmp";
 
 pub struct PersistPeerAddrs {
 	storage_dir: PathBuf,
@@ -163,7 +162,6 @@ impl PersistPeerAddrs {
 
 mod persist_peer_addrs {
 	use super::*;
-	use tokio::io::AsyncWriteExt;
 
 	#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 	pub(super) struct PeerEntry {
@@ -176,33 +174,13 @@ mod persist_peer_addrs {
 		protocols: HashMap<ProtocolType, Vec<PeerEntry>>,
 	) -> Result<(), io::Error> {
 		let persist_to_file = storage_dir.join(PEER_ADDRS_FILENAME);
-		let tmp_file_path = persist_to_file.with_extension(EXTENSION_TMP);
-
-		let mut tmp_file = tokio::fs::OpenOptions::new()
-			.create(true)
-			.write(true)
-			.truncate(true)
-			.open(&tmp_file_path)
-			.await?;
-		let serialized = serde_json::to_vec_pretty(&protocols)?;
-
-		tmp_file.write_all(&serialized).await?;
-		tmp_file.flush().await?;
-		std::mem::drop(tmp_file);
-
-		tokio::fs::rename(&tmp_file_path, &persist_to_file).await?;
+		utils::json_file::save(&persist_to_file, &protocols).await?;
 
 		Ok(())
 	}
 
 	pub(super) fn load(path: &Path) -> Result<HashMap<ProtocolType, Vec<PeerEntry>>, io::Error> {
-		let file = match std::fs::OpenOptions::new().read(true).open(path) {
-			Ok(file) => file,
-			Err(not_found) if not_found.kind() == std::io::ErrorKind::NotFound =>
-				return Ok(Default::default()),
-			Err(reason) => return Err(reason),
-		};
-		let entries = serde_json::from_reader(file)?;
+		let entries = utils::json_file::load_sync(path)?.unwrap_or_default();
 		Ok(entries)
 	}
 }
@@ -235,7 +213,7 @@ mod peersets {
 	use super::*;
 
 	#[derive(Debug, serde::Serialize, serde::Deserialize)]
-	pub struct PeerInfo {
+	pub(crate) struct PeerInfo {
 		pub peer_id: String,
 		pub sets: Vec<usize>,
 	}
@@ -244,10 +222,7 @@ mod peersets {
 		storage_dir: &Path,
 		peerset_handle: &PeersetHandle,
 	) -> Result<(), io::Error> {
-		use tokio::io::AsyncWriteExt;
-
 		let persist_to_file = storage_dir.join(PEER_SETS_FILENAME);
-		let tmp_file_path = persist_to_file.with_extension(EXTENSION_TMP);
 
 		let peersets_dumped = peerset_handle
 			.dump_state()
@@ -257,43 +232,24 @@ mod peersets {
 			.map(|(peer_id, sets)| PeerInfo { peer_id: peer_id.to_base58(), sets })
 			.collect::<Vec<_>>();
 
-		let mut tmp_file = tokio::fs::OpenOptions::new()
-			.create(true)
-			.write(true)
-			.truncate(true)
-			.open(&tmp_file_path)
-			.await?;
-		let serialized = serde_json::to_vec_pretty(&peersets_dumped)?;
-		tmp_file.write_all(&serialized).await?;
-		tmp_file.flush().await?;
-		std::mem::drop(tmp_file);
-
-		tokio::fs::rename(&tmp_file_path, &persist_to_file).await?;
-
+		utils::json_file::save(&persist_to_file, &peersets_dumped).await?;
 		Ok(())
 	}
 
 	pub fn load(dir: impl AsRef<Path>) -> Result<Vec<(PeerId, Vec<usize>)>, io::Error> {
 		let path = dir.as_ref().join("peer-sets.json");
 
-		match std::fs::OpenOptions::new().read(true).open(&path) {
-			Ok(f) => {
-				let peersets: Vec<PeerInfo> = serde_json::from_reader(f)?;
-
-				Ok(peersets
-					.into_iter()
-					.filter_map(|peer_info| {
-						if let Ok(peer_id) = peer_info.peer_id.parse::<PeerId>() {
-							Some((peer_id, peer_info.sets))
-						} else {
-							None
-						}
-					})
-					.collect())
-			},
-			Err(not_found) if not_found.kind() == io::ErrorKind::NotFound => Ok(vec![]),
-			Err(reason) => Err(reason),
-		}
+		let entries: Vec<PeerInfo> = utils::json_file::load_sync(&path)?.unwrap_or_default();
+		Ok(entries
+			.into_iter()
+			.filter_map(|peer_info| {
+				if let Ok(peer_id) = peer_info.peer_id.parse::<PeerId>() {
+					Some((peer_id, peer_info.sets))
+				} else {
+					None
+				}
+			})
+			.collect())
 	}
 
 	impl fmt::Debug for PersistPeersets {

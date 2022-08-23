@@ -65,6 +65,7 @@ assert_matches = "1.3"
 async-std = "1.11.0"
 rand = "0.7.2"
 tempfile = "3.1.0"
+tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
 sc-network-light = { version = "0.10.0-dev", path = "./light" }
 sc-network-sync = { version = "0.10.0-dev", path = "./sync" }
 sp-test-primitives = { version = "2.0.0", path = "../../primitives/test-primitives" }
