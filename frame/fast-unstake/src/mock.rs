@@ -15,13 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::*;
 use crate::{self as pallet_fast_unstake, *};
 use frame_election_provider_support::VoteWeight;
 use frame_support::{
 	assert_ok,
 	pallet_prelude::*,
 	parameter_types,
-	traits::{ConstU64, ConstU8},
+	traits::{ConstU64, ConstU8, Currency},
 	PalletId,
 };
 use sp_runtime::{
@@ -29,10 +30,14 @@ use sp_runtime::{
 	FixedU128,
 };
 
-type AccountId = u128;
-type AccountIndex = u32;
-type BlockNumber = u64;
-type Balance = u128;
+use frame_system::RawOrigin;
+use pallet_nomination_pools::{LastPoolId, PoolId, *};
+use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
+
+pub type AccountId = u128;
+pub type AccountIndex = u32;
+pub type BlockNumber = u64;
+pub type Balance = u128;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -74,7 +79,7 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 parameter_types! {
-	pub static ExistentialDeposit: Balance = 1;
+	pub static ExistentialDeposit: Balance = 5;
 }
 
 impl pallet_balances::Config for Runtime {
@@ -103,6 +108,14 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub static BondingDuration: u32 = 3;
+	pub static MinJoinBondConfig: Balance = 2;
+	pub static CurrentEra: u32 = 0;
+	pub storage BondedBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
+	pub storage UnbondingBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
+	#[derive(Clone, PartialEq)]
+	pub static MaxUnbonding: u32 = 8;
+	pub static StakingMinBond: Balance = 10;
+	pub storage Nominations: Option<Vec<AccountId>> = None;
 }
 
 impl pallet_staking::Config for Runtime {
@@ -163,6 +176,8 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 parameter_types! {
 	pub const PostUnbondingPoolsWindow: u32 = 10;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
+	pub static MaxMetadataLen: u32 = 2;
+	pub static CheckLevel: u8 = 255;
 }
 
 impl pallet_nomination_pools::Config for Runtime {
@@ -175,7 +190,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
-	type MaxMetadataLen = ConstU32<256>;
+	type MaxMetadataLen = MaxMetadataLen;
 	type MaxUnbonding = ConstU32<8>;
 	type MaxPointsToBalance = ConstU8<10>;
 	type PalletId = PoolsPalletId;
@@ -265,4 +280,104 @@ pub(crate) fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runt
 	let already_seen = ObservedEventsStaking::get();
 	ObservedEventsStaking::set(events.len());
 	events.into_iter().skip(already_seen).collect()
+}
+
+pub struct ExtBuilder {
+	members: Vec<(AccountId, Balance)>,
+	max_members: Option<u32>,
+	max_members_per_pool: Option<u32>,
+}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self { members: Default::default(), max_members: Some(4), max_members_per_pool: Some(3) }
+	}
+}
+
+impl ExtBuilder {
+	// Add members to pool 0.
+	pub(crate) fn add_members(mut self, members: Vec<(AccountId, Balance)>) -> Self {
+		self.members = members;
+		self
+	}
+
+	pub(crate) fn ed(self, ed: Balance) -> Self {
+		ExistentialDeposit::set(ed);
+		self
+	}
+
+	pub(crate) fn min_bond(self, min: Balance) -> Self {
+		StakingMinBond::set(min);
+		self
+	}
+
+	pub(crate) fn min_join_bond(self, min: Balance) -> Self {
+		MinJoinBondConfig::set(min);
+		self
+	}
+
+	pub(crate) fn with_check(self, level: u8) -> Self {
+		CheckLevel::set(level);
+		self
+	}
+
+	pub(crate) fn max_members(mut self, max: Option<u32>) -> Self {
+		self.max_members = max;
+		self
+	}
+
+	pub(crate) fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
+		self.max_members_per_pool = max;
+		self
+	}
+
+	pub(crate) fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
+		let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+
+		let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
+			min_join_bond: MinJoinBondConfig::get(),
+			min_create_bond: 2,
+			max_pools: Some(2),
+			max_members_per_pool: self.max_members_per_pool,
+			max_members: self.max_members,
+		}
+		.assimilate_storage(&mut storage);
+
+		let mut ext = sp_io::TestExternalities::from(storage);
+
+		ext.execute_with(|| {
+			// for events to be deposited.
+			frame_system::Pallet::<Runtime>::set_block_number(1);
+
+			// make a pool
+			let amount_to_bond = MinJoinBondConfig::get();
+			Balances::make_free_balance_be(&10, amount_to_bond * 5);
+			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
+
+			let last_pool = LastPoolId::<Runtime>::get();
+			for (account_id, bonded) in self.members {
+				Balances::make_free_balance_be(&account_id, bonded * 2);
+				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, last_pool));
+			}
+		});
+
+		ext
+	}
+
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		self.build().execute_with(|| {
+			test();
+			Pools::sanity_checks(CheckLevel::get()).unwrap();
+		})
+	}
+}
+
+pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
+	BondedPools::<Runtime>::try_mutate(pool_id, |maybe_bonded_pool| {
+		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
+			bonded_pool.state = state;
+		})
+	})
+	.unwrap()
 }
