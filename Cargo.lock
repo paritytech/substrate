@@ -3376,6 +3376,7 @@ dependencies = [
  "pallet-recovery",
  "pallet-referenda",
  "pallet-remark",
+ "pallet-safe-mode",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
@@ -6138,6 +6139,9 @@ version = "4.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-std",
 ]
 
 [[package]]

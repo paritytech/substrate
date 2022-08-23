@@ -31,9 +31,9 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		AsEnsureOriginWithArg, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
+		EqualPrivilegeOnly, Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier,
+		Nothing, OnUnbalanced, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -199,8 +199,21 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
+impl pallet_safe_mode::Config for Runtime {
+	type Event = Event;
+	// TODO: add some safe pallet like governance
+	type SafePallets = Nothing;
+	type BanOrigin = EnsureRoot<AccountId>;
+	type UnBanOrigin = EnsureRoot<AccountId>;
+	type MaxNameLen = ConstU32<256>;
+	type BanTooLongNames = ConstBool<true>;
+}
+
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = Everything;
+	// Directly using the `SafeMode` pallet here implies that there is no general
+	// filter and everything that is not banned, is allowed.
+	// Otherwise you can compose them: `TheseExcept<DefaultFilter, SafeMode>`.
+	type BaseCallFilter = SafeMode;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -1641,6 +1654,7 @@ construct_runtime!(
 		NominationPools: pallet_nomination_pools,
 		RankedPolls: pallet_referenda::<Instance2>,
 		RankedCollective: pallet_ranked_collective,
+		SafeMode: pallet_safe_mode,
 	}
 );
 
