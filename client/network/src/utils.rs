@@ -93,7 +93,7 @@ pub(crate) mod json_file {
 		P: AsRef<Path>,
 		D: DeserializeOwned,
 	{
-		let file = match std::fs::OpenOptions::new().read(true).open(path) {
+		let file = match std::fs::File::open(path) {
 			Ok(file) => file,
 			Err(not_found) if not_found.kind() == std::io::ErrorKind::NotFound => return Ok(None),
 			Err(reason) => return Err(reason),
