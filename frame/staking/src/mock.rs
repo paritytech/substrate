@@ -233,11 +233,9 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 
 const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
-const THRESHOLDS_BALANCE: [Balance; 9] = [10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
-	pub static BagThresholdsBalance: &'static [sp_npos_elections::ExtendedBalance] = &THRESHOLDS_BALANCE;
 	pub static MaxNominations: u32 = 16;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
