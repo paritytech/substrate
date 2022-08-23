@@ -17,7 +17,6 @@
 
 //! Utils for parsing user input
 
-use std::num::ParseIntError;
 use sp_version::StateVersion;
 
 pub(crate) fn hash(block_hash: &str) -> Result<String, String> {
@@ -51,6 +50,6 @@ pub(crate) fn state_version(s: &str) -> Result<StateVersion, &'static str> {
 		Ok(0) => Ok(StateVersion::V0),
 		Ok(1) => Ok(StateVersion::V1),
 		Ok(_) => Err("State version not supported."),
-		_ => Err("State version couldn't have been parsed.")
+		_ => Err("State version couldn't have been parsed."),
 	}
 }
