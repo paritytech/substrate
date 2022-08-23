@@ -405,6 +405,7 @@ impl_runtime_apis! {
 				epoch_length: EpochDuration::get(),
 				authorities: Sassafras::authorities().to_vec(),
 				randomness: Sassafras::randomness(),
+				threshold_params: Sassafras::config(),
 			}
 		}
 

@@ -164,7 +164,7 @@ where
 
 			let info = self.client.info();
 
-			if let Some(mut next_epoch_descriptor) = next_epoch_digest {
+			if let Some(next_epoch_descriptor) = next_epoch_digest {
 				old_epoch_changes = Some((*epoch_changes).clone());
 
 				let viable_epoch = epoch_changes
@@ -191,9 +191,6 @@ where
 					 viable_epoch.as_ref().start_slot,
 				);
 
-				if next_epoch_descriptor.config.is_none() {
-					next_epoch_descriptor.config = Some(viable_epoch.as_ref().config.clone());
-				}
 				let next_epoch = viable_epoch.increment(next_epoch_descriptor);
 
 				log!(target: "sassafras",

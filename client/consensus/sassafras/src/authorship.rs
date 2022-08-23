@@ -21,21 +21,21 @@
 use super::*;
 
 use sp_consensus_sassafras::{
-	digests::PreDigest, make_slot_transcript_data, make_ticket_transcript_data, AuthorityId, Slot,
-	Ticket, TicketInfo,
+	digests::PreDigest,
+	vrf::{make_slot_transcript_data, make_ticket_transcript_data},
+	AuthorityId, Slot, Ticket, TicketInfo,
 };
 use sp_core::{twox_64, ByteArray};
 
 /// Get secondary authority index for the given epoch and slot.
-#[inline]
-pub fn secondary_authority_index(slot: Slot, epoch: &Epoch) -> u64 {
+pub(crate) fn secondary_authority_index(slot: Slot, epoch: &Epoch) -> u64 {
 	u64::from_le_bytes((epoch.randomness, slot).using_encoded(twox_64)) %
 		epoch.authorities.len() as u64
 }
 
 /// Try to claim an epoch slot.
 /// If ticket is `None`, then the slot should be claimed using the fallback mechanism.
-pub fn claim_slot(
+fn claim_slot(
 	slot: Slot,
 	epoch: &Epoch,
 	ticket: Option<Ticket>,
@@ -59,23 +59,24 @@ pub fn claim_slot(
 	let authority_id = epoch.authorities.get(authority_index as usize).map(|auth| &auth.0)?;
 
 	let transcript_data = make_slot_transcript_data(&epoch.randomness, slot, epoch.epoch_index);
-	let result = SyncCryptoStore::sr25519_vrf_sign(
+	let signature = SyncCryptoStore::sr25519_vrf_sign(
 		&**keystore,
 		AuthorityId::ID,
 		authority_id.as_ref(),
 		transcript_data,
-	);
+	)
+	.ok()
+	.flatten()?;
 
-	result.ok().flatten().map(|signature| {
-		let pre_digest = PreDigest {
-			authority_index: authority_index as u32,
-			slot,
-			vrf_output: VRFOutput(signature.output),
-			vrf_proof: VRFProof(signature.proof.clone()),
-			ticket_info,
-		};
-		(pre_digest, authority_id.clone())
-	})
+	let pre_digest = PreDigest {
+		authority_index: authority_index as u32,
+		slot,
+		vrf_output: VRFOutput(signature.output),
+		vrf_proof: VRFProof(signature.proof.clone()),
+		ticket_info,
+	};
+
+	Some((pre_digest, authority_id.clone()))
 }
 
 /// Generate the tickets for the given epoch.

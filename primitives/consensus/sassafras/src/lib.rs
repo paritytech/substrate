@@ -22,34 +22,31 @@
 #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub use merlin::Transcript;
-
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::{crypto, U256};
-#[cfg(feature = "std")]
-use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
 pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, VRFInOut, VRFOutput, VRFProof, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH,
+	PublicKey, Randomness, VRFOutput, VRFProof, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH,
 	VRF_PROOF_LENGTH,
 };
 
-/// Key type for Sassafras module.
-pub const KEY_TYPE: crypto::KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
-
 pub mod digests;
 pub mod inherents;
+pub mod vrf;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::SASSAFRAS, sr25519};
 	app_crypto!(sr25519, SASSAFRAS);
 }
+
+/// Key type for Sassafras protocol.
+pub const KEY_TYPE: crypto::KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
 
 /// The index of an authority.
 pub type AuthorityIndex = u32;
@@ -92,6 +89,8 @@ pub struct SassafrasConfiguration {
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// The randomness for the genesis epoch.
 	pub randomness: Randomness,
+	/// Threshold params
+	pub threshold_params: SassafrasEpochConfiguration,
 }
 
 impl SassafrasConfiguration {
@@ -125,86 +124,6 @@ pub struct TicketInfo {
 	pub proof: VRFProof,
 }
 
-const TYPE_LABEL: &str = "type";
-const EPOCH_LABEL: &str = "epoch";
-const SLOT_LABEL: &str = "slot";
-const ATTEMPT_LABEL: &str = "slot";
-const RANDOMNESS_LABEL: &str = "randomness";
-
-const SLOT_VRF_TYPE_VALUE: &str = "slot-vrf";
-const TICKET_VRF_TYPE_VALUE: &str = "ticket-vrf";
-
-/// Make slot VRF transcript.
-pub fn make_slot_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
-	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
-	transcript.append_message(TYPE_LABEL.as_bytes(), SLOT_VRF_TYPE_VALUE.as_bytes());
-	transcript.append_u64(SLOT_LABEL.as_bytes(), *slot);
-	transcript.append_u64(EPOCH_LABEL.as_bytes(), epoch);
-	transcript.append_message(RANDOMNESS_LABEL.as_bytes(), randomness);
-	transcript
-}
-
-/// Make slot VRF transcript data container.
-#[cfg(feature = "std")]
-pub fn make_slot_transcript_data(
-	randomness: &Randomness,
-	slot: Slot,
-	epoch: u64,
-) -> VRFTranscriptData {
-	VRFTranscriptData {
-		label: &SASSAFRAS_ENGINE_ID,
-		items: vec![
-			(TYPE_LABEL, VRFTranscriptValue::Bytes(SLOT_VRF_TYPE_VALUE.as_bytes().to_vec())),
-			(SLOT_LABEL, VRFTranscriptValue::U64(*slot)),
-			(EPOCH_LABEL, VRFTranscriptValue::U64(epoch)),
-			(RANDOMNESS_LABEL, VRFTranscriptValue::Bytes(randomness.to_vec())),
-		],
-	}
-}
-
-/// Make ticket VRF transcript.
-pub fn make_ticket_transcript(randomness: &Randomness, attempt: u32, epoch: u64) -> Transcript {
-	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
-	transcript.append_message(TYPE_LABEL.as_bytes(), TICKET_VRF_TYPE_VALUE.as_bytes());
-	transcript.append_u64(ATTEMPT_LABEL.as_bytes(), attempt as u64);
-	transcript.append_u64(EPOCH_LABEL.as_bytes(), epoch);
-	transcript.append_message(RANDOMNESS_LABEL.as_bytes(), randomness);
-	transcript
-}
-
-/// Make ticket VRF transcript data container.
-#[cfg(feature = "std")]
-pub fn make_ticket_transcript_data(
-	randomness: &Randomness,
-	attempt: u32,
-	epoch: u64,
-) -> VRFTranscriptData {
-	VRFTranscriptData {
-		label: &SASSAFRAS_ENGINE_ID,
-		items: vec![
-			(TYPE_LABEL, VRFTranscriptValue::Bytes(TICKET_VRF_TYPE_VALUE.as_bytes().to_vec())),
-			(ATTEMPT_LABEL, VRFTranscriptValue::U64(attempt as u64)),
-			(EPOCH_LABEL, VRFTranscriptValue::U64(epoch)),
-			(RANDOMNESS_LABEL, VRFTranscriptValue::Bytes(randomness.to_vec())),
-		],
-	}
-}
-
-sp_api::decl_runtime_apis! {
-	/// API necessary for block authorship with Sassafras.
-	pub trait SassafrasApi {
-		 /// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
-		fn configuration() -> SassafrasConfiguration;
-
-		/// Submit next epoch validator tickets via an unsigned extrinsic.
-		/// This method returns `false` when creation of the extrinsics fails.
-		fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool;
-
-		/// Get expected ticket for the given slot.
-		fn slot_ticket(slot: Slot) -> Option<Ticket>;
-	}
-}
-
 /// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
 /// - x: redundancy factor;
 /// - s: number of slots in epoch;
@@ -227,4 +146,20 @@ pub fn compute_threshold(redundancy: u32, slots: u32, attempts: u32, validators:
 #[inline]
 pub fn check_threshold(ticket: &Ticket, threshold: U256) -> bool {
 	U256::from(ticket.as_bytes()) < threshold
+}
+
+// Runtime API.
+sp_api::decl_runtime_apis! {
+	/// API necessary for block authorship with Sassafras.
+	pub trait SassafrasApi {
+		 /// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
+		fn configuration() -> SassafrasConfiguration;
+
+		/// Submit next epoch validator tickets via an unsigned extrinsic.
+		/// This method returns `false` when creation of the extrinsics fails.
+		fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool;
+
+		/// Get expected ticket for the given slot.
+		fn slot_ticket(slot: Slot) -> Option<Ticket>;
+	}
 }

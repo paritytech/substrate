@@ -52,20 +52,19 @@ use scale_info::TypeInfo;
 
 use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
-use sp_application_crypto::ByteArray;
-use sp_consensus_vrf::schnorrkel;
+//use sp_application_crypto::ByteArray;
+//use sp_consensus_vrf::schnorrkel;
+use sp_consensus_sassafras::{
+	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
+	AuthorityId, Randomness, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, Ticket,
+	SASSAFRAS_ENGINE_ID,
+};
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{One, Saturating},
 	BoundToRuntimeAppPublic,
 };
 use sp_std::prelude::Vec;
-
-pub use sp_consensus_sassafras::{
-	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, Ticket,
-	PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
-};
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -187,15 +186,15 @@ pub mod pallet {
 	/// adversary, for purposes such as public-coin zero-knowledge proofs.
 	#[pallet::storage]
 	#[pallet::getter(fn randomness)]
-	pub type Randomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type CurrentRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
 	/// Next epoch randomness.
 	#[pallet::storage]
-	pub type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type NextRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
 	/// Randomness accumulator.
 	#[pallet::storage]
-	pub type RandomnessAccumulator<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type RandomnessAccumulator<T> = StorageValue<_, Randomness, ValueQuery>;
 
 	/// Temporary value (cleared at block finalization) which is `Some`
 	/// if per-block initialization has already been called for current block.
@@ -275,39 +274,9 @@ pub mod pallet {
 			// this block into the randomness accumulator. If we've determined
 			// that this block was the first in a new epoch, the changeover logic has
 			// already occurred at this point, so the
-			//
-			// TODO-SASS-P2
-			// under-construction randomness
-			// will only contain outputs from the right epoch.
 			let pre_digest = Initialized::<T>::take()
 				.expect("Finalization is called after initialization; qed.");
-
-			let randomness = Authorities::<T>::get()
-				.get(pre_digest.authority_index as usize)
-				.and_then(|(authority, _)| {
-					schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
-				})
-				.and_then(|pubkey| {
-					let transcript = sp_consensus_sassafras::make_slot_transcript(
-						&Self::randomness(),
-						Self::current_slot(),
-						EpochIndex::<T>::get(),
-					);
-
-					// This has already been verified by the client on block import.
-					debug_assert!(pubkey
-						.vrf_verify(
-							transcript.clone(),
-							&pre_digest.vrf_output,
-							&pre_digest.vrf_proof
-						)
-						.is_ok());
-
-					Some(pre_digest.vrf_output.to_bytes())
-				})
-				.expect("Pre-digest contains valid randomness; qed");
-
-			Self::deposit_randomness(&randomness);
+			Self::deposit_randomness(pre_digest.vrf_output.as_bytes());
 		}
 	}
 
@@ -554,9 +523,9 @@ impl<T: Config> Pallet<T> {
 
 	/// Call this function on epoch change to update the randomness.
 	/// Returns the next epoch randomness.
-	fn update_randomness(next_epoch_index: u64) -> schnorrkel::Randomness {
+	fn update_randomness(next_epoch_index: u64) -> Randomness {
 		let curr_randomness = NextRandomness::<T>::get();
-		Randomness::<T>::put(curr_randomness);
+		CurrentRandomness::<T>::put(curr_randomness);
 
 		let accumulator = RandomnessAccumulator::<T>::get();
 		let mut s = Vec::with_capacity(2 * curr_randomness.len() + 8);
@@ -590,7 +559,7 @@ impl<T: Config> Pallet<T> {
 		<frame_system::Pallet<T>>::deposit_log(log)
 	}
 
-	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
+	fn deposit_randomness(randomness: &Randomness) {
 		let mut s = RandomnessAccumulator::<T>::get().to_vec();
 		s.extend_from_slice(randomness);
 		let accumulator = sp_io::hashing::blake2_256(&s);

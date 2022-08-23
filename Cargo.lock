@@ -6260,7 +6260,6 @@ dependencies = [
  "scale-info",
  "sp-application-crypto",
  "sp-consensus-sassafras",
- "sp-consensus-vrf",
  "sp-core",
  "sp-io",
  "sp-runtime",

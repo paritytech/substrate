@@ -85,10 +85,10 @@ use sp_runtime::{
 pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
 	inherents::SassafrasInherentData,
-	make_slot_transcript, make_ticket_transcript, AuthorityId, AuthorityPair, AuthoritySignature,
-	SassafrasApi, SassafrasAuthorityWeight, SassafrasConfiguration, SassafrasEpochConfiguration,
-	Ticket, TicketInfo, VRFOutput, VRFProof, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
-	VRF_PROOF_LENGTH,
+	vrf::{make_slot_transcript, make_ticket_transcript},
+	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
+	SassafrasConfiguration, SassafrasEpochConfiguration, Ticket, TicketInfo, VRFOutput, VRFProof,
+	SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
 };
 
 mod authorship;
@@ -101,7 +101,6 @@ pub use block_import::{block_import, SassafrasBlockImport};
 pub use verification::SassafrasVerifier;
 
 /// Errors encountered by the Sassafras routines.
-/// TODO-SASS-P2: remove unused errors.
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	/// Multiple Sassafras pre-runtime digests
@@ -217,7 +216,7 @@ impl EpochT for Epoch {
 			duration: self.duration,
 			authorities: descriptor.authorities,
 			randomness: descriptor.randomness,
-			config: descriptor.config.expect("configuration should have been set"),
+			config: descriptor.config.unwrap_or(self.config.clone()),
 			tickets_info: BTreeMap::new(),
 		}
 	}
@@ -241,26 +240,24 @@ impl Epoch {
 			duration: config.epoch_length,
 			authorities: config.authorities.clone(),
 			randomness: config.randomness,
-			config: SassafrasEpochConfiguration::default(),
+			config: config.threshold_params.clone(),
 			tickets_info: BTreeMap::new(),
 		}
 	}
 }
 
-/// TODO-SASS-P2
+/// Read latest finalized protocol configuration.
 pub fn configuration<B, C>(client: &C) -> ClientResult<SassafrasConfiguration>
 where
 	B: BlockT,
-	// TODO-SASS-P2: we require all these bunds?
-	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
+	C: ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: SassafrasApi<B>,
 {
-	let hash = if client.usage_info().chain.finalized_state.is_some() {
-		client.usage_info().chain.best_hash
-	} else {
-		debug!(target: "sassafras", "🌳 No finalized state is available. Reading config from genesis");
-		client.usage_info().chain.genesis_hash
-	};
+	let info = client.usage_info().chain;
+	let hash = info.finalized_state.map(|(hash, _)| hash).unwrap_or_else(|| {
+		debug!(target: "sassafras", "🌳 Reading config from genesis");
+		info.genesis_hash
+	});
 
 	let config = client.runtime_api().configuration(&BlockId::Hash(hash))?;
 	Ok(config)
