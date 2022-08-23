@@ -17,32 +17,25 @@
 
 //! Test utilities for Sassafras pallet.
 
-// TODO-SASS-P2 remove
-#![allow(unused_imports)]
-
-use crate::{self as pallet_sassafras, Authorities, Config, SameAuthoritiesForever};
+use crate::{self as pallet_sassafras, SameAuthoritiesForever};
 
 use frame_support::{
 	parameter_types,
-	traits::{
-		ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
-	},
+	traits::{ConstU32, ConstU64, GenesisBuild, OnFinalize, OnInitialize},
 };
 use scale_codec::Encode;
 use sp_consensus_sassafras::{
-	digests::PreDigest, AuthorityId, AuthorityIndex, AuthorityPair, Slot,
+	digests::PreDigest,
+	vrf::{self, VRFOutput, VRFProof},
+	AuthorityIndex, AuthorityPair, Slot,
 };
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{
-	crypto::{IsWrappedBy, KeyTypeId, Pair},
+	crypto::{IsWrappedBy, Pair},
 	H256, U256,
 };
 use sp_runtime::{
-	curve::PiecewiseLinear,
-	impl_opaque_keys,
 	testing::{Digest, DigestItem, Header, TestXt},
-	traits::{Header as _, IdentityLookup, OpaqueKeys},
-	Perbill,
+	traits::IdentityLookup,
 };
 
 const EPOCH_DURATION: u64 = 10;
@@ -156,7 +149,7 @@ fn make_ticket_vrf(slot: Slot, attempt: u32, pair: &AuthorityPair) -> (VRFOutput
 		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let transcript = sp_consensus_sassafras::make_ticket_transcript(&randomness, attempt, epoch);
+	let transcript = vrf::make_ticket_transcript(&randomness, attempt, epoch);
 	let inout = pair.vrf_sign(transcript);
 	let output = VRFOutput(inout.0.to_output());
 	let proof = VRFProof(inout.1);
@@ -184,7 +177,7 @@ fn make_slot_vrf(slot: Slot, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 		randomness = crate::NextRandomness::<Test>::get();
 	}
 
-	let transcript = sp_consensus_sassafras::make_slot_transcript(&randomness, slot, epoch);
+	let transcript = vrf::make_slot_transcript(&randomness, slot, epoch);
 	let inout = pair.vrf_sign(transcript);
 	let output = VRFOutput(inout.0.to_output());
 	let proof = VRFProof(inout.1);

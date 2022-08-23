@@ -17,26 +17,13 @@
 
 //! Tests for Sassafras pallet.
 
-// TODO-SASS-P2 remove
-#![allow(unused_imports)]
-
 use crate::*;
 use mock::*;
 
-use frame_support::{
-	assert_err, assert_noop, assert_ok,
-	dispatch::EncodeLike,
-	traits::{ConstU32, Currency, EstimateNextSessionRotation, OnFinalize, OnInitialize},
-	weights::{GetDispatchInfo, Pays},
-	BoundedBTreeSet,
-};
+use frame_support::traits::{OnFinalize, OnInitialize};
 use hex_literal::hex;
-use pallet_session::ShouldEndSession;
-use sp_consensus_sassafras::{SassafrasEpochConfiguration, Slot};
-use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
-use sp_core::crypto::Pair;
+use sp_consensus_sassafras::Slot;
 use sp_runtime::traits::Get;
-use std::collections::BTreeSet;
 
 #[test]
 fn slot_ticket_fetch() {
@@ -285,6 +272,7 @@ fn epoch_change_block() {
 			sp_consensus_sassafras::digests::NextEpochDescriptor {
 				authorities: NextAuthorities::<Test>::get().to_vec(),
 				randomness: NextRandomness::<Test>::get(),
+				config: None,
 			},
 		);
 		let consensus_digest = DigestItem::Consensus(SASSAFRAS_ENGINE_ID, consensus_log.encode());
