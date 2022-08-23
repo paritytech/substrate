@@ -6,7 +6,7 @@ edition = "2021"
 license = "Unlicense"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME example pallet"
+description = "FRAME fast unstake pallet"
 readme = "README.md"
 
 [package.metadata.docs.rs]
