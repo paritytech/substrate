@@ -58,32 +58,48 @@ fn test_setup_works() {
 }
 
 #[test]
-fn cannot_register_if_in_queue() {}
+fn cannot_register_if_in_queue() {
+	new_test_ext().execute_with(|| {});
+}
 
 #[test]
-fn cannot_register_if_head() {}
+fn cannot_register_if_head() {
+	new_test_ext().execute_with(|| {});
+}
 
 #[test]
-fn cannot_register_if_has_unlocking_chunks() {}
+fn cannot_register_if_has_unlocking_chunks() {
+	new_test_ext().execute_with(|| {});
+}
 
 #[test]
-fn cannot_register_if_not_bonded() {}
+fn cannot_register_if_not_bonded() {
+	new_test_ext().execute_with(|| {});
+}
 
 #[test]
 fn register_should_work() {
-	// mint accounts 1-5 with 200 units of token
-	for i in 1..5 {
-		let _ = Balances::make_free_balance_be(&i, 2000);
-	}
-	// account 1 bond (stash)
-	// account 2: controller
-	// bond 100 tokens
-	// reward destination to controller account
-	assert_ok!(Staking::bond(Origin::signed(1), 2, 100, RewardDestination::Controller));
-	// TODO: register for unstake.
+	new_test_ext().execute_with(|| {
+		// mint accounts 1-2 with 200 units of token
+		for i in 1..2 {
+			let _ = Balances::make_free_balance_be(&i, 200);
+		}
+		// account 1 bond (stash)
+		// account 2: controller
+		// bond 100 tokens
+		// reward destination to controller account
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 100, RewardDestination::Controller));
+		// TODO: register for unstake
+	});
 }
 
 #[test]
 fn unstake_paused_mid_election() {
-	todo!("a dude is being unstaked, midway being checked, election happens, they are still not exposed, but a new era needs to be checked, therefore this unstake takes longer than expected.")
+	new_test_ext().execute_with(|| {
+		todo!(
+			"a dude is being unstaked, midway being checked, election happens, they are still not
+	exposed, but a new era needs to be checked, therefore this unstake takes longer than
+	expected."
+		)
+	});
 }
