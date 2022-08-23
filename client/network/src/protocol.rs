@@ -443,7 +443,7 @@ where
 			.net_config_path
 			.as_ref()
 			.filter(|_| network_config.persist_peers)
-			.map(|p| PersistPeersets::new(p, peerset_handle.to_owned()));
+			.map(|p| PersistPeersets::new(p.to_owned(), peerset_handle.to_owned()));
 
 		let protocol = Self {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),

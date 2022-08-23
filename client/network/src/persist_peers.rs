@@ -23,7 +23,6 @@ use std::{
 	io,
 	path::{Path, PathBuf},
 	pin::Pin,
-	sync::Arc,
 	task::{Context, Poll},
 	time::{Duration, Instant},
 };
@@ -42,18 +41,22 @@ type ProtocolType = String;
 const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 const PEER_ADDRS_CACHE_SIZE: usize = 100;
 
+const PEER_ADDRS_FILENAME: &str = "peer-addrs.json";
+const PEER_SETS_FILENAME: &str = "peer-sets.json";
+const EXTENSION_TMP: &str = "tmp";
+
 pub struct PersistPeerAddrs {
-	paths: Arc<Paths>,
+	storage_dir: PathBuf,
 	flushed_at: Instant,
 	protocols: HashMap<ProtocolType, LruCache<PeerId, HashSet<Multiaddr>>>,
 	busy: Option<BoxedFuture<Result<(), io::Error>>>,
 }
 
 impl PersistPeerAddrs {
-	pub fn load(dir: impl AsRef<Path>) -> Self {
-		let paths = Paths::new(dir, "peer-addrs");
+	pub fn load(storage_dir: PathBuf) -> Self {
+		let load_from_file = storage_dir.join(PEER_ADDRS_FILENAME);
 
-		let protocols = match persist_peer_addrs::load(&paths.path) {
+		let protocols = match persist_peer_addrs::load(&load_from_file) {
 			Ok(restored) => restored,
 			Err(reason) => {
 				log::warn!("Failed to load peer addresses: {:?}", reason);
@@ -77,7 +80,7 @@ impl PersistPeerAddrs {
 			})
 			.collect();
 
-		Self { paths: Arc::new(paths), flushed_at: Instant::now(), protocols, busy: None }
+		Self { storage_dir, flushed_at: Instant::now(), protocols, busy: None }
 	}
 
 	pub fn report_peer_addr(
@@ -150,7 +153,8 @@ impl PersistPeerAddrs {
 				})
 				.collect();
 
-			let busy_future = persist_peer_addrs::persist(Arc::clone(&self.paths), entries).boxed();
+			let busy_future =
+				persist_peer_addrs::persist(self.storage_dir.to_owned(), entries).boxed();
 			self.busy = Some(busy_future);
 		}
 		Poll::Pending
@@ -168,14 +172,17 @@ mod persist_peer_addrs {
 	}
 
 	pub(super) async fn persist(
-		paths: Arc<Paths>,
+		storage_dir: PathBuf,
 		protocols: HashMap<ProtocolType, Vec<PeerEntry>>,
 	) -> Result<(), io::Error> {
+		let persist_to_file = storage_dir.join(PEER_ADDRS_FILENAME);
+		let tmp_file_path = persist_to_file.with_extension(EXTENSION_TMP);
+
 		let mut tmp_file = tokio::fs::OpenOptions::new()
 			.create(true)
 			.write(true)
 			.truncate(true)
-			.open(&paths.tmp_path)
+			.open(&tmp_file_path)
 			.await?;
 		let serialized = serde_json::to_vec_pretty(&protocols)?;
 
@@ -183,15 +190,13 @@ mod persist_peer_addrs {
 		tmp_file.flush().await?;
 		std::mem::drop(tmp_file);
 
-		tokio::fs::rename(&paths.tmp_path, &paths.path).await?;
+		tokio::fs::rename(&tmp_file_path, &persist_to_file).await?;
 
 		Ok(())
 	}
 
-	pub(super) fn load(
-		path: impl AsRef<Path>,
-	) -> Result<HashMap<ProtocolType, Vec<PeerEntry>>, io::Error> {
-		let file = match std::fs::OpenOptions::new().read(true).open(path.as_ref()) {
+	pub(super) fn load(path: &Path) -> Result<HashMap<ProtocolType, Vec<PeerEntry>>, io::Error> {
+		let file = match std::fs::OpenOptions::new().read(true).open(path) {
 			Ok(file) => file,
 			Err(not_found) if not_found.kind() == std::io::ErrorKind::NotFound =>
 				return Ok(Default::default()),
@@ -206,15 +211,14 @@ pub struct PersistPeersets(BoxedFuture<Never>);
 pub use peersets::load as peersets_load;
 
 impl PersistPeersets {
-	pub fn new(dir: impl AsRef<Path>, peerset_handle: PeersetHandle) -> Self {
-		let paths = Paths::new(dir, "peer-sets");
+	pub fn new(storage_dir: PathBuf, peerset_handle: PeersetHandle) -> Self {
 		let busy_future = async move {
 			let mut ticks = tokio::time::interval(FLUSH_INTERVAL);
 			ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 			loop {
 				let _ = ticks.tick().await;
-				if let Err(reason) = peersets::persist(&paths, &peerset_handle).await {
+				if let Err(reason) = peersets::persist(&storage_dir, &peerset_handle).await {
 					log::warn!("Error persisting peer sets: {}", reason);
 				}
 			}
@@ -237,10 +241,13 @@ mod peersets {
 	}
 
 	pub(super) async fn persist(
-		paths: &Paths,
+		storage_dir: &Path,
 		peerset_handle: &PeersetHandle,
 	) -> Result<(), io::Error> {
 		use tokio::io::AsyncWriteExt;
+
+		let persist_to_file = storage_dir.join(PEER_SETS_FILENAME);
+		let tmp_file_path = persist_to_file.with_extension(EXTENSION_TMP);
 
 		let peersets_dumped = peerset_handle
 			.dump_state()
@@ -254,14 +261,14 @@ mod peersets {
 			.create(true)
 			.write(true)
 			.truncate(true)
-			.open(&paths.tmp_path)
+			.open(&tmp_file_path)
 			.await?;
 		let serialized = serde_json::to_vec_pretty(&peersets_dumped)?;
 		tmp_file.write_all(&serialized).await?;
 		tmp_file.flush().await?;
 		std::mem::drop(tmp_file);
 
-		tokio::fs::rename(&paths.tmp_path, &paths.path).await?;
+		tokio::fs::rename(&tmp_file_path, &persist_to_file).await?;
 
 		Ok(())
 	}
@@ -294,29 +301,4 @@ mod peersets {
 			f.debug_struct("PersistPeersets").finish()
 		}
 	}
-}
-
-#[derive(Debug)]
-struct Paths {
-	path: PathBuf,
-	tmp_path: PathBuf,
-}
-
-impl Paths {
-	pub fn new(net_config_path: impl AsRef<Path>, name: impl AsRef<str>) -> Self {
-		let mut p = net_config_path.as_ref().to_owned();
-		p.push(name.as_ref());
-
-		let path = p.with_extension("json");
-		let tmp_path = p.with_extension("tmp");
-
-		Self { path, tmp_path }
-	}
-}
-
-#[test]
-fn test_paths() {
-	let p = Paths::new("/tmp", "test");
-	assert_eq!(p.path.to_str(), Some("/tmp/test.json"));
-	assert_eq!(p.tmp_path.to_str(), Some("/tmp/test.tmp"));
 }
