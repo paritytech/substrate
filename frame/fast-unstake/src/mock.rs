@@ -333,7 +333,8 @@ impl ExtBuilder {
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut storage =
+			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 		let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
 			min_join_bond: MinJoinBondConfig::get(),
