@@ -25,7 +25,6 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { default-features = false, path = "../../primitives/staking" }
 
-pallet-bags-list = { default-features = false, path = "../bags-list" }
 pallet-balances = { default-features = false, path = "../balances" }
 pallet-timestamp = { default-features = false, path = "../timestamp" }
 pallet-staking = { default-features = false, path = "../staking" }
@@ -55,7 +54,6 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 
-	"pallet-bags-list/std",
 	"pallet-staking/std",
 	"pallet-nomination-pools/std",
 	"pallet-balances/std",

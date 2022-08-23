@@ -79,7 +79,7 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 parameter_types! {
-	pub static ExistentialDeposit: Balance = 5;
+	pub static ExistentialDeposit: Balance = 1;
 }
 
 impl pallet_balances::Config for Runtime {
@@ -140,23 +140,11 @@ impl pallet_staking::Config for Runtime {
 	type ElectionProvider =
 		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking)>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type VoterList = pallet_bags_list::Pallet<Self>;
+	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type OnStakerSlash = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub static BagThresholds: &'static [VoteWeight] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
-}
-
-impl pallet_bags_list::Config for Runtime {
-	type Event = Event;
-	type WeightInfo = ();
-	type BagThresholds = BagThresholds;
-	type ScoreProvider = Staking;
-	type Score = VoteWeight;
 }
 
 pub struct BalanceToU256;
@@ -209,7 +197,6 @@ frame_support::construct_runtime!(
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<Runtime>, Event<Runtime>},
 		Staking: pallet_staking::{Pallet, Call, Config<Runtime>, Storage, Event<Runtime>},
-		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<Runtime>},
 		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<Runtime>},
 	}
 );
