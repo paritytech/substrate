@@ -108,7 +108,7 @@ pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, 
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
 pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "../../../frame/whitelist" }
-pallet-safe-mode = { version = "4.0.0-dev", default-features = false, path = "../../../frame/safe-mode" }
+pallet-tx-pause = { version = "4.0.0-dev", default-features = false, path = "../../../frame/tx-pause" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
@@ -149,7 +149,7 @@ std = [
 	"pallet-nomination-pools/std",
 	"pallet-nomination-pools-runtime-api/std",
 	"pallet-identity/std",
-	"pallet-safe-mode/std",
+	"pallet-tx-pause/std",
 	"pallet-scheduler/std",
 	"node-primitives/std",
 	"sp-offchain/std",
@@ -231,7 +231,7 @@ runtime-benchmarks = [
 	"pallet-referenda/runtime-benchmarks",
 	"pallet-recovery/runtime-benchmarks",
 	"pallet-remark/runtime-benchmarks",
-	"pallet-safe-mode/runtime-benchmarks",
+	"pallet-tx-pause/runtime-benchmarks",
 	"pallet-session-benchmarking",
 	"pallet-society/runtime-benchmarks",
 	"pallet-staking/runtime-benchmarks",
@@ -281,7 +281,7 @@ try-runtime = [
 	"pallet-randomness-collective-flip/try-runtime",
 	"pallet-recovery/try-runtime",
 	"pallet-referenda/try-runtime",
-	"pallet-safe-mode/try-runtime",
+	"pallet-tx-pause/try-runtime",
 	"pallet-scheduler/try-runtime",
 	"pallet-session/try-runtime",
 	"pallet-society/try-runtime",

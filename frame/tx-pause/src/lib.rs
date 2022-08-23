@@ -46,32 +46,32 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// The only origin that can ban calls.
-		type BanOrigin: EnsureOrigin<Self::Origin>;
+		/// The only origin that can pause calls.
+		type PauseOrigin: EnsureOrigin<Self::Origin>;
 
-		/// The only origin that can un-ban calls.
-		type UnbanOrigin: EnsureOrigin<Self::Origin>;
+		/// The only origin that can un-pause calls.
+		type UnpauseOrigin: EnsureOrigin<Self::Origin>;
 
-		/// Pallets that are safe and can never be banned.
+		/// Pallets that are safe and can never be paused.
 		///
-		/// The safe-mode pallet is always assumed to be safe itself.
+		/// The tx-pause pallet is always assumed to be safe itself.
 		type SafePallets: Contains<PalletNameOf<Self>>;
 
 		/// Maximum length for pallet- and extrinsic-names.
 		///
 		/// Too long names will not be truncated but handled like
-		/// [`Self::BanTooLongNames`] specifies.
+		/// [`Self::PauseTooLongNames`] specifies.
 		#[pallet::constant]
 		type MaxNameLen: Get<u32>;
 
-		/// Specifies if extrinsics and pallets with too long names should be treated as banned.
+		/// Specifies if extrinsics and pallets with too long names should be treated as paused.
 		///
 		/// Setting this to `true` ensures that all calls that
-		/// are callable, are also ban-able.
+		/// are callable, are also pause-able.
 		/// Otherwise there could be a situation where a call
-		/// is callable but not ban-able, which would could be exploited.
+		/// is callable but not pause-able, which would could be exploited.
 		#[pallet::constant]
-		type BanTooLongNames: Get<bool>;
+		type PauseTooLongNames: Get<bool>;
 
 		// Weight information for extrinsics in this pallet.
 		//type WeightInfo: WeightInfo;
@@ -79,10 +79,10 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The call is banned.
-		IsBanned,
-		/// The call is not banned.
-		IsNotBanned,
+		/// The call is paused.
+		IsPaused,
+		/// The call is not paused.
+		IsNotPaused,
 		/// The call is listed as safe.
 		IsSafe,
 	}
@@ -90,53 +90,53 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// This call got banned.
-		CallBanned(PalletNameOf<T>, ExtrinsicNameOf<T>),
-		/// This call got un-banned.
-		CallUnbanned(PalletNameOf<T>, ExtrinsicNameOf<T>),
+		/// This call got paused.
+		CallPaused(PalletNameOf<T>, ExtrinsicNameOf<T>),
+		/// This call got un-paused.
+		CallUnpaused(PalletNameOf<T>, ExtrinsicNameOf<T>),
 	}
 
-	/// The set of calls that are explicitly banned.
+	/// The set of calls that are explicitly paused.
 	#[pallet::storage]
-	pub type BannedCalls<T: Config> =
+	pub type PausedCalls<T: Config> =
 		StorageMap<_, Blake2_128Concat, (PalletNameOf<T>, ExtrinsicNameOf<T>), (), OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Ban a call.
+		/// Pause a call.
 		///
-		/// Can only be called by [`Config::BanOrigin`].
-		/// Emits an [`Event::CallBanned`] event on success.
+		/// Can only be called by [`Config::PauseOrigin`].
+		/// Emits an [`Event::CallPaused`] event on success.
 		#[pallet::weight(0)]
-		pub fn ban_call(
+		pub fn pause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
 			extrinsic: ExtrinsicNameOf<T>,
 		) -> DispatchResult {
-			T::BanOrigin::ensure_origin(origin)?;
+			T::PauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_ban(&pallet, &extrinsic)?;
-			BannedCalls::<T>::insert((&pallet, &extrinsic), ());
-			Self::deposit_event(Event::CallBanned(pallet, extrinsic));
+			Self::ensure_can_pause(&pallet, &extrinsic)?;
+			PausedCalls::<T>::insert((&pallet, &extrinsic), ());
+			Self::deposit_event(Event::CallPaused(pallet, extrinsic));
 
 			Ok(())
 		}
 
-		/// Un-ban a call.
+		/// Un-pause a call.
 		///
-		/// Can only be called by [`Config::UnbanOrigin`].
-		/// Emits an [`Event::CallUnbanned`] event on success.
+		/// Can only be called by [`Config::UnpauseOrigin`].
+		/// Emits an [`Event::CallUnpaused`] event on success.
 		#[pallet::weight(0)]
-		pub fn unban_call(
+		pub fn unpause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
 			extrinsic: ExtrinsicNameOf<T>,
 		) -> DispatchResult {
-			T::UnbanOrigin::ensure_origin(origin)?;
+			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_unban(&pallet, &extrinsic)?;
-			BannedCalls::<T>::remove((&pallet, &extrinsic));
-			Self::deposit_event(Event::CallUnbanned(pallet, extrinsic));
+			Self::ensure_can_unpause(&pallet, &extrinsic)?;
+			PausedCalls::<T>::remove((&pallet, &extrinsic));
+			Self::deposit_event(Event::CallUnpaused(pallet, extrinsic));
 
 			Ok(())
 		}
@@ -144,24 +144,24 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Return whether the call is banned.
-	pub fn is_banned_unbound(pallet: Vec<u8>, extrinsic: Vec<u8>) -> bool {
+	/// Return whether the call is paused.
+	pub fn is_paused_unbound(pallet: Vec<u8>, extrinsic: Vec<u8>) -> bool {
 		let pallet = PalletNameOf::<T>::try_from(pallet);
 		let extrinsic = ExtrinsicNameOf::<T>::try_from(extrinsic);
 
 		match (pallet, extrinsic) {
-			(Ok(pallet), Ok(extrinsic)) => Self::is_banned(&pallet, &extrinsic),
-			_ => T::BanTooLongNames::get(),
+			(Ok(pallet), Ok(extrinsic)) => Self::is_paused(&pallet, &extrinsic),
+			_ => T::PauseTooLongNames::get(),
 		}
 	}
 
-	/// Return whether the call is banned.
-	pub fn is_banned(pallet: &PalletNameOf<T>, extrinsic: &ExtrinsicNameOf<T>) -> bool {
-		<BannedCalls<T>>::contains_key((pallet, extrinsic))
+	/// Return whether the call is paused.
+	pub fn is_paused(pallet: &PalletNameOf<T>, extrinsic: &ExtrinsicNameOf<T>) -> bool {
+		<PausedCalls<T>>::contains_key((pallet, extrinsic))
 	}
 
-	/// Ensure that the call can be banned.
-	pub fn ensure_can_ban(
+	/// Ensure that the call can be paused.
+	pub fn ensure_can_pause(
 		pallet: &PalletNameOf<T>,
 		extrinsic: &ExtrinsicNameOf<T>,
 	) -> Result<(), Error<T>> {
@@ -171,22 +171,22 @@ impl<T: Config> Pallet<T> {
 		if T::SafePallets::contains(&pallet) {
 			return Err(Error::<T>::IsSafe)
 		}
-		if Self::is_banned(pallet, extrinsic) {
-			return Err(Error::<T>::IsBanned)
+		if Self::is_paused(pallet, extrinsic) {
+			return Err(Error::<T>::IsPaused)
 		}
 		Ok(())
 	}
 
-	/// Ensure that the call can be un-banned.
-	pub fn ensure_can_unban(
+	/// Ensure that the call can be un-paused.
+	pub fn ensure_can_unpause(
 		pallet: &PalletNameOf<T>,
 		extrinsic: &ExtrinsicNameOf<T>,
 	) -> Result<(), Error<T>> {
-		if Self::is_banned(pallet, extrinsic) {
-			// SAFETY: Everything that is banned, can be un-banned.
+		if Self::is_paused(pallet, extrinsic) {
+			// SAFETY: Everything that is paused, can be un-paused.
 			Ok(())
 		} else {
-			Err(Error::IsNotBanned)
+			Err(Error::IsNotPaused)
 		}
 	}
 }
@@ -198,6 +198,6 @@ where
 	/// Returns whether the call is allowed to be called.
 	fn contains(call: &T::Call) -> bool {
 		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
-		!Pallet::<T>::is_banned_unbound(pallet_name.into(), function_name.into())
+		!Pallet::<T>::is_paused_unbound(pallet_name.into(), function_name.into())
 	}
 }
