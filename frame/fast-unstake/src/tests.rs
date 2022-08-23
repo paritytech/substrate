@@ -78,12 +78,13 @@ fn cannot_register_if_not_bonded() {
 }
 
 #[test]
-fn register_should_work() {
+fn register_works() {
 	new_test_ext().execute_with(|| {
 		// mint accounts 1-2 with 200 units of token
 		for i in 1..2 {
 			let _ = Balances::make_free_balance_be(&i, 200);
 		}
+		run_to_block(2);
 		// account 1 bond (stash)
 		// account 2: controller
 		// bond 100 tokens
@@ -91,6 +92,16 @@ fn register_should_work() {
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 100, RewardDestination::Controller));
 		// TODO: register for unstake
 	});
+}
+
+#[test]
+fn deregister_works() {
+	new_test_ext().execute_with(|| {});
+}
+
+#[test]
+fn control_works() {
+	new_test_ext().execute_with(|| {});
 }
 
 #[test]

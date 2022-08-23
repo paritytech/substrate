@@ -21,13 +21,12 @@
 
 use crate::{Pallet as FastUnstake, *};
 use frame_benchmarking::{benchmarks, whitelist_account};
-use frame_support::traits::{Currency, EnsureOrigin, Get};
+use frame_support::traits::{Currency, EnsureOrigin, Get, Hooks};
 use frame_system::RawOrigin;
 use pallet_nomination_pools::{Pallet as Pools, PoolId};
 use pallet_staking::Pallet as Staking;
 use sp_runtime::traits::{Bounded, StaticLookup, Zero};
 use sp_std::prelude::*;
-use frame_support::traits::Hooks;
 
 const USER_SEED: u32 = 0;
 const DEFAULT_BACKER_PER_VALIDATOR: u32 = 128;

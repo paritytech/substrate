@@ -194,8 +194,8 @@ impl fast_unstake::WeightInfo for FastUnstakeWeightInfo {
 	fn control() -> Weight {
 		2
 	}
-	fn on_idle_empty() -> Weight {
-		1
+	fn on_idle_unstake() -> Weight {
+		10
 	}
 	fn on_idle_check(e: u32) -> Weight {
 		10
@@ -378,7 +378,6 @@ impl ExtBuilder {
 				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, last_pool));
 			}
 		});
-
 		ext
 	}
 
@@ -397,4 +396,20 @@ pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
 		})
 	})
 	.unwrap()
+}
+
+pub(crate) fn run_to_block(n: u64) {
+	let current_block = System::block_number();
+	assert!(n > current_block);
+	while System::block_number() < n {
+		Balances::on_finalize(System::block_number());
+		Staking::on_finalize(System::block_number());
+		Pools::on_finalize(System::block_number());
+		FastUnstake::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		Balances::on_initialize(System::block_number());
+		Staking::on_initialize(System::block_number());
+		Pools::on_initialize(System::block_number());
+		FastUnstake::on_initialize(System::block_number());
+	}
 }
