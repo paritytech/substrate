@@ -16,8 +16,7 @@
 // limitations under the License.
 
 use super::*;
-use crate::{self as pallet_fast_unstake, *};
-use frame_election_provider_support::VoteWeight;
+use crate::{self as fast_unstake};
 use frame_support::{
 	assert_ok,
 	pallet_prelude::*,
@@ -32,7 +31,7 @@ use sp_runtime::{
 
 use frame_system::RawOrigin;
 use pallet_nomination_pools::{LastPoolId, PoolId, *};
-use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub type AccountId = u128;
 pub type AccountIndex = u32;
@@ -184,9 +183,38 @@ impl pallet_nomination_pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 }
 
+struct FastUnstakeWeightInfo;
+impl fast_unstake::WeightInfo for FastUnstakeWeightInfo {
+	fn register_fast_unstake() -> Weight {
+		10
+	}
+	fn deregister() -> Weight {
+		5
+	}
+	fn control() -> Weight {
+		2
+	}
+	fn on_idle_empty() -> Weight {
+		1
+	}
+	fn on_idle_check(e: u32) -> Weight {
+		10
+	}
+}
+
+parameter_types! {
+	pub static SlashPerEra: u32 = 100;
+}
+
+impl fast_unstake::Config for Runtime {
+	type Event = Event;
+	type SlashPerEra = SlashPerEra;
+	type ControlOrigin = Origin;
+	type WeightInfo = FastUnstakeWeightInfo;
+}
+
 type Block = frame_system::mocking::MockBlock<Runtime>;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
-
 frame_support::construct_runtime!(
 	pub enum Runtime where
 		Block = Block,

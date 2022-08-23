@@ -29,6 +29,7 @@ use frame_support::{
 };
 use pallet_balances::Error as BalancesError;
 use pallet_nomination_pools::{BondedPool, PoolId, *};
+use pallet_staking::RewardDestination;
 
 use sp_runtime::{
 	assert_eq_error_rate,
@@ -51,9 +52,7 @@ fn test_setup_works() {
 		assert_eq!(BondedPools::<Runtime>::count(), 1);
 		assert_eq!(RewardPools::<Runtime>::count(), 1);
 		assert_eq!(Staking::bonding_duration(), 3);
-
 		let last_pool = LastPoolId::<Runtime>::get();
-
 		assert_eq!(last_pool, 1);
 	})
 }
@@ -69,6 +68,20 @@ fn cannot_register_if_has_unlocking_chunks() {}
 
 #[test]
 fn cannot_register_if_not_bonded() {}
+
+#[test]
+fn register_should_work() {
+	// mint accounts 1-5 with 200 units of token
+	for i in 1..5 {
+		let _ = Balances::make_free_balance_be(&i, 2000);
+	}
+	// account 1 bond (stash)
+	// account 2: controller
+	// bond 100 tokens
+	// reward destination to controller account
+	assert_ok!(Staking::bond(Origin::signed(1), 2, 100, RewardDestination::Controller));
+	// TODO: register for unstake.
+}
 
 #[test]
 fn unstake_paused_mid_election() {
