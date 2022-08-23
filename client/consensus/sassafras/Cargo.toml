@@ -19,7 +19,6 @@ scale-codec = { package = "parity-scale-codec", version = "3.0.0", features = ["
 futures = "0.3.21"
 log = "0.4.16"
 parking_lot = "0.12.0"
-retain_mut = "0.1.4"
 thiserror = "1.0"
 fork-tree = { version = "3.0.0", path = "../../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }

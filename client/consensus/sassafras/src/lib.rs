@@ -40,7 +40,6 @@ use futures::{
 use log::{debug, error, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-use retain_mut::RetainMut;
 use scale_codec::{Decode, Encode};
 use schnorrkel::SignatureError;
 
