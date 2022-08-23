@@ -42,6 +42,11 @@
 
 pub use pallet::*;
 
+#[cfg(test)]
+mod mock;
+#[cfg(test)]
+mod tests;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
@@ -246,7 +251,8 @@ pub mod pallet {
 				return 0
 			}
 
-			// TODO ROSS: sum up all the weights consumed in the worse case execution of this code, if it is too much, early exit.
+			// TODO ROSS: sum up all the weights consumed in the worse case execution of this code,
+			// if it is too much, early exit.
 
 			if <T as pallet_staking::Config>::ElectionProvider::ongoing() {
 				// NOTE: we assume `ongoing` does not consume any weight.
