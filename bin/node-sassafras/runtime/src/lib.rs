@@ -8,6 +8,8 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use sp_api::impl_runtime_apis;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+#[cfg(feature = "use-session-pallet")]
+use sp_runtime::traits::OpaqueKeys;
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify},
@@ -70,12 +72,12 @@ pub mod opaque {
 	pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 	/// Opaque block identifier type.
 	pub type BlockId = generic::BlockId<Block>;
+}
 
-	impl_opaque_keys! {
-		pub struct SessionKeys {
-			pub sassafras: Sassafras,
-			pub grandpa: Grandpa,
-		}
+impl_opaque_keys! {
+	pub struct SessionKeys {
+		pub sassafras: Sassafras,
+		pub grandpa: Grandpa,
 	}
 }
 
@@ -215,6 +217,9 @@ parameter_types! {
 impl pallet_sassafras::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	#[cfg(feature = "use-session-pallet")]
+	type EpochChangeTrigger = pallet_sassafras::ExternalTrigger;
+	#[cfg(not(feature = "use-session-pallet"))]
 	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 	type MaxTickets = ConstU32<{ EPOCH_DURATION_IN_SLOTS as u32 }>;
@@ -236,7 +241,6 @@ impl pallet_grandpa::Config for Runtime {
 }
 
 impl pallet_timestamp::Config for Runtime {
-	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
@@ -244,13 +248,11 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 impl pallet_balances::Config for Runtime {
+	type Event = Event;
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-	/// The type for recording an account's balance.
 	type Balance = Balance;
-	/// The ubiquitous event type.
-	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU128<500>;
 	type AccountStore = System;
@@ -271,7 +273,40 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-// Create the runtime by composing the FRAME pallets that were previously configured.
+#[cfg(feature = "use-session-pallet")]
+impl pallet_session::Config for Runtime {
+	type Event = Event;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type ValidatorIdOf = (); //pallet_staking::StashOf<Self>;
+	type ShouldEndSession = Sassafras;
+	type NextSessionRotation = Sassafras;
+	type SessionManager = (); //pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
+	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type Keys = SessionKeys;
+	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
+}
+
+// Create a runtime using session pallet
+#[cfg(feature = "use-session-pallet")]
+construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = opaque::Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: frame_system,
+		Timestamp: pallet_timestamp,
+		Sassafras: pallet_sassafras,
+		Grandpa: pallet_grandpa,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
+		Sudo: pallet_sudo,
+		Session: pallet_session,
+	}
+);
+
+// Create a runtime NOT using session pallet
+#[cfg(not(feature = "use-session-pallet"))]
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -422,13 +457,13 @@ impl_runtime_apis! {
 
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
-			opaque::SessionKeys::generate(seed)
+			SessionKeys::generate(seed)
 		}
 
 		fn decode_session_keys(
 			encoded: Vec<u8>,
 		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
-			opaque::SessionKeys::decode_into_raw_public_keys(&encoded)
+			SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
 	}
 

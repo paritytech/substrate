@@ -66,7 +66,15 @@ substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build
 
 [features]
 default = []
-runtime-benchmarks = ["node-sassafras-runtime/runtime-benchmarks"]
+runtime-benchmarks = [
+    "node-sassafras-runtime/runtime-benchmarks"
+]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = ["node-sassafras-runtime/try-runtime", "try-runtime-cli"]
+try-runtime = [
+    "node-sassafras-runtime/try-runtime",
+    "try-runtime-cli"
+]
+use-session-pallet = [
+    "node-sassafras-runtime/use-session-pallet"
+]

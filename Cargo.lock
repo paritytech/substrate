@@ -4936,6 +4936,7 @@ dependencies = [
  "pallet-balances",
  "pallet-grandpa",
  "pallet-sassafras",
+ "pallet-session",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",

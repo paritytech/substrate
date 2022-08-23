@@ -52,8 +52,6 @@ use scale_info::TypeInfo;
 
 use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
-//use sp_application_crypto::ByteArray;
-//use sp_consensus_vrf::schnorrkel;
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
 	AuthorityId, Randomness, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, Ticket,
@@ -73,9 +71,11 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
+pub mod session;
+
 pub use pallet::*;
 
-/// Tickets related metadata that are commonly used together.
+/// Tickets related metadata that is commonly used together.
 #[derive(Debug, Default, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy)]
 pub struct TicketsMetadata {
 	/// Number of tickets available for even and odd session indices respectivelly.
@@ -303,7 +303,7 @@ pub mod pallet {
 		}
 
 		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
-		/// the next call to `enact_epoch_change`. The config will be activated one epoch after.
+		/// the next call to `enact_session_change`. The config will be activated one epoch after.
 		/// Multiple calls to this method will replace any existing planned config change that had
 		/// not been enacted yet.
 		#[pallet::weight(10_000)]
@@ -416,7 +416,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Determine whether an epoch change should take place at this block.
 	/// Assumes that initialization has already taken place.
-	pub fn should_epoch_change(now: T::BlockNumber) -> bool {
+	pub fn should_end_session(now: T::BlockNumber) -> bool {
 		// The epoch has technically ended during the passage of time between this block and the
 		// last, but we have to "end" the epoch now, since there is no earlier possible block we
 		// could have done it.
@@ -444,7 +444,7 @@ impl<T: Config> Pallet<T> {
 		*slot.saturating_sub(Self::current_epoch_start())
 	}
 
-	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change`
+	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_end_session`
 	/// has returned `true`, and the caller is the only caller of this function.
 	///
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set
@@ -454,7 +454,7 @@ impl<T: Config> Pallet<T> {
 	/// If we detect one or more skipped epochs the policy is to use the authorities and values
 	/// from the first skipped epoch.
 	/// Should the tickets be invalidated? Currently they are... see the `get-ticket` method.
-	pub(crate) fn enact_epoch_change(
+	pub(crate) fn enact_session_change(
 		authorities: WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<
 			(AuthorityId, SassafrasAuthorityWeight),
@@ -567,11 +567,19 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Initialize authorities on genesis phase.
-	// TODO-SASS-P2: temporary fix to make the compiler happy
-	#[allow(dead_code)]
 	fn initialize_genesis_authorities(authorities: &[(AuthorityId, SassafrasAuthorityWeight)]) {
-		assert!(!authorities.is_empty());
-		assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
+		// Genesis authorities may have been initialized via other means (e.g. via session pallet).
+		// If this function has already been called with some authorities, then the new list
+		// should be match the previously set one.
+		let prev_authorities = Authorities::<T>::get();
+		if !prev_authorities.is_empty() {
+			if prev_authorities.to_vec() == authorities {
+				return
+			} else {
+				panic!("Authorities already were already initialized");
+			}
+		}
+
 		let bounded_authorities =
 			WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
 				.expect("Initial number of authorities should be lower than T::MaxAuthorities");
@@ -784,11 +792,11 @@ pub struct SameAuthoritiesForever;
 
 impl EpochChangeTrigger for SameAuthoritiesForever {
 	fn trigger<T: Config>(now: T::BlockNumber) {
-		if <Pallet<T>>::should_epoch_change(now) {
+		if <Pallet<T>>::should_end_session(now) {
 			let authorities = <Pallet<T>>::authorities();
 			let next_authorities = authorities.clone();
 
-			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
+			<Pallet<T>>::enact_session_change(authorities, next_authorities);
 		}
 	}
 }
