@@ -228,6 +228,7 @@ where
 		bitswap: Option<Bitswap<B, Client>>,
 		light_client_request_protocol_config: ProtocolConfig,
 		// All remaining request protocol configs.
+		// TODO: insert here
 		mut request_response_protocols: Vec<ProtocolConfig>,
 		peerset: PeersetHandle,
 	) -> Result<Self, request_responses::RegisterError> {

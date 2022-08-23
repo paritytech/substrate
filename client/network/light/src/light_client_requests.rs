@@ -39,6 +39,8 @@ fn generate_legacy_protocol_name(protocol_id: &ProtocolId) -> String {
 	format!("/{}/light/2", protocol_id.as_ref())
 }
 
+// see this
+
 /// Generates a [`ProtocolConfig`] for the light client request protocol, refusing incoming
 /// requests.
 pub fn generate_protocol_config<Hash: AsRef<[u8]>>(

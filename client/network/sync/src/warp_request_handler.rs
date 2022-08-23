@@ -16,6 +16,8 @@
 
 //! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
+// see this
+
 use codec::Decode;
 use futures::{
 	channel::{mpsc, oneshot},

@@ -402,6 +402,7 @@ where
 			Notifications::new(
 				peerset,
 				iter::once(sync_protocol_config).chain(
+					// TODO: check here
 					network_config.extra_sets.iter().zip(notifications_protocols_handshakes).map(
 						|(s, hs)| notifications::ProtocolConfig {
 							name: s.notifications_protocol.clone(),

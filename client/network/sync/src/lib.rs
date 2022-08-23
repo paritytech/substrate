@@ -36,6 +36,8 @@ pub mod state_request_handler;
 pub mod warp;
 pub mod warp_request_handler;
 
+pub mod beefy_justif_requests;
+
 use crate::{
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
@@ -813,6 +815,7 @@ where
 		None
 	}
 
+	// TODO: see this
 	fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<B>)> {
 		if let Some(sync) = &self.warp_sync {
 			if self.allowed_requests.is_empty() ||

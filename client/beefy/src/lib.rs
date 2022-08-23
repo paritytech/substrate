@@ -56,22 +56,38 @@ pub use beefy_protocol_name::standard_name as protocol_standard_name;
 pub(crate) mod beefy_protocol_name {
 	use sc_chain_spec::ChainSpec;
 
-	const NAME: &str = "/beefy/1";
-	/// Old names for the notifications protocol, used for backward compatibility.
+	/// BEEFY votes gossip protocol name suffix.
+	const GOSSIP_NAME: &str = "/beefy/1";
+	/// Old names for the gossip protocol, used for backward compatibility.
 	pub(crate) const LEGACY_NAMES: [&str; 1] = ["/paritytech/beefy/1"];
 
-	/// Name of the notifications protocol used by BEEFY.
+	/// BEEFY justifications protocol name suffix.
+	const JUSTIFICATIONS_NAME: &str = "/beefy/justifications/1";
+
+	/// Name of the votes gossip protocol used by BEEFY.
 	///
-	/// Must be registered towards the networking in order for BEEFY to properly function.
+	/// Must be registered towards the networking in order for BEEFY voter to properly function.
 	pub fn standard_name<Hash: AsRef<[u8]>>(
-		genesis_hash: &Hash,
-		chain_spec: &Box<dyn ChainSpec>,
+		genesis_hash: Hash,
+		fork_id: Option<&str>,
 	) -> std::borrow::Cow<'static, str> {
-		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-			None => format!("/{}", hex::encode(genesis_hash)),
-		};
-		format!("{}{}", chain_prefix, NAME).into()
+		if let Some(fork_id) = fork_id {
+			format!("/{}/{}{}", hex::encode(genesis_hash), fork_id, GOSSIP_NAME).into()
+		} else {
+			format!("/{}{}", hex::encode(genesis_hash), GOSSIP_NAME).into()
+		}
+	}
+
+	/// Name of the BEEFY justifications request-response protocol.
+	pub fn justifications_protocol_name<Hash: AsRef<[u8]>>(
+		genesis_hash: Hash,
+		fork_id: Option<&str>,
+	) -> std::borrow::Cow<'static, str> {
+		if let Some(fork_id) = fork_id {
+			format!("/{}/{}{}", hex::encode(genesis_hash), fork_id, JUSTIFICATIONS_NAME).into()
+		} else {
+			format!("/{}{}", hex::encode(genesis_hash), JUSTIFICATIONS_NAME).into()
+		}
 	}
 }
 
