@@ -28,7 +28,9 @@ use frame_support::{
 	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use pallet_balances::Error as BalancesError;
-use pallet_nomination_pools::{BondedPool, PoolId, *};
+use pallet_nomination_pools::{
+	BondedPool, BondedPools, LastPoolId, PoolId, PoolRoles, RewardPools,
+};
 use pallet_staking::RewardDestination;
 
 use sp_runtime::{
@@ -58,6 +60,43 @@ fn test_setup_works() {
 }
 
 #[test]
+fn cannot_register_if_not_bonded() {
+	new_test_ext().execute_with(|| {
+		let stash = 1;
+		let ctrl = 2;
+		// Mint accounts 1 and 2 with 200 tokens.
+		for i in [stash, ctrl] {
+			let _ = Balances::make_free_balance_be(&1, 200);
+		}
+		// Attempt to fast unstake.
+		assert_noop!(
+			FastUnstake::register_fast_unstake(Origin::signed(1), Some(1_u32)),
+			Error::<Runtime>::NotController
+		);
+	});
+}
+
+#[test]
+fn register_works() {
+	new_test_ext().execute_with(|| {
+		let stash = 1;
+		let ctrl = 2;
+		// Mint accounts 1 and 2 with 200 tokens.
+		for i in [stash, ctrl] {
+			let _ = Balances::make_free_balance_be(&1, 200);
+		}
+		// Account 1 bonds 200 tokens (stash) with account 2 as the controller.
+		assert_ok!(Staking::bond(Origin::signed(1), 2, 100, RewardDestination::Controller));
+
+		// Stash nominates a validator
+		assert_ok!(Staking::nominate(Origin::signed(ctrl), vec![3_u128]));
+
+		// Controller account registers for fast unstake.
+		assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(ctrl), Some(1_u32)));
+	});
+}
+
+#[test]
 fn cannot_register_if_in_queue() {
 	new_test_ext().execute_with(|| {});
 }
@@ -70,28 +109,6 @@ fn cannot_register_if_head() {
 #[test]
 fn cannot_register_if_has_unlocking_chunks() {
 	new_test_ext().execute_with(|| {});
-}
-
-#[test]
-fn cannot_register_if_not_bonded() {
-	new_test_ext().execute_with(|| {});
-}
-
-#[test]
-fn register_works() {
-	new_test_ext().execute_with(|| {
-		// mint accounts 1-2 with 200 units of token
-		for i in 1..2 {
-			let _ = Balances::make_free_balance_be(&i, 200);
-		}
-		run_to_block(2);
-		// account 1 bond (stash)
-		// account 2: controller
-		// bond 100 tokens
-		// reward destination to controller account
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 100, RewardDestination::Controller));
-		// TODO: register for unstake
-	});
 }
 
 #[test]

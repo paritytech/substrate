@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 
 use frame_system::RawOrigin;
-use pallet_nomination_pools::{LastPoolId, PoolId, *};
+use pallet_nomination_pools::{BondedPools, LastPoolId, PoolId, PoolState};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub type AccountId = u128;
