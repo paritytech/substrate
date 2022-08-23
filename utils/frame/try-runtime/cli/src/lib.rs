@@ -294,8 +294,8 @@ use sp_runtime::{
 	DeserializeOwned,
 };
 use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
-use std::{fmt::Debug, path::PathBuf, str::FromStr};
 use sp_version::StateVersion;
+use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 mod commands;
 pub(crate) mod parse;
