@@ -71,7 +71,7 @@ The [Staking pallet](https://docs.rs/pallet-staking/latest/pallet_staking/) uses
 ```rust
 use pallet_session as session;
 
-fn validators<T: pallet_session::Trait>() -> Vec<<T as pallet_session::Trait>::ValidatorId> {
+fn validators<T: pallet_session::Config>() -> Vec<<T as pallet_session::Config>::ValidatorId> {
 	<pallet_session::Module<T>>::validators()
 }
 ```

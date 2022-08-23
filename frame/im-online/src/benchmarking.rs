@@ -34,7 +34,7 @@ use crate::Module as ImOnline;
 const MAX_KEYS: u32 = 1000;
 const MAX_EXTERNAL_ADDRESSES: u32 = 100;
 
-pub fn create_heartbeat<T: Trait>(k: u32, e: u32) ->
+pub fn create_heartbeat<T: Config>(k: u32, e: u32) ->
 	Result<(crate::Heartbeat<T::BlockNumber>, <T::AuthorityId as RuntimeAppPublic>::Signature), &'static str>
 {
 	let mut keys = Vec::new();

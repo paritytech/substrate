@@ -239,6 +239,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		task_executor,
 		transaction_pool: Default::default(),
 		network: network_config,
+		keystore_remote: Default::default(),
 		keystore: KeystoreConfig::Path {
 			path: root.join("key"),
 			password: None
@@ -274,6 +275,7 @@ fn node_config<G: RuntimeGenesis + 'static, E: ChainSpecExtension + Clone + 'sta
 		announce_block: true,
 		base_path: Some(BasePath::new(root)),
 		informant_output_format: Default::default(),
+		disable_log_reloading: false,
 	}
 }
 
@@ -542,7 +544,8 @@ pub fn sync<G, E, Fb, F, Lb, L, B, ExF, U>(
 
 			make_block_and_import(&first_service, first_user_data);
 		}
-		network.full_nodes[0].1.network().update_chain();
+		let info = network.full_nodes[0].1.client().info();
+		network.full_nodes[0].1.network().new_best_block_imported(info.best_hash, info.best_number);
 		network.full_nodes[0].3.clone()
 	};
 

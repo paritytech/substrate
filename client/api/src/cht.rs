@@ -122,7 +122,7 @@ pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	prove_read_on_trie_backend(
 		trie_storage,
 		blocks.into_iter().map(|number| encode_cht_key(number)),
-	).map_err(ClientError::Execution)
+	).map_err(ClientError::from_state)
 }
 
 /// Check CHT-based header proof.
@@ -150,7 +150,7 @@ pub fn check_proof<Header, Hasher>(
 			.map(|mut map| map
 				.remove(local_cht_key)
 				.expect("checked proof of local_cht_key; qed"))
-			.map_err(|e| ClientError::from(e)),
+			.map_err(ClientError::from_state),
 	)
 }
 
@@ -174,7 +174,7 @@ pub fn check_proof_on_proving_backend<Header, Hasher>(
 			read_proof_check_on_proving_backend::<Hasher>(
 				proving_backend,
 				local_cht_key,
-			).map_err(|e| ClientError::from(e)),
+			).map_err(ClientError::from_state),
 	)
 }
 

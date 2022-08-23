@@ -120,8 +120,8 @@ bytes.
 block announces are pushed to other nodes. The handshake is empty on both sides. The message
 format is a SCALE-encoded tuple containing a block header followed with an opaque list of
 bytes containing some data associated with this block announcement, e.g. a candidate message.
-- Notifications protocols that are registered using the `register_notifications_protocol`
-method. For example: `/paritytech/grandpa/1`. See below for more information.
+- Notifications protocols that are registered using `NetworkConfiguration::notifications_protocols`.
+For example: `/paritytech/grandpa/1`. See below for more information.
 
 ## The legacy Substrate substream
 

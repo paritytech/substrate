@@ -4,7 +4,7 @@ macro_rules! reserved {
 			mod $reserved {
 				pub use frame_support::dispatch;
 
-				pub trait Trait: frame_support_test::Trait {}
+				pub trait Config: frame_support_test::Config {}
 
 				pub mod system {
 					use frame_support::dispatch;
@@ -15,7 +15,7 @@ macro_rules! reserved {
 				}
 
 				frame_support::decl_module! {
-					pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {
+					pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {
 						#[weight = 0]
 						fn $reserved(_origin) -> dispatch::DispatchResult { unreachable!() }
 					}

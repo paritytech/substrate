@@ -62,7 +62,7 @@ mod tests;
 
 pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
 
-pub trait Trait: pallet_timestamp::Trait {
+pub trait Config: pallet_timestamp::Config {
 	/// The amount of time, in slots, that each epoch should last.
 	type EpochDuration: Get<SlotNumber>;
 
@@ -115,7 +115,7 @@ pub trait WeightInfo {
 pub trait EpochChangeTrigger {
 	/// Trigger an epoch change, if any should take place. This should be called
 	/// during every block, after initialization is done.
-	fn trigger<T: Trait>(now: T::BlockNumber);
+	fn trigger<T: Config>(now: T::BlockNumber);
 }
 
 /// A type signifying to BABE that an external trigger
@@ -123,7 +123,7 @@ pub trait EpochChangeTrigger {
 pub struct ExternalTrigger;
 
 impl EpochChangeTrigger for ExternalTrigger {
-	fn trigger<T: Trait>(_: T::BlockNumber) { } // nothing - trigger is external.
+	fn trigger<T: Config>(_: T::BlockNumber) { } // nothing - trigger is external.
 }
 
 /// A type signifying to BABE that it should perform epoch changes
@@ -131,7 +131,7 @@ impl EpochChangeTrigger for ExternalTrigger {
 pub struct SameAuthoritiesForever;
 
 impl EpochChangeTrigger for SameAuthoritiesForever {
-	fn trigger<T: Trait>(now: T::BlockNumber) {
+	fn trigger<T: Config>(now: T::BlockNumber) {
 		if <Module<T>>::should_epoch_change(now) {
 			let authorities = <Module<T>>::authorities();
 			let next_authorities = authorities.clone();
@@ -146,7 +146,7 @@ const UNDER_CONSTRUCTION_SEGMENT_LENGTH: usize = 256;
 type MaybeRandomness = Option<schnorrkel::Randomness>;
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// An equivocation proof provided as part of an equivocation report is invalid.
 		InvalidEquivocationProof,
 		/// A key ownership proof provided as part of an equivocation report is invalid.
@@ -157,7 +157,7 @@ decl_error! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Babe {
+	trait Store for Module<T: Config> as Babe {
 		/// Current epoch index.
 		pub EpochIndex get(fn epoch_index): u64;
 
@@ -230,7 +230,7 @@ decl_storage! {
 
 decl_module! {
 	/// The BABE Pallet
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		/// The number of **slots** that an epoch takes. We couple sessions to
 		/// epochs, i.e. we start a new session once the new epoch begins.
 		const EpochDuration: u64 = T::EpochDuration::get();
@@ -271,7 +271,7 @@ decl_module! {
 		/// the equivocation proof and validate the given key ownership proof
 		/// against the extracted offender. If both are valid, the offence will
 		/// be reported.
-		#[weight = <T as Trait>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
+		#[weight = <T as Config>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
@@ -294,7 +294,7 @@ decl_module! {
 		/// block authors will call it (validated in `ValidateUnsigned`), as such
 		/// if the block author is defined it will be defined as the equivocation
 		/// reporter.
-		#[weight = <T as Trait>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
+		#[weight = <T as Config>::WeightInfo::report_equivocation(key_owner_proof.validator_count())]
 		fn report_equivocation_unsigned(
 			origin,
 			equivocation_proof: EquivocationProof<T::Header>,
@@ -311,7 +311,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
+impl<T: Config> RandomnessT<<T as frame_system::Config>::Hash> for Module<T> {
 	/// Some BABE blocks have VRF outputs where the block producer has exactly one bit of influence,
 	/// either they make the block or they do not make the block and thus someone else makes the
 	/// next block. Yet, this randomness is not fresh in all BABE blocks.
@@ -332,14 +332,14 @@ impl<T: Trait> RandomnessT<<T as frame_system::Trait>::Hash> for Module<T> {
 		subject.reserve(VRF_OUTPUT_LENGTH);
 		subject.extend_from_slice(&Self::randomness()[..]);
 
-		<T as frame_system::Trait>::Hashing::hash(&subject[..])
+		<T as frame_system::Config>::Hashing::hash(&subject[..])
 	}
 }
 
 /// A BABE public key
 pub type BabeKey = [u8; PUBLIC_KEY_LENGTH];
 
-impl<T: Trait> FindAuthor<u32> for Module<T> {
+impl<T: Config> FindAuthor<u32> for Module<T> {
 	fn find_author<'a, I>(digests: I) -> Option<u32> where
 		I: 'a + IntoIterator<Item=(ConsensusEngineId, &'a [u8])>
 	{
@@ -354,7 +354,7 @@ impl<T: Trait> FindAuthor<u32> for Module<T> {
 	}
 }
 
-impl<T: Trait> IsMember<AuthorityId> for Module<T> {
+impl<T: Config> IsMember<AuthorityId> for Module<T> {
 	fn is_member(authority_id: &AuthorityId) -> bool {
 		<Module<T>>::authorities()
 			.iter()
@@ -362,7 +362,7 @@ impl<T: Trait> IsMember<AuthorityId> for Module<T> {
 	}
 }
 
-impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
+impl<T: Config> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	fn should_end_session(now: T::BlockNumber) -> bool {
 		// it might be (and it is in current implementation) that session module is calling
 		// should_end_session() from it's own on_initialize() handler
@@ -374,12 +374,12 @@ impl<T: Trait> pallet_session::ShouldEndSession<T::BlockNumber> for Module<T> {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Determine the BABE slot duration based on the Timestamp module configuration.
 	pub fn slot_duration() -> T::Moment {
 		// we double the minimum block-period so each author can always propose within
 		// the majority of their slot.
-		<T as pallet_timestamp::Trait>::MinimumPeriod::get().saturating_mul(2u32.into())
+		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
 	}
 
 	/// Determine whether an epoch change should take place at this block.
@@ -690,11 +690,11 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnTimestampSet<T::Moment> for Module<T> {
+impl<T: Config> OnTimestampSet<T::Moment> for Module<T> {
 	fn on_timestamp_set(_moment: T::Moment) { }
 }
 
-impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
+impl<T: Config> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber> for Module<T> {
 	fn estimate_next_session_rotation(now: T::BlockNumber) -> Option<T::BlockNumber> {
 		Self::next_expected_epoch_change(now)
 	}
@@ -706,17 +706,17 @@ impl<T: Trait> frame_support::traits::EstimateNextSessionRotation<T::BlockNumber
 	}
 }
 
-impl<T: Trait> frame_support::traits::Lateness<T::BlockNumber> for Module<T> {
+impl<T: Config> frame_support::traits::Lateness<T::BlockNumber> for Module<T> {
 	fn lateness(&self) -> T::BlockNumber {
 		Self::lateness()
 	}
 }
 
-impl<T: Trait> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
+impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Trait> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
+impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T> {
 	type Key = AuthorityId;
 
 	fn on_genesis_session<'a, I: 'a>(validators: I)
@@ -766,7 +766,7 @@ fn compute_randomness(
 	sp_io::hashing::blake2_256(&s)
 }
 
-impl<T: Trait> ProvideInherent for Module<T> {
+impl<T: Config> ProvideInherent for Module<T> {
 	type Call = pallet_timestamp::Call<T>;
 	type Error = MakeFatalError<sp_inherents::Error>;
 	const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;

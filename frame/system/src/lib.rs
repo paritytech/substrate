@@ -20,7 +20,7 @@
 //! The System module provides low-level access to core types and cross-cutting utilities.
 //! It acts as the base layer for other pallets to interact with the Substrate framework components.
 //!
-//! - [`system::Trait`](./trait.Trait.html)
+//! - [`system::Config`](./trait.Config.html)
 //!
 //! ## Overview
 //!
@@ -74,10 +74,10 @@
 //! use frame_support::{decl_module, dispatch};
 //! use frame_system::{self as system, ensure_signed};
 //!
-//! pub trait Trait: system::Trait {}
+//! pub trait Config: system::Config {}
 //!
 //! decl_module! {
-//! 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+//! 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 //! 		#[weight = 0]
 //! 		pub fn system_module_example(origin) -> dispatch::DispatchResult {
 //! 			let _sender = ensure_signed(origin)?;
@@ -122,7 +122,7 @@ use frame_support::{
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
-		extract_actual_weight,
+		extract_actual_weight, PerDispatchClass,
 	},
 	dispatch::DispatchResultWithPostInfo,
 };
@@ -132,14 +132,15 @@ use codec::{Encode, Decode, FullCodec, EncodeLike};
 use sp_io::TestExternalities;
 
 pub mod offchain;
+pub mod limits;
 #[cfg(test)]
 pub(crate) mod mock;
 
 mod extensions;
-mod weights;
+pub mod weights;
 #[cfg(test)]
 mod tests;
-mod default_weights;
+
 
 pub use extensions::{
 	check_mortality::CheckMortality, check_genesis::CheckGenesis, check_nonce::CheckNonce,
@@ -148,6 +149,7 @@ pub use extensions::{
 };
 // Backward compatible re-export.
 pub use extensions::check_mortality::CheckMortality as CheckEra;
+pub use weights::WeightInfo;
 
 /// Compute the trie root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -159,20 +161,19 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	H::ordered_trie_root(xts)
 }
 
-pub trait WeightInfo {
-	fn remark(b: u32) -> Weight;
-	fn set_heap_pages() -> Weight;
-	fn set_changes_trie_config() -> Weight;
-	fn set_storage(i: u32, ) -> Weight;
-	fn kill_storage(i: u32, ) -> Weight;
-	fn kill_prefix(p: u32, ) -> Weight;
-	fn suicide() -> Weight;
-}
+/// An object to track the currently used extrinsic weight in a block.
+pub type ConsumedWeight = PerDispatchClass<Weight>;
 
-pub trait Trait: 'static + Eq + Clone {
+pub trait Config: 'static + Eq + Clone {
 	/// The basic call filter to use in Origin. All origins are built with this filter as base,
 	/// except Root.
 	type BaseCallFilter: Filter<Self::Call>;
+
+	/// Block & extrinsics weights: base values and limits.
+	type BlockWeights: Get<limits::BlockWeights>;
+
+	/// The maximum length of a block (in bytes).
+	type BlockLength: Get<limits::BlockLength>;
 
 	/// The `Origin` type used by dispatchable calls.
 	type Origin:
@@ -228,30 +229,8 @@ pub trait Trait: 'static + Eq + Clone {
 	/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 	type BlockHashCount: Get<Self::BlockNumber>;
 
-	/// The maximum weight of a block.
-	type MaximumBlockWeight: Get<Weight>;
-
 	/// The weight of runtime database operations the runtime can invoke.
 	type DbWeight: Get<RuntimeDbWeight>;
-
-	/// The base weight of executing a block, independent of the transactions in the block.
-	type BlockExecutionWeight: Get<Weight>;
-
-	/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
-	type ExtrinsicBaseWeight: Get<Weight>;
-
-	/// The maximal weight of a single Extrinsic. This should be set to at most
-	/// `MaximumBlockWeight - AverageOnInitializeWeight`. The limit only applies to extrinsics
-	/// containing `Normal` dispatch class calls.
-	type MaximumExtrinsicWeight: Get<Weight>;
-
-	/// The maximum length of a block (in bytes).
-	type MaximumBlockLength: Get<u32>;
-
-	/// The portion of the block that is available to normal transaction. The rest can only be used
-	/// by operational transactions. This can be applied to any resource limit managed by the system
-	/// module, including weight and length.
-	type AvailableBlockRatio: Get<Perbill>;
 
 	/// Get the chain's current version.
 	type Version: Get<RuntimeVersion>;
@@ -279,8 +258,8 @@ pub trait Trait: 'static + Eq + Clone {
 	type SystemWeightInfo: WeightInfo;
 }
 
-pub type DigestOf<T> = generic::Digest<<T as Trait>::Hash>;
-pub type DigestItemOf<T> = generic::DigestItem<<T as Trait>::Hash>;
+pub type DigestOf<T> = generic::Digest<<T as Config>::Hash>;
+pub type DigestItemOf<T> = generic::DigestItem<<T as Config>::Hash>;
 
 pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
@@ -338,7 +317,7 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 }
 
 /// Exposed trait-generic origin type.
-pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 
 // Create a Hash with 69 for each byte,
 // only used to build genesis config.
@@ -399,7 +378,7 @@ impl From<sp_version::RuntimeVersion> for LastRuntimeUpgradeInfo {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as System {
+	trait Store for Module<T: Config> as System {
 		/// The full account information for a particular account ID.
 		pub Account get(fn account):
 			map hasher(blake2_128_concat) T::AccountId => AccountInfo<T::Index, T::AccountData>;
@@ -408,7 +387,7 @@ decl_storage! {
 		ExtrinsicCount: Option<u32>;
 
 		/// The current weight for the block.
-		BlockWeight get(fn block_weight): weights::ExtrinsicsWeight;
+		BlockWeight get(fn block_weight): ConsumedWeight;
 
 		/// Total length (in bytes) for all extrinsics put together, for the current block.
 		AllExtrinsicsLen: Option<u32>;
@@ -487,7 +466,7 @@ decl_storage! {
 
 decl_event!(
 	/// Event for the System module.
-	pub enum Event<T> where AccountId = <T as Trait>::AccountId {
+	pub enum Event<T> where AccountId = <T as Config>::AccountId {
 		/// An extrinsic completed successfully. \[info\]
 		ExtrinsicSuccess(DispatchInfo),
 		/// An extrinsic failed. \[error, info\]
@@ -503,7 +482,7 @@ decl_event!(
 
 decl_error! {
 	/// Error for the System module
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// The name of specification does not match between the current runtime
 		/// and the new runtime.
 		InvalidSpecName,
@@ -522,26 +501,17 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 		type Error = Error<T>;
 
 		/// The maximum number of blocks to allow in mortal eras.
 		const BlockHashCount: T::BlockNumber = T::BlockHashCount::get();
 
-		/// The maximum weight of a block.
-		const MaximumBlockWeight: Weight = T::MaximumBlockWeight::get();
-
 		/// The weight of runtime database operations the runtime can invoke.
 		const DbWeight: RuntimeDbWeight = T::DbWeight::get();
 
-		/// The base weight of executing a block, independent of the transactions in the block.
-		const BlockExecutionWeight: Weight = T::BlockExecutionWeight::get();
-
-		/// The base weight of an Extrinsic in the block, independent of the of extrinsic being executed.
-		const ExtrinsicBaseWeight: Weight = T::ExtrinsicBaseWeight::get();
-
-		/// The maximum length of a block (in bytes).
-		const MaximumBlockLength: u32 = T::MaximumBlockLength::get();
+		/// The weight configuration (limits & base values) for each class of extrinsics and block.
+		const BlockWeights: limits::BlockWeights = T::BlockWeights::get();
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if !UpgradedToU32RefCount::get() {
@@ -549,16 +519,22 @@ decl_module! {
 					Some(AccountInfo { nonce, refcount: rc as RefCount, data })
 				);
 				UpgradedToU32RefCount::put(true);
-				T::MaximumBlockWeight::get()
+				T::BlockWeights::get().max_block
 			} else {
 				0
 			}
 		}
 
+		fn integrity_test() {
+			T::BlockWeights::get()
+				.validate()
+				.expect("The weights are invalid.");
+		}
+
 		/// A dispatch that will fill the block weight up to the given ratio.
 		// TODO: This should only be available for testing, rather than in general usage, but
 		// that's not possible at present (since it's within the decl_module macro).
-		#[weight = *_ratio * T::MaximumBlockWeight::get()]
+		#[weight = *_ratio * T::BlockWeights::get().max_block]
 		fn fill_block(origin, _ratio: Perbill) {
 			ensure_root(origin)?;
 		}
@@ -599,7 +575,7 @@ decl_module! {
 		/// The weight of this function is dependent on the runtime, but generally this is very expensive.
 		/// We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
+		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
 		pub fn set_code(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			Self::can_set_code(&code)?;
@@ -616,7 +592,7 @@ decl_module! {
 		/// - 1 event.
 		/// The weight of this function is dependent on the runtime. We will treat this as a full block.
 		/// # </weight>
-		#[weight = (T::MaximumBlockWeight::get(), DispatchClass::Operational)]
+		#[weight = (T::BlockWeights::get().max_block, DispatchClass::Operational)]
 		pub fn set_code_without_checks(origin, code: Vec<u8>) {
 			ensure_root(origin)?;
 			storage::unhashed::put_raw(well_known_keys::CODE, &code);
@@ -906,10 +882,14 @@ pub enum RefStatus {
 	Unreferenced,
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Deposits an event into this block's event record.
 	pub fn deposit_event(event: impl Into<T::Event>) {
 		Self::deposit_event_indexed(&[], event.into());
+	}
+
+	pub fn account_exists(who: &T::AccountId) -> bool {
+		Account::<T>::contains_key(who)
 	}
 
 	/// Increment the reference counter on an account.
@@ -1125,9 +1105,9 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current block weight. This should only be used in some integration tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn set_block_limits(weight: Weight, len: usize) {
+	pub fn set_block_consumed_resources(weight: Weight, len: usize) {
 		BlockWeight::mutate(|current_weight| {
-			current_weight.put(weight, DispatchClass::Normal)
+			current_weight.set(weight, DispatchClass::Normal)
 		});
 		AllExtrinsicsLen::put(len as u32);
 	}
@@ -1261,7 +1241,7 @@ impl<T: Trait> Module<T> {
 
 /// Event handler which calls on_created_account when it happens.
 pub struct CallOnCreatedAccount<T>(PhantomData<T>);
-impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
+impl<T: Config> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 	fn happened(who: &T::AccountId) {
 		Module::<T>::on_created_account(who.clone());
 	}
@@ -1269,15 +1249,15 @@ impl<T: Trait> Happened<T::AccountId> for CallOnCreatedAccount<T> {
 
 /// Event handler which calls kill_account when it happens.
 pub struct CallKillAccount<T>(PhantomData<T>);
-impl<T: Trait> Happened<T::AccountId> for CallKillAccount<T> {
+impl<T: Config> Happened<T::AccountId> for CallKillAccount<T> {
 	fn happened(who: &T::AccountId) {
 		Module::<T>::kill_account(who)
 	}
 }
 
-impl<T: Trait> BlockNumberProvider for Module<T>
+impl<T: Config> BlockNumberProvider for Module<T>
 {
-	type BlockNumber = <T as Trait>::BlockNumber;
+	type BlockNumber = <T as Config>::BlockNumber;
 
 	fn current_block_number() -> Self::BlockNumber {
 		Module::<T>::block_number()
@@ -1287,7 +1267,7 @@ impl<T: Trait> BlockNumberProvider for Module<T>
 // Implement StoredMap for a simple single-item, kill-account-on-remove system. This works fine for
 // storing a single item which is required to not be empty/default for the account to exist.
 // Anything more complex will need more sophisticated logic.
-impl<T: Trait> StoredMap<T::AccountId, T::AccountData> for Module<T> {
+impl<T: Config> StoredMap<T::AccountId, T::AccountData> for Module<T> {
 	fn get(k: &T::AccountId) -> T::AccountData {
 		Account::<T>::get(k).data
 	}
@@ -1353,8 +1333,7 @@ pub fn split_inner<T, R, S>(option: Option<T>, splitter: impl FnOnce(T) -> (R, S
 	}
 }
 
-
-impl<T: Trait> IsDeadAccount<T::AccountId> for Module<T> {
+impl<T: Config> IsDeadAccount<T::AccountId> for Module<T> {
 	fn is_dead_account(who: &T::AccountId) -> bool {
 		!Account::<T>::contains_key(who)
 	}
@@ -1367,7 +1346,7 @@ impl<T> Default for ChainContext<T> {
 	}
 }
 
-impl<T: Trait> Lookup for ChainContext<T> {
+impl<T: Config> Lookup for ChainContext<T> {
 	type Source = <T::Lookup as StaticLookup>::Source;
 	type Target = <T::Lookup as StaticLookup>::Target;
 

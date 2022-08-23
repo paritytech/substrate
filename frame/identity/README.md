@@ -51,6 +51,6 @@ no state-bloat attack is viable.
 * `kill_identity` - Forcibly remove the associated identity; the deposit is lost.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0

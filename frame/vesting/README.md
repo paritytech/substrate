@@ -26,6 +26,6 @@ This module implements the `VestingSchedule` trait.
   "vested" so far.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0

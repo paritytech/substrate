@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Trait, exec::ExecError};
+use crate::Config;
 use sp_std::marker::PhantomData;
 use sp_runtime::traits::Zero;
 use frame_support::dispatch::{
 	DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo,
 };
+use pallet_contracts_primitives::ExecError;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -59,7 +60,7 @@ impl<T: Any + Debug + PartialEq + Eq> TestAuxiliaries for T {}
 /// Implementing type is expected to be super lightweight hence `Copy` (`Clone` is added
 /// for consistency). If inlined there should be no observable difference compared
 /// to a hand-written code.
-pub trait Token<T: Trait>: Copy + Clone + TestAuxiliaries {
+pub trait Token<T: Config>: Copy + Clone + TestAuxiliaries {
 	/// Metadata type, which the token can require for calculating the amount
 	/// of gas to charge. Can be a some configuration type or
 	/// just the `()`.
@@ -83,7 +84,7 @@ pub struct ErasedToken {
 	pub token: Box<dyn Any>,
 }
 
-pub struct GasMeter<T: Trait> {
+pub struct GasMeter<T: Config> {
 	gas_limit: Gas,
 	/// Amount of gas left from initial gas limit. Can reach zero.
 	gas_left: Gas,
@@ -91,7 +92,7 @@ pub struct GasMeter<T: Trait> {
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
 }
-impl<T: Trait> GasMeter<T> {
+impl<T: Config> GasMeter<T> {
 	pub fn new(gas_limit: Gas) -> Self {
 		GasMeter {
 			gas_limit,

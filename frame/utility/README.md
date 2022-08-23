@@ -33,6 +33,6 @@ filtered by any proxy.
 * `as_derivative` - Dispatch a call from a derivative signed origin.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0

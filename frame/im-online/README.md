@@ -30,10 +30,10 @@ use frame_support::{decl_module, dispatch};
 use frame_system::ensure_signed;
 use pallet_im_online::{self as im_online};
 
-pub trait Trait: im_online::Trait {}
+pub trait Config: im_online::Config {}
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		#[weight = 0]
 		pub fn is_online(origin, authority_index: u32) -> dispatch::DispatchResult {
 			let _sender = ensure_signed(origin)?;

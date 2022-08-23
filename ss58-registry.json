@@ -137,6 +137,24 @@
 			"website": "https://www.substratee.com"
 		},
 		{
+			"prefix": 14,
+			"network": "totem",
+			"displayName": "Totem",
+			"symbols": ["XTX"],
+			"decimals": [0],
+			"standardAccount": "*25519",
+			"website": "https://totemaccounting.com"
+		},
+		{
+			"prefix": 15,
+			"network": "synesthesia",
+			"displayName": "Synesthesia",
+			"symbols": ["SYN"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://synesthesia.network/"
+		},
+		{
 			"prefix": 16,
 			"network": "kulupu",
 			"displayName": "Kulupu",
@@ -176,10 +194,10 @@
 			"prefix": 20,
 			"network": "stafi",
 			"displayName": "Stafi",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["FIS"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://stafi.io"
 		},
 		{
 			"prefix": 21,
@@ -239,10 +257,10 @@
 			"prefix": 30,
 			"network": "phala",
 			"displayName": "Phala Network",
-			"symbols": null,
-			"decimals": null,
+			"symbols": ["PHA"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://phala.network"
 		},
 		{
 			"prefix": 32,

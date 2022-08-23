@@ -17,6 +17,7 @@
 
 use sp_api::{
 	RuntimeApiInfo, decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis,
+	ApiError,
 	ApiExt,
 };
 use sp_runtime::{traits::{GetNodeBlockType, Block as BlockT}, generic::BlockId};
@@ -103,17 +104,27 @@ mock_impl_runtime_apis! {
 		}
 
 		#[advanced]
-		fn same_name(_: &BlockId<Block>) -> std::result::Result<NativeOrEncoded<()>, String> {
+		fn same_name(_: &BlockId<Block>) ->
+			std::result::Result<
+				NativeOrEncoded<()>,
+				ApiError
+			>
+		{
 			Ok(().into())
 		}
 
 		#[advanced]
-		fn wild_card(at: &BlockId<Block>, _: u32) -> std::result::Result<NativeOrEncoded<()>, String> {
+		fn wild_card(at: &BlockId<Block>, _: u32) ->
+			std::result::Result<
+				NativeOrEncoded<()>,
+				ApiError
+			>
+		{
 			if let BlockId::Number(1337) = at {
 				// yeah
 				Ok(().into())
 			} else {
-				Err("Ohh noooo".into())
+				Err(ApiError::new("MockApi", codec::Error::from("Ohh noooo")))
 			}
 		}
 	}
@@ -197,5 +208,8 @@ fn mock_runtime_api_works_with_advanced() {
 
 	Api::<Block>::same_name(&mock, &BlockId::Number(0)).unwrap();
 	mock.wild_card(&BlockId::Number(1337), 1).unwrap();
-	assert_eq!(String::from("Ohh noooo"), mock.wild_card(&BlockId::Number(1336), 1).unwrap_err());
+	assert_eq!(
+		ApiError::new("MockApi", ::codec::Error::from("Ohh noooo")),
+		mock.wild_card(&BlockId::Number(1336), 1).unwrap_err()
+	);
 }

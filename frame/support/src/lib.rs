@@ -22,9 +22,6 @@
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
 
-#[macro_use]
-extern crate bitmask;
-
 #[doc(hidden)]
 pub use sp_tracing;
 
@@ -61,6 +58,8 @@ pub mod event;
 #[macro_use]
 pub mod metadata;
 #[macro_use]
+pub mod genesis_config;
+#[macro_use]
 pub mod inherent;
 #[macro_use]
 pub mod unsigned;
@@ -86,20 +85,25 @@ pub enum Never {}
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
-/// The so-called parameter type can be created in three different ways:
+/// The so-called parameter type can be created in four different ways:
 ///
-/// - Using `const` to create a parameter type that provides a `const` getter.
-///   It is required that the `value` is const.
+/// - Using `const` to create a parameter type that provides a `const` getter. It is required that
+///   the `value` is const.
 ///
 /// - Declare the parameter type without `const` to have more freedom when creating the value.
 ///
-/// - Using `storage` to create a storage parameter type. This type is special as it tries to
-///   load the value from the storage under a fixed key. If the value could not be found in the
-///   storage, the given default value will be returned. It is required that the value implements
-///   [`Encode`](codec::Encode) and [`Decode`](codec::Decode). The key for looking up the value
-///   in the storage is built using the following formular:
+/// - Using `storage` to create a storage parameter type. This type is special as it tries to load
+///   the value from the storage under a fixed key. If the value could not be found in the storage,
+///   the given default value will be returned. It is required that the value implements
+///   [`Encode`](codec::Encode) and [`Decode`](codec::Decode). The key for looking up the value in
+///   the storage is built using the following formula:
 ///
 ///   `twox_128(":" ++ NAME ++ ":")` where `NAME` is the name that is passed as type name.
+///
+/// - Using `static` to create a static parameter type. Its value is
+///   being provided by a static variable with the equivalent name in `UPPER_SNAKE_CASE`. An
+///   additional `set` function is provided in this case to alter the static variable.
+///   **This is intended for testing ONLY and is ONLY available when `std` is enabled.**
 ///
 /// # Examples
 ///
@@ -115,12 +119,14 @@ pub enum Never {}
 ///    /// Visibility of the type is optional
 ///    OtherArgument: u64 = non_const_expression();
 ///    pub storage StorageArgument: u64 = 5;
+///    pub static StaticArgument: u32 = 7;
 /// }
 ///
 /// trait Config {
 ///    type Parameter: Get<u64>;
 ///    type OtherParameter: Get<u64>;
 ///    type StorageParameter: Get<u64>;
+///    type StaticParameter: Get<u32>;
 /// }
 ///
 /// struct Runtime;
@@ -128,7 +134,10 @@ pub enum Never {}
 ///    type Parameter = Argument;
 ///    type OtherParameter = OtherArgument;
 ///    type StorageParameter = StorageArgument;
+///    type StaticParameter = StaticArgument;
 /// }
+///
+/// // In testing, `StaticArgument` can be altered later: `StaticArgument::set(8)`.
 /// ```
 ///
 /// # Invalid example:
@@ -143,7 +152,6 @@ pub enum Never {}
 ///    pub const Argument: u64 = non_const_expression();
 /// }
 /// ```
-
 #[macro_export]
 macro_rules! parameter_types {
 	(
@@ -236,7 +244,69 @@ macro_rules! parameter_types {
 				I::from(Self::get())
 			}
 		}
-	}
+	};
+	(
+		$(
+			$( #[ $attr:meta ] )*
+			$vis:vis static $name:ident: $type:ty = $value:expr;
+		)*
+	) => (
+		$crate::parameter_types_impl_thread_local!(
+			$(
+				$( #[ $attr ] )*
+				$vis static $name: $type = $value;
+			)*
+		);
+	);
+}
+
+#[cfg(not(feature = "std"))]
+#[macro_export]
+macro_rules! parameter_types_impl_thread_local {
+	( $( $any:tt )* ) => {
+		compile_error!("static parameter types is only available in std and for testing.");
+	};
+}
+
+#[cfg(feature = "std")]
+#[macro_export]
+macro_rules! parameter_types_impl_thread_local {
+	(
+		$(
+			$( #[ $attr:meta ] )*
+			$vis:vis static $name:ident: $type:ty = $value:expr;
+		)*
+	) => {
+		$crate::parameter_types_impl_thread_local!(
+			IMPL_THREAD_LOCAL $( $vis, $name, $type, $value, )*
+		);
+		$crate::paste::item! {
+			$crate::parameter_types!(
+				$(
+					$( #[ $attr ] )*
+					$vis $name: $type = [<$name:snake:upper>].with(|v| v.borrow().clone());
+				)*
+			);
+			$(
+				impl $name {
+					/// Set the internal value.
+					pub fn set(t: $type) {
+						[<$name:snake:upper>].with(|v| *v.borrow_mut() = t);
+					}
+				}
+			)*
+		}
+	};
+	(IMPL_THREAD_LOCAL $( $vis:vis, $name:ident, $type:ty, $value:expr, )* ) => {
+		$crate::paste::item! {
+			thread_local! {
+				$(
+					pub static [<$name:snake:upper>]: std::cell::RefCell<$type> =
+						std::cell::RefCell::new($value);
+				)*
+			}
+		}
+	};
 }
 
 /// Macro for easily creating a new implementation of both the `Get` and `Contains` traits. Use
@@ -276,14 +346,14 @@ pub use frame_support_procedural::{
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::CloneNoBound;
-/// trait Trait {
+/// trait Config {
 ///		type C: Clone;
 /// }
 ///
 /// // Foo implements [`Clone`] because `C` bounds [`Clone`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Clone`].
 /// #[derive(CloneNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -294,14 +364,14 @@ pub use frame_support_procedural::CloneNoBound;
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::{EqNoBound, PartialEqNoBound};
-/// trait Trait {
+/// trait Config {
 ///		type C: Eq;
 /// }
 ///
 /// // Foo implements [`Eq`] because `C` bounds [`Eq`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Eq`].
 /// #[derive(PartialEqNoBound, EqNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -312,14 +382,14 @@ pub use frame_support_procedural::EqNoBound;
 /// This is useful for type generic over runtime:
 /// ```
 /// # use frame_support::PartialEqNoBound;
-/// trait Trait {
+/// trait Config {
 ///		type C: PartialEq;
 /// }
 ///
 /// // Foo implements [`PartialEq`] because `C` bounds [`PartialEq`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`PartialEq`].
 /// #[derive(PartialEqNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -331,14 +401,14 @@ pub use frame_support_procedural::PartialEqNoBound;
 /// ```
 /// # use frame_support::DebugNoBound;
 /// # use core::fmt::Debug;
-/// trait Trait {
+/// trait Config {
 ///		type C: Debug;
 /// }
 ///
 /// // Foo implements [`Debug`] because `C` bounds [`Debug`].
 /// // Otherwise compilation will fail with an output telling `c` doesn't implement [`Debug`].
 /// #[derive(DebugNoBound)]
-/// struct Foo<T: Trait> {
+/// struct Foo<T: Config> {
 ///		c: T::C,
 /// }
 /// ```
@@ -417,7 +487,6 @@ macro_rules! ensure {
 ///
 /// Used as `assert_noop(expression_to_assert, expected_error_expression)`.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_noop {
 	(
 		$x:expr,
@@ -433,7 +502,6 @@ macro_rules! assert_noop {
 ///
 /// Used as `assert_err!(expression_to_assert, expected_error_expression)`
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err {
 	( $x:expr , $y:expr $(,)? ) => {
 		assert_eq!($x, Err($y.into()));
@@ -445,7 +513,6 @@ macro_rules! assert_err {
 /// This can be used on`DispatchResultWithPostInfo` when the post info should
 /// be ignored.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err_ignore_postinfo {
 	( $x:expr , $y:expr $(,)? ) => {
 		$crate::assert_err!($x.map(|_| ()).map_err(|e| e.error), $y);
@@ -454,7 +521,6 @@ macro_rules! assert_err_ignore_postinfo {
 
 /// Assert an expression returns error with the given weight.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_err_with_weight {
 	($call:expr, $err:expr, $weight:expr $(,)? ) => {
 		if let Err(dispatch_err_with_post) = $call {
@@ -471,7 +537,6 @@ macro_rules! assert_err_with_weight {
 /// Used as `assert_ok!(expression_to_assert, expected_ok_expression)`,
 /// or `assert_ok!(expression_to_assert)` which would assert against `Ok(())`.
 #[macro_export]
-#[cfg(feature = "std")]
 macro_rules! assert_ok {
 	( $x:expr $(,)? ) => {
 		let is = $x;
@@ -500,7 +565,7 @@ mod tests {
 	use sp_std::{marker::PhantomData, result};
 	use sp_io::TestExternalities;
 
-	pub trait Trait: 'static {
+	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default;
 		type Origin;
 		type PalletInfo: crate::traits::PalletInfo;
@@ -510,16 +575,16 @@ mod tests {
 	mod module {
 		#![allow(dead_code)]
 
-		use super::Trait;
+		use super::Config;
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self  {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
 	use self::module::Module;
 
 	decl_storage! {
-		trait Store for Module<T: Trait> as Test {
+		trait Store for Module<T: Config> as Test {
 			pub Data get(fn data) build(|_| vec![(15u32, 42u64)]):
 				map hasher(twox_64_concat) u32 => u64;
 			pub OptionLinkedMap: map hasher(blake2_128_concat) u32 => Option<u32>;
@@ -541,7 +606,7 @@ mod tests {
 	}
 
 	struct Test;
-	impl Trait for Test {
+	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
 		type PalletInfo = ();

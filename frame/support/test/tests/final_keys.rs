@@ -21,14 +21,14 @@ use frame_support::{StorageDoubleMap, StorageMap, StorageValue, StoragePrefixedM
 use sp_io::{TestExternalities, hashing::{twox_64, twox_128, blake2_128}};
 
 mod no_instance {
-	pub trait Trait: frame_support_test::Trait {}
+	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=frame_support_test {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
 	frame_support::decl_storage!{
-		trait Store for Module<T: Trait> as FinalKeysNone {
+		trait Store for Module<T: Config> as FinalKeysNone {
 			pub Value config(value): u32;
 
 			pub Map: map hasher(blake2_128_concat) u32 => u32;
@@ -45,15 +45,15 @@ mod no_instance {
 }
 
 mod instance {
-	pub trait Trait<I = DefaultInstance>: frame_support_test::Trait {}
+	pub trait Config<I = DefaultInstance>: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait<I>, I: Instance = DefaultInstance>
+		pub struct Module<T: Config<I>, I: Instance = DefaultInstance>
 			for enum Call where origin: T::Origin, system=frame_support_test {}
 	}
 
 	frame_support::decl_storage!{
-		trait Store for Module<T: Trait<I>, I: Instance = DefaultInstance>
+		trait Store for Module<T: Config<I>, I: Instance = DefaultInstance>
 			as FinalKeysSome
 		{
 			pub Value config(value): u32;

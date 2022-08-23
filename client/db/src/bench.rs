@@ -350,13 +350,13 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 		}
 	}
 
-	fn for_keys_in_child_storage<F: FnMut(&[u8])>(
+	fn apply_to_child_keys_while<F: FnMut(&[u8]) -> bool>(
 		&self,
 		child_info: &ChildInfo,
 		f: F,
 	) {
 		if let Some(ref state) = *self.state.borrow() {
-			state.for_keys_in_child_storage(child_info, f)
+			state.apply_to_child_keys_while(child_info, f)
 		}
 	}
 

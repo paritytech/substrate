@@ -271,7 +271,8 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 }
 
 /// Call `f` for all keys in a child trie.
-pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
+/// Aborts as soon as `f` returns false.
+pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]) -> bool, DB>(
 	keyspace: &[u8],
 	db: &DB,
 	root_slice: &[u8],
@@ -290,7 +291,9 @@ pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]), DB>(
 
 	for x in iter {
 		let (key, _) = x?;
-		f(&key);
+		if !f(&key) {
+			break;
+		}
 	}
 
 	Ok(())

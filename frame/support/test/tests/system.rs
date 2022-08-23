@@ -19,7 +19,7 @@ use frame_support::{
 	codec::{Encode, Decode, EncodeLike}, traits::Get, weights::RuntimeDbWeight,
 };
 
-pub trait Trait: 'static + Eq + Clone {
+pub trait Config: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
@@ -34,18 +34,18 @@ pub trait Trait: 'static + Eq + Clone {
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
 		#[weight = 0]
 		fn noop(origin) {}
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	pub fn deposit_event(_event: impl Into<T::Event>) {}
 }
 
 frame_support::decl_event!(
-	pub enum Event<T> where BlockNumber = <T as Trait>::BlockNumber {
+	pub enum Event<T> where BlockNumber = <T as Config>::BlockNumber {
 		ExtrinsicSuccess,
 		ExtrinsicFailed,
 		Ignore(BlockNumber),
@@ -53,7 +53,7 @@ frame_support::decl_event!(
 );
 
 frame_support::decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Test error documentation
 		TestError,
 		/// Error documentation
@@ -79,7 +79,7 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 	}
 }
 
-pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+pub type Origin<T> = RawOrigin<<T as Config>::AccountId>;
 
 #[allow(dead_code)]
 pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>

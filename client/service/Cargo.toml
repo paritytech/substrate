@@ -24,15 +24,15 @@ wasmtime = [
 test-helpers = []
 
 [dependencies]
-derive_more = "0.99.2"
+thiserror = "1.0.21"
 futures01 = { package = "futures", version = "0.1.29" }
 futures = { version = "0.3.4", features = ["compat"] }
-jsonrpc-pubsub = "15.0"
-jsonrpc-core = "15.0"
+jsonrpc-pubsub = "15.1"
+jsonrpc-core = "15.1"
 rand = "0.7.3"
 parking_lot = "0.10.0"
 lazy_static = "1.4.0"
-log = "0.4.8"
+log = "0.4.11"
 slog = { version = "2.5.2", features = ["nested-values"] }
 futures-timer = "3.0.1"
 wasm-timer = "0.2"
@@ -76,13 +76,13 @@ sc-offchain = { version = "2.0.0", path = "../offchain" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.8.0"}
 sc-tracing = { version = "2.0.0", path = "../tracing" }
 sp-tracing = { version = "2.0.0", path = "../../primitives/tracing" }
-tracing = "0.1.19"
+tracing = "0.1.22"
 tracing-futures = { version = "0.2.4" }
 parity-util-mem = { version = "0.7.0", default-features = false, features = ["primitive-types"] }
 
 [target.'cfg(not(target_os = "unknown"))'.dependencies]
 tempfile = "3.1.0"
-directories = "2.0.2"
+directories = "3.0.1"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

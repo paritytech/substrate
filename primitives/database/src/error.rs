@@ -17,7 +17,7 @@
 
 /// The error type for database operations.
 #[derive(Debug)]
-pub struct DatabaseError(pub Box<dyn std::error::Error + Send>);
+pub struct DatabaseError(pub Box<dyn std::error::Error + Send + Sync + 'static>);
 
 impl std::fmt::Display for DatabaseError {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

@@ -37,7 +37,8 @@
 //! needed must be provided in the given directory.
 //!
 use std::{
-	fs, collections::{HashMap, hash_map::DefaultHasher}, path::Path,
+	fs, collections::{HashMap, hash_map::DefaultHasher},
+	path::{Path, PathBuf},
 	hash::Hasher as _,
 };
 use sp_core::traits::FetchRuntimeCode;
@@ -82,6 +83,29 @@ impl FetchRuntimeCode for WasmBlob {
 	}
 }
 
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+pub enum WasmOverrideError {
+	#[error("Failed to get runtime version: {0}")]
+	VersionInvalid(String),
+
+	#[error("WASM override IO error")]
+	Io(PathBuf, #[source] std::io::Error),
+
+	#[error("Overwriting WASM requires a directory where local \
+	WASM is stored. {} is not a directory", .0.display())]
+	NotADirectory(PathBuf),
+
+	#[error("Duplicate WASM Runtimes found: \n{}\n", .0.join("\n") )]
+	DuplicateRuntime(Vec<String>),
+}
+
+impl From<WasmOverrideError> for sp_blockchain::Error {
+	fn from(err: WasmOverrideError) -> Self {
+		Self::Application(Box::new(err))
+	}
+}
+
 /// Scrapes WASM from a folder and returns WASM from that folder
 /// if the runtime spec version matches.
 #[derive(Clone, Debug)]
@@ -119,16 +143,13 @@ where
 	/// Scrapes a folder for WASM runtimes.
 	/// Returns a hashmap of the runtime version and wasm runtime code.
 	fn scrape_overrides(dir: &Path, executor: &E) -> Result<HashMap<u32, WasmBlob>> {
+
 		let handle_err = |e: std::io::Error | -> sp_blockchain::Error {
-			sp_blockchain::Error::Msg(format!("{}", e.to_string()))
+			WasmOverrideError::Io(dir.to_owned(), e).into()
 		};
 
 		if !dir.is_dir() {
-			return Err(sp_blockchain::Error::Msg(format!(
-				"Overwriting WASM requires a directory where \
-				 local WASM is stored. {:?} is not a directory",
-				 dir,
-			)));
+			return Err(WasmOverrideError::NotADirectory(dir.to_owned()).into());
 		}
 
 		let mut overrides = HashMap::new();
@@ -149,9 +170,7 @@ where
 		}
 
 		if !duplicates.is_empty() {
-			let duplicate_file_list = duplicates.join("\n");
-			let msg = format!("Duplicate WASM Runtimes found: \n{}\n", duplicate_file_list);
-			return Err(sp_blockchain::Error::Msg(msg));
+			return Err(WasmOverrideError::DuplicateRuntime(duplicates).into());
 		}
 
 		Ok(overrides)
@@ -164,7 +183,7 @@ where
 	) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
 		executor.runtime_version(&mut ext, &code.runtime_code(heap_pages))
-			.map_err(|e| sp_blockchain::Error::VersionInvalid(format!("{:?}", e)).into())
+			.map_err(|e| WasmOverrideError::VersionInvalid(format!("{:?}", e)).into())
 	}
 }
 
@@ -236,14 +255,10 @@ mod tests {
 			let scraped = WasmOverride::scrape_overrides(dir, exec);
 
 			match scraped {
-				Err(e) => {
-					match e {
-						sp_blockchain::Error::Msg(msg) => {
-							let is_match = msg
-								.matches("Duplicate WASM Runtimes found")
-								.map(ToString::to_string)
-								.collect::<Vec<String>>();
-							assert!(is_match.len() >= 1)
+				Err(sp_blockchain::Error::Application(e)) => {
+					match e.downcast_ref::<WasmOverrideError>() {
+						Some(WasmOverrideError::DuplicateRuntime(duplicates)) => {
+							assert_eq!(duplicates.len(), 1);
 						},
 						_ => panic!("Test should end with Msg Error Variant")
 					}

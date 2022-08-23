@@ -365,7 +365,9 @@ impl<T: codec::Codec> PassBy for Option<T> {
 	type PassBy = Codec<Self>;
 }
 
-impl PassBy for (u32, u32, u32, u32) {
+#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[tuple_types_no_default_trait_bound]
+impl PassBy for Tuple where Self: codec::Codec {
 	type PassBy = Codec<Self>;
 }
 

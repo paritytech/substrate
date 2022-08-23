@@ -215,7 +215,7 @@ impl<P, Client> AuthorApi<TxHash<P>, BlockHash<P>> for Author<P, Client>
 				Ok(watcher) => {
 					subscriptions.add(subscriber, move |sink| {
 						sink
-							.sink_map_err(|_| unimplemented!())
+							.sink_map_err(|e| log::debug!("Subscription sink failed: {:?}", e))
 							.send_all(Compat::new(watcher))
 							.map(|_| ())
 					});

@@ -114,8 +114,7 @@ pub trait CallExecutor<B: BlockT> {
 	) -> Result<(Vec<u8>, StorageProof), sp_blockchain::Error> {
 		let trie_state = state.as_trie_backend()
 			.ok_or_else(||
-				Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-					as Box<dyn sp_state_machine::Error>
+				sp_blockchain::Error::from_state(Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<_>)
 			)?;
 		self.prove_at_trie_state(trie_state, overlay, method, call_data)
 	}

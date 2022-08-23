@@ -118,7 +118,8 @@ impl Externalities for AsyncExternalities {
 	fn kill_child_storage(
 		&mut self,
 		_child_info: &ChildInfo,
-	) {
+		_limit: Option<u32>,
+	) -> bool {
 		panic!("`kill_child_storage`: should not be used in async externalities!")
 	}
 

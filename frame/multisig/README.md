@@ -24,6 +24,6 @@ not available or desired.
 * `cancel_as_multi` - Cancel a call from a composite origin.
 
 [`Call`]: ./enum.Call.html
-[`Trait`]: ./trait.Trait.html
+[`Config`]: ./trait.Config.html
 
 License: Apache-2.0

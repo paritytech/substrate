@@ -23,10 +23,10 @@ use super::*;
 
 use frame_support::{
 	assert_ok, assert_noop, impl_outer_origin, parameter_types, impl_outer_dispatch,
-	weights::Weight, impl_outer_event, traits::Filter,
+	impl_outer_event, traits::Filter,
 };
 use sp_core::H256;
-use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header};
+use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 use crate as multisig;
 
 impl_outer_origin! {
@@ -55,12 +55,14 @@ impl_outer_dispatch! {
 pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
 	type BaseCallFilter = TestBaseCallFilter;
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -72,13 +74,6 @@ impl frame_system::Trait for Test {
 	type Header = Header;
 	type Event = TestEvent;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -89,7 +84,7 @@ impl frame_system::Trait for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
 	type Event = TestEvent;
@@ -114,7 +109,7 @@ impl Filter<Call> for TestBaseCallFilter {
 		}
 	}
 }
-impl Trait for Test {
+impl Config for Test {
 	type Event = TestEvent;
 	type Call = Call;
 	type Currency = Balances;

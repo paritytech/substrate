@@ -210,8 +210,10 @@ impl Externalities for BasicExternalities {
 	fn kill_child_storage(
 		&mut self,
 		child_info: &ChildInfo,
-	) {
+		_limit: Option<u32>,
+	) -> bool {
 		self.inner.children_default.remove(child_info.storage_key());
+		true
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
@@ -407,7 +409,7 @@ mod tests {
 		ext.clear_child_storage(child_info, b"dog");
 		assert_eq!(ext.child_storage(child_info, b"dog"), None);
 
-		ext.kill_child_storage(child_info);
+		ext.kill_child_storage(child_info, None);
 		assert_eq!(ext.child_storage(child_info, b"doe"), None);
 	}
 

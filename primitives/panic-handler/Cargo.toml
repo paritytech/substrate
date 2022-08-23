@@ -15,4 +15,3 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 backtrace = "0.3.38"
-log = "0.4.8"

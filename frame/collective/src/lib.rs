@@ -63,7 +63,8 @@ use frame_system::{self as system, ensure_signed, ensure_root};
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-mod default_weight;
+pub mod weights;
+pub use weights::WeightInfo;
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -120,31 +121,18 @@ impl DefaultVote for MoreThanMajorityThenPrimeDefaultVote {
 	}
 }
 
-pub trait WeightInfo {
-	fn set_members(m: u32, n: u32, p: u32, ) -> Weight;
-	fn execute(b: u32, m: u32, ) -> Weight;
-	fn propose_execute(b: u32, m: u32, ) -> Weight;
-	fn propose_proposed(b: u32, m: u32, p: u32, ) -> Weight;
-	fn vote(m: u32, ) -> Weight;
-	fn close_early_disapproved(m: u32, p: u32, ) -> Weight;
-	fn close_early_approved(b: u32, m: u32, p: u32, ) -> Weight;
-	fn close_disapproved(m: u32, p: u32, ) -> Weight;
-	fn close_approved(b: u32, m: u32, p: u32, ) -> Weight;
-	fn disapprove_proposal(p: u32, ) -> Weight;
-}
-
-pub trait Trait<I: Instance=DefaultInstance>: frame_system::Trait {
+pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {
 	/// The outer origin type.
 	type Origin: From<RawOrigin<Self::AccountId, I>>;
 
 	/// The outer call dispatch type.
 	type Proposal: Parameter
-		+ Dispatchable<Origin=<Self as Trait<I>>::Origin, PostInfo=PostDispatchInfo>
+		+ Dispatchable<Origin=<Self as Config<I>>::Origin, PostInfo=PostDispatchInfo>
 		+ From<frame_system::Call<Self>>
 		+ GetDispatchInfo;
 
 	/// The outer event type.
-	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Trait>::Event>;
+	type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// The time-out for council motions.
 	type MotionDuration: Get<Self::BlockNumber>;
@@ -178,7 +166,7 @@ pub enum RawOrigin<AccountId, I> {
 }
 
 /// Origin for the collective module.
-pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as frame_system::Trait>::AccountId, I>;
+pub type Origin<T, I=DefaultInstance> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 /// Info for keeping track of a motion being voted on.
@@ -196,12 +184,12 @@ pub struct Votes<AccountId, BlockNumber> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait<I>, I: Instance=DefaultInstance> as Collective {
+	trait Store for Module<T: Config<I>, I: Instance=DefaultInstance> as Collective {
 		/// The hashes of the active proposals.
 		pub Proposals get(fn proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(fn proposal_of):
-			map hasher(identity) T::Hash => Option<<T as Trait<I>>::Proposal>;
+			map hasher(identity) T::Hash => Option<<T as Config<I>>::Proposal>;
 		/// Votes on a given proposal, if it is ongoing.
 		pub Voting get(fn voting):
 			map hasher(identity) T::Hash => Option<Votes<T::AccountId, T::BlockNumber>>;
@@ -221,8 +209,8 @@ decl_storage! {
 
 decl_event! {
 	pub enum Event<T, I=DefaultInstance> where
-		<T as frame_system::Trait>::Hash,
-		<T as frame_system::Trait>::AccountId,
+		<T as frame_system::Config>::Hash,
+		<T as frame_system::Config>::AccountId,
 	{
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given
 		/// `MemberCount`).
@@ -251,7 +239,7 @@ decl_event! {
 }
 
 decl_error! {
-	pub enum Error for Module<T: Trait<I>, I: Instance> {
+	pub enum Error for Module<T: Config<I>, I: Instance> {
 		/// Account is not a member
 		NotMember,
 		/// Duplicate proposals not allowed
@@ -288,7 +276,7 @@ fn get_result_weight(result: DispatchResultWithPostInfo) -> Option<Weight> {
 
 // Note that councillor operations are assigned to the operational class.
 decl_module! {
-	pub struct Module<T: Trait<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as frame_system::Trait>::Origin {
+	pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where origin: <T as frame_system::Config>::Origin {
 		type Error = Error<T, I>;
 
 		fn deposit_event() = default;
@@ -377,7 +365,7 @@ decl_module! {
 			DispatchClass::Operational
 		)]
 		fn execute(origin,
-			proposal: Box<<T as Trait<I>>::Proposal>,
+			proposal: Box<<T as Config<I>>::Proposal>,
 			#[compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -444,7 +432,7 @@ decl_module! {
 		)]
 		fn propose(origin,
 			#[compact] threshold: MemberCount,
-			proposal: Box<<T as Trait<I>>::Proposal>,
+			proposal: Box<<T as Config<I>>::Proposal>,
 			#[compact] length_bound: u32
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -694,7 +682,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> Module<T, I> {
+impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// Check whether `who` is a member of the collective.
 	pub fn is_member(who: &T::AccountId) -> bool {
 		// Note: The dispatchables *do not* use this to check membership so make sure
@@ -710,7 +698,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		hash: &T::Hash,
 		length_bound: u32,
 		weight_bound: Weight
-	) -> Result<(<T as Trait<I>>::Proposal, usize), DispatchError> {
+	) -> Result<(<T as Config<I>>::Proposal, usize), DispatchError> {
 		let key = ProposalOf::<T, I>::hashed_key_for(hash);
 		// read the length of the proposal storage entry directly
 		let proposal_len = storage::read(&key, &mut [0; 0], 0)
@@ -740,7 +728,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 		seats: MemberCount,
 		voting: Votes<T::AccountId, T::BlockNumber>,
 		proposal_hash: T::Hash,
-		proposal: <T as Trait<I>>::Proposal,
+		proposal: <T as Config<I>>::Proposal,
 	) -> (Weight, u32) {
 		Self::deposit_event(RawEvent::Approved(proposal_hash));
 
@@ -776,7 +764,7 @@ impl<T: Trait<I>, I: Instance> Module<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
+impl<T: Config<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 	/// Update the members of the collective. Votes are updated and the prime is reset.
 	///
 	/// NOTE: Does not enforce the expected `MaxMembers` limit on the amount of members, but
@@ -831,7 +819,7 @@ impl<T: Trait<I>, I: Instance> ChangeMembers<T::AccountId> for Module<T, I> {
 	}
 }
 
-impl<T: Trait<I>, I: Instance> InitializeMembers<T::AccountId> for Module<T, I> {
+impl<T: Config<I>, I: Instance> InitializeMembers<T::AccountId> for Module<T, I> {
 	fn initialize_members(members: &[T::AccountId]) {
 		if !members.is_empty() {
 			assert!(<Members<T, I>>::get().is_empty(), "Members are already initialized!");
@@ -945,27 +933,29 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types, weights::Weight};
+	use frame_support::{Hashable, assert_ok, assert_noop, parameter_types};
 	use frame_system::{self as system, EventRecord, Phase};
 	use hex_literal::hex;
 	use sp_core::H256;
 	use sp_runtime::{
-		Perbill, traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
+		traits::{BlakeTwo256, IdentityLookup, Block as BlockT}, testing::Header,
 		BuildStorage,
 	};
 	use crate as collective;
 
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 1024;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
 		pub const MotionDuration: u64 = 3;
 		pub const MaxProposals: u32 = 100;
 		pub const MaxMembers: u32 = 100;
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
-	impl frame_system::Trait for Test {
+	impl frame_system::Config for Test {
 		type BaseCallFilter = ();
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
@@ -977,13 +967,6 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = ();
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();
@@ -991,7 +974,7 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 	}
-	impl Trait<Instance1> for Test {
+	impl Config<Instance1> for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
@@ -1001,7 +984,7 @@ mod tests {
 		type DefaultVote = PrimeDefaultVote;
 		type WeightInfo = ();
 	}
-	impl Trait<Instance2> for Test {
+	impl Config<Instance2> for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;
@@ -1011,7 +994,7 @@ mod tests {
 		type DefaultVote = MoreThanMajorityThenPrimeDefaultVote;
 		type WeightInfo = ();
 	}
-	impl Trait for Test {
+	impl Config for Test {
 		type Origin = Origin;
 		type Proposal = Call;
 		type Event = Event;

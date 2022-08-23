@@ -37,7 +37,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 /// # Generic Event Example:
 ///
 /// ```rust
-/// trait Trait {
+/// trait Config {
 ///     type Balance;
 ///     type Token;
 /// }
@@ -45,7 +45,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 /// mod event1 {
 ///     // Event that specifies the generic parameter explicitly (`Balance`).
 ///     frame_support::decl_event!(
-///        pub enum Event<T> where Balance = <T as super::Trait>::Balance {
+///        pub enum Event<T> where Balance = <T as super::Config>::Balance {
 ///           Message(Balance),
 ///        }
 ///     );
@@ -56,7 +56,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 ///     // If no name for the generic parameter is specified explicitly,
 ///     // the name will be taken from the type name of the trait.
 ///     frame_support::decl_event!(
-///        pub enum Event<T> where <T as super::Trait>::Balance {
+///        pub enum Event<T> where <T as super::Config>::Balance {
 ///           Message(Balance),
 ///        }
 ///     );
@@ -65,7 +65,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 /// mod event3 {
 ///     // And we even support declaring multiple generic parameters!
 ///     frame_support::decl_event!(
-///        pub enum Event<T> where <T as super::Trait>::Balance, <T as super::Trait>::Token {
+///        pub enum Event<T> where <T as super::Config>::Balance, <T as super::Config>::Token {
 ///           Message(Balance, Token),
 ///        }
 ///     );
@@ -82,7 +82,7 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 ///# struct DefaultInstance;
 ///# trait Instance {}
 ///# impl Instance for DefaultInstance {}
-/// trait Trait<I: Instance=DefaultInstance> {
+/// trait Config<I: Instance=DefaultInstance> {
 ///     type Balance;
 ///     type Token;
 /// }
@@ -90,8 +90,8 @@ pub use frame_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnE
 /// // For module with instances, DefaultInstance is optional
 /// frame_support::decl_event!(
 ///    pub enum Event<T, I: Instance = DefaultInstance> where
-///       <T as Trait>::Balance,
-///       <T as Trait>::Token
+///       <T as Config>::Balance,
+///       <T as Config>::Token
 ///    {
 ///       Message(Balance, Token),
 ///    }
@@ -258,10 +258,10 @@ macro_rules! __decl_generic_event {
 		{ $( $events:tt )* };
 		{ ,$( $generic_param:ident = $generic_type:ty ),* };
 	) => {
-		/// [`RawEvent`] specialized for the configuration [`Trait`]
+		/// [`RawEvent`] specialized for the configuration [`Config`]
 		///
 		/// [`RawEvent`]: enum.RawEvent.html
-		/// [`Trait`]: trait.Trait.html
+		/// [`Config`]: trait.Config.html
 		pub type Event<$event_generic_param $(, $instance $( = $event_default_instance)? )?> = RawEvent<$( $generic_type ),* $(, $instance)? >;
 
 		#[derive(
@@ -551,7 +551,7 @@ mod tests {
 	use codec::{Encode, Decode};
 
 	mod system {
-		pub trait Trait: 'static {
+		pub trait Config: 'static {
 			type Origin;
 			type BlockNumber;
 			type PalletInfo: crate::traits::PalletInfo;
@@ -559,7 +559,7 @@ mod tests {
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 		}
 
 		decl_event!(
@@ -570,7 +570,7 @@ mod tests {
 	}
 
 	mod system_renamed {
-		pub trait Trait: 'static {
+		pub trait Config: 'static {
 			type Origin;
 			type BlockNumber;
 			type PalletInfo: crate::traits::PalletInfo;
@@ -578,7 +578,7 @@ mod tests {
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 		}
 
 		decl_event!(
@@ -591,17 +591,17 @@ mod tests {
 	mod event_module {
 		use super::system;
 
-		pub trait Trait: system::Trait {
+		pub trait Config: system::Config {
 			type Balance;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		decl_event!(
 			/// Event without renaming the generic parameter `Balance` and `Origin`.
-			pub enum Event<T> where <T as Trait>::Balance, <T as system::Trait>::Origin
+			pub enum Event<T> where <T as Config>::Balance, <T as system::Config>::Origin
 			{
 				/// Hi, I am a comment.
 				TestEvent(Balance, Origin),
@@ -614,19 +614,19 @@ mod tests {
 	mod event_module2 {
 		use super::system;
 
-		pub trait Trait: system::Trait {
+		pub trait Config: system::Config {
 			type Balance;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		decl_event!(
 			/// Event with renamed generic parameter
 			pub enum Event<T> where
-				BalanceRenamed = <T as Trait>::Balance,
-				OriginRenamed = <T as system::Trait>::Origin
+				BalanceRenamed = <T as Config>::Balance,
+				OriginRenamed = <T as system::Config>::Origin
 			{
 				TestEvent(BalanceRenamed),
 				TestOrigin(OriginRenamed),
@@ -645,19 +645,19 @@ mod tests {
 	mod event_module4 {
 		use super::system;
 
-		pub trait Trait: system::Trait {
+		pub trait Config: system::Config {
 			type Balance;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		decl_event!(
 			/// Event finish formatting on an unnamed one with trailing comma
 			pub enum Event<T> where
-				<T as Trait>::Balance,
-				<T as system::Trait>::Origin,
+				<T as Config>::Balance,
+				<T as system::Config>::Origin,
 			{
 				TestEvent(Balance, Origin),
 			}
@@ -667,19 +667,19 @@ mod tests {
 	mod event_module5 {
 		use super::system;
 
-		pub trait Trait: system::Trait {
+		pub trait Config: system::Config {
 			type Balance;
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=system {}
+			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
 		}
 
 		decl_event!(
 			/// Event finish formatting on an named one with trailing comma
 			pub enum Event<T> where
-				BalanceRenamed = <T as Trait>::Balance,
-				OriginRenamed = <T as system::Trait>::Origin,
+				BalanceRenamed = <T as Config>::Balance,
+				OriginRenamed = <T as system::Config>::Origin,
 			{
 				TestEvent(BalanceRenamed, OriginRenamed),
 				TrailingCommaInArgs(
@@ -714,37 +714,37 @@ mod tests {
 		}
 	}
 
-	impl event_module::Trait for TestRuntime {
+	impl event_module::Config for TestRuntime {
 		type Balance = u32;
 	}
 
-	impl event_module2::Trait for TestRuntime {
+	impl event_module2::Config for TestRuntime {
 		type Balance = u32;
 	}
 
-	impl system::Trait for TestRuntime {
+	impl system::Config for TestRuntime {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
 		type DbWeight = ();
 	}
 
-	impl event_module::Trait for TestRuntime2 {
+	impl event_module::Config for TestRuntime2 {
 		type Balance = u32;
 	}
 
-	impl event_module2::Trait for TestRuntime2 {
+	impl event_module2::Config for TestRuntime2 {
 		type Balance = u32;
 	}
 
-	impl system_renamed::Trait for TestRuntime2 {
+	impl system_renamed::Config for TestRuntime2 {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
 		type DbWeight = ();
 	}
 
-	impl system::Trait for TestRuntime2 {
+	impl system::Config for TestRuntime2 {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();

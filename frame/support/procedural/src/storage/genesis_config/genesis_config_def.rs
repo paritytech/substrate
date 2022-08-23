@@ -33,11 +33,11 @@ pub struct GenesisConfigFieldDef {
 pub struct GenesisConfigDef {
 	pub is_generic: bool,
 	pub fields: Vec<GenesisConfigFieldDef>,
-	/// For example: `<T: Trait<I>, I: Instance=DefaultInstance>`.
+	/// For example: `<T: Config<I>, I: Instance=DefaultInstance>`.
 	pub genesis_struct_decl: TokenStream,
 	/// For example: `<T, I>`.
 	pub genesis_struct: TokenStream,
-	/// For example: `<T: Trait<I>, I: Instance>`.
+	/// For example: `<T: Config<I>, I: Instance>`.
 	pub genesis_impl: TokenStream,
 	/// The where clause to use to constrain generics if genesis config is generic.
 	pub genesis_where_clause: Option<syn::WhereClause>,

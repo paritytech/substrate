@@ -18,7 +18,7 @@
 //! # Scheduler
 //! A module for scheduling dispatches.
 //!
-//! - [`scheduler::Trait`](./trait.Trait.html)
+//! - [`scheduler::Config`](./trait.Config.html)
 //! - [`Call`](./enum.Call.html)
 //! - [`Module`](./struct.Module.html)
 //!
@@ -29,7 +29,7 @@
 //! may be named or anonymous and may be canceled.
 //!
 //! **NOTE:** The scheduled calls will be dispatched with the default filter
-//! for the origin: namely `frame_system::Trait::BaseCallFilter` for all origin
+//! for the origin: namely `frame_system::Config::BaseCallFilter` for all origin
 //! except root which will get no filter. And not the filter contained in origin
 //! use to call `fn schedule`.
 //!
@@ -52,7 +52,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
-mod default_weights;
+pub mod weights;
 
 use sp_std::{prelude::*, marker::PhantomData, borrow::Borrow};
 use codec::{Encode, Decode, Codec};
@@ -64,39 +64,33 @@ use frame_support::{
 	weights::{GetDispatchInfo, Weight},
 };
 use frame_system::{self as system, ensure_signed};
-
-pub trait WeightInfo {
-	fn schedule(s: u32, ) -> Weight;
-	fn cancel(s: u32, ) -> Weight;
-	fn schedule_named(s: u32, ) -> Weight;
-	fn cancel_named(s: u32, ) -> Weight;
-}
+pub use weights::WeightInfo;
 
 /// Our pallet's configuration trait. All our types and constants go in here. If the
 /// pallet is dependent on specific other pallets, then their configuration traits
 /// should be added to our implied traits list.
 ///
-/// `system::Trait` should always be included in our implied traits.
-pub trait Trait: system::Trait {
+/// `system::Config` should always be included in our implied traits.
+pub trait Config: system::Config {
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+	type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
 	/// The aggregated origin which the dispatch will take.
 	type Origin: OriginTrait<PalletsOrigin =
-		Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Trait>::Origin>;
+		Self::PalletsOrigin> + From<Self::PalletsOrigin> + IsType<<Self as system::Config>::Origin>;
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq;
 
 	/// The aggregated call type.
-	type Call: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + GetDispatchInfo + From<system::Call<Self>>;
+	type Call: Parameter + Dispatchable<Origin=<Self as Config>::Origin> + GetDispatchInfo + From<system::Call<Self>>;
 
 	/// The maximum weight that may be scheduled per block for any dispatchables of less priority
 	/// than `schedule::HARD_DEADLINE`.
 	type MaximumWeight: Get<Weight>;
 
 	/// Required origin to schedule or cancel calls.
-	type ScheduleOrigin: EnsureOrigin<<Self as system::Trait>::Origin>;
+	type ScheduleOrigin: EnsureOrigin<<Self as system::Config>::Origin>;
 
 	/// The maximum number of scheduled calls in the queue for a single block.
 	/// Not strictly enforced, but used for weight estimation.
@@ -156,10 +150,10 @@ impl Default for Releases {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Scheduler {
+	trait Store for Module<T: Config> as Scheduler {
 		/// Items to be executed, indexed by the block number that they should be executed on.
 		pub Agenda: map hasher(twox_64_concat) T::BlockNumber
-			=> Vec<Option<Scheduled<<T as Trait>::Call, T::BlockNumber, T::PalletsOrigin, T::AccountId>>>;
+			=> Vec<Option<Scheduled<<T as Config>::Call, T::BlockNumber, T::PalletsOrigin, T::AccountId>>>;
 
 		/// Lookup from identity to the block number and index of the task.
 		Lookup: map hasher(twox_64_concat) Vec<u8> => Option<TaskAddress<T::BlockNumber>>;
@@ -172,7 +166,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as system::Trait>::BlockNumber {
+	pub enum Event<T> where <T as system::Config>::BlockNumber {
 		/// Scheduled some task. \[when, index\]
 		Scheduled(BlockNumber, u32),
 		/// Canceled some task. \[when, index\]
@@ -183,7 +177,7 @@ decl_event!(
 );
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// Failed to schedule a call
 		FailedToSchedule,
 		/// Cannot find the scheduled call.
@@ -197,7 +191,7 @@ decl_error! {
 
 decl_module! {
 	/// Scheduler module declaration.
-	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+	pub struct Module<T: Config> for enum Call where origin: <T as system::Config>::Origin {
 		type Error = Error<T>;
 		fn deposit_event() = default;
 
@@ -216,10 +210,10 @@ decl_module! {
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<<T as Trait>::Call>,
+			call: Box<<T as Config>::Call>,
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Trait>::Origin::from(origin);
+			let origin = <T as Config>::Origin::from(origin);
 			Self::do_schedule(DispatchTime::At(when), maybe_periodic, priority, origin.caller().clone(), *call)?;
 		}
 
@@ -236,7 +230,7 @@ decl_module! {
 		#[weight = T::WeightInfo::cancel(T::MaxScheduledPerBlock::get())]
 		fn cancel(origin, when: T::BlockNumber, index: u32) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Trait>::Origin::from(origin);
+			let origin = <T as Config>::Origin::from(origin);
 			Self::do_cancel(Some(origin.caller().clone()), (when, index))?;
 		}
 
@@ -256,10 +250,10 @@ decl_module! {
 			when: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<<T as Trait>::Call>,
+			call: Box<<T as Config>::Call>,
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Trait>::Origin::from(origin);
+			let origin = <T as Config>::Origin::from(origin);
 			Self::do_schedule_named(
 				id, DispatchTime::At(when), maybe_periodic, priority, origin.caller().clone(), *call
 			)?;
@@ -278,7 +272,7 @@ decl_module! {
 		#[weight = T::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get())]
 		fn cancel_named(origin, id: Vec<u8>) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Trait>::Origin::from(origin);
+			let origin = <T as Config>::Origin::from(origin);
 			Self::do_cancel_named(Some(origin.caller().clone()), id)?;
 		}
 
@@ -292,10 +286,10 @@ decl_module! {
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<<T as Trait>::Call>,
+			call: Box<<T as Config>::Call>,
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Trait>::Origin::from(origin);
+			let origin = <T as Config>::Origin::from(origin);
 			Self::do_schedule(
 				DispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call
 			)?;
@@ -312,10 +306,10 @@ decl_module! {
 			after: T::BlockNumber,
 			maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 			priority: schedule::Priority,
-			call: Box<<T as Trait>::Call>,
+			call: Box<<T as Config>::Call>,
 		) {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Trait>::Origin::from(origin);
+			let origin = <T as Config>::Origin::from(origin);
 			Self::do_schedule_named(
 				id, DispatchTime::After(after), maybe_periodic, priority, origin.caller().clone(), *call
 			)?;
@@ -353,7 +347,7 @@ decl_module! {
 					*cumulative_weight = cumulative_weight
 						.saturating_add(s.call.get_dispatch_info().weight);
 
-					let origin = <<T as Trait>::Origin as From<T::PalletsOrigin>>::from(
+					let origin = <<T as Config>::Origin as From<T::PalletsOrigin>>::from(
 						s.origin.clone()
 					).into();
 
@@ -421,7 +415,7 @@ decl_module! {
 	}
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 	/// Migrate storage format from V1 to V2.
 	/// Return true if migration is performed.
 	pub fn migrate_v1_to_t2() -> bool {
@@ -429,7 +423,7 @@ impl<T: Trait> Module<T> {
 			StorageVersion::put(Releases::V2);
 
 			Agenda::<T>::translate::<
-				Vec<Option<ScheduledV1<<T as Trait>::Call, T::BlockNumber>>>, _
+				Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _
 			>(|_, agenda| Some(
 				agenda
 					.into_iter()
@@ -453,7 +447,7 @@ impl<T: Trait> Module<T> {
 	/// Helper to migrate scheduler when the pallet origin type has changed.
 	pub fn migrate_origin<OldOrigin: Into<T::PalletsOrigin> + codec::Decode>() {
 		Agenda::<T>::translate::<
-			Vec<Option<Scheduled<<T as Trait>::Call, T::BlockNumber, OldOrigin, T::AccountId>>>, _
+			Vec<Option<Scheduled<<T as Config>::Call, T::BlockNumber, OldOrigin, T::AccountId>>>, _
 		>(|_, agenda| Some(
 			agenda
 				.into_iter()
@@ -491,7 +485,7 @@ impl<T: Trait> Module<T> {
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: <T as Trait>::Call
+		call: <T as Config>::Call
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		let when = Self::resolve_time(when)?;
 
@@ -575,7 +569,7 @@ impl<T: Trait> Module<T> {
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: <T as Trait>::Call,
+		call: <T as Config>::Call,
 	) -> Result<TaskAddress<T::BlockNumber>, DispatchError> {
 		// ensure id it is unique
 		if Lookup::<T>::contains_key(&id) {
@@ -663,7 +657,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
+impl<T: Config> schedule::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin> for Module<T> {
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule(
@@ -671,7 +665,7 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrig
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: <T as Trait>::Call
+		call: <T as Config>::Call
 	) -> Result<Self::Address, DispatchError> {
 		Self::do_schedule(when, maybe_periodic, priority, origin, call)
 	}
@@ -692,7 +686,7 @@ impl<T: Trait> schedule::Anon<T::BlockNumber, <T as Trait>::Call, T::PalletsOrig
 	}
 }
 
-impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOrigin> for Module<T> {
+impl<T: Config> schedule::Named<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin> for Module<T> {
 	type Address = TaskAddress<T::BlockNumber>;
 
 	fn schedule_named(
@@ -701,7 +695,7 @@ impl<T: Trait> schedule::Named<T::BlockNumber, <T as Trait>::Call, T::PalletsOri
 		maybe_periodic: Option<schedule::Period<T::BlockNumber>>,
 		priority: schedule::Priority,
 		origin: T::PalletsOrigin,
-		call: <T as Trait>::Call,
+		call: <T as Config>::Call,
 	) -> Result<Self::Address, ()> {
 		Self::do_schedule_named(id, when, maybe_periodic, priority, origin, call).map_err(|_| ())
 	}
@@ -752,8 +746,8 @@ mod tests {
 		pub fn log() -> Vec<(OriginCaller, u32)> {
 			LOG.with(|log| log.borrow().clone())
 		}
-		pub trait Trait: system::Trait {
-			type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+		pub trait Config: system::Config {
+			type Event: From<Event> + Into<<Self as system::Config>::Event>;
 		}
 		decl_event! {
 			pub enum Event {
@@ -761,10 +755,10 @@ mod tests {
 			}
 		}
 		decl_module! {
-			pub struct Module<T: Trait> for enum Call
+			pub struct Module<T: Config> for enum Call
 			where
-				origin: <T as system::Trait>::Origin,
-				<T as system::Trait>::Origin: OriginTrait<PalletsOrigin = OriginCaller>
+				origin: <T as system::Config>::Origin,
+				<T as system::Config>::Origin: OriginTrait<PalletsOrigin = OriginCaller>
 			{
 				fn deposit_event() = default;
 
@@ -818,12 +812,14 @@ mod tests {
 	pub struct Test;
 	parameter_types! {
 		pub const BlockHashCount: u64 = 250;
-		pub const MaximumBlockWeight: Weight = 2_000_000_000_000;
-		pub const MaximumBlockLength: u32 = 2 * 1024;
-		pub const AvailableBlockRatio: Perbill = Perbill::one();
+		pub BlockWeights: frame_system::limits::BlockWeights =
+			frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
 	}
-	impl system::Trait for Test {
+	impl system::Config for Test {
 		type BaseCallFilter = BaseFilter;
+		type BlockWeights = ();
+		type BlockLength = ();
+		type DbWeight = RocksDbWeight;
 		type Origin = Origin;
 		type Call = Call;
 		type Index = u64;
@@ -835,13 +831,6 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 		type BlockHashCount = BlockHashCount;
-		type MaximumBlockWeight = MaximumBlockWeight;
-		type DbWeight = RocksDbWeight;
-		type BlockExecutionWeight = ();
-		type ExtrinsicBaseWeight = ();
-		type MaximumExtrinsicWeight = MaximumBlockWeight;
-		type MaximumBlockLength = MaximumBlockLength;
-		type AvailableBlockRatio = AvailableBlockRatio;
 		type Version = ();
 		type PalletInfo = ();
 		type AccountData = ();
@@ -849,18 +838,18 @@ mod tests {
 		type OnKilledAccount = ();
 		type SystemWeightInfo = ();
 	}
-	impl logger::Trait for Test {
+	impl logger::Config for Test {
 		type Event = ();
 	}
 	parameter_types! {
-		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * MaximumBlockWeight::get();
+		pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 		pub const MaxScheduledPerBlock: u32 = 10;
 	}
 	ord_parameter_types! {
 		pub const One: u64 = 1;
 	}
 
-	impl Trait for Test {
+	impl Config for Test {
 		type Event = ();
 		type Origin = Origin;
 		type PalletsOrigin = OriginCaller;
@@ -895,7 +884,7 @@ mod tests {
 	fn basic_scheduling_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call));
 			run_to_block(3);
 			assert!(logger::log().is_empty());
@@ -911,7 +900,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call));
 			run_to_block(5);
@@ -928,7 +917,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			run_to_block(2);
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_ok!(Scheduler::do_schedule(DispatchTime::After(0), None, 127, root(), call));
 			// Will trigger on the next block.
 			run_to_block(3);
@@ -966,7 +955,7 @@ mod tests {
 	fn reschedule_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_eq!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call).unwrap(), (4, 0));
 
 			run_to_block(3);
@@ -991,7 +980,7 @@ mod tests {
 	fn reschedule_named_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_eq!(Scheduler::do_schedule_named(
 				1u32.encode(), DispatchTime::At(4), None, 127, root(), call
 			).unwrap(), (4, 0));
@@ -1018,7 +1007,7 @@ mod tests {
 	fn reschedule_named_perodic_works() {
 		new_test_ext().execute_with(|| {
 			let call = Call::Logger(logger::Call::log(42, 1000));
-			assert!(!<Test as frame_system::Trait>::BaseCallFilter::filter(&call));
+			assert!(!<Test as frame_system::Config>::BaseCallFilter::filter(&call));
 			assert_eq!(Scheduler::do_schedule_named(
 				1u32.encode(), DispatchTime::At(4), Some((3, 3)), 127, root(), call
 			).unwrap(), (4, 0));
@@ -1209,10 +1198,10 @@ mod tests {
 	#[test]
 	fn on_initialize_weight_is_correct() {
 		new_test_ext().execute_with(|| {
-			let base_weight: Weight = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 2);
+			let base_weight: Weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(1, 2);
 			let base_multiplier = 0;
-			let named_multiplier = <Test as frame_system::Trait>::DbWeight::get().writes(1);
-			let periodic_multiplier = <Test as frame_system::Trait>::DbWeight::get().reads_writes(1, 1);
+			let named_multiplier = <Test as frame_system::Config>::DbWeight::get().writes(1);
+			let periodic_multiplier = <Test as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
 
 			// Named
 			assert_ok!(

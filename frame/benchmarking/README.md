@@ -43,7 +43,7 @@ The benchmarking framework comes with the following tools:
 * [A set of macros](./src/lib.rs) (`benchmarks!`, `add_benchmark!`, etc...) to make it easy to
   write, test, and add runtime benchmarks.
 * [A set of linear regression analysis functions](./src/analysis.rs) for processing benchmark data.
-* [A CLI extension](../../utils/benchmarking-cli/) to make it easy to execute benchmarks on your
+* [A CLI extension](../../utils/frame/benchmarking-cli/) to make it easy to execute benchmarks on your
   node.
 
 The end-to-end benchmarking pipeline is disabled by default when compiling a node. If you want to

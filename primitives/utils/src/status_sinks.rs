@@ -43,6 +43,12 @@ struct YieldAfter<T> {
 	sender: Option<TracingUnboundedSender<T>>,
 }
 
+impl <T> Default for StatusSinks<T> {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl<T> StatusSinks<T> {
 	/// Builds a new empty collection.
 	pub fn new() -> StatusSinks<T> {

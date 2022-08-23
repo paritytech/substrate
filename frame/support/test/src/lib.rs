@@ -26,7 +26,7 @@
 mod pallet_version;
 
 /// The configuration trait
-pub trait Trait: 'static {
+pub trait Config: 'static {
 	/// The runtime origin type.
 	type Origin: codec::Codec + codec::EncodeLike + Default;
 	/// The block number type.
@@ -39,5 +39,5 @@ pub trait Trait: 'static {
 
 frame_support::decl_module! {
 	/// Some test module
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 }

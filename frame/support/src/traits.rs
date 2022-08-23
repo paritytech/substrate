@@ -33,6 +33,7 @@ use sp_runtime::{
 use crate::dispatch::Parameter;
 use crate::storage::StorageMap;
 use crate::weights::Weight;
+use bitflags::bitflags;
 use impl_trait_for_tuples::impl_for_tuples;
 
 /// Re-expected for the macro.
@@ -1184,24 +1185,39 @@ pub trait VestingSchedule<AccountId> {
 	fn remove_vesting_schedule(who: &AccountId);
 }
 
-bitmask! {
+bitflags! {
 	/// Reasons for moving funds out of an account.
 	#[derive(Encode, Decode)]
-	pub mask WithdrawReasons: i8 where
-
-	/// Reason for moving funds out of an account.
-	#[derive(Encode, Decode)]
-	flags WithdrawReason {
+	pub struct WithdrawReasons: i8 {
 		/// In order to pay for (system) transaction costs.
-		TransactionPayment = 0b00000001,
+		const TRANSACTION_PAYMENT = 0b00000001;
 		/// In order to transfer ownership.
-		Transfer = 0b00000010,
+		const TRANSFER = 0b00000010;
 		/// In order to reserve some funds for a later return or repatriation.
-		Reserve = 0b00000100,
+		const RESERVE = 0b00000100;
 		/// In order to pay some other (higher-level) fees.
-		Fee = 0b00001000,
+		const FEE = 0b00001000;
 		/// In order to tip a validator for transaction inclusion.
-		Tip = 0b00010000,
+		const TIP = 0b00010000;
+	}
+}
+
+impl WithdrawReasons {
+	/// Choose all variants except for `one`.
+	///
+	/// ```rust
+	/// # use frame_support::traits::WithdrawReasons;
+	/// # fn main() {
+	/// assert_eq!(
+	/// 	WithdrawReasons::FEE | WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE | WithdrawReasons::TIP,
+	/// 	WithdrawReasons::except(WithdrawReasons::TRANSACTION_PAYMENT),
+	///	);
+	/// # }
+	/// ```
+	pub fn except(one: WithdrawReasons) -> WithdrawReasons {
+		let mut flags = Self::all();
+		flags.toggle(one);
+		flags
 	}
 }
 
@@ -1215,25 +1231,6 @@ pub trait Time {
 pub trait UnixTime {
 	/// Return duration since `SystemTime::UNIX_EPOCH`.
 	fn now() -> core::time::Duration;
-}
-
-impl WithdrawReasons {
-	/// Choose all variants except for `one`.
-	///
-	/// ```rust
-	/// # use frame_support::traits::{WithdrawReason, WithdrawReasons};
-	/// # fn main() {
-	/// assert_eq!(
-	/// 	WithdrawReason::Fee | WithdrawReason::Transfer | WithdrawReason::Reserve | WithdrawReason::Tip,
-	/// 	WithdrawReasons::except(WithdrawReason::TransactionPayment),
-	///	);
-	/// # }
-	/// ```
-	pub fn except(one: WithdrawReason) -> WithdrawReasons {
-		let mut mask = Self::all();
-		mask.toggle(one);
-		mask
-	}
 }
 
 /// Trait for type that can handle incremental changes to a set of account IDs.
@@ -1268,7 +1265,7 @@ pub trait ChangeMembers<AccountId: Clone + Ord> {
 		Self::change_members_sorted(&incoming[..], &outgoing[..], &new_members);
 	}
 
-	/// Compute diff between new and old members; they **must already be sorted**. 
+	/// Compute diff between new and old members; they **must already be sorted**.
 	///
 	/// Returns incoming and outgoing members.
 	fn compute_members_diff(
@@ -1424,20 +1421,30 @@ pub trait GetCallMetadata {
 	fn get_call_metadata(&self) -> CallMetadata;
 }
 
-/// The block finalization trait. Implementing this lets you express what should happen
-/// for your module when the block is ending.
+/// The block finalization trait.
+///
+/// Implementing this lets you express what should happen for your pallet when the block is ending.
 #[impl_for_tuples(30)]
 pub trait OnFinalize<BlockNumber> {
 	/// The block is being finalized. Implement to have something happen.
+	///
+	/// NOTE: This function is called AFTER ALL extrinsics in a block are applied,
+	/// including inherent extrinsics.
 	fn on_finalize(_n: BlockNumber) {}
 }
 
-/// The block initialization trait. Implementing this lets you express what should happen
-/// for your module when the block is beginning (right before the first extrinsic is executed).
+/// The block initialization trait.
+///
+/// Implementing this lets you express what should happen for your pallet when the block is
+/// beginning (right before the first extrinsic is executed).
 pub trait OnInitialize<BlockNumber> {
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
+	///
+	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
+	/// including inherent extrinsics. Hence for instance, if you runtime includes
+	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight { 0 }
 }
 
@@ -1448,6 +1455,17 @@ impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(_n.clone())); )* );
 		weight
 	}
+}
+
+/// A trait that will be called at genesis.
+///
+/// Implementing this trait for a pallet let's you express operations that should
+/// happen at genesis. It will be called in an externalities provided environment and
+/// will see the genesis state after all pallets have written their genesis state.
+#[impl_for_tuples(30)]
+pub trait OnGenesis {
+	/// Something that should happen at genesis.
+	fn on_genesis() {}
 }
 
 /// The runtime upgrade trait.
@@ -1558,7 +1576,7 @@ pub mod schedule {
 		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
 		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
 		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
-		/// others, use `reschedule_named`. 
+		/// others, use `reschedule_named`.
 		///
 		/// Will return an error if the `address` is invalid.
 		fn reschedule(
@@ -1635,16 +1653,16 @@ pub trait EnsureOrigin<OuterOrigin> {
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime` and `impl_outer_dispatch`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Trait::Origin`).
+	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
 	type Origin;
 
 	/// Dispatch this call but do not check the filter in origin.
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> crate::dispatch::DispatchResultWithPostInfo;
 }
 
-/// Methods available on `frame_system::Trait::Origin`.
+/// Methods available on `frame_system::Config::Origin`.
 pub trait OriginTrait: Sized {
-	/// Runtime call type, as in `frame_system::Trait::Call`
+	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
@@ -1656,7 +1674,7 @@ pub trait OriginTrait: Sized {
 	/// Add a filter to the origin.
 	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
-	/// Reset origin filters to default one, i.e `frame_system::Trait::BaseCallFilter`.
+	/// Reset origin filters to default one, i.e `frame_system::Config::BaseCallFilter`.
 	fn reset_filter(&mut self);
 
 	/// Replace the caller with caller from the other origin
@@ -1668,13 +1686,13 @@ pub trait OriginTrait: Sized {
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;
 
-	/// Create with system none origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system none origin and `frame-system::Config::BaseCallFilter`.
 	fn none() -> Self;
 
 	/// Create with system root origin and no filter.
 	fn root() -> Self;
 
-	/// Create with system signed origin and `frame-system::Trait::BaseCallFilter`.
+	/// Create with system signed origin and `frame-system::Config::BaseCallFilter`.
 	fn signed(by: Self::AccountId) -> Self;
 }
 
@@ -1711,6 +1729,30 @@ impl<T> IsType<T> for T {
 pub trait Instance: 'static {
 	/// Unique module prefix. E.g. "InstanceNMyModule" or "MyModule"
 	const PREFIX: &'static str;
+}
+
+/// An instance of a storage in a pallet.
+///
+/// Define an instance for an individual storage inside a pallet.
+/// The pallet prefix is used to isolate the storage between pallets, and the storage prefix is
+/// used to isolate storages inside a pallet.
+///
+/// NOTE: These information can be used to define storages in pallet such as a `StorageMap` which
+/// can use keys after `twox_128(pallet_prefix())++twox_128(STORAGE_PREFIX)`
+pub trait StorageInstance {
+	/// Prefix of a pallet to isolate it from other pallets.
+	fn pallet_prefix() -> &'static str;
+
+	/// Prefix given to a storage to isolate from other storages in the pallet.
+	const STORAGE_PREFIX: &'static str;
+}
+
+/// Implement Get by returning Default for any type that implements Default.
+pub struct GetDefault;
+impl<T: Default> crate::traits::Get<T> for GetDefault {
+	fn get() -> T {
+		T::default()
+	}
 }
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
@@ -1837,7 +1879,7 @@ pub const PALLET_VERSION_STORAGE_KEY_POSTFIX: &[u8] = b":__PALLET_VERSION__:";
 ///
 /// Each pallet version is stored in the state under a fixed key. See
 /// [`PALLET_VERSION_STORAGE_KEY_POSTFIX`] for how this key is built.
-#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord)]
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy)]
 pub struct PalletVersion {
 	/// The major version of the pallet.
 	pub major: u16,
@@ -1874,6 +1916,25 @@ impl PalletVersion {
 		final_key[16..].copy_from_slice(&postfix);
 
 		Some(final_key)
+	}
+
+	/// Put this pallet version into the storage.
+	///
+	/// It will use the storage key that is associated with the given `Pallet`.
+	///
+	/// # Panics
+	///
+	/// This function will panic iff `Pallet` can not be found by `PalletInfo`.
+	/// In a runtime that is put together using
+	/// [`construct_runtime!`](crate::construct_runtime) this should never happen.
+	///
+	/// It will also panic if this function isn't executed in an externalities
+	/// provided environment.
+	pub fn put_into_storage<PI: PalletInfo, Pallet: 'static>(&self) {
+		let key = Self::storage_key::<PI, Pallet>()
+			.expect("Every active pallet has a name in the runtime; qed");
+
+		crate::storage::unhashed::put(&key, self);
 	}
 }
 

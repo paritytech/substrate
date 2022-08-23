@@ -24,12 +24,12 @@ use sp_runtime::{Perbill, traits::{BlakeTwo256, IdentityLookup}, testing::Header
 mod module {
 	use super::*;
 
-	pub trait Trait: system::Trait {
-		type Event: From<Event> + Into<<Self as system::Trait>::Event>;
+	pub trait Config: system::Config {
+		type Event: From<Event> + Into<<Self as system::Config>::Event>;
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config> for enum Call where origin: T::Origin {
 			pub fn deposit_event() = default;
 		}
 	}
@@ -54,14 +54,22 @@ impl_outer_event! {
 
 frame_support::parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 4 * 1024 * 1024;
-	pub const MaximumBlockLength: u32 = 4 * 1024 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::with_sensible_defaults(
+			4 * 1024 * 1024, Perbill::from_percent(75),
+		);
+	pub BlockLength: frame_system::limits::BlockLength =
+		frame_system::limits::BlockLength::max_with_normal_ratio(
+			4 * 1024 * 1024, Perbill::from_percent(75),
+		);
 }
 #[derive(Clone, Eq, PartialEq)]
 pub struct Runtime;
-impl system::Trait for Runtime {
+impl system::Config for Runtime {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = BlockLength;
+	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -73,13 +81,6 @@ impl system::Trait for Runtime {
 	type Header = Header;
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type MaximumBlockLength = MaximumBlockLength;
-	type AvailableBlockRatio = AvailableBlockRatio;
 	type Version = ();
 	type PalletInfo = ();
 	type AccountData = ();
@@ -88,7 +89,7 @@ impl system::Trait for Runtime {
 	type SystemWeightInfo = ();
 }
 
-impl module::Trait for Runtime {
+impl module::Config for Runtime {
 	type Event = Event;
 }
 

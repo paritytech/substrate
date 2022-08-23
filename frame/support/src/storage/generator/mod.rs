@@ -42,14 +42,14 @@ mod tests {
 
 	struct Runtime;
 
-	pub trait Trait: 'static {
+	pub trait Config: 'static {
 		type Origin;
 		type BlockNumber;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
-	impl Trait for Runtime {
+	impl Config for Runtime {
 		type Origin = u32;
 		type BlockNumber = u32;
 		type PalletInfo = ();
@@ -57,11 +57,11 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
 	}
 
 	crate::decl_storage! {
-		trait Store for Module<T: Trait> as Runtime {
+		trait Store for Module<T: Config> as Runtime {
 			Value get(fn value) config(): (u64, u64);
 			NumberMap: map hasher(identity) u32 => u64;
 			DoubleMap: double_map hasher(identity) u32, hasher(identity) u32 => u64;

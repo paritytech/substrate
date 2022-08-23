@@ -297,7 +297,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		config: ClientConfig,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			let genesis_storage = build_genesis_storage.build_storage()?;
+			let genesis_storage = build_genesis_storage.build_storage()
+				.map_err(sp_blockchain::Error::Storage)?;
 			let mut op = backend.begin_operation()?;
 			backend.begin_state_operation(&mut op, BlockId::Hash(Default::default()))?;
 			let state_root = op.reset_storage(genesis_storage)?;
@@ -880,7 +881,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 					&state,
 					changes_trie_state.as_ref(),
 					*parent_hash,
-				)?;
+				).map_err(sp_blockchain::Error::Storage)?;
 
 				if import_block.header.state_root()
 					!= &gen_storage_changes.transaction_storage_root
@@ -1159,12 +1160,12 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 	/// Prepare in-memory header that is used in execution environment.
 	fn prepare_environment_block(&self, parent: &BlockId<Block>) -> sp_blockchain::Result<Block::Header> {
-		let parent_header = self.backend.blockchain().expect_header(*parent)?;
+		let parent_hash = self.backend.blockchain().expect_block_hash_from_id(parent)?;
 		Ok(<<Block as BlockT>::Header as HeaderT>::new(
 			self.backend.blockchain().expect_block_number_from_id(parent)? + One::one(),
 			Default::default(),
 			Default::default(),
-			parent_header.hash(),
+			parent_hash,
 			Default::default(),
 		))
 	}
@@ -1900,8 +1901,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 		self.body(id)
 	}
 
-	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>
-	{
+	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), justification) =>
 				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
@@ -1910,26 +1910,7 @@ impl<B, E, Block, RA> BlockBackend<Block> for Client<B, E, Block, RA>
 	}
 
 	fn block_status(&self, id: &BlockId<Block>) -> sp_blockchain::Result<BlockStatus> {
-		// this can probably be implemented more efficiently
-		if let BlockId::Hash(ref h) = id {
-			if self.importing_block.read().as_ref().map_or(false, |importing| h == importing) {
-				return Ok(BlockStatus::Queued);
-			}
-		}
-		let hash_and_number = match id.clone() {
-			BlockId::Hash(hash) => self.backend.blockchain().number(hash)?.map(|n| (hash, n)),
-			BlockId::Number(n) => self.backend.blockchain().hash(n)?.map(|hash| (hash, n)),
-		};
-		match hash_and_number {
-			Some((hash, number)) => {
-				if self.backend.have_state_at(&hash, number) {
-					Ok(BlockStatus::InChainWithState)
-				} else {
-					Ok(BlockStatus::InChainPruned)
-				}
-			}
-			None => Ok(BlockStatus::Unknown),
-		}
+		Client::block_status(self, id)
 	}
 
 	fn justification(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justification>> {

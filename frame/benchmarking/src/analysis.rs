@@ -18,8 +18,10 @@
 //! Tools for analyzing the benchmark results.
 
 use std::collections::BTreeMap;
-use linregress::{FormulaRegressionBuilder, RegressionDataBuilder, RegressionModel};
+use linregress::{FormulaRegressionBuilder, RegressionDataBuilder};
 use crate::BenchmarkResults;
+
+pub use linregress::RegressionModel;
 
 pub struct Analysis {
 	pub base: u128,

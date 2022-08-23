@@ -1,9 +1,9 @@
-trait Trait {
+trait Config {
 	type C;
 }
 
 #[derive(frame_support::CloneNoBound)]
-struct Foo<T: Trait> {
+struct Foo<T: Config> {
 	c: T::C,
 }
 
