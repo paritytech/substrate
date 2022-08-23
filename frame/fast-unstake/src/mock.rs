@@ -34,19 +34,14 @@ type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u128;
 
-pub(crate) type T = Runtime;
-
-// pub(crate) const POOL1_BONDED: AccountId = 20318131474730217858575332831085u128;
-// pub(crate) const POOL1_REWARD: AccountId = 20397359637244482196168876781421u128;
-
-// parameter_types! {
-// 	pub BlockWeights: frame_system::limits::BlockWeights =
-// 		frame_system::limits::BlockWeights::simple_max(1024);
-// }
+parameter_types! {
+	pub BlockWeights: frame_system::limits::BlockWeights =
+		frame_system::limits::BlockWeights::simple_max(1024);
+}
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
 	type Origin = Origin;
@@ -195,12 +190,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Event<Runtime>},
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
-		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<Runtime>, Event<Runtime>},
+		Staking: pallet_staking::{Pallet, Call, Config<Runtime>, Storage, Event<Runtime>},
+		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<Runtime>},
+		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<Runtime>},
 	}
 );
 
