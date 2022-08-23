@@ -3355,6 +3355,7 @@ dependencies = [
  "pallet-election-provider-multi-phase",
  "pallet-election-provider-support-benchmarking",
  "pallet-elections-phragmen",
+ "pallet-fast-unstake",
  "pallet-gilt",
  "pallet-grandpa",
  "pallet-identity",

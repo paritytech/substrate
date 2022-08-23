@@ -122,4 +122,8 @@ where
 		voter_at: impl Fn(Self::VoterIndex) -> Option<A>,
 		target_at: impl Fn(Self::TargetIndex) -> Option<A>,
 	) -> Result<Vec<Assignment<A, Self::Accuracy>>, Error>;
+
+	/// Build a fake version of self with the given number of voters and targets.
+	#[cfg(feature = "srd")]
+	fn fake_from(v: u32, t: u32) -> Self;
 }

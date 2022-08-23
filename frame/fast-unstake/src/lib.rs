@@ -40,6 +40,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
 pub use pallet::*;
 
 #[cfg(test)]
@@ -77,8 +80,7 @@ pub mod pallet {
 	use sp_staking::EraIndex;
 
 	use frame_election_provider_support::ElectionProvider;
-	use pallet_nomination_pools::WeightInfo as _;
-	use pallet_staking::{Pallet as Staking, WeightInfo as _};
+	use pallet_staking::Pallet as Staking;
 
 	use sp_std::{ops::Div, vec::Vec};
 
@@ -87,8 +89,26 @@ pub mod pallet {
 		fn deregister() -> Weight;
 		fn control() -> Weight;
 
-		fn on_idle_empty() -> Weight;
+		fn on_idle_unstake() -> Weight;
 		fn on_idle_check(e: u32) -> Weight;
+	}
+
+	impl WeightInfo for () {
+		fn register_fast_unstake() -> Weight {
+			0
+		}
+		fn deregister() -> Weight {
+			0
+		}
+		fn control() -> Weight {
+			0
+		}
+		fn on_idle_unstake() -> Weight {
+			0
+		}
+		fn on_idle_check(_: u32) -> Weight {
+			0
+		}
 	}
 
 	type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
@@ -194,7 +214,7 @@ pub mod pallet {
 		/// If the check fails, the stash remains chilled and waiting for being unbonded as in with
 		/// the normal staking system, but they lose part of their unbonding chunks due to consuming
 		/// the chain's resources.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
 		pub fn register_fast_unstake(
 			origin: OriginFor<T>,
 			maybe_pool_id: Option<PoolId>,
@@ -228,7 +248,7 @@ pub mod pallet {
 		/// Note that the associated stash is still fully unbonded and chilled as a consequence of
 		/// calling `register_fast_unstake`. This should probably be followed by a call to
 		/// `Staking::rebond`.
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
 			let stash = pallet_staking::Ledger::<T>::get(&ctrl)
@@ -247,7 +267,7 @@ pub mod pallet {
 		/// Control the operation of this pallet.
 		///
 		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
-		#[pallet::weight(0)]
+		#[pallet::weight(<T as Config>::WeightInfo::control())]
 		pub fn control(origin: OriginFor<T>, eras_to_check: EraIndex) -> DispatchResult {
 			let _ = T::ControlOrigin::ensure_origin(origin)?;
 			ErasToCheckPerBlock::<T>::put(eras_to_check);
@@ -272,9 +292,13 @@ pub mod pallet {
 				return T::DbWeight::get().reads(1)
 			}
 
-			let total_worse_case_weight =
-				<T as Config>::WeightInfo::on_idle_check(eras_to_check_per_block)
-					.max(<T as Config>::WeightInfo::on_idle_empty());
+			#[cfg(feature = "runtime-benchmarks")]
+			let total_worse_case_weight = <T as Config>::WeightInfo::on_idle_check(eras_to_check_per_block)
+				.max(<T as Config>::WeightInfo::on_idle_unstake());
+			// TODO: not sure if this is needed.
+			#[cfg(not(feature = "runtime-benchmarks"))]
+			let total_worse_case_weight = 0;
+
 			if total_worse_case_weight > remaining_weight {
 				log!(warn, "total_worse_case_weight > remaining_weight, early exiting");
 				return T::DbWeight::get().reads(1)
@@ -353,7 +377,7 @@ pub mod pallet {
 					Some(ctrl) => ctrl,
 					None => {
 						Self::deposit_event(Event::<T>::Errored { stash });
-						return <T as Config>::WeightInfo::on_idle_empty()
+						return <T as Config>::WeightInfo::on_idle_unstake()
 					},
 				};
 
@@ -361,7 +385,7 @@ pub mod pallet {
 					Some(ledger) => ledger,
 					None => {
 						Self::deposit_event(Event::<T>::Errored { stash });
-						return <T as Config>::WeightInfo::on_idle_empty()
+						return <T as Config>::WeightInfo::on_idle_unstake()
 					},
 				};
 
@@ -384,7 +408,7 @@ pub mod pallet {
 				let result = unstake_result.and(pool_stake_result);
 				Self::deposit_event(Event::<T>::Unstaked { stash, maybe_pool_id, result });
 
-				<T as Config>::WeightInfo::on_idle_empty()
+				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
 				// eras remaining to be checked.
 				let mut eras_checked = 0u32;

@@ -2175,7 +2175,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// It is essentially `max { MinNominatorBond, MinCreateBond, MinJoinBond }`, where the former
 	/// is coming from the staking pallet and the latter two are configured in this pallet.
-	fn depositor_min_bond() -> BalanceOf<T> {
+	pub fn depositor_min_bond() -> BalanceOf<T> {
 		T::StakingInterface::minimum_bond()
 			.max(MinCreateBond::<T>::get())
 			.max(MinJoinBond::<T>::get())
