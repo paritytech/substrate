@@ -89,6 +89,7 @@ fn register_works() {
 		assert_ok!(Staking::bond(Origin::signed(1), 2, 100, RewardDestination::Controller));
 
 		// Stash nominates a validator
+		// NOTE: not sure where this validator is coming from (not an actual validator).
 		assert_ok!(Staking::nominate(Origin::signed(ctrl), vec![3_u128]));
 
 		// Controller account registers for fast unstake.
