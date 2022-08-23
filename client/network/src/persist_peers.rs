@@ -233,7 +233,6 @@ mod peersets {
 	#[derive(Debug, serde::Serialize, serde::Deserialize)]
 	pub struct PeerInfo {
 		pub peer_id: String,
-		pub reputation: i32,
 		pub sets: Vec<usize>,
 	}
 
@@ -248,11 +247,7 @@ mod peersets {
 			.await
 			.map_err(|()| io::Error::new(io::ErrorKind::BrokenPipe, "oneshot channel failure"))?
 			.into_iter()
-			.map(|(peer_id, reputation, sets)| PeerInfo {
-				peer_id: peer_id.to_base58(),
-				reputation,
-				sets,
-			})
+			.map(|(peer_id, sets)| PeerInfo { peer_id: peer_id.to_base58(), sets })
 			.collect::<Vec<_>>();
 
 		let mut tmp_file = tokio::fs::OpenOptions::new()
@@ -271,7 +266,7 @@ mod peersets {
 		Ok(())
 	}
 
-	pub fn load(dir: impl AsRef<Path>) -> Result<Vec<(PeerId, i32, Vec<usize>)>, io::Error> {
+	pub fn load(dir: impl AsRef<Path>) -> Result<Vec<(PeerId, Vec<usize>)>, io::Error> {
 		let path = dir.as_ref().join("peer-sets.json");
 
 		match std::fs::OpenOptions::new().read(true).open(&path) {
@@ -282,7 +277,7 @@ mod peersets {
 					.into_iter()
 					.filter_map(|peer_info| {
 						if let Ok(peer_id) = peer_info.peer_id.parse::<PeerId>() {
-							Some((peer_id, peer_info.reputation, peer_info.sets))
+							Some((peer_id, peer_info.sets))
 						} else {
 							None
 						}

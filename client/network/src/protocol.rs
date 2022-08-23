@@ -380,22 +380,10 @@ where
 			.map(persist_peers::peersets_load)
 			.transpose()?
 		{
-			use sc_peerset::{ReputationChange, SetId};
+			use sc_peerset::SetId;
 
-			for (peer_id, reputation, sets) in loaded_peerinfo {
-				log::info!(
-					"Restoring {:?} with sets: {:?}, reputation: {:?}",
-					peer_id,
-					sets,
-					reputation
-				);
-				peerset.report_peer(
-					peer_id,
-					ReputationChange {
-						value: reputation,
-						reason: "Restoring from previous node incarnation",
-					},
-				);
+			for (peer_id, sets) in loaded_peerinfo {
+				log::info!("Restoring {:?} with sets: {:?}", peer_id, sets,);
 
 				for set_id in sets {
 					peerset.add_to_peers_set(SetId::from(set_id), peer_id.to_owned());
