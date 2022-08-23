@@ -183,7 +183,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 }
 
-struct FastUnstakeWeightInfo;
+pub struct FastUnstakeWeightInfo;
 impl fast_unstake::WeightInfo for FastUnstakeWeightInfo {
 	fn register_fast_unstake() -> Weight {
 		10
@@ -209,7 +209,7 @@ parameter_types! {
 impl fast_unstake::Config for Runtime {
 	type Event = Event;
 	type SlashPerEra = SlashPerEra;
-	type ControlOrigin = Origin;
+	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type WeightInfo = FastUnstakeWeightInfo;
 }
 
@@ -226,6 +226,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<Runtime>, Event<Runtime>},
 		Staking: pallet_staking::{Pallet, Call, Config<Runtime>, Storage, Event<Runtime>},
 		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<Runtime>},
+		FastUnstake: fast_unstake::{Pallet, Call, Storage, Event<Runtime>},
 	}
 );
 
