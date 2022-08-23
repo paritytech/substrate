@@ -42,8 +42,22 @@
 
 pub use pallet::*;
 
+pub const LOG_TARGET: &'static str = "runtime::fast-unstake";
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("[{:?}] 💨 ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+		)
+	};
+}
+
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use sp_std::prelude::*;
@@ -68,9 +82,8 @@ pub mod pallet {
 		fn deregister() -> Weight;
 		fn control() -> Weight;
 
-		// TODO: maybe not needed.
-		fn weight_per_era_check() -> Weight;
-		fn do_slash() -> Weight;
+		fn on_idle_empty() -> Weight;
+		fn on_idle_check(e: u32) -> Weight;
 	}
 
 	type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
@@ -144,6 +157,9 @@ pub mod pallet {
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
 		/// A staker was partially checked for the given eras, but the process did not finish.
 		Checked { stash: T::AccountId, eras: Vec<EraIndex> },
+		/// Some internal error happened while migrating stash. They are removed as head as a
+		/// consequence.
+		Errored { stash: T::AccountId },
 	}
 
 	#[pallet::hooks]
@@ -181,6 +197,7 @@ pub mod pallet {
 			let ctrl = ensure_signed(origin)?;
 
 			let ledger = pallet_staking::Ledger::<T>::get(&ctrl).ok_or("NotController")?;
+			ensure!(pallet_staking::Nominators::<T>::contains_key(&ledger.stash), "NotNominator");
 
 			ensure!(!Queue::<T>::contains_key(&ledger.stash), "AlreadyQueued");
 			ensure!(
@@ -238,31 +255,36 @@ pub mod pallet {
 		/// process up to `remaining_weight`.
 		///
 		/// Returns the actual weight consumed.
+		///
+		/// Written for readability in mind, not efficiency. For example:
+		///
+		/// 1. We assume this is only ever called once per `on_idle`. This is because we know that
+		/// in all use cases, even a single nominator cannot be unbonded in a single call. Multiple
+		/// calls to this function are thus not needed. 2. We will only mark a staker
 		fn process_head(remaining_weight: Weight) -> Weight {
-			let get_unstake_head_weight = T::DbWeight::get().reads(2);
-			if remaining_weight < get_unstake_head_weight {
-				// check that we have enough weight o read
-				// nothing can be done.
-				return 0
+			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
+			if eras_to_check_per_block.is_zero() {
+				return T::DbWeight::get().reads(1)
 			}
 
-			// TODO ROSS: sum up all the weights consumed in the worse case execution of this code, if it is too much, early exit.
+			let total_worse_case_weight =
+				<T as Config>::WeightInfo::on_idle_check(eras_to_check_per_block)
+					.max(<T as Config>::WeightInfo::on_idle_empty());
+			if total_worse_case_weight > remaining_weight {
+				log!(warn, "total_worse_case_weight > remaining_weight, early exiting");
+				return T::DbWeight::get().reads(1)
+			}
 
 			if <T as pallet_staking::Config>::ElectionProvider::ongoing() {
 				// NOTE: we assume `ongoing` does not consume any weight.
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
 				// taken. In this time period, we don't want to accidentally unstake them.
-				return 0
+				return T::DbWeight::get().reads(1)
 			}
-
-			let mut consumed_weight = 0;
-			let mut add_weight =
-				|amount: u64| consumed_weight = consumed_weight.saturating_add(amount);
 
 			let UnstakeRequest { stash, mut checked, maybe_pool_id } = match Head::<T>::take()
 				.or_else(|| {
-					// TODO: this is purely unordered. If there is an attack, this could
 					Queue::<T>::drain()
 						.take(1)
 						.map(|(stash, maybe_pool_id)| UnstakeRequest {
@@ -274,36 +296,32 @@ pub mod pallet {
 				}) {
 				None => {
 					// There's no `Head` and nothing in the `Queue`, nothing to do here.
-					return get_unstake_head_weight
+					return T::DbWeight::get().reads_writes(2, 1)
 				},
-				Some(head) => {
-					add_weight(get_unstake_head_weight);
-					head
-				},
+				Some(head) => head,
 			};
 
 			// determine the amount of eras to check. this is minimum of two criteria:
 			// `ErasToCheckPerBlock`, and how much weight is given to the on_idle hook. For the sake
 			// of simplicity, we assume we check at most one staker's eras per-block.
 			let final_eras_to_check = {
-				let weight_per_era_check: Weight =
-					<T as Config>::WeightInfo::weight_per_era_check();
+				// NOTE: here we're assuming that the number of validators has only ever increased,
+				// meaning that the number of exposures to check is either this per era, or less.
+				let weight_per_era_check = T::DbWeight::get().reads(1) *
+					pallet_staking::ValidatorCount::<T>::get() as Weight;
 				let eras_to_check_weight_limit = remaining_weight.div(weight_per_era_check);
-				add_weight(T::DbWeight::get().reads(1));
-				ErasToCheckPerBlock::<T>::get().min(eras_to_check_weight_limit as u32)
+				eras_to_check_per_block.min(eras_to_check_weight_limit as u32)
 			};
 
 			// return weight consumed if no eras to check..
 			if final_eras_to_check.is_zero() {
-				// TODO: if ErasToCheckPerBlock == 0 preferably don't consume any weight.
-				return consumed_weight
+				return T::DbWeight::get().reads_writes(2, 1)
 			}
 
 			// the range that we're allowed to check in this round.
 			let current_era = pallet_staking::CurrentEra::<T>::get().unwrap_or_default();
 			let eras_to_check = {
 				let bonding_duration = <T as pallet_staking::Config>::BondingDuration::get();
-				add_weight(T::DbWeight::get().reads(1));
 
 				// get the last available `bonding_duration` eras up to current era in reverse
 				// order.
@@ -325,20 +343,30 @@ pub mod pallet {
 			if eras_to_check.is_empty() {
 				// `stash` is not exposed in any era now -- we can let go of them now.
 				let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
-				let ctrl = pallet_staking::Bonded::<T>::get(&stash).unwrap();
-				let ledger = pallet_staking::Ledger::<T>::get(ctrl).unwrap();
 
-				add_weight(<T as pallet_staking::Config>::WeightInfo::force_unstake(
-					num_slashing_spans,
-				));
+				let ctrl = match pallet_staking::Bonded::<T>::get(&stash) {
+					Some(ctrl) => ctrl,
+					None => {
+						Self::deposit_event(Event::<T>::Errored { stash });
+						return <T as Config>::WeightInfo::on_idle_empty()
+					},
+				};
+
+				let ledger = match pallet_staking::Ledger::<T>::get(ctrl) {
+					Some(ledger) => ledger,
+					None => {
+						Self::deposit_event(Event::<T>::Errored { stash });
+						return <T as Config>::WeightInfo::on_idle_empty()
+					},
+				};
 
 				let unstake_result = pallet_staking::Pallet::<T>::force_unstake(
 					RawOrigin::Root.into(),
 					stash.clone(),
 					num_slashing_spans,
 				);
+
 				let pool_stake_result = if let Some(pool_id) = maybe_pool_id {
-					add_weight(<T as pallet_nomination_pools::Config>::WeightInfo::join());
 					pallet_nomination_pools::Pallet::<T>::join(
 						RawOrigin::Signed(stash.clone()).into(),
 						ledger.total,
@@ -350,6 +378,8 @@ pub mod pallet {
 
 				let result = unstake_result.and(pool_stake_result);
 				Self::deposit_event(Event::<T>::Unstaked { stash, maybe_pool_id, result });
+
+				<T as Config>::WeightInfo::on_idle_empty()
 			} else {
 				// eras remaining to be checked.
 				let mut eras_checked = 0u32;
@@ -357,10 +387,6 @@ pub mod pallet {
 					eras_checked.saturating_inc();
 					Self::is_exposed_in_era(&stash, e)
 				});
-				add_weight(
-					<T as Config>::WeightInfo::weight_per_era_check()
-						.saturating_mul(eras_checked.into()),
-				);
 
 				// NOTE: you can be extremely unlucky and get slashed here: You are not exposed in
 				// the last 28 eras, have registered yourself to be unstaked, midway being checked,
@@ -374,7 +400,6 @@ pub mod pallet {
 						&mut Default::default(),
 						current_era,
 					);
-					add_weight(<T as Config>::WeightInfo::do_slash());
 					Self::deposit_event(Event::<T>::Slashed { stash, amount });
 				} else {
 					// Not exposed in these two eras.
@@ -382,9 +407,9 @@ pub mod pallet {
 					Head::<T>::put(UnstakeRequest { stash: stash.clone(), checked, maybe_pool_id });
 					Self::deposit_event(Event::<T>::Checked { stash, eras: eras_to_check });
 				}
-			}
 
-			consumed_weight
+				<T as Config>::WeightInfo::on_idle_check(final_eras_to_check)
+			}
 		}
 
 		/// Checks whether an account `who` has been exposed in an era.
