@@ -333,7 +333,7 @@ pub mod pallet {
 
 		type SystemWeightInfo: WeightInfo;
 
-		/// The designated SS85 prefix of this chain.
+		/// The designated SS58 prefix of this chain.
 		///
 		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
 		/// that the runtime should know about the prefix in order to make use of it as

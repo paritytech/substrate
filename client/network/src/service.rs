@@ -30,7 +30,7 @@
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	bitswap::Bitswap,
-	config::{parse_str_addr, Params, TransportConfig},
+	config::{Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -62,6 +62,7 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
+	config::parse_str_addr,
 	protocol::event::{DhtEvent, Event},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
