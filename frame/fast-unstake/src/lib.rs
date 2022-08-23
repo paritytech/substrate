@@ -66,29 +66,26 @@ macro_rules! log {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_election_provider_support::ElectionProvider;
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{Currency, IsSubType},
+	};
 	use frame_system::{pallet_prelude::*, RawOrigin};
-	use sp_std::prelude::*;
-
-	use frame_support::traits::{Currency, IsSubType};
 	use pallet_nomination_pools::PoolId;
+	use pallet_staking::Pallet as Staking;
 	use sp_runtime::{
 		traits::{Saturating, Zero},
 		transaction_validity::{InvalidTransaction, TransactionValidityError},
 		DispatchResult,
 	};
 	use sp_staking::EraIndex;
-
-	use frame_election_provider_support::ElectionProvider;
-	use pallet_staking::Pallet as Staking;
-
-	use sp_std::{ops::Div, vec::Vec};
+	use sp_std::{ops::Div, prelude::*, vec::Vec};
 
 	pub trait WeightInfo {
 		fn register_fast_unstake() -> Weight;
 		fn deregister() -> Weight;
 		fn control() -> Weight;
-
 		fn on_idle_unstake() -> Weight;
 		fn on_idle_check(e: u32) -> Weight;
 	}
@@ -187,6 +184,23 @@ pub mod pallet {
 		Errored { stash: T::AccountId },
 	}
 
+	#[pallet::error]
+	#[cfg_attr(test, derive(PartialEq))]
+	pub enum Error<T> {
+		/// The provided Controller account was not found.
+		NotController,
+		/// The nominator was not found.
+		NotNominator,
+		/// The bonded account has already been queued.
+		AlreadyQueued,
+		/// The bonded account has active unlocking chunks.
+		NotFullyBonded,
+		/// The provided unstaker is not in the `Queue`.
+		NotQueued,
+		/// The provided unstaker is already in Head, and cannot deregister.
+		AlreadyHead,
+	}
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
@@ -201,7 +215,7 @@ pub mod pallet {
 		/// The dispatch origin of this call must be signed by the controller account, similar to
 		/// `staking::unbond`.
 		///
-		/// The stash associated with the origin must have no ongoing unlocking chunks.  If
+		/// The stash associated with the origin must have no ongoing unlocking chunks. If
 		/// successful, this will fully unbond and chill the stash. Then, it will enqueue the stash
 		/// to be checked in further blocks.
 		///
@@ -221,16 +235,22 @@ pub mod pallet {
 		) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
 
-			let ledger = pallet_staking::Ledger::<T>::get(&ctrl).ok_or("NotController")?;
-			ensure!(pallet_staking::Nominators::<T>::contains_key(&ledger.stash), "NotNominator");
-
-			ensure!(!Queue::<T>::contains_key(&ledger.stash), "AlreadyQueued");
+			let ledger =
+				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
+			ensure!(
+				pallet_staking::Nominators::<T>::contains_key(&ledger.stash),
+				Error::<T>::NotNominator
+			);
+			ensure!(!Queue::<T>::contains_key(&ledger.stash), Error::<T>::AlreadyQueued);
 			ensure!(
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != ledger.stash),
-				"AlreadyHead"
+				Error::<T>::AlreadyHead
 			);
 			// second part of the && is defensive.
-			ensure!(ledger.active == ledger.total && ledger.unlocking.is_empty(), "NotFullyBonded");
+			ensure!(
+				ledger.active == ledger.total && ledger.unlocking.is_empty(),
+				Error::<T>::NotFullyBonded
+			);
 
 			// chill and fully unstake.
 			Staking::<T>::chill(RawOrigin::Signed(ctrl.clone()).into())?;
@@ -253,11 +273,11 @@ pub mod pallet {
 			let ctrl = ensure_signed(origin)?;
 			let stash = pallet_staking::Ledger::<T>::get(&ctrl)
 				.map(|l| l.stash)
-				.ok_or("NotController")?;
-			ensure!(Queue::<T>::contains_key(&stash), "NotQueued");
+				.ok_or(Error::<T>::NotController)?;
+			ensure!(Queue::<T>::contains_key(&stash), Error::<T>::NotQueued);
 			ensure!(
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
-				"AlreadyHead"
+				Error::<T>::AlreadyHead
 			);
 
 			Queue::<T>::remove(stash);
