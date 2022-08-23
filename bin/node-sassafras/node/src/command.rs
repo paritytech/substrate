@@ -3,6 +3,7 @@ use crate::{
 	cli::{Cli, Subcommand},
 	service,
 };
+use frame_benchmarking_cli::BenchmarkCmd;
 use node_sassafras_runtime::Block;
 use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
@@ -100,6 +101,31 @@ pub fn run() -> sc_cli::Result<()> {
 					Ok(())
 				});
 				Ok((cmd.run(client, backend, Some(aux_revert)), task_manager))
+			})
+		},
+		Some(Subcommand::Benchmark(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+
+			runner.sync_run(|config| {
+				// This switch needs to be in the client, since the client decides
+				// which sub-commands it wants to support.
+				match cmd {
+					BenchmarkCmd::Pallet(cmd) => {
+						if !cfg!(feature = "runtime-benchmarks") {
+							return Err(
+								"Runtime benchmarking wasn't enabled when building the node. \
+							You can enable it with `--features runtime-benchmarks`."
+									.into(),
+							)
+						}
+
+						cmd.run::<Block, service::ExecutorDispatch>(config)
+					},
+					_ => {
+						println!("Not implemented...");
+						Ok(())
+					},
+				}
 			})
 		},
 		#[cfg(feature = "try-runtime")]

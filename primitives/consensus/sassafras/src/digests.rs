@@ -18,8 +18,8 @@
 //! Private implementation details of Sassafras digests.
 
 use super::{
-	AuthorityId, AuthorityIndex, AuthoritySignature, SassafrasAuthorityWeight, Slot, TicketInfo,
-	SASSAFRAS_ENGINE_ID,
+	AuthorityId, AuthorityIndex, AuthoritySignature, SassafrasAuthorityWeight,
+	SassafrasEpochConfiguration, Slot, TicketInfo, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -36,22 +36,24 @@ pub struct PreDigest {
 	pub authority_index: AuthorityIndex,
 	/// Corresponding slot number.
 	pub slot: Slot,
-	/// Block VRF output.
-	pub block_vrf_output: VRFOutput,
-	/// Block VRF proof.
-	pub block_vrf_proof: VRFProof,
+	/// Slot VRF output.
+	pub vrf_output: VRFOutput,
+	/// Slot VRF proof.
+	pub vrf_proof: VRFProof,
 	/// Ticket information.
 	pub ticket_info: Option<TicketInfo>,
 }
 
 /// Information about the next epoch. This is broadcast in the first block
 /// of the epoch.
-#[derive(Decode, Encode, PartialEq, Eq, Clone, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
 pub struct NextEpochDescriptor {
 	/// The authorities.
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 	/// The value of randomness to use for the slot-assignment.
 	pub randomness: Randomness,
+	/// Algorithm parameters. If not present, previous epoch parameters are used.
+	pub config: Option<SassafrasEpochConfiguration>,
 }
 
 /// An consensus log item for BABE.

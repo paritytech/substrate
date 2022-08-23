@@ -1,4 +1,4 @@
-// Sassafras This file is part of Substrate.
+// This file is part of Substrate.
 
 // Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Consensus extension module for Sassafras consensus.
+//! Extension module for Sassafras consensus.
 //!
 //! Sassafras is a constant-time block production protocol that aims to ensure that
 //! there is exactly one block produced with constant time intervals rather multiple
@@ -47,12 +47,16 @@
 #![warn(unused_must_use, unsafe_code, unused_variables, unused_imports, missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use scale_codec::{Decode, Encode};
+use scale_codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 
-use frame_support::{traits::Get, weights::Weight, BoundedBTreeSet, BoundedVec, WeakBoundedVec};
+use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
-use sp_application_crypto::ByteArray;
-use sp_consensus_vrf::schnorrkel;
+use sp_consensus_sassafras::{
+	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
+	AuthorityId, Randomness, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, Ticket,
+	SASSAFRAS_ENGINE_ID,
+};
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{One, Saturating},
@@ -60,53 +64,27 @@ use sp_runtime::{
 };
 use sp_std::prelude::Vec;
 
-pub use sp_consensus_sassafras::{
-	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, Ticket,
-	PUBLIC_KEY_LENGTH, RANDOMNESS_LENGTH, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH,
-};
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+#[cfg(all(feature = "std", test))]
+mod mock;
+#[cfg(all(feature = "std", test))]
+mod tests;
 
-// TODO-SASS-P2: tests and benches
-
-//#[cfg(test)]
-//mod mock;
-//
-//#[cfg(test)]
-//mod tests;
-//
-//#[cfg(feature = "runtime-benchmarks")]
-//mod benchmarking;
+pub mod session;
 
 pub use pallet::*;
 
-/// Trigger an epoch change, if any should take place.
-pub trait EpochChangeTrigger {
-	/// Trigger an epoch change, if any should take place. This should be called
-	/// during every block, after initialization is done.
-	fn trigger<T: Config>(now: T::BlockNumber);
-}
-
-/// A type signifying to Sassafras that an external trigger for epoch changes
-/// (e.g. pallet-session) is used.
-pub struct ExternalTrigger;
-
-impl EpochChangeTrigger for ExternalTrigger {
-	fn trigger<T: Config>(_: T::BlockNumber) {} // nothing - trigger is external.
-}
-
-/// A type signifying to Sassafras that it should perform epoch changes with an internal
-/// trigger, recycling the same authorities forever.
-pub struct SameAuthoritiesForever;
-
-impl EpochChangeTrigger for SameAuthoritiesForever {
-	fn trigger<T: Config>(now: T::BlockNumber) {
-		if <Pallet<T>>::should_epoch_change(now) {
-			let authorities = <Pallet<T>>::authorities();
-			let next_authorities = authorities.clone();
-
-			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
-		}
-	}
+/// Tickets related metadata that is commonly used together.
+#[derive(Debug, Default, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy)]
+pub struct TicketsMetadata {
+	/// Number of tickets available for even and odd session indices respectivelly.
+	/// I.e. the index is computed as session-index modulo 2.
+	pub tickets_count: [u32; 2],
+	/// Number of tickets segments
+	pub segments_count: u32,
+	/// Last segment has been already sorted
+	pub sort_started: bool,
 }
 
 #[frame_support::pallet]
@@ -152,10 +130,6 @@ pub mod pallet {
 		/// Max number of tickets that are considered for each epoch.
 		#[pallet::constant]
 		type MaxTickets: Get<u32>;
-
-		/// Max number of tickets that we are going to consider for each epoch.
-		#[pallet::constant]
-		type MaxSubmittedTickets: Get<u32>;
 	}
 
 	// TODO-SASS-P2
@@ -212,37 +186,61 @@ pub mod pallet {
 	/// adversary, for purposes such as public-coin zero-knowledge proofs.
 	#[pallet::storage]
 	#[pallet::getter(fn randomness)]
-	pub type Randomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type CurrentRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
 	/// Next epoch randomness.
 	#[pallet::storage]
-	pub type NextRandomness<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type NextRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
-	/// Current epoch randomness accumulator.
+	/// Randomness accumulator.
 	#[pallet::storage]
-	pub type RandomnessAccumulator<T> = StorageValue<_, schnorrkel::Randomness, ValueQuery>;
+	pub type RandomnessAccumulator<T> = StorageValue<_, Randomness, ValueQuery>;
 
 	/// Temporary value (cleared at block finalization) which is `Some`
 	/// if per-block initialization has already been called for current block.
 	#[pallet::storage]
 	#[pallet::getter(fn initialized)]
-	pub type Initialized<T> = StorageValue<_, Option<PreDigest>>;
+	pub type Initialized<T> = StorageValue<_, PreDigest>;
 
-	/// The configuration for the current epoch. Should never be `None` as it is initialized in
-	/// genesis.
+	/// The configuration for the current epoch.
 	#[pallet::storage]
-	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
+	#[pallet::getter(fn config)]
+	pub type EpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration, ValueQuery>;
 
-	/// Current session tickets.
+	/// The configuration for the next epoch.
 	#[pallet::storage]
-	pub type Tickets<T: Config> = StorageValue<_, BoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
+	pub type NextEpochConfig<T> = StorageValue<_, SassafrasEpochConfiguration>;
 
-	/// Next session tickets.
-	// TODO-SASS-P2: probably the best thing is to store the tickets in a map
-	// Each map entry contains a vector of tickets as they are received.
+	/// Pending epoch configuration change that will be set as `NextEpochConfig` when the next
+	/// epoch is enacted.
+	/// TODO-SASS-P2: better doc? Double check if next epoch tickets were computed using NextEpoch
+	/// params in the native ecode.
+	/// In other words a config change submitted during session N will be enacted on session N+2.
+	/// This is to maintain coherence for already submitted tickets for epoch N+1 that where
+	/// computed using configuration parameters stored for session N+1.
 	#[pallet::storage]
-	pub type NextTickets<T: Config> =
-		StorageValue<_, BoundedBTreeSet<Ticket, T::MaxSubmittedTickets>, ValueQuery>;
+	pub(super) type PendingEpochConfigChange<T> = StorageValue<_, SassafrasEpochConfiguration>;
+
+	/// Stored tickets metadata.
+	#[pallet::storage]
+	pub type TicketsMeta<T> = StorageValue<_, TicketsMetadata, ValueQuery>;
+
+	/// Tickets to be used for current and next session.
+	/// The key consists of a
+	/// - `u8` equal to session-index mod 2
+	/// - `u32` equal to the slot-index.
+	#[pallet::storage]
+	pub type Tickets<T> = StorageMap<_, Identity, (u8, u32), Ticket>;
+
+	// /// Next session tickets temporary accumulator length.
+	// #[pallet::storage]
+	// pub type NextTicketsSegmentsCount<T> = StorageValue<_, u32, ValueQuery>;
+
+	/// Next session tickets temporary accumulator.
+	/// Special u32::MAX key is reserved for partially sorted segment.
+	#[pallet::storage]
+	pub type NextTicketsSegments<T: Config> =
+		StorageMap<_, Identity, u32, BoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
 
 	/// Genesis configuration for Sassafras protocol.
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -251,16 +249,14 @@ pub mod pallet {
 		/// Genesis authorities.
 		pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
 		/// Genesis epoch configuration.
-		pub epoch_config: Option<SassafrasEpochConfiguration>,
+		pub epoch_config: SassafrasEpochConfiguration,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
-			EpochConfig::<T>::put(
-				self.epoch_config.clone().expect("epoch_config must not be None"),
-			);
+			EpochConfig::<T>::put(self.epoch_config.clone());
 		}
 	}
 
@@ -277,88 +273,50 @@ pub mod pallet {
 			// At the end of the block, we can safely include the new VRF output from
 			// this block into the randomness accumulator. If we've determined
 			// that this block was the first in a new epoch, the changeover logic has
-			// already occurred at this point, so the under-construction randomness
-			// will only contain outputs from the right epoch.
-			// TODO-SASS-P2: maybe here we can `expect` that is initialized (panic if not)
-			if let Some(pre_digest) = Initialized::<T>::take().flatten() {
-				let authority_index = pre_digest.authority_index;
-
-				let randomness: Option<schnorrkel::Randomness> = Authorities::<T>::get()
-					.get(authority_index as usize)
-					.and_then(|(authority, _)| {
-						schnorrkel::PublicKey::from_bytes(authority.as_slice()).ok()
-					})
-					.and_then(|pubkey| {
-						let current_slot = CurrentSlot::<T>::get();
-
-						let transcript = sp_consensus_sassafras::make_slot_transcript(
-							&Self::randomness(),
-							current_slot,
-							EpochIndex::<T>::get(),
-						);
-
-						let vrf_output = pre_digest.block_vrf_output;
-
-						// This has already been verified by the client on block import.
-						debug_assert!(pubkey
-							.vrf_verify(
-								transcript.clone(),
-								&vrf_output,
-								&pre_digest.block_vrf_proof
-							)
-							.is_ok());
-
-						vrf_output.0.attach_input_hash(&pubkey, transcript).ok()
-					})
-					.map(|inout| {
-						inout.make_bytes(sp_consensus_sassafras::SASSAFRAS_BLOCK_VRF_PREFIX)
-					});
-
-				// TODO-SASS-P2: this should be infallible. Randomness should be always deposited.
-				// Eventually better to panic here?
-				if let Some(randomness) = randomness {
-					Self::deposit_randomness(&randomness);
-				}
-			}
+			// already occurred at this point, so the
+			let pre_digest = Initialized::<T>::take()
+				.expect("Finalization is called after initialization; qed.");
+			Self::deposit_randomness(pre_digest.vrf_output.as_bytes());
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit next epoch tickets.
+		/// TODO-SASS-P3: this is an unsigned extrinsic. Can we remov ethe weight?
 		#[pallet::weight(10_000)]
-		pub fn submit_tickets(origin: OriginFor<T>, tickets: Vec<Ticket>) -> DispatchResult {
+		pub fn submit_tickets(
+			origin: OriginFor<T>,
+			tickets: BoundedVec<Ticket, T::MaxTickets>,
+		) -> DispatchResult {
 			ensure_none(origin)?;
+
+			let mut metadata = TicketsMeta::<T>::get();
 
 			log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ received {} tickets", tickets.len());
 
-			// We have to traverse the tickets list one by one to verify the SNARK proofs.
-			let mut next_tickets = NextTickets::<T>::get();
+			// We just require a unique key to save the partial tickets list.
+			metadata.segments_count += 1;
+			NextTicketsSegments::<T>::insert(metadata.segments_count, tickets);
+			TicketsMeta::<T>::set(metadata);
+			Ok(())
+		}
 
-			// 1. validate proof
-			// 2. append to sorted list
-			// TODO-SASS-P2: use a scattered structure for tickets
-			next_tickets = next_tickets.try_mutate(|tree| {
-                for ticket in tickets.iter() {
-                    tree.insert(*ticket);
-                }
-                let max_tickets = T::MaxTickets::get() as usize;
-                if tree.len() > max_tickets {
-                    // Remove the mid values
-                    // TODO-SASS-P2: with the new structure this will be reimplemented...
-                    let diff = tree.len() - max_tickets;
-                    let off = max_tickets / 2;
-                    let val = tree.iter().nth(off).cloned().unwrap();
-                    let mut mid = tree.split_off(&val);
-                    let val = mid.iter().nth(diff).cloned().unwrap();
-                    let mut tail = mid.split_off(&val);
-                    tree.append(&mut tail);
-                    log::warn!(target: "sassafras", "🌳 TICKETS OVERFLOW, drop {} tickets... (len = {})", diff, tree.len());
-                }
-            }).expect("Tickets list len is within the allowed bounds; qed.");
-
-			NextTickets::<T>::put(next_tickets);
-
+		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
+		/// the next call to `enact_session_change`. The config will be activated one epoch after.
+		/// Multiple calls to this method will replace any existing planned config change that had
+		/// not been enacted yet.
+		#[pallet::weight(10_000)]
+		pub fn plan_config_change(
+			origin: OriginFor<T>,
+			config: SassafrasEpochConfiguration,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			ensure!(
+				config.redundancy_factor != 0 && config.attempts_number != 0,
+				Error::<T>::InvalidConfiguration
+			);
+			PendingEpochConfigChange::<T>::put(config);
 			Ok(())
 		}
 	}
@@ -384,6 +342,10 @@ pub mod pallet {
 					// submit our tickets if we don't have enough authoring slots.
 					// If we have 0 slots => we have zero chances.
 					// Maybe this is one valid reason to introduce proxies.
+					// In short the question is >>> WHO HAS THE RIGHT TO SUBMIT A TICKET? <<<
+					//  A) The current epoch validators
+					//  B) The next epoch validators
+					//  C) Doesn't matter as far as the tickets are good (i.e. RVRF verify is ok)
 					log::warn!(
 						target: "sassafras::runtime",
 						"🌳 Rejecting unsigned transaction from external sources.",
@@ -392,7 +354,9 @@ pub mod pallet {
 				}
 
 				// Current slot should be less than half of epoch duration.
-				if Self::current_slot_epoch_index() >= T::EpochDuration::get() / 2 {
+				let epoch_duration = T::EpochDuration::get();
+
+				if Self::current_slot_epoch_index() >= epoch_duration / 2 {
 					log::warn!(
 						target: "sassafras::runtime",
 						"🌳 Timeout to propose tickets, bailing out.",
@@ -400,10 +364,27 @@ pub mod pallet {
 					return InvalidTransaction::Stale.into()
 				}
 
-				// TODO-SASS-P2 more validation steps:
-				// 1. epoch index
-				// 2. signed by an authority for current epoch
-				// 3. single submission attempt from validator?
+				// Check tickets are below threshold
+
+				let next_auth = NextAuthorities::<T>::get();
+				let epoch_config = EpochConfig::<T>::get();
+				let threshold = sp_consensus_sassafras::compute_threshold(
+					epoch_config.redundancy_factor,
+					epoch_duration as u32,
+					epoch_config.attempts_number,
+					next_auth.len() as u32,
+				);
+
+				// TODO-SASS-P2: if we move this in the `submit_tickets` call then we can
+				// can drop only the invalid tickets.
+				// In this way we don't penalize validators that submit tickets together
+				// with faulty validators.
+				if !tickets
+					.iter()
+					.all(|ticket| sp_consensus_sassafras::check_threshold(ticket, threshold))
+				{
+					return InvalidTransaction::Custom(0).into()
+				}
 
 				ValidTransaction::with_tag_prefix("Sassafras")
 					// We assign the maximum priority for any equivocation report.
@@ -411,8 +392,8 @@ pub mod pallet {
 					// TODO-SASS-P2: if possible use a more efficient way to distinquish
 					// duplicates...
 					.and_provides(tickets)
-					// TODO-SASS-P2: this should be set such that it is discarded after the first
-					// half
+					// TODO-SASS-P2: this sholot_tld be set such that it is discarded after the
+					// first half
 					.longevity(3_u64)
 					.propagate(true)
 					.build()
@@ -435,7 +416,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Determine whether an epoch change should take place at this block.
 	/// Assumes that initialization has already taken place.
-	pub fn should_epoch_change(now: T::BlockNumber) -> bool {
+	pub fn should_end_session(now: T::BlockNumber) -> bool {
 		// The epoch has technically ended during the passage of time between this block and the
 		// last, but we have to "end" the epoch now, since there is no earlier possible block we
 		// could have done it.
@@ -443,6 +424,11 @@ impl<T: Config> Pallet<T> {
 		// The exception is for block 1: the genesis has slot 0, so we treat epoch 0 as having
 		// started at the slot of block 1. We want to use the same randomness and validator set as
 		// signalled in the genesis, so we don't rotate the epoch.
+
+		// TODO-SASS-P2
+		// Is now != One required???
+		// What if we want epochs with len = 1. In this case we doesn't change epoch correctly
+		// in slot 1.
 		now != One::one() && Self::current_slot_epoch_index() >= T::EpochDuration::get()
 	}
 
@@ -451,100 +437,106 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn slot_epoch_index(slot: Slot) -> u64 {
-		if *GenesisSlot::<T>::get() == 0 {
-			return 0
-		}
+		// TODO-SASS-P2 : is this required?
+		// if *GenesisSlot::<T>::get() == 0 {
+		// 	return 0
+		// }
 		*slot.saturating_sub(Self::current_epoch_start())
 	}
 
-	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_epoch_change`
+	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_end_session`
 	/// has returned `true`, and the caller is the only caller of this function.
 	///
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set
 	/// manager logic like `pallet-session`.
-	pub fn enact_epoch_change(
+	///
+	/// TODO-SASS-P3:
+	/// If we detect one or more skipped epochs the policy is to use the authorities and values
+	/// from the first skipped epoch.
+	/// Should the tickets be invalidated? Currently they are... see the `get-ticket` method.
+	pub(crate) fn enact_session_change(
 		authorities: WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<
 			(AuthorityId, SassafrasAuthorityWeight),
 			T::MaxAuthorities,
 		>,
 	) {
-		// TODO-SASS-P2: we don't depend on session module...
-
-		// PRECONDITION: caller has done initialization and is guaranteed by the session module to
-		// be called before this.
+		// PRECONDITION: caller has done initialization.
+		// If using the internal trigger or the session pallet then this is guaranteed.
 		debug_assert!(Self::initialized().is_some());
-
-		// Update epoch index
-		let epoch_index = EpochIndex::<T>::get()
-			.checked_add(1)
-			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
-		EpochIndex::<T>::put(epoch_index);
 
 		// Update authorities
 		Authorities::<T>::put(authorities);
 		NextAuthorities::<T>::put(&next_authorities);
 
-		// Update epoch randomness.
-		let next_epoch_index = epoch_index
+		// Update epoch index
+		let mut epoch_idx = EpochIndex::<T>::get()
 			.checked_add(1)
 			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
 
-		// Returns randomness for the current epoch and computes the *next*
-		// epoch randomness.
-		let randomness = Self::randomness_change_epoch(next_epoch_index);
-		Randomness::<T>::put(randomness);
+		let slot_idx = CurrentSlot::<T>::get().saturating_sub(Self::epoch_start(epoch_idx));
+		if slot_idx >= T::EpochDuration::get() {
+			// Detected one or more skipped epochs, kill tickets and recompute the `epoch_index`.
+			TicketsMeta::<T>::kill();
+			// TODO-SASS-P2: adjust epoch index (TEST ME)
+			let idx: u64 = slot_idx.into();
+			epoch_idx += idx / T::EpochDuration::get();
+		}
+		EpochIndex::<T>::put(epoch_idx);
 
-		// // Update the start blocks of the previous and new current epoch.
-		// <EpochStart<T>>::mutate(|(previous_epoch_start_block, current_epoch_start_block)| {
-		// 	*previous_epoch_start_block = sp_std::mem::take(current_epoch_start_block);
-		// 	*current_epoch_start_block = <frame_system::Pallet<T>>::block_number();
-		// });
+		let next_epoch_index = epoch_idx
+			.checked_add(1)
+			.expect("epoch indices will never reach 2^64 before the death of the universe; qed");
+
+		// Updates current epoch randomness and computes the *next* epoch randomness.
+		let next_randomness = Self::update_randomness(next_epoch_index);
+
+		if let Some(config) = NextEpochConfig::<T>::take() {
+			EpochConfig::<T>::put(config);
+		}
+
+		let next_config = PendingEpochConfigChange::<T>::take();
+		if let Some(next_config) = next_config.clone() {
+			NextEpochConfig::<T>::put(next_config);
+		}
 
 		// After we update the current epoch, we signal the *next* epoch change
 		// so that nodes can track changes.
-
-		let next_randomness = NextRandomness::<T>::get();
-
 		let next_epoch = NextEpochDescriptor {
 			authorities: next_authorities.to_vec(),
 			randomness: next_randomness,
+			config: next_config,
 		};
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next_epoch));
 
-		// if let Some(next_config) = NextEpochConfig::<T>::get() {
-		// 	EpochConfig::<T>::put(next_config);
-		// }
-
-		// if let Some(pending_epoch_config_change) = PendingEpochConfigChange::<T>::take() {
-		// 	let next_epoch_config: BabeEpochConfiguration =
-		// 		pending_epoch_config_change.clone().into();
-		// 	NextEpochConfig::<T>::put(next_epoch_config);
-		// 	Self::deposit_consensus(ConsensusLog::NextConfigData(pending_epoch_config_change));
-		// }
-
-		Self::enact_tickets();
+		let epoch_key = (epoch_idx & 1) as u8;
+		let mut tickets_metadata = TicketsMeta::<T>::get();
+		// Optionally finish sorting
+		if tickets_metadata.segments_count != 0 {
+			Self::sort_tickets(u32::MAX, epoch_key, &mut tickets_metadata);
+		}
+		// Clear the prev (equal to the next) epoch tickets counter.
+		let next_epoch_key = epoch_key ^ 1;
+		tickets_metadata.tickets_count[next_epoch_key as usize] = 0;
+		TicketsMeta::<T>::set(tickets_metadata);
 	}
 
-	/// Enact next epoch tickets list.
-	/// To work properly this should be done as the last action of the last epoch slot.
-	/// (i.e. current tickets list is not used at this point)
-	fn enact_tickets() {
-		// TODO-SASS-P2: manage skipped epoch by killing both Tickets and NextTickets
+	/// Call this function on epoch change to update the randomness.
+	/// Returns the next epoch randomness.
+	fn update_randomness(next_epoch_index: u64) -> Randomness {
+		let curr_randomness = NextRandomness::<T>::get();
+		CurrentRandomness::<T>::put(curr_randomness);
 
-		let mut tickets = NextTickets::<T>::get().into_iter().collect::<Vec<_>>();
-		log::debug!(target: "sassafras", "🌳 @@@@@@@@@ Enacting {} tickets", tickets.len());
+		let accumulator = RandomnessAccumulator::<T>::get();
+		let mut s = Vec::with_capacity(2 * curr_randomness.len() + 8);
+		s.extend_from_slice(&curr_randomness);
+		s.extend_from_slice(&next_epoch_index.to_le_bytes());
+		s.extend_from_slice(&accumulator);
 
-		if tickets.len() > T::MaxTickets::get() as usize {
-			log::error!(target: "sassafras", "🌳 should never happen...");
-			let max = T::MaxTickets::get() as usize;
-			tickets.truncate(max);
-		}
-		let tickets = BoundedVec::<Ticket, T::MaxTickets>::try_from(tickets)
-			.expect("vector has been eventually truncated; qed");
+		let next_randomness = sp_io::hashing::blake2_256(&s);
+		NextRandomness::<T>::put(&next_randomness);
 
-		Tickets::<T>::put(tickets);
-		NextTickets::<T>::kill();
+		next_randomness
 	}
 
 	/// Finds the start slot of the current epoch. Only guaranteed to give correct results after
@@ -567,7 +559,7 @@ impl<T: Config> Pallet<T> {
 		<frame_system::Pallet<T>>::deposit_log(log)
 	}
 
-	fn deposit_randomness(randomness: &schnorrkel::Randomness) {
+	fn deposit_randomness(randomness: &Randomness) {
 		let mut s = RandomnessAccumulator::<T>::get().to_vec();
 		s.extend_from_slice(randomness);
 		let accumulator = sp_io::hashing::blake2_256(&s);
@@ -575,36 +567,43 @@ impl<T: Config> Pallet<T> {
 	}
 
 	// Initialize authorities on genesis phase.
-	// TODO-SASS-P2: temporary fix to make the compiler happy
-	#[allow(dead_code)]
 	fn initialize_genesis_authorities(authorities: &[(AuthorityId, SassafrasAuthorityWeight)]) {
-		if !authorities.is_empty() {
-			assert!(Authorities::<T>::get().is_empty(), "Authorities are already initialized!");
-			let bounded_authorities =
-				WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
-					.expect("Initial number of authorities should be lower than T::MaxAuthorities");
-			Authorities::<T>::put(&bounded_authorities);
-			NextAuthorities::<T>::put(&bounded_authorities);
+		// Genesis authorities may have been initialized via other means (e.g. via session pallet).
+		// If this function has already been called with some authorities, then the new list
+		// should be match the previously set one.
+		let prev_authorities = Authorities::<T>::get();
+		if !prev_authorities.is_empty() {
+			if prev_authorities.to_vec() == authorities {
+				return
+			} else {
+				panic!("Authorities already were already initialized");
+			}
 		}
+
+		let bounded_authorities =
+			WeakBoundedVec::<_, T::MaxAuthorities>::try_from(authorities.to_vec())
+				.expect("Initial number of authorities should be lower than T::MaxAuthorities");
+		Authorities::<T>::put(&bounded_authorities);
+		NextAuthorities::<T>::put(&bounded_authorities);
 	}
 
 	fn initialize_genesis_epoch(genesis_slot: Slot) {
 		GenesisSlot::<T>::put(genesis_slot);
-		debug_assert_ne!(*GenesisSlot::<T>::get(), 0);
 
-		// Deposit a log because this is the first block in epoch #0. We use the same values
-		// as genesis because we haven't collected any randomness yet.
+		// Deposit a log because this is the first block in epoch #0.
+		// We use the same values as genesis because we haven't collected any randomness yet.
 		let next = NextEpochDescriptor {
 			authorities: Self::authorities().to_vec(),
 			randomness: Self::randomness(),
+			config: None,
 		};
-
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
 	}
 
 	fn initialize(now: T::BlockNumber) {
 		// Since `initialize` can be called twice (e.g. if session module is present)
-		// let's ensure that we only do the initialization once per block
+		// let's ensure that we only do the initialization once per block.
+		// TODO-SASS-P2: why session calls initialize?
 		if Self::initialized().is_some() {
 			return
 		}
@@ -622,86 +621,183 @@ impl<T: Config> Pallet<T> {
 			})
 			.next();
 
-		// TODO-SASS-P2: maybe here we have to assert! the presence of pre_digest...
-		// Every valid sassafras block should come with a pre-digest
+		let pre_digest = pre_digest.expect("Valid Sassafras block should have a pre-digest. qed"); // let Some(ref pre_digest) = pre_digest {
+																						   //
+		let current_slot = pre_digest.slot;
+		CurrentSlot::<T>::put(current_slot);
 
-		if let Some(ref pre_digest) = pre_digest {
-			// The slot number of the current block being initialized
-			let current_slot = pre_digest.slot;
-
-			// On the first non-zero block (i.e. block #1) this is where the first epoch
-			// (epoch #0) actually starts. We need to adjust internal storage accordingly.
-			if *GenesisSlot::<T>::get() == 0 {
-				Self::initialize_genesis_epoch(current_slot)
-			}
-
-			CurrentSlot::<T>::put(current_slot);
+		// On the first non-zero block (i.e. block #1) this is where the first epoch
+		// (epoch #0) actually starts. We need to adjust internal storage accordingly.
+		if *GenesisSlot::<T>::get() == 0 {
+			Self::initialize_genesis_epoch(current_slot)
 		}
 
 		Initialized::<T>::put(pre_digest);
 
-		// enact epoch change, if necessary.
+		// TODO-SASS-P2: incremental parial ordering for NextTickets
+
+		// Enact epoch change, if necessary.
 		T::EpochChangeTrigger::trigger::<T>(now);
 	}
 
-	/// Call this function exactly once when an epoch changes, to update the randomness.
-	/// Returns the new randomness.
-	fn randomness_change_epoch(next_epoch_index: u64) -> schnorrkel::Randomness {
-		let this_randomness = NextRandomness::<T>::get();
-		let accumulator = RandomnessAccumulator::<T>::get();
-
-		let mut s = Vec::with_capacity(2 * this_randomness.len() + 8);
-		s.extend_from_slice(&this_randomness);
-		s.extend_from_slice(&next_epoch_index.to_le_bytes());
-		s.extend_from_slice(&accumulator);
-
-		let next_randomness = sp_io::hashing::blake2_256(&s);
-		NextRandomness::<T>::put(&next_randomness);
-
-		this_randomness
-	}
-
-	/// Fetch expected ticket for the given slot.
-	// TODO-SASS-P2: This is a very inefficient and temporary solution.
-	// On refactory we will come up with a better solution (like a scattered vector).
+	/// Fetch expected ticket for the given slot according to an "outside-in" sorting strategy.
+	///
+	/// Given an ordered sequence of tickets [t0, t1, t2, ..., tk] to be assigned to n slots,
+	/// with n >= k, then the tickets are assigned to the slots according to the following
+	/// strategy:
+	///
+	/// slot-index  : [ 0,  1,  2, ............ , n ]
+	/// tickets     : [ t1, t3, t5, ... , t4, t2, t0 ].
+	///
+	/// With slot-index computed as `epoch_start() - slot`.
+	///
+	/// If `slot` value falls within the current epoch then we fetch tickets from the `Tickets`
+	/// list.
+	///
+	/// If `slot` value falls within the next epoch then we fetch tickets from the `NextTickets`
+	/// list. Note that in this case we may have not finished receiving all the tickets for that
+	/// epoch yet. The next epoch tickets should be considered "stable" only after the current
+	/// epoch first half (see the [`submit_tickets_unsigned_extrinsic`]).
+	///
+	/// Returns `None` if, according to the sorting strategy, there is no ticket associated to the
+	/// specified slot-index (happend if a ticket falls in the middle of an epoch and n > k),
+	/// or if the slot falls beyond the next epoch.
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
+		let epoch_idx = EpochIndex::<T>::get();
 		let duration = T::EpochDuration::get();
-		let slot_idx = Self::slot_epoch_index(slot); // % duration;
+		let mut slot_idx = Self::slot_epoch_index(slot);
+		let mut tickets_meta = TicketsMeta::<T>::get();
 
-		// Given a list of ordered tickets: t0, t1, t2, ..., tk to be assigned to N slots (N>k)
-		// The tickets are assigned to the slots in the following order: t1, t3, ..., t4, t2, t0.
-
-		let ticket_index = |slot_idx| {
+		let get_ticket_idx = |slot_idx| {
 			let ticket_idx = if slot_idx < duration / 2 {
 				2 * slot_idx + 1
 			} else {
 				2 * (duration - (slot_idx + 1))
 			};
-			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>>>>>>>> SLOT-IDX {} -> TICKET-IDX {}", slot_idx, ticket_idx);
-			ticket_idx as usize
+			log::debug!(target: "sassafras::runtime", "🌳 >>>>>>>> SLOT-IDX {} -> TICKET-IDX {}", slot_idx, ticket_idx);
+			ticket_idx as u32
 		};
 
-		// If this is a ticket for an epoch not enacted yet we have to fetch it from the
-		// `NextTickets` list. For example, this may happen when an author request the first
-		// ticket of a new epoch.
-		if slot_idx < duration {
-			let tickets = Tickets::<T>::get();
-			let idx = ticket_index(slot_idx);
-			tickets.get(idx).cloned()
+		let mut epoch_key = (epoch_idx & 1) as u8;
+
+		if duration <= slot_idx && slot_idx < 2 * duration {
+			// Try to get a ticket for the next epoch. Since its state values were not enacted yet,
+			// we may have to finish sorting the tickets.
+			epoch_key ^= 1;
+			slot_idx -= duration;
+			if tickets_meta.segments_count != 0 {
+				Self::sort_tickets(tickets_meta.segments_count, epoch_key, &mut tickets_meta);
+				TicketsMeta::<T>::set(tickets_meta.clone());
+			}
+		} else if slot_idx >= 2 * duration {
+			return None
+		}
+
+		let ticket_idx = get_ticket_idx(slot_idx);
+		if ticket_idx < tickets_meta.tickets_count[epoch_key as usize] {
+			Tickets::<T>::get((epoch_key, ticket_idx))
 		} else {
-			let tickets = NextTickets::<T>::get();
-			// Do not use modulus since we want to eventually return `None` for slots crossing the
-			// epoch boundaries.
-			let idx = ticket_index(slot_idx - duration);
-			tickets.iter().nth(idx).cloned()
+			None
 		}
 	}
 
+	// Sort the tickets that belong to at most `max_iter` segments starting from the last.
+	// If the `max_iter` value is equal to the number of segments then the result is truncated
+	// and saved as the tickets associated to `epoch_key`.
+	// Else the result is saved within the structure itself to be used on next iterations.
+	fn sort_tickets(max_iter: u32, epoch_key: u8, metadata: &mut TicketsMetadata) {
+		let mut segments_count = metadata.segments_count;
+		let max_iter = max_iter.min(segments_count);
+		let max_tickets = T::MaxTickets::get() as usize;
+
+		let mut new_segment = if metadata.sort_started {
+			NextTicketsSegments::<T>::take(u32::MAX).into_inner()
+		} else {
+			Vec::new()
+		};
+
+		let mut require_sort = max_iter != 0;
+
+		let mut sup = if new_segment.len() >= max_tickets {
+			new_segment[new_segment.len() - 1]
+		} else {
+			Ticket::try_from([0xFF; 32]).expect("This is a valid ticket value; qed")
+		};
+
+		for _ in 0..max_iter {
+			let segment = NextTicketsSegments::<T>::take(segments_count);
+
+			segment.into_iter().filter(|t| t < &sup).for_each(|t| new_segment.push(t));
+			if new_segment.len() > max_tickets {
+				require_sort = false;
+				new_segment.sort_unstable();
+				new_segment.truncate(max_tickets);
+				sup = new_segment[new_segment.len() - 1];
+			}
+
+			segments_count -= 1;
+		}
+
+		if require_sort {
+			new_segment.sort_unstable();
+		}
+
+		if segments_count == 0 {
+			// Sort is over, write to the map.
+			// TODO-SASS-P2: is there a better way to write a map from a vector?
+			new_segment.iter().enumerate().for_each(|(i, t)| {
+				Tickets::<T>::insert((epoch_key, i as u32), t);
+			});
+			metadata.tickets_count[epoch_key as usize] = new_segment.len() as u32;
+		} else {
+			NextTicketsSegments::<T>::insert(u32::MAX, BoundedVec::truncate_from(new_segment));
+			metadata.sort_started = true;
+		}
+
+		metadata.segments_count = segments_count;
+	}
+
 	/// Submit next epoch validator tickets via an unsigned extrinsic.
-	pub fn submit_tickets_unsigned_extrinsic(tickets: Vec<Ticket>) -> bool {
+	/// The submitted tickets are added to the `NextTickets` list as long as the extrinsic has
+	/// is called within the first half of the epoch. That is, tickets received within the
+	/// second half are dropped.
+	/// TODO-SASS-P3: we have to add the zk validity proofs
+	pub fn submit_tickets_unsigned_extrinsic(mut tickets: Vec<Ticket>) -> bool {
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
+		tickets.sort_unstable();
+		let tickets = BoundedVec::truncate_from(tickets);
 		let call = Call::submit_tickets { tickets };
 		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()).is_ok()
+	}
+}
+
+/// Trigger an epoch change, if any should take place.
+pub trait EpochChangeTrigger {
+	/// Trigger an epoch change, if any should take place. This should be called
+	/// during every block, after initialization is done.
+	fn trigger<T: Config>(now: T::BlockNumber);
+}
+
+/// A type signifying to Sassafras that an external trigger for epoch changes
+/// (e.g. pallet-session) is used.
+pub struct ExternalTrigger;
+
+impl EpochChangeTrigger for ExternalTrigger {
+	fn trigger<T: Config>(_: T::BlockNumber) {} // nothing - trigger is external.
+}
+
+/// A type signifying to Sassafras that it should perform epoch changes with an internal
+/// trigger, recycling the same authorities forever.
+pub struct SameAuthoritiesForever;
+
+impl EpochChangeTrigger for SameAuthoritiesForever {
+	fn trigger<T: Config>(now: T::BlockNumber) {
+		if <Pallet<T>>::should_end_session(now) {
+			let authorities = <Pallet<T>>::authorities();
+			let next_authorities = authorities.clone();
+
+			<Pallet<T>>::enact_session_change(authorities, next_authorities);
+		}
 	}
 }
 

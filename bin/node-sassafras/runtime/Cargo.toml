@@ -17,9 +17,9 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 
 pallet-sassafras = { version = "0.1.0", default-features = false, path = "../../../frame/sassafras" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
+pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../../frame/session" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../../frame/support" }
 pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../frame/grandpa" }
-pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-sudo = { version = "4.0.0-dev", default-features = false, path = "../../../frame/sudo" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
 frame-try-runtime = { version = "0.10.0-dev", default-features = false, path = "../../../frame/try-runtime", optional = true }
@@ -62,8 +62,8 @@ std = [
     "pallet-sassafras/std",
 	"pallet-balances/std",
 	"pallet-grandpa/std",
-	"pallet-randomness-collective-flip/std",
 	"pallet-sudo/std",
+	"pallet-session/std",
 	"pallet-timestamp/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
@@ -87,6 +87,7 @@ runtime-benchmarks = [
 	"hex-literal",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-grandpa/runtime-benchmarks",
+    "pallet-sassafras/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 ]
@@ -96,8 +97,8 @@ try-runtime = [
 	"frame-system/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-grandpa/try-runtime",
-	"pallet-randomness-collective-flip/try-runtime",
 	"pallet-sudo/try-runtime",
 	"pallet-timestamp/try-runtime",
 	"pallet-transaction-payment/try-runtime",
 ]
+use-session-pallet = []

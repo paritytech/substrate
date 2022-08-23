@@ -6,41 +6,34 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use pallet_grandpa::{
-	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
-};
 use sp_api::impl_runtime_apis;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+#[cfg(feature = "use-session-pallet")]
+use sp_runtime::traits::OpaqueKeys;
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, MultiSignature,
+	ApplyExtrinsicResult, MultiSignature, Perbill,
 };
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-// A few exports that help ease life for downstream crates.
-pub use frame_support::{
-	construct_runtime, parameter_types,
-	traits::{
-		ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem, Randomness, StorageInfo,
-	},
-	weights::{
-		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-		IdentityFee, Weight,
-	},
-	StorageValue,
+use pallet_grandpa::{
+	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
-pub use frame_system::Call as SystemCall;
-pub use pallet_balances::Call as BalancesCall;
-pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::CurrencyAdapter;
-#[cfg(any(feature = "std", test))]
-pub use sp_runtime::BuildStorage;
-pub use sp_runtime::{Perbill, Permill};
+
+use frame_support::{
+	construct_runtime, parameter_types,
+	traits::{ConstU128, ConstU32, ConstU64, ConstU8, KeyOwnerProofSystem},
+	weights::{
+		constants::{RocksDbWeight, WEIGHT_PER_SECOND},
+		IdentityFee,
+	},
+};
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -79,12 +72,12 @@ pub mod opaque {
 	pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 	/// Opaque block identifier type.
 	pub type BlockId = generic::BlockId<Block>;
+}
 
-	impl_opaque_keys! {
-		pub struct SessionKeys {
-			pub sassafras: Sassafras,
-			pub grandpa: Grandpa,
-		}
+impl_opaque_keys! {
+	pub struct SessionKeys {
+		pub sassafras: Sassafras,
+		pub grandpa: Grandpa,
 	}
 }
 
@@ -134,12 +127,6 @@ pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 
 pub const MAX_AUTHORITIES: u32 = 32;
-
-/// The Sassafras epoch configuration at genesis.
-pub const SASSAFRAS_GENESIS_EPOCH_CONFIG: sp_consensus_sassafras::SassafrasEpochConfiguration =
-	sp_consensus_sassafras::SassafrasEpochConfiguration {
-        // TODO-SASS-P2
-	};
 
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
@@ -222,8 +209,6 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-impl pallet_randomness_collective_flip::Config for Runtime {}
-
 parameter_types! {
 	pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
 	pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
@@ -232,11 +217,12 @@ parameter_types! {
 impl pallet_sassafras::Config for Runtime {
 	type EpochDuration = EpochDuration;
 	type ExpectedBlockTime = ExpectedBlockTime;
+	#[cfg(feature = "use-session-pallet")]
+	type EpochChangeTrigger = pallet_sassafras::ExternalTrigger;
+	#[cfg(not(feature = "use-session-pallet"))]
 	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
 	type MaxAuthorities = ConstU32<MAX_AUTHORITIES>;
 	type MaxTickets = ConstU32<{ EPOCH_DURATION_IN_SLOTS as u32 }>;
-	// TODO-SASS-P4. Add some redundancy before starting tickets drop.
-	type MaxSubmittedTickets = ConstU32<{ 3 * EPOCH_DURATION_IN_SLOTS as u32 }>;
 }
 
 impl pallet_grandpa::Config for Runtime {
@@ -255,7 +241,6 @@ impl pallet_grandpa::Config for Runtime {
 }
 
 impl pallet_timestamp::Config for Runtime {
-	/// A timestamp: milliseconds since the unix epoch.
 	type Moment = u64;
 	type OnTimestampSet = ();
 	type MinimumPeriod = ConstU64<{ SLOT_DURATION / 2 }>;
@@ -263,13 +248,11 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 impl pallet_balances::Config for Runtime {
+	type Event = Event;
 	type MaxLocks = ConstU32<50>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
-	/// The type for recording an account's balance.
 	type Balance = Balance;
-	/// The ubiquitous event type.
-	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU128<500>;
 	type AccountStore = System;
@@ -290,7 +273,21 @@ impl pallet_sudo::Config for Runtime {
 	type Call = Call;
 }
 
-// Create the runtime by composing the FRAME pallets that were previously configured.
+#[cfg(feature = "use-session-pallet")]
+impl pallet_session::Config for Runtime {
+	type Event = Event;
+	type ValidatorId = <Self as frame_system::Config>::AccountId;
+	type ValidatorIdOf = (); //pallet_staking::StashOf<Self>;
+	type ShouldEndSession = Sassafras;
+	type NextSessionRotation = Sassafras;
+	type SessionManager = (); //pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
+	type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+	type Keys = SessionKeys;
+	type WeightInfo = pallet_session::weights::SubstrateWeight<Runtime>;
+}
+
+// Create a runtime using session pallet
+#[cfg(feature = "use-session-pallet")]
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -298,7 +295,25 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: frame_system,
-		RandomnessCollectiveFlip: pallet_randomness_collective_flip,
+		Timestamp: pallet_timestamp,
+		Sassafras: pallet_sassafras,
+		Grandpa: pallet_grandpa,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
+		Sudo: pallet_sudo,
+		Session: pallet_session,
+	}
+);
+
+// Create a runtime NOT using session pallet
+#[cfg(not(feature = "use-session-pallet"))]
+construct_runtime!(
+	pub enum Runtime where
+		Block = Block,
+		NodeBlock = opaque::Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
+		System: frame_system,
 		Timestamp: pallet_timestamp,
 		Sassafras: pallet_sassafras,
 		Grandpa: pallet_grandpa,
@@ -310,10 +325,13 @@ construct_runtime!(
 
 /// The address format for describing accounts.
 pub type Address = sp_runtime::MultiAddress<AccountId, ()>;
+
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
+
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+
 /// The SignedExtension to the basic transaction logic.
 pub type SignedExtra = (
 	frame_system::CheckNonZeroSender<Runtime>,
@@ -325,10 +343,13 @@ pub type SignedExtra = (
 	frame_system::CheckWeight<Runtime>,
 	pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 );
+
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Call, Signature, SignedExtra>;
+
 /// The payload being signed in transactions.
 pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
+
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
 	Runtime,
@@ -349,6 +370,8 @@ mod benches {
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_balances, Balances]
 		[pallet_timestamp, Timestamp]
+		[pallet_grandpa, Grandpa]
+		[pallet_sassafras, Sassafras]
 	);
 }
 
@@ -411,12 +434,13 @@ impl_runtime_apis! {
 	}
 
 	impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
-		fn configuration() -> sp_consensus_sassafras::SassafrasGenesisConfiguration {
-			sp_consensus_sassafras::SassafrasGenesisConfiguration {
+		fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
+			sp_consensus_sassafras::SassafrasConfiguration {
 				slot_duration: Sassafras::slot_duration(),
-				epoch_length: EpochDuration::get(),
-				genesis_authorities: Sassafras::authorities().to_vec(),
+				epoch_duration: EpochDuration::get(),
+				authorities: Sassafras::authorities().to_vec(),
 				randomness: Sassafras::randomness(),
+				threshold_params: Sassafras::config(),
 			}
 		}
 
@@ -433,13 +457,13 @@ impl_runtime_apis! {
 
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
-			opaque::SessionKeys::generate(seed)
+			SessionKeys::generate(seed)
 		}
 
 		fn decode_session_keys(
 			encoded: Vec<u8>,
 		) -> Option<Vec<(Vec<u8>, KeyTypeId)>> {
-			opaque::SessionKeys::decode_into_raw_public_keys(&encoded)
+			SessionKeys::decode_into_raw_public_keys(&encoded)
 		}
 	}
 

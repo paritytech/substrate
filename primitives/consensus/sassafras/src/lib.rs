@@ -22,41 +22,34 @@
 #![forbid(unsafe_code, missing_docs, unused_variables, unused_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub use merlin::Transcript;
-
 use scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "std")]
-use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
+use sp_core::{crypto, U256};
 use sp_runtime::{ConsensusEngineId, RuntimeDebug};
 use sp_std::vec::Vec;
 
 pub use sp_consensus_slots::{Slot, SlotDuration};
 pub use sp_consensus_vrf::schnorrkel::{
-	Randomness, VRFOutput, VRFProof, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+	PublicKey, Randomness, VRFOutput, VRFProof, RANDOMNESS_LENGTH, VRF_OUTPUT_LENGTH,
+	VRF_PROOF_LENGTH,
 };
-
-/// Key type for Sassafras module.
-pub const KEY_TYPE: sp_core::crypto::KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
 
 pub mod digests;
 pub mod inherents;
+pub mod vrf;
 
 mod app {
 	use sp_application_crypto::{app_crypto, key_types::SASSAFRAS, sr25519};
 	app_crypto!(sr25519, SASSAFRAS);
 }
 
+/// Key type for Sassafras protocol.
+pub const KEY_TYPE: crypto::KeyTypeId = sp_application_crypto::key_types::SASSAFRAS;
+
 /// The index of an authority.
 pub type AuthorityIndex = u32;
-
-/// The prefix used by Sassafras for its ticket VRF keys.
-pub const SASSAFRAS_TICKET_VRF_PREFIX: &[u8] = b"substrate-sassafras-ticket-vrf";
-
-/// The prefix used by Sassafras for its post-block VRF keys.
-pub const SASSAFRAS_BLOCK_VRF_PREFIX: &[u8] = b"substrate-sassafras-block-vrf";
 
 /// Sassafras authority keypair. Necessarily equivalent to the schnorrkel public key used in
 /// the main Sassafras module. If that ever changes, then this must, too.
@@ -87,25 +80,34 @@ pub type SassafrasBlockWeight = u32;
 
 /// Configuration data used by the Sassafras consensus engine.
 #[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
-pub struct SassafrasGenesisConfiguration {
-	/// The slot duration in milliseconds for Sassafras.
+pub struct SassafrasConfiguration {
+	/// The slot duration in milliseconds.
 	pub slot_duration: u64,
 	/// The duration of epochs in slots.
-	pub epoch_length: u64,
-	/// The authorities for the genesis epoch.
-	pub genesis_authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
-	/// The randomness for the genesis epoch.
+	pub epoch_duration: u64,
+	/// The authorities for the epoch.
+	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
+	/// The randomness for the epoch.
 	pub randomness: Randomness,
+	/// Tickets threshold parameters.
+	pub threshold_params: SassafrasEpochConfiguration,
+}
+
+impl SassafrasConfiguration {
+	/// Get the slot duration defined in the genesis configuration.
+	pub fn slot_duration(&self) -> SlotDuration {
+		SlotDuration::from_millis(self.slot_duration)
+	}
 }
 
 /// Configuration data used by the Sassafras consensus engine that can be modified on epoch change.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SassafrasEpochConfiguration {
-	// TODO-SASS-P2
-	// x: redundancy_factor
-	// a: attempts number
-	// L: bound on aa number of tickets that can be gossiped
+	/// Redundancy factor.
+	pub redundancy_factor: u32,
+	/// Number of attempts for tickets generation.
+	pub attempts_number: u32,
 }
 
 /// Ticket type.
@@ -122,65 +124,36 @@ pub struct TicketInfo {
 	pub proof: VRFProof,
 }
 
-/// Make slot VRF transcript.
-pub fn make_slot_transcript(randomness: &Randomness, slot: Slot, epoch: u64) -> Transcript {
-	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
-	transcript.append_u64(b"slot number", *slot);
-	transcript.append_u64(b"current epoch", epoch);
-	transcript.append_message(b"chain randomness", &randomness[..]);
-	transcript
+/// Computes the threshold for a given epoch as T = (x*s)/(a*v), where:
+/// - x: redundancy factor;
+/// - s: number of slots in epoch;
+/// - a: max number of attempts;
+/// - v: number of validator in epoch.
+/// The parameters should be chosen such that T <= 1.
+/// If `attempts * validators` is zero then we fallback to T = 0
+// TODO-SASS-P3: this formula must be double-checked...
+#[inline]
+pub fn compute_threshold(redundancy: u32, slots: u32, attempts: u32, validators: u32) -> U256 {
+	let den = attempts as u64 * validators as u64;
+	let num = redundancy as u64 * slots as u64;
+	U256::max_value()
+		.checked_div(den.into())
+		.unwrap_or(U256::zero())
+		.saturating_mul(num.into())
 }
 
-/// Make slot VRF transcript data container.
-#[cfg(feature = "std")]
-pub fn make_slot_transcript_data(
-	randomness: &Randomness,
-	slot: Slot,
-	epoch: u64,
-) -> VRFTranscriptData {
-	VRFTranscriptData {
-		label: &SASSAFRAS_ENGINE_ID,
-		items: vec![
-			("slot number", VRFTranscriptValue::U64(*slot)),
-			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
-		],
-	}
+/// Returns true if the given VRF output is lower than the given threshold, false otherwise.
+#[inline]
+pub fn check_threshold(ticket: &Ticket, threshold: U256) -> bool {
+	U256::from(ticket.as_bytes()) < threshold
 }
 
-/// Make ticket VRF transcript.
-pub fn make_ticket_transcript(randomness: &[u8], attempt: u64, epoch: u64) -> Transcript {
-	let mut transcript = Transcript::new(&SASSAFRAS_ENGINE_ID);
-	transcript.append_message(b"type", b"ticket");
-	transcript.append_u64(b"attempt", attempt);
-	transcript.append_u64(b"current epoch", epoch);
-	transcript.append_message(b"chain randomness", randomness);
-	transcript
-}
-
-/// Make ticket VRF transcript data container.
-#[cfg(feature = "std")]
-pub fn make_ticket_transcript_data(
-	randomness: &[u8],
-	attempt: u64,
-	epoch: u64,
-) -> VRFTranscriptData {
-	VRFTranscriptData {
-		label: &SASSAFRAS_ENGINE_ID,
-		items: vec![
-			("type", VRFTranscriptValue::Bytes(b"ticket".to_vec())),
-			("attempt", VRFTranscriptValue::U64(attempt)),
-			("current epoch", VRFTranscriptValue::U64(epoch)),
-			("chain randomness", VRFTranscriptValue::Bytes(randomness.to_vec())),
-		],
-	}
-}
-
+// Runtime API.
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with Sassafras.
 	pub trait SassafrasApi {
 		 /// Return the genesis configuration for Sassafras. The configuration is only read on genesis.
-		fn configuration() -> SassafrasGenesisConfiguration;
+		fn configuration() -> SassafrasConfiguration;
 
 		/// Submit next epoch validator tickets via an unsigned extrinsic.
 		/// This method returns `false` when creation of the extrinsics fails.

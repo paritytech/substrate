@@ -16,17 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Verification for Sassafras headers.
+//! Types and functions related to block verification.
 
-use super::{authorship, sassafras_err, BlockT, Epoch, Error};
-use sc_consensus_slots::CheckedHeader;
-use sp_consensus_sassafras::{
-	digests::{CompatibleDigestItem, PreDigest},
-	make_slot_transcript, make_ticket_transcript, AuthorityId, AuthorityPair, Ticket,
-};
-use sp_consensus_slots::Slot;
-use sp_core::{ByteArray, Pair};
-use sp_runtime::{traits::Header, DigestItem};
+use super::*;
 
 // Allowed slot drift.
 const MAX_SLOT_DRIFT: u64 = 1;
@@ -64,13 +56,14 @@ pub fn check_header<B: BlockT + Sized>(
 	params: VerificationParams<B>,
 ) -> Result<CheckedHeader<B::Header, VerifiedHeaderInfo>, Error<B>> {
 	let VerificationParams { mut header, pre_digest, slot_now, epoch, ticket } = params;
+	let config = &epoch.config;
 
 	// Check that the slot is not in the future, with some drift being allowed.
 	if pre_digest.slot > slot_now + MAX_SLOT_DRIFT {
 		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
 	}
 
-	let author = match epoch.authorities.get(pre_digest.authority_index as usize) {
+	let author = match config.authorities.get(pre_digest.authority_index as usize) {
 		Some(author) => author.0.clone(),
 		None => return Err(sassafras_err(Error::SlotAuthorNotFound)),
 	};
@@ -100,18 +93,15 @@ pub fn check_header<B: BlockT + Sized>(
 				// TODO-SASS-P2 ... we can eventually remove auth index from ticket info
 				log::error!(target: "sassafras", "🌳 Wrong primary authority index");
 			}
-			let transcript = make_ticket_transcript(
-				&epoch.randomness,
-				ticket_info.attempt as u64,
-				epoch.epoch_index,
-			);
+			let transcript =
+				make_ticket_transcript(&config.randomness, ticket_info.attempt, epoch.epoch_index);
 			schnorrkel::PublicKey::from_bytes(author.as_slice())
 				.and_then(|p| p.vrf_verify(transcript, &ticket, &ticket_info.proof))
 				.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 		},
 		(None, None) => {
 			log::debug!(target: "sassafras", "🌳 checking secondary");
-			let idx = authorship::secondary_authority_index(pre_digest.slot, params.epoch);
+			let idx = authorship::secondary_authority_index(pre_digest.slot, config);
 			if idx != pre_digest.authority_index as u64 {
 				log::error!(target: "sassafras", "🌳 Wrong secondary authority index");
 			}
@@ -128,13 +118,11 @@ pub fn check_header<B: BlockT + Sized>(
 		},
 	}
 
-	// Check block-vrf proof
+	// Check slot-vrf proof
 
-	let transcript = make_slot_transcript(&epoch.randomness, pre_digest.slot, epoch.epoch_index);
+	let transcript = make_slot_transcript(&config.randomness, pre_digest.slot, epoch.epoch_index);
 	schnorrkel::PublicKey::from_bytes(author.as_slice())
-		.and_then(|p| {
-			p.vrf_verify(transcript, &pre_digest.block_vrf_output, &pre_digest.block_vrf_proof)
-		})
+		.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
 		.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 
 	let info = VerifiedHeaderInfo {
@@ -144,4 +132,301 @@ pub fn check_header<B: BlockT + Sized>(
 	};
 
 	Ok(CheckedHeader::Checked(header, info))
+}
+
+/// A verifier for Sassafras blocks.
+pub struct SassafrasVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
+	client: Arc<Client>,
+	select_chain: SelectChain,
+	create_inherent_data_providers: CIDP,
+	epoch_changes: SharedEpochChanges<Block, Epoch>,
+	can_author_with: CAW,
+	telemetry: Option<TelemetryHandle>,
+	genesis_config: SassafrasConfiguration,
+}
+
+impl<Block: BlockT, Client, SelectChain, CAW, CIDP>
+	SassafrasVerifier<Block, Client, SelectChain, CAW, CIDP>
+{
+	/// Constructor.
+	pub fn new(
+		client: Arc<Client>,
+		select_chain: SelectChain,
+		create_inherent_data_providers: CIDP,
+		epoch_changes: SharedEpochChanges<Block, Epoch>,
+		can_author_with: CAW,
+		telemetry: Option<TelemetryHandle>,
+		genesis_config: SassafrasConfiguration,
+	) -> Self {
+		SassafrasVerifier {
+			client,
+			select_chain,
+			create_inherent_data_providers,
+			epoch_changes,
+			can_author_with,
+			telemetry,
+			genesis_config,
+		}
+	}
+}
+
+impl<Block, Client, SelectChain, CAW, CIDP> SassafrasVerifier<Block, Client, SelectChain, CAW, CIDP>
+where
+	Block: BlockT,
+	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
+	Client::Api: BlockBuilderApi<Block> + SassafrasApi<Block>,
+	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block>,
+	CIDP: CreateInherentDataProviders<Block, ()>,
+{
+	async fn check_inherents(
+		&self,
+		block: Block,
+		block_id: BlockId<Block>,
+		inherent_data: InherentData,
+		create_inherent_data_providers: CIDP::InherentDataProviders,
+		execution_context: ExecutionContext,
+	) -> Result<(), Error<Block>> {
+		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
+			debug!(
+				target: "sassafras",
+				"🌳 Skipping `check_inherents` as authoring version is not compatible: {}",
+				e,
+			);
+
+			return Ok(())
+		}
+
+		let inherent_res = self
+			.client
+			.runtime_api()
+			.check_inherents_with_context(&block_id, execution_context, block, inherent_data)
+			.map_err(Error::RuntimeApi)?;
+
+		if !inherent_res.ok() {
+			for (i, e) in inherent_res.into_errors() {
+				match create_inherent_data_providers.try_handle_error(&i, &e).await {
+					Some(res) => res.map_err(|e| Error::CheckInherents(e))?,
+					None => return Err(Error::CheckInherentsUnhandled(i)),
+				}
+			}
+		}
+
+		Ok(())
+	}
+
+	async fn check_and_report_equivocation(
+		&self,
+		slot_now: Slot,
+		slot: Slot,
+		header: &Block::Header,
+		author: &AuthorityId,
+		origin: &BlockOrigin,
+	) -> Result<(), Error<Block>> {
+		// Don't report any equivocations during initial sync as they are most likely stale.
+		if *origin == BlockOrigin::NetworkInitialSync {
+			return Ok(())
+		}
+
+		// Check if authorship of this header is an equivocation and return a proof if so.
+		let equivocation_proof =
+			match check_equivocation(&*self.client, slot_now, slot, header, author)
+				.map_err(Error::Client)?
+			{
+				Some(proof) => proof,
+				None => return Ok(()),
+			};
+
+		info!(
+			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+			author,
+			slot,
+			equivocation_proof.first_header.hash(),
+			equivocation_proof.second_header.hash(),
+		);
+
+		// Get the best block on which we will build and send the equivocation report.
+		let _best_id: BlockId<Block> = self
+			.select_chain
+			.best_chain()
+			.await
+			.map(|h| BlockId::Hash(h.hash()))
+			.map_err(|e| Error::Client(e.into()))?;
+
+		// TODO-SASS-P2
+
+		Ok(())
+	}
+}
+
+type BlockVerificationResult<Block> =
+	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
+
+#[async_trait::async_trait]
+impl<Block, Client, SelectChain, CAW, CIDP> Verifier<Block>
+	for SassafrasVerifier<Block, Client, SelectChain, CAW, CIDP>
+where
+	Block: BlockT,
+	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>
+		+ HeaderBackend<Block>
+		+ ProvideRuntimeApi<Block>
+		+ Send
+		+ Sync
+		+ AuxStore,
+	Client::Api: BlockBuilderApi<Block> + SassafrasApi<Block>,
+	SelectChain: sp_consensus::SelectChain<Block>,
+	CAW: CanAuthorWith<Block> + Send + Sync,
+	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
+{
+	async fn verify(
+		&mut self,
+		mut block: BlockImportParams<Block, ()>,
+	) -> BlockVerificationResult<Block> {
+		trace!(
+			target: "sassafras",
+			"🌳 Verifying origin: {:?} header: {:?} justification(s): {:?} body: {:?}",
+			block.origin,
+			block.header,
+			block.justifications,
+			block.body,
+		);
+
+		if block.with_state() {
+			// When importing whole state we don't calculate epoch descriptor, but rather
+			// read it from the state after import. We also skip all verifications
+			// because there's no parent state and we trust the sync module to verify
+			// that the state is correct and finalized.
+			return Ok((block, Default::default()))
+		}
+
+		trace!(target: "sassafras", "🌳 We have {:?} logs in this header", block.header.digest().logs().len());
+
+		let hash = block.header.hash();
+		let parent_hash = *block.header.parent_hash();
+
+		let create_inherent_data_providers = self
+			.create_inherent_data_providers
+			.create_inherent_data_providers(parent_hash, ())
+			.await
+			.map_err(|e| Error::<Block>::Client(sp_consensus::Error::from(e).into()))?;
+
+		let slot_now = create_inherent_data_providers.slot();
+
+		let parent_header_metadata = self
+			.client
+			.header_metadata(parent_hash)
+			.map_err(Error::<Block>::FetchParentHeader)?;
+
+		let pre_digest = find_pre_digest::<Block>(&block.header)?;
+
+		let (check_header, epoch_descriptor) = {
+			let epoch_changes = self.epoch_changes.shared_data();
+			let epoch_descriptor = epoch_changes
+				.epoch_descriptor_for_child_of(
+					descendent_query(&*self.client),
+					&parent_hash,
+					parent_header_metadata.number,
+					pre_digest.slot,
+				)
+				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
+			let viable_epoch = epoch_changes
+				.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.genesis_config, slot))
+				.ok_or(Error::<Block>::FetchEpoch(parent_hash))?;
+
+			let ticket = self
+				.client
+				.runtime_api()
+				.slot_ticket(&BlockId::Hash(parent_hash), pre_digest.slot)
+				.map_err(|err| err.to_string())?;
+
+			let v_params = VerificationParams {
+				header: block.header.clone(),
+				pre_digest,
+				slot_now,
+				epoch: viable_epoch.as_ref(),
+				ticket,
+			};
+
+			(check_header::<Block>(v_params)?, epoch_descriptor)
+		};
+
+		match check_header {
+			CheckedHeader::Checked(pre_header, verified_info) => {
+				let sassafras_pre_digest = verified_info
+					.pre_digest
+					.as_sassafras_pre_digest()
+					.expect("check_header always returns a pre-digest digest item; qed");
+				let slot = sassafras_pre_digest.slot;
+
+				// The header is valid but let's check if there was something else already
+				// proposed at the same slot by the given author. If there was, we will
+				// report the equivocation to the runtime.
+				if let Err(err) = self
+					.check_and_report_equivocation(
+						slot_now,
+						slot,
+						&block.header,
+						&verified_info.author,
+						&block.origin,
+					)
+					.await
+				{
+					warn!(target: "sassafras", "🌳 Error checking/reporting Sassafras equivocation: {}", err);
+				}
+
+				// If the body is passed through, we need to use the runtime to check that the
+				// internally-set timestamp in the inherents actually matches the slot set in the
+				// seal.
+				if let Some(inner_body) = block.body {
+					let mut inherent_data = create_inherent_data_providers
+						.create_inherent_data()
+						.map_err(Error::<Block>::CreateInherents)?;
+					inherent_data.sassafras_replace_inherent_data(slot);
+					let new_block = Block::new(pre_header.clone(), inner_body);
+
+					self.check_inherents(
+						new_block.clone(),
+						BlockId::Hash(parent_hash),
+						inherent_data,
+						create_inherent_data_providers,
+						block.origin.into(),
+					)
+					.await?;
+
+					let (_, inner_body) = new_block.deconstruct();
+					block.body = Some(inner_body);
+				}
+
+				trace!(target: "sassafras", "🌳 Checked {:?}; importing.", pre_header);
+				telemetry!(
+					self.telemetry;
+					CONSENSUS_TRACE;
+					"sassafras.checked_and_importing";
+					"pre_header" => ?pre_header,
+				);
+
+				block.header = pre_header;
+				block.post_digests.push(verified_info.seal);
+				block.intermediates.insert(
+					Cow::from(INTERMEDIATE_KEY),
+					Box::new(SassafrasIntermediate::<Block> { epoch_descriptor }) as Box<_>,
+				);
+				block.post_hash = Some(hash);
+
+				Ok((block, Default::default()))
+			},
+			CheckedHeader::Deferred(a, b) => {
+				debug!(target: "sassafras", "🌳 Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				telemetry!(
+					self.telemetry;
+					CONSENSUS_DEBUG;
+					"sassafras.header_too_far_in_future";
+					"hash" => ?hash, "a" => ?a, "b" => ?b
+				);
+				Err(Error::<Block>::TooFarInFuture(hash).into())
+			},
+		}
+	}
 }
