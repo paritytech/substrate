@@ -79,19 +79,16 @@ async fn peer_persistence_works() {
 		_ => node.start(),
 	});
 
-	// Wait till the network initializes.
-	tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+	
 	// Ensure that all the started nodes keep finalizing blocks.
-	assert!(wait_n_blocks_if_running(3, 30, &node_defs[..]).await);
+	assert!(wait_n_blocks_if_running(3, 60, &node_defs[..]).await);
 
 	// Start the positive- and negative-case nodes.
 	node_defs[IDX_POS].start();
 	node_defs[IDX_NEG].start();
 
-	// Give these nodes some time to initialize.
-	tokio::time::sleep(std::time::Duration::from_secs(30)).await;
 	// Ensure that all the started nodes keep finalizing blocks.
-	assert!(wait_n_blocks_if_running(3, 30, &node_defs[..]).await);
+	assert!(wait_n_blocks_if_running(3, 60, &node_defs[..]).await);
 
 	// Terminate the secondary bootnode.
 	node_defs[IDX_SECONDARY_BOOT_NODE].stop();
@@ -107,18 +104,16 @@ async fn peer_persistence_works() {
 	// Start the positive- and negative-case nodes.
 	node_defs[IDX_POS].start();
 	node_defs[IDX_NEG].start();
-	// Give these nodes some time to initialize.
-	tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-
+	
 	// Expected:
 	// - positive-case node successfully catches up with the network;
 	// - negative-case node does not get updates on the finalized nodes;
 	// - the rest of the started nodes keep working.
-	let pos_queried = wait_n_blocks_if_running(3, 30, std::iter::once(&node_defs[IDX_POS]));
-	let neg_queried = wait_n_blocks_if_running(3, 30, std::iter::once(&node_defs[IDX_NEG]));
+	let pos_queried = wait_n_blocks_if_running(3, 60, std::iter::once(&node_defs[IDX_POS]));
+	let neg_queried = wait_n_blocks_if_running(3, 60, std::iter::once(&node_defs[IDX_NEG]));
 	let the_rest_queried = wait_n_blocks_if_running(
 		3,
-		30,
+		60,
 		node_defs.iter().enumerate().filter_map(|(idx, node)| match idx {
 			IDX_POS | IDX_NEG => None,
 			_ => Some(node),
