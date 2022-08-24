@@ -446,6 +446,13 @@ macro_rules! parameter_types_impl_thread_local {
 						Self::set(current);
 						result
 					}
+
+					/// Get and remove the value.
+					pub fn take() -> $type {
+						let current = Self::get();
+						Self::set(Default::default());
+						current
+					}
 				}
 			)*
 		}

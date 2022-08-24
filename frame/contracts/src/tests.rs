@@ -109,7 +109,7 @@ pub mod test_utils {
 }
 
 parameter_types! {
-	static TestExtensionsTestValue: TestExtension = Default::default();
+	static TestExtensionTestValue: TestExtension = Default::default();
 }
 
 #[derive(Clone)]
@@ -132,15 +132,15 @@ pub struct TempStorageExtension {
 
 impl TestExtension {
 	fn disable() {
-		TestExtensionsTestValue::mutate(|e| e.enabled = false)
+		TestExtensionTestValue::mutate(|e| e.enabled = false)
 	}
 
 	fn last_seen_buffer() -> Vec<u8> {
-		TestExtensionsTestValue::get().last_seen_buffer.clone()
+		TestExtensionTestValue::get().last_seen_buffer.clone()
 	}
 
 	fn last_seen_inputs() -> (u32, u32, u32, u32) {
-		TestExtensionsTestValue::get().last_seen_inputs
+		TestExtensionTestValue::get().last_seen_inputs
 	}
 }
 
@@ -163,12 +163,12 @@ impl ChainExtension<Test> for TestExtension {
 				let mut env = env.buf_in_buf_out();
 				let input = env.read(8)?;
 				env.write(&input, false, None)?;
-				TestExtensionsTestValue::mutate(|e| e.last_seen_buffer = input);
+				TestExtensionTestValue::mutate(|e| e.last_seen_buffer = input);
 				Ok(RetVal::Converging(id))
 			},
 			0x8001 => {
 				let env = env.only_in();
-				TestExtensionsTestValue::mutate(|e| {
+				TestExtensionTestValue::mutate(|e| {
 					e.last_seen_inputs = (env.val0(), env.val1(), env.val2(), env.val3())
 				});
 				Ok(RetVal::Converging(id))
@@ -187,7 +187,7 @@ impl ChainExtension<Test> for TestExtension {
 	}
 
 	fn enabled() -> bool {
-		TestExtensionsTestValue::get().enabled
+		TestExtensionTestValue::get().enabled
 	}
 }
 
@@ -205,7 +205,7 @@ impl ChainExtension<Test> for RevertingExtension {
 	}
 
 	fn enabled() -> bool {
-		TestExtensionsTestValue::get().enabled
+		TestExtensionTestValue::get().enabled
 	}
 }
 
@@ -254,7 +254,7 @@ impl ChainExtension<Test> for TempStorageExtension {
 	}
 
 	fn enabled() -> bool {
-		TestExtensionsTestValue::get().enabled
+		TestExtensionTestValue::get().enabled
 	}
 }
 
