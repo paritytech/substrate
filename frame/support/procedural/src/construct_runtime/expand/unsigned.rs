@@ -44,7 +44,7 @@ pub fn expand_outer_validate_unsigned(
 		#( #query_validate_unsigned_part_macros )*
 
 		impl #scrate::unsigned::ValidateUnsigned for #runtime {
-			type Call = Call;
+			type Call = RuntimeCall;
 
 			fn pre_dispatch(call: &Self::Call) -> Result<(), #scrate::unsigned::TransactionValidityError> {
 				#[allow(unreachable_patterns)]

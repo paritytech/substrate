@@ -56,12 +56,12 @@ pub type DispatchErrorWithPostInfo =
 
 /// Serializable version of pallet dispatchable.
 pub trait Callable<T> {
-	type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
+	type RuntimeCall: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
+pub type CallableCallFor<A, R> = <A as Callable<R>>::RuntimeCall;
 
 /// Origin for the System pallet.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]

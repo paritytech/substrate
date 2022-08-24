@@ -38,7 +38,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let type_impl_gen = &def.type_impl_generics(span);
 	let type_decl_bounded_gen = &def.type_decl_bounded_generics(span);
 	let type_use_gen = &def.type_use_generics(span);
-	let call_ident = syn::Ident::new("Call", span);
+	let call_ident = syn::Ident::new("RuntimeCall", span);
 	let pallet_ident = &def.pallet_struct.pallet;
 
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
@@ -127,7 +127,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			compile_error!(concat!(
 				"`",
 				stringify!($pallet_name),
-				"` does not have #[pallet::call] defined, perhaps you should remove `Call` from \
+				"` does not have #[pallet::call] defined, perhaps you should remove `RuntimeCall` from \
 				construct_runtime?",
 			));
 		}
@@ -290,7 +290,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 						},
 					)*
 					Self::__Ignore(_, _) => {
-						let _ = origin; // Use origin for empty Call enum
+						let _ = origin; // Use origin for empty RuntimeCall enum
 						unreachable!("__PhantomItem cannot be used.");
 					},
 				}
@@ -300,7 +300,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		impl<#type_impl_gen> #frame_support::dispatch::Callable<T> for #pallet_ident<#type_use_gen>
 			#where_clause
 		{
-			type Call = #call_ident<#type_use_gen>;
+			type RuntimeCall = #call_ident<#type_use_gen>;
 		}
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {
