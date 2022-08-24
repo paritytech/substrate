@@ -59,11 +59,11 @@ use crate::{
 	Client,
 };
 
-pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
+pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, BKS> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub runtime: Arc<R>,
-	pub key_store: BeefyKeystore,
+	pub key_store: BKS,
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	pub gossip_engine: GossipEngine<B>,
@@ -74,11 +74,11 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
+pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, BKS> {
 	client: Arc<C>,
 	backend: Arc<BE>,
 	runtime: Arc<R>,
-	key_store: BeefyKeystore,
+	key_store: BKS,
 	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
 	gossip_validator: Arc<GossipValidator<B>>,
@@ -94,7 +94,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	/// Best block a BEEFY voting round has been concluded for
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Used to keep RPC worker up to date on latest/best beefy
-	beefy_best_block_sender: BeefyBestBlockSender<B>,
+	beefy_best_blollck_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
 	/// Handle to the sync oracle
@@ -103,7 +103,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	_backend: PhantomData<BE>,
 }
 
-impl<B, BE, C, R, SO> BeefyWorker<B, BE, C, R, SO>
+impl<B, BE, C, R, SO, BKS> BeefyWorker<B, BE, C, R, SO, BKS>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
@@ -118,7 +118,7 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO, BKS>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
