@@ -1845,18 +1845,18 @@ pub mod pallet_prelude {
 /// [`frame_support::storage::types::QueryKindTrait`]. There are 3 implementations of this
 /// trait by default:
 /// 1. [`frame_support::storage::types::OptionQuery`], the default `QueryKind` used when this
-/// type    parameter is omitted. Specifying this as the `QueryKind` would cause storage map
-/// APIs that    return a `QueryKind` to instead return an `Option`, returning `Some` when a
-/// value does exist    under a specified storage key, and `None` otherwise.
+///    type parameter is omitted. Specifying this as the `QueryKind` would cause storage map
+///    APIs that return a `QueryKind` to instead return an `Option`, returning `Some` when a
+///    value does exist under a specified storage key, and `None` otherwise.
 /// 2. [`frame_support::storage::types::ValueQuery`] causes storage map APIs that return a
 ///    `QueryKind` to instead return the value type. In cases where a value does not exist
-/// under a    specified storage key, the `OnEmpty` type parameter on `QueryKindTrait` is used
-/// to return an    appropriate value.
+///    under a specified storage key, the `OnEmpty` type parameter on `QueryKindTrait` is used
+///    to return an appropriate value.
 /// 3. [`frame_support::storage::types::ResultQuery`] causes storage map APIs that return a
 ///    `QueryKind` to instead return a `Result<T, E>`, with `T` being the value type and `E`
-/// being    the pallet error type specified by the `#[pallet::error]` attribute. In cases
-/// where a value    does not exist under a specified storage key, an `Err` with the specified
-/// pallet error    variant is returned.
+///    being the pallet error type specified by the `#[pallet::error]` attribute. In cases
+///    where a value does not exist under a specified storage key, an `Err` with the specified
+///    pallet error variant is returned.
 ///
 /// NOTE: If the `QueryKind` generic parameter is still generic at this stage or is using some
 /// type alias then the generation of the getter might fail. In this case the getter can be
