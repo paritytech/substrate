@@ -472,7 +472,11 @@ where
 	}
 
 	/// Compute the final fee value for a particular transaction.
-	pub fn compute_fee(len: u32, info: &DispatchInfoOf<T::RuntimeCall>, tip: BalanceOf<T>) -> BalanceOf<T>
+	pub fn compute_fee(
+		len: u32,
+		info: &DispatchInfoOf<T::RuntimeCall>,
+		tip: BalanceOf<T>,
+	) -> BalanceOf<T>
 	where
 		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{

@@ -133,8 +133,9 @@ pub mod pallet {
 		/// The limit on the number of batched calls.
 		fn batched_calls_limit() -> u32 {
 			let allocator_limit = sp_core::MAX_POSSIBLE_ALLOCATION;
-			let call_size = ((sp_std::mem::size_of::<<T as Config>::RuntimeCall>() as u32 + CALL_ALIGN -
-				1) / CALL_ALIGN) * CALL_ALIGN;
+			let call_size = ((sp_std::mem::size_of::<<T as Config>::RuntimeCall>() as u32 +
+				CALL_ALIGN - 1) / CALL_ALIGN) *
+				CALL_ALIGN;
 			// The margin to take into account vec doubling capacity.
 			let margin_factor = 3;
 
@@ -333,10 +334,12 @@ pub mod pallet {
 				} else {
 					let mut filtered_origin = origin.clone();
 					// Don't allow users to nest `batch_all` calls.
-					filtered_origin.add_filter(move |c: &<T as frame_system::Config>::RuntimeCall| {
-						let c = <T as Config>::RuntimeCall::from_ref(c);
-						!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
-					});
+					filtered_origin.add_filter(
+						move |c: &<T as frame_system::Config>::RuntimeCall| {
+							let c = <T as Config>::RuntimeCall::from_ref(c);
+							!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
+						},
+					);
 					call.dispatch(filtered_origin)
 				};
 				// Add the weight of this call.

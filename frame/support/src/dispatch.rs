@@ -2612,7 +2612,7 @@ mod tests {
 
 		pub trait Config: 'static {
 			type AccountId;
-			type Call;
+			type RuntimeCall;
 			type BaseCallFilter;
 			type Origin: crate::traits::OriginTrait<Call = Self::RuntimeCall>;
 			type BlockNumber: Into<u32>;
@@ -2719,7 +2719,7 @@ mod tests {
 		type PalletsOrigin = OuterOrigin;
 		type AccountId = <TraitImpl as system::Config>::AccountId;
 
-		fn add_filter(&mut self, _filter: impl Fn(&Self::RuntimeCall) -> bool + 'static) {
+		fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
 			unimplemented!("Not required in tests!")
 		}
 
@@ -2731,7 +2731,7 @@ mod tests {
 			unimplemented!("Not required in tests!")
 		}
 
-		fn filter_call(&self, _call: &Self::RuntimeCall) -> bool {
+		fn filter_call(&self, _call: &Self::Call) -> bool {
 			unimplemented!("Not required in tests!")
 		}
 

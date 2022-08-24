@@ -376,7 +376,10 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType5> + From<SomeType3>,
 	{
 		type Call = Call<T>;
-		fn validate_unsigned(_source: TransactionSource, call: &Self::RuntimeCall) -> TransactionValidity {
+		fn validate_unsigned(
+			_source: TransactionSource,
+			call: &Self::RuntimeCall,
+		) -> TransactionValidity {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_storage_layer { .. }) {

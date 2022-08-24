@@ -300,7 +300,10 @@ pub mod pallet {
 			T::WeightInfo::buy_ticket()
 				.saturating_add(call.get_dispatch_info().weight)
 		)]
-		pub fn buy_ticket(origin: OriginFor<T>, call: Box<<T as Config>::RuntimeCall>) -> DispatchResult {
+		pub fn buy_ticket(
+			origin: OriginFor<T>,
+			call: Box<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
 			let caller = ensure_signed(origin.clone())?;
 			call.clone().dispatch(origin).map_err(|e| e.error)?;
 
@@ -315,7 +318,10 @@ pub mod pallet {
 		///
 		/// This extrinsic must be called by the Manager origin.
 		#[pallet::weight(T::WeightInfo::set_calls(calls.len() as u32))]
-		pub fn set_calls(origin: OriginFor<T>, calls: Vec<<T as Config>::RuntimeCall>) -> DispatchResult {
+		pub fn set_calls(
+			origin: OriginFor<T>,
+			calls: Vec<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
 			T::ManagerOrigin::ensure_origin(origin)?;
 			ensure!(calls.len() <= T::MaxCalls::get() as usize, Error::<T>::TooManyCalls);
 			if calls.is_empty() {

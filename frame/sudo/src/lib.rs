@@ -118,7 +118,9 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// A sudo-able call.
-		type RuntimeCall: Parameter + UnfilteredDispatchable<Origin = Self::Origin> + GetDispatchInfo;
+		type RuntimeCall: Parameter
+			+ UnfilteredDispatchable<Origin = Self::Origin>
+			+ GetDispatchInfo;
 	}
 
 	#[pallet::pallet]
