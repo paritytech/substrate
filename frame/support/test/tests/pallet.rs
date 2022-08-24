@@ -125,8 +125,7 @@ pub mod pallet {
 
 		type Balance: Parameter + Default + TypeInfo;
 
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::extra_constants]
@@ -165,18 +164,18 @@ pub mod pallet {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
-			Self::deposit_event(PalletEvent::Something(10));
+			Self::deposit_event(Event::Something(10));
 			10
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
-			Self::deposit_event(PalletEvent::Something(20));
+			Self::deposit_event(Event::Something(20));
 		}
 		fn on_runtime_upgrade() -> Weight {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
-			Self::deposit_event(PalletEvent::Something(30));
+			Self::deposit_event(Event::Something(30));
 			30
 		}
 		fn integrity_test() {
@@ -200,7 +199,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType3); // Test for where clause
 			let _ = origin;
-			Self::deposit_event(PalletEvent::Something(3));
+			Self::deposit_event(Event::Something(3));
 			Ok(().into())
 		}
 
@@ -210,7 +209,7 @@ pub mod pallet {
 			_origin: OriginFor<T>,
 			#[pallet::compact] foo: u32,
 		) -> DispatchResultWithPostInfo {
-			Self::deposit_event(PalletEvent::Something(0));
+			Self::deposit_event(Event::Something(0));
 			if foo == 0 {
 				Err(Error::<T>::InsufficientProposersBalance)?;
 			}
@@ -238,7 +237,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
-	pub enum PalletEvent<T: Config>
+	pub enum Event<T: Config>
 	where
 		T::AccountId: SomeAssociation1 + From<SomeType1>,
 	{
@@ -453,7 +452,7 @@ pub mod pallet2 {
 	where
 		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
-		type RuntimeEvent: From<PalletEvent> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -467,14 +466,14 @@ pub mod pallet2 {
 		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
-			Self::deposit_event(PalletEvent::Something(11));
+			Self::deposit_event(Event::Something(11));
 			0
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
-			Self::deposit_event(PalletEvent::Something(21));
+			Self::deposit_event(Event::Something(21));
 		}
 		fn on_runtime_upgrade() -> Weight {
-			Self::deposit_event(PalletEvent::Something(31));
+			Self::deposit_event(Event::Something(31));
 			0
 		}
 	}
@@ -491,7 +490,7 @@ pub mod pallet2 {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
-	pub enum PalletEvent {
+	pub enum Event {
 		/// Something
 		Something(u32),
 	}
@@ -632,7 +631,7 @@ fn transactional_works() {
 				.iter()
 				.map(|e| &e.event)
 				.collect::<Vec<_>>(),
-			vec![&RuntimeEvent::Example(pallet::PalletEvent::Something(0))],
+			vec![&RuntimeEvent::Example(pallet::Event::Something(0))],
 		);
 	})
 }
@@ -888,7 +887,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(3)),
+			RuntimeEvent::Example(pallet::Event::Something(3)),
 		);
 	})
 }
@@ -995,27 +994,27 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(10)),
+			RuntimeEvent::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			RuntimeEvent::Example2(pallet2::PalletEvent::Something(11)),
+			RuntimeEvent::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(20)),
+			RuntimeEvent::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			RuntimeEvent::Example2(pallet2::PalletEvent::Something(21)),
+			RuntimeEvent::Example2(pallet2::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(30)),
+			RuntimeEvent::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			RuntimeEvent::Example2(pallet2::PalletEvent::Something(31)),
+			RuntimeEvent::Example2(pallet2::Event::Something(31)),
 		);
 	})
 }
@@ -1035,27 +1034,27 @@ fn all_pallets_type_reversed_order_is_correct() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example2(pallet2::PalletEvent::Something(11)),
+			RuntimeEvent::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(10)),
+			RuntimeEvent::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			RuntimeEvent::Example2(pallet2::PalletEvent::Something(21)),
+			RuntimeEvent::Example2(pallet2::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(20)),
+			RuntimeEvent::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			RuntimeEvent::Example2(pallet2::PalletEvent::Something(31)),
+			RuntimeEvent::Example2(pallet2::Event::Something(31)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(30)),
+			RuntimeEvent::Example(pallet::Event::Something(30)),
 		);
 	})
 }
@@ -1303,7 +1302,7 @@ fn metadata() {
 				],
 			}),
 			calls: Some(meta_type::<pallet::Call<Runtime>>().into()),
-			event: Some(meta_type::<pallet::PalletEvent<Runtime>>().into()),
+			event: Some(meta_type::<pallet::Event<Runtime>>().into()),
 			constants: vec![
 				PalletConstantMetadata {
 					name: "MyGetParam",
@@ -1378,7 +1377,7 @@ fn metadata() {
 				],
 			}),
 			calls: None,
-			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::PalletEvent>() }),
+			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
 			constants: vec![],
 			error: None,
 		},

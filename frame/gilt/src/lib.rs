@@ -98,8 +98,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type that this works on.
 		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
@@ -288,7 +287,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A bid was successfully placed.
 		BidPlaced { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
 		/// A bid was successfully removed (before being accepted as a gilt).
@@ -400,7 +399,7 @@ pub mod pallet {
 				qs[queue_index].0 += net.0;
 				qs[queue_index].1 = qs[queue_index].1.saturating_add(net.1);
 			});
-			Self::deposit_event(PalletEvent::BidPlaced { who, amount, duration });
+			Self::deposit_event(Event::BidPlaced { who, amount, duration });
 
 			Ok(().into())
 		}
@@ -438,11 +437,7 @@ pub mod pallet {
 			});
 
 			T::Currency::unreserve(&bid.who, bid.amount);
-			Self::deposit_event(PalletEvent::BidRetracted {
-				who: bid.who,
-				amount: bid.amount,
-				duration,
-			});
+			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
 			Ok(().into())
 		}
@@ -521,7 +516,7 @@ pub mod pallet {
 					debug_assert!(err_amt.is_zero());
 				}
 
-				let e = PalletEvent::GiltThawed {
+				let e = Event::GiltThawed {
 					index,
 					who: gilt.who,
 					original_amount: gilt.amount,
@@ -640,12 +635,8 @@ pub mod pallet {
 								totals.proportion =
 									totals.proportion.defensive_saturating_add(proportion);
 								totals.index += 1;
-								let e = PalletEvent::GiltIssued {
-									index,
-									expiry,
-									who: who.clone(),
-									amount,
-								};
+								let e =
+									Event::GiltIssued { index, expiry, who: who.clone(), amount };
 								Self::deposit_event(e);
 								let gilt = ActiveGilt { amount, proportion, who, expiry };
 								Active::<T>::insert(index, gilt);

@@ -124,7 +124,7 @@ pub mod pallet {
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
 		type Call: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self, I>>;
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -220,7 +220,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A referendum has being submitted.
 		Submitted {
 			/// Index of the referendum.
@@ -387,7 +387,7 @@ pub mod pallet {
 			};
 			ReferendumInfoFor::<T, I>::insert(index, ReferendumInfo::Ongoing(status));
 
-			Self::deposit_event(PalletEvent::<T, I>::Submitted { index, track, proposal_hash });
+			Self::deposit_event(Event::<T, I>::Submitted { index, track, proposal_hash });
 			Ok(())
 		}
 
@@ -413,11 +413,8 @@ pub mod pallet {
 			let now = frame_system::Pallet::<T>::block_number();
 			let (info, _, branch) = Self::service_referendum(now, index, status);
 			ReferendumInfoFor::<T, I>::insert(index, info);
-			let e = PalletEvent::<T, I>::DecisionDepositPlaced {
-				index,
-				who,
-				amount: track.decision_deposit,
-			};
+			let e =
+				Event::<T, I>::DecisionDepositPlaced { index, who, amount: track.decision_deposit };
 			Self::deposit_event(e);
 			Ok(branch.weight_of_deposit::<T, I>().into())
 		}
@@ -443,7 +440,7 @@ pub mod pallet {
 				.ok_or(Error::<T, I>::NoDeposit)?;
 			Self::refund_deposit(Some(deposit.clone()));
 			ReferendumInfoFor::<T, I>::insert(index, info);
-			let e = PalletEvent::<T, I>::DecisionDepositRefunded {
+			let e = Event::<T, I>::DecisionDepositRefunded {
 				index,
 				who: deposit.who,
 				amount: deposit.amount,
@@ -466,7 +463,7 @@ pub mod pallet {
 				let _ = T::Scheduler::cancel(last_alarm);
 			}
 			Self::note_one_fewer_deciding(status.track);
-			Self::deposit_event(PalletEvent::<T, I>::Cancelled { index, tally: status.tally });
+			Self::deposit_event(Event::<T, I>::Cancelled { index, tally: status.tally });
 			let info = ReferendumInfo::Cancelled(
 				frame_system::Pallet::<T>::block_number(),
 				status.submission_deposit,
@@ -490,7 +487,7 @@ pub mod pallet {
 				let _ = T::Scheduler::cancel(last_alarm);
 			}
 			Self::note_one_fewer_deciding(status.track);
-			Self::deposit_event(PalletEvent::<T, I>::Killed { index, tally: status.tally });
+			Self::deposit_event(Event::<T, I>::Killed { index, tally: status.tally });
 			Self::slash_deposit(Some(status.submission_deposit.clone()));
 			Self::slash_deposit(status.decision_deposit.clone());
 			let info = ReferendumInfo::Killed(frame_system::Pallet::<T>::block_number());
@@ -744,14 +741,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			status.track,
 		);
 		status.in_queue = false;
-		Self::deposit_event(PalletEvent::<T, I>::DecisionStarted {
+		Self::deposit_event(Event::<T, I>::DecisionStarted {
 			index,
 			tally: status.tally.clone(),
 			proposal_hash: status.proposal_hash,
 			track: status.track,
 		});
 		let confirming = if is_passing {
-			Self::deposit_event(PalletEvent::<T, I>::ConfirmStarted { index });
+			Self::deposit_event(Event::<T, I>::ConfirmStarted { index });
 			Some(now.saturating_add(track.confirm_period))
 		} else {
 			None
@@ -931,10 +928,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				if status.deciding.is_none() && now >= timeout {
 					// Too long without being decided - end it.
 					Self::ensure_no_alarm(&mut status);
-					Self::deposit_event(PalletEvent::<T, I>::TimedOut {
-						index,
-						tally: status.tally,
-					});
+					Self::deposit_event(Event::<T, I>::TimedOut { index, tally: status.tally });
 					return (
 						ReferendumInfo::TimedOut(
 							now,
@@ -969,7 +963,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								status.origin,
 								call_hash,
 							);
-							Self::deposit_event(PalletEvent::<T, I>::Confirmed {
+							Self::deposit_event(Event::<T, I>::Confirmed {
 								index,
 								tally: status.tally,
 							});
@@ -988,7 +982,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							// Start confirming
 							dirty = true;
 							deciding.confirming = Some(now.saturating_add(track.confirm_period));
-							Self::deposit_event(PalletEvent::<T, I>::ConfirmStarted { index });
+							Self::deposit_event(Event::<T, I>::ConfirmStarted { index });
 							ServiceBranch::BeginConfirming
 						},
 					}
@@ -997,10 +991,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// Failed!
 						Self::ensure_no_alarm(&mut status);
 						Self::note_one_fewer_deciding(status.track);
-						Self::deposit_event(PalletEvent::<T, I>::Rejected {
-							index,
-							tally: status.tally,
-						});
+						Self::deposit_event(Event::<T, I>::Rejected { index, tally: status.tally });
 						return (
 							ReferendumInfo::Rejected(
 								now,
@@ -1015,7 +1006,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// Stop confirming
 						dirty = true;
 						deciding.confirming = None;
-						Self::deposit_event(PalletEvent::<T, I>::ConfirmAborted { index });
+						Self::deposit_event(Event::<T, I>::ConfirmAborted { index });
 						ServiceBranch::EndConfirming
 					} else {
 						ServiceBranch::ContinueNotConfirming
@@ -1076,7 +1067,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn slash_deposit(deposit: Option<Deposit<T::AccountId, BalanceOf<T, I>>>) {
 		if let Some(Deposit { who, amount }) = deposit {
 			T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
-			Self::deposit_event(PalletEvent::<T, I>::DepositSlashed { who, amount });
+			Self::deposit_event(Event::<T, I>::DepositSlashed { who, amount });
 		}
 	}
 

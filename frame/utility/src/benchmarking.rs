@@ -41,7 +41,7 @@ benchmarks! {
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), calls)
 	verify {
-		assert_last_event::<T>(PalletEvent::BatchCompleted.into())
+		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
 
 	as_derivative {
@@ -62,7 +62,7 @@ benchmarks! {
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), calls)
 	verify {
-		assert_last_event::<T>(PalletEvent::BatchCompleted.into())
+		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
 
 	dispatch_as {
@@ -83,7 +83,7 @@ benchmarks! {
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), calls)
 	verify {
-		assert_last_event::<T>(PalletEvent::BatchCompleted.into())
+		assert_last_event::<T>(Event::BatchCompleted.into())
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test);

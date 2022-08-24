@@ -250,8 +250,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for withdrawing, refunding and depositing the transaction fee.
 		/// Transaction fees are withdrawn before the transaction is executed.
@@ -327,7 +326,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A transaction fee `actual_fee`, of which `tip` was added to the minimum inclusion fee,
 		/// has been paid by `who`.
 		TransactionFeePaid { who: T::AccountId, actual_fee: BalanceOf<T>, tip: BalanceOf<T> },
@@ -772,11 +771,7 @@ where
 			T::OnChargeTransaction::correct_and_deposit_fee(
 				&who, info, post_info, actual_fee, tip, imbalance,
 			)?;
-			Pallet::<T>::deposit_event(PalletEvent::<T>::TransactionFeePaid {
-				who,
-				actual_fee,
-				tip,
-			});
+			Pallet::<T>::deposit_event(Event::<T>::TransactionFeePaid { who, actual_fee, tip });
 		}
 		Ok(())
 	}
@@ -1428,12 +1423,12 @@ mod tests {
 				assert_eq!(Balances::free_balance(2), 0);
 				// Transfer Event
 				System::assert_has_event(RuntimeEvent::Balances(
-					pallet_balances::PalletEvent::Transfer { from: 2, to: 3, amount: 80 },
+					pallet_balances::Event::Transfer { from: 2, to: 3, amount: 80 },
 				));
 				// Killed Event
-				System::assert_has_event(RuntimeEvent::System(
-					system::PalletEvent::KilledAccount { account: 2 },
-				));
+				System::assert_has_event(RuntimeEvent::System(system::Event::KilledAccount {
+					account: 2,
+				}));
 			});
 	}
 
@@ -1488,7 +1483,7 @@ mod tests {
 				assert_eq!(Balances::total_balance(&user), 0);
 				// TransactionFeePaid Event
 				System::assert_has_event(RuntimeEvent::TransactionPayment(
-					pallet_transaction_payment::PalletEvent::TransactionFeePaid {
+					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: user,
 						actual_fee: 0,
 						tip: 0,

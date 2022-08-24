@@ -379,7 +379,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// A stable ID for a validator.
 		type ValidatorId: Member
@@ -541,7 +541,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent {
+	pub enum Event {
 		/// New session has happened. Note that the argument is the session index, not the
 		/// block number as the type might suggest.
 		NewSession { session_index: SessionIndex },
@@ -708,7 +708,7 @@ impl<T: Config> Pallet<T> {
 		<QueuedChanged<T>>::put(next_changed);
 
 		// Record that this happened.
-		Self::deposit_event(PalletEvent::NewSession { session_index });
+		Self::deposit_event(Event::NewSession { session_index });
 
 		// Tell everyone about the new session keys.
 		T::SessionHandler::on_new_session::<T::Keys>(changed, &session_keys, &queued_amalgamated);

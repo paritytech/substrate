@@ -41,7 +41,7 @@ pub trait Currency {}
 
 // Test for:
 // * No default instance
-// * Origin, Inherent, PalletEvent
+// * Origin, Inherent, Event
 mod module1 {
 	use super::*;
 	use sp_std::ops::Add;
@@ -50,7 +50,7 @@ mod module1 {
 	where
 		<Self as system::Config>::BlockNumber: From<u32>,
 	{
-		type RuntimeEvent: From<PalletEvent<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
 		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
 		type GenericType: Default + Clone + Codec + EncodeLike + TypeInfo;
@@ -102,7 +102,7 @@ mod module1 {
 	}
 
 	frame_support::decl_event! {
-		pub enum PalletEvent<T, I> where Phantom = std::marker::PhantomData<T> {
+		pub enum Event<T, I> where Phantom = std::marker::PhantomData<T> {
 			_Phantom(Phantom),
 			AnotherVariant(u32),
 		}
@@ -154,7 +154,7 @@ mod module2 {
 
 	pub trait Config<I = DefaultInstance>: system::Config {
 		type Amount: Parameter + Default;
-		type RuntimeEvent: From<PalletEvent<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
 		type Origin: From<Origin<Self, I>>;
 	}
 
@@ -178,7 +178,7 @@ mod module2 {
 	}
 
 	frame_support::decl_event! {
-		pub enum PalletEvent<T, I=DefaultInstance> where Amount = <T as Config<I>>::Amount {
+		pub enum Event<T, I=DefaultInstance> where Amount = <T as Config<I>>::Amount {
 			Variant(Amount),
 		}
 	}

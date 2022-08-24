@@ -98,11 +98,7 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet
 			admin.clone(),
 			T::CollectionDeposit::get(),
 			false,
-			PalletEvent::Created {
-				collection: *collection,
-				creator: who.clone(),
-				owner: admin.clone(),
-			},
+			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
 		)
 	}
 }

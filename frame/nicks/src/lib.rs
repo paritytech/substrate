@@ -58,8 +58,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -85,7 +84,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A name was set.
 		NameSet { who: T::AccountId },
 		/// A name was forcibly set.
@@ -145,12 +144,12 @@ pub mod pallet {
 			ensure!(bounded_name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
-				Self::deposit_event(PalletEvent::<T>::NameChanged { who: sender.clone() });
+				Self::deposit_event(Event::<T>::NameChanged { who: sender.clone() });
 				deposit
 			} else {
 				let deposit = T::ReservationFee::get();
 				T::Currency::reserve(&sender, deposit)?;
-				Self::deposit_event(PalletEvent::<T>::NameSet { who: sender.clone() });
+				Self::deposit_event(Event::<T>::NameSet { who: sender.clone() });
 				deposit
 			};
 
@@ -177,7 +176,7 @@ pub mod pallet {
 			let err_amount = T::Currency::unreserve(&sender, deposit);
 			debug_assert!(err_amount.is_zero());
 
-			Self::deposit_event(PalletEvent::<T>::NameCleared { who: sender, deposit });
+			Self::deposit_event(Event::<T>::NameCleared { who: sender, deposit });
 			Ok(())
 		}
 
@@ -205,7 +204,7 @@ pub mod pallet {
 			// Slash their deposit from them.
 			T::Slashed::on_unbalanced(T::Currency::slash_reserved(&target, deposit).0);
 
-			Self::deposit_event(PalletEvent::<T>::NameKilled { target, deposit });
+			Self::deposit_event(Event::<T>::NameKilled { target, deposit });
 			Ok(())
 		}
 
@@ -235,7 +234,7 @@ pub mod pallet {
 			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);
 			<NameOf<T>>::insert(&target, (bounded_name, deposit));
 
-			Self::deposit_event(PalletEvent::<T>::NameForced { target });
+			Self::deposit_event(Event::<T>::NameForced { target });
 			Ok(())
 		}
 	}

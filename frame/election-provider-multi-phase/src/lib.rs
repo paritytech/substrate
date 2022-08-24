@@ -569,9 +569,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type RuntimeEvent: From<PalletEvent<Self>>
+		type RuntimeEvent: From<Event<Self>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
-			+ TryInto<PalletEvent<Self>>;
+			+ TryInto<Event<Self>>;
 
 		/// Currency type.
 		type Currency: ReservableCurrency<Self::AccountId> + Currency<Self::AccountId>;
@@ -900,7 +900,7 @@ pub mod pallet {
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
 			let ejected_a_solution = <QueuedSolution<T>>::exists();
 			<QueuedSolution<T>>::put(ready);
-			Self::deposit_event(PalletEvent::SolutionStored {
+			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Unsigned,
 				prev_ejected: ejected_a_solution,
 			});
@@ -948,7 +948,7 @@ pub mod pallet {
 				compute: ElectionCompute::Emergency,
 			};
 
-			Self::deposit_event(PalletEvent::SolutionStored {
+			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Emergency,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
@@ -1024,7 +1024,7 @@ pub mod pallet {
 			}
 
 			signed_submissions.put();
-			Self::deposit_event(PalletEvent::SolutionStored {
+			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Signed,
 				prev_ejected: ejected_a_solution,
 			});
@@ -1062,7 +1062,7 @@ pub mod pallet {
 				compute: ElectionCompute::Fallback,
 			};
 
-			Self::deposit_event(PalletEvent::SolutionStored {
+			Self::deposit_event(Event::SolutionStored {
 				election_compute: ElectionCompute::Fallback,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
@@ -1074,7 +1074,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A solution was stored with the given compute.
 		///
 		/// If the solution is signed, this means that it hasn't yet been processed. If the
@@ -1303,7 +1303,7 @@ impl<T: Config> Pallet<T> {
 	pub fn on_initialize_open_signed() {
 		log!(info, "Starting signed phase round {}.", Self::round());
 		<CurrentPhase<T>>::put(Phase::Signed);
-		Self::deposit_event(PalletEvent::SignedPhaseStarted { round: Self::round() });
+		Self::deposit_event(Event::SignedPhaseStarted { round: Self::round() });
 	}
 
 	/// Logic for `<Pallet as Hooks<T>>::on_initialize` when unsigned phase is being opened.
@@ -1311,7 +1311,7 @@ impl<T: Config> Pallet<T> {
 		let round = Self::round();
 		log!(info, "Starting unsigned phase round {} enabled {}.", round, enabled);
 		<CurrentPhase<T>>::put(Phase::Unsigned((enabled, now)));
-		Self::deposit_event(PalletEvent::UnsignedPhaseStarted { round });
+		Self::deposit_event(Event::UnsignedPhaseStarted { round });
 	}
 
 	/// Parts of [`create_snapshot`] that happen inside of this pallet.
@@ -1540,16 +1540,14 @@ impl<T: Config> Pallet<T> {
 				|ReadySolution { supports, compute, .. }| Ok((supports, compute)),
 			)
 			.map(|(supports, compute)| {
-				Self::deposit_event(PalletEvent::ElectionFinalized {
-					election_compute: Some(compute),
-				});
+				Self::deposit_event(Event::ElectionFinalized { election_compute: Some(compute) });
 				if Self::round() != 1 {
 					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
 				supports
 			})
 			.map_err(|err| {
-				Self::deposit_event(PalletEvent::ElectionFinalized { election_compute: None });
+				Self::deposit_event(Event::ElectionFinalized { election_compute: None });
 				if Self::round() != 1 {
 					log!(warn, "Failed to finalize election round. reason {:?}", err);
 				}
@@ -1830,7 +1828,7 @@ mod tests {
 
 			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
-			assert_eq!(multi_phase_events(), vec![PalletEvent::SignedPhaseStarted { round: 1 }]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -1844,8 +1842,8 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					PalletEvent::SignedPhaseStarted { round: 1 },
-					PalletEvent::UnsignedPhaseStarted { round: 1 }
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 }
 				],
 			);
 			assert!(MultiPhase::snapshot().is_some());
@@ -1957,7 +1955,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(15);
-			assert_eq!(multi_phase_events(), vec![PalletEvent::SignedPhaseStarted { round: 1 }]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -1969,10 +1967,8 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					PalletEvent::SignedPhaseStarted { round: 1 },
-					PalletEvent::ElectionFinalized {
-						election_compute: Some(ElectionCompute::Fallback)
-					}
+					Event::SignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
 				],
 			);
 			// All storage items must be cleared.
@@ -1994,7 +1990,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(15);
-			assert_eq!(multi_phase_events(), vec![PalletEvent::SignedPhaseStarted { round: 1 }]);
+			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
@@ -2083,16 +2079,14 @@ mod tests {
 			assert_eq!(
 				multi_phase_events(),
 				vec![
-					PalletEvent::SignedPhaseStarted { round: 1 },
-					PalletEvent::UnsignedPhaseStarted { round: 1 },
-					PalletEvent::ElectionFinalized { election_compute: None },
-					PalletEvent::SolutionStored {
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized { election_compute: None },
+					Event::SolutionStored {
 						election_compute: ElectionCompute::Fallback,
 						prev_ejected: false
 					},
-					PalletEvent::ElectionFinalized {
-						election_compute: Some(ElectionCompute::Fallback)
-					}
+					Event::ElectionFinalized { election_compute: Some(ElectionCompute::Fallback) }
 				]
 			);
 		})

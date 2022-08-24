@@ -62,7 +62,7 @@ mod module1 {
 	pub struct Origin<T, I: Instance = DefaultInstance>(pub core::marker::PhantomData<(T, I)>);
 
 	frame_support::decl_event! {
-		pub enum PalletEvent<T, I: Instance = DefaultInstance> where
+		pub enum Event<T, I: Instance = DefaultInstance> where
 			<T as system::Config>::AccountId
 		{
 			A(AccountId),
@@ -106,7 +106,7 @@ mod module2 {
 	pub struct Origin;
 
 	frame_support::decl_event! {
-		pub enum PalletEvent {
+		pub enum Event {
 			A,
 		}
 	}
@@ -151,7 +151,7 @@ mod nested {
 		pub struct Origin;
 
 		frame_support::decl_event! {
-			pub enum PalletEvent {
+			pub enum Event {
 				A,
 			}
 		}
@@ -209,7 +209,7 @@ pub mod module3 {
 	pub struct Origin<T>(pub core::marker::PhantomData<T>);
 
 	frame_support::decl_event! {
-		pub enum PalletEvent {
+		pub enum Event {
 			A,
 		}
 	}
@@ -419,37 +419,37 @@ fn origin_codec() {
 fn event_codec() {
 	use codec::Encode;
 
-	let event = system::PalletEvent::<Runtime>::ExtrinsicSuccess;
+	let event = system::Event::<Runtime>::ExtrinsicSuccess;
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 30);
 
-	let event = module1::PalletEvent::<Runtime, module1::Instance1>::A(test_pub());
+	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 31);
 
-	let event = module2::PalletEvent::A;
+	let event = module2::Event::A;
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 32);
 
-	let event = module1::PalletEvent::<Runtime, module1::Instance2>::A(test_pub());
+	let event = module1::Event::<Runtime, module1::Instance2>::A(test_pub());
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 33);
 
-	let event = nested::module3::PalletEvent::A;
+	let event = nested::module3::Event::A;
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 34);
 
-	let event = module3::PalletEvent::A;
+	let event = module3::Event::A;
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 35);
 
-	let event = module1::PalletEvent::<Runtime, module1::Instance5>::A(test_pub());
+	let event = module1::Event::<Runtime, module1::Instance5>::A(test_pub());
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 4);
 
-	let event = module1::PalletEvent::<Runtime, module1::Instance6>::A(test_pub());
+	let event = module1::Event::<Runtime, module1::Instance6>::A(test_pub());
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 1);
 
-	let event = module1::PalletEvent::<Runtime, module1::Instance7>::A(test_pub());
+	let event = module1::Event::<Runtime, module1::Instance7>::A(test_pub());
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 2);
 
-	let event = module1::PalletEvent::<Runtime, module1::Instance8>::A(test_pub());
+	let event = module1::Event::<Runtime, module1::Instance8>::A(test_pub());
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 12);
 
-	let event = module1::PalletEvent::<Runtime, module1::Instance9>::A(test_pub());
+	let event = module1::Event::<Runtime, module1::Instance9>::A(test_pub());
 	assert_eq!(RuntimeEvent::from(event).encode()[0], 13);
 }
 
@@ -585,7 +585,7 @@ fn test_metadata() {
 			name: "System",
 			storage: None,
 			calls: Some(meta_type::<system::Call<Runtime>>().into()),
-			event: Some(meta_type::<system::PalletEvent<Runtime>>().into()),
+			event: Some(meta_type::<system::Event<Runtime>>().into()),
 			constants: vec![],
 			error: None,
 			index: 30,
@@ -594,7 +594,7 @@ fn test_metadata() {
 			name: "Module1_1",
 			storage: Some(PalletStorageMetadata { prefix: "Instance1Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance1>>().into()),
-			event: Some(meta_type::<module1::PalletEvent<Runtime, module1::Instance1>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance1>>().into()),
 			constants: vec![],
 			error: None,
 			index: 31,
@@ -603,7 +603,7 @@ fn test_metadata() {
 			name: "Module2",
 			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
 			calls: Some(meta_type::<module2::Call<Runtime>>().into()),
-			event: Some(meta_type::<module2::PalletEvent>().into()),
+			event: Some(meta_type::<module2::Event>().into()),
 			constants: vec![],
 			error: None,
 			index: 32,
@@ -612,7 +612,7 @@ fn test_metadata() {
 			name: "Module1_2",
 			storage: Some(PalletStorageMetadata { prefix: "Instance2Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance2>>().into()),
-			event: Some(meta_type::<module1::PalletEvent<Runtime, module1::Instance2>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance2>>().into()),
 			constants: vec![],
 			error: None,
 			index: 33,
@@ -621,7 +621,7 @@ fn test_metadata() {
 			name: "NestedModule3",
 			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
 			calls: Some(meta_type::<nested::module3::Call<Runtime>>().into()),
-			event: Some(meta_type::<nested::module3::PalletEvent>().into()),
+			event: Some(meta_type::<nested::module3::Event>().into()),
 			constants: vec![],
 			error: None,
 			index: 34,
@@ -630,7 +630,7 @@ fn test_metadata() {
 			name: "Module3",
 			storage: Some(PalletStorageMetadata { prefix: "Module", entries: vec![] }),
 			calls: Some(meta_type::<module3::Call<Runtime>>().into()),
-			event: Some(meta_type::<module3::PalletEvent>().into()),
+			event: Some(meta_type::<module3::Event>().into()),
 			constants: vec![],
 			error: None,
 			index: 35,
@@ -657,7 +657,7 @@ fn test_metadata() {
 			name: "Module1_5",
 			storage: None,
 			calls: None,
-			event: Some(meta_type::<module1::PalletEvent<Runtime, module1::Instance5>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance5>>().into()),
 			constants: vec![],
 			error: None,
 			index: 4,
@@ -666,7 +666,7 @@ fn test_metadata() {
 			name: "Module1_6",
 			storage: Some(PalletStorageMetadata { prefix: "Instance6Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance6>>().into()),
-			event: Some(meta_type::<module1::PalletEvent<Runtime, module1::Instance6>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance6>>().into()),
 			constants: vec![],
 			error: None,
 			index: 1,
@@ -676,7 +676,7 @@ fn test_metadata() {
 			storage: Some(PalletStorageMetadata { prefix: "Instance7Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance7>>().into()),
 			event: Some(PalletEventMetadata {
-				ty: meta_type::<module1::PalletEvent<Runtime, module1::Instance7>>(),
+				ty: meta_type::<module1::Event<Runtime, module1::Instance7>>(),
 			}),
 			constants: vec![],
 			error: None,
@@ -686,7 +686,7 @@ fn test_metadata() {
 			name: "Module1_8",
 			storage: Some(PalletStorageMetadata { prefix: "Instance8Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance8>>().into()),
-			event: Some(meta_type::<module1::PalletEvent<Runtime, module1::Instance8>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance8>>().into()),
 			constants: vec![],
 			error: None,
 			index: 12,
@@ -695,7 +695,7 @@ fn test_metadata() {
 			name: "Module1_9",
 			storage: Some(PalletStorageMetadata { prefix: "Instance9Module", entries: vec![] }),
 			calls: Some(meta_type::<module1::Call<Runtime, module1::Instance9>>().into()),
-			event: Some(meta_type::<module1::PalletEvent<Runtime, module1::Instance9>>().into()),
+			event: Some(meta_type::<module1::Event<Runtime, module1::Instance9>>().into()),
 			constants: vec![],
 			error: None,
 			index: 13,

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{PalletEvent as CollectiveEvent, *};
+use super::{Event as CollectiveEvent, *};
 use crate as pallet_collective;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
@@ -61,7 +61,7 @@ mod mock_democracy {
 
 		#[pallet::config]
 		pub trait Config: frame_system::Config + Sized {
-			type RuntimeEvent: From<PalletEvent<Self>>
+			type RuntimeEvent: From<Event<Self>>
 				+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 			type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
 		}
@@ -71,14 +71,14 @@ mod mock_democracy {
 			#[pallet::weight(0)]
 			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
 				T::ExternalMajorityOrigin::ensure_origin(origin)?;
-				Self::deposit_event(PalletEvent::<T>::ExternalProposed);
+				Self::deposit_event(Event::<T>::ExternalProposed);
 				Ok(())
 			}
 		}
 
 		#[pallet::event]
 		#[pallet::generate_deposit(pub(super) fn deposit_event)]
-		pub enum PalletEvent<T: Config> {
+		pub enum Event<T: Config> {
 			ExternalProposed,
 		}
 	}
@@ -1014,7 +1014,7 @@ fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 				})),
 				record(RuntimeEvent::Collective(CollectiveEvent::Approved { proposal_hash: hash })),
 				record(RuntimeEvent::Democracy(
-					mock_democracy::pallet::PalletEvent::<Test>::ExternalProposed
+					mock_democracy::pallet::Event::<Test>::ExternalProposed
 				)),
 				record(RuntimeEvent::Collective(CollectiveEvent::Executed {
 					proposal_hash: hash,

@@ -789,7 +789,7 @@ benchmarks! {
 	}: enact_proposal(RawOrigin::Root, proposal_hash, 0)
 	verify {
 		// Fails due to mismatched origin
-		assert_last_event::<T>(PalletEvent::<T>::Executed { ref_index: 0, result: Err(BadOrigin.into()) }.into());
+		assert_last_event::<T>(Event::<T>::Executed { ref_index: 0, result: Err(BadOrigin.into()) }.into());
 	}
 
 	#[extra]

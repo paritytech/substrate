@@ -425,7 +425,7 @@ pub mod pallet {
 	/// Inner events of this pallet.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// Given number of `(top, child)` keys were migrated respectively, with the given
 		/// `compute`.
 		Migrated { top: u32, child: u32, compute: MigrationCompute },
@@ -452,8 +452,7 @@ pub mod pallet {
 		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency provider type.
 		type Currency: Currency<Self::AccountId>;
@@ -620,12 +619,12 @@ pub mod pallet {
 			if real_size_upper < task.dyn_size {
 				// let the imbalance burn.
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
-				Self::deposit_event(PalletEvent::<T>::Slashed { who, amount: deposit });
+				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
 				return Ok(().into())
 			}
 
-			Self::deposit_event(PalletEvent::<T>::Migrated {
+			Self::deposit_event(Event::<T>::Migrated {
 				top: task.dyn_top_items,
 				child: task.dyn_child_items,
 				compute: MigrationCompute::Signed,
@@ -679,11 +678,11 @@ pub mod pallet {
 
 			if dyn_size > witness_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
-				Self::deposit_event(PalletEvent::<T>::Slashed { who, amount: deposit });
+				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				debug_assert!(_remainder.is_zero());
 				Ok(().into())
 			} else {
-				Self::deposit_event(PalletEvent::<T>::Migrated {
+				Self::deposit_event(Event::<T>::Migrated {
 					top: keys.len() as u32,
 					child: 0,
 					compute: MigrationCompute::Signed,
@@ -742,13 +741,13 @@ pub mod pallet {
 			if dyn_size != total_size {
 				let (_imbalance, _remainder) = T::Currency::slash(&who, deposit);
 				debug_assert!(_remainder.is_zero());
-				Self::deposit_event(PalletEvent::<T>::Slashed { who, amount: deposit });
+				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				Ok(PostDispatchInfo {
 					actual_weight: Some(T::WeightInfo::migrate_custom_child_fail()),
 					pays_fee: Pays::Yes,
 				})
 			} else {
-				Self::deposit_event(PalletEvent::<T>::Migrated {
+				Self::deposit_event(Event::<T>::Migrated {
 					top: 0,
 					child: child_keys.len() as u32,
 					compute: MigrationCompute::Signed,
@@ -818,10 +817,10 @@ pub mod pallet {
 				);
 
 				if task.finished() {
-					Self::deposit_event(PalletEvent::<T>::AutoMigrationFinished);
+					Self::deposit_event(Event::<T>::AutoMigrationFinished);
 					AutoLimits::<T>::kill();
 				} else {
-					Self::deposit_event(PalletEvent::<T>::Migrated {
+					Self::deposit_event(Event::<T>::Migrated {
 						top: task.dyn_top_items,
 						child: task.dyn_child_items,
 						compute: MigrationCompute::Auto,
@@ -851,7 +850,7 @@ pub mod pallet {
 		fn halt(error: Error<T>) {
 			log!(error, "migration halted due to: {:?}", error);
 			AutoLimits::<T>::kill();
-			Self::deposit_event(PalletEvent::<T>::Halted { error });
+			Self::deposit_event(Event::<T>::Halted { error });
 		}
 
 		/// Convert a child root key, aka. "Child-bearing top key" into the proper format.
@@ -964,7 +963,7 @@ mod benchmarks {
 			);
 
 			frame_system::Pallet::<T>::assert_last_event(
-				<T as Config>::RuntimeEvent::from(crate::PalletEvent::Slashed {
+				<T as Config>::RuntimeEvent::from(crate::Event::Slashed {
 					who: caller.clone(),
 					amount: T::SignedDepositBase::get()
 						.saturating_add(T::SignedDepositPerItem::get().saturating_mul(1u32.into())),
@@ -1300,7 +1299,7 @@ mod test {
 			),);
 			// The auto migration halted.
 			System::assert_last_event(
-				crate::PalletEvent::Halted { error: Error::<Test>::KeyTooLong }.into(),
+				crate::Event::Halted { error: Error::<Test>::KeyTooLong }.into(),
 			);
 			// Limits are killed.
 			assert!(AutoLimits::<Test>::get().is_none());
@@ -1335,7 +1334,7 @@ mod test {
 			));
 			// The auto migration halted.
 			System::assert_last_event(
-				crate::PalletEvent::Halted { error: Error::<Test>::KeyTooLong }.into(),
+				crate::Event::Halted { error: Error::<Test>::KeyTooLong }.into(),
 			);
 			// Limits are killed.
 			assert!(AutoLimits::<Test>::get().is_none());

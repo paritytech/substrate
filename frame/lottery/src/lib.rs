@@ -146,8 +146,7 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The manager origin.
 		type ManagerOrigin: EnsureOrigin<Self::Origin>;
@@ -175,7 +174,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A lottery has been started!
 		LotteryStarted,
 		/// A new set of calls have been set!
@@ -259,7 +258,7 @@ pub mod pallet {
 						);
 						debug_assert!(res.is_ok());
 
-						Self::deposit_event(PalletEvent::<T>::Winner { winner, lottery_balance });
+						Self::deposit_event(Event::<T>::Winner { winner, lottery_balance });
 
 						TicketsCount::<T>::kill();
 
@@ -325,7 +324,7 @@ pub mod pallet {
 				let indices = Self::calls_to_indices(&calls)?;
 				CallIndices::<T>::put(indices);
 			}
-			Self::deposit_event(PalletEvent::<T>::CallsUpdated);
+			Self::deposit_event(Event::<T>::CallsUpdated);
 			Ok(())
 		}
 
@@ -363,7 +362,7 @@ pub mod pallet {
 			if T::Currency::total_balance(&lottery_account).is_zero() {
 				T::Currency::deposit_creating(&lottery_account, T::Currency::minimum_balance());
 			}
-			Self::deposit_event(PalletEvent::<T>::LotteryStarted);
+			Self::deposit_event(Event::<T>::LotteryStarted);
 			Ok(())
 		}
 
@@ -463,7 +462,7 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
-		Self::deposit_event(PalletEvent::<T>::TicketBought { who: caller.clone(), call_index });
+		Self::deposit_event(Event::<T>::TicketBought { who: caller.clone(), call_index });
 
 		Ok(())
 	}

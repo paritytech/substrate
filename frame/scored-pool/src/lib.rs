@@ -149,7 +149,7 @@ pub mod pallet {
 			+ scale_info::TypeInfo;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		// The deposit which is reserved from candidates if they want to
@@ -184,7 +184,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The given member was removed. See the transaction for who.
 		MemberRemoved,
 		/// An entity has issued a candidacy. See the transaction for who.
@@ -313,7 +313,7 @@ pub mod pallet {
 
 			<CandidateExists<T, I>>::insert(&who, true);
 
-			Self::deposit_event(PalletEvent::<T, I>::CandidateAdded);
+			Self::deposit_event(Event::<T, I>::CandidateAdded);
 			Ok(())
 		}
 
@@ -335,7 +335,7 @@ pub mod pallet {
 			Self::ensure_index(&pool, &who, index)?;
 
 			Self::remove_member(pool, who, index)?;
-			Self::deposit_event(PalletEvent::<T, I>::CandidateWithdrew);
+			Self::deposit_event(Event::<T, I>::CandidateWithdrew);
 			Ok(())
 		}
 
@@ -359,7 +359,7 @@ pub mod pallet {
 			Self::ensure_index(&pool, &who, index)?;
 
 			Self::remove_member(pool, who, index)?;
-			Self::deposit_event(PalletEvent::<T, I>::CandidateKicked);
+			Self::deposit_event(Event::<T, I>::CandidateKicked);
 			Ok(())
 		}
 
@@ -398,7 +398,7 @@ pub mod pallet {
 			pool.insert(location, item);
 
 			<Pool<T, I>>::put(&pool);
-			Self::deposit_event(PalletEvent::<T, I>::CandidateScored);
+			Self::deposit_event(Event::<T, I>::CandidateScored);
 			Ok(())
 		}
 
@@ -473,7 +473,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::Currency::unreserve(&remove, T::CandidateDeposit::get());
 
-		Self::deposit_event(PalletEvent::<T, I>::MemberRemoved);
+		Self::deposit_event(Event::<T, I>::MemberRemoved);
 		Ok(())
 	}
 

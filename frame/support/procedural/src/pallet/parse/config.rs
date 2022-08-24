@@ -29,7 +29,7 @@ mod keyword {
 	syn::custom_keyword!(config);
 	syn::custom_keyword!(IsType);
 	syn::custom_keyword!(RuntimeEvent);
-	syn::custom_keyword!(PalletEvent);
+	syn::custom_keyword!(Event);
 	syn::custom_keyword!(constant);
 	syn::custom_keyword!(frame_system);
 	syn::custom_keyword!(disable_frame_system_supertrait_check);
@@ -43,10 +43,10 @@ pub struct ConfigDef {
 	pub has_instance: bool,
 	/// Const associated type.
 	pub consts_metadata: Vec<ConstMetadataDef>,
-	/// Whether the trait has the associated type `PalletEvent`, note that those bounds are
+	/// Whether the trait has the associated type `Event`, note that those bounds are
 	/// checked:
 	/// * `IsType<Self as frame_system::Config>::RuntimeEvent`
-	/// * `From<PalletEvent>` or `From<PalletEvent<T>>` or `From<PalletEvent<T, I>>`
+	/// * `From<Event>` or `From<Event<T>>` or `From<Event<T, I>>`
 	pub has_event_type: bool,
 	/// The where clause on trait definition but modified so `Self` is `T`.
 	pub where_clause: Option<syn::WhereClause>,
@@ -183,7 +183,7 @@ impl syn::parse::Parse for IsTypeBoundEventParse {
 	}
 }
 
-/// Parse for `From<PalletEvent>` or `From<PalletEvent<Self>>` or `From<PalletEvent<Self, I>>`
+/// Parse for `From<Event>` or `From<Event<Self>>` or `From<Event<Self, I>>`
 pub struct FromEventParse {
 	is_generic: bool,
 	has_instance: bool,
@@ -196,7 +196,7 @@ impl syn::parse::Parse for FromEventParse {
 
 		input.parse::<keyword::From>()?;
 		input.parse::<syn::Token![<]>()?;
-		input.parse::<keyword::PalletEvent>()?;
+		input.parse::<keyword::Event>()?;
 		if input.peek(syn::Token![<]) {
 			is_generic = true;
 			input.parse::<syn::Token![<]>()?;
@@ -214,8 +214,8 @@ impl syn::parse::Parse for FromEventParse {
 	}
 }
 
-/// Check if trait_item is `type PalletEvent`, if so checks its bounds are those expected.
-/// (PalletEvent type is reserved type)
+/// Check if trait_item is `type Event`, if so checks its bounds are those expected.
+/// (Event type is reserved type)
 fn check_event_type(
 	frame_system: &syn::Ident,
 	trait_item: &syn::TraitItem,
@@ -254,14 +254,14 @@ fn check_event_type(
 				b
 			} else {
 				let msg = "Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must \
-					bound: `From<PalletEvent>` or `From<PalletEvent<Self>>` or `From<PalletEvent<Self, I>>`";
+					bound: `From<Event>` or `From<Event<Self>>` or `From<Event<Self, I>>`";
 				return Err(syn::Error::new(type_.span(), msg))
 			};
 
 			if from_event_bound.is_generic && (from_event_bound.has_instance != trait_has_instance)
 			{
-				let msg = "Invalid `type PalletEvent`, associated type `PalletEvent` bounds inconsistent \
-					`From<PalletEvent..>`. Config and generic PalletEvent must be both with instance or \
+				let msg = "Invalid `type Event`, associated type `Event` bounds inconsistent \
+					`From<Event..>`. Config and generic Event must be both with instance or \
 					without instance";
 				return Err(syn::Error::new(type_.span(), msg))
 			}

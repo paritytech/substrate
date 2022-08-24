@@ -278,7 +278,7 @@ pub mod v2 {
 								sum_paid_out = sum_paid_out.saturating_add(last_claim);
 							}
 
-							Pallet::<T>::deposit_event(PalletEvent::<T>::PaidOut {
+							Pallet::<T>::deposit_event(Event::<T>::PaidOut {
 								member: who.clone(),
 								pool_id: id,
 								payout: last_claim,

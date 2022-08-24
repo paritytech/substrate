@@ -129,8 +129,7 @@ pub mod pallet {
 		type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for the unbalanced reduction when slashing a staker.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -610,7 +609,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
 		/// \[era_index, validator_payout, remainder\]
@@ -803,7 +802,7 @@ pub mod pallet {
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
-			Self::deposit_event(PalletEvent::<T>::Bonded(stash.clone(), value));
+			Self::deposit_event(Event::<T>::Bonded(stash.clone(), value));
 			let item = StakingLedger {
 				stash,
 				total: value,
@@ -860,7 +859,7 @@ pub mod pallet {
 					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 				}
 
-				Self::deposit_event(PalletEvent::<T>::Bonded(stash, extra));
+				Self::deposit_event(Event::<T>::Bonded(stash, extra));
 			}
 			Ok(())
 		}
@@ -943,7 +942,7 @@ pub mod pallet {
 						.defensive();
 				}
 
-				Self::deposit_event(PalletEvent::<T>::Unbonded(ledger.stash, value));
+				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
 			}
 			Ok(())
 		}
@@ -999,7 +998,7 @@ pub mod pallet {
 			if ledger.total < old_total {
 				// Already checked that this won't overflow by entry condition.
 				let value = old_total - ledger.total;
-				Self::deposit_event(PalletEvent::<T>::Withdrawn(stash, value));
+				Self::deposit_event(Event::<T>::Withdrawn(stash, value));
 			}
 
 			Ok(post_info_weight.into())
@@ -1037,7 +1036,7 @@ pub mod pallet {
 
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs.clone());
-			Self::deposit_event(PalletEvent::<T>::ValidatorPrefsSet(ledger.stash, prefs));
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
 
 			Ok(())
 		}
@@ -1420,7 +1419,7 @@ pub mod pallet {
 			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
-			Self::deposit_event(PalletEvent::<T>::Bonded(ledger.stash.clone(), rebonded_value));
+			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), rebonded_value));
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
@@ -1537,7 +1536,7 @@ pub mod pallet {
 					if let Some(ref mut nom) = maybe_nom {
 						if let Some(pos) = nom.targets.iter().position(|v| v == stash) {
 							nom.targets.swap_remove(pos);
-							Self::deposit_event(PalletEvent::<T>::Kicked(
+							Self::deposit_event(Event::<T>::Kicked(
 								nom_stash.clone(),
 								stash.clone(),
 							));

@@ -61,8 +61,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
 		type Call: IsType<<Self as frame_system::Config>::Call>
@@ -93,7 +92,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		CallWhitelisted { call_hash: T::Hash },
 		WhitelistedCallRemoved { call_hash: T::Hash },
 		WhitelistedCallDispatched { call_hash: T::Hash, result: DispatchResultWithPostInfo },
@@ -130,7 +129,7 @@ pub mod pallet {
 			WhitelistedCall::<T>::insert(call_hash, ());
 			T::PreimageProvider::request_preimage(&call_hash);
 
-			Self::deposit_event(PalletEvent::<T>::CallWhitelisted { call_hash });
+			Self::deposit_event(Event::<T>::CallWhitelisted { call_hash });
 
 			Ok(())
 		}
@@ -143,7 +142,7 @@ pub mod pallet {
 
 			T::PreimageProvider::unrequest_preimage(&call_hash);
 
-			Self::deposit_event(PalletEvent::<T>::WhitelistedCallRemoved { call_hash });
+			Self::deposit_event(Event::<T>::WhitelistedCallRemoved { call_hash });
 
 			Ok(())
 		}
@@ -229,7 +228,7 @@ impl<T: Config> Pallet<T> {
 			Err(call_err) => call_err.post_info.actual_weight,
 		};
 
-		Self::deposit_event(PalletEvent::<T>::WhitelistedCallDispatched { call_hash, result });
+		Self::deposit_event(Event::<T>::WhitelistedCallDispatched { call_hash, result });
 
 		call_actual_weight
 	}

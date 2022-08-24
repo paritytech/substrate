@@ -114,7 +114,7 @@ fn should_deposit_event() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: RuntimeEvent::Offences(crate::PalletEvent::Offence {
+				event: RuntimeEvent::Offences(crate::Event::Offence {
 					kind: KIND,
 					timeslot: time_slot.encode()
 				}),
@@ -148,7 +148,7 @@ fn doesnt_deposit_event_for_dups() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: RuntimeEvent::Offences(crate::PalletEvent::Offence {
+				event: RuntimeEvent::Offences(crate::Event::Offence {
 					kind: KIND,
 					timeslot: time_slot.encode()
 				}),

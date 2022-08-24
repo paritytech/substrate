@@ -18,7 +18,7 @@
 pub trait Trait: frame_system::Config {
 	type Balance: frame_support::dispatch::Parameter;
 	/// The overarching event type.
-	type RuntimeEvent: From<PalletEvent<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
+	type RuntimeEvent: From<Event<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
 }
 
 frame_support::decl_storage! {
@@ -28,7 +28,7 @@ frame_support::decl_storage! {
 }
 
 frame_support::decl_event!(
-	pub enum PalletEvent<T>
+	pub enum Event<T>
 	where
 		B = <T as Trait>::Balance,
 	{

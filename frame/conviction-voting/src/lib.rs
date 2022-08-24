@@ -98,7 +98,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -161,7 +161,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An account has delegated their vote to another account. \[who, target\]
 		Delegated(T::AccountId, T::AccountId),
 		/// An \[account\] has cancelled a previous delegation operation.
@@ -573,7 +573,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Self::extend_lock(&who, &class, balance);
 				Ok(votes)
 			})?;
-		Self::deposit_event(PalletEvent::<T, I>::Delegated(who, target));
+		Self::deposit_event(Event::<T, I>::Delegated(who, target));
 		Ok(votes)
 	}
 
@@ -612,7 +612,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					Voting::Casting(_) => Err(Error::<T, I>::NotDelegating.into()),
 				}
 			})?;
-		Self::deposit_event(PalletEvent::<T, I>::Undelegated(who));
+		Self::deposit_event(Event::<T, I>::Undelegated(who));
 		Ok(votes)
 	}
 

@@ -43,8 +43,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -71,14 +70,14 @@ pub mod pallet {
 			let extrinsic_index = <frame_system::Pallet<T>>::extrinsic_index()
 				.ok_or_else(|| Error::<T>::BadContext)?;
 			sp_io::transaction_index::index(extrinsic_index, remark.len() as u32, content_hash);
-			Self::deposit_event(PalletEvent::Stored { sender, content_hash: content_hash.into() });
+			Self::deposit_event(Event::Stored { sender, content_hash: content_hash.into() });
 			Ok(().into())
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// Stored data off chain.
 		Stored { sender: T::AccountId, content_hash: sp_core::H256 },
 	}

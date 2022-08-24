@@ -164,10 +164,10 @@ impl Config for Test {
 	type AnnouncementDepositFactor = ConstU64<1>;
 }
 
-use super::{Call as ProxyCall, PalletEvent as ProxyEvent};
+use super::{Call as ProxyCall, Event as ProxyEvent};
 use frame_system::Call as SystemCall;
-use pallet_balances::{Call as BalancesCall, Error as BalancesError, PalletEvent as BalancesEvent};
-use pallet_utility::{Call as UtilityCall, PalletEvent as UtilityEvent};
+use pallet_balances::{Call as BalancesCall, Error as BalancesError, Event as BalancesEvent};
+use pallet_utility::{Call as UtilityCall, Event as UtilityEvent};
 
 type SystemError = frame_system::Error<Test>;
 

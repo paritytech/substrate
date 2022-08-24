@@ -17,7 +17,7 @@
 
 //! Tests for Uniques pallet.
 
-use crate::{mock::*, PalletEvent, *};
+use crate::{mock::*, Event, *};
 use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::Currency};
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
@@ -70,7 +70,7 @@ fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
 	s
 }
 
-fn events() -> Vec<PalletEvent<Test>> {
+fn events() -> Vec<Event<Test>> {
 	let result = System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -663,7 +663,7 @@ fn max_supply_should_work() {
 		));
 		assert_eq!(CollectionMaxSupply::<Test>::get(collection_id).unwrap(), max_supply);
 
-		assert!(events().contains(&PalletEvent::<Test>::CollectionMaxSupplySet {
+		assert!(events().contains(&Event::<Test>::CollectionMaxSupplySet {
 			collection: collection_id,
 			max_supply,
 		}));
@@ -732,7 +732,7 @@ fn set_price_should_work() {
 		assert_eq!(item.0, 2);
 		assert_eq!(item.1, Some(3));
 
-		assert!(events().contains(&PalletEvent::<Test>::ItemPriceSet {
+		assert!(events().contains(&Event::<Test>::ItemPriceSet {
 			collection: collection_id,
 			item: item_1,
 			price: 1,
@@ -741,7 +741,7 @@ fn set_price_should_work() {
 
 		// validate we can unset the price
 		assert_ok!(Uniques::set_price(Origin::signed(user_id), collection_id, item_2, None, None));
-		assert!(events().contains(&PalletEvent::<Test>::ItemPriceRemoved {
+		assert!(events().contains(&Event::<Test>::ItemPriceRemoved {
 			collection: collection_id,
 			item: item_2
 		}));
@@ -819,7 +819,7 @@ fn buy_item_should_work() {
 		// can buy when I'm a whitelisted buyer
 		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2,));
 
-		assert!(events().contains(&PalletEvent::<Test>::ItemBought {
+		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection: collection_id,
 			item: item_2,
 			price: price_2,

@@ -868,7 +868,7 @@ macro_rules! assert_session_era {
 	};
 }
 
-pub(crate) fn staking_events() -> Vec<crate::PalletEvent<Test>> {
+pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -880,7 +880,7 @@ parameter_types! {
 	static StakingEventsIndex: usize = 0;
 }
 
-pub(crate) fn staking_events_since_last_call() -> Vec<crate::PalletEvent<Test>> {
+pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 	let all: Vec<_> = System::events()
 		.into_iter()
 		.filter_map(|r| if let RuntimeEvent::Staking(inner) = r.event { Some(inner) } else { None })

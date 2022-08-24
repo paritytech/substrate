@@ -117,7 +117,7 @@ impl Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-pub type SysEvent = frame_system::PalletEvent<Test>;
+pub type SysEvent = frame_system::Event<Test>;
 
 /// A simple call, which one doesn't matter.
 pub const CALL: &<Test as Config>::Call =

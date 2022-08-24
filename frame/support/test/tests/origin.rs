@@ -53,7 +53,7 @@ mod nested {
 		pub struct Origin;
 
 		frame_support::decl_event! {
-			pub enum PalletEvent {
+			pub enum Event {
 				A,
 			}
 		}
@@ -111,7 +111,7 @@ pub mod module {
 	pub struct Origin<T>(pub core::marker::PhantomData<T>);
 
 	frame_support::decl_event! {
-		pub enum PalletEvent {
+		pub enum Event {
 			A,
 		}
 	}

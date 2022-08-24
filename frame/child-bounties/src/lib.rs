@@ -146,8 +146,7 @@ pub mod pallet {
 		type ChildBountyValueMinimum: Get<BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -165,7 +164,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A child-bounty is added.
 		Added { index: BountyIndex, child_index: BountyIndex },
 		/// A child-bounty is awarded to a beneficiary.
@@ -612,7 +611,7 @@ pub mod pallet {
 			)?;
 
 			// Trigger the event Awarded.
-			Self::deposit_event(PalletEvent::<T>::Awarded {
+			Self::deposit_event(Event::<T>::Awarded {
 				index: parent_bounty_id,
 				child_index: child_bounty_id,
 				beneficiary,
@@ -698,7 +697,7 @@ pub mod pallet {
 						debug_assert!(payout_transfer_result.is_ok());
 
 						// Trigger the Claimed event.
-						Self::deposit_event(PalletEvent::<T>::Claimed {
+						Self::deposit_event(Event::<T>::Claimed {
 							index: parent_bounty_id,
 							child_index: child_bounty_id,
 							payout,
@@ -806,10 +805,7 @@ impl<T: Config> Pallet<T> {
 		};
 		ChildBounties::<T>::insert(parent_bounty_id, child_bounty_id, &child_bounty);
 		ChildBountyDescriptions::<T>::insert(child_bounty_id, description);
-		Self::deposit_event(PalletEvent::Added {
-			index: parent_bounty_id,
-			child_index: child_bounty_id,
-		});
+		Self::deposit_event(Event::Added { index: parent_bounty_id, child_index: child_bounty_id });
 	}
 
 	fn ensure_bounty_active(
@@ -882,7 +878,7 @@ impl<T: Config> Pallet<T> {
 
 				*maybe_child_bounty = None;
 
-				Self::deposit_event(PalletEvent::<T>::Canceled {
+				Self::deposit_event(Event::<T>::Canceled {
 					index: parent_bounty_id,
 					child_index: child_bounty_id,
 				});

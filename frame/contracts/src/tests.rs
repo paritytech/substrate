@@ -516,14 +516,14 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::PalletEvent::NewAccount {
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: min_balance,
 					}),
@@ -531,7 +531,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: min_balance,
@@ -540,7 +540,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: min_balance,
 					}),
@@ -548,7 +548,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: value,
@@ -557,7 +557,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::ContractEmitted {
+					event: RuntimeEvent::Contracts(crate::Event::ContractEmitted {
 						contract: addr.clone(),
 						data: vec![1, 2, 3, 4]
 					}),
@@ -565,7 +565,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::Instantiated {
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone()
 					}),
@@ -810,14 +810,14 @@ fn deploy_and_call_other_contract() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::PalletEvent::NewAccount {
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: callee_addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: callee_addr.clone(),
 						free_balance: min_balance,
 					}),
@@ -825,7 +825,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: callee_addr.clone(),
 						amount: min_balance,
@@ -834,7 +834,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: callee_addr.clone(),
 						amount: min_balance,
 					}),
@@ -842,7 +842,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: caller_addr.clone(),
 						to: callee_addr.clone(),
 						amount: 32768, // hard coded in wasm
@@ -851,7 +851,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::Instantiated {
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: caller_addr.clone(),
 						contract: callee_addr.clone(),
 					}),
@@ -859,7 +859,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: caller_addr.clone(),
 						to: callee_addr.clone(),
 						amount: 32768,
@@ -1059,7 +1059,7 @@ fn cannot_self_destruct_by_refund_after_slash() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Slashed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Slashed {
 						who: addr.clone(),
 						amount: 90,
 					}),
@@ -1067,14 +1067,12 @@ fn cannot_self_destruct_by_refund_after_slash() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(
-						pallet_balances::PalletEvent::ReserveRepatriated {
-							from: addr.clone(),
-							to: ALICE,
-							amount: 10,
-							destination_status: BalanceStatus::Free,
-						}
-					),
+					event: RuntimeEvent::Balances(pallet_balances::Event::ReserveRepatriated {
+						from: addr.clone(),
+						to: ALICE,
+						amount: 10,
+						destination_status: BalanceStatus::Free,
+					}),
 					topics: vec![],
 				},
 			]
@@ -1161,7 +1159,7 @@ fn self_destruct_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: addr.clone(),
 						to: DJANGO,
 						amount: 100_000,
@@ -1170,7 +1168,7 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::Terminated {
+					event: RuntimeEvent::Contracts(crate::Event::Terminated {
 						contract: addr.clone(),
 						beneficiary: DJANGO
 					}),
@@ -1178,21 +1176,19 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::PalletEvent::KilledAccount {
+					event: RuntimeEvent::System(frame_system::Event::KilledAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(
-						pallet_balances::PalletEvent::ReserveRepatriated {
-							from: addr.clone(),
-							to: ALICE,
-							amount: 1_000,
-							destination_status: BalanceStatus::Free,
-						}
-					),
+					event: RuntimeEvent::Balances(pallet_balances::Event::ReserveRepatriated {
+						from: addr.clone(),
+						to: ALICE,
+						amount: 1_000,
+						destination_status: BalanceStatus::Free,
+					}),
 					topics: vec![],
 				},
 			],
@@ -2613,7 +2609,7 @@ fn upload_code_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2621,7 +2617,7 @@ fn upload_code_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::CodeStored { code_hash }),
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![],
 				},
 			]
@@ -2692,7 +2688,7 @@ fn remove_code_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2700,12 +2696,12 @@ fn remove_code_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::CodeStored { code_hash }),
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Unreserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Unreserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2713,7 +2709,7 @@ fn remove_code_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::CodeRemoved { code_hash }),
+					event: RuntimeEvent::Contracts(crate::Event::CodeRemoved { code_hash }),
 					topics: vec![],
 				},
 			]
@@ -2747,7 +2743,7 @@ fn remove_code_wrong_origin() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2755,7 +2751,7 @@ fn remove_code_wrong_origin() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::CodeStored { code_hash }),
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![],
 				},
 			]
@@ -2848,14 +2844,14 @@ fn instantiate_with_zero_balance_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::PalletEvent::NewAccount {
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: min_balance,
 					}),
@@ -2863,7 +2859,7 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: min_balance,
@@ -2872,7 +2868,7 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: min_balance,
 					}),
@@ -2880,7 +2876,7 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2888,12 +2884,12 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::CodeStored { code_hash }),
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::Instantiated {
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
@@ -2941,14 +2937,14 @@ fn instantiate_with_below_existential_deposit_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::PalletEvent::NewAccount {
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: min_balance,
 					}),
@@ -2956,7 +2952,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: min_balance,
@@ -2965,7 +2961,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: min_balance,
 					}),
@@ -2973,7 +2969,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: 50,
@@ -2982,7 +2978,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2990,12 +2986,12 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::CodeStored { code_hash }),
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Contracts(crate::PalletEvent::Instantiated {
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
@@ -3072,7 +3068,7 @@ fn storage_deposit_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: 42,
@@ -3081,7 +3077,7 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: charged0,
@@ -3090,7 +3086,7 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: charged0,
 					}),
@@ -3098,7 +3094,7 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: charged1,
@@ -3107,7 +3103,7 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: charged1,
 					}),
@@ -3115,14 +3111,12 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(
-						pallet_balances::PalletEvent::ReserveRepatriated {
-							from: addr.clone(),
-							to: ALICE,
-							amount: refunded0,
-							destination_status: BalanceStatus::Free,
-						}
-					),
+					event: RuntimeEvent::Balances(pallet_balances::Event::ReserveRepatriated {
+						from: addr.clone(),
+						to: ALICE,
+						amount: refunded0,
+						destination_status: BalanceStatus::Free,
+					}),
 					topics: vec![],
 				},
 			]
@@ -3199,13 +3193,11 @@ fn set_code_extrinsic() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: RuntimeEvent::Contracts(
-					pallet_contracts::PalletEvent::ContractCodeUpdated {
-						contract: addr,
-						new_code_hash,
-						old_code_hash: code_hash,
-					}
-				),
+				event: RuntimeEvent::Contracts(pallet_contracts::Event::ContractCodeUpdated {
+					contract: addr,
+					new_code_hash,
+					old_code_hash: code_hash,
+				}),
 				topics: vec![],
 			},]
 		);
@@ -3280,14 +3272,14 @@ fn call_after_killed_account_needs_funding() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::PalletEvent::KilledAccount {
+					event: RuntimeEvent::System(frame_system::Event::KilledAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Slashed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Slashed {
 						who: addr.clone(),
 						amount: min_balance + 700
 					}),
@@ -3295,14 +3287,14 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::PalletEvent::NewAccount {
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: min_balance
 					}),
@@ -3310,7 +3302,7 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::Balances(pallet_balances::PalletEvent::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: min_balance
@@ -3491,7 +3483,7 @@ fn set_code_hash() {
 			System::events().pop().unwrap(),
 			EventRecord {
 				phase: Phase::Initialization,
-				event: RuntimeEvent::Contracts(crate::PalletEvent::ContractCodeUpdated {
+				event: RuntimeEvent::Contracts(crate::Event::ContractCodeUpdated {
 					contract: contract_addr.clone(),
 					new_code_hash,
 					old_code_hash: code_hash,

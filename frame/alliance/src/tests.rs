@@ -25,7 +25,7 @@ use frame_system::{EventRecord, Phase};
 use super::*;
 use crate::mock::*;
 
-type AllianceMotionEvent = pallet_collective::PalletEvent<Test, pallet_collective::Instance1>;
+type AllianceMotionEvent = pallet_collective::Event<Test, pallet_collective::Instance1>;
 
 #[test]
 fn propose_works() {
@@ -233,7 +233,7 @@ fn set_rule_works() {
 		assert_ok!(Alliance::set_rule(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::rule(), Some(cid.clone()));
 
-		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::PalletEvent::NewRuleSet {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::NewRuleSet {
 			rule: cid,
 		}));
 	});
@@ -246,7 +246,7 @@ fn announce_works() {
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
-		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::PalletEvent::Announced {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::Announced {
 			announcement: cid,
 		}));
 	});
@@ -258,7 +258,7 @@ fn remove_announcement_works() {
 		let cid = test_cid();
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
-		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::PalletEvent::Announced {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::Announced {
 			announcement: cid.clone(),
 		}));
 
@@ -267,7 +267,7 @@ fn remove_announcement_works() {
 		assert_ok!(Alliance::remove_announcement(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![]);
 		System::assert_last_event(mock::RuntimeEvent::Alliance(
-			crate::PalletEvent::AnnouncementRemoved { announcement: cid },
+			crate::Event::AnnouncementRemoved { announcement: cid },
 		));
 	});
 }

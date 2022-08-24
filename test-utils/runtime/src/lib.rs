@@ -503,8 +503,8 @@ impl frame_support::traits::OriginTrait for Origin {
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct RuntimeEvent;
 
-impl From<frame_system::PalletEvent<Runtime>> for RuntimeEvent {
-	fn from(_evt: frame_system::PalletEvent<Runtime>) -> Self {
+impl From<frame_system::Event<Runtime>> for RuntimeEvent {
+	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }

@@ -363,7 +363,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The outer event type.
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The origin required to add or promote a mmember. The success value indicates the
@@ -428,7 +428,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A member `who` has been added.
 		MemberAdded { who: T::AccountId },
 		/// The member `who`'s rank has been changed to the given `rank`.
@@ -511,12 +511,12 @@ pub mod pallet {
 			match maybe_rank {
 				None => {
 					Members::<T, I>::remove(&who);
-					Self::deposit_event(PalletEvent::MemberRemoved { who, rank: 0 });
+					Self::deposit_event(Event::MemberRemoved { who, rank: 0 });
 				},
 				Some(rank) => {
 					record.rank = rank;
 					Members::<T, I>::insert(&who, &record);
-					Self::deposit_event(PalletEvent::RankChanged { who, rank });
+					Self::deposit_event(Event::RankChanged { who, rank });
 				},
 			}
 			Ok(())
@@ -545,7 +545,7 @@ pub mod pallet {
 				Self::remove_from_rank(&who, r)?;
 			}
 			Members::<T, I>::remove(&who);
-			Self::deposit_event(PalletEvent::MemberRemoved { who, rank });
+			Self::deposit_event(Event::MemberRemoved { who, rank });
 			Ok(PostDispatchInfo {
 				actual_weight: Some(T::WeightInfo::remove_member(rank as u32)),
 				pays_fee: Pays::Yes,
@@ -605,7 +605,7 @@ pub mod pallet {
 					}
 				},
 			)?;
-			Self::deposit_event(PalletEvent::Voted { who, poll, vote, tally });
+			Self::deposit_event(Event::Voted { who, poll, vote, tally });
 			Ok(pays.into())
 		}
 
@@ -682,7 +682,7 @@ pub mod pallet {
 			IdToIndex::<T, I>::insert(0, &who, index);
 			IndexToId::<T, I>::insert(0, index, &who);
 			MemberCount::<T, I>::insert(0, count);
-			Self::deposit_event(PalletEvent::MemberAdded { who });
+			Self::deposit_event(Event::MemberAdded { who });
 			Ok(())
 		}
 
@@ -704,7 +704,7 @@ pub mod pallet {
 			IdToIndex::<T, I>::insert(rank, &who, index);
 			IndexToId::<T, I>::insert(rank, index, &who);
 			Members::<T, I>::insert(&who, MemberRecord { rank });
-			Self::deposit_event(PalletEvent::RankChanged { who, rank });
+			Self::deposit_event(Event::RankChanged { who, rank });
 			Ok(())
 		}
 

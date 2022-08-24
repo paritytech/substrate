@@ -155,8 +155,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
 		type Currency: LockableCurrency<Self::AccountId>;
@@ -258,7 +257,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// The amount vested has been updated. This could indicate a change in funds available.
 		/// The balance given is the amount which is left unvested (and thus locked).
 		VestingUpdated { account: T::AccountId, unvested: BalanceOf<T> },
@@ -568,11 +567,11 @@ impl<T: Config> Pallet<T> {
 	fn write_lock(who: &T::AccountId, total_locked_now: BalanceOf<T>) {
 		if total_locked_now.is_zero() {
 			T::Currency::remove_lock(VESTING_ID, who);
-			Self::deposit_event(PalletEvent::<T>::VestingCompleted { account: who.clone() });
+			Self::deposit_event(Event::<T>::VestingCompleted { account: who.clone() });
 		} else {
 			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
 			T::Currency::set_lock(VESTING_ID, who, total_locked_now, reasons);
-			Self::deposit_event(PalletEvent::<T>::VestingUpdated {
+			Self::deposit_event(Event::<T>::VestingUpdated {
 				account: who.clone(),
 				unvested: total_locked_now,
 			});

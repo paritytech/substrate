@@ -324,7 +324,7 @@ parameter_types! {
 }
 
 /// All events of this pallet.
-pub(crate) fn pool_events_since_last_call() -> Vec<super::PalletEvent<Runtime>> {
+pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -336,7 +336,7 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::PalletEvent<Runtime>> 
 }
 
 /// All events of the `Balances` pallet.
-pub(crate) fn balances_events_since_last_call() -> Vec<pallet_balances::PalletEvent<Runtime>> {
+pub(crate) fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Runtime>> {
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)

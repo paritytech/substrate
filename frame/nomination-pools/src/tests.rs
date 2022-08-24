@@ -16,9 +16,9 @@
 // limitations under the License.
 
 use super::*;
-use crate::{mock::*, PalletEvent};
+use crate::{mock::*, Event};
 use frame_support::{assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_btree_map};
-use pallet_balances::PalletEvent as BEvent;
+use pallet_balances::Event as BEvent;
 use sp_runtime::traits::Dispatchable;
 
 macro_rules! unbonding_pools_with_era {
@@ -449,9 +449,9 @@ mod join {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 11, pool_id: 1, bonded: 2, joined: true },
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 11, pool_id: 1, bonded: 2, joined: true },
 				]
 			);
 
@@ -475,7 +475,7 @@ mod join {
 			// Then
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Bonded { member: 12, pool_id: 1, bonded: 12, joined: true }]
+				vec![Event::Bonded { member: 12, pool_id: 1, bonded: 12, joined: true }]
 			);
 
 			assert_eq!(
@@ -599,10 +599,10 @@ mod join {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 101, pool_id: 1, bonded: 100, joined: true },
-					PalletEvent::Bonded { member: 102, pool_id: 1, bonded: 100, joined: true }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 101, pool_id: 1, bonded: 100, joined: true },
+					Event::Bonded { member: 102, pool_id: 1, bonded: 100, joined: true }
 				]
 			);
 
@@ -627,8 +627,8 @@ mod join {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 104, pool_id: 2 },
-					PalletEvent::Bonded { member: 104, pool_id: 2, bonded: 100, joined: true }
+					Event::Created { depositor: 104, pool_id: 2 },
+					Event::Bonded { member: 104, pool_id: 2, bonded: 100, joined: true }
 				]
 			);
 
@@ -696,7 +696,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 },]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10 },]
 				);
 				// last recorded reward counter at the time of this member's payout is 1
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 1));
@@ -712,7 +712,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 40, pool_id: 1, payout: 40 }]
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 40 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del(40, 1));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 50));
@@ -725,7 +725,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 50, pool_id: 1, payout: 50 }]
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del(50, 1));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 100));
@@ -741,7 +741,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 5 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del_float(10, 1.5));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 105));
@@ -754,7 +754,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 40, pool_id: 1, payout: 20 }]
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 20 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del_float(40, 1.5));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 125));
@@ -771,7 +771,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 50, pool_id: 1, payout: 50 }]
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del_float(50, 2.0));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 175));
@@ -784,7 +784,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 5 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del(10, 2));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 180));
@@ -801,7 +801,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 40 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 40 }]
 				);
 
 				// We expect a payout of 40
@@ -820,7 +820,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 2 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 2 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(10).unwrap(), del_float(10, 6.2));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 222));
@@ -833,7 +833,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 40, pool_id: 1, payout: 188 }]
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 188 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(40).unwrap(), del_float(40, 6.2));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 410));
@@ -846,7 +846,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 50, pool_id: 1, payout: 210 }]
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 210 }]
 				);
 				assert_eq!(PoolMembers::<Runtime>::get(50).unwrap(), del_float(50, 6.2));
 				assert_eq!(RewardPools::<Runtime>::get(&1).unwrap(), rew(0, 0, 620));
@@ -866,16 +866,10 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 11, pool_id: 1, bonded: 11, joined: true },
-					PalletEvent::Unbonded {
-						member: 11,
-						pool_id: 1,
-						points: 11,
-						balance: 11,
-						era: 3
-					}
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 11, pool_id: 1, bonded: 11, joined: true },
+					Event::Unbonded { member: 11, pool_id: 1, points: 11, balance: 11, era: 3 }
 				]
 			);
 		});
@@ -911,9 +905,9 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 5 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 5 }
 				]
 			);
 			assert_eq!(payout, 5);
@@ -931,7 +925,7 @@ mod claim_payout {
 			// Then
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 }]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10 }]
 			);
 			assert_eq!(payout, 10);
 			assert_eq!(reward_pool, rew(0, 0, 15));
@@ -968,10 +962,10 @@ mod claim_payout {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						PalletEvent::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
-						PalletEvent::Bonded { member: 50, pool_id: 1, bonded: 50, joined: true }
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
+						Event::Bonded { member: 50, pool_id: 1, bonded: 50, joined: true }
 					]
 				);
 
@@ -990,7 +984,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10 }]
 				);
 				assert_eq!(payout, 10);
 				assert_eq!(del_10, del(10, 1));
@@ -1004,7 +998,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 40, pool_id: 1, payout: 40 }]
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 40 }]
 				);
 				assert_eq!(payout, 40);
 				assert_eq!(del_40, del(40, 1));
@@ -1018,7 +1012,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 50, pool_id: 1, payout: 50 }]
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
 				);
 				assert_eq!(payout, 50);
 				assert_eq!(del_50, del(50, 1));
@@ -1035,7 +1029,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 5 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5 }]
 				);
 				assert_eq!(payout, 5);
 				assert_eq!(del_10, del_float(10, 1.5));
@@ -1049,7 +1043,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 40, pool_id: 1, payout: 20 }]
+					vec![Event::PaidOut { member: 40, pool_id: 1, payout: 20 }]
 				);
 				assert_eq!(payout, 20);
 				assert_eq!(del_40, del_float(40, 1.5));
@@ -1066,7 +1060,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 50, pool_id: 1, payout: 50 }]
+					vec![Event::PaidOut { member: 50, pool_id: 1, payout: 50 }]
 				);
 				assert_eq!(payout, 50);
 				assert_eq!(del_50, del_float(50, 2.0));
@@ -1080,7 +1074,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 5 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 5 }]
 				);
 				assert_eq!(payout, 5);
 				assert_eq!(del_10, del_float(10, 2.0));
@@ -1097,7 +1091,7 @@ mod claim_payout {
 				// Then
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 40 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 40 }]
 				);
 				assert_eq!(payout, 40);
 				assert_eq!(del_10, del_float(10, 6.0));
@@ -1157,11 +1151,11 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 20 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 10 },
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 20 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 10 },
 				]
 			);
 
@@ -1174,8 +1168,8 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 10 },
 				]
 			);
 		});
@@ -1200,11 +1194,11 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 3 + 3 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 3 },
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 3 + 3 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3 },
 				]
 			);
 
@@ -1217,8 +1211,8 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 4 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 4 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 4 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 4 },
 				]
 			);
 
@@ -1231,8 +1225,8 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 3 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 3 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 3 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3 },
 				]
 			);
 		});
@@ -1263,13 +1257,13 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 30 + 100 / 2 + 60 / 3 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 100 / 2 + 60 / 3 },
-					PalletEvent::PaidOut { member: 30, pool_id: 1, payout: 60 / 3 },
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 30 + 100 / 2 + 60 / 3 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 100 / 2 + 60 / 3 },
+					Event::PaidOut { member: 30, pool_id: 1, payout: 60 / 3 },
 				]
 			);
 
@@ -1283,9 +1277,9 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 10 },
-					PalletEvent::PaidOut { member: 30, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 30, pool_id: 1, payout: 10 },
 				]
 			);
 		});
@@ -1311,13 +1305,13 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 20 },
-					PalletEvent::PaidOut { member: 30, pool_id: 1, payout: 10 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 20 },
+					Event::PaidOut { member: 30, pool_id: 1, payout: 10 }
 				]
 			);
 
@@ -1334,10 +1328,10 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Bonded { member: 30, pool_id: 1, bonded: 10, joined: false },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 20 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 40 },
-					PalletEvent::PaidOut { member: 30, pool_id: 1, payout: 40 }
+					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: false },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 20 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 40 },
+					Event::PaidOut { member: 30, pool_id: 1, payout: 40 }
 				]
 			);
 		});
@@ -1360,11 +1354,11 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 20 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 20 }
 				]
 			);
 
@@ -1380,15 +1374,9 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Unbonded {
-						member: 20,
-						pool_id: 1,
-						balance: 10,
-						points: 10,
-						era: 3
-					},
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 50 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 50 },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10, era: 3 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 50 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 50 },
 				]
 			);
 		});
@@ -1414,12 +1402,12 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 20 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 20 }
 				]
 			);
 
@@ -1433,8 +1421,8 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 20 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 40 }
+					Event::PaidOut { member: 10, pool_id: 1, payout: 20 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 40 }
 				]
 			);
 
@@ -1448,8 +1436,8 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 20 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 40 }
+					Event::PaidOut { member: 10, pool_id: 1, payout: 20 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 40 }
 				]
 			);
 
@@ -1458,7 +1446,7 @@ mod claim_payout {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::PaidOut { member: 30, pool_id: 1, payout: 10 + 20 + 20 }]
+				vec![Event::PaidOut { member: 30, pool_id: 1, payout: 10 + 20 + 20 }]
 			);
 		});
 	}
@@ -1480,10 +1468,10 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 10 }
 				]
 			);
 
@@ -1501,9 +1489,9 @@ mod claim_payout {
 				pool_events_since_last_call(),
 				vec![
 					// 20 + 40, which means the extra amount they bonded did not impact us.
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 60 },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 10, joined: false },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 20 }
+					Event::PaidOut { member: 20, pool_id: 1, payout: 60 },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: false },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 20 }
 				]
 			);
 
@@ -1517,8 +1505,8 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 15 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 45 }
+					Event::PaidOut { member: 10, pool_id: 1, payout: 15 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 45 }
 				]
 			);
 		});
@@ -1579,13 +1567,13 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Created { depositor: 20, pool_id: 2 },
-					PalletEvent::Bonded { member: 20, pool_id: 2, bonded: 10, joined: true },
-					PalletEvent::Created { depositor: 30, pool_id: 3 },
-					PalletEvent::Bonded { member: 30, pool_id: 3, bonded: 10, joined: true },
-					PalletEvent::PaidOut { member: 30, pool_id: 3, payout: 10 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Created { depositor: 20, pool_id: 2 },
+					Event::Bonded { member: 20, pool_id: 2, bonded: 10, joined: true },
+					Event::Created { depositor: 30, pool_id: 3 },
+					Event::Bonded { member: 30, pool_id: 3, bonded: 10, joined: true },
+					Event::PaidOut { member: 30, pool_id: 3, payout: 10 }
 				]
 			);
 		})
@@ -1648,11 +1636,11 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 40, pool_id: 1, bonded: 10, joined: true }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 40, pool_id: 1, bonded: 10, joined: true }
 				]
 			);
 		})
@@ -1719,14 +1707,14 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 15 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 15 },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 10, joined: false }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 15 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 15 },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: false }
 				]
 			);
 		})
@@ -1816,41 +1804,17 @@ mod claim_payout {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-						PalletEvent::Bonded { member: 30, pool_id: 1, bonded: 20, joined: true },
-						PalletEvent::Unbonded {
-							member: 20,
-							pool_id: 1,
-							balance: 10,
-							points: 10,
-							era: 3
-						},
-						PalletEvent::PaidOut { member: 30, pool_id: 1, payout: 15 },
-						PalletEvent::Unbonded {
-							member: 30,
-							pool_id: 1,
-							balance: 10,
-							points: 10,
-							era: 3
-						},
-						PalletEvent::Unbonded {
-							member: 30,
-							pool_id: 1,
-							balance: 5,
-							points: 5,
-							era: 3
-						},
-						PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 7 },
-						PalletEvent::Unbonded {
-							member: 20,
-							pool_id: 1,
-							balance: 5,
-							points: 5,
-							era: 3
-						},
-						PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 7 }
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+						Event::Bonded { member: 30, pool_id: 1, bonded: 20, joined: true },
+						Event::Unbonded { member: 20, pool_id: 1, balance: 10, points: 10, era: 3 },
+						Event::PaidOut { member: 30, pool_id: 1, payout: 15 },
+						Event::Unbonded { member: 30, pool_id: 1, balance: 10, points: 10, era: 3 },
+						Event::Unbonded { member: 30, pool_id: 1, balance: 5, points: 5, era: 3 },
+						Event::PaidOut { member: 20, pool_id: 1, payout: 7 },
+						Event::Unbonded { member: 20, pool_id: 1, balance: 5, points: 5, era: 3 },
+						Event::PaidOut { member: 10, pool_id: 1, payout: 7 }
 					]
 				);
 			})
@@ -1878,11 +1842,11 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 13 },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 26 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 13 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 26 }
 				]
 			);
 
@@ -1900,26 +1864,14 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-					PalletEvent::Unbonded {
-						member: 20,
-						pool_id: 1,
-						balance: 20,
-						points: 20,
-						era: 3
-					},
-					PalletEvent::Withdrawn { member: 20, pool_id: 1, balance: 20, points: 20 },
-					PalletEvent::MemberRemoved { pool_id: 1, member: 20 },
-					PalletEvent::Unbonded {
-						member: 10,
-						pool_id: 1,
-						balance: 10,
-						points: 10,
-						era: 6
-					},
-					PalletEvent::Withdrawn { member: 10, pool_id: 1, balance: 10, points: 10 },
-					PalletEvent::MemberRemoved { pool_id: 1, member: 10 },
-					PalletEvent::Destroyed { pool_id: 1 }
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 20, points: 20, era: 3 },
+					Event::Withdrawn { member: 20, pool_id: 1, balance: 20, points: 20 },
+					Event::MemberRemoved { pool_id: 1, member: 20 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10, era: 6 },
+					Event::Withdrawn { member: 10, pool_id: 1, balance: 10, points: 10 },
+					Event::MemberRemoved { pool_id: 1, member: 10 },
+					Event::Destroyed { pool_id: 1 }
 				]
 			);
 
@@ -1953,35 +1905,35 @@ mod claim_payout {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded {
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded {
 							member: 10,
 							pool_id: 1,
 							bonded: 1000000000000000,
 							joined: true
 						},
-						PalletEvent::Bonded {
+						Event::Bonded {
 							member: 20,
 							pool_id: 1,
 							bonded: 1500000000000000,
 							joined: true
 						},
-						PalletEvent::Bonded {
+						Event::Bonded {
 							member: 21,
 							pool_id: 1,
 							bonded: 2500000000000000,
 							joined: true
 						},
-						PalletEvent::Bonded {
+						Event::Bonded {
 							member: 22,
 							pool_id: 1,
 							bonded: 5000000000000000,
 							joined: true
 						},
-						PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 100000000 },
-						PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 150000000 },
-						PalletEvent::PaidOut { member: 21, pool_id: 1, payout: 250000000 },
-						PalletEvent::PaidOut { member: 22, pool_id: 1, payout: 500000000 }
+						Event::PaidOut { member: 10, pool_id: 1, payout: 100000000 },
+						Event::PaidOut { member: 20, pool_id: 1, payout: 150000000 },
+						Event::PaidOut { member: 21, pool_id: 1, payout: 250000000 },
+						Event::PaidOut { member: 22, pool_id: 1, payout: 500000000 }
 					]
 				);
 			})
@@ -2312,18 +2264,12 @@ mod unbond {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						PalletEvent::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
-						PalletEvent::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						PalletEvent::PaidOut { member: 40, pool_id: 1, payout: 40 },
-						PalletEvent::Unbonded {
-							member: 40,
-							pool_id: 1,
-							points: 6,
-							balance: 6,
-							era: 3
-						}
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
+						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
+						Event::PaidOut { member: 40, pool_id: 1, payout: 40 },
+						Event::Unbonded { member: 40, pool_id: 1, points: 6, balance: 6, era: 3 }
 					]
 				);
 
@@ -2364,8 +2310,8 @@ mod unbond {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::PaidOut { member: 550, pool_id: 1, payout: 550 },
-						PalletEvent::Unbonded {
+						Event::PaidOut { member: 550, pool_id: 1, payout: 550 },
+						Event::Unbonded {
 							member: 550,
 							pool_id: 1,
 							points: 92,
@@ -2404,18 +2350,12 @@ mod unbond {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Withdrawn { member: 40, pool_id: 1, points: 6, balance: 6 },
-						PalletEvent::MemberRemoved { pool_id: 1, member: 40 },
-						PalletEvent::Withdrawn { member: 550, pool_id: 1, points: 92, balance: 92 },
-						PalletEvent::MemberRemoved { pool_id: 1, member: 550 },
-						PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10 },
-						PalletEvent::Unbonded {
-							member: 10,
-							pool_id: 1,
-							points: 2,
-							balance: 2,
-							era: 6
-						}
+						Event::Withdrawn { member: 40, pool_id: 1, points: 6, balance: 6 },
+						Event::MemberRemoved { pool_id: 1, member: 40 },
+						Event::Withdrawn { member: 550, pool_id: 1, points: 92, balance: 92 },
+						Event::MemberRemoved { pool_id: 1, member: 550 },
+						Event::PaidOut { member: 10, pool_id: 1, payout: 10 },
+						Event::Unbonded { member: 10, pool_id: 1, points: 2, balance: 2, era: 6 }
 					]
 				);
 			});
@@ -2459,15 +2399,9 @@ mod unbond {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Unbonded {
-						member: 10,
-						pool_id: 1,
-						points: 10,
-						balance: 10,
-						era: 9
-					}
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Unbonded { member: 10, pool_id: 1, points: 10, balance: 10, era: 9 }
 				]
 			);
 		});
@@ -2498,11 +2432,11 @@ mod unbond {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						PalletEvent::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-						PalletEvent::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						PalletEvent::Unbonded {
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
+						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
+						Event::Unbonded {
 							member: 100,
 							pool_id: 1,
 							points: 100,
@@ -2517,7 +2451,7 @@ mod unbond {
 
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::Unbonded {
+					vec![Event::Unbonded {
 						member: 200,
 						pool_id: 1,
 						points: 200,
@@ -2589,16 +2523,10 @@ mod unbond {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					PalletEvent::Unbonded {
-						member: 100,
-						pool_id: 1,
-						points: 100,
-						balance: 100,
-						era: 3
-					}
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
+					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100, era: 3 }
 				]
 			);
 
@@ -2747,9 +2675,9 @@ mod unbond {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 3 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 3 }
 				]
 			);
 
@@ -2775,13 +2703,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Unbonded {
-					member: 10,
-					pool_id: 1,
-					points: 5,
-					balance: 5,
-					era: 3
-				}]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5, era: 3 }]
 			);
 
 			// when: casual further unbond, next era.
@@ -2808,13 +2730,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Unbonded {
-					member: 10,
-					pool_id: 1,
-					points: 1,
-					balance: 1,
-					era: 4
-				}]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 4 }]
 			);
 
 			// when: unbonding more than our active: error
@@ -2849,13 +2765,7 @@ mod unbond {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Unbonded {
-					member: 10,
-					pool_id: 1,
-					points: 3,
-					balance: 3,
-					era: 4
-				}]
+				vec![Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 4 }]
 			);
 		});
 	}
@@ -2897,12 +2807,12 @@ mod unbond {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::Unbonded { member: 20, pool_id: 1, points: 2, balance: 2, era: 3 },
-					PalletEvent::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3, era: 4 },
-					PalletEvent::Unbonded { member: 20, pool_id: 1, points: 1, balance: 1, era: 5 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::Unbonded { member: 20, pool_id: 1, points: 2, balance: 2, era: 3 },
+					Event::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3, era: 4 },
+					Event::Unbonded { member: 20, pool_id: 1, points: 1, balance: 1, era: 5 }
 				]
 			);
 		})
@@ -2933,9 +2843,9 @@ mod unbond {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 3 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Unbonded { member: 10, pool_id: 1, points: 3, balance: 3, era: 3 }
 				]
 			);
 		});
@@ -2977,11 +2887,11 @@ mod unbond {
 				pool_events_since_last_call(),
 				vec![
 					// 2/3 of ed, which is 20's share.
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 10 },
-					PalletEvent::Unbonded { member: 20, pool_id: 1, balance: 2, points: 2, era: 3 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 10 },
+					Event::Unbonded { member: 20, pool_id: 1, balance: 2, points: 2, era: 3 }
 				]
 			);
 
@@ -2996,8 +2906,8 @@ mod unbond {
 				pool_events_since_last_call(),
 				vec![
 					// 2/3 of ed, which is 20's share.
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 6 },
-					PalletEvent::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3, era: 4 }
+					Event::PaidOut { member: 20, pool_id: 1, payout: 6 },
+					Event::Unbonded { member: 20, pool_id: 1, points: 3, balance: 3, era: 4 }
 				]
 			);
 
@@ -3011,8 +2921,8 @@ mod unbond {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 3 },
-					PalletEvent::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5, era: 5 }
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3 },
+					Event::Unbonded { member: 20, pool_id: 1, points: 5, balance: 5, era: 5 }
 				]
 			);
 
@@ -3114,24 +3024,18 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						PalletEvent::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
-						PalletEvent::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						PalletEvent::Unbonded {
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
+						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
+						Event::Unbonded {
 							member: 550,
 							pool_id: 1,
 							points: 550,
 							balance: 550,
 							era: 3
 						},
-						PalletEvent::Unbonded {
-							member: 40,
-							pool_id: 1,
-							points: 40,
-							balance: 40,
-							era: 3
-						},
+						Event::Unbonded { member: 40, pool_id: 1, points: 40, balance: 40, era: 3 },
 					]
 				);
 				assert_eq!(
@@ -3154,13 +3058,8 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Withdrawn {
-							member: 550,
-							pool_id: 1,
-							balance: 275,
-							points: 550
-						},
-						PalletEvent::MemberRemoved { pool_id: 1, member: 550 }
+						Event::Withdrawn { member: 550, pool_id: 1, balance: 275, points: 550 },
+						Event::MemberRemoved { pool_id: 1, member: 550 }
 					]
 				);
 				assert_eq!(
@@ -3180,8 +3079,8 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Withdrawn { member: 40, pool_id: 1, balance: 20, points: 40 },
-						PalletEvent::MemberRemoved { pool_id: 1, member: 40 }
+						Event::Withdrawn { member: 40, pool_id: 1, balance: 20, points: 40 },
+						Event::MemberRemoved { pool_id: 1, member: 40 }
 					]
 				);
 				assert_eq!(
@@ -3201,16 +3100,10 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Unbonded {
-							member: 10,
-							pool_id: 1,
-							balance: 5,
-							points: 5,
-							era: 9
-						},
-						PalletEvent::Withdrawn { member: 10, pool_id: 1, balance: 5, points: 5 },
-						PalletEvent::MemberRemoved { pool_id: 1, member: 10 },
-						PalletEvent::Destroyed { pool_id: 1 }
+						Event::Unbonded { member: 10, pool_id: 1, balance: 5, points: 5, era: 9 },
+						Event::Withdrawn { member: 10, pool_id: 1, balance: 5, points: 5 },
+						Event::MemberRemoved { pool_id: 1, member: 10 },
+						Event::Destroyed { pool_id: 1 }
 					]
 				);
 				assert_eq!(
@@ -3248,18 +3141,12 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						PalletEvent::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
-						PalletEvent::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
-						PalletEvent::Unbonded {
-							member: 40,
-							pool_id: 1,
-							balance: 20,
-							points: 20,
-							era: 3
-						},
-						PalletEvent::Unbonded {
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 40, pool_id: 1, bonded: 40, joined: true },
+						Event::Bonded { member: 550, pool_id: 1, bonded: 550, joined: true },
+						Event::Unbonded { member: 40, pool_id: 1, balance: 20, points: 20, era: 3 },
+						Event::Unbonded {
 							member: 550,
 							pool_id: 1,
 							balance: 275,
@@ -3290,8 +3177,8 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Withdrawn { member: 40, pool_id: 1, balance: 20, points: 20 },
-						PalletEvent::MemberRemoved { pool_id: 1, member: 40 }
+						Event::Withdrawn { member: 40, pool_id: 1, balance: 20, points: 20 },
+						Event::MemberRemoved { pool_id: 1, member: 40 }
 					]
 				);
 
@@ -3311,13 +3198,8 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Withdrawn {
-							member: 550,
-							pool_id: 1,
-							balance: 275,
-							points: 275
-						},
-						PalletEvent::MemberRemoved { pool_id: 1, member: 550 }
+						Event::Withdrawn { member: 550, pool_id: 1, balance: 275, points: 275 },
+						Event::MemberRemoved { pool_id: 1, member: 550 }
 					]
 				);
 				assert!(SubPoolsStorage::<Runtime>::get(&1).unwrap().with_era.is_empty());
@@ -3346,16 +3228,10 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Unbonded {
-							member: 10,
-							pool_id: 1,
-							points: 5,
-							balance: 5,
-							era: 6
-						},
-						PalletEvent::Withdrawn { member: 10, pool_id: 1, points: 5, balance: 5 },
-						PalletEvent::MemberRemoved { pool_id: 1, member: 10 },
-						PalletEvent::Destroyed { pool_id: 1 }
+						Event::Unbonded { member: 10, pool_id: 1, points: 5, balance: 5, era: 6 },
+						Event::Withdrawn { member: 10, pool_id: 1, points: 5, balance: 5 },
+						Event::MemberRemoved { pool_id: 1, member: 10 },
+						Event::Destroyed { pool_id: 1 }
 					]
 				);
 				assert_eq!(
@@ -3462,18 +3338,18 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-						PalletEvent::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-						PalletEvent::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
-						PalletEvent::Unbonded {
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+						Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
+						Event::Bonded { member: 200, pool_id: 1, bonded: 200, joined: true },
+						Event::Unbonded {
 							member: 100,
 							pool_id: 1,
 							points: 100,
 							balance: 100,
 							era: 3
 						},
-						PalletEvent::Unbonded {
+						Event::Unbonded {
 							member: 200,
 							pool_id: 1,
 							points: 200,
@@ -3506,20 +3382,10 @@ mod withdraw_unbonded {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Withdrawn {
-							member: 100,
-							pool_id: 1,
-							points: 100,
-							balance: 100
-						},
-						PalletEvent::MemberRemoved { pool_id: 1, member: 100 },
-						PalletEvent::Withdrawn {
-							member: 200,
-							pool_id: 1,
-							points: 200,
-							balance: 200
-						},
-						PalletEvent::MemberRemoved { pool_id: 1, member: 200 }
+						Event::Withdrawn { member: 100, pool_id: 1, points: 100, balance: 100 },
+						Event::MemberRemoved { pool_id: 1, member: 100 },
+						Event::Withdrawn { member: 200, pool_id: 1, points: 200, balance: 200 },
+						Event::MemberRemoved { pool_id: 1, member: 200 }
 					]
 				);
 			});
@@ -3563,18 +3429,12 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					PalletEvent::Unbonded {
-						member: 100,
-						pool_id: 1,
-						points: 100,
-						balance: 100,
-						era: 3
-					},
-					PalletEvent::Withdrawn { member: 100, pool_id: 1, points: 100, balance: 100 },
-					PalletEvent::MemberRemoved { pool_id: 1, member: 100 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
+					Event::Unbonded { member: 100, pool_id: 1, points: 100, balance: 100, era: 3 },
+					Event::Withdrawn { member: 100, pool_id: 1, points: 100, balance: 100 },
+					Event::MemberRemoved { pool_id: 1, member: 100 }
 				]
 			);
 		});
@@ -3609,11 +3469,11 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
-					PalletEvent::Unbonded { member: 10, pool_id: 1, points: 6, balance: 6, era: 3 },
-					PalletEvent::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 4 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
+					Event::Unbonded { member: 10, pool_id: 1, points: 6, balance: 6, era: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, points: 1, balance: 1, era: 4 }
 				]
 			);
 
@@ -3644,7 +3504,7 @@ mod withdraw_unbonded {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Withdrawn { member: 10, pool_id: 1, points: 6, balance: 6 }]
+				vec![Event::Withdrawn { member: 10, pool_id: 1, points: 6, balance: 6 }]
 			);
 
 			// when
@@ -3659,7 +3519,7 @@ mod withdraw_unbonded {
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Withdrawn { member: 10, pool_id: 1, points: 1, balance: 1 },]
+				vec![Event::Withdrawn { member: 10, pool_id: 1, points: 1, balance: 1 },]
 			);
 
 			// when repeating:
@@ -3696,11 +3556,11 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 11, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Unbonded { member: 11, pool_id: 1, points: 6, balance: 6, era: 3 },
-					PalletEvent::Unbonded { member: 11, pool_id: 1, points: 1, balance: 1, era: 4 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 11, pool_id: 1, bonded: 10, joined: true },
+					Event::Unbonded { member: 11, pool_id: 1, points: 6, balance: 6, era: 3 },
+					Event::Unbonded { member: 11, pool_id: 1, points: 1, balance: 1, era: 4 }
 				]
 			);
 
@@ -3731,7 +3591,7 @@ mod withdraw_unbonded {
 			);
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Withdrawn { member: 11, pool_id: 1, points: 6, balance: 6 }]
+				vec![Event::Withdrawn { member: 11, pool_id: 1, points: 6, balance: 6 }]
 			);
 
 			// when
@@ -3746,7 +3606,7 @@ mod withdraw_unbonded {
 			assert_eq!(SubPoolsStorage::<Runtime>::get(1).unwrap(), Default::default());
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Withdrawn { member: 11, pool_id: 1, points: 1, balance: 1 }]
+				vec![Event::Withdrawn { member: 11, pool_id: 1, points: 1, balance: 1 }]
 			);
 
 			// when repeating:
@@ -3786,24 +3646,12 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
-					PalletEvent::Unbonded {
-						member: 100,
-						pool_id: 1,
-						points: 75,
-						balance: 75,
-						era: 3
-					},
-					PalletEvent::Unbonded {
-						member: 100,
-						pool_id: 1,
-						points: 25,
-						balance: 25,
-						era: 4
-					},
-					PalletEvent::Withdrawn { member: 100, pool_id: 1, points: 75, balance: 75 },
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 100, pool_id: 1, bonded: 100, joined: true },
+					Event::Unbonded { member: 100, pool_id: 1, points: 75, balance: 75, era: 3 },
+					Event::Unbonded { member: 100, pool_id: 1, points: 25, balance: 25, era: 4 },
+					Event::Withdrawn { member: 100, pool_id: 1, points: 75, balance: 75 },
 				]
 			);
 			assert_eq!(
@@ -3817,8 +3665,8 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Withdrawn { member: 100, pool_id: 1, points: 25, balance: 25 },
-					PalletEvent::MemberRemoved { pool_id: 1, member: 100 }
+					Event::Withdrawn { member: 100, pool_id: 1, points: 25, balance: 25 },
+					Event::MemberRemoved { pool_id: 1, member: 100 }
 				]
 			);
 		})
@@ -3870,19 +3718,13 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
-					PalletEvent::Unbonded { member: 10, pool_id: 1, balance: 7, points: 7, era: 3 },
-					PalletEvent::Unbonded { member: 10, pool_id: 1, balance: 3, points: 3, era: 4 },
-					PalletEvent::Unbonded {
-						member: 10,
-						pool_id: 1,
-						balance: 10,
-						points: 10,
-						era: 4
-					},
-					PalletEvent::Withdrawn { member: 10, pool_id: 1, balance: 7, points: 7 }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 7, points: 7, era: 3 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 3, points: 3, era: 4 },
+					Event::Unbonded { member: 10, pool_id: 1, balance: 10, points: 10, era: 4 },
+					Event::Withdrawn { member: 10, pool_id: 1, balance: 7, points: 7 }
 				]
 			);
 			assert_eq!(
@@ -3897,9 +3739,9 @@ mod withdraw_unbonded {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Withdrawn { member: 10, pool_id: 1, points: 13, balance: 13 },
-					PalletEvent::MemberRemoved { pool_id: 1, member: 10 },
-					PalletEvent::Destroyed { pool_id: 1 },
+					Event::Withdrawn { member: 10, pool_id: 1, points: 13, balance: 13 },
+					Event::MemberRemoved { pool_id: 1, member: 10 },
+					Event::Destroyed { pool_id: 1 },
 				]
 			);
 		})
@@ -3968,10 +3810,10 @@ mod create {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Created { depositor: 11, pool_id: 2 },
-					PalletEvent::Bonded { member: 11, pool_id: 2, bonded: 10, joined: true }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Created { depositor: 11, pool_id: 2 },
+					Event::Bonded { member: 11, pool_id: 2, bonded: 10, joined: true }
 				]
 			);
 		});
@@ -4102,9 +3944,9 @@ mod set_state {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::StateChanged { pool_id: 1, new_state: PoolState::Blocked }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Blocked }
 				]
 			);
 
@@ -4155,9 +3997,9 @@ mod set_state {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-					PalletEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
-					PalletEvent::StateChanged { pool_id: 1, new_state: PoolState::Destroying }
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying },
+					Event::StateChanged { pool_id: 1, new_state: PoolState::Destroying }
 				]
 			);
 		});
@@ -4250,7 +4092,7 @@ mod set_configs {
 
 mod bond_extra {
 	use super::*;
-	use crate::PalletEvent;
+	use crate::Event;
 
 	#[test]
 	fn bond_extra_from_free_balance_creator() {
@@ -4274,9 +4116,9 @@ mod bond_extra {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: false }
 				]
 			);
 
@@ -4290,7 +4132,7 @@ mod bond_extra {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 20, joined: false }]
+				vec![Event::Bonded { member: 10, pool_id: 1, bonded: 20, joined: false }]
 			);
 		})
 	}
@@ -4320,10 +4162,10 @@ mod bond_extra {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: claimable_reward },
-					PalletEvent::Bonded {
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: claimable_reward },
+					Event::Bonded {
 						member: 10,
 						pool_id: 1,
 						bonded: claimable_reward,
@@ -4374,13 +4216,13 @@ mod bond_extra {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
-					PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 1, joined: false },
-					PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 2 },
-					PalletEvent::Bonded { member: 20, pool_id: 1, bonded: 2, joined: false }
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 20, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 1, joined: false },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 2 },
+					Event::Bonded { member: 20, pool_id: 1, bonded: 2, joined: false }
 				]
 			);
 		})
@@ -4462,9 +4304,9 @@ mod update_roles {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					PalletEvent::RolesUpdated {
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::RolesUpdated {
 						root: Some(5),
 						state_toggler: Some(7),
 						nominator: Some(6)
@@ -4492,7 +4334,7 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::RolesUpdated {
+				vec![Event::RolesUpdated {
 					root: Some(1),
 					state_toggler: Some(3),
 					nominator: Some(2)
@@ -4519,7 +4361,7 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::RolesUpdated {
+				vec![Event::RolesUpdated {
 					root: Some(11),
 					state_toggler: Some(3),
 					nominator: Some(2)
@@ -4547,11 +4389,7 @@ mod update_roles {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::RolesUpdated {
-					root: Some(69),
-					state_toggler: None,
-					nominator: None
-				}]
+				vec![Event::RolesUpdated { root: Some(69), state_toggler: None, nominator: None }]
 			);
 
 			assert_eq!(
@@ -4602,8 +4440,8 @@ mod reward_counter_precision {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded {
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded {
 						member: 10,
 						pool_id: 1,
 						bonded: 1173908528796953165005,
@@ -4631,7 +4469,7 @@ mod reward_counter_precision {
 			assert_ok!(Pools::claim_payout(Origin::signed(10)));
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 1173 }]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1173 }]
 			);
 		})
 	}
@@ -4644,8 +4482,8 @@ mod reward_counter_precision {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded {
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded {
 						member: 10,
 						pool_id: 1,
 						bonded: 12_968_712_300_500_000_000,
@@ -4668,7 +4506,7 @@ mod reward_counter_precision {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::Bonded {
+				vec![Event::Bonded {
 					member: 20,
 					pool_id: 1,
 					bonded: 12_968_712_300_500_000_000,
@@ -4681,7 +4519,7 @@ mod reward_counter_precision {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 15937424600999999996 }]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 15937424600999999996 }]
 			);
 
 			// now let a small member join with 10 DOTs.
@@ -4695,14 +4533,9 @@ mod reward_counter_precision {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Bonded {
-						member: 30,
-						pool_id: 1,
-						bonded: 100000000000,
-						joined: true
-					},
+					Event::Bonded { member: 30, pool_id: 1, bonded: 100000000000, joined: true },
 					// quite small, but working fine.
-					PalletEvent::PaidOut { member: 30, pool_id: 1, payout: 38 }
+					Event::PaidOut { member: 30, pool_id: 1, payout: 38 }
 				]
 			);
 		})
@@ -4716,8 +4549,8 @@ mod reward_counter_precision {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![
-					PalletEvent::Created { depositor: 10, pool_id: 1 },
-					PalletEvent::Bonded {
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded {
 						member: 10,
 						pool_id: 1,
 						bonded: 12_968_712_300_500_000_000,
@@ -4748,8 +4581,8 @@ mod reward_counter_precision {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded {
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded {
 							member: 10,
 							pool_id: 1,
 							bonded: 2500000000000000000,
@@ -4773,13 +4606,13 @@ mod reward_counter_precision {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Bonded {
+						Event::Bonded {
 							member: 20,
 							pool_id: 1,
 							bonded: 100000000000,
 							joined: true
 						},
-						PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 9999997 }
+						Event::PaidOut { member: 10, pool_id: 1, payout: 9999997 }
 					]
 				);
 
@@ -4792,7 +4625,7 @@ mod reward_counter_precision {
 				assert_ok!(Pools::claim_payout(Origin::signed(10)));
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10000000 }]
+					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10000000 }]
 				);
 
 				// earn some more rewards, this time 20 can also claim.
@@ -4805,8 +4638,8 @@ mod reward_counter_precision {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 10000000 },
-						PalletEvent::PaidOut { member: 20, pool_id: 1, payout: 1 }
+						Event::PaidOut { member: 10, pool_id: 1, payout: 10000000 },
+						Event::PaidOut { member: 20, pool_id: 1, payout: 1 }
 					]
 				);
 			});
@@ -4822,8 +4655,8 @@ mod reward_counter_precision {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Created { depositor: 10, pool_id: 1 },
-						PalletEvent::Bonded {
+						Event::Created { depositor: 10, pool_id: 1 },
+						Event::Bonded {
 							member: 10,
 							pool_id: 1,
 							bonded: 2500000000000000000,
@@ -4849,13 +4682,13 @@ mod reward_counter_precision {
 				assert_eq!(
 					pool_events_since_last_call(),
 					vec![
-						PalletEvent::Bonded {
+						Event::Bonded {
 							member: 20,
 							pool_id: 1,
 							bonded: 100000000000,
 							joined: true
 						},
-						PalletEvent::PaidOut { member: 10, pool_id: 1, payout: 9999997 }
+						Event::PaidOut { member: 10, pool_id: 1, payout: 9999997 }
 					]
 				);
 

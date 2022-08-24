@@ -154,7 +154,7 @@ benchmarks! {
 		};
 	}: _(RawOrigin::Signed(caller.clone()), Box::new(create_identity_info::<T>(x)))
 	verify {
-		assert_last_event::<T>(PalletEvent::<T>::IdentitySet { who: caller }.into());
+		assert_last_event::<T>(Event::<T>::IdentitySet { who: caller }.into());
 	}
 
 	// We need to split `set_subs` into two benchmarks to accurately isolate the potential
@@ -238,7 +238,7 @@ benchmarks! {
 		};
 	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
 	verify {
-		assert_last_event::<T>(PalletEvent::<T>::JudgementRequested { who: caller, registrar_index: r-1 }.into());
+		assert_last_event::<T>(Event::<T>::JudgementRequested { who: caller, registrar_index: r-1 }.into());
 	}
 
 	cancel_request {
@@ -258,7 +258,7 @@ benchmarks! {
 		Identity::<T>::request_judgement(caller_origin, r - 1, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller.clone()), r - 1)
 	verify {
-		assert_last_event::<T>(PalletEvent::<T>::JudgementUnrequested { who: caller, registrar_index: r-1 }.into());
+		assert_last_event::<T>(Event::<T>::JudgementUnrequested { who: caller, registrar_index: r-1 }.into());
 	}
 
 	set_fee {
@@ -338,7 +338,7 @@ benchmarks! {
 		Identity::<T>::request_judgement(user_origin, r, 10u32.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
 	verify {
-		assert_last_event::<T>(PalletEvent::<T>::JudgementGiven { target: user, registrar_index: r }.into())
+		assert_last_event::<T>(Event::<T>::JudgementGiven { target: user, registrar_index: r }.into())
 	}
 
 	kill_identity {

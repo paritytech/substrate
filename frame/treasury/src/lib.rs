@@ -155,7 +155,7 @@ pub mod pallet {
 		type RejectOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for the unbalanced decrease when slashing for a rejected proposal or bounty.
@@ -267,7 +267,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// New proposal.
 		Proposed { proposal_index: ProposalIndex },
 		/// We have ended a spend period and will now allocate funds.
@@ -353,7 +353,7 @@ pub mod pallet {
 			<ProposalCount<T, I>>::put(c + 1);
 			<Proposals<T, I>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
-			Self::deposit_event(PalletEvent::Proposed { proposal_index: c });
+			Self::deposit_event(Event::Proposed { proposal_index: c });
 			Ok(())
 		}
 
@@ -379,7 +379,7 @@ pub mod pallet {
 			let imbalance = T::Currency::slash_reserved(&proposal.proposer, value).0;
 			T::OnSlash::on_unbalanced(imbalance);
 
-			Self::deposit_event(PalletEvent::<T, I>::Rejected {
+			Self::deposit_event(Event::<T, I>::Rejected {
 				proposal_index: proposal_id,
 				slashed: value,
 			});
@@ -439,7 +439,7 @@ pub mod pallet {
 			Proposals::<T, I>::insert(proposal_index, proposal);
 			ProposalCount::<T, I>::put(proposal_index + 1);
 
-			Self::deposit_event(PalletEvent::SpendApproved { proposal_index, amount, beneficiary });
+			Self::deposit_event(Event::SpendApproved { proposal_index, amount, beneficiary });
 			Ok(())
 		}
 
@@ -504,7 +504,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut total_weight: Weight = Zero::zero();
 
 		let mut budget_remaining = Self::pot();
-		Self::deposit_event(PalletEvent::Spending { budget_remaining });
+		Self::deposit_event(Event::Spending { budget_remaining });
 		let account_id = Self::account_id();
 
 		let mut missed_any = false;
@@ -525,7 +525,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						// provide the allocation.
 						imbalance.subsume(T::Currency::deposit_creating(&p.beneficiary, p.value));
 
-						Self::deposit_event(PalletEvent::Awarded {
+						Self::deposit_event(Event::Awarded {
 							proposal_index: index,
 							award: p.value,
 							account: p.beneficiary,
@@ -560,7 +560,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let (debit, credit) = T::Currency::pair(burn);
 			imbalance.subsume(debit);
 			T::BurnDestination::on_unbalanced(credit);
-			Self::deposit_event(PalletEvent::Burnt { burnt_funds: burn })
+			Self::deposit_event(Event::Burnt { burnt_funds: burn })
 		}
 
 		// Must never be an error, but better to be safe.
@@ -575,7 +575,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			drop(problem);
 		}
 
-		Self::deposit_event(PalletEvent::Rollover { rollover_balance: budget_remaining });
+		Self::deposit_event(Event::Rollover { rollover_balance: budget_remaining });
 
 		total_weight
 	}
@@ -596,6 +596,6 @@ impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Palle
 		// Must resolve into existing but better to be safe.
 		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
 
-		Self::deposit_event(PalletEvent::Deposit { value: numeric_amount });
+		Self::deposit_event(Event::Deposit { value: numeric_amount });
 	}
 }

@@ -57,7 +57,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Full identification of the validator.
 		type IdentificationTuple: Parameter;
 		/// A handler called for every offence report.
@@ -104,7 +104,7 @@ pub mod pallet {
 	/// Events type.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent {
+	pub enum Event {
 		/// There is an offence reported of the given `kind` happened at the `session_index` and
 		/// (kind-specific) time slot. This event is not deposited for duplicate slashes.
 		/// \[kind, timeslot\].
@@ -145,7 +145,7 @@ where
 		);
 
 		// Deposit the event.
-		Self::deposit_event(PalletEvent::Offence { kind: O::ID, timeslot: time_slot.encode() });
+		Self::deposit_event(Event::Offence { kind: O::ID, timeslot: time_slot.encode() });
 
 		Ok(())
 	}

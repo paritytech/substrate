@@ -15,7 +15,7 @@ error: `Pallet` does not have #[pallet::event] defined, perhaps you should remov
    |
    = note: this error originates in the macro `pallet::__substrate_event_check::is_event_part_defined` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0412]: cannot find type `PalletEvent` in module `pallet`
+error[E0412]: cannot find type `Event` in module `pallet`
   --> tests/construct_runtime_ui/undefined_event_part.rs:49:1
    |
 49 | / construct_runtime! {
@@ -30,9 +30,9 @@ error[E0412]: cannot find type `PalletEvent` in module `pallet`
    = note: this error originates in the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 help: consider importing this enum
    |
-1  | use frame_system::PalletEvent;
+1  | use frame_system::Event;
    |
-help: if you import `PalletEvent`, refer to it directly
+help: if you import `Event`, refer to it directly
    |
 49 - construct_runtime! {
 50 -     pub enum Runtime where

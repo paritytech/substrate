@@ -38,7 +38,7 @@ use sp_runtime::{
 	BuildStorage, Perbill, Storage,
 };
 
-use super::PalletEvent as BountiesEvent;
+use super::Event as BountiesEvent;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

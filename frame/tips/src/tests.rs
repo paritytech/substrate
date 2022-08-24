@@ -39,7 +39,7 @@ use frame_support::{
 };
 
 use super::*;
-use crate::{self as pallet_tips, PalletEvent as TipEvent};
+use crate::{self as pallet_tips, Event as TipEvent};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

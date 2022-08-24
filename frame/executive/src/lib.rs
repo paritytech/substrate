@@ -813,7 +813,7 @@ mod tests {
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
-			System::deposit_event(frame_system::PalletEvent::CodeUpdated);
+			System::deposit_event(frame_system::Event::CodeUpdated);
 			100
 		}
 	}
@@ -1302,7 +1302,7 @@ mod tests {
 				Digest::default(),
 			));
 
-			System::assert_last_event(frame_system::PalletEvent::<Runtime>::CodeUpdated.into());
+			System::assert_last_event(frame_system::Event::<Runtime>::CodeUpdated.into());
 		});
 	}
 

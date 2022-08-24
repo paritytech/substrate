@@ -6,7 +6,7 @@ mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type Bar;
-		type RuntimeEvent: IsType<<Self as frame_system::Config>::RuntimeEvent> + From<PalletEvent<Self>>;
+		type RuntimeEvent: IsType<<Self as frame_system::Config>::RuntimeEvent> + From<Event<Self>>;
 	}
 
 	#[pallet::pallet]
@@ -19,7 +19,7 @@ mod pallet {
 	impl<T: Config> Pallet<T> {}
 
 	#[pallet::event]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		B { b: T::Bar },
 	}
 }

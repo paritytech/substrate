@@ -42,7 +42,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MyGetParam: Get<u32>;
 		type Balance: Parameter + Default + scale_info::StaticTypeInfo;
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
@@ -54,26 +54,26 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
-				Self::deposit_event(PalletEvent::Something(10));
+				Self::deposit_event(Event::Something(10));
 				10
 			} else {
-				Self::deposit_event(PalletEvent::Something(11));
+				Self::deposit_event(Event::Something(11));
 				11
 			}
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
-				Self::deposit_event(PalletEvent::Something(20));
+				Self::deposit_event(Event::Something(20));
 			} else {
-				Self::deposit_event(PalletEvent::Something(21));
+				Self::deposit_event(Event::Something(21));
 			}
 		}
 		fn on_runtime_upgrade() -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
-				Self::deposit_event(PalletEvent::Something(30));
+				Self::deposit_event(Event::Something(30));
 				30
 			} else {
-				Self::deposit_event(PalletEvent::Something(31));
+				Self::deposit_event(Event::Something(31));
 				31
 			}
 		}
@@ -89,7 +89,7 @@ pub mod pallet {
 			#[pallet::compact] _foo: u32,
 		) -> DispatchResultWithPostInfo {
 			let _ = origin;
-			Self::deposit_event(PalletEvent::Something(3));
+			Self::deposit_event(Event::Something(3));
 			Ok(().into())
 		}
 
@@ -112,7 +112,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// doc comment put in metadata
 		Proposed(<T as frame_system::Config>::AccountId),
 		/// doc
@@ -218,7 +218,7 @@ pub mod pallet2 {
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
@@ -227,7 +227,7 @@ pub mod pallet2 {
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::event]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// Something
 		Something(u32),
 	}
@@ -389,7 +389,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(3)),
+			RuntimeEvent::Example(pallet::Event::Something(3)),
 		);
 	});
 
@@ -400,7 +400,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Instance1Example(pallet::PalletEvent::Something(3)),
+			RuntimeEvent::Instance1Example(pallet::Event::Something(3)),
 		);
 	});
 }
@@ -566,27 +566,27 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(10)),
+			RuntimeEvent::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			RuntimeEvent::Instance1Example(pallet::PalletEvent::Something(11)),
+			RuntimeEvent::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(20)),
+			RuntimeEvent::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			RuntimeEvent::Instance1Example(pallet::PalletEvent::Something(21)),
+			RuntimeEvent::Instance1Example(pallet::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			RuntimeEvent::Example(pallet::PalletEvent::Something(30)),
+			RuntimeEvent::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			RuntimeEvent::Instance1Example(pallet::PalletEvent::Something(31)),
+			RuntimeEvent::Instance1Example(pallet::Event::Something(31)),
 		);
 	})
 }
@@ -610,7 +610,7 @@ fn metadata() {
 		storage: None, // The storage metadatas have been excluded.
 		calls: Some(scale_info::meta_type::<frame_system::Call<Runtime>>().into()),
 		event: Some(PalletEventMetadata {
-			ty: scale_info::meta_type::<frame_system::PalletEvent<Runtime>>(),
+			ty: scale_info::meta_type::<frame_system::Event<Runtime>>(),
 		}),
 		constants: vec![
 			PalletConstantMetadata {
@@ -737,9 +737,7 @@ fn metadata() {
 			],
 		}),
 		calls: Some(scale_info::meta_type::<pallet::Call<Runtime>>().into()),
-		event: Some(PalletEventMetadata {
-			ty: scale_info::meta_type::<pallet::PalletEvent<Runtime>>(),
-		}),
+		event: Some(PalletEventMetadata { ty: scale_info::meta_type::<pallet::Event<Runtime>>() }),
 		constants: vec![PalletConstantMetadata {
 			name: "MyGetParam",
 			ty: scale_info::meta_type::<u32>(),
@@ -760,8 +758,7 @@ fn metadata() {
 	}
 	match example_pallet_instance1_metadata.event {
 		Some(ref mut event_meta) => {
-			event_meta.ty =
-				scale_info::meta_type::<pallet::PalletEvent<Runtime, pallet::Instance1>>();
+			event_meta.ty = scale_info::meta_type::<pallet::Event<Runtime, pallet::Instance1>>();
 		},
 		_ => unreachable!(),
 	}

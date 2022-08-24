@@ -378,7 +378,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The societies's pallet id
@@ -477,7 +477,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The society is founded by the given identity.
 		Founded { founder: T::AccountId },
 		/// A membership bid just happened. The given account is the candidate's ID and their offer
@@ -727,7 +727,7 @@ pub mod pallet {
 			T::Currency::reserve(&who, deposit)?;
 
 			Self::put_bid(bids, &who, value, BidKind::Deposit(deposit));
-			Self::deposit_event(PalletEvent::<T, I>::Bid { candidate_id: who, offer: value });
+			Self::deposit_event(Event::<T, I>::Bid { candidate_id: who, offer: value });
 			Ok(())
 		}
 
@@ -769,7 +769,7 @@ pub mod pallet {
 							<Vouching<T, I>>::remove(&voucher);
 						},
 					}
-					Self::deposit_event(PalletEvent::<T, I>::Unbid { candidate: who });
+					Self::deposit_event(Event::<T, I>::Unbid { candidate: who });
 					Ok(())
 				} else {
 					Err(Error::<T, I>::BadPosition.into())
@@ -848,7 +848,7 @@ pub mod pallet {
 
 			<Vouching<T, I>>::insert(&voucher, VouchingStatus::Vouching);
 			Self::put_bid(bids, &who, value, BidKind::Vouch(voucher.clone(), tip));
-			Self::deposit_event(PalletEvent::<T, I>::Vouch {
+			Self::deposit_event(Event::<T, I>::Vouch {
 				candidate_id: who,
 				offer: value,
 				vouching: voucher,
@@ -887,7 +887,7 @@ pub mod pallet {
 					b[pos].kind.check_voucher(&voucher)?;
 					<Vouching<T, I>>::remove(&voucher);
 					let who = b.remove(pos).who;
-					Self::deposit_event(PalletEvent::<T, I>::Unvouch { candidate: who });
+					Self::deposit_event(Event::<T, I>::Unvouch { candidate: who });
 					Ok(())
 				} else {
 					Err(Error::<T, I>::BadPosition.into())
@@ -930,7 +930,7 @@ pub mod pallet {
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
 			<Votes<T, I>>::insert(&candidate, &voter, vote);
 
-			Self::deposit_event(PalletEvent::<T, I>::Vote { candidate, voter, vote: approve });
+			Self::deposit_event(Event::<T, I>::Vote { candidate, voter, vote: approve });
 			Ok(())
 		}
 
@@ -959,7 +959,7 @@ pub mod pallet {
 			let vote = if approve { Vote::Approve } else { Vote::Reject };
 			<DefenderVotes<T, I>>::insert(&voter, vote);
 
-			Self::deposit_event(PalletEvent::<T, I>::DefenderVote { voter, vote: approve });
+			Self::deposit_event(Event::<T, I>::DefenderVote { voter, vote: approve });
 			Ok(())
 		}
 
@@ -1043,7 +1043,7 @@ pub mod pallet {
 			<Head<T, I>>::put(&founder);
 			<Founder<T, I>>::put(&founder);
 			Rules::<T, I>::put(T::Hashing::hash(&rules));
-			Self::deposit_event(PalletEvent::<T, I>::Founded { founder });
+			Self::deposit_event(Event::<T, I>::Founded { founder });
 			Ok(())
 		}
 
@@ -1073,7 +1073,7 @@ pub mod pallet {
 			Candidates::<T, I>::kill();
 			#[allow(deprecated)]
 			SuspendedCandidates::<T, I>::remove_all(None);
-			Self::deposit_event(PalletEvent::<T, I>::Unfounded { founder });
+			Self::deposit_event(Event::<T, I>::Unfounded { founder });
 			Ok(())
 		}
 
@@ -1131,17 +1131,14 @@ pub mod pallet {
 						if let Some(pos) = bids.iter().position(|b| b.kind.check_voucher(&who).is_ok()) {
 							// Remove the bid, and emit an event
 							let vouched = bids.remove(pos).who;
-							Self::deposit_event(PalletEvent::<T, I>::Unvouch { candidate: vouched });
+							Self::deposit_event(Event::<T, I>::Unvouch { candidate: vouched });
 						}
 					);
 				}
 			}
 
 			<SuspendedMembers<T, I>>::remove(&who);
-			Self::deposit_event(PalletEvent::<T, I>::SuspendedMemberJudgement {
-				who,
-				judged: forgive,
-			});
+			Self::deposit_event(Event::<T, I>::SuspendedMemberJudgement { who, judged: forgive });
 			Ok(())
 		}
 
@@ -1263,7 +1260,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			ensure!(max > 1, Error::<T, I>::MaxMembers);
 			MaxMembers::<T, I>::put(max);
-			Self::deposit_event(PalletEvent::<T, I>::NewMaxMembers { max });
+			Self::deposit_event(Event::<T, I>::NewMaxMembers { max });
 			Ok(())
 		}
 	}
@@ -1349,7 +1346,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					<Vouching<T, I>>::remove(&voucher);
 				},
 			}
-			Self::deposit_event(PalletEvent::<T, I>::AutoUnbid { candidate: popped });
+			Self::deposit_event(Event::<T, I>::AutoUnbid { candidate: popped });
 		}
 
 		<Bids<T, I>>::put(bids);
@@ -1514,7 +1511,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					} else {
 						// Suspend Candidate
 						<SuspendedCandidates<T, I>>::insert(&candidate, (value, kind));
-						Self::deposit_event(PalletEvent::<T, I>::CandidateSuspended { candidate });
+						Self::deposit_event(Event::<T, I>::CandidateSuspended { candidate });
 						None
 					}
 				})
@@ -1584,10 +1581,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				<Head<T, I>>::put(&primary);
 
 				T::MembershipChanged::change_members_sorted(&accounts, &[], members);
-				Self::deposit_event(PalletEvent::<T, I>::Inducted {
-					primary,
-					candidates: accounts,
-				});
+				Self::deposit_event(Event::<T, I>::Inducted { primary, candidates: accounts });
 			}
 
 			// Bump the pot by at most PeriodSpend, but less if there's not very much left in our
@@ -1652,7 +1646,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if Self::remove_member(who).is_ok() {
 			<SuspendedMembers<T, I>>::insert(who, true);
 			<Strikes<T, I>>::remove(who);
-			Self::deposit_event(PalletEvent::<T, I>::MemberSuspended { member: who.clone() });
+			Self::deposit_event(Event::<T, I>::MemberSuspended { member: who.clone() });
 		}
 	}
 
@@ -1729,7 +1723,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let chosen = pick_item(&mut rng, &members[1..members.len() - 1])
 					.expect("exited if members empty; qed");
 				<Defender<T, I>>::put(&chosen);
-				Self::deposit_event(PalletEvent::<T, I>::Challenged { member: chosen.clone() });
+				Self::deposit_event(Event::<T, I>::Challenged { member: chosen.clone() });
 			} else {
 				<Defender<T, I>>::kill();
 			}
@@ -1833,6 +1827,6 @@ impl<T: Config<I>, I: 'static> OnUnbalanced<NegativeImbalanceOf<T, I>> for Palle
 		// Must resolve into existing but better to be safe.
 		let _ = T::Currency::resolve_creating(&Self::account_id(), amount);
 
-		Self::deposit_event(PalletEvent::<T, I>::Deposit { value: numeric_amount });
+		Self::deposit_event(Event::<T, I>::Deposit { value: numeric_amount });
 	}
 }

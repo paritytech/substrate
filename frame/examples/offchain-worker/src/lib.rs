@@ -126,8 +126,7 @@ pub mod pallet {
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching dispatch call type.
 		type Call: From<Call<Self>>;
@@ -294,7 +293,7 @@ pub mod pallet {
 	/// Events for the pallet.
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// Event generated when new price is accepted to contribute to the average.
 		NewPrice { price: u32, maybe_who: Option<T::AccountId> },
 	}
@@ -658,7 +657,7 @@ impl<T: Config> Pallet<T> {
 			.expect("The average is not empty, because it was just mutated; qed");
 		log::info!("Current average price is: {}", average);
 		// here we are raising the NewPrice event
-		Self::deposit_event(PalletEvent::NewPrice { price, maybe_who });
+		Self::deposit_event(Event::NewPrice { price, maybe_who });
 	}
 
 	/// Calculate current average price.

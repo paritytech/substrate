@@ -21,7 +21,7 @@ use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
-	syn::custom_keyword!(PalletEvent);
+	syn::custom_keyword!(Event);
 	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(generate_deposit);
 	syn::custom_keyword!(deposit_event);
@@ -31,11 +31,11 @@ mod keyword {
 pub struct EventDef {
 	/// The index of event item in pallet module.
 	pub index: usize,
-	/// The keyword PalletEvent used (contains span).
-	pub event: keyword::PalletEvent,
+	/// The keyword Event used (contains span).
+	pub event: keyword::Event,
 	/// A set of usage of instance, must be check for consistency with trait.
 	pub instances: Vec<helper::InstanceUsage>,
-	/// The kind of generic the type `PalletEvent` has.
+	/// The kind of generic the type `Event` has.
 	pub gen_kind: super::GenericKind,
 	/// Whether the function `deposit_event` must be generated.
 	pub deposit_event: Option<PalletEventDepositAttr>,
@@ -45,7 +45,7 @@ pub struct EventDef {
 	pub attr_span: proc_macro2::Span,
 }
 
-/// Attribute for a pallet's PalletEvent.
+/// Attribute for a pallet's Event.
 ///
 /// Syntax is:
 /// * `#[pallet::generate_deposit($vis fn deposit_event)]`
@@ -113,14 +113,14 @@ impl EventDef {
 		let deposit_event = attr_info.deposit_event;
 
 		if !matches!(item.vis, syn::Visibility::Public(_)) {
-			let msg = "Invalid pallet::event, `PalletEvent` must be public";
+			let msg = "Invalid pallet::event, `Event` must be public";
 			return Err(syn::Error::new(item.span(), msg))
 		}
 
 		let where_clause = item.generics.where_clause.clone();
 
 		let mut instances = vec![];
-		// NOTE: PalletEvent is not allowed to be only generic on I because it is not supported
+		// NOTE: Event is not allowed to be only generic on I because it is not supported
 		// by construct_runtime.
 		if let Some(u) = helper::check_type_def_optional_gen(&item.generics, item.ident.span())? {
 			instances.push(u);
@@ -134,7 +134,7 @@ impl EventDef {
 		let gen_kind = super::GenericKind::from_gens(has_config, has_instance)
 			.expect("Checked by `helper::check_type_def_optional_gen` above");
 
-		let event = syn::parse2::<keyword::PalletEvent>(item.ident.to_token_stream())?;
+		let event = syn::parse2::<keyword::Event>(item.ident.to_token_stream())?;
 
 		Ok(EventDef { attr_span, index, instances, deposit_event, event, gen_kind, where_clause })
 	}

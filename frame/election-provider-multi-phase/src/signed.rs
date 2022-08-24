@@ -461,7 +461,7 @@ impl<T: Config> Pallet<T> {
 
 		let reward = T::SignedRewardBase::get();
 		// emit reward event
-		Self::deposit_event(crate::PalletEvent::Rewarded { account: who.clone(), value: reward });
+		Self::deposit_event(crate::Event::Rewarded { account: who.clone(), value: reward });
 
 		// Unreserve deposit.
 		let _remaining = T::Currency::unreserve(who, deposit);
@@ -479,7 +479,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_reject_solution(who: &T::AccountId, deposit: BalanceOf<T>) {
-		Self::deposit_event(crate::PalletEvent::Slashed { account: who.clone(), value: deposit });
+		Self::deposit_event(crate::Event::Slashed { account: who.clone(), value: deposit });
 		let (negative_imbalance, _remaining) = T::Currency::slash_reserved(who, deposit);
 		debug_assert!(_remaining.is_zero());
 		T::SlashHandler::on_unbalanced(negative_imbalance);

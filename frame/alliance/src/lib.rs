@@ -223,7 +223,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The outer call dispatch type.
@@ -362,7 +362,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A new rule has been set.
 		NewRuleSet { rule: Cid },
 		/// A new announcement has been proposed.
@@ -658,7 +658,7 @@ pub mod pallet {
 				founders, fellows, allies
 			);
 
-			Self::deposit_event(PalletEvent::MembersInitialized {
+			Self::deposit_event(Event::MembersInitialized {
 				founders: founders.into(),
 				fellows: fellows.into(),
 				allies: allies.into(),
@@ -673,7 +673,7 @@ pub mod pallet {
 
 			Rule::<T, I>::put(&rule);
 
-			Self::deposit_event(PalletEvent::NewRuleSet { rule });
+			Self::deposit_event(Event::NewRuleSet { rule });
 			Ok(())
 		}
 
@@ -688,7 +688,7 @@ pub mod pallet {
 				.map_err(|_| Error::<T, I>::TooManyAnnouncements)?;
 			<Announcements<T, I>>::put(announcements);
 
-			Self::deposit_event(PalletEvent::Announced { announcement });
+			Self::deposit_event(Event::Announced { announcement });
 			Ok(())
 		}
 
@@ -705,7 +705,7 @@ pub mod pallet {
 			announcements.remove(pos);
 			<Announcements<T, I>>::put(announcements);
 
-			Self::deposit_event(PalletEvent::AnnouncementRemoved { announcement });
+			Self::deposit_event(Event::AnnouncementRemoved { announcement });
 			Ok(())
 		}
 
@@ -736,7 +736,7 @@ pub mod pallet {
 
 			Self::add_member(&who, MemberRole::Ally)?;
 
-			Self::deposit_event(PalletEvent::NewAllyJoined {
+			Self::deposit_event(Event::NewAllyJoined {
 				ally: who,
 				nominator: None,
 				reserved: Some(deposit),
@@ -761,7 +761,7 @@ pub mod pallet {
 
 			Self::add_member(&who, MemberRole::Ally)?;
 
-			Self::deposit_event(PalletEvent::NewAllyJoined {
+			Self::deposit_event(Event::NewAllyJoined {
 				ally: who,
 				nominator: Some(nominator),
 				reserved: None,
@@ -780,7 +780,7 @@ pub mod pallet {
 			Self::remove_member(&ally, MemberRole::Ally)?;
 			Self::add_member(&ally, MemberRole::Fellow)?;
 
-			Self::deposit_event(PalletEvent::AllyElevated { ally });
+			Self::deposit_event(Event::AllyElevated { ally });
 			Ok(())
 		}
 
@@ -798,7 +798,7 @@ pub mod pallet {
 				let err_amount = T::Currency::unreserve(&who, deposit);
 				debug_assert!(err_amount.is_zero());
 			}
-			Self::deposit_event(PalletEvent::MemberRetired { member: who, unreserved: deposit });
+			Self::deposit_event(Event::MemberRetired { member: who, unreserved: deposit });
 			Ok(())
 		}
 
@@ -817,7 +817,7 @@ pub mod pallet {
 
 			<UpForKicking<T, I>>::remove(&member);
 
-			Self::deposit_event(PalletEvent::MemberKicked { member, slashed: deposit });
+			Self::deposit_event(Event::MemberKicked { member, slashed: deposit });
 			Ok(())
 		}
 
@@ -846,7 +846,7 @@ pub mod pallet {
 			}
 
 			Self::do_add_unscrupulous_items(&mut accounts, &mut webs)?;
-			Self::deposit_event(PalletEvent::UnscrupulousItemAdded { items });
+			Self::deposit_event(Event::UnscrupulousItemAdded { items });
 			Ok(())
 		}
 
@@ -869,7 +869,7 @@ pub mod pallet {
 				}
 			}
 			Self::do_remove_unscrupulous_items(&mut accounts, &mut webs)?;
-			Self::deposit_event(PalletEvent::UnscrupulousItemRemoved { items });
+			Self::deposit_event(Event::UnscrupulousItemRemoved { items });
 			Ok(())
 		}
 	}

@@ -338,7 +338,7 @@ impl quote::ToTokens for PalletPath {
 
 /// Parse [`PalletPart`]'s from a braces enclosed list that is split by commas, e.g.
 ///
-/// `{ Call, PalletEvent }`
+/// `{ Call, Event }`
 fn parse_pallet_parts(input: ParseStream) -> Result<Vec<PalletPart>> {
 	let pallet_parts: ext::Braces<ext::Punctuated<PalletPart, Token![,]>> = input.parse()?;
 
@@ -503,7 +503,7 @@ impl Parse for PalletPartNoGeneric {
 
 /// Parse [`PalletPartNoGeneric`]'s from a braces enclosed list that is split by commas, e.g.
 ///
-/// `{ Call, PalletEvent }`
+/// `{ Call, Event }`
 fn parse_pallet_parts_no_generic(input: ParseStream) -> Result<Vec<PalletPartNoGeneric>> {
 	let pallet_parts: ext::Braces<ext::Punctuated<PalletPartNoGeneric, Token![,]>> =
 		input.parse()?;

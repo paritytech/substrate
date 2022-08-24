@@ -218,7 +218,7 @@ pub mod pallet {
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self, I>>
+		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The minimum amount required to keep an account open.
@@ -343,11 +343,7 @@ pub mod pallet {
 				mem::drop(NegativeImbalance::<T, I>::new(old_reserved - new_reserved));
 			}
 
-			Self::deposit_event(PalletEvent::BalanceSet {
-				who,
-				free: new_free,
-				reserved: new_reserved,
-			});
+			Self::deposit_event(Event::BalanceSet { who, free: new_free, reserved: new_reserved });
 			Ok(().into())
 		}
 
@@ -444,7 +440,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config<I>, I: 'static = ()> {
+	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// An account was created with some free balance.
 		Endowed { account: T::AccountId, free_balance: T::Balance },
 		/// An account was removed whose balance was non-zero but below ExistentialDeposit,
@@ -743,10 +739,7 @@ pub struct DustCleaner<T: Config<I>, I: 'static = ()>(
 impl<T: Config<I>, I: 'static> Drop for DustCleaner<T, I> {
 	fn drop(&mut self) {
 		if let Some((who, dust)) = self.0.take() {
-			Pallet::<T, I>::deposit_event(PalletEvent::DustLost {
-				account: who,
-				amount: dust.peek(),
-			});
+			Pallet::<T, I>::deposit_event(Event::DustLost { account: who, amount: dust.peek() });
 			T::DustRemoval::on_unbalanced(dust);
 		}
 	}
@@ -944,10 +937,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		result.map(|(maybe_endowed, maybe_dust, result)| {
 			if let Some(endowed) = maybe_endowed {
-				Self::deposit_event(PalletEvent::Endowed {
-					account: who.clone(),
-					free_balance: endowed,
-				});
+				Self::deposit_event(Event::Endowed { account: who.clone(), free_balance: endowed });
 			}
 			let dust_cleaner = DustCleaner(maybe_dust.map(|dust| (who.clone(), dust)));
 			(result, dust_cleaner)
@@ -1057,7 +1047,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		)?;
 
-		Self::deposit_event(PalletEvent::ReserveRepatriated {
+		Self::deposit_event(Event::ReserveRepatriated {
 			from: slashed.clone(),
 			to: beneficiary.clone(),
 			amount: actual,
@@ -1115,7 +1105,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			Ok(())
 		})?;
 		TotalIssuance::<T, I>::mutate(|t| *t += amount);
-		Self::deposit_event(PalletEvent::Deposit { who: who.clone(), amount });
+		Self::deposit_event(Event::Deposit { who: who.clone(), amount });
 		Ok(())
 	}
 
@@ -1136,7 +1126,7 @@ impl<T: Config<I>, I: 'static> fungible::Mutate<T::AccountId> for Pallet<T, I> {
 			},
 		)?;
 		TotalIssuance::<T, I>::mutate(|t| *t -= actual);
-		Self::deposit_event(PalletEvent::Withdraw { who: who.clone(), amount });
+		Self::deposit_event(Event::Withdraw { who: who.clone(), amount });
 		Ok(actual)
 	}
 }
@@ -1157,7 +1147,7 @@ impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, 
 	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
 		Self::mutate_account(who, |account| {
 			account.free = amount;
-			Self::deposit_event(PalletEvent::BalanceSet {
+			Self::deposit_event(Event::BalanceSet {
 				who: who.clone(),
 				free: account.free,
 				reserved: account.reserved,
@@ -1541,7 +1531,7 @@ where
 		)?;
 
 		// Emit transfer event.
-		Self::deposit_event(PalletEvent::Transfer {
+		Self::deposit_event(Event::Transfer {
 			from: transactor.clone(),
 			to: dest.clone(),
 			amount: value,
@@ -1609,7 +1599,7 @@ where
 				},
 			) {
 				Ok((imbalance, not_slashed)) => {
-					Self::deposit_event(PalletEvent::Slashed {
+					Self::deposit_event(Event::Slashed {
 						who: who.clone(),
 						amount: value.saturating_sub(not_slashed),
 					});
@@ -1639,7 +1629,7 @@ where
 			|account, is_new| -> Result<Self::PositiveImbalance, DispatchError> {
 				ensure!(!is_new, Error::<T, I>::DeadAccount);
 				account.free = account.free.checked_add(&value).ok_or(ArithmeticError::Overflow)?;
-				Self::deposit_event(PalletEvent::Deposit { who: who.clone(), amount: value });
+				Self::deposit_event(Event::Deposit { who: who.clone(), amount: value });
 				Ok(PositiveImbalance::new(value))
 			},
 		)
@@ -1672,7 +1662,7 @@ where
 					None => return Ok(Self::PositiveImbalance::zero()),
 				};
 
-				Self::deposit_event(PalletEvent::Deposit { who: who.clone(), amount: value });
+				Self::deposit_event(Event::Deposit { who: who.clone(), amount: value });
 				Ok(PositiveImbalance::new(value))
 			},
 		)
@@ -1708,7 +1698,7 @@ where
 
 				account.free = new_free_account;
 
-				Self::deposit_event(PalletEvent::Withdraw { who: who.clone(), amount: value });
+				Self::deposit_event(Event::Withdraw { who: who.clone(), amount: value });
 				Ok(NegativeImbalance::new(value))
 			},
 		)
@@ -1741,7 +1731,7 @@ where
 					SignedImbalance::Negative(NegativeImbalance::new(account.free - value))
 				};
 				account.free = value;
-				Self::deposit_event(PalletEvent::BalanceSet {
+				Self::deposit_event(Event::BalanceSet {
 					who: who.clone(),
 					free: account.free,
 					reserved: account.reserved,
@@ -1789,7 +1779,7 @@ where
 			Self::ensure_can_withdraw(&who, value, WithdrawReasons::RESERVE, account.free)
 		})?;
 
-		Self::deposit_event(PalletEvent::Reserved { who: who.clone(), amount: value });
+		Self::deposit_event(Event::Reserved { who: who.clone(), amount: value });
 		Ok(())
 	}
 
@@ -1821,7 +1811,7 @@ where
 			},
 		};
 
-		Self::deposit_event(PalletEvent::Unreserved { who: who.clone(), amount: actual });
+		Self::deposit_event(Event::Unreserved { who: who.clone(), amount: actual });
 		value - actual
 	}
 
@@ -1862,7 +1852,7 @@ where
 				(NegativeImbalance::new(actual), value - actual)
 			}) {
 				Ok((imbalance, not_slashed)) => {
-					Self::deposit_event(PalletEvent::Slashed {
+					Self::deposit_event(Event::Slashed {
 						who: who.clone(),
 						amount: value.saturating_sub(not_slashed),
 					});
@@ -2008,7 +1998,7 @@ where
 					// `actual <= to_change` and `to_change <= amount`; qed;
 					reserves[index].amount -= actual;
 
-					Self::deposit_event(PalletEvent::Slashed { who: who.clone(), amount: actual });
+					Self::deposit_event(Event::Slashed { who: who.clone(), amount: actual });
 					(imb, value - actual)
 				},
 				Err(_) => (NegativeImbalance::zero(), value),

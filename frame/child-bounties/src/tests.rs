@@ -39,7 +39,7 @@ use sp_runtime::{
 	Perbill, Permill,
 };
 
-use super::PalletEvent as ChildBountiesEvent;
+use super::Event as ChildBountiesEvent;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

@@ -117,8 +117,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
 		type Call: Parameter
@@ -206,7 +205,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A new multisig operation has begun.
 		NewMultisig { approving: T::AccountId, multisig: T::AccountId, call_hash: CallHash },
 		/// A multisig operation has been approved by someone.
@@ -491,7 +490,7 @@ pub mod pallet {
 			<Multisigs<T>>::remove(&id, &call_hash);
 			Self::clear_call(&call_hash);
 
-			Self::deposit_event(PalletEvent::MultisigCancelled {
+			Self::deposit_event(Event::MultisigCancelled {
 				cancelling: who,
 				timepoint,
 				multisig: id,
@@ -573,7 +572,7 @@ impl<T: Config> Pallet<T> {
 				T::Currency::unreserve(&m.depositor, m.deposit);
 
 				let result = call.dispatch(RawOrigin::Signed(id.clone()).into());
-				Self::deposit_event(PalletEvent::MultisigExecuted {
+				Self::deposit_event(Event::MultisigExecuted {
 					approving: who,
 					timepoint,
 					multisig: id,
@@ -610,7 +609,7 @@ impl<T: Config> Pallet<T> {
 					// Record approval.
 					m.approvals.insert(pos, who.clone());
 					<Multisigs<T>>::insert(&id, call_hash, m);
-					Self::deposit_event(PalletEvent::MultisigApproval {
+					Self::deposit_event(Event::MultisigApproval {
 						approving: who,
 						timepoint,
 						multisig: id,
@@ -659,11 +658,7 @@ impl<T: Config> Pallet<T> {
 					approvals: vec![who.clone()],
 				},
 			);
-			Self::deposit_event(PalletEvent::NewMultisig {
-				approving: who,
-				multisig: id,
-				call_hash,
-			});
+			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
 
 			let final_weight = if stored {
 				T::WeightInfo::as_multi_create_store(other_signatories_len as u32, call_len as u32)

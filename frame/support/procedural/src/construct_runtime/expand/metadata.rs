@@ -139,10 +139,10 @@ fn expand_pallet_metadata_events(
 			.params
 			.is_empty();
 		let pallet_event = match (decl.instance.as_ref(), part_is_generic) {
-			(Some(inst), true) => quote!(#path::PalletEvent::<#runtime, #path::#inst>),
-			(Some(inst), false) => quote!(#path::PalletEvent::<#path::#inst>),
-			(None, true) => quote!(#path::PalletEvent::<#runtime>),
-			(None, false) => quote!(#path::PalletEvent),
+			(Some(inst), true) => quote!(#path::Event::<#runtime, #path::#inst>),
+			(Some(inst), false) => quote!(#path::Event::<#path::#inst>),
+			(None, true) => quote!(#path::Event::<#runtime>),
+			(None, false) => quote!(#path::Event),
 		};
 
 		quote! {

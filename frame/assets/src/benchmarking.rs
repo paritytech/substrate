@@ -155,7 +155,7 @@ benchmarks_instance_pallet! {
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1u32.into())
 	verify {
-		assert_last_event::<T, I>(PalletEvent::Created { asset_id: Default::default(), creator: caller.clone(), owner: caller }.into());
+		assert_last_event::<T, I>(Event::Created { asset_id: Default::default(), creator: caller.clone(), owner: caller }.into());
 	}
 
 	force_create {
@@ -163,7 +163,7 @@ benchmarks_instance_pallet! {
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 	}: _(SystemOrigin::Root, Default::default(), caller_lookup, true, 1u32.into())
 	verify {
-		assert_last_event::<T, I>(PalletEvent::ForceCreated { asset_id: Default::default(), owner: caller }.into());
+		assert_last_event::<T, I>(Event::ForceCreated { asset_id: Default::default(), owner: caller }.into());
 	}
 
 	destroy {
@@ -177,7 +177,7 @@ benchmarks_instance_pallet! {
 		let witness = Asset::<T, I>::get(T::AssetId::default()).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), Default::default(), witness)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::Destroyed { asset_id: Default::default() }.into());
+		assert_last_event::<T, I>(Event::Destroyed { asset_id: Default::default() }.into());
 	}
 
 	mint {
@@ -185,7 +185,7 @@ benchmarks_instance_pallet! {
 		let amount = T::Balance::from(100u32);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::Issued { asset_id: Default::default(), owner: caller, total_supply: amount }.into());
+		assert_last_event::<T, I>(Event::Issued { asset_id: Default::default(), owner: caller, total_supply: amount }.into());
 	}
 
 	burn {
@@ -193,7 +193,7 @@ benchmarks_instance_pallet! {
 		let (caller, caller_lookup) = create_default_minted_asset::<T, I>(true, amount);
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, amount)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::Burned { asset_id: Default::default(), owner: caller, balance: amount }.into());
+		assert_last_event::<T, I>(Event::Burned { asset_id: Default::default(), owner: caller, balance: amount }.into());
 	}
 
 	transfer {
@@ -203,7 +203,7 @@ benchmarks_instance_pallet! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), target_lookup, amount)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::Transferred { asset_id: Default::default(), from: caller, to: target, amount }.into());
+		assert_last_event::<T, I>(Event::Transferred { asset_id: Default::default(), from: caller, to: target, amount }.into());
 	}
 
 	transfer_keep_alive {
@@ -215,7 +215,7 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), target_lookup, amount)
 	verify {
 		assert!(frame_system::Pallet::<T>::account_exists(&caller));
-		assert_last_event::<T, I>(PalletEvent::Transferred { asset_id: Default::default(), from: caller, to: target, amount }.into());
+		assert_last_event::<T, I>(Event::Transferred { asset_id: Default::default(), from: caller, to: target, amount }.into());
 	}
 
 	force_transfer {
@@ -226,7 +226,7 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, target_lookup, amount)
 	verify {
 		assert_last_event::<T, I>(
-			PalletEvent::Transferred { asset_id: Default::default(), from: caller, to: target, amount }.into()
+			Event::Transferred { asset_id: Default::default(), from: caller, to: target, amount }.into()
 		);
 	}
 
@@ -234,7 +234,7 @@ benchmarks_instance_pallet! {
 		let (caller, caller_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::Frozen { asset_id: Default::default(), who: caller }.into());
+		assert_last_event::<T, I>(Event::Frozen { asset_id: Default::default(), who: caller }.into());
 	}
 
 	thaw {
@@ -246,14 +246,14 @@ benchmarks_instance_pallet! {
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::Thawed { asset_id: Default::default(), who: caller }.into());
+		assert_last_event::<T, I>(Event::Thawed { asset_id: Default::default(), who: caller }.into());
 	}
 
 	freeze_asset {
 		let (caller, caller_lookup) = create_default_minted_asset::<T, I>(true, 100u32.into());
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default())
 	verify {
-		assert_last_event::<T, I>(PalletEvent::AssetFrozen { asset_id: Default::default() }.into());
+		assert_last_event::<T, I>(Event::AssetFrozen { asset_id: Default::default() }.into());
 	}
 
 	thaw_asset {
@@ -264,7 +264,7 @@ benchmarks_instance_pallet! {
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), Default::default())
 	verify {
-		assert_last_event::<T, I>(PalletEvent::AssetThawed { asset_id: Default::default() }.into());
+		assert_last_event::<T, I>(Event::AssetThawed { asset_id: Default::default() }.into());
 	}
 
 	transfer_ownership {
@@ -273,7 +273,7 @@ benchmarks_instance_pallet! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 	}: _(SystemOrigin::Signed(caller), Default::default(), target_lookup)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::OwnerChanged { asset_id: Default::default(), owner: target }.into());
+		assert_last_event::<T, I>(Event::OwnerChanged { asset_id: Default::default(), owner: target }.into());
 	}
 
 	set_team {
@@ -283,7 +283,7 @@ benchmarks_instance_pallet! {
 		let target2 = T::Lookup::unlookup(account("target", 2, SEED));
 	}: _(SystemOrigin::Signed(caller), Default::default(), target0, target1, target2)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::TeamChanged {
+		assert_last_event::<T, I>(Event::TeamChanged {
 			asset_id: Default::default(),
 			issuer: account("target", 0, SEED),
 			admin: account("target", 1, SEED),
@@ -304,7 +304,7 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller), Default::default(), name.clone(), symbol.clone(), decimals)
 	verify {
 		let id = Default::default();
-		assert_last_event::<T, I>(PalletEvent::MetadataSet { asset_id: id, name, symbol, decimals, is_frozen: false }.into());
+		assert_last_event::<T, I>(Event::MetadataSet { asset_id: id, name, symbol, decimals, is_frozen: false }.into());
 	}
 
 	clear_metadata {
@@ -315,7 +315,7 @@ benchmarks_instance_pallet! {
 		Assets::<T, I>::set_metadata(origin, Default::default(), dummy.clone(), dummy, 12)?;
 	}: _(SystemOrigin::Signed(caller), Default::default())
 	verify {
-		assert_last_event::<T, I>(PalletEvent::MetadataCleared { asset_id: Default::default() }.into());
+		assert_last_event::<T, I>(Event::MetadataCleared { asset_id: Default::default() }.into());
 	}
 
 	force_set_metadata {
@@ -339,7 +339,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		let id = Default::default();
-		assert_last_event::<T, I>(PalletEvent::MetadataSet { asset_id: id, name, symbol, decimals, is_frozen: false }.into());
+		assert_last_event::<T, I>(Event::MetadataSet { asset_id: id, name, symbol, decimals, is_frozen: false }.into());
 	}
 
 	force_clear_metadata {
@@ -353,7 +353,7 @@ benchmarks_instance_pallet! {
 		let call = Call::<T, I>::force_clear_metadata { id: Default::default() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(PalletEvent::MetadataCleared { asset_id: Default::default() }.into());
+		assert_last_event::<T, I>(Event::MetadataCleared { asset_id: Default::default() }.into());
 	}
 
 	force_asset_status {
@@ -372,7 +372,7 @@ benchmarks_instance_pallet! {
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(PalletEvent::AssetStatusChanged { asset_id: Default::default() }.into());
+		assert_last_event::<T, I>(Event::AssetStatusChanged { asset_id: Default::default() }.into());
 	}
 
 	approve_transfer {
@@ -385,7 +385,7 @@ benchmarks_instance_pallet! {
 		let amount = 100u32.into();
 	}: _(SystemOrigin::Signed(caller.clone()), id, delegate_lookup, amount)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::ApprovedTransfer { asset_id: id, source: caller, delegate, amount }.into());
+		assert_last_event::<T, I>(Event::ApprovedTransfer { asset_id: id, source: caller, delegate, amount }.into());
 	}
 
 	transfer_approved {
@@ -405,7 +405,7 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(delegate.clone()), id, owner_lookup, dest_lookup, amount)
 	verify {
 		assert!(T::Currency::reserved_balance(&owner).is_zero());
-		assert_event::<T, I>(PalletEvent::Transferred { asset_id: id, from: owner, to: dest, amount }.into());
+		assert_event::<T, I>(Event::Transferred { asset_id: id, from: owner, to: dest, amount }.into());
 	}
 
 	cancel_approval {
@@ -420,7 +420,7 @@ benchmarks_instance_pallet! {
 		Assets::<T, I>::approve_transfer(origin, id, delegate_lookup.clone(), amount)?;
 	}: _(SystemOrigin::Signed(caller.clone()), id, delegate_lookup)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::ApprovalCancelled { asset_id: id, owner: caller, delegate }.into());
+		assert_last_event::<T, I>(Event::ApprovalCancelled { asset_id: id, owner: caller, delegate }.into());
 	}
 
 	force_cancel_approval {
@@ -435,7 +435,7 @@ benchmarks_instance_pallet! {
 		Assets::<T, I>::approve_transfer(origin, id, delegate_lookup.clone(), amount)?;
 	}: _(SystemOrigin::Signed(caller.clone()), id, caller_lookup, delegate_lookup)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::ApprovalCancelled { asset_id: id, owner: caller, delegate }.into());
+		assert_last_event::<T, I>(Event::ApprovalCancelled { asset_id: id, owner: caller, delegate }.into());
 	}
 
 	impl_benchmark_test_suite!(Assets, crate::mock::new_test_ext(), crate::mock::Test)

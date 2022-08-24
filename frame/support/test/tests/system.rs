@@ -30,7 +30,7 @@ pub trait Config: 'static + Eq + Clone {
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode + scale_info::TypeInfo;
 	type Call;
-	type RuntimeEvent: From<PalletEvent<Self>>;
+	type RuntimeEvent: From<Event<Self>>;
 	type PalletInfo: frame_support::traits::PalletInfo;
 	type DbWeight: Get<RuntimeDbWeight>;
 }
@@ -47,7 +47,7 @@ impl<T: Config> Module<T> {
 }
 
 frame_support::decl_event!(
-	pub enum PalletEvent<T>
+	pub enum Event<T>
 	where
 		BlockNumber = <T as Config>::BlockNumber,
 	{

@@ -27,7 +27,7 @@
 ///
 /// ```rust
 /// frame_support::decl_event!(
-///    pub enum PalletEvent {
+///    pub enum Event {
 ///       Success,
 ///       Failure(String),
 ///    }
@@ -36,7 +36,7 @@
 /// # fn main() {}
 /// ```
 ///
-/// # Generic PalletEvent Example:
+/// # Generic Event Example:
 ///
 /// ```rust
 /// trait Config {
@@ -47,7 +47,7 @@
 /// mod event1 {
 ///     // Event that specifies the generic parameter explicitly (`Balance`).
 ///     frame_support::decl_event!(
-///        pub enum PalletEvent<T> where Balance = <T as super::Config>::Balance {
+///        pub enum Event<T> where Balance = <T as super::Config>::Balance {
 ///           Message(Balance),
 ///        }
 ///     );
@@ -58,7 +58,7 @@
 ///     // If no name for the generic parameter is specified explicitly,
 ///     // the name will be taken from the type name of the trait.
 ///     frame_support::decl_event!(
-///        pub enum PalletEvent<T> where <T as super::Config>::Balance {
+///        pub enum Event<T> where <T as super::Config>::Balance {
 ///           Message(Balance),
 ///        }
 ///     );
@@ -67,7 +67,7 @@
 /// mod event3 {
 ///     // And we even support declaring multiple generic parameters!
 ///     frame_support::decl_event!(
-///        pub enum PalletEvent<T> where <T as super::Config>::Balance, <T as super::Config>::Token {
+///        pub enum Event<T> where <T as super::Config>::Balance, <T as super::Config>::Token {
 ///           Message(Balance, Token),
 ///        }
 ///     );
@@ -91,7 +91,7 @@
 ///
 /// // For module with instances, DefaultInstance is optional
 /// frame_support::decl_event!(
-///    pub enum PalletEvent<T, I: Instance = DefaultInstance> where
+///    pub enum Event<T, I: Instance = DefaultInstance> where
 ///       <T as Config>::Balance,
 ///       <T as Config>::Token
 ///    {
@@ -104,7 +104,7 @@
 macro_rules! decl_event {
 	(
 		$(#[$attr:meta])*
-		pub enum PalletEvent<$evt_generic_param:ident $(, $instance:ident $(: $instantiable:ident)? $( = $event_default_instance:path)? )?> where
+		pub enum Event<$evt_generic_param:ident $(, $instance:ident $(: $instantiable:ident)? $( = $event_default_instance:path)? )?> where
 			$( $tt:tt )*
 	) => {
 		$crate::__decl_generic_event!(
@@ -116,7 +116,7 @@ macro_rules! decl_event {
 	};
 	(
 		$(#[$attr:meta])*
-		pub enum PalletEvent {
+		pub enum Event {
 			$(
 				$events:tt
 			)*
@@ -134,13 +134,13 @@ macro_rules! decl_event {
 		/// Events for this module.
 		///
 		$(#[$attr])*
-		pub enum PalletEvent {
+		pub enum Event {
 			$(
 				$events
 			)*
 		}
-		impl From<PalletEvent> for () {
-			fn from(_: PalletEvent) -> () { () }
+		impl From<Event> for () {
+			fn from(_: Event) -> () { () }
 		}
 	}
 }
@@ -259,7 +259,7 @@ macro_rules! __decl_generic_event {
 		///
 		/// [`RawEvent`]: enum.RawEvent.html
 		/// [`Config`]: trait.Config.html
-		pub type PalletEvent<$event_generic_param $(, $instance $( = $event_default_instance)? )?> = RawEvent<$( $generic_type ),* $(, $instance)? >;
+		pub type Event<$event_generic_param $(, $instance $( = $event_default_instance)? )?> = RawEvent<$( $generic_type ),* $(, $instance)? >;
 
 		#[derive(
 			Clone, PartialEq, Eq,

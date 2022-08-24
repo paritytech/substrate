@@ -56,7 +56,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(MemberCount::<T, I>::get(0), 1);
-		assert_last_event::<T, I>(PalletEvent::MemberAdded { who }.into());
+		assert_last_event::<T, I>(Event::MemberAdded { who }.into());
 	}
 
 	remove_member {
@@ -75,7 +75,7 @@ benchmarks_instance_pallet! {
 			assert_eq!(MemberCount::<T, I>::get(r), 2);
 			assert_ne!(last_index[r as usize], IdToIndex::<T, I>::get(r, &last).unwrap());
 		}
-		assert_last_event::<T, I>(PalletEvent::MemberRemoved { who, rank }.into());
+		assert_last_event::<T, I>(Event::MemberRemoved { who, rank }.into());
 	}
 
 	promote_member {
@@ -88,7 +88,7 @@ benchmarks_instance_pallet! {
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(Members::<T, I>::get(&who).unwrap().rank, rank + 1);
-		assert_last_event::<T, I>(PalletEvent::RankChanged { who, rank: rank + 1 }.into());
+		assert_last_event::<T, I>(Event::RankChanged { who, rank: rank + 1 }.into());
 	}
 
 	demote_member {
@@ -107,8 +107,8 @@ benchmarks_instance_pallet! {
 		assert_eq!(MemberCount::<T, I>::get(rank), 2);
 		assert_ne!(last_index, IdToIndex::<T, I>::get(rank, &last).unwrap());
 		assert_last_event::<T, I>(match rank {
-			0 => PalletEvent::MemberRemoved { who, rank: 0 },
-			r => PalletEvent::RankChanged { who, rank: r - 1 },
+			0 => Event::MemberRemoved { who, rank: 0 },
+			r => Event::RankChanged { who, rank: r - 1 },
 		}.into());
 	}
 
@@ -133,7 +133,7 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), poll, false)
 	verify {
 		let tally = Tally::from_parts(0, 0, 1);
-		let ev = PalletEvent::Voted { who: caller, poll, vote: VoteRecord::Nay(1), tally };
+		let ev = Event::Voted { who: caller, poll, vote: VoteRecord::Nay(1), tally };
 		assert_last_event::<T, I>(ev.into());
 	}
 

@@ -110,8 +110,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
 		type Call: Parameter
@@ -332,7 +331,7 @@ pub mod pallet {
 			T::Currency::reserve(&who, deposit)?;
 
 			Proxies::<T>::insert(&anonymous, (bounded_proxies, deposit));
-			Self::deposit_event(PalletEvent::AnonymousCreated {
+			Self::deposit_event(Event::AnonymousCreated {
 				anonymous,
 				who,
 				proxy_type,
@@ -439,7 +438,7 @@ pub mod pallet {
 				})
 				.map(|d| *deposit = d)
 			})?;
-			Self::deposit_event(PalletEvent::Announced { real, proxy: who, call_hash });
+			Self::deposit_event(Event::Announced { real, proxy: who, call_hash });
 
 			Ok(())
 		}
@@ -564,7 +563,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A proxy was executed correctly, with the given.
 		ProxyExecuted { result: DispatchResult },
 		/// Anonymous account has been created by new proxy with given
@@ -703,7 +702,7 @@ impl<T: Config> Pallet<T> {
 				T::Currency::unreserve(delegator, *deposit - new_deposit);
 			}
 			*deposit = new_deposit;
-			Self::deposit_event(PalletEvent::<T>::ProxyAdded {
+			Self::deposit_event(Event::<T>::ProxyAdded {
 				delegator: delegator.clone(),
 				delegatee,
 				proxy_type,
@@ -745,7 +744,7 @@ impl<T: Config> Pallet<T> {
 			if !proxies.is_empty() {
 				*x = Some((proxies, new_deposit))
 			}
-			Self::deposit_event(PalletEvent::<T>::ProxyRemoved {
+			Self::deposit_event(Event::<T>::ProxyRemoved {
 				delegator: delegator.clone(),
 				delegatee,
 				proxy_type,
@@ -841,8 +840,6 @@ impl<T: Config> Pallet<T> {
 			}
 		});
 		let e = call.dispatch(origin);
-		Self::deposit_event(PalletEvent::ProxyExecuted {
-			result: e.map(|_| ()).map_err(|e| e.error),
-		});
+		Self::deposit_event(Event::ProxyExecuted { result: e.map(|_| ()).map_err(|e| e.error) });
 	}
 }

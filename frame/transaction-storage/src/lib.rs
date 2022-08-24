@@ -92,8 +92,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// A dispatchable call.
 		type Call: Parameter
 			+ Dispatchable<Origin = Self::Origin>
@@ -226,7 +225,7 @@ pub mod pallet {
 					.map_err(|_| Error::<T>::TooManyTransactions)?;
 				Ok(())
 			})?;
-			Self::deposit_event(PalletEvent::Stored { index });
+			Self::deposit_event(Event::Stored { index });
 			Ok(())
 		}
 
@@ -270,7 +269,7 @@ pub mod pallet {
 					})
 					.map_err(|_| Error::<T>::TooManyTransactions)
 			})?;
-			Self::deposit_event(PalletEvent::Renewed { index });
+			Self::deposit_event(Event::Renewed { index });
 			Ok(().into())
 		}
 
@@ -323,14 +322,14 @@ pub mod pallet {
 				Error::<T>::InvalidProof
 			);
 			ProofChecked::<T>::put(true);
-			Self::deposit_event(PalletEvent::ProofChecked);
+			Self::deposit_event(Event::ProofChecked);
 			Ok(().into())
 		}
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// Stored data under specified index.
 		Stored { index: u32 },
 		/// Renewed data under specified index.

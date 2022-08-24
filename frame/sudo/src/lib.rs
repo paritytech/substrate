@@ -115,8 +115,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<PalletEvent<Self>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// A sudo-able call.
 		type Call: Parameter + UnfilteredDispatchable<Origin = Self::Origin> + GetDispatchInfo;
@@ -151,9 +150,7 @@ pub mod pallet {
 			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(PalletEvent::Sudid {
-				sudo_result: res.map(|_| ()).map_err(|e| e.error),
-			});
+			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -179,9 +176,7 @@ pub mod pallet {
 			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-			Self::deposit_event(PalletEvent::Sudid {
-				sudo_result: res.map(|_| ()).map_err(|e| e.error),
-			});
+			Self::deposit_event(Event::Sudid { sudo_result: res.map(|_| ()).map_err(|e| e.error) });
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
 		}
@@ -206,7 +201,7 @@ pub mod pallet {
 			ensure!(Self::key().map_or(false, |k| sender == k), Error::<T>::RequireSudo);
 			let new = T::Lookup::lookup(new)?;
 
-			Self::deposit_event(PalletEvent::KeyChanged { old_sudoer: Key::<T>::get() });
+			Self::deposit_event(Event::KeyChanged { old_sudoer: Key::<T>::get() });
 			Key::<T>::put(&new);
 			// Sudo user does not pay a fee.
 			Ok(Pays::No.into())
@@ -246,7 +241,7 @@ pub mod pallet {
 
 			let res = call.dispatch_bypass_filter(frame_system::RawOrigin::Signed(who).into());
 
-			Self::deposit_event(PalletEvent::SudoAsDone {
+			Self::deposit_event(Event::SudoAsDone {
 				sudo_result: res.map(|_| ()).map_err(|e| e.error),
 			});
 			// Sudo user does not pay a fee.
@@ -256,7 +251,7 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// A sudo just took place. \[result\]
 		Sudid { sudo_result: DispatchResult },
 		/// The \[sudoer\] just switched identity; the old key is supplied if one existed.

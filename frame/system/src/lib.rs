@@ -295,7 +295,7 @@ pub mod pallet {
 		/// The aggregated event type of the runtime.
 		type RuntimeEvent: Parameter
 			+ Member
-			+ From<PalletEvent<Self>>
+			+ From<Event<Self>>
 			+ Debug
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -498,14 +498,14 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let hash = T::Hashing::hash(&remark[..]);
-			Self::deposit_event(PalletEvent::Remarked { sender: who, hash });
+			Self::deposit_event(Event::Remarked { sender: who, hash });
 			Ok(().into())
 		}
 	}
 
 	/// Event for the System pallet.
 	#[pallet::event]
-	pub enum PalletEvent<T: Config> {
+	pub enum Event<T: Config> {
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess { dispatch_info: DispatchInfo },
 		/// An extrinsic failed.
@@ -993,7 +993,7 @@ impl<T: Config> Pallet<T> {
 	pub fn update_code_in_storage(code: &[u8]) -> DispatchResult {
 		storage::unhashed::put_raw(well_known_keys::CODE, code);
 		Self::deposit_log(generic::DigestItem::RuntimeEnvironmentUpdated);
-		Self::deposit_event(PalletEvent::CodeUpdated);
+		Self::deposit_event(Event::CodeUpdated);
 		Ok(())
 	}
 
@@ -1507,7 +1507,7 @@ impl<T: Config> Pallet<T> {
 		info.weight = extract_actual_weight(r, &info);
 		info.pays_fee = extract_actual_pays_fee(r, &info);
 		Self::deposit_event(match r {
-			Ok(_) => PalletEvent::ExtrinsicSuccess { dispatch_info: info },
+			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
 				log::trace!(
 					target: "runtime::system",
@@ -1515,7 +1515,7 @@ impl<T: Config> Pallet<T> {
 					Self::block_number(),
 					err,
 				);
-				PalletEvent::ExtrinsicFailed { dispatch_error: err.error, dispatch_info: info }
+				Event::ExtrinsicFailed { dispatch_error: err.error, dispatch_info: info }
 			},
 		});
 
@@ -1543,13 +1543,13 @@ impl<T: Config> Pallet<T> {
 	/// An account is being created.
 	pub fn on_created_account(who: T::AccountId, _a: &mut AccountInfo<T::Index, T::AccountData>) {
 		T::OnNewAccount::on_new_account(&who);
-		Self::deposit_event(PalletEvent::NewAccount { account: who });
+		Self::deposit_event(Event::NewAccount { account: who });
 	}
 
 	/// Do anything that needs to be done after an account has been killed.
 	fn on_killed_account(who: T::AccountId) {
 		T::OnKilledAccount::on_killed_account(&who);
-		Self::deposit_event(PalletEvent::KilledAccount { account: who });
+		Self::deposit_event(Event::KilledAccount { account: who });
 	}
 
 	/// Determine whether or not it is possible to update the code.

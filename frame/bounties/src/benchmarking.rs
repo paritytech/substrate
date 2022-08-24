@@ -181,7 +181,7 @@ benchmarks_instance_pallet! {
 		let approve_origin = T::ApproveOrigin::successful_origin();
 	}: close_bounty<T::Origin>(approve_origin, bounty_id)
 	verify {
-		assert_last_event::<T, I>(PalletEvent::BountyCanceled { index: bounty_id }.into())
+		assert_last_event::<T, I>(Event::BountyCanceled { index: bounty_id }.into())
 	}
 
 	extend_bounty_expiry {
@@ -193,7 +193,7 @@ benchmarks_instance_pallet! {
 		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
 	}: _(RawOrigin::Signed(curator), bounty_id, Vec::new())
 	verify {
-		assert_last_event::<T, I>(PalletEvent::BountyExtended { index: bounty_id }.into())
+		assert_last_event::<T, I>(Event::BountyExtended { index: bounty_id }.into())
 	}
 
 	spend_funds {
@@ -216,7 +216,7 @@ benchmarks_instance_pallet! {
 	verify {
 		ensure!(budget_remaining < BalanceOf::<T, I>::max_value(), "Budget not used");
 		ensure!(missed_any == false, "Missed some");
-		assert_last_event::<T, I>(PalletEvent::BountyBecameActive { index: b - 1 }.into())
+		assert_last_event::<T, I>(Event::BountyBecameActive { index: b - 1 }.into())
 	}
 
 	impl_benchmark_test_suite!(Bounties, crate::tests::new_test_ext(), crate::tests::Test)
