@@ -141,11 +141,11 @@ pub mod pallet {
 	#[derive(Encode, Decode, Eq, PartialEq, Clone, scale_info::TypeInfo)]
 	pub struct UnstakeRequest<AccountId> {
 		/// Their stash account.
-		stash: AccountId,
+		pub stash: AccountId,
 		/// The list of eras for which they have been checked.
-		checked: Vec<EraIndex>,
+		pub checked: Vec<EraIndex>,
 		/// The pool they wish to join, if any.
-		maybe_pool_id: Option<PoolId>,
+		pub maybe_pool_id: Option<PoolId>,
 	}
 
 	/// The current "head of the queue" being unstaked.
@@ -279,7 +279,6 @@ pub mod pallet {
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
 				Error::<T>::AlreadyHead
 			);
-
 			Queue::<T>::remove(stash);
 			Ok(())
 		}
@@ -291,7 +290,6 @@ pub mod pallet {
 		pub fn control(origin: OriginFor<T>, eras_to_check: EraIndex) -> DispatchResult {
 			let _ = T::ControlOrigin::ensure_origin(origin)?;
 			ErasToCheckPerBlock::<T>::put(eras_to_check);
-
 			Ok(())
 		}
 	}
