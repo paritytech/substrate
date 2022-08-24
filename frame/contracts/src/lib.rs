@@ -260,7 +260,7 @@ pub mod pallet {
 		/// # Stability
 		///
 		/// The runtime **must** make sure that all dispatchables that are callable by
-		/// contracts remain stable. In addition [`Self::Call`] itself must remain stable.
+		/// contracts remain stable. In addition [`Self::RuntimeCall`] itself must remain stable.
 		/// This means that no existing variants are allowed to switch their positions.
 		///
 		/// # Note

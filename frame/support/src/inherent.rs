@@ -60,7 +60,7 @@ pub trait ProvideInherent {
 	///
 	/// NOTE: If the inherent is required then the runtime asserts that the block contains at least
 	/// one inherent for which:
-	/// * type is [`Self::Call`],
+	/// * type is [`Self::RuntimeCall`],
 	/// * [`Self::is_inherent`] returns true.
 	///
 	/// NOTE: This is currently only checked by block producers, not all full nodes.

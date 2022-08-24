@@ -66,7 +66,7 @@
 //! # };
 //! # use sp_runtime::traits::ValidateUnsigned;
 //! # impl ValidateUnsigned for Runtime {
-//! #     type RuntimeCall = ();
+//! #     type Call = ();
 //! #
 //! #     fn validate_unsigned(_source: TransactionSource, _call: &Self::Call) -> TransactionValidity {
 //! #         UnknownTransaction::NoUnsignedValidator.into()
