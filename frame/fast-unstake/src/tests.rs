@@ -177,10 +177,7 @@ fn cannot_deregister_if_not_controller() {
 		// Controller account registers for fast unstake.
 		FastUnstake::register_fast_unstake(Origin::signed(ctrl), Some(1_u32));
 		// Stash tries to deregister.
-		assert_noop!(
-			FastUnstake::deregister(Origin::signed(stash)),
-			Error::<Runtime>::NotController
-		);
+		assert_noop!(FastUnstake::deregister(Origin::signed(stash)), Error::<Runtime>::NotController);
 	});
 }
 
@@ -208,7 +205,7 @@ fn cannot_deregister_already_head() {
 			maybe_pool_id: None,
 		});
 		// Controller attempts to deregister
-		assert_noop!(FastUnstake::deregister(Origin::root()), Error::<Runtime>::AlreadyHead);
+		assert_noop!(FastUnstake::deregister(Origin::signed(ctrl)), Error::<Runtime>::AlreadyHead);
 	});
 }
 
