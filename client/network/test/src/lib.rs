@@ -887,6 +887,8 @@ where
 			state_request_protocol_config,
 			light_client_request_protocol_config,
 			warp_sync_protocol_config: Some(warp_protocol_config),
+			// TODO: add tests for this too.
+			beefy_justifications_protocol_config: None,
 		})
 		.unwrap();
 

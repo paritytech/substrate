@@ -78,10 +78,7 @@ where
 	Client: BlockBackend<B> + Send + Sync + 'static,
 {
 	/// Create a new [`BeefyJustifsRequestHandler`].
-	pub fn new<Hash: AsRef<[u8]>>(
-		fork_id: Option<&str>,
-		client: Arc<Client>,
-	) -> (Self, RequestResponseConfig) {
+	pub fn new(fork_id: Option<&str>, client: Arc<Client>) -> (Self, RequestResponseConfig) {
 		let (tx, request_receiver) = mpsc::channel(20);
 
 		let genesis_hash = client

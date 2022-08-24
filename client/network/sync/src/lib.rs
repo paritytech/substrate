@@ -1758,6 +1758,7 @@ where
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
+		beefy_justif_requests_provider: Option<BeefySync<B, Client>>,
 	) -> Result<Self, ClientError> {
 		let mut sync = Self {
 			client,
@@ -1778,7 +1779,7 @@ where
 			state_sync: None,
 			warp_sync: None,
 			warp_sync_provider,
-			beefy_sync: None,
+			beefy_sync: beefy_justif_requests_provider,
 			import_existing: false,
 			gap_sync: None,
 		};

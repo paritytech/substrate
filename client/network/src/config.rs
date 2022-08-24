@@ -137,6 +137,9 @@ where
 
 	/// Optional warp sync protocol config.
 	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
+
+	/// Optional BEEFY justifications protocol config.
+	pub beefy_justifications_protocol_config: Option<RequestResponseConfig>,
 }
 
 /// Role of the local node.

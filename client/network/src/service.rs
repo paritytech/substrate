@@ -385,6 +385,7 @@ where
 					params.warp_sync_protocol_config,
 					bitswap,
 					params.light_client_request_protocol_config,
+					params.beefy_justifications_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
 				);

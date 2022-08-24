@@ -44,7 +44,8 @@ use sc_network_common::{
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
+	beefy_justif_requests::BeefyJustifsRequestHandler, block_request_handler::BlockRequestHandler,
+	state_request_handler::StateRequestHandler,
 	warp_request_handler::RequestHandler as WarpSyncRequestHandler, ChainSync,
 };
 use sc_rpc::{
@@ -824,6 +825,19 @@ where
 		protocol_config
 	};
 
+	// TODO: `None` if not provided a beefy-worker-link to produce BEEFY justifications requests.
+	let beefy_justifications_protocol_config = Some({
+		// Allow both outgoing and incoming requests.
+		let (handler, protocol_config) =
+			BeefyJustifsRequestHandler::new(config.chain_spec.fork_id(), client.clone());
+		spawn_handle.spawn(
+			"beefy-justifications-request-handler",
+			Some("networking"),
+			handler.run(),
+		);
+		protocol_config
+	});
+
 	let chain_sync = ChainSync::new(
 		match config.network.sync_mode {
 			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
@@ -835,6 +849,8 @@ where
 		block_announce_validator,
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
+		// TODO: add a beefy-worker-link here that produces actual BEEFY justifications requests.
+		None,
 	)?;
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
@@ -862,6 +878,7 @@ where
 		state_request_protocol_config,
 		warp_sync_protocol_config,
 		light_client_request_protocol_config,
+		beefy_justifications_protocol_config,
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

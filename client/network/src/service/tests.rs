@@ -150,6 +150,7 @@ fn build_test_full_node(
 		state_request_protocol_config,
 		light_client_request_protocol_config,
 		warp_sync_protocol_config: None,
+		beefy_justifications_protocol_config: None,
 	})
 	.unwrap();
 
