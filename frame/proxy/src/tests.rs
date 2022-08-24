@@ -124,8 +124,8 @@ impl Default for ProxyType {
 		Self::Any
 	}
 }
-impl InstanceFilter<Call> for ProxyType {
-	fn filter(&self, c: &Call) -> bool {
+impl InstanceFilter<RuntimeCall> for ProxyType {
+	fn filter(&self, c: &RuntimeCall) -> bool {
 		match self {
 			ProxyType::Any => true,
 			ProxyType::JustTransfer => {
@@ -139,8 +139,8 @@ impl InstanceFilter<Call> for ProxyType {
 	}
 }
 pub struct BaseFilter;
-impl Contains<Call> for BaseFilter {
-	fn contains(c: &Call) -> bool {
+impl Contains<RuntimeCall> for BaseFilter {
+	fn contains(c: &RuntimeCall) -> bool {
 		match *c {
 			// Remark is used as a no-op call in the benchmarking
 			RuntimeCall::System(SystemCall::remark { .. }) => true,
@@ -197,7 +197,7 @@ fn expect_events(e: Vec<RuntimeEvent>) {
 	assert_eq!(last_events(e.len()), e);
 }
 
-fn call_transfer(dest: u64, value: u64) -> Call {
+fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
 	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 }
 

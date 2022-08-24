@@ -157,11 +157,11 @@ impl IdentityVerifier<u64> for AllianceIdentityVerifier {
 }
 
 pub struct AllianceProposalProvider;
-impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
+impl ProposalProvider<u64, H256, RuntimeCall> for AllianceProposalProvider {
 	fn propose_proposal(
 		who: u64,
 		threshold: u32,
-		proposal: Box<Call>,
+		proposal: Box<RuntimeCall>,
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError> {
 		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
@@ -189,7 +189,7 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
 	}
 
-	fn proposal_of(proposal_hash: H256) -> Option<Call> {
+	fn proposal_of(proposal_hash: H256) -> Option<RuntimeCall> {
 		AllianceMotion::proposal_of(proposal_hash)
 	}
 }
@@ -317,14 +317,14 @@ pub fn test_cid() -> Cid {
 	Cid::new_v0(&*result)
 }
 
-pub fn make_proposal(value: u64) -> Call {
+pub fn make_proposal(value: u64) -> RuntimeCall {
 	RuntimeCall::System(frame_system::Call::remark { remark: value.encode() })
 }
 
-pub fn make_set_rule_proposal(rule: Cid) -> Call {
+pub fn make_set_rule_proposal(rule: Cid) -> RuntimeCall {
 	RuntimeCall::Alliance(pallet_alliance::Call::set_rule { rule })
 }
 
-pub fn make_kick_member_proposal(who: u64) -> Call {
+pub fn make_kick_member_proposal(who: u64) -> RuntimeCall {
 	RuntimeCall::Alliance(pallet_alliance::Call::kick_member { who })
 }

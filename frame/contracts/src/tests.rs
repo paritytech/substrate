@@ -340,17 +340,17 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 pub struct TestFilter;
 
 thread_local! {
-	static CALL_FILTER: RefCell<fn(&Call) -> bool> = RefCell::new(|_| true);
+	static CALL_FILTER: RefCell<fn(&RuntimeCall) -> bool> = RefCell::new(|_| true);
 }
 
 impl TestFilter {
-	pub fn set_filter(filter: fn(&Call) -> bool) {
+	pub fn set_filter(filter: fn(&RuntimeCall) -> bool) {
 		CALL_FILTER.with(|fltr| *fltr.borrow_mut() = filter);
 	}
 }
 
-impl Contains<Call> for TestFilter {
-	fn contains(call: &Call) -> bool {
+impl Contains<RuntimeCall> for TestFilter {
+	fn contains(call: &RuntimeCall) -> bool {
 		CALL_FILTER.with(|fltr| fltr.borrow()(call))
 	}
 }

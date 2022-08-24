@@ -113,8 +113,8 @@ parameter_types! {
 }
 
 pub struct BlockEverything;
-impl Contains<Call> for BlockEverything {
-	fn contains(_: &Call) -> bool {
+impl Contains<RuntimeCall> for BlockEverything {
+	fn contains(_: &RuntimeCall) -> bool {
 		false
 	}
 }

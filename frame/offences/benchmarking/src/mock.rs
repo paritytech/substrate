@@ -205,7 +205,7 @@ impl pallet_offences::Config for Test {
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test
 where
-	Call: From<T>,
+	RuntimeCall: From<T>,
 {
 	type Extrinsic = Extrinsic;
 	type OverarchingCall = RuntimeCall;
@@ -214,7 +214,7 @@ where
 impl crate::Config for Test {}
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, u64, ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, u64, ()>;
 
 frame_support::construct_runtime!(
 	pub enum Test where

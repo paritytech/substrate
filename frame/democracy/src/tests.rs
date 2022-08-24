@@ -70,8 +70,8 @@ frame_support::construct_runtime!(
 
 // Test that a fitlered call can be dispatched.
 pub struct BaseFilter;
-impl Contains<Call> for BaseFilter {
-	fn contains(call: &Call) -> bool {
+impl Contains<RuntimeCall> for BaseFilter {
+	fn contains(call: &RuntimeCall) -> bool {
 		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
@@ -228,7 +228,7 @@ fn set_balance_proposal(value: u64) -> Vec<u8> {
 #[test]
 fn set_balance_proposal_is_correctly_filtered_out() {
 	for i in 0..10 {
-		let call = Call::decode(&mut &set_balance_proposal(i)[..]).unwrap();
+		let call = RuntimeCall::decode(&mut &set_balance_proposal(i)[..]).unwrap();
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 	}
 }

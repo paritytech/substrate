@@ -148,8 +148,8 @@ parameter_types! {
 impl example::Config for Test {}
 
 pub struct TestBaseCallFilter;
-impl Contains<Call> for TestBaseCallFilter {
-	fn contains(c: &Call) -> bool {
+impl Contains<RuntimeCall> for TestBaseCallFilter {
+	fn contains(c: &RuntimeCall) -> bool {
 		match *c {
 			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
 			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => true,
@@ -187,11 +187,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn call_transfer(dest: u64, value: u64) -> Call {
+fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
 	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 }
 
-fn call_foobar(err: bool, start_weight: u64, end_weight: Option<u64>) -> Call {
+fn call_foobar(err: bool, start_weight: u64, end_weight: Option<u64>) -> RuntimeCall {
 	RuntimeCall::Example(ExampleCall::foobar { err, start_weight, end_weight })
 }
 

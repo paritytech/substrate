@@ -50,7 +50,8 @@ use sp_runtime::{
 use std::sync::Arc;
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<AccountId, Call, (), ()>;
+pub type UncheckedExtrinsic =
+	sp_runtime::generic::UncheckedExtrinsic<AccountId, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -391,7 +392,7 @@ impl crate::Config for Runtime {
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
 where
-	Call: From<LocalCall>,
+	RuntimeCall: From<LocalCall>,
 {
 	type OverarchingCall = RuntimeCall;
 	type Extrinsic = Extrinsic;

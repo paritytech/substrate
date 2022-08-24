@@ -280,7 +280,7 @@ mod tests {
 		},
 		gas::GasMeter,
 		storage::WriteOutcome,
-		tests::{Call, Test, ALICE, BOB},
+		tests::{RuntimeCall, Test, ALICE, BOB},
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
@@ -339,7 +339,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
-		runtime_calls: RefCell<Vec<Call>>,
+		runtime_calls: RefCell<Vec<RuntimeCall>>,
 		schedule: Schedule<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,

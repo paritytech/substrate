@@ -111,9 +111,9 @@ frame_support::construct_runtime!(
 
 // Scheduler must dispatch with root and no filter, this tests base filter is indeed not used.
 pub struct BaseFilter;
-impl Contains<Call> for BaseFilter {
-	fn contains(call: &Call) -> bool {
-		!matches!(call, Call::Logger(LoggerCall::log { .. }))
+impl Contains<RuntimeCall> for BaseFilter {
+	fn contains(call: &RuntimeCall) -> bool {
+		!matches!(call, RuntimeCall::Logger(LoggerCall::log { .. }))
 	}
 }
 

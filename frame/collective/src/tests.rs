@@ -32,7 +32,7 @@ use sp_runtime::{
 };
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, RuntimeCall, ()>;
 
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -172,7 +172,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-fn make_proposal(value: u64) -> Call {
+fn make_proposal(value: u64) -> RuntimeCall {
 	RuntimeCall::System(frame_system::Call::remark_with_event {
 		remark: value.to_be_bytes().to_vec(),
 	})

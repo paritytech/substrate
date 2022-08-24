@@ -92,8 +92,8 @@ impl pallet_balances::Config for Test {
 }
 
 pub struct TestBaseCallFilter;
-impl Contains<Call> for TestBaseCallFilter {
-	fn contains(c: &Call) -> bool {
+impl Contains<RuntimeCall> for TestBaseCallFilter {
+	fn contains(c: &RuntimeCall) -> bool {
 		match *c {
 			RuntimeCall::Balances(_) => true,
 			// Needed for benchmarking
@@ -130,7 +130,7 @@ fn now() -> Timepoint<u64> {
 	Multisig::timepoint()
 }
 
-fn call_transfer(dest: u64, value: u64) -> Call {
+fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
 	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 }
 

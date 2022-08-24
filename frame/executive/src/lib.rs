@@ -840,7 +840,7 @@ mod tests {
 		Some((who, extra(nonce, fee)))
 	}
 
-	fn call_transfer(dest: u64, value: u64) -> Call {
+	fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
 		RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 	}
 
@@ -1096,8 +1096,8 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let valid = TestXt::new(Call::Custom(custom::Call::allowed_unsigned {}), None);
-		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned {}), None);
+		let valid = TestXt::new(RuntimeCall::Custom(custom::Call::allowed_unsigned {}), None);
+		let invalid = TestXt::new(RuntimeCall::Custom(custom::Call::unallowed_unsigned {}), None);
 		let mut t = new_test_ext(1);
 
 		t.execute_with(|| {
@@ -1413,7 +1413,7 @@ mod tests {
 
 	#[test]
 	fn calculating_storage_root_twice_works() {
-		let call = Call::Custom(custom::Call::calculate_storage_root {});
+		let call = RuntimeCall::Custom(custom::Call::calculate_storage_root {});
 		let xt = TestXt::new(call, sign_extra(1, 0, 0));
 
 		let header = new_test_ext(1).execute_with(|| {
@@ -1443,7 +1443,7 @@ mod tests {
 			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
-		let xt2 = TestXt::new(Call::Custom(custom::Call::inherent_call {}), None);
+		let xt2 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Let's build some fake block.
@@ -1468,7 +1468,7 @@ mod tests {
 
 	#[test]
 	fn valid_inherents_position_works() {
-		let xt1 = TestXt::new(Call::Custom(custom::Call::inherent_call {}), None);
+		let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 		let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
 
 		let header = new_test_ext(1).execute_with(|| {

@@ -103,7 +103,7 @@ impl frame_system::Config for Test {
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
 where
-	Call: From<C>,
+	RuntimeCall: From<C>,
 {
 	type OverarchingCall = RuntimeCall;
 	type Extrinsic = TestXt<RuntimeCall, ()>;
