@@ -121,7 +121,7 @@ pub type SysEvent = frame_system::Event<Test>;
 
 /// A simple call, which one doesn't matter.
 pub const CALL: &<Test as Config>::Call =
-	&Call::System(frame_system::Call::set_heap_pages { pages: 0u64 });
+	&RuntimeCall::System(frame_system::Call::set_heap_pages { pages: 0u64 });
 
 /// Create new externalities for `System` module tests.
 pub fn new_test_ext() -> sp_io::TestExternalities {

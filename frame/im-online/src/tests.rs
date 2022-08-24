@@ -240,7 +240,8 @@ fn should_generate_heartbeats() {
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.call {
-			crate::mock::Call::ImOnline(crate::Call::heartbeat { heartbeat, .. }) => heartbeat,
+			crate::mock::RuntimeCall::ImOnline(crate::Call::heartbeat { heartbeat, .. }) =>
+				heartbeat,
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
@@ -355,7 +356,8 @@ fn should_not_send_a_report_if_already_online() {
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.call {
-			crate::mock::Call::ImOnline(crate::Call::heartbeat { heartbeat, .. }) => heartbeat,
+			crate::mock::RuntimeCall::ImOnline(crate::Call::heartbeat { heartbeat, .. }) =>
+				heartbeat,
 			e => panic!("Unexpected call: {:?}", e),
 		};
 

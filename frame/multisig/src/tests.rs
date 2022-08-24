@@ -97,7 +97,7 @@ impl Contains<Call> for TestBaseCallFilter {
 		match *c {
 			RuntimeCall::Balances(_) => true,
 			// Needed for benchmarking
-			Call::System(frame_system::Call::remark { .. }) => true,
+			RuntimeCall::System(frame_system::Call::remark { .. }) => true,
 			_ => false,
 		}
 	}
@@ -766,7 +766,7 @@ fn multisig_1_of_3_works() {
 #[test]
 fn multisig_filters() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::System(frame_system::Call::set_code { code: vec![] }));
+		let call = Box::new(RuntimeCall::System(frame_system::Call::set_code { code: vec![] }));
 		assert_noop!(
 			Multisig::as_multi_threshold_1(Origin::signed(1), vec![2], call.clone()),
 			DispatchError::from(frame_system::Error::<Test>::CallFiltered),

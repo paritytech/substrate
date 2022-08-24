@@ -456,17 +456,17 @@ fn event_codec() {
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(Call::System(system::Call::noop {}).encode()[0], 30);
-	assert_eq!(Call::Module1_1(module1::Call::fail {}).encode()[0], 31);
-	assert_eq!(Call::Module2(module2::Call::fail {}).encode()[0], 32);
-	assert_eq!(Call::Module1_2(module1::Call::fail {}).encode()[0], 33);
-	assert_eq!(Call::NestedModule3(nested::module3::Call::fail {}).encode()[0], 34);
-	assert_eq!(Call::Module3(module3::Call::fail {}).encode()[0], 35);
-	assert_eq!(Call::Module1_4(module1::Call::fail {}).encode()[0], 3);
-	assert_eq!(Call::Module1_6(module1::Call::fail {}).encode()[0], 1);
-	assert_eq!(Call::Module1_7(module1::Call::fail {}).encode()[0], 2);
-	assert_eq!(Call::Module1_8(module1::Call::fail {}).encode()[0], 12);
-	assert_eq!(Call::Module1_9(module1::Call::fail {}).encode()[0], 13);
+	assert_eq!(RuntimeCall::System(system::Call::noop {}).encode()[0], 30);
+	assert_eq!(RuntimeCall::Module1_1(module1::Call::fail {}).encode()[0], 31);
+	assert_eq!(RuntimeCall::Module2(module2::Call::fail {}).encode()[0], 32);
+	assert_eq!(RuntimeCall::Module1_2(module1::Call::fail {}).encode()[0], 33);
+	assert_eq!(RuntimeCall::NestedModule3(nested::module3::Call::fail {}).encode()[0], 34);
+	assert_eq!(RuntimeCall::Module3(module3::Call::fail {}).encode()[0], 35);
+	assert_eq!(RuntimeCall::Module1_4(module1::Call::fail {}).encode()[0], 3);
+	assert_eq!(RuntimeCall::Module1_6(module1::Call::fail {}).encode()[0], 1);
+	assert_eq!(RuntimeCall::Module1_7(module1::Call::fail {}).encode()[0], 2);
+	assert_eq!(RuntimeCall::Module1_8(module1::Call::fail {}).encode()[0], 12);
+	assert_eq!(RuntimeCall::Module1_9(module1::Call::fail {}).encode()[0], 13);
 }
 
 #[test]

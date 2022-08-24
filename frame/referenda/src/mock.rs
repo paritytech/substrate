@@ -295,8 +295,12 @@ impl<Class> VoteTally<u32, Class> for Tally {
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
-	RuntimeCall::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
-		.encode()
+	RuntimeCall::Balances(pallet_balances::Call::set_balance {
+		who: 42,
+		new_free: value,
+		new_reserved: 0,
+	})
+	.encode()
 }
 
 pub fn set_balance_proposal_hash(value: u64) -> H256 {

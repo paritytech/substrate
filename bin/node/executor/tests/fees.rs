@@ -22,7 +22,8 @@ use frame_support::{
 };
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
-	Balances, RuntimeCall, CheckedExtrinsic, Multiplier, Runtime, TransactionByteFee, TransactionPayment,
+	Balances, CheckedExtrinsic, Multiplier, Runtime, RuntimeCall, TransactionByteFee,
+	TransactionPayment,
 };
 use node_primitives::Balance;
 use node_testing::keyring::*;
@@ -54,12 +55,12 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set { now: time1 }),
+				function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: time1 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::Sudo(pallet_sudo::Call::sudo {
-					call: Box::new(Call::System(frame_system::Call::fill_block {
+				function: RuntimeCall::Sudo(pallet_sudo::Call::sudo {
+					call: Box::new(RuntimeCall::System(frame_system::Call::fill_block {
 						ratio: Perbill::from_percent(60),
 					})),
 				}),
@@ -77,11 +78,11 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set { now: time2 }),
+				function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: time2 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::System(frame_system::Call::remark { remark: vec![0; 1] }),
+				function: RuntimeCall::System(frame_system::Call::remark { remark: vec![0; 1] }),
 			},
 		],
 		(time2 / SLOT_DURATION).into(),
@@ -252,7 +253,7 @@ fn block_weight_capacity_report() {
 			0,
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
+				function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 			},
 		);
 
@@ -322,11 +323,13 @@ fn block_length_capacity_report() {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
+					function: RuntimeCall::Timestamp(pallet_timestamp::Call::set {
+						now: time * 1000,
+					}),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), signed_extra(nonce, 0))),
-					function: Call::System(frame_system::Call::remark {
+					function: RuntimeCall::System(frame_system::Call::remark {
 						remark: vec![0u8; (block_number * factor) as usize],
 					}),
 				},

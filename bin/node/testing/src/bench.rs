@@ -35,8 +35,8 @@ use crate::{
 use codec::{Decode, Encode};
 use futures::executor;
 use kitchensink_runtime::{
-	constants::currency::DOLLARS, AccountId, BalancesCall, RuntimeCall, CheckedExtrinsic, MinimumPeriod,
-	Signature, SystemCall, UncheckedExtrinsic,
+	constants::currency::DOLLARS, AccountId, BalancesCall, CheckedExtrinsic, MinimumPeriod,
+	RuntimeCall, Signature, SystemCall, UncheckedExtrinsic,
 };
 use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
@@ -321,7 +321,8 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 								(kitchensink_runtime::ExistentialDeposit::get() - 1),
 						})
 					},
-					BlockType::Noop => Call::System(SystemCall::remark { remark: Vec::new() }),
+					BlockType::Noop =>
+						RuntimeCall::System(SystemCall::remark { remark: Vec::new() }),
 				},
 			},
 			self.runtime_version.spec_version,

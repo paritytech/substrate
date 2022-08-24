@@ -608,7 +608,7 @@ frame_support::construct_runtime!(
 // Test that the part `Call` is excluded from Example2 and included in Example4.
 fn _ensure_call_is_correctly_excluded_and_included(call: Call) {
 	match call {
-		Call::System(_) | Call::Example(_) | Call::Example4(_) => (),
+		RuntimeCall::System(_) | RuntimeCall::Example(_) | RuntimeCall::Example4(_) => (),
 	}
 }
 
@@ -692,7 +692,7 @@ fn inherent_expand() {
 	let inherents = InherentData::new().create_extrinsics();
 
 	let expected = vec![UncheckedExtrinsic {
-		function: Call::Example(pallet::Call::foo_no_post_info {}),
+		function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 		signature: None,
 	}];
 	assert_eq!(expected, inherents);
@@ -707,11 +707,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info {}),
+				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -729,11 +729,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info {}),
+				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 0, bar: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 0, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -750,7 +750,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+			function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -768,7 +768,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_no_post_info {}),
+			function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 			signature: Some((1, (), ())),
 		}],
 	);
@@ -787,11 +787,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -809,15 +809,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info {}),
+				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -835,15 +835,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: Some((1, (), ())),
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info {}),
+				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],

@@ -173,7 +173,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn make_proposal(value: u64) -> Call {
-	Call::System(frame_system::Call::remark_with_event { remark: value.to_be_bytes().to_vec() })
+	RuntimeCall::System(frame_system::Call::remark_with_event {
+		remark: value.to_be_bytes().to_vec(),
+	})
 }
 
 fn record(event: RuntimeEvent) -> EventRecord<RuntimeEvent, H256> {
@@ -253,7 +255,7 @@ fn close_works() {
 #[test]
 fn proposal_weight_limit_works_on_approve() {
 	new_test_ext().execute_with(|| {
-		let proposal = Call::Collective(crate::Call::set_members {
+		let proposal = RuntimeCall::Collective(crate::Call::set_members {
 			new_members: vec![1, 2, 3],
 			prime: None,
 			old_count: MaxMembers::get(),
@@ -283,7 +285,7 @@ fn proposal_weight_limit_works_on_approve() {
 #[test]
 fn proposal_weight_limit_ignored_on_disapprove() {
 	new_test_ext().execute_with(|| {
-		let proposal = Call::Collective(crate::Call::set_members {
+		let proposal = RuntimeCall::Collective(crate::Call::set_members {
 			new_members: vec![1, 2, 3],
 			prime: None,
 			old_count: MaxMembers::get(),
@@ -669,7 +671,7 @@ fn limit_active_proposals() {
 #[test]
 fn correct_validate_and_get_proposal() {
 	new_test_ext().execute_with(|| {
-		let proposal = Call::Collective(crate::Call::set_members {
+		let proposal = RuntimeCall::Collective(crate::Call::set_members {
 			new_members: vec![1, 2, 3],
 			prime: None,
 			old_count: MaxMembers::get(),

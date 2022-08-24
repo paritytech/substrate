@@ -293,16 +293,19 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 			ProxyType::NonTransfer => !matches!(
 				c,
 				RuntimeCall::Balances(..) |
-					RuntimeCall::Assets(..) | RuntimeCall::Uniques(..) |
+					RuntimeCall::Assets(..) |
+					RuntimeCall::Uniques(..) |
 					RuntimeCall::Vesting(pallet_vesting::Call::vested_transfer { .. }) |
 					RuntimeCall::Indices(pallet_indices::Call::transfer { .. })
 			),
 			ProxyType::Governance => matches!(
 				c,
 				RuntimeCall::Democracy(..) |
-					RuntimeCall::Council(..) | RuntimeCall::Society(..) |
+					RuntimeCall::Council(..) |
+					RuntimeCall::Society(..) |
 					RuntimeCall::TechnicalCommittee(..) |
-					RuntimeCall::Elections(..) | RuntimeCall::Treasury(..)
+					RuntimeCall::Elections(..) |
+					RuntimeCall::Treasury(..)
 			),
 			ProxyType::Staking => matches!(c, RuntimeCall::Staking(..)),
 		}
@@ -1671,7 +1674,8 @@ pub type SignedExtra = (
 );
 
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+pub type UncheckedExtrinsic =
+	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 /// The payload being signed in transactions.
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Extrinsic type that has already been checked.

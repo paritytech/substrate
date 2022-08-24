@@ -318,13 +318,13 @@ pub fn test_cid() -> Cid {
 }
 
 pub fn make_proposal(value: u64) -> Call {
-	Call::System(frame_system::Call::remark { remark: value.encode() })
+	RuntimeCall::System(frame_system::Call::remark { remark: value.encode() })
 }
 
 pub fn make_set_rule_proposal(rule: Cid) -> Call {
-	Call::Alliance(pallet_alliance::Call::set_rule { rule })
+	RuntimeCall::Alliance(pallet_alliance::Call::set_rule { rule })
 }
 
 pub fn make_kick_member_proposal(who: u64) -> Call {
-	Call::Alliance(pallet_alliance::Call::kick_member { who })
+	RuntimeCall::Alliance(pallet_alliance::Call::kick_member { who })
 }
