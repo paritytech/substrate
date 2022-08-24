@@ -176,7 +176,7 @@ pub mod pallet {
 		type Call = Call<T, I>;
 		fn validate_unsigned(
 			_source: TransactionSource,
-			_call: &Self::Call,
+			_call: &Self::RuntimeCall,
 		) -> TransactionValidity {
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}
@@ -189,11 +189,11 @@ pub mod pallet {
 
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
 			unimplemented!();
 		}
 
-		fn is_inherent(_call: &Self::Call) -> bool {
+		fn is_inherent(_call: &Self::RuntimeCall) -> bool {
 			unimplemented!();
 		}
 	}

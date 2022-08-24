@@ -33,7 +33,7 @@ benchmarks! {
 	where_clause { where <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin: Clone }
 	batch {
 		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::Call> = Vec::new();
+		let mut calls: Vec<<T as Config>::RuntimeCall> = Vec::new();
 		for i in 0 .. c {
 			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
@@ -54,7 +54,7 @@ benchmarks! {
 
 	batch_all {
 		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::Call> = Vec::new();
+		let mut calls: Vec<<T as Config>::RuntimeCall> = Vec::new();
 		for i in 0 .. c {
 			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
@@ -75,7 +75,7 @@ benchmarks! {
 
 	force_batch {
 		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::Call> = Vec::new();
+		let mut calls: Vec<<T as Config>::RuntimeCall> = Vec::new();
 		for i in 0 .. c {
 			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);

@@ -129,18 +129,18 @@ mod module1 {
 		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
 			unimplemented!();
 		}
 
 		fn check_inherent(
-			_: &Self::Call,
+			_: &Self::RuntimeCall,
 			_: &InherentData,
 		) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 
-		fn is_inherent(_call: &Self::Call) -> bool {
+		fn is_inherent(_call: &Self::RuntimeCall) -> bool {
 			unimplemented!();
 		}
 	}
@@ -198,18 +198,18 @@ mod module2 {
 		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
 			unimplemented!();
 		}
 
 		fn check_inherent(
-			_call: &Self::Call,
+			_call: &Self::RuntimeCall,
 			_data: &InherentData,
 		) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 
-		fn is_inherent(_call: &Self::Call) -> bool {
+		fn is_inherent(_call: &Self::RuntimeCall) -> bool {
 			unimplemented!();
 		}
 	}

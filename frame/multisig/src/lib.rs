@@ -99,7 +99,7 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	approvals: Vec<AccountId>,
 }
 
-type OpaqueCall<T> = WrapperKeepOpaque<<T as Config>::Call>;
+type OpaqueCall<T> = WrapperKeepOpaque<<T as Config>::RuntimeCall>;
 
 type CallHash = [u8; 32];
 
@@ -266,7 +266,7 @@ pub mod pallet {
 		pub fn as_multi_threshold_1(
 			origin: OriginFor<T>,
 			other_signatories: Vec<T::AccountId>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let max_sigs = T::MaxSignatories::get() as usize;
@@ -695,7 +695,7 @@ impl<T: Config> Pallet<T> {
 	fn get_call(
 		hash: &[u8; 32],
 		maybe_known: Option<&OpaqueCall<T>>,
-	) -> Option<(<T as Config>::Call, usize)> {
+	) -> Option<(<T as Config>::RuntimeCall, usize)> {
 		maybe_known.map_or_else(
 			|| {
 				Calls::<T>::get(hash)

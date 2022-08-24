@@ -384,7 +384,7 @@ pub mod pallet {
 		pub fn as_recovered(
 			origin: OriginFor<T>,
 			account: AccountIdLookupOf<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let account = T::Lookup::lookup(account)?;

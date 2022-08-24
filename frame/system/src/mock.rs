@@ -95,7 +95,7 @@ impl Config for Test {
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -120,7 +120,7 @@ impl Config for Test {
 pub type SysEvent = frame_system::Event<Test>;
 
 /// A simple call, which one doesn't matter.
-pub const CALL: &<Test as Config>::Call =
+pub const CALL: &<Test as Config>::RuntimeCall =
 	&RuntimeCall::System(frame_system::Call::set_heap_pages { pages: 0u64 });
 
 /// Create new externalities for `System` module tests.

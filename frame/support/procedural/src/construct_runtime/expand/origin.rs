@@ -104,7 +104,7 @@ pub fn expand_outer_origin(
 		#[derive(Clone)]
 		pub struct Origin {
 			caller: OriginCaller,
-			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::Call) -> bool>>,
+			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::RuntimeCall) -> bool>>,
 		}
 
 		#[cfg(not(feature = "std"))]
@@ -131,11 +131,11 @@ pub fn expand_outer_origin(
 		}
 
 		impl #scrate::traits::OriginTrait for Origin {
-			type Call = <#runtime as #system_path::Config>::Call;
+			type Call = <#runtime as #system_path::Config>::RuntimeCall;
 			type PalletsOrigin = OriginCaller;
 			type AccountId = <#runtime as #system_path::Config>::AccountId;
 
-			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
+			fn add_filter(&mut self, filter: impl Fn(&Self::RuntimeCall) -> bool + 'static) {
 				let f = self.filter.clone();
 
 				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(move |call| {
@@ -146,7 +146,7 @@ pub fn expand_outer_origin(
 			fn reset_filter(&mut self) {
 				let filter = <
 					<#runtime as #system_path::Config>::BaseCallFilter
-					as #scrate::traits::Contains<<#runtime as #system_path::Config>::Call>
+					as #scrate::traits::Contains<<#runtime as #system_path::Config>::RuntimeCall>
 				>::contains;
 
 				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(filter));
@@ -156,7 +156,7 @@ pub fn expand_outer_origin(
 				self.caller = other.into().caller;
 			}
 
-			fn filter_call(&self, call: &Self::Call) -> bool {
+			fn filter_call(&self, call: &Self::RuntimeCall) -> bool {
 				match self.caller {
 					// Root bypasses all filters
 					OriginCaller::system(#system_path::Origin::<#runtime>::Root) => true,

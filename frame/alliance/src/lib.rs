@@ -233,7 +233,7 @@ pub mod pallet {
 			+ From<Call<Self, I>>
 			+ GetDispatchInfo
 			+ IsSubType<Call<Self, I>>
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Origin for admin-level operations, like setting the Alliance's rules.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;

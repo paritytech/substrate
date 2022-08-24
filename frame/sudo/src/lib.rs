@@ -143,7 +143,7 @@ pub mod pallet {
 		})]
 		pub fn sudo(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -168,7 +168,7 @@ pub mod pallet {
 		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
 		pub fn sudo_unchecked_weight(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 			_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -231,7 +231,7 @@ pub mod pallet {
 		pub fn sudo_as(
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;

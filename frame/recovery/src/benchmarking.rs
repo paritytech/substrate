@@ -107,7 +107,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let recovered_account: T::AccountId = account("recovered_account", 0, SEED);
 		let recovered_account_lookup = T::Lookup::unlookup(recovered_account.clone());
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark { remark: vec![] }.into();
 
 		Proxy::<T>::insert(&caller, &recovered_account);
 	}: _(

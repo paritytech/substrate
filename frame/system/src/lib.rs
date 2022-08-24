@@ -205,7 +205,7 @@ pub mod pallet {
 	pub trait Config: 'static + Eq + Clone {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
-		type BaseCallFilter: Contains<Self::Call>;
+		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
 		#[pallet::constant]
@@ -219,10 +219,10 @@ pub mod pallet {
 		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<Call = Self::Call>;
+			+ OriginTrait<RuntimeCall = Self::RuntimeCall>;
 
-		/// The aggregated `Call` type.
-		type Call: Dispatchable + Debug;
+		/// The aggregated `RuntimeCall` type.
+		type RuntimeCall: Dispatchable + Debug;
 
 		/// Account index (aka nonce) type. This stores the number of previous transactions
 		/// associated with a sender account.

@@ -2614,7 +2614,7 @@ mod tests {
 			type AccountId;
 			type Call;
 			type BaseCallFilter;
-			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
+			type Origin: crate::traits::OriginTrait<Call = Self::RuntimeCall>;
 			type BlockNumber: Into<u32>;
 			type PalletInfo: crate::traits::PalletInfo;
 			type DbWeight: Get<RuntimeDbWeight>;
@@ -2715,11 +2715,11 @@ mod tests {
 	}
 
 	impl crate::traits::OriginTrait for OuterOrigin {
-		type Call = <TraitImpl as system::Config>::Call;
+		type Call = <TraitImpl as system::Config>::RuntimeCall;
 		type PalletsOrigin = OuterOrigin;
 		type AccountId = <TraitImpl as system::Config>::AccountId;
 
-		fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
+		fn add_filter(&mut self, _filter: impl Fn(&Self::RuntimeCall) -> bool + 'static) {
 			unimplemented!("Not required in tests!")
 		}
 
@@ -2731,7 +2731,7 @@ mod tests {
 			unimplemented!("Not required in tests!")
 		}
 
-		fn filter_call(&self, _call: &Self::Call) -> bool {
+		fn filter_call(&self, _call: &Self::RuntimeCall) -> bool {
 			unimplemented!("Not required in tests!")
 		}
 
@@ -2763,7 +2763,7 @@ mod tests {
 	impl system::Config for TraitImpl {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
-		type Call = ();
+		type RuntimeCall = ();
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockNumber = u32;
 		type PalletInfo = Self;

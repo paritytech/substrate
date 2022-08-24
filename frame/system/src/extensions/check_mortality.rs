@@ -56,7 +56,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckMortality";

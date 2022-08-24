@@ -376,7 +376,7 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType5> + From<SomeType3>,
 	{
 		type Call = Call<T>;
-		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+		fn validate_unsigned(_source: TransactionSource, call: &Self::RuntimeCall) -> TransactionValidity {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_storage_layer { .. }) {
@@ -396,17 +396,17 @@ pub mod pallet {
 
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType6); // Test for where clause
 			Some(Call::foo_no_post_info {})
 		}
 
-		fn is_inherent(call: &Self::Call) -> bool {
+		fn is_inherent(call: &Self::RuntimeCall) -> bool {
 			matches!(call, Call::foo_no_post_info {} | Call::foo { .. })
 		}
 
-		fn check_inherent(call: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
+		fn check_inherent(call: &Self::RuntimeCall, _: &InherentData) -> Result<(), Self::Error> {
 			match call {
 				Call::foo_no_post_info {} => Ok(()),
 				Call::foo { foo: 0, bar: 0 } => Err(InherentError::Fatal),

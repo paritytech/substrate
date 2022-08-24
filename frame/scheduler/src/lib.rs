@@ -82,7 +82,7 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
-pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
+pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::RuntimeCall, <T as frame_system::Config>::Hash>;
 
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
@@ -113,7 +113,7 @@ pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId> {
 use crate::ScheduledV3 as ScheduledV2;
 
 pub type ScheduledV2Of<T> = ScheduledV3<
-	<T as Config>::Call,
+	<T as Config>::RuntimeCall,
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
 	<T as frame_system::Config>::AccountId,
@@ -543,7 +543,7 @@ impl<T: Config> Pallet<T> {
 	pub fn migrate_v1_to_v3() -> Weight {
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
-		Agenda::<T>::translate::<Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _>(
+		Agenda::<T>::translate::<Vec<Option<ScheduledV1<<T as Config>::RuntimeCall, T::BlockNumber>>>, _>(
 			|_, agenda| {
 				Some(
 					agenda
@@ -859,7 +859,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
+impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::RuntimeCall, T::PalletsOrigin>
 	for Pallet<T>
 {
 	type Address = TaskAddress<T::BlockNumber>;
@@ -891,7 +891,7 @@ impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::Palle
 	}
 }
 
-impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
+impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::RuntimeCall, T::PalletsOrigin>
 	for Pallet<T>
 {
 	type Address = TaskAddress<T::BlockNumber>;

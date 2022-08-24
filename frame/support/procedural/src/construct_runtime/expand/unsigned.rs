@@ -46,7 +46,7 @@ pub fn expand_outer_validate_unsigned(
 		impl #scrate::unsigned::ValidateUnsigned for #runtime {
 			type Call = RuntimeCall;
 
-			fn pre_dispatch(call: &Self::Call) -> Result<(), #scrate::unsigned::TransactionValidityError> {
+			fn pre_dispatch(call: &Self::RuntimeCall) -> Result<(), #scrate::unsigned::TransactionValidityError> {
 				#[allow(unreachable_patterns)]
 				match call {
 					#( Call::#pallet_names(inner_call) => #pallet_names::pre_dispatch(inner_call), )*
@@ -59,7 +59,7 @@ pub fn expand_outer_validate_unsigned(
 			fn validate_unsigned(
 				#[allow(unused_variables)]
 				source: #scrate::unsigned::TransactionSource,
-				call: &Self::Call,
+				call: &Self::RuntimeCall,
 			) -> #scrate::unsigned::TransactionValidity {
 				#[allow(unreachable_patterns)]
 				match call {

@@ -719,11 +719,11 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
 where
-	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
+	<T as frame_system::Config>::RuntimeCall: IsSubType<Call<T>>,
 {
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
-	type Call = <T as frame_system::Config>::Call;
+	type Call = <T as frame_system::Config>::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = ();
 

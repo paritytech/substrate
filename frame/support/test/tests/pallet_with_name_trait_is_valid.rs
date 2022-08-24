@@ -64,7 +64,7 @@ impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
 
 	fn validate_unsigned(
 		_source: sp_runtime::transaction_validity::TransactionSource,
-		_call: &Self::Call,
+		_call: &Self::RuntimeCall,
 	) -> sp_runtime::transaction_validity::TransactionValidity {
 		unimplemented!();
 	}
@@ -77,18 +77,18 @@ impl<T: Trait> frame_support::inherent::ProvideInherent for Module<T> {
 	type Error = frame_support::inherent::MakeFatalError<()>;
 	const INHERENT_IDENTIFIER: frame_support::inherent::InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent(_data: &frame_support::inherent::InherentData) -> Option<Self::Call> {
+	fn create_inherent(_data: &frame_support::inherent::InherentData) -> Option<Self::RuntimeCall> {
 		unimplemented!();
 	}
 
 	fn check_inherent(
-		_: &Self::Call,
+		_: &Self::RuntimeCall,
 		_: &frame_support::inherent::InherentData,
 	) -> std::result::Result<(), Self::Error> {
 		unimplemented!();
 	}
 
-	fn is_inherent(_call: &Self::Call) -> bool {
+	fn is_inherent(_call: &Self::RuntimeCall) -> bool {
 		unimplemented!();
 	}
 }
@@ -108,7 +108,7 @@ mod tests {
 	type TestHeader = sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>;
 	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
 		<Runtime as frame_system::Config>::AccountId,
-		<Runtime as frame_system::Config>::Call,
+		<Runtime as frame_system::Config>::RuntimeCall,
 		(),
 		SignedExtra,
 	>;

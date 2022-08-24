@@ -832,7 +832,7 @@ mod tests {
 		}
 	);
 
-	const CALL: &<Runtime as frame_system::Config>::Call =
+	const CALL: &<Runtime as frame_system::Config>::RuntimeCall =
 		&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 	thread_local! {

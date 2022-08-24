@@ -2170,7 +2170,7 @@ pub mod pallet_prelude {
 /// 		type Call = Call<T>;
 /// 		fn validate_unsigned(
 /// 			source: TransactionSource,
-/// 			call: &Self::Call
+/// 			call: &Self::RuntimeCall
 /// 		) -> TransactionValidity {
 /// 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 /// 		}
@@ -2184,11 +2184,11 @@ pub mod pallet_prelude {
 ///
 /// 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 ///
-/// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+/// 		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
 /// 			unimplemented!();
 /// 		}
 ///
-/// 		fn is_inherent(_call: &Self::Call) -> bool {
+/// 		fn is_inherent(_call: &Self::RuntimeCall) -> bool {
 /// 			unimplemented!();
 /// 		}
 /// 	}
@@ -2302,7 +2302,7 @@ pub mod pallet_prelude {
 /// 		type Call = Call<T, I>;
 /// 		fn validate_unsigned(
 /// 			source: TransactionSource,
-/// 			call: &Self::Call
+/// 			call: &Self::RuntimeCall
 /// 		) -> TransactionValidity {
 /// 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 /// 		}
@@ -2315,11 +2315,11 @@ pub mod pallet_prelude {
 ///
 /// 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 ///
-/// 		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
+/// 		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
 /// 			unimplemented!();
 /// 		}
 ///
-/// 		fn is_inherent(_call: &Self::Call) -> bool {
+/// 		fn is_inherent(_call: &Self::RuntimeCall) -> bool {
 /// 			unimplemented!();
 /// 		}
 /// 	}
