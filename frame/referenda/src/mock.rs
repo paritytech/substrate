@@ -72,7 +72,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -103,7 +103,7 @@ impl pallet_scheduler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = ConstU64<2_000_000_000_000>;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;
@@ -211,7 +211,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 
 impl Config for Test {
 	type WeightInfo = ();
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;

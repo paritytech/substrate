@@ -250,7 +250,7 @@ impl system::Config for Runtime {
 	type AccountId = AccountId;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 }
 

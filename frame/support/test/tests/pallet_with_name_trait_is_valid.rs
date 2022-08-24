@@ -130,7 +130,7 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;
-		type Call = RuntimeCall;
+		type RuntimeCall = RuntimeCall;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;

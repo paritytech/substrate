@@ -219,7 +219,7 @@ pub mod pallet {
 		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<RuntimeCall = Self::RuntimeCall>;
+			+ OriginTrait<Call = Self::RuntimeCall>;
 
 		/// The aggregated `RuntimeCall` type.
 		type RuntimeCall: Dispatchable + Debug;

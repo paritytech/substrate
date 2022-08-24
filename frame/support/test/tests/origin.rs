@@ -151,7 +151,7 @@ impl system::Config for RuntimeOriginTest {
 	type AccountId = u32;
 	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 }
 

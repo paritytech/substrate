@@ -737,7 +737,7 @@ mod tests {
 		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
-		type Call = RuntimeCall;
+		type RuntimeCall = RuntimeCall;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;
 		type Hashing = BlakeTwo256;

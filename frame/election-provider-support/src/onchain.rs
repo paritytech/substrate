@@ -214,7 +214,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = AccountId;
 		type BlockNumber = BlockNumber;
-		type Call = RuntimeCall;
+		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;

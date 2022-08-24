@@ -134,7 +134,7 @@ pub mod pallet {
 		type PalletId: Get<PalletId>;
 
 		/// A dispatchable call.
-		type Call: Parameter
+		type RuntimeCall: Parameter
 			+ Dispatchable<Origin = Self::Origin>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;

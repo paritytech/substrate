@@ -455,11 +455,11 @@ impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
 }
 
 impl frame_support::traits::OriginTrait for Origin {
-	type RuntimeCall = <Runtime as frame_system::Config>::RuntimeCall;
+	type Call = <Runtime as frame_system::Config>::RuntimeCall;
 	type PalletsOrigin = Origin;
 	type AccountId = <Runtime as frame_system::Config>::AccountId;
 
-	fn add_filter(&mut self, _filter: impl Fn(&Self::RuntimeCall) -> bool + 'static) {
+	fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
 		unimplemented!("Not required in tests!")
 	}
 
@@ -471,7 +471,7 @@ impl frame_support::traits::OriginTrait for Origin {
 		unimplemented!("Not required in tests!")
 	}
 
-	fn filter_call(&self, _call: &Self::RuntimeCall) -> bool {
+	fn filter_call(&self, _call: &Self::Call) -> bool {
 		unimplemented!("Not required in tests!")
 	}
 

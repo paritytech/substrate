@@ -205,7 +205,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
 	type Origin = Origin;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Index = Index;
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
@@ -230,7 +230,7 @@ impl pallet_randomness_collective_flip::Config for Runtime {}
 
 impl pallet_utility::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
 }
@@ -244,7 +244,7 @@ parameter_types! {
 
 impl pallet_multisig::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
@@ -323,7 +323,7 @@ impl InstanceFilter<RuntimeCall> for ProxyType {
 
 impl pallet_proxy::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type ProxyType = ProxyType;
 	type ProxyDepositBase = ProxyDepositBase;
@@ -347,7 +347,7 @@ impl pallet_scheduler::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<AccountId>;
 	type MaxScheduledPerBlock = ConstU32<50>;
@@ -830,7 +830,7 @@ impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
 
 impl pallet_referenda::Config for Runtime {
 	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Self>;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
@@ -849,7 +849,7 @@ impl pallet_referenda::Config for Runtime {
 
 impl pallet_referenda::Config<pallet_referenda::Instance2> for Runtime {
 	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Self>;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
@@ -1140,7 +1140,7 @@ impl pallet_contracts::Config for Runtime {
 	type Randomness = RandomnessCollectiveFlip;
 	type Currency = Balances;
 	type RuntimeEvent = RuntimeEvent;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	/// The safest default is to allow no calls at all.
 	///
 	/// Runtimes should whitelist dispatchables that are allowed to be called from contracts
@@ -1166,7 +1166,7 @@ impl pallet_contracts::Config for Runtime {
 
 impl pallet_sudo::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 }
 
 parameter_types! {
@@ -1259,7 +1259,7 @@ impl pallet_authority_discovery::Config for Runtime {
 
 impl pallet_grandpa::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 
 	type KeyOwnerProofSystem = Historical;
 
@@ -1315,7 +1315,7 @@ parameter_types! {
 impl pallet_recovery::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_recovery::weights::SubstrateWeight<Runtime>;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type ConfigDepositBase = ConfigDepositBase;
 	type FriendDepositFactor = FriendDepositFactor;
@@ -1386,7 +1386,7 @@ parameter_types! {
 
 impl pallet_lottery::Config for Runtime {
 	type PalletId = LotteryPalletId;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type Randomness = RandomnessCollectiveFlip;
 	type RuntimeEvent = RuntimeEvent;
@@ -1482,7 +1482,7 @@ impl pallet_uniques::Config for Runtime {
 impl pallet_transaction_storage::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type FeeDestination = ();
 	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
 	type MaxBlockTransactions =
@@ -1493,7 +1493,7 @@ impl pallet_transaction_storage::Config for Runtime {
 
 impl pallet_whitelist::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type WhitelistOrigin = EnsureRoot<AccountId>;
 	type DispatchWhitelistedOrigin = EnsureRoot<AccountId>;
 	type PreimageProvider = Preimage;

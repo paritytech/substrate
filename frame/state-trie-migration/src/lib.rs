@@ -1084,7 +1084,7 @@ mod mock {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type Origin = Origin;
-		type Call = RuntimeCall;
+		type RuntimeCall = RuntimeCall;
 		type Index = u64;
 		type BlockNumber = u32;
 		type Hash = H256;

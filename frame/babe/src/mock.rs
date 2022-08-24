@@ -77,7 +77,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Version = ();
 	type Hashing = sp_runtime::traits::BlakeTwo256;

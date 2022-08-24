@@ -61,7 +61,7 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type Origin = Origin;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -119,7 +119,7 @@ parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type AuthorityId = crypto::TestAuthId;
-	type Call = RuntimeCall;
+	type RuntimeCall = RuntimeCall;
 	type GracePeriod = ConstU64<5>;
 	type UnsignedInterval = ConstU64<128>;
 	type UnsignedPriority = UnsignedPriority;

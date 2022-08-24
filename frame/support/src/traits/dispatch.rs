@@ -239,7 +239,7 @@ pub trait UnfilteredDispatchable {
 /// Methods available on `frame_system::Config::Origin`.
 pub trait OriginTrait: Sized {
 	/// Runtime call type, as in `frame_system::Config::Call`
-	type RuntimeCall;
+	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
 	type PalletsOrigin: Parameter
@@ -252,7 +252,7 @@ pub trait OriginTrait: Sized {
 	type AccountId;
 
 	/// Add a filter to the origin.
-	fn add_filter(&mut self, filter: impl Fn(&Self::RuntimeCall) -> bool + 'static);
+	fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static);
 
 	/// Reset origin filters to default one, i.e `frame_system::Config::BaseCallFilter`.
 	fn reset_filter(&mut self);
@@ -264,7 +264,7 @@ pub trait OriginTrait: Sized {
 	/// out.
 	///
 	/// For root origin caller, the filters are bypassed and true is returned.
-	fn filter_call(&self, call: &Self::RuntimeCall) -> bool;
+	fn filter_call(&self, call: &Self::Call) -> bool;
 
 	/// Get the caller.
 	fn caller(&self) -> &Self::PalletsOrigin;

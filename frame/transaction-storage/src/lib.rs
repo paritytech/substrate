@@ -94,7 +94,7 @@ pub mod pallet {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// A dispatchable call.
-		type Call: Parameter
+		type RuntimeCall: Parameter
 			+ Dispatchable<Origin = Self::Origin>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;

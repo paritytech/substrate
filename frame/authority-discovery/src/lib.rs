@@ -238,7 +238,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;
-		type Call = RuntimeCall;
+		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AuthorityId;

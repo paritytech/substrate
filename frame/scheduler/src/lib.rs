@@ -209,7 +209,7 @@ pub mod pallet {
 		type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq + TypeInfo;
 
 		/// The aggregated call type.
-		type Call: Parameter
+		type RuntimeCall: Parameter
 			+ Dispatchable<Origin = <Self as Config>::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<system::Call<Self>>;

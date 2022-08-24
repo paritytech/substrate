@@ -69,7 +69,7 @@ pub fn fetch_nonce(client: &FullClient, account: sp_core::sr25519::Pair) -> u32 
 pub fn create_extrinsic(
 	client: &FullClient,
 	sender: sp_core::sr25519::Pair,
-	function: impl Into<kitchensink_runtime::Call>,
+	function: impl Into<kitchensink_runtime::RuntimeCall>,
 	nonce: Option<u32>,
 ) -> kitchensink_runtime::UncheckedExtrinsic {
 	let function = function.into();

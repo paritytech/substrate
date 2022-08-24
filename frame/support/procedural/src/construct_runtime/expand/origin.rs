@@ -135,7 +135,7 @@ pub fn expand_outer_origin(
 			type PalletsOrigin = OriginCaller;
 			type AccountId = <#runtime as #system_path::Config>::AccountId;
 
-			fn add_filter(&mut self, filter: impl Fn(&Self::RuntimeCall) -> bool + 'static) {
+			fn add_filter(&mut self, filter: impl Fn(&Self::Call) -> bool + 'static) {
 				let f = self.filter.clone();
 
 				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(move |call| {
@@ -156,7 +156,7 @@ pub fn expand_outer_origin(
 				self.caller = other.into().caller;
 			}
 
-			fn filter_call(&self, call: &Self::RuntimeCall) -> bool {
+			fn filter_call(&self, call: &Self::Call) -> bool {
 				match self.caller {
 					// Root bypasses all filters
 					OriginCaller::system(#system_path::Origin::<#runtime>::Root) => true,
