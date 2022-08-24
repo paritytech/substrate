@@ -243,6 +243,7 @@ impl pallet_balances::Config for Runtime {
 
 #[derive(Default, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum MockedWeightInfo {
+	#[default]
 	Basic,
 	Complex,
 	Real,
