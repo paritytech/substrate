@@ -37,8 +37,10 @@ pub use crate as pallet_alliance;
 
 use super::*;
 
+type BlockNumber = u64;
+
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
+	pub const BlockHashCount: BlockNumber = 250;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -47,7 +49,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -83,10 +85,10 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-const MOTION_DURATION: u64 = 3;
+const MOTION_DURATION: BlockNumber = 3;
 
 parameter_types! {
-	pub const MotionDuration: u64 = MOTION_DURATION;
+	pub const MotionDuration: BlockNumber = MOTION_DURATION;
 	pub const MaxProposals: u32 = 100;
 	pub const MaxMembers: u32 = 100;
 }
@@ -201,7 +203,7 @@ parameter_types! {
 	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: u64 = 25;
-	pub const RetirementPeriod: u64 = MOTION_DURATION + 1;
+	pub const RetirementPeriod: BlockNumber = MOTION_DURATION + 1;
 }
 impl Config for Test {
 	type Event = Event;

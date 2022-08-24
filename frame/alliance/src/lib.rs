@@ -102,7 +102,7 @@ pub mod weights;
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, Zero},
+	traits::{Saturating, StaticLookup, Zero},
 	RuntimeDebug,
 };
 use sp_std::{convert::TryInto, prelude::*};
@@ -315,7 +315,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The period required to pass from retirement notice for a member to retire.
+		/// The number of blocks a member must wait between giving a retirement notice and retiring.
 		/// Supposed to be greater than time required to `kick_member`.
 		type RetirementPeriod: Get<Self::BlockNumber>;
 	}
@@ -806,13 +806,14 @@ pub mod pallet {
 		pub fn give_retirement_notice(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
-			ensure!(!role.eq(&MemberRole::Retiring), Error::<T, I>::AlreadyRetiring);
+			ensure!(role.ne(&MemberRole::Retiring), Error::<T, I>::AlreadyRetiring);
 
 			Self::remove_member(&who, role)?;
 			Self::add_member(&who, MemberRole::Retiring)?;
 			<RetiringMembers<T, I>>::insert(
 				&who,
-				frame_system::Pallet::<T>::block_number() + T::RetirementPeriod::get(),
+				frame_system::Pallet::<T>::block_number()
+					.saturating_add(T::RetirementPeriod::get()),
 			);
 
 			Self::deposit_event(Event::MemberRetirementPeriodStarted { member: who });
