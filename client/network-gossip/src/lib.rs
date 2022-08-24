@@ -67,7 +67,7 @@ pub use self::{
 	validator::{DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext},
 };
 
-use sc_network::{multiaddr, PeerId};
+use libp2p::{multiaddr, PeerId};
 use sc_network_common::service::{
 	NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 };
