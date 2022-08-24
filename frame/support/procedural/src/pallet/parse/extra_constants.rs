@@ -22,7 +22,7 @@ use syn::spanned::Spanned;
 /// List of additional token to be used for parsing.
 mod keyword {
 	syn::custom_keyword!(DispatchResultWithPostInfo);
-	syn::custom_keyword!(RuntimeCall);
+	syn::custom_keyword!(Call);
 	syn::custom_keyword!(OriginFor);
 	syn::custom_keyword!(weight);
 	syn::custom_keyword!(compact);

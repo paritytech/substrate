@@ -105,7 +105,7 @@ impl Def {
 					let m = hooks::HooksDef::try_from(span, index, item)?;
 					hooks = Some(m);
 				},
-				Some(PalletAttr::RuntimeCall(span)) if call.is_none() =>
+				Some(PalletAttr::Call(span)) if call.is_none() =>
 					call = Some(call::CallDef::try_from(span, index, item)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
@@ -391,7 +391,7 @@ enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
-	RuntimeCall(proc_macro2::Span),
+	Call(proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
 	Origin(proc_macro2::Span),
@@ -410,7 +410,7 @@ impl PalletAttr {
 			Self::Config(span) => *span,
 			Self::Pallet(span) => *span,
 			Self::Hooks(span) => *span,
-			Self::RuntimeCall(span) => *span,
+			Self::Call(span) => *span,
 			Self::Error(span) => *span,
 			Self::RuntimeEvent(span) => *span,
 			Self::Origin(span) => *span,
@@ -441,7 +441,7 @@ impl syn::parse::Parse for PalletAttr {
 		} else if lookahead.peek(keyword::hooks) {
 			Ok(PalletAttr::Hooks(content.parse::<keyword::hooks>()?.span()))
 		} else if lookahead.peek(keyword::call) {
-			Ok(PalletAttr::RuntimeCall(content.parse::<keyword::call>()?.span()))
+			Ok(PalletAttr::Call(content.parse::<keyword::call>()?.span()))
 		} else if lookahead.peek(keyword::error) {
 			Ok(PalletAttr::Error(content.parse::<keyword::error>()?.span()))
 		} else if lookahead.peek(keyword::event) {

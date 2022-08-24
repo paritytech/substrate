@@ -71,7 +71,7 @@ pub fn expand_outer_dispatch(
 				&[#(
 					(
 						stringify!(#pallet_names),
-						size_of::< <#pallet_names as Callable<#runtime>>::RuntimeCall >(),
+						size_of::< <#pallet_names as Callable<#runtime>>::Call >(),
 					),
 				)*]
 			}
@@ -130,7 +130,7 @@ pub fn expand_outer_dispatch(
 				match module {
 					#(
 						stringify!(#pallet_names) =>
-							<<#pallet_names as Callable<#runtime>>::RuntimeCall
+							<<#pallet_names as Callable<#runtime>>::Call
 								as GetCallName>::get_call_names(),
 					)*
 					_ => unreachable!(),

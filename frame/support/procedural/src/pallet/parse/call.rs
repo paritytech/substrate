@@ -23,7 +23,7 @@ use syn::spanned::Spanned;
 
 /// List of additional token to be used for parsing.
 mod keyword {
-	syn::custom_keyword!(RuntimeCall);
+	syn::custom_keyword!(Call);
 	syn::custom_keyword!(OriginFor);
 	syn::custom_keyword!(weight);
 	syn::custom_keyword!(call_index);
@@ -57,7 +57,7 @@ pub struct CallVariantDef {
 	pub args: Vec<(bool, syn::Ident, Box<syn::Type>)>,
 	/// Weight formula.
 	pub weight: syn::Expr,
-	/// RuntimeCall index of the dispatchable.
+	/// Call index of the dispatchable.
 	pub call_index: u8,
 	/// Docs, used for metadata.
 	pub docs: Vec<syn::Lit>,
@@ -237,7 +237,7 @@ impl CallDef {
 					Some(i) => i,
 					None =>
 						last_index.map_or(Some(0), |idx| idx.checked_add(1)).ok_or_else(|| {
-							let msg = "RuntimeCall index doesn't fit into u8, index is 256";
+							let msg = "Call index doesn't fit into u8, index is 256";
 							syn::Error::new(method.sig.span(), msg)
 						})?,
 				};
@@ -245,7 +245,7 @@ impl CallDef {
 
 				if let Some(used_fn) = indices.insert(final_index, method.sig.ident.clone()) {
 					let msg = format!(
-						"RuntimeCall indices are conflicting: Both functions {} and {} are at index {}",
+						"Call indices are conflicting: Both functions {} and {} are at index {}",
 						used_fn, method.sig.ident, final_index,
 					);
 					let mut err = syn::Error::new(used_fn.span(), &msg);
