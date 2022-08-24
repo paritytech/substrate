@@ -6515,9 +6515,9 @@ dependencies = [
 
 [[package]]
 name = "parity-db"
-version = "0.3.13"
+version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55a7901b85874402471e131de3332dde0e51f38432c69a3853627c8e25433048"
+checksum = "2bb474d0ed0836e185cb998a6b140ed1073d1fbf27d690ecf9ede8030289382c"
 dependencies = [
  "blake2-rfc",
  "crc32fast",
@@ -7731,7 +7731,6 @@ dependencies = [
  "quickcheck",
  "rand 0.7.3",
  "sc-client-api",
- "sc-network",
  "sc-network-common",
  "sp-api",
  "sp-authority-discovery",
@@ -7794,7 +7793,7 @@ dependencies = [
  "memmap2 0.5.0",
  "parity-scale-codec",
  "sc-chain-spec-derive",
- "sc-network",
+ "sc-network-common",
  "sc-telemetry",
  "serde",
  "serde_json",
@@ -8427,6 +8426,7 @@ dependencies = [
  "prost-build",
  "sc-consensus",
  "sc-peerset",
+ "serde",
  "smallvec",
  "sp-blockchain",
  "sp-consensus",
@@ -8447,8 +8447,8 @@ dependencies = [
  "log",
  "lru",
  "quickcheck",
- "sc-network",
  "sc-network-common",
+ "sc-peerset",
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -8549,6 +8549,7 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "lazy_static",
+ "libp2p",
  "num_cpus",
  "once_cell",
  "parity-scale-codec",
@@ -8557,8 +8558,8 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-client-db",
- "sc-network",
  "sc-network-common",
+ "sc-peerset",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sc-utils",
@@ -8612,6 +8613,7 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-network",
+ "sc-network-common",
  "sc-rpc-api",
  "sc-tracing",
  "sc-transaction-pool",

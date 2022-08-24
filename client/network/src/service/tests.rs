@@ -21,7 +21,7 @@ use crate::{config, NetworkService, NetworkWorker};
 use futures::prelude::*;
 use libp2p::PeerId;
 use sc_network_common::{
-	config::ProtocolId,
+	config::{MultiaddrWithPeerId, ProtocolId},
 	protocol::event::Event,
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
 };
@@ -195,7 +195,7 @@ fn build_nodes_one_proto() -> (
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
 			set_config: config::SetConfig {
-				reserved_nodes: vec![config::MultiaddrWithPeerId {
+				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr,
 					peer_id: node1.local_peer_id(),
 				}],
@@ -384,7 +384,7 @@ fn lots_of_incoming_peers_works() {
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
-					reserved_nodes: vec![config::MultiaddrWithPeerId {
+					reserved_nodes: vec![MultiaddrWithPeerId {
 						multiaddr: listen_addr.clone(),
 						peer_id: main_node_peer_id,
 					}],
@@ -514,7 +514,7 @@ fn fallback_name_working() {
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
 			set_config: config::SetConfig {
-				reserved_nodes: vec![config::MultiaddrWithPeerId {
+				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr,
 					peer_id: node1.local_peer_id(),
 				}],
@@ -585,7 +585,7 @@ fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 #[should_panic(expected = "don't match the transport")]
 fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
-	let boot_node = config::MultiaddrWithPeerId {
+	let boot_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)],
 		peer_id: PeerId::random(),
 	};
@@ -602,7 +602,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 #[should_panic(expected = "don't match the transport")]
 fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
-	let boot_node = config::MultiaddrWithPeerId {
+	let boot_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Memory(rand::random::<u64>())],
 		peer_id: PeerId::random(),
 	};
@@ -618,7 +618,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 #[should_panic(expected = "don't match the transport")]
 fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
-	let reserved_node = config::MultiaddrWithPeerId {
+	let reserved_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)],
 		peer_id: PeerId::random(),
 	};
@@ -638,7 +638,7 @@ fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 #[should_panic(expected = "don't match the transport")]
 fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
-	let reserved_node = config::MultiaddrWithPeerId {
+	let reserved_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Memory(rand::random::<u64>())],
 		peer_id: PeerId::random(),
 	};

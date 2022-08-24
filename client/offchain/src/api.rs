@@ -22,7 +22,7 @@ use crate::NetworkProvider;
 use codec::{Decode, Encode};
 use futures::Future;
 pub use http::SharedClient;
-use sc_network::{Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId};
 use sp_core::{
 	offchain::{
 		self, HttpError, HttpRequestId, HttpRequestStatus, OffchainStorage, OpaqueMultiaddr,
@@ -324,9 +324,10 @@ impl AsyncApi {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use libp2p::PeerId;
 	use sc_client_db::offchain::LocalStorage;
-	use sc_network::{PeerId, ReputationChange};
 	use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
+	use sc_peerset::ReputationChange;
 	use sp_core::offchain::{DbExternalities, Externalities};
 	use std::{borrow::Cow, time::SystemTime};
 

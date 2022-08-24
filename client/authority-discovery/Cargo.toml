@@ -29,7 +29,6 @@ thiserror = "1.0"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
-sc-network = { version = "0.10.0-dev", path = "../network" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-authority-discovery = { version = "4.0.0-dev", path = "../../primitives/authority-discovery" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
