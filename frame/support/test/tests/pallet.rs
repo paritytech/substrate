@@ -1532,6 +1532,8 @@ fn test_storage_info() {
 		traits::{StorageInfo, StorageInfoTrait},
 	};
 
+	// Storage max size is calculated by adding up all the hasher size, the key type size and the
+	// value type size
 	assert_eq!(
 		Example::storage_info(),
 		vec![
@@ -1561,63 +1563,63 @@ fn test_storage_info() {
 				storage_name: b"Map".to_vec(),
 				prefix: prefix(b"Example", b"Map").to_vec(),
 				max_values: None,
-				max_size: Some(3 + 16),
+				max_size: Some(16 + 1 + 2),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"Map2".to_vec(),
 				prefix: prefix(b"Example", b"Map2").to_vec(),
 				max_values: Some(3),
-				max_size: Some(6 + 8),
+				max_size: Some(8 + 2 + 4),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"Map3".to_vec(),
 				prefix: prefix(b"Example", b"Map3").to_vec(),
 				max_values: None,
-				max_size: Some(12 + 16),
+				max_size: Some(16 + 4 + 8),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"DoubleMap".to_vec(),
 				prefix: prefix(b"Example", b"DoubleMap").to_vec(),
 				max_values: None,
-				max_size: Some(7 + 16 + 8),
+				max_size: Some(16 + 1 + 8 + 2 + 4),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"DoubleMap2".to_vec(),
 				prefix: prefix(b"Example", b"DoubleMap2").to_vec(),
 				max_values: Some(5),
-				max_size: Some(14 + 8 + 16),
+				max_size: Some(8 + 2 + 16 + 4 + 8),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"DoubleMap3".to_vec(),
 				prefix: prefix(b"Example", b"DoubleMap3").to_vec(),
 				max_values: None,
-				max_size: Some(4 + 16 + 32),
+				max_size: Some(16 + 4 + 8 + 8 + 16),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"NMap".to_vec(),
 				prefix: prefix(b"Example", b"NMap").to_vec(),
 				max_values: None,
-				max_size: Some(5 + 16),
+				max_size: Some(16 + 1 + 4),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"NMap2".to_vec(),
 				prefix: prefix(b"Example", b"NMap2").to_vec(),
 				max_values: Some(11),
-				max_size: Some(14 + 8 + 16),
+				max_size: Some(8 + 2 + 16 + 4 + 8),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"NMap3".to_vec(),
 				prefix: prefix(b"Example", b"NMap3").to_vec(),
 				max_values: None,
-				max_size: Some(7 + 4 + 32),
+				max_size: Some(16 + 1 + 8 + 2 + 16),
 			},
 			#[cfg(feature = "conditional-storage")]
 			{
@@ -1636,7 +1638,7 @@ fn test_storage_info() {
 					storage_name: b"ConditionalMap".to_vec(),
 					prefix: prefix(b"Example", b"ConditionalMap").to_vec(),
 					max_values: Some(12),
-					max_size: Some(6 + 8),
+					max_size: Some(8 + 2 + 4),
 				}
 			},
 			#[cfg(feature = "conditional-storage")]
@@ -1646,7 +1648,7 @@ fn test_storage_info() {
 					storage_name: b"ConditionalDoubleMap".to_vec(),
 					prefix: prefix(b"Example", b"ConditionalDoubleMap").to_vec(),
 					max_values: None,
-					max_size: Some(7 + 16 + 8),
+					max_size: Some(16 + 1 + 8 + 2 + 4),
 				}
 			},
 			#[cfg(feature = "conditional-storage")]
@@ -1656,7 +1658,7 @@ fn test_storage_info() {
 					storage_name: b"ConditionalNMap".to_vec(),
 					prefix: prefix(b"Example", b"ConditionalNMap").to_vec(),
 					max_values: None,
-					max_size: Some(7 + 16 + 8),
+					max_size: Some(16 + 1 + 8 + 2 + 4),
 				}
 			},
 			StorageInfo {
@@ -1664,7 +1666,7 @@ fn test_storage_info() {
 				storage_name: b"RenamedCountedMap".to_vec(),
 				prefix: prefix(b"Example", b"RenamedCountedMap").to_vec(),
 				max_values: None,
-				max_size: Some(1 + 4 + 8),
+				max_size: Some(8 + 1 + 4),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
