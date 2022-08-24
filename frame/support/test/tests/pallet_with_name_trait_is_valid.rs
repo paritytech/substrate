@@ -15,32 +15,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub trait Trait: frame_system::Config {
+pub trait Config: frame_system::Config {
 	type Balance: frame_support::dispatch::Parameter;
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 }
 
 frame_support::decl_storage! {
-	trait Store for Module<T: Trait> as Example {
+	trait Store for Module<T: Config> as Example {
 		Dummy get(fn dummy) config(): Option<u32>;
 	}
 }
 
 frame_support::decl_event!(
-	pub enum Event<T> where B = <T as Trait>::Balance {
+	pub enum Event<T> where B = <T as Config>::Balance {
 		Dummy(B),
 	}
 );
 
 frame_support::decl_error!(
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		Dummy,
 	}
 );
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 		type Error = Error<T>;
 		const Foo: u32 = u32::max_value();
@@ -56,7 +56,7 @@ frame_support::decl_module! {
 	}
 }
 
-impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
+impl<T: Config> sp_runtime::traits::ValidateUnsigned for Module<T> {
 	type Call = Call<T>;
 
 	fn validate_unsigned(
@@ -143,7 +143,7 @@ mod tests {
 		type SystemWeightInfo = ();
 	}
 
-	impl pallet_test::Trait for Runtime {
+	impl pallet_test::Config for Runtime {
 		type Balance = u32;
 		type Event = ();
 	}

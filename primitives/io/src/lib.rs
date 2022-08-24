@@ -1292,7 +1292,7 @@ pub trait RuntimeTasks {
 			runtime_spawn.join(handle)
 		}).expect("`RuntimeTasks::join`: called outside of externalities context")
 	}
- }
+}
 
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(not(feature = "std"))]

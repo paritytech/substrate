@@ -33,8 +33,8 @@ pub struct Erc721Token {
     pub metadata: Vec<u8>,
 }
 
-pub trait Trait: system::Trait {
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+pub trait Config: system::Config {
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
     /// Some identifier for this token type, possibly the originating ethereum address.
     /// This is not explicitly used for anything, but may reflect the bridge's notion of resource ID.
@@ -42,7 +42,7 @@ pub trait Trait: system::Trait {
 }
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         /// ID not recognized
         TokenIdDoesNotExist,
         /// Already exists with an owner
@@ -53,7 +53,7 @@ decl_error! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as TokenStorage {
+	trait Store for Module<T: Config> as TokenStorage {
         /// Maps tokenId to Erc721 object
         Tokens get(fn tokens): map hasher(opaque_blake2_256) TokenId => Option<Erc721Token>;
         /// Maps tokenId to owner
@@ -66,7 +66,7 @@ decl_storage! {
 decl_event!(
 	pub enum Event<T>
     where
-        <T as system::Trait>::AccountId,
+        <T as system::Config>::AccountId,
     {
         /// New token created
         Minted(AccountId, TokenId),
@@ -78,7 +78,7 @@ decl_event!(
 );
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
         type Error = Error<T>;
         fn deposit_event() = default;
 
@@ -116,7 +116,7 @@ decl_module! {
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
     /// Creates a new token in the system.
     pub fn mint_token(owner: T::AccountId, id: TokenId, metadata: Vec<u8>) -> DispatchResult {
         ensure!(!Tokens::contains_key(id), Error::<T>::TokenAlreadyExists);

@@ -102,8 +102,8 @@ impl<AccountId, BlockNumber: Default> Default for ProposalVotes<AccountId, Block
     }
 }
 
-pub trait Trait: system::Trait {
-    type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+pub trait Config: system::Config {
+    type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
     /// Origin used to administer the pallet
     type AdminOrigin: EnsureOrigin<Self::Origin>;
     /// Proposed dispatchable call
@@ -116,7 +116,7 @@ pub trait Trait: system::Trait {
 }
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         /// Relayer threshold not set
         ThresholdNotSet,
         /// Provided chain Id is not valid
@@ -151,7 +151,7 @@ decl_error! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as ChainBridge {
+	trait Store for Module<T: Config> as ChainBridge {
 		/// All whitelisted chains and their respective transaction counts
 		ChainNonces get(fn chains): map hasher(opaque_blake2_256) ChainId => Option<DepositNonce>;
 
@@ -177,7 +177,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where <T as frame_system::Trait>::AccountId {
+	pub enum Event<T> where <T as frame_system::Config>::AccountId {
         /// Vote threshold has changed (new_threshold)
         RelayerThresholdChanged(u32),
         /// Chain now available for transfers (chain_id)
@@ -208,7 +208,7 @@ decl_event!(
 );
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
         type Error = Error<T>;
 
         const ChainIdentity: ChainId = T::ChainId::get();
@@ -298,7 +298,7 @@ decl_module! {
         /// - weight of proposed call, regardless of whether execution is performed
         /// # </weight>
         #[weight = (call.get_dispatch_info().weight + 195_000_000, call.get_dispatch_info().class, Pays::Yes)]
-        pub fn acknowledge_proposal(origin, nonce: DepositNonce, src_id: ChainId, r_id: ResourceId, call: Box<<T as Trait>::Proposal>) -> DispatchResult {
+        pub fn acknowledge_proposal(origin, nonce: DepositNonce, src_id: ChainId, r_id: ResourceId, call: Box<<T as Config>::Proposal>) -> DispatchResult {
             let who = ensure_signed(origin)?;
             ensure!(Self::is_relayer(&who), Error::<T>::MustBeRelayer);
             ensure!(Self::chain_whitelisted(src_id), Error::<T>::ChainNotWhitelisted);
@@ -313,7 +313,7 @@ decl_module! {
         /// - Fixed, since execution of proposal should not be included
         /// # </weight>
         #[weight = 195_000_000]
-        pub fn reject_proposal(origin, nonce: DepositNonce, src_id: ChainId, r_id: ResourceId, call: Box<<T as Trait>::Proposal>) -> DispatchResult {
+        pub fn reject_proposal(origin, nonce: DepositNonce, src_id: ChainId, r_id: ResourceId, call: Box<<T as Config>::Proposal>) -> DispatchResult {
             let who = ensure_signed(origin)?;
             ensure!(Self::is_relayer(&who), Error::<T>::MustBeRelayer);
             ensure!(Self::chain_whitelisted(src_id), Error::<T>::ChainNotWhitelisted);
@@ -331,7 +331,7 @@ decl_module! {
         /// - weight of proposed call, regardless of whether execution is performed
         /// # </weight>
         #[weight = (prop.get_dispatch_info().weight + 195_000_000, prop.get_dispatch_info().class, Pays::Yes)]
-        pub fn eval_vote_state(origin, nonce: DepositNonce, src_id: ChainId, prop: Box<<T as Trait>::Proposal>) -> DispatchResult {
+        pub fn eval_vote_state(origin, nonce: DepositNonce, src_id: ChainId, prop: Box<<T as Config>::Proposal>) -> DispatchResult {
             ensure_signed(origin)?;
 
             Self::try_resolve_proposal(nonce, src_id, prop)
@@ -339,7 +339,7 @@ decl_module! {
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
     // *** Utility methods ***
 
     pub fn ensure_admin(o: T::Origin) -> DispatchResult {
@@ -621,7 +621,7 @@ impl<T: Trait> Module<T> {
 
 /// Simple ensure origin for the bridge account
 pub struct EnsureBridge<T>(sp_std::marker::PhantomData<T>);
-impl<T: Trait> EnsureOrigin<T::Origin> for EnsureBridge<T> {
+impl<T: Config> EnsureOrigin<T::Origin> for EnsureBridge<T> {
     type Success = T::AccountId;
     fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
         let bridge_id = MODULE_ID.into_account();
