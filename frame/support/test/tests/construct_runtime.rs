@@ -278,7 +278,7 @@ frame_support::construct_runtime!(
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 #[test]
 fn check_modules_error_type() {
@@ -527,7 +527,7 @@ fn call_name() {
 #[test]
 fn call_metadata() {
 	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
-	let call = Call::Module3(module3::Call::<Runtime>::aux_4 {});
+	let call = RuntimeCall::Module3(module3::Call::<Runtime>::aux_4 {});
 	let metadata = call.get_call_metadata();
 	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
 	assert_eq!(metadata, expected);
@@ -543,7 +543,7 @@ fn get_call_names() {
 #[test]
 fn get_module_names() {
 	use frame_support::dispatch::GetCallMetadata;
-	let module_names = Call::get_module_names();
+	let module_names = RuntimeCall::get_module_names();
 	assert_eq!(
 		[
 			"System",
@@ -565,13 +565,13 @@ fn get_module_names() {
 #[test]
 fn call_subtype_conversion() {
 	use frame_support::{dispatch::CallableCallFor, traits::IsSubType};
-	let call = Call::Module3(module3::Call::<Runtime>::fail {});
+	let call = RuntimeCall::Module3(module3::Call::<Runtime>::fail {});
 	let subcall: Option<&CallableCallFor<Module3, Runtime>> = call.is_sub_type();
 	let subcall_none: Option<&CallableCallFor<Module2, Runtime>> = call.is_sub_type();
 	assert_eq!(Some(&module3::Call::<Runtime>::fail {}), subcall);
 	assert_eq!(None, subcall_none);
 
-	let from = Call::from(subcall.unwrap().clone());
+	let from = RuntimeCall::from(subcall.unwrap().clone());
 	assert_eq!(from, call);
 }
 

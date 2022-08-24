@@ -129,18 +129,18 @@ mod module1 {
 		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
+		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
 
 		fn check_inherent(
-			_: &Self::RuntimeCall,
+			_: &Self::Call,
 			_: &InherentData,
 		) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 
-		fn is_inherent(_call: &Self::RuntimeCall) -> bool {
+		fn is_inherent(_call: &Self::Call) -> bool {
 			unimplemented!();
 		}
 	}
@@ -198,18 +198,18 @@ mod module2 {
 		type Error = MakeFatalError<()>;
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
+		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
 
 		fn check_inherent(
-			_call: &Self::RuntimeCall,
+			_call: &Self::Call,
 			_data: &InherentData,
 		) -> std::result::Result<(), Self::Error> {
 			unimplemented!();
 		}
 
-		fn is_inherent(_call: &Self::RuntimeCall) -> bool {
+		fn is_inherent(_call: &Self::Call) -> bool {
 			unimplemented!();
 		}
 	}
@@ -315,7 +315,7 @@ frame_support::construct_runtime!(
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig {

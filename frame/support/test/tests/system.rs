@@ -29,7 +29,7 @@ pub trait Config: 'static + Eq + Clone {
 	type BlockNumber: Decode + Encode + EncodeLike + Clone + Default + scale_info::TypeInfo;
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode + scale_info::TypeInfo;
-	type Call;
+	type RuntimeCall;
 	type RuntimeEvent: From<Event<Self>>;
 	type PalletInfo: frame_support::traits::PalletInfo;
 	type DbWeight: Get<RuntimeDbWeight>;

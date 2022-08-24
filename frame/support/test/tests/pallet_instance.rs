@@ -176,7 +176,7 @@ pub mod pallet {
 		type Call = Call<T, I>;
 		fn validate_unsigned(
 			_source: TransactionSource,
-			_call: &Self::RuntimeCall,
+			_call: &Self::Call,
 		) -> TransactionValidity {
 			Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 		}
@@ -189,11 +189,11 @@ pub mod pallet {
 
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
+		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			unimplemented!();
 		}
 
-		fn is_inherent(_call: &Self::RuntimeCall) -> bool {
+		fn is_inherent(_call: &Self::Call) -> bool {
 			unimplemented!();
 		}
 	}
@@ -294,7 +294,7 @@ impl pallet2::Config<pallet::Instance1> for Runtime {
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where

@@ -7,7 +7,7 @@ error: Unexpected tokens, expected one of `=`, `,`
 error[E0412]: cannot find type `Call` in this scope
   --> $DIR/both_use_and_excluded_parts.rs:18:64
    |
-18 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+18 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
    |                                                                ^^^^ not found in this scope
    |
 help: consider importing one of these items

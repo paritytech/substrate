@@ -7,7 +7,7 @@ error: Invalid pallet part specified, the pallet `Pallet` doesn't have the `Call
 error[E0412]: cannot find type `Call` in this scope
   --> $DIR/use_undefined_part.rs:23:64
    |
-23 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+23 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
    |                                                                ^^^^ not found in this scope
    |
 help: consider importing one of these items

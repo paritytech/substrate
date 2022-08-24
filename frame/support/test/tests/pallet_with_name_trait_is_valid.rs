@@ -64,7 +64,7 @@ impl<T: Trait> sp_runtime::traits::ValidateUnsigned for Module<T> {
 
 	fn validate_unsigned(
 		_source: sp_runtime::transaction_validity::TransactionSource,
-		_call: &Self::RuntimeCall,
+		_call: &Self::Call,
 	) -> sp_runtime::transaction_validity::TransactionValidity {
 		unimplemented!();
 	}
@@ -77,18 +77,18 @@ impl<T: Trait> frame_support::inherent::ProvideInherent for Module<T> {
 	type Error = frame_support::inherent::MakeFatalError<()>;
 	const INHERENT_IDENTIFIER: frame_support::inherent::InherentIdentifier = INHERENT_IDENTIFIER;
 
-	fn create_inherent(_data: &frame_support::inherent::InherentData) -> Option<Self::RuntimeCall> {
+	fn create_inherent(_data: &frame_support::inherent::InherentData) -> Option<Self::Call> {
 		unimplemented!();
 	}
 
 	fn check_inherent(
-		_: &Self::RuntimeCall,
+		_: &Self::Call,
 		_: &frame_support::inherent::InherentData,
 	) -> std::result::Result<(), Self::Error> {
 		unimplemented!();
 	}
 
-	fn is_inherent(_call: &Self::RuntimeCall) -> bool {
+	fn is_inherent(_call: &Self::Call) -> bool {
 		unimplemented!();
 	}
 }

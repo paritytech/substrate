@@ -376,10 +376,7 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + SomeAssociation1 + From<SomeType5> + From<SomeType3>,
 	{
 		type Call = Call<T>;
-		fn validate_unsigned(
-			_source: TransactionSource,
-			call: &Self::RuntimeCall,
-		) -> TransactionValidity {
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType5); // Test for where clause
 			if matches!(call, Call::foo_storage_layer { .. }) {
@@ -399,17 +396,17 @@ pub mod pallet {
 
 		const INHERENT_IDENTIFIER: InherentIdentifier = INHERENT_IDENTIFIER;
 
-		fn create_inherent(_data: &InherentData) -> Option<Self::RuntimeCall> {
+		fn create_inherent(_data: &InherentData) -> Option<Self::Call> {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType6); // Test for where clause
 			Some(Call::foo_no_post_info {})
 		}
 
-		fn is_inherent(call: &Self::RuntimeCall) -> bool {
+		fn is_inherent(call: &Self::Call) -> bool {
 			matches!(call, Call::foo_no_post_info {} | Call::foo { .. })
 		}
 
-		fn check_inherent(call: &Self::RuntimeCall, _: &InherentData) -> Result<(), Self::Error> {
+		fn check_inherent(call: &Self::Call, _: &InherentData) -> Result<(), Self::Error> {
 			match call {
 				Call::foo_no_post_info {} => Ok(()),
 				Call::foo { foo: 0, bar: 0 } => Err(InherentError::Fatal),
@@ -592,7 +589,7 @@ impl pallet4::Config for Runtime {}
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -608,8 +605,8 @@ frame_support::construct_runtime!(
 	}
 );
 
-// Test that the part `Call` is excluded from Example2 and included in Example4.
-fn _ensure_call_is_correctly_excluded_and_included(call: Call) {
+// Test that the part `RuntimeCall` is excluded from Example2 and included in Example4.
+fn _ensure_call_is_correctly_excluded_and_included(call: RuntimeCall) {
 	match call {
 		RuntimeCall::System(_) | RuntimeCall::Example(_) | RuntimeCall::Example4(_) => (),
 	}
