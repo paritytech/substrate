@@ -19,7 +19,7 @@ use codec::{Decode, Encode};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use frame_support::Hashable;
 use kitchensink_runtime::{
-	constants::currency::*, Block, BuildStorage, Call, CheckedExtrinsic, GenesisConfig, Header,
+	constants::currency::*, Block, BuildStorage, RuntimeCall, CheckedExtrinsic, GenesisConfig, Header,
 	UncheckedExtrinsic,
 };
 use node_executor::ExecutorDispatch;
@@ -168,7 +168,7 @@ fn test_blocks(
 	}];
 	block1_extrinsics.extend((0..20).map(|i| CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(i, 0))),
-		function: Call::Balances(pallet_balances::Call::transfer {
+		function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 			dest: bob().into(),
 			value: 1 * DOLLARS,
 		}),

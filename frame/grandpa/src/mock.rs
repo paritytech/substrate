@@ -82,7 +82,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Hash = H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
@@ -105,7 +105,7 @@ impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
 where
 	Call: From<C>,
 {
-	type OverarchingCall = Call;
+	type OverarchingCall = RuntimeCall;
 	type Extrinsic = TestXt<Call, ()>;
 }
 
@@ -225,7 +225,7 @@ parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = Call;
+	type Call = RuntimeCall;
 
 	type KeyOwnerProofSystem = Historical;
 

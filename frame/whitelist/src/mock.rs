@@ -62,7 +62,7 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -104,7 +104,7 @@ impl pallet_preimage::Config for Test {
 
 impl pallet_whitelist::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type WhitelistOrigin = EnsureRoot<Self::AccountId>;
 	type DispatchWhitelistedOrigin = EnsureRoot<Self::AccountId>;
 	type PreimageProvider = Preimage;

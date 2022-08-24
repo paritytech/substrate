@@ -61,7 +61,7 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -95,7 +95,7 @@ pub struct TestBaseCallFilter;
 impl Contains<Call> for TestBaseCallFilter {
 	fn contains(c: &Call) -> bool {
 		match *c {
-			Call::Balances(_) => true,
+			RuntimeCall::Balances(_) => true,
 			// Needed for benchmarking
 			Call::System(frame_system::Call::remark { .. }) => true,
 			_ => false,
@@ -104,7 +104,7 @@ impl Contains<Call> for TestBaseCallFilter {
 }
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Currency = Balances;
 	type DepositBase = ConstU64<1>;
 	type DepositFactor = ConstU64<1>;
@@ -131,7 +131,7 @@ fn now() -> Timepoint<u64> {
 }
 
 fn call_transfer(dest: u64, value: u64) -> Call {
-	Call::Balances(BalancesCall::transfer { dest, value })
+	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 }
 
 #[test]

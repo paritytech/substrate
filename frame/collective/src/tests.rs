@@ -100,7 +100,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -120,7 +120,7 @@ impl frame_system::Config for Test {
 }
 impl Config<Instance1> for Test {
 	type Origin = Origin;
-	type Proposal = Call;
+	type Proposal = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
@@ -130,7 +130,7 @@ impl Config<Instance1> for Test {
 }
 impl Config<Instance2> for Test {
 	type Origin = Origin;
-	type Proposal = Call;
+	type Proposal = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
@@ -144,7 +144,7 @@ impl mock_democracy::Config for Test {
 }
 impl Config for Test {
 	type Origin = Origin;
-	type Proposal = Call;
+	type Proposal = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = ConstU64<3>;
 	type MaxProposals = MaxProposals;
@@ -910,7 +910,7 @@ fn motions_reproposing_disapproved_works() {
 #[test]
 fn motions_approval_with_enough_votes_and_lower_voting_threshold_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = Call::Democracy(mock_democracy::Call::external_propose_majority {});
+		let proposal = RuntimeCall::Democracy(mock_democracy::Call::external_propose_majority {});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
 		let hash: H256 = proposal.blake2_256().into();

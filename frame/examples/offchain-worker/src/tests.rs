@@ -61,7 +61,7 @@ impl frame_system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = ();
 	type Origin = Origin;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -94,7 +94,7 @@ impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
 where
 	Call: From<LocalCall>,
 {
-	type OverarchingCall = Call;
+	type OverarchingCall = RuntimeCall;
 	type Extrinsic = Extrinsic;
 }
 
@@ -119,7 +119,7 @@ parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type AuthorityId = crypto::TestAuthId;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type GracePeriod = ConstU64<5>;
 	type UnsignedInterval = ConstU64<128>;
 	type UnsignedPriority = UnsignedPriority;

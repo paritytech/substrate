@@ -45,7 +45,7 @@ frame_support::construct_runtime!(
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;

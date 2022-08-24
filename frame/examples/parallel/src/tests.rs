@@ -46,7 +46,7 @@ parameter_types! {
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type PalletInfo = PalletInfo;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -71,7 +71,7 @@ impl frame_system::Config for Test {
 }
 
 impl Config for Test {
-	type Call = Call;
+	type Call = RuntimeCall;
 }
 
 fn test_pub(n: u8) -> sp_core::sr25519::Public {

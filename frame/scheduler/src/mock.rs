@@ -127,7 +127,7 @@ impl system::Config for Test {
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type Origin = Origin;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -172,7 +172,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;

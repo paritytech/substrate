@@ -22,7 +22,7 @@ use frame_support::{
 };
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
-	Balances, Call, CheckedExtrinsic, Multiplier, Runtime, TransactionByteFee, TransactionPayment,
+	Balances, RuntimeCall, CheckedExtrinsic, Multiplier, Runtime, TransactionByteFee, TransactionPayment,
 };
 use node_primitives::Balance;
 use node_testing::keyring::*;
@@ -163,7 +163,7 @@ fn transaction_fee_is_correct() {
 	let tip = 1_000_000;
 	let xt = sign(CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(0, tip))),
-		function: Call::Balances(default_transfer_call()),
+		function: RuntimeCall::Balances(default_transfer_call()),
 	});
 
 	let r = executor_call::<NeverNativeValue, fn() -> _>(
@@ -241,7 +241,7 @@ fn block_weight_capacity_report() {
 		let mut xts = (0..num_transfers)
 			.map(|i| CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(nonce + i as Index, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: bob().into(),
 					value: 0,
 				}),

@@ -570,7 +570,7 @@ mod tests {
 	use codec::Encode;
 	use kitchensink_runtime::{
 		constants::{currency::CENTS, time::SLOT_DURATION},
-		Address, BalancesCall, Call, UncheckedExtrinsic,
+		Address, BalancesCall, RuntimeCall, UncheckedExtrinsic,
 	};
 	use node_primitives::{Block, DigestItem, Signature};
 	use sc_client_api::BlockBackend;
@@ -763,7 +763,7 @@ mod tests {
 				let signer = charlie.clone();
 
 				let function =
-					Call::Balances(BalancesCall::transfer { dest: to.into(), value: amount });
+					RuntimeCall::Balances(BalancesCall::transfer { dest: to.into(), value: amount });
 
 				let check_non_zero_sender = frame_system::CheckNonZeroSender::new();
 				let check_spec_version = frame_system::CheckSpecVersion::new();

@@ -28,7 +28,7 @@ use sp_runtime::{
 
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
-	Balances, Call, CheckedExtrinsic, Header, Runtime, RuntimeEvent, System, TransactionPayment,
+	Balances, RuntimeCall, CheckedExtrinsic, Header, Runtime, RuntimeEvent, System, TransactionPayment,
 	UncheckedExtrinsic,
 };
 use node_primitives::{Balance, Hash};
@@ -67,7 +67,7 @@ fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
 fn xt() -> UncheckedExtrinsic {
 	sign(CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(0, 0))),
-		function: Call::Balances(default_transfer_call()),
+		function: RuntimeCall::Balances(default_transfer_call()),
 	})
 }
 
@@ -88,7 +88,7 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: bob().into(),
 					value: 69 * DOLLARS,
 				}),
@@ -115,7 +115,7 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: bob().into(),
 					value: 69 * DOLLARS,
 				}),
@@ -135,14 +135,14 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 			},
 			CheckedExtrinsic {
 				signed: Some((bob(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: alice().into(),
 					value: 5 * DOLLARS,
 				}),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(1, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: bob().into(),
 					value: 15 * DOLLARS,
 				}),

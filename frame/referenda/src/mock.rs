@@ -56,7 +56,7 @@ frame_support::construct_runtime!(
 pub struct BaseFilter;
 impl Contains<Call> for BaseFilter {
 	fn contains(call: &Call) -> bool {
-		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance { .. }))
+		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
 
@@ -72,7 +72,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -103,7 +103,7 @@ impl pallet_scheduler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type MaximumWeight = ConstU64<2_000_000_000_000>;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;
@@ -211,7 +211,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 
 impl Config for Test {
 	type WeightInfo = ();
-	type Call = Call;
+	type Call = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
@@ -295,12 +295,12 @@ impl<Class> VoteTally<u32, Class> for Tally {
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
-	Call::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
+	RuntimeCall::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
 		.encode()
 }
 
 pub fn set_balance_proposal_hash(value: u64) -> H256 {
-	let c = Call::Balances(pallet_balances::Call::set_balance {
+	let c = RuntimeCall::Balances(pallet_balances::Call::set_balance {
 		who: 42,
 		new_free: value,
 		new_reserved: 0,

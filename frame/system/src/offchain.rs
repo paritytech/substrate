@@ -631,7 +631,7 @@ mod tests {
 
 	impl SendTransactionTypes<Call> for TestRuntime {
 		type Extrinsic = Extrinsic;
-		type OverarchingCall = Call;
+		type OverarchingCall = RuntimeCall;
 	}
 
 	#[derive(codec::Encode, codec::Decode)]

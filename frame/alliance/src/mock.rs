@@ -45,7 +45,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -91,7 +91,7 @@ parameter_types! {
 type AllianceCollective = pallet_collective::Instance1;
 impl pallet_collective::Config<AllianceCollective> for Test {
 	type Origin = Origin;
-	type Proposal = Call;
+	type Proposal = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = MotionDuration;
 	type MaxProposals = MaxProposals;
@@ -202,7 +202,7 @@ parameter_types! {
 }
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Proposal = Call;
+	type Proposal = RuntimeCall;
 	type AdminOrigin = EnsureSignedBy<One, u64>;
 	type MembershipManager = EnsureSignedBy<Two, u64>;
 	type AnnouncementOrigin = EnsureSignedBy<Three, u64>;

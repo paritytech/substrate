@@ -110,7 +110,7 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -152,7 +152,7 @@ impl Contains<Call> for TestBaseCallFilter {
 	fn contains(c: &Call) -> bool {
 		match *c {
 			// Transfer works. Use `transfer_keep_alive` for a call that doesn't pass the filter.
-			Call::Balances(pallet_balances::Call::transfer { .. }) => true,
+			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => true,
 			Call::Utility(_) => true,
 			// For benchmarking, this acts as a noop call
 			Call::System(frame_system::Call::remark { .. }) => true,
@@ -164,7 +164,7 @@ impl Contains<Call> for TestBaseCallFilter {
 }
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
@@ -188,7 +188,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 fn call_transfer(dest: u64, value: u64) -> Call {
-	Call::Balances(BalancesCall::transfer { dest, value })
+	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 }
 
 fn call_foobar(err: bool, start_weight: u64, end_weight: Option<u64>) -> Call {
@@ -281,7 +281,7 @@ fn as_derivative_filters() {
 			Utility::as_derivative(
 				Origin::signed(1),
 				1,
-				Box::new(Call::Balances(pallet_balances::Call::transfer_keep_alive {
+				Box::new(RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive {
 					dest: 2,
 					value: 1
 				})),
@@ -303,8 +303,8 @@ fn batch_with_root_works() {
 		assert_ok!(Utility::batch(
 			Origin::root(),
 			vec![
-				Call::Balances(BalancesCall::force_transfer { source: 1, dest: 2, value: 5 }),
-				Call::Balances(BalancesCall::force_transfer { source: 1, dest: 2, value: 5 }),
+				RuntimeCall::Balances(BalancesCall::force_transfer { source: 1, dest: 2, value: 5 }),
+				RuntimeCall::Balances(BalancesCall::force_transfer { source: 1, dest: 2, value: 5 }),
 				call, // Check filters are correctly bypassed
 			]
 		));
@@ -333,7 +333,7 @@ fn batch_with_signed_filters() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Utility::batch(
 			Origin::signed(1),
-			vec![Call::Balances(pallet_balances::Call::transfer_keep_alive { dest: 2, value: 1 })]
+			vec![RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { dest: 2, value: 1 })]
 		),);
 		System::assert_last_event(
 			utility::Event::BatchInterrupted {

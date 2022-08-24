@@ -56,7 +56,7 @@ frame_support::construct_runtime!(
 );
 
 const CALL: &<Runtime as frame_system::Config>::Call =
-	&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+	&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 thread_local! {
 	static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
@@ -90,7 +90,7 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;

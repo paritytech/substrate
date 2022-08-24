@@ -59,7 +59,7 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type Origin = Origin;
 	type Index = u64;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
@@ -97,7 +97,7 @@ parameter_types! {
 
 impl Config for Test {
 	type PalletId = LotteryPalletId;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Currency = Balances;
 	type Randomness = TestRandomness<Self>;
 	type RuntimeEvent = RuntimeEvent;

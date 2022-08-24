@@ -833,7 +833,7 @@ mod tests {
 	);
 
 	const CALL: &<Runtime as frame_system::Config>::Call =
-		&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+		&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 	thread_local! {
 		static EXTRINSIC_BASE_WEIGHT: RefCell<u64> = RefCell::new(0);
@@ -868,7 +868,7 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = Call;
+		type Call = RuntimeCall;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
@@ -1177,7 +1177,7 @@ mod tests {
 
 	#[test]
 	fn query_info_and_fee_details_works() {
-		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+		let call = RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let origin = 111111;
 		let extra = ();
 		let xt = TestXt::new(call.clone(), Some((origin, extra)));
@@ -1234,7 +1234,7 @@ mod tests {
 
 	#[test]
 	fn query_call_info_and_fee_details_works() {
-		let call = Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+		let call = RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 		let info = call.get_dispatch_info();
 		let encoded_call = call.encode();
 		let len = encoded_call.len() as u32;

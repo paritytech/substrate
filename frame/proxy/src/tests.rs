@@ -65,7 +65,7 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
@@ -96,7 +96,7 @@ impl pallet_balances::Config for Test {
 }
 impl pallet_utility::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
@@ -129,7 +129,7 @@ impl InstanceFilter<Call> for ProxyType {
 		match self {
 			ProxyType::Any => true,
 			ProxyType::JustTransfer => {
-				matches!(c, Call::Balances(pallet_balances::Call::transfer { .. }))
+				matches!(c, RuntimeCall::Balances(pallet_balances::Call::transfer { .. }))
 			},
 			ProxyType::JustUtility => matches!(c, Call::Utility { .. }),
 		}
@@ -151,7 +151,7 @@ impl Contains<Call> for BaseFilter {
 }
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Call = Call;
+	type Call = RuntimeCall;
 	type Currency = Balances;
 	type ProxyType = ProxyType;
 	type ProxyDepositBase = ConstU64<1>;
@@ -198,7 +198,7 @@ fn expect_events(e: Vec<RuntimeEvent>) {
 }
 
 fn call_transfer(dest: u64, value: u64) -> Call {
-	Call::Balances(BalancesCall::transfer { dest, value })
+	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 }
 
 #[test]
@@ -524,7 +524,7 @@ fn proxying_works() {
 		);
 
 		let call =
-			Box::new(Call::Balances(BalancesCall::transfer_keep_alive { dest: 6, value: 1 }));
+			Box::new(RuntimeCall::Balances(BalancesCall::transfer_keep_alive { dest: 6, value: 1 }));
 		assert_ok!(Call::Proxy(super::Call::new_call_variant_proxy(1, None, call.clone()))
 			.dispatch(Origin::signed(2)));
 		System::assert_last_event(
