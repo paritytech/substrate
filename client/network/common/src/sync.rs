@@ -23,6 +23,7 @@ pub mod message;
 pub mod metrics;
 pub mod warp;
 
+use beefy::{BeefyEncodedProof, BeefyJustifRequest};
 use libp2p::PeerId;
 use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
@@ -32,7 +33,6 @@ use sp_runtime::{
 	Justifications,
 };
 use std::{any::Any, fmt, fmt::Formatter, task::Poll};
-use beefy::{BeefyEncodedProof, BeefyJustifRequest};
 use warp::{EncodedProof, WarpProofRequest, WarpSyncProgress};
 
 /// The sync status of a peer we are trying to sync with
@@ -310,7 +310,11 @@ pub trait ChainSync<Block: BlockT>: Send {
 	fn on_warp_sync_data(&mut self, who: &PeerId, response: EncodedProof) -> Result<(), BadPeer>;
 
 	/// Handle a response from the remote to a BEEFY justification request that we made.
-	fn on_beefy_justification(&mut self, who: &PeerId, response: BeefyEncodedProof) -> Result<(), BadPeer>;
+	fn on_beefy_justification(
+		&mut self,
+		who: &PeerId,
+		response: BeefyEncodedProof,
+	) -> Result<(), BadPeer>;
 
 	/// Handle a response from the remote to a justification request that we made.
 	///

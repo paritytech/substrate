@@ -46,7 +46,7 @@ use sc_network_common::{
 	config::ProtocolId,
 	request_responses::RequestFailure,
 	sync::{
-		beefy::{BeefyJustifRequest, BeefyEncodedProof},
+		beefy::{BeefyEncodedProof, BeefyJustifRequest},
 		message::{
 			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
 		},
