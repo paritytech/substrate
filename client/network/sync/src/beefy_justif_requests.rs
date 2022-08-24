@@ -16,36 +16,27 @@
 
 //! Helper for handling (i.e. answering) BEEFY justifications requests from a remote peer.
 
-use codec::{Decode, Encode};
+use codec::Decode;
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
 };
 use log::debug;
 use sc_client_api::BlockBackend;
-use sc_network_common::request_responses::{
-	IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+use sc_network_common::{
+	request_responses::{
+		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
+	},
+	sync::beefy::{BeefyJustifRequest, BEEFY_LOG_TARGET},
 };
 use sp_runtime::{generic::BlockId, traits::Block};
 use std::{marker::PhantomData, sync::Arc, time::Duration};
-
-const LOG_TARGET: &str = "beefy::sync";
 
 // TODO: use better value here
 const MAX_RESPONSE_SIZE: u64 = 1024 * 1024;
 
 // TODO: use the definition from primitives
 const BEEFY_ENGINE_ID: sp_runtime::ConsensusEngineId = *b"BEEF";
-
-/// Scale-encoded BEEFY justification response.
-pub struct EncodedProof(pub Vec<u8>);
-
-/// BEEFY justification request.
-#[derive(Encode, Decode, Debug)]
-pub struct BeefyJustifRequest<B: Block> {
-	/// Start collecting proofs from this block.
-	pub begin: B::Hash,
-}
 
 /// Generates a [`RequestResponseConfig`] for the BEEFY justifications request protocol,
 /// refusing incoming requests (incoming requests will be initialized later).
@@ -114,7 +105,7 @@ where
 
 		let proof = self
 			.client
-			.justifications(&BlockId::Hash(request.begin))
+			.justifications(&BlockId::Number(request.begin))
 			.map_err(HandleRequestError::Client)?
 			.map(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
 			.flatten()
@@ -136,13 +127,16 @@ where
 			let IncomingRequest { peer, payload, pending_response } = request;
 			match self.handle_request(payload, pending_response) {
 				Ok(()) => {
-					debug!(target: LOG_TARGET, "Handled BEEFY justification request from {}.", peer)
+					debug!(
+						target: BEEFY_LOG_TARGET,
+						"Handled BEEFY justification request from {}.", peer
+					)
 				},
 				Err(e) => {
 					// TODO: handle reputation changes here
 
 					debug!(
-						target: LOG_TARGET,
+						target: BEEFY_LOG_TARGET,
 						"Failed to handle BEEFY justification request from {}: {}", peer, e,
 					)
 				},

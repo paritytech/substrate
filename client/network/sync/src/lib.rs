@@ -36,9 +36,11 @@ pub mod state_request_handler;
 pub mod warp;
 pub mod warp_request_handler;
 
+pub mod beefy;
 pub mod beefy_justif_requests;
 
 use crate::{
+	beefy::{BeefyProofImportResult, BeefySync},
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
 	state::StateSync,
@@ -53,6 +55,7 @@ use prost::Message;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
 use sc_network_common::sync::{
+	beefy::{BeefyEncodedProof, BeefyJustifRequest, BEEFY_LOG_TARGET},
 	message::{
 		BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, Direction,
 		FromBlock,
@@ -150,7 +153,7 @@ mod rep {
 	/// Reputation change for peers which send us a block with bad justifications.
 	pub const BAD_JUSTIFICATION: Rep = Rep::new(-(1 << 16), "Bad justification");
 
-	/// Reputation change when a peer sent us invlid ancestry result.
+	/// Reputation change when a peer sent us invalid ancestry result.
 	pub const UNKNOWN_ANCESTOR: Rep = Rep::new(-(1 << 16), "DB Error");
 
 	/// Peer response data does not have requested bits.
@@ -249,6 +252,8 @@ pub struct ChainSync<B: BlockT, Client> {
 	warp_sync: Option<WarpSync<B, Client>>,
 	/// Warp sync provider.
 	warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
+	/// BEEFY sync in progress, if any.
+	beefy_sync: Option<BeefySync<B, Client>>,
 	/// Enable importing existing blocks. This is used used after the state download to
 	/// catch up to the latest state while re-importing blocks.
 	import_existing: bool,
@@ -313,6 +318,8 @@ pub enum PeerSyncState<B: BlockT> {
 	DownloadingStale(B::Hash),
 	/// Downloading justification for given block hash.
 	DownloadingJustification(B::Hash),
+	/// Downloading BEEFY justification for given block hash.
+	DownloadingBeefyJustification(NumberFor<B>),
 	/// Downloading state.
 	DownloadingState,
 	/// Downloading warp proof.
@@ -815,7 +822,6 @@ where
 		None
 	}
 
-	// TODO: see this
 	fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<B>)> {
 		if let Some(sync) = &self.warp_sync {
 			if self.allowed_requests.is_empty() ||
@@ -841,6 +847,30 @@ where
 							return Some((*id, request))
 						}
 					}
+				}
+			}
+		}
+		None
+	}
+
+	fn beefy_justification_request(&mut self) -> Option<(PeerId, BeefyJustifRequest<B>)> {
+		if let Some(sync) = &self.beefy_sync {
+			if self.peers.iter().any(|(_, peer)| {
+				matches!(peer.state, PeerSyncState::DownloadingBeefyJustification(_))
+			}) {
+				// Only one pending BEEFY justification request is allowed.
+				return None
+			}
+			if let Some(request) = sync.next_beefy_proof_request() {
+				// TODO: use a better peer selection strategy. Maybe use [`ExtraRequests`].
+				if let Some((id, peer)) = self
+					.peers
+					.iter_mut()
+					.find(|(_, p)| p.state.is_available() && p.best_number > request.begin)
+				{
+					trace!(target: "sync", "New BeefyJustifRequest for {}", id);
+					peer.state = PeerSyncState::DownloadingBeefyJustification(request.begin);
+					return Some((*id, request))
 				}
 			}
 		}
@@ -1036,6 +1066,7 @@ where
 					},
 					PeerSyncState::Available |
 					PeerSyncState::DownloadingJustification(..) |
+					PeerSyncState::DownloadingBeefyJustification(..) |
 					PeerSyncState::DownloadingState |
 					PeerSyncState::DownloadingWarpProof => Vec::new(),
 				}
@@ -1164,6 +1195,38 @@ where
 			WarpProofImportResult::Success => Ok(()),
 			WarpProofImportResult::BadResponse => {
 				debug!(target: "sync", "Bad proof data received from {}", who);
+				Err(BadPeer(*who, rep::BAD_BLOCK))
+			},
+		}
+	}
+
+	fn on_beefy_justification(
+		&mut self,
+		who: &PeerId,
+		response: BeefyEncodedProof,
+	) -> Result<(), BadPeer> {
+		if let Some(peer) = self.peers.get_mut(who) {
+			if let PeerSyncState::DownloadingBeefyJustification(_) = peer.state {
+				peer.state = PeerSyncState::Available;
+			}
+		}
+		let import_result = if let Some(sync) = &mut self.beefy_sync {
+			debug!(
+				target: BEEFY_LOG_TARGET,
+				"Importing BEEFY proof data from {}, {} bytes.",
+				who,
+				response.0.len(),
+			);
+			sync.import_beefy_proof(response)
+		} else {
+			debug!(target: BEEFY_LOG_TARGET, "BEEFY sync disabled. Ignoring response from {}", who);
+			return Err(BadPeer(*who, rep::NOT_REQUESTED))
+		};
+
+		match import_result {
+			BeefyProofImportResult::Success => Ok(()),
+			BeefyProofImportResult::BadResponse => {
+				debug!(target: BEEFY_LOG_TARGET, "Bad BEEFY proof received from {}", who);
 				Err(BadPeer(*who, rep::BAD_BLOCK))
 			},
 		}
@@ -1715,6 +1778,7 @@ where
 			state_sync: None,
 			warp_sync: None,
 			warp_sync_provider,
+			beefy_sync: None,
 			import_existing: false,
 			gap_sync: None,
 		};

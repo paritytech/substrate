@@ -18,6 +18,7 @@
 
 //! Abstract interfaces and data structures related to network sync.
 
+pub mod beefy;
 pub mod message;
 pub mod metrics;
 pub mod warp;
@@ -31,6 +32,7 @@ use sp_runtime::{
 	Justifications,
 };
 use std::{any::Any, fmt, fmt::Formatter, task::Poll};
+use beefy::{BeefyEncodedProof, BeefyJustifRequest};
 use warp::{EncodedProof, WarpProofRequest, WarpSyncProgress};
 
 /// The sync status of a peer we are trying to sync with
@@ -162,7 +164,7 @@ pub enum SyncMode {
 	Light,
 	// Sync headers and block bodies
 	Full,
-	// Sync headers and the last finalied state
+	// Sync headers and the last finalized state
 	LightState { storage_chain_mode: bool, skip_proofs: bool },
 	// Warp sync mode.
 	Warp,
@@ -280,6 +282,9 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// Get a warp sync request, if any.
 	fn warp_sync_request(&mut self) -> Option<(PeerId, WarpProofRequest<Block>)>;
 
+	/// Get a BEEFY justification request, if any.
+	fn beefy_justification_request(&mut self) -> Option<(PeerId, BeefyJustifRequest<Block>)>;
+
 	/// Handle a response from the remote to a block request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
@@ -303,6 +308,9 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Handle a response from the remote to a warp proof request that we made.
 	fn on_warp_sync_data(&mut self, who: &PeerId, response: EncodedProof) -> Result<(), BadPeer>;
+
+	/// Handle a response from the remote to a BEEFY justification request that we made.
+	fn on_beefy_justification(&mut self, who: &PeerId, response: BeefyEncodedProof) -> Result<(), BadPeer>;
 
 	/// Handle a response from the remote to a justification request that we made.
 	///

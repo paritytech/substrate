@@ -46,6 +46,7 @@ use sc_network_common::{
 	config::ProtocolId,
 	request_responses::RequestFailure,
 	sync::{
+		beefy::{BeefyJustifRequest, BeefyEncodedProof},
 		message::{
 			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
 		},
@@ -212,6 +213,7 @@ enum PeerRequest<B: BlockT> {
 	Block(BlockRequest<B>),
 	State,
 	WarpProof,
+	BeefyProof,
 }
 
 /// Peer information
@@ -673,6 +675,24 @@ where
 		match self.chain_sync.on_warp_sync_data(&peer_id, response) {
 			Ok(()) => CustomMessageOutcome::None,
 			Err(BadPeer(id, repu)) => {
+				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
+				self.peerset_handle.report_peer(id, repu);
+				CustomMessageOutcome::None
+			},
+		}
+	}
+
+	/// Must be called in response to a [`CustomMessageOutcome::BeefyJustificationRequest`] being
+	/// emitted. Must contain the same `PeerId` and request that have been emitted.
+	pub fn on_beefy_justification_response(
+		&mut self,
+		peer_id: PeerId,
+		response: BeefyEncodedProof,
+	) -> CustomMessageOutcome<B> {
+		match self.chain_sync.on_beefy_justification(&peer_id, response) {
+			Ok(()) => CustomMessageOutcome::None,
+			Err(BadPeer(id, repu)) => {
+				// TODO: should we use separate PEERSET for BEEFY?
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
 				CustomMessageOutcome::None
@@ -1258,6 +1278,19 @@ fn prepare_warp_sync_request<B: BlockT>(
 	CustomMessageOutcome::WarpSyncRequest { target: who, request, pending_response: tx }
 }
 
+fn prepare_beefy_justification_request<B: BlockT>(
+	peers: &mut HashMap<PeerId, Peer<B>>,
+	who: PeerId,
+	request: BeefyJustifRequest<B>,
+) -> CustomMessageOutcome<B> {
+	let (tx, rx) = oneshot::channel();
+
+	if let Some(ref mut peer) = peers.get_mut(&who) {
+		peer.request = Some((PeerRequest::BeefyProof, rx));
+	}
+	CustomMessageOutcome::BeefyJustificationRequest { target: who, request, pending_response: tx }
+}
+
 /// Outcome of an incoming custom message.
 #[derive(Debug)]
 #[must_use]
@@ -1305,6 +1338,12 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	WarpSyncRequest {
 		target: PeerId,
 		request: WarpProofRequest<B>,
+		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+	},
+	/// A new BEEFY justification request must be emitted.
+	BeefyJustificationRequest {
+		target: PeerId,
+		request: BeefyJustifRequest<B>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 	/// Peer has a reported a new head of chain.
@@ -1394,6 +1433,7 @@ where
 		let mut finished_block_requests = Vec::new();
 		let mut finished_state_requests = Vec::new();
 		let mut finished_warp_sync_requests = Vec::new();
+		let mut finished_beefy_justification_requests = Vec::new();
 		for (id, peer) in self.peers.iter_mut() {
 			if let Peer { request: Some((_, pending_response)), .. } = peer {
 				match pending_response.poll_unpin(cx) {
@@ -1442,6 +1482,9 @@ where
 							},
 							PeerRequest::WarpProof => {
 								finished_warp_sync_requests.push((*id, resp));
+							},
+							PeerRequest::BeefyProof => {
+								finished_beefy_justification_requests.push((*id, resp));
 							},
 						}
 					},
@@ -1509,6 +1552,10 @@ where
 			let ev = self.on_warp_sync_response(id, EncodedProof(response));
 			self.pending_messages.push_back(ev);
 		}
+		for (id, response) in finished_beefy_justification_requests {
+			let ev = self.on_beefy_justification_response(id, BeefyEncodedProof(response));
+			self.pending_messages.push_back(ev);
+		}
 
 		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
 			self.tick();
@@ -1535,6 +1582,10 @@ where
 		}
 		if let Some((id, request)) = self.chain_sync.warp_sync_request() {
 			let event = prepare_warp_sync_request(&mut self.peers, id, request);
+			self.pending_messages.push_back(event);
+		}
+		if let Some((id, request)) = self.chain_sync.beefy_justification_request() {
+			let event = prepare_beefy_justification_request(&mut self.peers, id, request);
 			self.pending_messages.push_back(event);
 		}
 
