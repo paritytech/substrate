@@ -16,7 +16,7 @@ futures = "0.3"
 futures-timer = "3.0.1"
 hex = "0.4.2"
 log = "0.4"
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 thiserror = "1.0"
 wasm-timer = "0.2.5"
 beefy-primitives = { version = "4.0.0-dev", path = "../../primitives/beefy" }
