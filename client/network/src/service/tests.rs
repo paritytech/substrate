@@ -130,6 +130,7 @@ fn build_test_full_node(
 		Box::new(DefaultBlockAnnounceValidator),
 		network_config.max_parallel_downloads,
 		None,
+		None,
 	)
 	.unwrap();
 	let worker = NetworkWorker::new(config::Params {

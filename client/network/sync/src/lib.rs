@@ -2609,7 +2609,7 @@ mod test {
 		let peer_id = PeerId::random();
 
 		let mut sync =
-			ChainSync::new(SyncMode::Full, client.clone(), block_announce_validator, 1, None)
+			ChainSync::new(SyncMode::Full, client.clone(), block_announce_validator, 1, None, None)
 				.unwrap();
 
 		let (a1_hash, a1_number) = {
@@ -2661,6 +2661,7 @@ mod test {
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
 			1,
+			None,
 			None,
 		)
 		.unwrap();
@@ -2830,6 +2831,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
 			None,
+			None,
 		)
 		.unwrap();
 
@@ -2944,6 +2946,7 @@ mod test {
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
+			None,
 			None,
 		)
 		.unwrap();
@@ -3088,6 +3091,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
 			None,
+			None,
 		)
 		.unwrap();
 
@@ -3218,6 +3222,7 @@ mod test {
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
+			None,
 			None,
 		)
 		.unwrap();
@@ -3350,6 +3355,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			1,
 			None,
+			None,
 		)
 		.unwrap();
 
@@ -3382,6 +3388,7 @@ mod test {
 			empty_client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
 			1,
+			None,
 			None,
 		)
 		.unwrap();
