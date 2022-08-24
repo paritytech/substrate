@@ -146,7 +146,7 @@ parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 }
 
-pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
+pub type Extrinsic = sp_runtime::testing::TestXt<RuntimeCall, ()>;
 
 pub struct OnChainSeqPhragmen;
 impl onchain::Config for OnChainSeqPhragmen {

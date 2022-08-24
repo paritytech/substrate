@@ -801,7 +801,7 @@ mod tests {
 		frame_system::CheckWeight<Runtime>,
 		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 	);
-	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
+	type TestXt = sp_runtime::testing::TestXt<RuntimeCall, SignedExtra>;
 	type TestBlock = Block<TestXt>;
 	type TestUncheckedExtrinsic = TestXt;
 

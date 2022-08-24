@@ -106,7 +106,7 @@ where
 	Call: From<C>,
 {
 	type OverarchingCall = RuntimeCall;
-	type Extrinsic = TestXt<Call, ()>;
+	type Extrinsic = TestXt<RuntimeCall, ()>;
 }
 
 parameter_types! {

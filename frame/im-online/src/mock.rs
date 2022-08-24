@@ -87,7 +87,7 @@ impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager
 }
 
 /// An extrinsic type used for tests.
-pub type Extrinsic = TestXt<Call, ()>;
+pub type Extrinsic = TestXt<RuntimeCall, ()>;
 type IdentificationTuple = (u64, u64);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 

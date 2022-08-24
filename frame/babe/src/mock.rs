@@ -101,7 +101,7 @@ where
 	Call: From<C>,
 {
 	type OverarchingCall = RuntimeCall;
-	type Extrinsic = TestXt<Call, ()>;
+	type Extrinsic = TestXt<RuntimeCall, ()>;
 }
 
 impl_opaque_keys! {
