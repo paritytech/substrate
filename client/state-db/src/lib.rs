@@ -116,12 +116,14 @@ pub trait NodeDb {
 }
 
 /// Error type.
+#[derive(Eq, PartialEq)]
 pub enum Error<E> {
 	/// Database backend error.
 	Db(E),
 	StateDb(StateDbError),
 }
 
+#[derive(Eq, PartialEq)]
 pub enum StateDbError {
 	/// `Codec` decoding error.
 	Decoding(codec::Error),
@@ -139,6 +141,10 @@ pub enum StateDbError {
 	BlockAlreadyExists,
 	/// Invalid metadata
 	Metadata(String),
+	/// Trying to get a block record from db while it is not commit to db yet
+	BlockUnavailable,
+	/// Block record is missing from the pruning window
+	BlockMissing,
 }
 
 impl<E> From<StateDbError> for Error<E> {
@@ -183,6 +189,9 @@ impl fmt::Debug for StateDbError {
 			Self::TooManySiblingBlocks => write!(f, "Too many sibling blocks inserted"),
 			Self::BlockAlreadyExists => write!(f, "Block already exists"),
 			Self::Metadata(message) => write!(f, "Invalid metadata: {}", message),
+			Self::BlockUnavailable =>
+				write!(f, "Trying to get a block record from db while it is not commit to db yet"),
+			Self::BlockMissing => write!(f, "Block record is missing from the pruning window"),
 		}
 	}
 }
@@ -387,10 +396,20 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 				}
 
 				let pinned = &self.pinned;
-				if pruning.next_hash()?.map_or(false, |h| pinned.contains_key(&h)) {
-					break
+				match pruning.next_hash() {
+					// the block record is temporary unavailable, break and try next time
+					Err(Error::StateDb(StateDbError::BlockUnavailable)) => break,
+					res =>
+						if res?.map_or(false, |h| pinned.contains_key(&h)) {
+							break
+						},
 				}
-				pruning.prune_one(commit)?;
+				match pruning.prune_one(commit) {
+					// this branch should not reach as previous `next_hash` don't return error
+					// keeping it for robustness
+					Err(Error::StateDb(StateDbError::BlockUnavailable)) => break,
+					res => res?,
+				}
 			}
 		}
 		Ok(())
@@ -780,6 +799,43 @@ mod tests {
 	fn canonical_archive_keeps_canonical() {
 		let (db, _) = make_test_db(PruningMode::ArchiveCanonical);
 		assert!(db.data_eq(&make_db(&[1, 21, 3, 91, 921, 922, 93, 94])));
+	}
+
+	#[test]
+	fn block_record_unavailable() {
+		let (mut db, state_db) = make_test_db(PruningMode::Constrained(Constraints {
+			max_blocks: Some(1),
+			max_mem: None,
+		}));
+		// import 2 blocks
+		for i in &[5, 6] {
+			db.commit(
+				&state_db
+					.insert_block(
+						&H256::from_low_u64_be(*i),
+						*i,
+						&H256::from_low_u64_be(*i - 1),
+						make_changeset(&[], &[]),
+					)
+					.unwrap(),
+			);
+		}
+		// canonicalize block 4 but not commit it to db
+		let c1 = state_db.canonicalize_block(&H256::from_low_u64_be(4)).unwrap();
+		assert_eq!(state_db.is_pruned(&H256::from_low_u64_be(3), 3), IsPruned::Pruned);
+
+		// canonicalize block 5 but not commit it to db, block 4 is not pruned due to it is not
+		// commit to db yet (unavailable), return `MaybePruned` here because `apply_pending` is not
+		// called and block 3 is still in cache
+		let c2 = state_db.canonicalize_block(&H256::from_low_u64_be(5)).unwrap();
+		assert_eq!(state_db.is_pruned(&H256::from_low_u64_be(4), 4), IsPruned::MaybePruned);
+
+		// commit block 4 and 5 to db, and import a new block will prune both block 4 and 5
+		db.commit(&c1);
+		db.commit(&c2);
+		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(6)).unwrap());
+		assert_eq!(state_db.is_pruned(&H256::from_low_u64_be(4), 4), IsPruned::Pruned);
+		assert_eq!(state_db.is_pruned(&H256::from_low_u64_be(5), 5), IsPruned::Pruned);
 	}
 
 	#[test]
