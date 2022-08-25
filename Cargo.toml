@@ -123,6 +123,7 @@ members = [
 	"frame/referenda",
 	"frame/remark",
 	"frame/tx-pause",
+	"frame/safe-mode",
 	"frame/scheduler",
 	"frame/scored-pool",
 	"frame/session",

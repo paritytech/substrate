@@ -31,9 +31,9 @@ use frame_support::{
 	pallet_prelude::Get,
 	parameter_types,
 	traits::{
-		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
-		EqualPrivilegeOnly, Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier,
-		Nothing, OnUnbalanced, U128CurrencyToVote,
+		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency, InsideBoth,
+		EitherOfDiverse, EqualPrivilegeOnly, Imbalance, InstanceFilter, KeyOwnerProofSystem,
+		LockIdentifier, Nothing, OnUnbalanced, PalletInfoAccess, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -199,21 +199,37 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
+pub struct UnpausablePallets();
+impl Contains<pallet_tx_pause::PalletNameOf<Runtime>> for UnpausablePallets {
+	fn contains(pallet: &pallet_tx_pause::PalletNameOf<Runtime>) -> bool {
+		pallet.as_ref() ==
+			<pallet_safe_mode::Pallet<Runtime> as PalletInfoAccess>::name()
+				.as_bytes()
+				.to_vec()
+	}
+}
+
 impl pallet_tx_pause::Config for Runtime {
 	type Event = Event;
-	// TODO: add some safe pallets like governance.
-	type SafePallets = Nothing;
-	type BanOrigin = EnsureRoot<AccountId>;
+	type UnpausablePallets = UnpausablePallets;
+	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
 	type MaxNameLen = ConstU32<256>;
-	type BanTooLongNames = ConstBool<true>;
+	type PauseTooLongNames = ConstBool<true>;
+}
+
+impl pallet_safe_mode::Config for Runtime {
+	type Event = Event;
+	type SafeModeFilter = Nothing; // TODO add TxPause pallet
+	type EnableDuration = ConstU32<{ 2 * DAYS }>;
+	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
+	type EnableOrigin = EnsureRoot<AccountId>;
+	type ExtendOrigin = EnsureRoot<AccountId>;
+	type PreemptiveDisableOrigin = EnsureRoot<AccountId>;
 }
 
 impl frame_system::Config for Runtime {
-	// Directly using the `TxPause` pallet here implies that there is no general
-	// filter and everything that is not banned, is allowed.
-	// Otherwise you can compose them: `TheseExcept<DefaultFilter, TxPause>`.
-	type BaseCallFilter = TxPause;
+	type BaseCallFilter = InsideBoth<SafeMode, TxPause>;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -1655,6 +1671,7 @@ construct_runtime!(
 		RankedPolls: pallet_referenda::<Instance2>,
 		RankedCollective: pallet_ranked_collective,
 		TxPause: pallet_tx_pause,
+		SafeMode: pallet_safe_mode,
 	}
 );
 

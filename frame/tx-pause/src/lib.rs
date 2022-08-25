@@ -30,8 +30,8 @@ mod tests;
 
 pub use pallet::*;
 
-pub(crate) type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
-pub(crate) type ExtrinsicNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
+pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
+pub type ExtrinsicNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -55,7 +55,7 @@ pub mod pallet {
 		/// Pallets that are safe and can never be paused.
 		///
 		/// The tx-pause pallet is always assumed to be safe itself.
-		type SafePallets: Contains<PalletNameOf<Self>>;
+		type UnpausablePallets: Contains<PalletNameOf<Self>>;
 
 		/// Maximum length for pallet- and extrinsic-names.
 		///
@@ -79,12 +79,14 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The call is paused.
+		/// The call is (already) paused.
 		IsPaused,
-		/// The call is not paused.
-		IsNotPaused,
-		/// The call is listed as safe.
-		IsSafe,
+
+		/// The call is (already) unpaused.
+		IsUnpaused,
+
+		/// The call is listed as safe and cannot be paused.
+		IsUnpausable,
 	}
 
 	#[pallet::event]
@@ -144,7 +146,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Return whether the call is paused.
+	/// Return whether this call is paused.
 	pub fn is_paused_unbound(pallet: Vec<u8>, extrinsic: Vec<u8>) -> bool {
 		let pallet = PalletNameOf::<T>::try_from(pallet);
 		let extrinsic = ExtrinsicNameOf::<T>::try_from(extrinsic);
@@ -155,21 +157,22 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Return whether the call is paused.
+	/// Return whether this call is paused.
 	pub fn is_paused(pallet: &PalletNameOf<T>, extrinsic: &ExtrinsicNameOf<T>) -> bool {
 		<PausedCalls<T>>::contains_key((pallet, extrinsic))
 	}
 
-	/// Ensure that the call can be paused.
+	/// Ensure that this call can be paused.
 	pub fn ensure_can_pause(
 		pallet: &PalletNameOf<T>,
 		extrinsic: &ExtrinsicNameOf<T>,
 	) -> Result<(), Error<T>> {
+		// The `TxPause` pallet can never be paused.
 		if pallet.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
-			return Err(Error::<T>::IsSafe)
+			return Err(Error::<T>::IsUnpausable)
 		}
-		if T::SafePallets::contains(&pallet) {
-			return Err(Error::<T>::IsSafe)
+		if T::UnpausablePallets::contains(&pallet) {
+			return Err(Error::<T>::IsUnpausable)
 		}
 		if Self::is_paused(pallet, extrinsic) {
 			return Err(Error::<T>::IsPaused)
@@ -177,7 +180,7 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Ensure that the call can be un-paused.
+	/// Ensure that this call can be un-paused.
 	pub fn ensure_can_unpause(
 		pallet: &PalletNameOf<T>,
 		extrinsic: &ExtrinsicNameOf<T>,
@@ -186,7 +189,7 @@ impl<T: Config> Pallet<T> {
 			// SAFETY: Everything that is paused, can be un-paused.
 			Ok(())
 		} else {
-			Err(Error::IsNotPaused)
+			Err(Error::IsUnpaused)
 		}
 	}
 }
@@ -195,7 +198,7 @@ impl<T: pallet::Config> Contains<T::Call> for Pallet<T>
 where
 	<T as frame_system::Config>::Call: GetCallMetadata,
 {
-	/// Returns whether the call is allowed to be called.
+	/// Return whether the call is allowed to be dispatched.
 	fn contains(call: &T::Call) -> bool {
 		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
 		!Pallet::<T>::is_paused_unbound(pallet_name.into(), function_name.into())
