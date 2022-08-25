@@ -771,7 +771,7 @@ pub mod tests {
 					}
 				}
 
-				let proving = TrieBackendBuilder::wrap(&trie)
+				let proving = TrieBackendBuilder::wrap(trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -816,7 +816,7 @@ pub mod tests {
 				assert_eq!(in_memory_root, trie_root);
 				(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-				let proving = TrieBackendBuilder::wrap(&trie)
+				let proving = TrieBackendBuilder::wrap(trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -888,7 +888,7 @@ pub mod tests {
 				assert_eq!(in_memory_root, trie_root);
 				(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-				let proving = TrieBackendBuilder::wrap(&trie)
+				let proving = TrieBackendBuilder::wrap(trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -905,7 +905,7 @@ pub mod tests {
 				assert_eq!(proof_check.storage(&[41]).unwrap().unwrap(), vec![41]);
 				assert_eq!(proof_check.storage(&[64]).unwrap(), None);
 
-				let proving = TrieBackendBuilder::wrap(&trie)
+				let proving = TrieBackendBuilder::wrap(trie)
 					.with_recorder(Recorder::default())
 					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
 					.build();
@@ -1019,7 +1019,7 @@ pub mod tests {
 
 		{
 			// Record the access
-			let proving = TrieBackendBuilder::wrap(&trie)
+			let proving = TrieBackendBuilder::wrap(trie)
 				.with_recorder(Recorder::default())
 				.with_cache(cache.local_cache())
 				.build();

@@ -299,7 +299,7 @@ impl<B: BlockT> AsTrieBackend<HashFor<B>> for RefTrackingState<B> {
 	fn as_trie_backend(
 		&self,
 	) -> &sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>> {
-		&self.state.as_trie_backend()
+		self.state.as_trie_backend()
 	}
 }
 

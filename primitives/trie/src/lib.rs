@@ -375,7 +375,7 @@ where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
 	let db = KeySpacedDB::new(db, keyspace);
-	TrieDBBuilder::<L>::new(&db, &root)
+	TrieDBBuilder::<L>::new(&db, root)
 		.with_optional_recorder(recorder)
 		.with_optional_cache(cache)
 		.build()
@@ -396,7 +396,7 @@ where
 	DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
 	let db = KeySpacedDB::new(db, keyspace);
-	TrieDBBuilder::<L>::new(&db, &root)
+	TrieDBBuilder::<L>::new(&db, root)
 		.with_optional_recorder(recorder)
 		.with_optional_cache(cache)
 		.build()

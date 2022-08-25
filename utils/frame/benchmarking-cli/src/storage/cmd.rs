@@ -189,7 +189,7 @@ impl StorageCmd {
 			info!("Warmup round {}/{}", i + 1, self.params.warmups);
 			for key in keys.as_slice() {
 				let _ = client
-					.storage(&block, &key)
+					.storage(&block, key)
 					.expect("Checked above to exist")
 					.ok_or("Value unexpectedly empty");
 			}

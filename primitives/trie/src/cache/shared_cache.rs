@@ -259,7 +259,7 @@ impl<'a, H> ValueCacheKey<'a, H> {
 	/// Returns the stored storage key.
 	pub fn storage_key(&self) -> Option<&[u8]> {
 		match self {
-			Self::Ref { storage_key, .. } => Some(&storage_key),
+			Self::Ref { storage_key, .. } => Some(storage_key),
 			Self::Value { storage_key, .. } => Some(storage_key),
 			Self::Hash { .. } => None,
 		}

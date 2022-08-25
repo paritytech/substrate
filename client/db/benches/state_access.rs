@@ -179,7 +179,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 				|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
 				|state| {
 					for key in keys.iter().cycle().take(keys.len() * multiplier) {
-						let _ = state.storage(&key).expect("Doesn't fail").unwrap();
+						let _ = state.storage(key).expect("Doesn't fail").unwrap();
 					}
 				},
 				BatchSize::SmallInput,
@@ -217,7 +217,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 				|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
 				|state| {
 					for key in keys.iter().take(1).cycle().take(multiplier) {
-						let _ = state.storage(&key).expect("Doesn't fail").unwrap();
+						let _ = state.storage(key).expect("Doesn't fail").unwrap();
 					}
 				},
 				BatchSize::SmallInput,
@@ -255,7 +255,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 				|| backend.state_at(BlockId::Hash(block_hash)).expect("Creates state"),
 				|state| {
 					for key in keys.iter().take(1).cycle().take(multiplier) {
-						let _ = state.storage_hash(&key).expect("Doesn't fail").unwrap();
+						let _ = state.storage_hash(key).expect("Doesn't fail").unwrap();
 					}
 				},
 				BatchSize::SmallInput,

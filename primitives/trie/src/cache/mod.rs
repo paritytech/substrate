@@ -497,7 +497,7 @@ mod tests {
 					.build();
 
 				for (key, value) in TEST_DATA {
-					assert_eq!(*value, trie.get(&key).unwrap().unwrap());
+					assert_eq!(*value, trie.get(key).unwrap().unwrap());
 				}
 			}
 
@@ -508,7 +508,7 @@ mod tests {
 				let trie = TrieDBBuilder::<Layout>::new(&memory_db, &root).build();
 
 				for (key, value) in TEST_DATA {
-					assert_eq!(*value, trie.get(&key).unwrap().unwrap());
+					assert_eq!(*value, trie.get(key).unwrap().unwrap());
 				}
 			}
 		}

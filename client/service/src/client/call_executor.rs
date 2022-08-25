@@ -226,7 +226,7 @@ where
 			Some(recorder) => {
 				let trie_state = state.as_trie_backend();
 
-				let backend = sp_state_machine::TrieBackendBuilder::wrap(&trie_state)
+				let backend = sp_state_machine::TrieBackendBuilder::wrap(trie_state)
 					.with_recorder(recorder.clone())
 					.build();
 

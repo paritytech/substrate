@@ -214,26 +214,26 @@ impl HostFn {
 
 		let ret_ty = match item.clone().sig.output {
 			syn::ReturnType::Type(_, ty) => Ok(ty.clone()),
-			_ => Err(err(span, &msg)),
+			_ => Err(err(span, msg)),
 		}?;
 
 		match *ret_ty {
 			syn::Type::Path(tp) => {
-				let result = &tp.path.segments.last().ok_or(err(span, &msg))?;
+				let result = &tp.path.segments.last().ok_or(err(span, msg))?;
 				let (id, span) = (result.ident.to_string(), result.ident.span());
-				id.eq(&"Result".to_string()).then_some(()).ok_or(err(span, &msg))?;
+				id.eq(&"Result".to_string()).then_some(()).ok_or(err(span, msg))?;
 
 				match &result.arguments {
 					syn::PathArguments::AngleBracketed(group) => {
 						if group.args.len() != 2 {
-							return Err(err(span, &msg))
+							return Err(err(span, msg))
 						};
 
-						let arg2 = group.args.last().ok_or(err(span, &msg))?;
+						let arg2 = group.args.last().ok_or(err(span, msg))?;
 
 						let err_ty = match arg2 {
 							syn::GenericArgument::Type(ty) => Ok(ty.clone()),
-							_ => Err(err(arg2.span(), &msg)),
+							_ => Err(err(arg2.span(), msg)),
 						}?;
 
 						match err_ty {
@@ -241,49 +241,49 @@ impl HostFn {
 								.path
 								.segments
 								.first()
-								.ok_or(err(arg2.span(), &msg))?
+								.ok_or(err(arg2.span(), msg))?
 								.ident
 								.to_string()),
-							_ => Err(err(tp.span(), &msg)),
+							_ => Err(err(tp.span(), msg)),
 						}?
 						.eq("TrapReason")
 						.then_some(())
-						.ok_or(err(span, &msg))?;
+						.ok_or(err(span, msg))?;
 
-						let arg1 = group.args.first().ok_or(err(span, &msg))?;
+						let arg1 = group.args.first().ok_or(err(span, msg))?;
 						let ok_ty = match arg1 {
 							syn::GenericArgument::Type(ty) => Ok(ty.clone()),
-							_ => Err(err(arg1.span(), &msg)),
+							_ => Err(err(arg1.span(), msg)),
 						}?;
 						let ok_ty_str = match ok_ty {
 							syn::Type::Path(tp) => Ok(tp
 								.path
 								.segments
 								.first()
-								.ok_or(err(arg1.span(), &msg))?
+								.ok_or(err(arg1.span(), msg))?
 								.ident
 								.to_string()),
 							syn::Type::Tuple(tt) => {
 								if !tt.elems.is_empty() {
-									return Err(err(arg1.span(), &msg))
+									return Err(err(arg1.span(), msg))
 								};
 								Ok("()".to_string())
 							},
-							_ => Err(err(ok_ty.span(), &msg)),
+							_ => Err(err(ok_ty.span(), msg)),
 						}?;
 
 						let returns = match ok_ty_str.as_str() {
 							"()" => Ok(HostFnReturn::Unit),
 							"u32" => Ok(HostFnReturn::U32),
 							"ReturnCode" => Ok(HostFnReturn::ReturnCode),
-							_ => Err(err(arg1.span(), &msg)),
+							_ => Err(err(arg1.span(), msg)),
 						}?;
 						Ok(Self { item, module, name, returns })
 					},
-					_ => Err(err(span, &msg)),
+					_ => Err(err(span, msg)),
 				}
 			},
-			_ => Err(err(span, &msg)),
+			_ => Err(err(span, msg)),
 		}
 	}
 
