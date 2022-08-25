@@ -403,7 +403,7 @@ mod tests {
 			salt: &[u8],
 		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
-				code_hash: code_hash.clone(),
+				code_hash,
 				value,
 				data: data.to_vec(),
 				gas_left: gas_limit,
@@ -541,7 +541,7 @@ mod tests {
 			signature: &[u8; 65],
 			message_hash: &[u8; 32],
 		) -> Result<[u8; 33], ()> {
-			self.ecdsa_recover.borrow_mut().push((signature.clone(), message_hash.clone()));
+			self.ecdsa_recover.borrow_mut().push((*signature, *message_hash));
 			Ok([3; 33])
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {

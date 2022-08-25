@@ -262,22 +262,26 @@ pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{
-	event::{DhtEvent, Event, ObservedRole},
-	PeerInfo,
-};
-pub use sc_network_common::sync::{
-	warp::{WarpSyncPhase, WarpSyncProgress},
-	StateDownloadProgress, SyncState,
+pub use protocol::PeerInfo;
+pub use sc_network_common::{
+	protocol::event::{DhtEvent, Event, ObservedRole},
+	request_responses::{IfDisconnected, RequestFailure},
+	service::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
+		NetworkTransaction, Signature, SigningError,
+	},
+	sync::{
+		warp::{WarpSyncPhase, WarpSyncProgress},
+		StateDownloadProgress, SyncState,
+	},
 };
 pub use service::{
-	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
-	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
-	Signature, SigningError,
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
+	NotificationSenderReady, OutboundFailure, PublicKey,
 };
 
 pub use sc_peerset::ReputationChange;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -296,35 +300,3 @@ pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync 
 
 impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
 {}
-
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
-}
-
-/// Overview status of the network.
-#[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
-	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
-	/// The total number of bytes received.
-	pub total_bytes_inbound: u64,
-	/// The total number of bytes sent.
-	pub total_bytes_outbound: u64,
-	/// State sync in progress.
-	pub state_sync: Option<StateDownloadProgress>,
-	/// Warp sync in progress.
-	pub warp_sync: Option<WarpSyncProgress<B>>,
-}

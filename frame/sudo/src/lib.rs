@@ -88,7 +88,7 @@
 //!
 //! * [Democracy](../pallet_democracy/index.html)
 //!
-//! [`Origin`]: https://docs.substrate.io/v3/runtime/origins
+//! [`Origin`]: https://docs.substrate.io/main-docs/build/origins/
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -103,6 +103,8 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -192,7 +194,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn set_key(
 			origin: OriginFor<T>,
-			new: <T::Lookup as StaticLookup>::Source,
+			new: AccountIdLookupOf<T>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -228,7 +230,7 @@ pub mod pallet {
 		})]
 		pub fn sudo_as(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.

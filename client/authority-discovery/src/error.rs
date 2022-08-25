@@ -57,7 +57,7 @@ pub enum Error {
 	ParsingMultiaddress(#[from] libp2p::core::multiaddr::Error),
 
 	#[error("Failed to parse a libp2p key.")]
-	ParsingLibp2pIdentity(#[from] sc_network::DecodingError),
+	ParsingLibp2pIdentity(#[from] libp2p::identity::error::DecodingError),
 
 	#[error("Failed to sign using a specific public key.")]
 	MissingSignature(CryptoTypePublicPair),
