@@ -10,7 +10,7 @@ pub(crate) async fn save(
 ) -> Result<(), IoError> {
 	let target_file = target_file.as_ref();
 	let tmp_file = target_file.with_extension(EXTENSION_TMP);
-	let mut rm_tmp_file_on_drop = sp_core::defer! {
+	let mut rm_tmp_file_on_drop = sp_core::cancellable_defer! {
 		if let Err(reason) = std::fs::remove_file(&tmp_file) {
 			log::error!("Failed to cleanup temp-file: {:?}: {}", tmp_file, reason);
 		}

@@ -62,6 +62,13 @@ impl<F: FnOnce()> Drop for DeferGuard<F> {
 #[macro_export]
 macro_rules! defer(
 	( $( $code:tt )* ) => {
+		let _guard = $crate::defer::DeferGuard(Some(|| { $( $code )* }));
+	};
+);
+
+#[macro_export]
+macro_rules! cancellable_defer(
+	( $( $code:tt )* ) => {
 		$crate::defer::DeferGuard(Some(|| { $( $code )* }));
 	};
 );
