@@ -197,12 +197,12 @@ mod multiplier_tests {
 	fn truth_value_update_poc_works() {
 		let fm = Multiplier::saturating_from_rational(1, 2);
 		let test_set = vec![
-			(0, fm.clone()),
-			(100, fm.clone()),
-			(1000, fm.clone()),
-			(target(), fm.clone()),
-			(max_normal() / 2, fm.clone()),
-			(max_normal(), fm.clone()),
+			(0, fm),
+			(100, fm),
+			(1000, fm),
+			(target(), fm),
+			(max_normal() / 2, fm),
+			(max_normal(), fm),
 		];
 		test_set.into_iter().for_each(|(w, fm)| {
 			run_with_system_weight(w, || {

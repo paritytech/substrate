@@ -30,7 +30,7 @@
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	bitswap::Bitswap,
-	config::{parse_str_addr, Params, TransportConfig},
+	config::{Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -62,6 +62,7 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
+	config::parse_str_addr,
 	protocol::event::{DhtEvent, Event},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
@@ -159,18 +160,7 @@ where
 			.network_config
 			.boot_nodes
 			.into_iter()
-			.filter(|boot_node| {
-				if boot_node.peer_id == local_peer_id {
-					warn!(
-						target: "sub-libp2p",
-						"Local peer ID used in bootnode, ignoring: {}",
-						boot_node,
-					);
-					false
-				} else {
-					true
-				}
-			})
+			.filter(|boot_node| boot_node.peer_id != local_peer_id)
 			.collect();
 		params.network_config.default_peers_set.reserved_nodes = params
 			.network_config
@@ -1824,7 +1814,7 @@ where
 								if let ConnectedPoint::Dialer { address, role_override: _ } =
 									endpoint
 								{
-									error!(
+									warn!(
 										"💔 The bootnode you want to connect to at `{}` provided a different peer ID `{}` than the one you expect `{}`.",
 										address,
 										obtained,
