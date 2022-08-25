@@ -72,20 +72,14 @@ macro_rules! defer(
 /// # Example
 ///
 /// ```rust
-/// let target_file = "to-be-written-atomically.json";
-/// let tmp_file = target_file.with_extension("json.tmp");
-///
-/// // When dropped, `rm_tmp_file_on_drop` will execute the clean up code...
-/// 	let mut rm_tmp_file_on_drop = sp_core::cancellable_defer! {
-/// 		if let Err(reason) = std::fs::remove_file(&tmp_file) {
-/// 			log::error!("Failed to cleanup temp-file: {:?}: {}", tmp_file, reason);
-/// 		}
-/// 	};
-///
-/// std::fs::rename(&tmp_file, target_file).await?;
-///
-/// // ... unless it is cancelled.
-/// rm_tmp_file_on_drop.cancel();
+/// use sp_core::defer;
+/// let out = std::cell::RefCell::new(vec![]);
+/// {
+/// 	let to_be_kept = defer! { out.borrow_mut().push("kept") };
+///     let mut to_be_cancelled = defer! { out.borrow_mut().push("cancelled"); }
+/// 	to_be_cancelled.cancel();
+/// }
+/// assert_eq!(out, &["kept"]);
 /// ```
 #[macro_export]
 macro_rules! cancellable_defer(
