@@ -631,7 +631,7 @@ mod tests {
 			let mut cache = local_cache.as_trie_db_cache(root);
 			let trie = TrieDBBuilder::<Layout>::new(&db, &root).with_cache(&mut cache).build();
 
-			for (k, _) in TEST_DATA.iter().take(2) {
+			for (k, _) in TEST_DATA.iter().skip(2) {
 				trie.get(k).unwrap().unwrap();
 			}
 		}
