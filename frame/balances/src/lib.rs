@@ -1556,7 +1556,7 @@ where
 			return (NegativeImbalance::zero(), value)
 		}
 
-		for attempt in 0..2 {
+		for attempt in 0..=1 {
 			match Self::try_mutate_account(
 				who,
 				|account,
@@ -1579,22 +1579,13 @@ where
 					account.free -= free_slash; // Safe because of above check
 					let remaining_slash = best_value - free_slash; // Safe because of above check
 
-					if !remaining_slash.is_zero() {
-						// If we have remaining slash, take it from reserved balance.
-						let reserved_slash = cmp::min(account.reserved, remaining_slash);
-						account.reserved -= reserved_slash; // Safe because of above check
-						Ok((
-							NegativeImbalance::new(free_slash + reserved_slash),
-							value - free_slash - reserved_slash, /* Safe because value is gt or
-							                                      * eq total slashed */
-						))
-					} else {
-						// Else we are done!
-						Ok((
-							NegativeImbalance::new(free_slash),
-							value - free_slash, // Safe because value is gt or eq to total slashed
-						))
-					}
+					// If we have remaining slash, take it from reserved balance.
+					let reserved_slash = cmp::min(account.reserved, remaining_slash);
+					account.reserved -= reserved_slash; // Safe because of above check
+					Ok((
+						NegativeImbalance::new(free_slash + reserved_slash),
+						value - free_slash - reserved_slash, // Safe because value is gt or eq total slashed
+					))
 				},
 			) {
 				Ok((imbalance, not_slashed)) => {
@@ -1832,7 +1823,7 @@ where
 		// NOTE: `mutate_account` may fail if it attempts to reduce the balance to the point that an
 		//   account is attempted to be illegally destroyed.
 
-		for attempt in 0..2 {
+		for attempt in 0..=1 {
 			match Self::mutate_account(who, |account| {
 				let best_value = match attempt {
 					0 => value,
