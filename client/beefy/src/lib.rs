@@ -29,8 +29,8 @@ use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::Block;
 use std::sync::Arc;
 
+mod communication;
 mod error;
-mod gossip;
 mod keystore;
 mod metrics;
 mod round;
@@ -232,7 +232,7 @@ where
 	} = beefy_params;
 
 	let sync_oracle = network.clone();
-	let gossip_validator = Arc::new(gossip::GossipValidator::new());
+	let gossip_validator = Arc::new(communication::gossip::GossipValidator::new());
 	let gossip_engine = sc_network_gossip::GossipEngine::new(
 		network,
 		protocol_name,

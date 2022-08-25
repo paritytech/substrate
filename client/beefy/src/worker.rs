@@ -47,8 +47,8 @@ use beefy_primitives::{
 };
 
 use crate::{
+	communication::gossip::{topic, GossipValidator},
 	error::Error,
-	gossip::{topic, GossipValidator},
 	justification::BeefyVersionedFinalityProof,
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
@@ -881,7 +881,7 @@ pub(crate) mod tests {
 		let api = Arc::new(TestApi {});
 		let network = peer.network_service().clone();
 		let sync_oracle = network.clone();
-		let gossip_validator = Arc::new(crate::gossip::GossipValidator::new());
+		let gossip_validator = Arc::new(crate::communication::gossip::GossipValidator::new());
 		let gossip_engine =
 			GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
 		let worker_params = crate::worker::WorkerParams {
