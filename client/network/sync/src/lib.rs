@@ -389,8 +389,10 @@ where
 
 	/// Returns the current sync status.
 	fn status(&self) -> SyncStatus<B> {
-		let best_seen = self.best_seen();
-		let sync_state = if let Some(n) = best_seen {
+		let median_seen = self.median_seen();
+		let best_seen_block =
+			median_seen.and_then(|median| (median > self.best_queued_number).then_some(median));
+		let sync_state = if let Some(n) = median_seen {
 			// A chain is classified as downloading if the provided best block is
 			// more than `MAJOR_SYNC_BLOCKS` behind the best block.
 			let best_block = self.client.info().best_number;
@@ -414,9 +416,12 @@ where
 			_ => None,
 		};
 
+		let is_major_syncing = matches!(sync_state, SyncState::Downloading);
+
 		SyncStatus {
 			state: sync_state,
-			best_seen_block: best_seen,
+			best_seen_block,
+			is_major_syncing,
 			num_peers: self.peers.len() as u32,
 			queued_blocks: self.queue_blocks.len() as u32,
 			state_sync: self.state_sync.as_ref().map(|s| s.progress()),
@@ -1719,8 +1724,8 @@ where
 		Ok(sync)
 	}
 
-	/// Returns the best seen block number if we don't have that block yet, `None` otherwise.
-	fn best_seen(&self) -> Option<NumberFor<B>> {
+	/// Returns the median seen block number.
+	fn median_seen(&self) -> Option<NumberFor<B>> {
 		let mut best_seens = self.peers.values().map(|p| p.best_number).collect::<Vec<_>>();
 
 		if best_seens.is_empty() {
@@ -1729,12 +1734,7 @@ where
 			let middle = best_seens.len() / 2;
 
 			// Not the "perfect median" when we have an even number of peers.
-			let median = *best_seens.select_nth_unstable(middle).1;
-			if median > self.best_queued_number {
-				Some(median)
-			} else {
-				None
-			}
+			Some(*best_seens.select_nth_unstable(middle).1)
 		}
 	}
 

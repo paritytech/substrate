@@ -67,6 +67,8 @@ pub struct SyncStatus<Block: BlockT> {
 	pub state: SyncState,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<Block>>,
+	/// Are we actively catching up with the chain?
+	pub is_major_syncing: bool,
 	/// Number of peers participating in syncing.
 	pub num_peers: u32,
 	/// Number of blocks queued for import
