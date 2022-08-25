@@ -65,3 +65,87 @@ impl<P: AsRef<Path>> Drop for MaybeRmOnDrop<P> {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+
+	#[tokio::test]
+	async fn json_data_saved_to_file_and_loaded_from_it() {
+		let tmp_dir = tempfile::TempDir::new().expect("Failed to create temp-dir");
+		assert!(
+			tokio::fs::read_dir(tmp_dir.path())
+				.await
+				.expect("read_dir(tmp_dir) failed")
+				.next_entry()
+				.await
+				.expect("read_dir(tmp_dir).next_entry() failed")
+				.is_none(),
+			"temporary dir is not empty at the beginning of the test"
+		);
+
+		let data = serde_json::json!({"key": "value"});
+		let file = tmp_dir.path().join("data.json");
+
+		super::save(&file, &data).await.expect("Failed to save JSON to file");
+
+		let loaded = super::load_sync::<serde_json::Value, _>(&file)
+			.expect("Failed to load from JSON-file")
+			.expect("JSON-file missing");
+
+		assert_eq!(loaded, data);
+
+		tokio::fs::remove_file(&file).await.expect("Failed to remove JSON-file");
+		assert!(
+			tokio::fs::read_dir(tmp_dir.path())
+				.await
+				.expect("read_dir(tmp_dir) failed")
+				.next_entry()
+				.await
+				.expect("read_dir(tmp_dir).next_entry() failed")
+				.is_none(),
+			"temporary dir is not empty at the completion of the test"
+		);
+	}
+
+	#[tokio::test]
+	async fn json_data_cant_be_serialized_but_no_temp_file_left() {
+		use std::collections::HashMap;
+
+		let tmp_dir = tempfile::TempDir::new().expect("Failed to create temp-dir");
+		assert!(
+			tokio::fs::read_dir(tmp_dir.path())
+				.await
+				.expect("read_dir(tmp_dir) failed")
+				.next_entry()
+				.await
+				.expect("read_dir(tmp_dir).next_entry() failed")
+				.is_none(),
+			"temporary dir is not empty at the beginning of the test"
+		);
+
+		let data = [((), ())].into_iter().collect::<HashMap<(), ()>>();
+		let file = tmp_dir.path().join("data.json");
+
+		let should_be_error = super::save(&file, &data).await;
+
+		let should_be_invalid_data =
+			should_be_error.err().expect("save_to_json_file should have failed");
+		assert_eq!(
+			should_be_invalid_data.kind(),
+			std::io::ErrorKind::InvalidData,
+			"save_to_json_file has failed with reason other than serialization failure: {}",
+			should_be_invalid_data
+		);
+
+		assert!(
+			tokio::fs::read_dir(tmp_dir.path())
+				.await
+				.expect("read_dir(tmp_dir) failed")
+				.next_entry()
+				.await
+				.expect("read_dir(tmp_dir).next_entry() failed")
+				.is_none(),
+			"temporary dir is not empty at the completion of the test"
+		);
+	}
+}
