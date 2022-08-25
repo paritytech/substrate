@@ -101,7 +101,8 @@ pub struct WasmExecutor<H> {
 	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
 	/// compiled artifacts.
 	cache_path: Option<PathBuf>,
-
+	/// Ignore missing function imports.
+	allow_missing_host_functions: bool,
 	phantom: PhantomData<H>,
 }
 
@@ -112,6 +113,7 @@ impl<H> Clone for WasmExecutor<H> {
 			default_heap_pages: self.default_heap_pages,
 			cache: self.cache.clone(),
 			cache_path: self.cache_path.clone(),
+			allow_missing_host_functions: self.allow_missing_host_functions,
 			phantom: self.phantom,
 		}
 	}
@@ -153,8 +155,14 @@ where
 				runtime_cache_size,
 			)),
 			cache_path,
+			allow_missing_host_functions: false,
 			phantom: PhantomData,
 		}
+	}
+
+	/// Ignore missing function imports if set true.
+	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
+		self.allow_missing_host_functions = allow_missing_host_functions
 	}
 
 	/// Execute the given closure `f` with the latest runtime (based on `runtime_code`).
@@ -170,11 +178,10 @@ where
 	/// runtime is invalidated on any `panic!` to prevent a poisoned state. `ext` is already
 	/// implicitly handled as unwind safe, as we store it in a global variable while executing the
 	/// native runtime.
-	fn with_instance<R, F>(
+	pub fn with_instance<R, F>(
 		&self,
 		runtime_code: &RuntimeCode,
 		ext: &mut dyn Externalities,
-		allow_missing_host_functions: bool,
 		f: F,
 	) -> Result<R>
 	where
@@ -190,7 +197,7 @@ where
 			ext,
 			self.method,
 			self.default_heap_pages,
-			allow_missing_host_functions,
+			self.allow_missing_host_functions,
 			|module, instance, version, ext| {
 				let module = AssertUnwindSafe(module);
 				let instance = AssertUnwindSafe(instance);
@@ -353,7 +360,6 @@ where
 		let result = self.with_instance(
 			runtime_code,
 			ext,
-			false,
 			|module, mut instance, _onchain_version, mut ext| {
 				with_externalities_safe(&mut **ext, move || {
 					preregister_builtin_ext(module.clone());
@@ -374,7 +380,7 @@ where
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
+		self.with_instance(runtime_code, ext, |_module, _instance, version, _ext| {
 			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
 		})
 	}
@@ -387,7 +393,7 @@ where
 	D: NativeExecutionDispatch,
 {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	_dummy: std::marker::PhantomData<D>,
+	_dummy: PhantomData<D>,
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// Fallback wasm executor.
@@ -414,7 +420,7 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		max_runtime_instances: usize,
 		runtime_cache_size: u8,
 	) -> Self {
-		let wasm_executor = WasmExecutor::new(
+		let wasm = WasmExecutor::new(
 			fallback_method,
 			default_heap_pages,
 			max_runtime_instances,
@@ -425,8 +431,13 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		NativeElseWasmExecutor {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
-			wasm: wasm_executor,
+			wasm,
 		}
+	}
+
+	/// Ignore missing function imports if set true.
+	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
+		self.wasm.allow_missing_host_functions = allow_missing_host_functions
 	}
 }
 
@@ -436,10 +447,9 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeElseWasmExecutor<D> 
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm
-			.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
-				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-			})
+		self.wasm.with_instance(runtime_code, ext, |_module, _instance, version, _ext| {
+			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+		})
 	}
 }
 
@@ -606,7 +616,6 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 		let result = self.wasm.with_instance(
 			runtime_code,
 			ext,
-			false,
 			|module, mut instance, onchain_version, mut ext| {
 				let onchain_version =
 					onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;

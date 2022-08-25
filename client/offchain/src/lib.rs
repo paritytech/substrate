@@ -246,9 +246,10 @@ pub async fn notification_future<Client, Block, Spawner>(
 mod tests {
 	use super::*;
 	use futures::executor::block_on;
+	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network::{Multiaddr, PeerId, ReputationChange};
+	use sc_peerset::ReputationChange;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
