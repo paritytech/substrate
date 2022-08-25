@@ -29,13 +29,13 @@ use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::Block;
 use std::sync::Arc;
 
-mod communication;
 mod error;
 mod keystore;
 mod metrics;
 mod round;
 mod worker;
 
+pub mod communication;
 pub mod import;
 pub mod justification;
 pub mod notification;
@@ -51,42 +51,8 @@ use crate::{
 	},
 };
 
-pub use beefy_protocol_name::standard_name as protocol_standard_name;
-
-pub(crate) mod beefy_protocol_name {
-	use sc_chain_spec::ChainSpec;
-
-	const NAME: &str = "/beefy/1";
-	/// Old names for the notifications protocol, used for backward compatibility.
-	pub(crate) const LEGACY_NAMES: [&str; 1] = ["/paritytech/beefy/1"];
-
-	/// Name of the notifications protocol used by BEEFY.
-	///
-	/// Must be registered towards the networking in order for BEEFY to properly function.
-	pub fn standard_name<Hash: AsRef<[u8]>>(
-		genesis_hash: &Hash,
-		chain_spec: &Box<dyn ChainSpec>,
-	) -> std::borrow::Cow<'static, str> {
-		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-			None => format!("/{}", hex::encode(genesis_hash)),
-		};
-		format!("{}{}", chain_prefix, NAME).into()
-	}
-}
-
-/// Returns the configuration value to put in
-/// [`sc_network::config::NetworkConfiguration::extra_sets`].
-/// For standard protocol name see [`beefy_protocol_name::standard_name`].
-pub fn beefy_peers_set_config(
-	protocol_name: std::borrow::Cow<'static, str>,
-) -> sc_network::config::NonDefaultSetConfig {
-	let mut cfg = sc_network::config::NonDefaultSetConfig::new(protocol_name, 1024 * 1024);
-
-	cfg.allow_non_reserved(25, 25);
-	cfg.add_fallback_names(beefy_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect());
-	cfg
-}
+pub use communication::beefy_protocol_name::gossip_protocol_name as gossip_protocol_name;
+pub use communication::beefy_protocol_name::justifications_protocol_name as justifs_protocol_name;
 
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as

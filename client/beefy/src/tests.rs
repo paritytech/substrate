@@ -24,7 +24,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc, task::Poll};
 use tokio::{runtime::Runtime, time::Duration};
 
-use sc_chain_spec::{ChainSpec, GenericChainSpec};
 use sc_client_api::HeaderBackend;
 use sc_consensus::{
 	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
@@ -60,8 +59,8 @@ use sp_runtime::{
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 
 use crate::{
-	beefy_block_import_and_links, beefy_protocol_name, justification::*,
-	keystore::tests::Keyring as BeefyKeyring, BeefyRPCLinks, BeefyVoterLinks,
+	beefy_block_import_and_links, communication::beefy_protocol_name::gossip_protocol_name,
+	justification::*, keystore::tests::Keyring as BeefyKeyring, BeefyRPCLinks, BeefyVoterLinks,
 };
 
 pub(crate) const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
@@ -91,16 +90,10 @@ impl BuildStorage for Genesis {
 
 #[test]
 fn beefy_protocol_name() {
-	let chain_spec = GenericChainSpec::<Genesis>::from_json_bytes(
-		&include_bytes!("../../chain-spec/res/chain_spec.json")[..],
-	)
-	.unwrap()
-	.cloned_box();
-
 	// Create protocol name using random genesis hash.
 	let genesis_hash = H256::random();
 	let expected = format!("/{}/beefy/1", hex::encode(genesis_hash));
-	let proto_name = beefy_protocol_name::standard_name(&genesis_hash, &chain_spec);
+	let proto_name = gossip_protocol_name(&genesis_hash, None);
 	assert_eq!(proto_name.to_string(), expected);
 
 	// Create protocol name using hardcoded genesis hash. Verify exact representation.
@@ -110,7 +103,7 @@ fn beefy_protocol_name() {
 	];
 	let expected =
 		"/32043c7b3a6ad8f6c2bc8bc121d4caab09377b5e082b0cfbbb39ad13bc4acd93/beefy/1".to_string();
-	let proto_name = beefy_protocol_name::standard_name(&genesis_hash, &chain_spec);
+	let proto_name = gossip_protocol_name(&genesis_hash, None);
 	assert_eq!(proto_name.to_string(), expected);
 }
 
