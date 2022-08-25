@@ -72,14 +72,14 @@ macro_rules! defer(
 /// # Example
 ///
 /// ```rust
-/// use sp_core::defer;
+/// use sp_core::cancellable_defer;
 /// let out = std::cell::RefCell::new(vec![]);
 /// {
-/// 	let to_be_kept = defer! { out.borrow_mut().push("kept") };
-///     let mut to_be_cancelled = defer! { out.borrow_mut().push("cancelled"); }
+/// 	let to_be_kept = cancellable_defer! { out.borrow_mut().push("kept") };
+///     let mut to_be_cancelled = cancellable_defer! { out.borrow_mut().push("cancelled"); };
 /// 	to_be_cancelled.cancel();
 /// }
-/// assert_eq!(out, &["kept"]);
+/// assert_eq!(&out.borrow()[..], &["kept"]);
 /// ```
 #[macro_export]
 macro_rules! cancellable_defer(
