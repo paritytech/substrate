@@ -26,7 +26,7 @@ jsonrpsee = { version = "0.15.1", features = ["server"] }
 thiserror = "1.0.30"
 futures = "0.3.21"
 rand = "0.7.3"
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 log = "0.4.17"
 futures-timer = "3.0.1"
 exit-future = "0.2.0"
