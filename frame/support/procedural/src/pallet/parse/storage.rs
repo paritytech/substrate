@@ -775,7 +775,7 @@ impl StorageDef {
 						error.push_value(last);
 
 						Ok(Some(QueryKind::ResultQuery(
-							syn::Path { leading_colon: leading_colon.clone(), segments: error },
+							syn::Path { leading_colon, segments: error },
 							err_variant,
 						)))
 					},
