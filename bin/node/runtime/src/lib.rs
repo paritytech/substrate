@@ -954,7 +954,7 @@ parameter_types! {
 }
 
 /// Configure the send data pallet
-impl pallet_cere_ddc::Trait for Runtime {
+impl pallet_cere_ddc::Config for Runtime {
 	type MinLength = MinDataLength;
 	type MaxLength = MaxDataLength;
 	// The ubiquitous event type.
@@ -967,7 +967,7 @@ parameter_types! {
 }
 
 /// Configure the send data pallet
-impl pallet_chainbridge::Trait for Runtime {
+impl pallet_chainbridge::Config for Runtime {
 	type Event = Event;
 	type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type Proposal = Call;
@@ -983,12 +983,12 @@ parameter_types! {
     pub NFTTokenId: pallet_chainbridge::ResourceId = pallet_chainbridge::derive_resource_id(1, &blake2_128(b"NFT"));
 }
 
-impl pallet_erc721::Trait for Runtime {
+impl pallet_erc721::Config for Runtime {
 	type Event = Event;
 	type Identifier = NFTTokenId;
 }
 
-impl pallet_erc20::Trait for Runtime {
+impl pallet_erc20::Config for Runtime {
 	type Event = Event;
 	type BridgeOrigin = pallet_chainbridge::EnsureBridge<Runtime>;
 	type Currency = pallet_balances::Module<Runtime>;
@@ -1001,11 +1001,9 @@ parameter_types! {
 	pub const OcwBlockInterval: u32 = pallet_ddc_metrics_offchain_worker::BLOCK_INTERVAL;
 }
 
-impl pallet_ddc_metrics_offchain_worker::Trait for Runtime {
+impl pallet_ddc_metrics_offchain_worker::Config for Runtime {
 	type BlockInterval = OcwBlockInterval;
 
-	type CT = Self;
-	type CST = Self;
 	type AuthorityId = pallet_ddc_metrics_offchain_worker::crypto::TestAuthId;
 
 	type Event = Event;
