@@ -26,7 +26,9 @@ pub mod v11 {
 		storage::migration::move_pallet,
 		traits::{GetStorageVersion, PalletInfoAccess},
 	};
-	use sp_core::twox_128;
+
+	#[cfg(feature = "try-runtime")]
+	use sp_io::hashing::twox_128;
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade<T: Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
