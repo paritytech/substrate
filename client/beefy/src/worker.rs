@@ -834,8 +834,8 @@ where
 pub(crate) mod tests {
 	use super::*;
 	use crate::{
+		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 		keystore::tests::Keyring,
-		notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 		tests::{
 			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
 			BeefyPeer, BeefyTestNet, BEEFY_PROTOCOL_NAME,

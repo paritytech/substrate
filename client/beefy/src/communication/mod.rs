@@ -18,6 +18,8 @@
 
 //! Communication streams for the BEEFY networking protocols.
 
+pub mod notification;
+
 pub(crate) mod gossip;
 
 pub(crate) mod beefy_protocol_name {

@@ -38,21 +38,21 @@ mod worker;
 pub mod communication;
 pub mod import;
 pub mod justification;
-pub mod notification;
 
 #[cfg(test)]
 mod tests;
 
 use crate::{
-	import::BeefyBlockImport,
-	notification::{
+	communication::notification::{
 		BeefyBestBlockSender, BeefyBestBlockStream, BeefyVersionedFinalityProofSender,
 		BeefyVersionedFinalityProofStream,
 	},
+	import::BeefyBlockImport,
 };
 
-pub use communication::beefy_protocol_name::gossip_protocol_name as gossip_protocol_name;
-pub use communication::beefy_protocol_name::justifications_protocol_name as justifs_protocol_name;
+pub use communication::beefy_protocol_name::{
+	gossip_protocol_name, justifications_protocol_name as justifs_protocol_name,
+};
 
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
@@ -122,13 +122,13 @@ where
 {
 	// Voter -> RPC links
 	let (to_rpc_justif_sender, from_voter_justif_stream) =
-		notification::BeefyVersionedFinalityProofStream::<B>::channel();
+		BeefyVersionedFinalityProofStream::<B>::channel();
 	let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
-		notification::BeefyBestBlockStream::<B>::channel();
+		BeefyBestBlockStream::<B>::channel();
 
 	// BlockImport -> Voter links
 	let (to_voter_justif_sender, from_block_import_justif_stream) =
-		notification::BeefyVersionedFinalityProofStream::<B>::channel();
+		BeefyVersionedFinalityProofStream::<B>::channel();
 
 	// BlockImport
 	let import =
