@@ -90,7 +90,7 @@ macro_rules! wasm_export_functions {
 					&mut &input[..],
 				).expect("Input data is correctly encoded");
 
-				$( $fn_impl )*
+				(|| { $( $fn_impl )* })()
 			}
 
 			$crate::to_substrate_wasm_fn_return_value(&())
@@ -118,7 +118,7 @@ macro_rules! wasm_export_functions {
 					&mut &input[..],
 				).expect("Input data is correctly encoded");
 
-				$( $fn_impl )*
+				(|| { $( $fn_impl )* })()
 			};
 
 			$crate::to_substrate_wasm_fn_return_value(&output)
