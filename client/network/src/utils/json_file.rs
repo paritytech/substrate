@@ -2,13 +2,19 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{io::Error as IoError, path::Path};
 use tokio::io::AsyncWriteExt;
 
+const EXTENSION_TMP: &str = "tmp";
+
 pub(crate) async fn save(
 	target_file: impl AsRef<Path>,
 	data: &impl Serialize,
 ) -> Result<(), IoError> {
 	let target_file = target_file.as_ref();
 	let tmp_file = target_file.with_extension(EXTENSION_TMP);
-	let mut tmp_file_rm_guard = MaybeRmOnDrop::new(&tmp_file);
+	let mut rm_tmp_file_on_drop = sp_core::defer! {
+		if let Err(reason) = std::fs::remove_file(&tmp_file) {
+			log::error!("Failed to cleanup temp-file: {:?}: {}", tmp_file, reason);
+		}
+	};
 
 	let data = serde_json::to_vec_pretty(&data)?;
 
@@ -24,7 +30,7 @@ pub(crate) async fn save(
 	std::mem::drop(temp_fd);
 
 	tokio::fs::rename(&tmp_file, target_file).await?;
-	tmp_file_rm_guard.disarm();
+	rm_tmp_file_on_drop.cancel();
 
 	Ok(())
 }
@@ -41,29 +47,6 @@ where
 	};
 	let entries = serde_json::from_reader(file)?;
 	Ok(Some(entries))
-}
-
-const EXTENSION_TMP: &str = "tmp";
-
-struct MaybeRmOnDrop<P: AsRef<Path>>(Option<P>);
-
-impl<P: AsRef<Path>> MaybeRmOnDrop<P> {
-	fn new(path: P) -> Self {
-		Self(Some(path))
-	}
-	fn disarm(&mut self) {
-		self.0.take();
-	}
-}
-
-impl<P: AsRef<Path>> Drop for MaybeRmOnDrop<P> {
-	fn drop(&mut self) {
-		if let Some(file) = self.0.take() {
-			if let Err(reason) = std::fs::remove_file(file.as_ref()) {
-				log::error!("Failed to cleanup temp-file: {:?}: {}", file.as_ref(), reason);
-			}
-		}
-	}
 }
 
 #[cfg(test)]

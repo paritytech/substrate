@@ -25,6 +25,13 @@
 #[must_use]
 pub struct DeferGuard<F: FnOnce()>(pub Option<F>);
 
+impl<F: FnOnce()> DeferGuard<F> {
+	/// Prevent the deferred statement from execution.
+	pub fn cancel(&mut self) {
+		self.0.take();
+	}
+}
+
 impl<F: FnOnce()> Drop for DeferGuard<F> {
 	fn drop(&mut self) {
 		self.0.take().map(|f| f());
@@ -55,7 +62,7 @@ impl<F: FnOnce()> Drop for DeferGuard<F> {
 #[macro_export]
 macro_rules! defer(
 	( $( $code:tt )* ) => {
-		let _guard = $crate::defer::DeferGuard(Some(|| { $( $code )* }));
+		$crate::defer::DeferGuard(Some(|| { $( $code )* }));
 	};
 );
 
