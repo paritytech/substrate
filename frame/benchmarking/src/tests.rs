@@ -27,6 +27,7 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_std::prelude::*;
+use std::cell::RefCell;
 
 #[frame_support::pallet]
 mod pallet_test {
@@ -125,10 +126,16 @@ fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig::default().build_storage().unwrap().into()
 }
 
+thread_local! {
+	/// Tracks the used components per value. Needs to be a thread local since the
+	/// benchmarking clears the storage after each run.
+	static VALUES_PER_COMPONENT: RefCell<Vec<u32>> = RefCell::new(vec![]);
+}
+
 // NOTE: This attribute is only needed for the `modify_in_` functions.
 #[allow(unreachable_code)]
 mod benchmarks {
-	use super::{new_test_ext, pallet_test::Value, Test};
+	use super::{new_test_ext, pallet_test::Value, Test, VALUES_PER_COMPONENT};
 	use crate::{account, BenchmarkError, BenchmarkParameter, BenchmarkResult, BenchmarkingSetup};
 	use frame_support::{assert_err, assert_ok, ensure, traits::Get};
 	use frame_system::RawOrigin;
@@ -246,6 +253,13 @@ mod benchmarks {
 		} verify {
 			Value::<T>::set(Some(123));
 			return Err(BenchmarkError::Stop("Should error"));
+		}
+
+		// Stores all component values in the thread-local storage.
+		values_per_component {
+			let n in 0 .. 10;
+		}: {
+			VALUES_PER_COMPONENT.with(|v| v.borrow_mut().push(n));
 		}
 	}
 
@@ -392,6 +406,43 @@ mod benchmarks {
 				"Should error"
 			);
 			assert_eq!(Value::<Test>::get(), None);
+		});
+	}
+
+	/// Test that the benchmarking uses the correct values for each component and
+	/// that the number of components can be controlled with `VALUES_PER_COMPONENT`.
+	#[test]
+	fn test_values_per_component() {
+		let tests = vec![
+			(Some("1"), Err("`VALUES_PER_COMPONENT` must be at least 2".into())),
+			(Some("asdf"), Err("Could not parse env var `VALUES_PER_COMPONENT` as u32.".into())),
+			(None, Ok(vec![0, 2, 4, 6, 8, 10])),
+			(Some("2"), Ok(vec![0, 10])),
+			(Some("4"), Ok(vec![0, 3, 6, 10])),
+			(Some("6"), Ok(vec![0, 2, 4, 6, 8, 10])),
+			(Some("10"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 10])),
+			(Some("11"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
+			(Some("99"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
+		];
+
+		for (num, expected) in tests {
+			run_test_values_per_component(num, expected);
+		}
+	}
+
+	/// Helper for [`test_values_per_component`].
+	fn run_test_values_per_component(num: Option<&str>, output: Result<Vec<u32>, BenchmarkError>) {
+		VALUES_PER_COMPONENT.with(|v| v.borrow_mut().clear());
+		match num {
+			Some(n) => std::env::set_var("VALUES_PER_COMPONENT", n),
+			None => std::env::remove_var("VALUES_PER_COMPONENT"),
+		}
+
+		new_test_ext().execute_with(|| {
+			let got = Pallet::<Test>::test_benchmark_values_per_component()
+				.map(|_| VALUES_PER_COMPONENT.with(|v| v.borrow().clone()));
+
+			assert_eq!(got, output);
 		});
 	}
 }

@@ -29,6 +29,7 @@ mod keyword {
 	syn::custom_keyword!(storage_prefix);
 	syn::custom_keyword!(unbounded);
 	syn::custom_keyword!(OptionQuery);
+	syn::custom_keyword!(ResultQuery);
 	syn::custom_keyword!(ValueQuery);
 }
 
@@ -129,6 +130,7 @@ pub enum Metadata {
 
 pub enum QueryKind {
 	OptionQuery,
+	ResultQuery(syn::Path, syn::Ident),
 	ValueQuery,
 }
 
@@ -153,7 +155,7 @@ pub struct StorageDef {
 	/// Optional expression that evaluates to a type that can be used as StoragePrefix instead of
 	/// ident.
 	pub rename_as: Option<syn::LitStr>,
-	/// Whereas the querytype of the storage is OptionQuery or ValueQuery.
+	/// Whereas the querytype of the storage is OptionQuery, ResultQuery or ValueQuery.
 	/// Note that this is best effort as it can't be determined when QueryKind is generic, and
 	/// result can be false if user do some unexpected type alias.
 	pub query_kind: Option<QueryKind>,
@@ -695,21 +697,105 @@ impl StorageDef {
 		let (named_generics, metadata, query_kind) = process_generics(&typ.path.segments[0])?;
 
 		let query_kind = query_kind
-			.map(|query_kind| match query_kind {
-				syn::Type::Path(path)
-					if path.path.segments.last().map_or(false, |s| s.ident == "OptionQuery") =>
-					Some(QueryKind::OptionQuery),
-				syn::Type::Path(path)
-					if path.path.segments.last().map_or(false, |s| s.ident == "ValueQuery") =>
-					Some(QueryKind::ValueQuery),
-				_ => None,
+			.map(|query_kind| {
+				use syn::{
+					AngleBracketedGenericArguments, GenericArgument, Path, PathArguments, Type,
+					TypePath,
+				};
+
+				let result_query = match query_kind {
+					Type::Path(path)
+						if path
+							.path
+							.segments
+							.last()
+							.map_or(false, |s| s.ident == "OptionQuery") =>
+						return Ok(Some(QueryKind::OptionQuery)),
+					Type::Path(TypePath { path: Path { segments, .. }, .. })
+						if segments.last().map_or(false, |s| s.ident == "ResultQuery") =>
+						segments
+							.last()
+							.expect("segments is checked to have the last value; qed")
+							.clone(),
+					Type::Path(path)
+						if path.path.segments.last().map_or(false, |s| s.ident == "ValueQuery") =>
+						return Ok(Some(QueryKind::ValueQuery)),
+					_ => return Ok(None),
+				};
+
+				let error_type = match result_query.arguments {
+					PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+						args, ..
+					}) => {
+						if args.len() != 1 {
+							let msg = format!(
+								"Invalid pallet::storage, unexpected number of generic arguments \
+								for ResultQuery, expected 1 type argument, found {}",
+								args.len(),
+							);
+							return Err(syn::Error::new(args.span(), msg))
+						}
+
+						args[0].clone()
+					},
+					args => {
+						let msg = format!(
+							"Invalid pallet::storage, unexpected generic args for ResultQuery, \
+							expected angle-bracketed arguments, found `{}`",
+							args.to_token_stream().to_string()
+						);
+						return Err(syn::Error::new(args.span(), msg))
+					},
+				};
+
+				match error_type {
+					GenericArgument::Type(Type::Path(TypePath {
+						path: Path { segments: err_variant, leading_colon },
+						..
+					})) => {
+						if err_variant.len() < 2 {
+							let msg = format!(
+								"Invalid pallet::storage, unexpected number of path segments for \
+								the generics in ResultQuery, expected a path with at least 2 \
+								segments, found {}",
+								err_variant.len(),
+							);
+							return Err(syn::Error::new(err_variant.span(), msg))
+						}
+						let mut error = err_variant.clone();
+						let err_variant = error
+							.pop()
+							.expect("Checked to have at least 2; qed")
+							.into_value()
+							.ident;
+
+						// Necessary here to eliminate the last double colon
+						let last =
+							error.pop().expect("Checked to have at least 2; qed").into_value();
+						error.push_value(last);
+
+						Ok(Some(QueryKind::ResultQuery(
+							syn::Path { leading_colon: leading_colon.clone(), segments: error },
+							err_variant,
+						)))
+					},
+					gen_arg => {
+						let msg = format!(
+							"Invalid pallet::storage, unexpected generic argument kind, expected a \
+							type path to a `PalletError` enum variant, found `{}`",
+							gen_arg.to_token_stream().to_string(),
+						);
+						Err(syn::Error::new(gen_arg.span(), msg))
+					},
+				}
 			})
-			.unwrap_or(Some(QueryKind::OptionQuery)); // This value must match the default generic.
+			.transpose()?
+			.unwrap_or(Some(QueryKind::OptionQuery));
 
 		if let (None, Some(getter)) = (query_kind.as_ref(), getter.as_ref()) {
 			let msg = "Invalid pallet::storage, cannot generate getter because QueryKind is not \
-				identifiable. QueryKind must be `OptionQuery`, `ValueQuery`, or default one to be \
-				identifiable.";
+				identifiable. QueryKind must be `OptionQuery`, `ResultQuery`, `ValueQuery`, or default \
+				one to be identifiable.";
 			return Err(syn::Error::new(getter.span(), msg))
 		}
 
