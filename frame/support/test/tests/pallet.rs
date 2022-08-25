@@ -626,6 +626,8 @@ frame_support::construct_runtime!(
 		System: frame_system exclude_parts { Pallet, Storage },
 		Example: pallet,
 		Example2: pallet2 exclude_parts { Call },
+		#[cfg(feature = "example3")]
+		Example3: pallet3,
 		Example4: pallet4 use_parts { Call },
 	}
 );
