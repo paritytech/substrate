@@ -31,19 +31,17 @@ pub mod v11 {
 	use sp_io::hashing::twox_128;
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade<T: Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
+	pub fn pre_upgrade<T: Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
 		old_pallet_name: N,
 	) -> Result<(), &'static str> {
-		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 		frame_support::ensure!(
 			StorageVersion::<T>::get() == crate::Releases::V10_0_0,
 			"must upgrade linearly"
 		);
-
-		let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
+		let old_pallet_prefix = twox_128(old_pallet_name.as_ref().as_bytes());
 
 		frame_support::ensure!(
-			sp_io::storage::next_key(&old_pallet_prefix).is_some();
+			sp_io::storage::next_key(&old_pallet_prefix).is_some(),
 			"no data for the old pallet name has been detected"
 		);
 
@@ -80,25 +78,24 @@ pub mod v11 {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade<T: Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
+	pub fn post_upgrade<T: Config, P: GetStorageVersion + PalletInfoAccess, N: AsRef<str>>(
 		old_pallet_name: N,
 	) -> Result<(), &'static str> {
-		use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 		frame_support::ensure!(
 			StorageVersion::<T>::get() == crate::Releases::V11_0_0,
 			"wrong version after the upgrade"
 		);
 
-		let old_pallet_prefix = twox_128(old_pallet_name.as_bytes());
+		let old_pallet_prefix = twox_128(old_pallet_name.as_ref().as_bytes());
 		frame_support::ensure!(
-			sp_io::storage::next_key(&old_pallet_prefix).is_none();
+			sp_io::storage::next_key(&old_pallet_prefix).is_none(),
 			"old pallet data hasn't been removed"
 		);
 
 		let new_pallet_name = <P as PalletInfoAccess>::name();
 		let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
 		frame_support::ensure!(
-			sp_io::storage::next_key(&new_pallet_prefix).is_some();
+			sp_io::storage::next_key(&new_pallet_prefix).is_some(),
 			"new pallet data hasn't been created"
 		);
 
