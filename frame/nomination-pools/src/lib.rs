@@ -2257,8 +2257,8 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		new_funds: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let u256 = T::BalanceToU256::convert;
-		let balance = T::U256ToBalance::convert;
+		let to_u256 = T::BalanceToU256::convert;
+		let to_balance = T::U256ToBalance::convert;
 		match (current_balance.is_zero(), current_points.is_zero()) {
 			(_, true) => new_funds.saturating_mul(POINTS_TO_BALANCE_INIT_RATIO.into()),
 			(true, false) => {
@@ -2268,11 +2268,11 @@ impl<T: Config> Pallet<T> {
 			},
 			(false, false) => {
 				// Equivalent to (current_points / current_balance) * new_funds
-				balance(
-					u256(current_points)
-						.saturating_mul(u256(new_funds))
+				to_balance(
+					to_u256(current_points)
+						.saturating_mul(to_u256(new_funds))
 						// We check for zero above
-						.div(u256(current_balance)),
+						.div(to_u256(current_balance)),
 				)
 			},
 		}
@@ -2285,15 +2285,15 @@ impl<T: Config> Pallet<T> {
 		current_points: BalanceOf<T>,
 		points: BalanceOf<T>,
 	) -> BalanceOf<T> {
-		let u256 = T::BalanceToU256::convert;
-		let balance = T::U256ToBalance::convert;
+		let to_u256 = T::BalanceToU256::convert;
+		let to_balance = T::U256ToBalance::convert;
 		if current_balance.is_zero() || current_points.is_zero() || points.is_zero() {
 			// There is nothing to unbond
 			return Zero::zero()
 		}
 
 		// Equivalent of (current_balance / current_points) * points
-		balance(u256(current_balance).saturating_mul(u256(points)))
+		to_balance(to_u256(current_balance).saturating_mul(to_u256(points)))
 			// We check for zero above
 			.div(current_points)
 	}
