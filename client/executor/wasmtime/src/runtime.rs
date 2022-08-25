@@ -24,7 +24,7 @@ use crate::{
 	util::{self, replace_strategy_if_broken},
 };
 
-use sc_allocator::FreeingBumpHeapAllocator;
+use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
 	error::{Result, WasmError},
 	runtime_blob::{
@@ -184,8 +184,13 @@ pub struct WasmtimeInstance {
 	strategy: Strategy,
 }
 
-impl WasmInstance for WasmtimeInstance {
-	fn call(&mut self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
+impl WasmtimeInstance {
+	fn call_impl(
+		&mut self,
+		method: InvokeMethod,
+		data: &[u8],
+		allocation_stats: &mut Option<AllocationStats>,
+	) -> Result<Vec<u8>> {
 		match &mut self.strategy {
 			Strategy::LegacyInstanceReuse {
 				ref mut instance_wrapper,
@@ -205,7 +210,8 @@ impl WasmInstance for WasmtimeInstance {
 				globals_snapshot.apply(&mut InstanceGlobals { instance: instance_wrapper });
 				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-				let result = perform_call(data, instance_wrapper, entrypoint, allocator);
+				let result =
+					perform_call(data, instance_wrapper, entrypoint, allocator, allocation_stats);
 
 				// Signal to the OS that we are done with the linear memory and that it can be
 				// reclaimed.
@@ -219,9 +225,21 @@ impl WasmInstance for WasmtimeInstance {
 				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
 				let allocator = FreeingBumpHeapAllocator::new(heap_base);
-				perform_call(data, &mut instance_wrapper, entrypoint, allocator)
+				perform_call(data, &mut instance_wrapper, entrypoint, allocator, allocation_stats)
 			},
 		}
+	}
+}
+
+impl WasmInstance for WasmtimeInstance {
+	fn call_with_allocation_stats(
+		&mut self,
+		method: InvokeMethod,
+		data: &[u8],
+	) -> (Result<Vec<u8>>, Option<AllocationStats>) {
+		let mut allocation_stats = None;
+		let result = self.call_impl(method, data, &mut allocation_stats);
+		(result, allocation_stats)
 	}
 
 	fn get_global_const(&mut self, name: &str) -> Result<Option<Value>> {
@@ -306,13 +324,19 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 		.profiler(profiler)
 		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {:#}", e)))?;
 
-	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
-		semantics.deterministic_stack_limit
-	{
-		config
-			.max_wasm_stack(native_stack_max as usize)
-			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {:#}", e)))?;
-	}
+	let native_stack_max = match semantics.deterministic_stack_limit {
+		Some(DeterministicStackLimit { native_stack_max, .. }) => native_stack_max,
+
+		// In `wasmtime` 0.35 the default stack size limit was changed from 1MB to 512KB.
+		//
+		// This broke at least one parachain which depended on the original 1MB limit,
+		// so here we restore it to what it was originally.
+		None => 1024 * 1024,
+	};
+
+	config
+		.max_wasm_stack(native_stack_max as usize)
+		.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {:#}", e)))?;
 
 	config.parallel_compilation(semantics.parallel_compilation);
 
@@ -741,6 +765,7 @@ fn perform_call(
 	instance_wrapper: &mut InstanceWrapper,
 	entrypoint: EntryPoint,
 	mut allocator: FreeingBumpHeapAllocator,
+	allocation_stats: &mut Option<AllocationStats>,
 ) -> Result<Vec<u8>> {
 	let (data_ptr, data_len) = inject_input_data(instance_wrapper, &mut allocator, data)?;
 
@@ -754,7 +779,10 @@ fn perform_call(
 		.map(unpack_ptr_and_len);
 
 	// Reset the host state
-	instance_wrapper.store_mut().data_mut().host_state = None;
+	let host_state = instance_wrapper.store_mut().data_mut().host_state.take().expect(
+		"the host state is always set before calling into WASM so it can't be None here; qed",
+	);
+	*allocation_stats = Some(host_state.allocation_stats());
 
 	let (output_ptr, output_len) = ret?;
 	let output = extract_output_data(instance_wrapper, output_ptr, output_len)?;

@@ -47,6 +47,7 @@ fn benchmark_storage(db: &str, base_path: &Path) -> ExitStatus {
 		.args(["--state-version", "1"])
 		.args(["--warmups", "0"])
 		.args(["--add", "100", "--mul", "1.2", "--metric", "p75"])
+		.arg("--include-child-trees")
 		.status()
 		.unwrap()
 }

@@ -90,7 +90,7 @@ fn generate_random_phragmen_assignment(
 				let target =
 					targets_to_chose_from.remove(rng.gen_range(0..targets_to_chose_from.len()));
 				if winners.iter().all(|w| *w != target) {
-					winners.push(target.clone());
+					winners.push(target);
 				}
 				(target, rng.gen_range(1 * KSM..100 * KSM))
 			})

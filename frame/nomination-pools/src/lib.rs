@@ -282,7 +282,10 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
-	traits::{AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, Zero},
+	traits::{
+		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
+		Zero,
+	},
 	FixedPointNumber, FixedPointOperand,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
@@ -320,6 +323,8 @@ pub type BalanceOf<T> =
 pub type PoolId = u32;
 
 type UnbondingPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 pub const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
@@ -491,7 +496,7 @@ impl<T: Config> PoolMember<T> {
 				true
 			} else {
 				removed_points
-					.try_insert(*e, p.clone())
+					.try_insert(*e, *p)
 					.expect("source map is bounded, this is a subset, will be bounded; qed");
 				false
 			}
@@ -939,7 +944,7 @@ pub struct RewardPool<T: Config> {
 
 impl<T: Config> RewardPool<T> {
 	/// Getter for [`RewardPool::last_recorded_reward_counter`].
-	fn last_recorded_reward_counter(&self) -> T::RewardCounter {
+	pub(crate) fn last_recorded_reward_counter(&self) -> T::RewardCounter {
 		self.last_recorded_reward_counter
 	}
 
@@ -1349,7 +1354,7 @@ pub mod pallet {
 		///   pool.
 		/// - `points` is the number of points that are issued as a result of `balance` being
 		/// dissolved into the corresponding unbonding pool.
-		///
+		/// - `era` is the era in which the balance will be unbonded.
 		/// In the absence of slashing, these values will match. In the presence of slashing, the
 		/// number of points that are issued in the unbonding pool will be less than the amount
 		/// requested to be unbonded.
@@ -1358,6 +1363,7 @@ pub mod pallet {
 			pool_id: PoolId,
 			balance: BalanceOf<T>,
 			points: BalanceOf<T>,
+			era: EraIndex,
 		},
 		/// A member has withdrawn from their pool.
 		///
@@ -1628,10 +1634,11 @@ pub mod pallet {
 		#[transactional]
 		pub fn unbond(
 			origin: OriginFor<T>,
-			member_account: T::AccountId,
+			member_account: AccountIdLookupOf<T>,
 			#[pallet::compact] unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let member_account = T::Lookup::lookup(member_account)?;
 			let (mut member, mut bonded_pool, mut reward_pool) =
 				Self::get_member_with_pools(&member_account)?;
 
@@ -1683,6 +1690,7 @@ pub mod pallet {
 				pool_id: member.pool_id,
 				points: points_unbonded,
 				balance: unbonding_balance,
+				era: unbond_era,
 			});
 
 			// Now that we know everything has worked write the items to storage.
@@ -1739,10 +1747,11 @@ pub mod pallet {
 		#[transactional]
 		pub fn withdraw_unbonded(
 			origin: OriginFor<T>,
-			member_account: T::AccountId,
+			member_account: AccountIdLookupOf<T>,
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let caller = ensure_signed(origin)?;
+			let member_account = T::Lookup::lookup(member_account)?;
 			let mut member =
 				PoolMembers::<T>::get(&member_account).ok_or(Error::<T>::PoolMemberNotFound)?;
 			let current_era = T::StakingInterface::current_era();
@@ -1861,11 +1870,14 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
-			root: T::AccountId,
-			nominator: T::AccountId,
-			state_toggler: T::AccountId,
+			root: AccountIdLookupOf<T>,
+			nominator: AccountIdLookupOf<T>,
+			state_toggler: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let root = T::Lookup::lookup(root)?;
+			let nominator = T::Lookup::lookup(nominator)?;
+			let state_toggler = T::Lookup::lookup(state_toggler)?;
 
 			ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
 			ensure!(
@@ -1918,10 +1930,7 @@ pub mod pallet {
 			);
 			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
 
-			Self::deposit_event(Event::<T>::Created {
-				depositor: who.clone(),
-				pool_id: pool_id.clone(),
-			});
+			Self::deposit_event(Event::<T>::Created { depositor: who.clone(), pool_id });
 
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who,
@@ -2145,6 +2154,20 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Returns the pending rewards for the specified `member_account`.
+	///
+	/// In the case of error the function returns balance of zero.
+	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
+		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
+			if let Some(reward_pool) = RewardPools::<T>::get(pool_member.pool_id) {
+				return pool_member
+					.pending_rewards(reward_pool.last_recorded_reward_counter())
+					.unwrap_or_default()
+			}
+		}
+		BalanceOf::<T>::default()
+	}
+
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
 	///
 	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
@@ -2448,7 +2471,8 @@ impl<T: Config> Pallet<T> {
 		member: T::AccountId,
 	) -> DispatchResult {
 		let points = PoolMembers::<T>::get(&member).map(|d| d.active_points()).unwrap_or_default();
-		Self::unbond(origin, member, points)
+		let member_lookup = T::Lookup::unlookup(member);
+		Self::unbond(origin, member_lookup, points)
 	}
 }
 

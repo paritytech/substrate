@@ -445,7 +445,7 @@ pallet-assets, pallet-balances, pallet-consensus, pallet-contracts, pallet-counc
 frame-executive,  pallet-session, pallet-staking, pallet-timestamp, pallet-treasury
 * Node
 [source, shell]
-node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime
+node-cli, node-consensus, node-executor, node-network, node-primitives, kitchensink-runtime
 * Subkey
 [source, shell]
 subkey
