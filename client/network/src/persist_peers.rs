@@ -51,11 +51,13 @@ pub struct PersistPeerAddrs {
 	busy: Option<BoxedFuture<Result<(), io::Error>>>,
 }
 
+pub struct PersistPeersets(BoxedFuture<Never>);
+
 impl PersistPeerAddrs {
 	pub fn load(storage_dir: PathBuf) -> Self {
 		let load_from_file = storage_dir.join(PEER_ADDRS_FILENAME);
 
-		let protocols = match persist_peer_addrs::load(&load_from_file) {
+		let protocols = match peer_addrs_load(&load_from_file) {
 			Ok(restored) => restored,
 			Err(reason) => {
 				log::warn!("Failed to load peer addresses: {:?}", reason);
@@ -68,7 +70,7 @@ impl PersistPeerAddrs {
 			.map(|(protocol, entries)| {
 				let cache = entries.into_iter().rev().fold(
 					LruCache::new(PEER_ADDRS_CACHE_SIZE),
-					|mut acc, persist_peer_addrs::PeerEntry { peer_id, addrs }| {
+					|mut acc, AddrsEntry { peer_id, addrs }| {
 						if let Ok(peer_id) = peer_id.parse() {
 							acc.push(peer_id, addrs.into_iter().collect::<HashSet<_>>());
 						}
@@ -145,48 +147,19 @@ impl PersistPeerAddrs {
 							let peer_id = peer_id.to_base58();
 							let addrs = addrs.into_iter().cloned().collect();
 
-							persist_peer_addrs::PeerEntry { peer_id, addrs }
+							AddrsEntry { peer_id, addrs }
 						})
 						.collect::<Vec<_>>();
 					(protocol.to_owned(), entries)
 				})
 				.collect();
 
-			let busy_future =
-				persist_peer_addrs::persist(self.storage_dir.to_owned(), entries).boxed();
+			let busy_future = peer_addrs_save(self.storage_dir.to_owned(), entries).boxed();
 			self.busy = Some(busy_future);
 		}
 		Poll::Pending
 	}
 }
-
-mod persist_peer_addrs {
-	use super::*;
-
-	#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-	pub(super) struct PeerEntry {
-		pub peer_id: String,
-		pub addrs: Vec<Multiaddr>,
-	}
-
-	pub(super) async fn persist(
-		storage_dir: PathBuf,
-		protocols: HashMap<ProtocolType, Vec<PeerEntry>>,
-	) -> Result<(), io::Error> {
-		let persist_to_file = storage_dir.join(PEER_ADDRS_FILENAME);
-		utils::json_file::save(&persist_to_file, &protocols).await?;
-
-		Ok(())
-	}
-
-	pub(super) fn load(path: &Path) -> Result<HashMap<ProtocolType, Vec<PeerEntry>>, io::Error> {
-		let entries = utils::json_file::load_sync(path)?.unwrap_or_default();
-		Ok(entries)
-	}
-}
-
-pub struct PersistPeersets(BoxedFuture<Never>);
-pub use peersets::load as peersets_load;
 
 impl PersistPeersets {
 	pub fn new(storage_dir: PathBuf, peerset_handle: PeersetHandle) -> Self {
@@ -196,7 +169,7 @@ impl PersistPeersets {
 
 			loop {
 				let _ = ticks.tick().await;
-				if let Err(reason) = peersets::persist(&storage_dir, &peerset_handle).await {
+				if let Err(reason) = peersets_save(&storage_dir, &peerset_handle).await {
 					log::warn!("Error persisting peer sets: {}", reason);
 				}
 			}
@@ -209,52 +182,69 @@ impl PersistPeersets {
 	}
 }
 
-mod peersets {
-	use super::*;
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct AddrsEntry {
+	pub peer_id: String,
+	pub addrs: Vec<Multiaddr>,
+}
 
-	#[derive(Debug, serde::Serialize, serde::Deserialize)]
-	pub(crate) struct PeerInfo {
-		pub peer_id: String,
-		pub sets: Vec<usize>,
-	}
+async fn peer_addrs_save(
+	storage_dir: PathBuf,
+	protocols: HashMap<ProtocolType, Vec<AddrsEntry>>,
+) -> Result<(), io::Error> {
+	let persist_to_file = storage_dir.join(PEER_ADDRS_FILENAME);
+	utils::json_file::save(&persist_to_file, &protocols).await?;
 
-	pub(super) async fn persist(
-		storage_dir: &Path,
-		peerset_handle: &PeersetHandle,
-	) -> Result<(), io::Error> {
-		let persist_to_file = storage_dir.join(PEER_SETS_FILENAME);
+	Ok(())
+}
 
-		let peersets_dumped = peerset_handle
-			.dump_state()
-			.await
-			.map_err(|()| io::Error::new(io::ErrorKind::BrokenPipe, "oneshot channel failure"))?
-			.into_iter()
-			.map(|(peer_id, sets)| PeerInfo { peer_id: peer_id.to_base58(), sets })
-			.collect::<Vec<_>>();
+fn peer_addrs_load(path: &Path) -> Result<HashMap<ProtocolType, Vec<AddrsEntry>>, io::Error> {
+	let entries = utils::json_file::load_sync(path)?.unwrap_or_default();
+	Ok(entries)
+}
 
-		utils::json_file::save(&persist_to_file, &peersets_dumped).await?;
-		Ok(())
-	}
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct SetsEntry {
+	pub peer_id: String,
+	pub sets: Vec<usize>,
+}
 
-	pub fn load(dir: impl AsRef<Path>) -> Result<Vec<(PeerId, Vec<usize>)>, io::Error> {
-		let path = dir.as_ref().join("peer-sets.json");
+async fn peersets_save(
+	storage_dir: &Path,
+	peerset_handle: &PeersetHandle,
+) -> Result<(), io::Error> {
+	let persist_to_file = storage_dir.join(PEER_SETS_FILENAME);
 
-		let entries: Vec<PeerInfo> = utils::json_file::load_sync(&path)?.unwrap_or_default();
-		Ok(entries
-			.into_iter()
-			.filter_map(|peer_info| {
-				if let Ok(peer_id) = peer_info.peer_id.parse::<PeerId>() {
-					Some((peer_id, peer_info.sets))
-				} else {
-					None
-				}
-			})
-			.collect())
-	}
+	let peersets_dumped = peerset_handle
+		.dump_state()
+		.await
+		.map_err(|()| io::Error::new(io::ErrorKind::BrokenPipe, "oneshot channel failure"))?
+		.into_iter()
+		.map(|(peer_id, sets)| SetsEntry { peer_id: peer_id.to_base58(), sets })
+		.collect::<Vec<_>>();
 
-	impl fmt::Debug for PersistPeersets {
-		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-			f.debug_struct("PersistPeersets").finish()
-		}
+	utils::json_file::save(&persist_to_file, &peersets_dumped).await?;
+	Ok(())
+}
+
+pub(crate) fn peersets_load(dir: impl AsRef<Path>) -> Result<Vec<(PeerId, Vec<usize>)>, io::Error> {
+	let path = dir.as_ref().join("peer-sets.json");
+
+	let entries: Vec<SetsEntry> = utils::json_file::load_sync(&path)?.unwrap_or_default();
+	Ok(entries
+		.into_iter()
+		.filter_map(|peer_info| {
+			if let Ok(peer_id) = peer_info.peer_id.parse::<PeerId>() {
+				Some((peer_id, peer_info.sets))
+			} else {
+				None
+			}
+		})
+		.collect())
+}
+
+impl fmt::Debug for PersistPeersets {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_struct("PersistPeersets").finish()
 	}
 }
