@@ -19,17 +19,18 @@
 //! Communication streams for the BEEFY networking protocols.
 
 pub mod notification;
+pub mod request_response;
 
 pub(crate) mod gossip;
 
 pub(crate) mod beefy_protocol_name {
 	/// BEEFY votes gossip protocol name suffix.
 	const GOSSIP_NAME: &str = "/beefy/1";
-	/// Old names for the gossip protocol, used for backward compatibility.
-	pub(super) const LEGACY_NAMES: [&str; 1] = ["/paritytech/beefy/1"];
-
 	/// BEEFY justifications protocol name suffix.
 	const JUSTIFICATIONS_NAME: &str = "/beefy/justifications/1";
+
+	/// Old names for the gossip protocol, used for backward compatibility.
+	pub(super) const LEGACY_NAMES: [&str; 1] = ["/paritytech/beefy/1"];
 
 	/// Name of the votes gossip protocol used by BEEFY.
 	///
