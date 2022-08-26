@@ -186,9 +186,23 @@ impl HostFn {
 			_ => Err(err(span, msg)),
 		}?;
 
-		let name = item.sig.ident.to_string();
-		let attrs: Vec<&syn::Attribute> =
-			item.attrs.iter().filter(|m| !m.path.is_ident("doc")).collect();
+		let name = if item.attrs.iter().any(|a| {
+			a.path
+				.get_ident()
+				.unwrap_or(&syn::Ident::new("nope", proc_macro2::Span::call_site()))
+				.to_string()
+				.eq("prefixed_alias")
+		}) {
+			"seal_".to_string() + &item.sig.ident.to_string()
+		} else {
+			item.sig.ident.to_string()
+		};
+
+		let attrs: Vec<&syn::Attribute> = item
+			.attrs
+			.iter()
+			.filter(|m| !(m.path.is_ident("doc") || m.path.is_ident("prefixed_alias")))
+			.collect();
 
 		let module = match attrs.len() {
 			0 => Ok("seal0".to_string()),
@@ -316,8 +330,24 @@ impl EnvDef {
 			.ok_or(err("Invalid environment definition, expected `mod` to be inlined."))?
 			.1;
 
+		let aliases = items.iter().filter(|i| {
+			let i = match i {
+				syn::Item::Fn(i_fn) => i_fn,
+				_ => return false,
+			};
+
+			i.attrs.iter().any(|a| {
+				a.path
+					.get_ident()
+					.unwrap_or(&syn::Ident::new("nope", proc_macro2::Span::call_site()))
+					.to_string()
+					.eq("prefixed_alias")
+			})
+		});
+
 		let host_funcs = items
 			.iter()
+			.chain(aliases)
 			.map(|i| HostFn::try_from(i.clone()))
 			.collect::<Result<Vec<_>, _>>()?;
 

@@ -965,6 +965,7 @@ pub mod env {
 	///
 	/// Equivalent to the newer version of `seal_set_storage` with the exception of the return
 	/// type. Still a valid thing to call when not interested in the return value.
+	#[prefixed_alias]
 	fn seal_set_storage(
 		ctx: Runtime<E: Ext>,
 		key_ptr: u32,
