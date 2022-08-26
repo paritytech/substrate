@@ -27,7 +27,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use futures::FutureExt;
+use futures::{channel::oneshot, FutureExt};
 use lru::LruCache;
 
 use sc_peerset::PeersetHandle;
@@ -51,7 +51,7 @@ pub struct PersistPeerAddrs {
 	busy: Option<BoxedFuture<Result<(), io::Error>>>,
 }
 
-pub struct PersistPeersets(BoxedFuture<Never>);
+pub struct PersistPeersets(oneshot::Sender<()>);
 
 impl PersistPeerAddrs {
 	pub fn load(storage_dir: PathBuf) -> Self {
@@ -163,6 +163,8 @@ impl PersistPeerAddrs {
 
 impl PersistPeersets {
 	pub fn new(storage_dir: PathBuf, peerset_handle: PeersetHandle) -> Self {
+		let (killswitch_tx, killswitch_rx) = oneshot::channel::<()>();
+
 		let busy_future = async move {
 			let mut ticks = tokio::time::interval(FLUSH_INTERVAL);
 			ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -174,11 +176,11 @@ impl PersistPeersets {
 				}
 			}
 		};
-		Self(busy_future.boxed())
-	}
 
-	pub fn poll(&mut self, cx: &mut Context) -> Poll<Never> {
-		self.0.poll_unpin(cx)
+		let cancellable_future = futures::future::select(busy_future.boxed(), killswitch_rx);
+		tokio::spawn(cancellable_future);
+
+		Self(killswitch_tx)
 	}
 }
 

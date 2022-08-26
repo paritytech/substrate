@@ -1412,10 +1412,6 @@ where
 		cx: &mut std::task::Context,
 		params: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-		if let Some(persist_peersets) = self.persist_peersets.as_mut() {
-			let _ = persist_peersets.poll(cx);
-		}
-
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
