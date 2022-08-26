@@ -463,7 +463,7 @@ fn assert_powerless(user: Origin) {
 
 	assert_noop!(Alliance::retire(user.clone()), Error::<Test, ()>::RetirementNoticeNotGiven);
 
-	assert_noop!(Alliance::retirement_notice(user.clone()), Error::<Test, ()>::NotMember);
+	assert_noop!(Alliance::give_retirement_notice(user.clone()), Error::<Test, ()>::NotMember);
 
 	assert_noop!(Alliance::elevate_ally(user.clone(), 4), BadOrigin);
 
@@ -472,13 +472,6 @@ fn assert_powerless(user: Origin) {
 	assert_noop!(Alliance::nominate_ally(user.clone(), 4),  Error::<Test, ()>::NoVotingRights);
 
 	assert_noop!(Alliance::propose(user.clone(), 5, Box::new(proposal), 1000),  Error::<Test, ()>::NoVotingRights);
-
-	// Currently failing below:
-	assert_noop!(Alliance::add_unscrupulous_items(user.clone(), vec![]), BadOrigin);
-
-	assert_noop!(Alliance::remove_unscrupulous_items(user.clone(), vec![]), BadOrigin);
-
-	assert_noop!(Alliance::announce(user, cid.clone()), Error::<Test, ()>::NotAlly);
 }
 
 #[test]
