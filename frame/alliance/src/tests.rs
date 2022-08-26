@@ -241,6 +241,9 @@ fn set_rule_works() {
 fn announce_works() {
 	new_test_ext().execute_with(|| {
 		let cid = test_cid();
+
+		assert_noop!(Alliance::announce(Origin::signed(2), cid.clone()), BadOrigin);
+
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
@@ -438,7 +441,37 @@ fn retire_works() {
 			member: (3),
 			unreserved: None,
 		}));
+
+		// Move time on:
+		System::set_block_number(System::block_number() + RetirementPeriod::get());
+
+		assert_powerless(Origin::signed(3));
 	});
+}
+
+fn assert_powerless(user: Origin) {
+	//vote / veto with a valid propsal
+	let cid = test_cid();
+	let proposal = make_proposal(42);
+
+	assert_noop!(Alliance::init_members(user.clone(), vec![], vec![], vec![]), BadOrigin);
+
+	assert_noop!(Alliance::set_rule(user.clone(), cid.clone()), BadOrigin);
+
+	assert_noop!(Alliance::retire(user.clone()), Error::<Test, ()>::RetirementNoticeNotGiven);
+
+	assert_noop!(Alliance::give_retirement_notice(user.clone()), Error::<Test, ()>::NotMember);
+
+	assert_noop!(Alliance::elevate_ally(user.clone(), 4), BadOrigin);
+
+	assert_noop!(Alliance::kick_member(user.clone(), 1), BadOrigin);
+
+	assert_noop!(Alliance::nominate_ally(user.clone(), 4), Error::<Test, ()>::NoVotingRights);
+
+	assert_noop!(
+		Alliance::propose(user.clone(), 5, Box::new(proposal), 1000),
+		Error::<Test, ()>::NoVotingRights
+	);
 }
 
 #[test]
@@ -463,6 +496,8 @@ fn kick_member_works() {
 #[test]
 fn add_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
+		assert_noop!(Alliance::add_unscrupulous_items(Origin::signed(2), vec![]), BadOrigin);
+
 		assert_ok!(Alliance::add_unscrupulous_items(
 			Origin::signed(3),
 			vec![
@@ -486,6 +521,8 @@ fn add_unscrupulous_items_works() {
 #[test]
 fn remove_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
+		assert_noop!(Alliance::remove_unscrupulous_items(Origin::signed(2), vec![]), BadOrigin);
+
 		assert_noop!(
 			Alliance::remove_unscrupulous_items(
 				Origin::signed(3),
