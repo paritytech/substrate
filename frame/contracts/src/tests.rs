@@ -339,19 +339,32 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 /// A filter whose filter function can be swapped at runtime.
 pub struct TestFilter;
 
+#[derive(Clone)]
+pub struct Filters{
+	filter: fn(&Call) -> bool
+}
+
+impl Default for Filters{
+	fn default() -> Self {
+		Filters{
+			filter: (|_| true)
+		}
+	}
+}
+
 parameter_types! {
-	static CallFilter: fn(&Call) -> bool = (|_| true);
+	static CallFilter: Filters = Default::default();
 }
 
 impl TestFilter {
 	pub fn set_filter(filter: fn(&Call) -> bool) {
-		CallFilter::mutate(|fltr| *fltr = filter);
+		CallFilter::mutate(|fltr| fltr.filter = filter);
 	}
 }
 
 impl Contains<Call> for TestFilter {
 	fn contains(call: &Call) -> bool {
-		CallFilter::get()(call)
+		(CallFilter::get().filter)(call)
 	}
 }
 
