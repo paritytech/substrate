@@ -263,7 +263,7 @@ pub mod pallet {
 
 		/// Deregister oneself from the fast-unstake (and possibly joining a pool).
 		///
-		/// This is useful id one is registered, they are still waiting, and they change their mind.
+		/// This is useful if one is registered, they are still waiting, and they change their mind.
 		///
 		/// Note that the associated stash is still fully unbonded and chilled as a consequence of
 		/// calling `register_fast_unstake`. This should probably be followed by a call to
@@ -490,8 +490,7 @@ pub mod pallet {
 		fn pre_dispatch(
 			self,
 			// NOTE: we want to prevent this stash-controller pair from doing anything in the
-			// staking system as long as they are registered here. `who` can be a stash or a
-			// controller.
+			// staking system as long as they are registered here.
 			stash_or_controller: &Self::AccountId,
 			call: &Self::Call,
 			_info: &sp_runtime::traits::DispatchInfoOf<Self::Call>,
