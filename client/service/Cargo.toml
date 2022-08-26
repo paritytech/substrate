@@ -80,7 +80,7 @@ tracing-futures = { version = "0.2.4" }
 parity-util-mem = { version = "0.11.0", default-features = false, features = [
 	"primitive-types",
 ] }
-async-trait = "0.1.50"
+async-trait = "0.1.57"
 tokio = { version = "1.17.0", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
