@@ -25,7 +25,7 @@ log = "0.4.17"
 parity-scale-codec = { version = "3.0.0", features = ["derive"] }
 parking_lot = "0.12.1"
 rand = "0.8.4"
-serde_json = "1.0.79"
+serde_json = "1.0.85"
 thiserror = "1.0"
 fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../utils/prometheus" }
