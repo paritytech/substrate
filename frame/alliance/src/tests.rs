@@ -41,6 +41,7 @@ fn force_set_members_works() {
 		assert!(Alliance::up_for_kicking(&2));
 		// ensure proposal is listed as active proposal
 		assert_eq!(<Test as Config>::ProposalProvider::proposals(), vec![hash, k_hash]);
+		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 2);
 
 		// fails without root
 		assert_noop!(
@@ -102,6 +103,7 @@ fn force_set_members_works() {
 		assert!(!Alliance::is_member(&3));
 		// all proposals are removed
 		assert_eq!(<Test as Config>::ProposalProvider::proposals(), vec![]);
+		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 0);
 
 		System::assert_last_event(mock::Event::Alliance(crate::Event::MembersInitialized {
 			founders: vec![5, 8],

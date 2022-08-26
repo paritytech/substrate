@@ -197,6 +197,10 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 	fn proposals() -> Vec<H256> {
 		AllianceMotion::proposals().into_inner()
 	}
+
+	fn proposals_count() -> u32 {
+		pallet_collective::Proposals::<Test, AllianceCollective>::decode_len().unwrap_or(0) as u32
+	}
 }
 
 parameter_types! {

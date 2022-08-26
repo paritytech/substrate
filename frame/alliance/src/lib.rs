@@ -201,6 +201,11 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 
 	/// Return hashes of all active proposals.
 	fn proposals() -> Vec<Hash>;
+
+	// Return count of all active proposals.
+	//
+	// Used to check a witness data for an extrinsic.
+	fn proposals_count() -> u32;
 }
 
 /// The various roles that a member can hold.
@@ -643,17 +648,20 @@ pub mod pallet {
 				// actionable items managed outside of the pallet. Items managed within the pallet,
 				// like `UnscrupulousWebsites`, are left for the new Alliance to clean up or keep.
 
-				let proposals = T::ProposalProvider::proposals();
-				ensure!(proposals.len() as u32 <= witness.proposals, Error::<T, I>::BadWitness);
+				ensure!(
+					T::ProposalProvider::proposals_count() <= witness.proposals,
+					Error::<T, I>::BadWitness
+				);
+				ensure!(
+					Self::votable_members_count() <= witness.members,
+					Error::<T, I>::BadWitness
+				);
 
-				let votable_members = Self::votable_members();
-				ensure!(votable_members.len() as u32 <= witness.members, Error::<T, I>::BadWitness);
-
-				proposals.into_iter().for_each(|hash| {
+				T::ProposalProvider::proposals().into_iter().for_each(|hash| {
 					T::ProposalProvider::veto_proposal(hash);
 				});
 
-				T::MembershipChanged::change_members_sorted(&[], &votable_members, &[]);
+				T::MembershipChanged::change_members_sorted(&[], &Self::votable_members(), &[]);
 				ensure!(
 					// `MemberRole` variants count never greater than members count.
 					Members::<T, I>::clear(witness.members, None).maybe_cursor.is_none(),
@@ -967,6 +975,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Check if a member has voting rights.
 	fn has_voting_rights(who: &T::AccountId) -> bool {
 		Self::is_founder(who) || Self::is_fellow(who)
+	}
+
+	/// Count of all members who have voting rights.
+	fn votable_members_count() -> u32 {
+		Members::<T, I>::decode_len(MemberRole::Founder)
+			.unwrap_or(0)
+			.saturating_add(Members::<T, I>::decode_len(MemberRole::Fellow).unwrap_or(0)) as u32
 	}
 
 	/// Collect all members who have voting rights into one list.
