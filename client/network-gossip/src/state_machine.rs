@@ -42,9 +42,9 @@ const REBROADCAST_INTERVAL: time::Duration = time::Duration::from_millis(750);
 pub(crate) const PERIODIC_MAINTENANCE_INTERVAL: time::Duration = time::Duration::from_millis(1100);
 
 mod rep {
-	use sc_network::ReputationChange as Rep;
+	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when a peer sends us a gossip message that we didn't know about.
-	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successfull gossip");
+	pub const GOSSIP_SUCCESS: Rep = Rep::new(1 << 4, "Successful gossip");
 	/// Reputation change when a peer sends us a gossip message that we already knew about.
 	pub const DUPLICATE_GOSSIP: Rep = Rep::new(-(1 << 2), "Duplicate gossip");
 }
@@ -513,7 +513,6 @@ mod tests {
 	use super::*;
 	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
-	use sc_network::ReputationChange;
 	use sc_network_common::{
 		protocol::event::Event,
 		service::{
@@ -521,6 +520,7 @@ mod tests {
 			NotificationSender, NotificationSenderError,
 		},
 	};
+	use sc_peerset::ReputationChange;
 	use sp_runtime::{
 		testing::{Block as RawBlock, ExtrinsicWrapper, H256},
 		traits::NumberFor,

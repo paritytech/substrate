@@ -36,7 +36,7 @@ use frame_support::{
 	},
 };
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Saturating, Zero},
+	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
 	ArithmeticError, Perbill,
 };
 use sp_std::prelude::*;
@@ -62,6 +62,7 @@ pub mod benchmarking;
 
 const CONVICTION_VOTING_ID: LockIdentifier = *b"pyconvot";
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type VotingOf<T, I = ()> = Voting<
@@ -245,11 +246,12 @@ pub mod pallet {
 		pub fn delegate(
 			origin: OriginFor<T>,
 			class: ClassOf<T, I>,
-			to: T::AccountId,
+			to: AccountIdLookupOf<T>,
 			conviction: Conviction,
 			balance: BalanceOf<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			let to = T::Lookup::lookup(to)?;
 			let votes = Self::try_delegate(who, class, to, conviction, balance)?;
 
 			Ok(Some(T::WeightInfo::delegate(votes)).into())
@@ -294,9 +296,10 @@ pub mod pallet {
 		pub fn unlock(
 			origin: OriginFor<T>,
 			class: ClassOf<T, I>,
-			target: T::AccountId,
+			target: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&class, &target);
 			Ok(())
 		}
@@ -359,11 +362,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_other_vote())]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
-			target: T::AccountId,
+			target: AccountIdLookupOf<T>,
 			class: ClassOf<T, I>,
 			index: PollIndexOf<T, I>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, Some(class), scope)?;
 			Ok(())
