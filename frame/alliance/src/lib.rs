@@ -60,8 +60,8 @@
 //!
 //! #### For Members (All)
 //!
-//! - `retirement_notice` - Give a retirement notice and start a retirement period required to pass
-//!   in order to retire.
+//! - `give_retirement_notice` - Give a retirement notice and start a retirement period required to
+//!   pass in order to retire.
 //! - `retire` - Retire from the Alliance and release the caller's deposit.
 //!
 //! #### For Members (Founders/Fellows)
@@ -95,13 +95,14 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migration;
 mod types;
 pub mod weights;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, Zero},
+	traits::{Saturating, StaticLookup, Zero},
 	RuntimeDebug,
 };
 use sp_std::{convert::TryInto, prelude::*};
@@ -125,6 +126,9 @@ use pallet_identity::IdentityField;
 pub use pallet::*;
 pub use types::*;
 pub use weights::*;
+
+/// The log target of this pallet.
+pub const LOG_TARGET: &str = "runtime::alliance";
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -219,6 +223,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(migration::STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -310,7 +315,7 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The period required to pass from retirement notice for a member to retire.
+		/// The number of blocks a member must wait between giving a retirement notice and retiring.
 		/// Supposed to be greater than time required to `kick_member`.
 		type RetirementPeriod: Get<Self::BlockNumber>;
 	}
@@ -364,7 +369,7 @@ pub mod pallet {
 		AlreadyRetiring,
 		/// Account did not give a retirement notice required to retire.
 		RetirementNoticeNotGiven,
-		/// Retirement period is not passed.
+		/// Retirement period has not passed.
 		RetirementPeriodNotPassed,
 	}
 
@@ -391,7 +396,7 @@ pub mod pallet {
 		},
 		/// An ally has been elevated to Fellow.
 		AllyElevated { ally: T::AccountId },
-		/// A member gave retirement notice and retirement period started.
+		/// A member gave retirement notice and their retirement period started.
 		MemberRetirementPeriodStarted { member: T::AccountId },
 		/// A member has retired with its deposit unreserved.
 		MemberRetired { member: T::AccountId, unreserved: Option<BalanceOf<T, I>> },
@@ -797,17 +802,18 @@ pub mod pallet {
 
 		/// As a member, give a retirement notice and start a retirement period required to pass in
 		/// order to retire.
-		#[pallet::weight(T::WeightInfo::retirement_notice())]
-		pub fn retirement_notice(origin: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::give_retirement_notice())]
+		pub fn give_retirement_notice(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
-			ensure!(!role.eq(&MemberRole::Retiring), Error::<T, I>::AlreadyRetiring);
+			ensure!(role.ne(&MemberRole::Retiring), Error::<T, I>::AlreadyRetiring);
 
 			Self::remove_member(&who, role)?;
 			Self::add_member(&who, MemberRole::Retiring)?;
 			<RetiringMembers<T, I>>::insert(
 				&who,
-				frame_system::Pallet::<T>::block_number() + T::RetirementPeriod::get(),
+				frame_system::Pallet::<T>::block_number()
+					.saturating_add(T::RetirementPeriod::get()),
 			);
 
 			Self::deposit_event(Event::MemberRetirementPeriodStarted { member: who });
@@ -815,6 +821,7 @@ pub mod pallet {
 		}
 
 		/// As a member, retire from the alliance and unreserve the deposit.
+		/// This can only be done once you have `give_retirement_notice` and it has expired.
 		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
