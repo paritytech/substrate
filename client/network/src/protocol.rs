@@ -207,7 +207,7 @@ pub struct Protocol<B: BlockT, Client> {
 	/// A cache for the data that was associated to a block announcement.
 	block_announce_data_cache: lru::LruCache<B::Hash, Vec<u8>>,
 
-	persist_peersets: Option<PersistPeersets>,
+	_persist_peersets: Option<PersistPeersets>,
 }
 
 #[derive(Debug)]
@@ -477,7 +477,7 @@ where
 			},
 			boot_node_ids,
 			block_announce_data_cache,
-			persist_peersets,
+			_persist_peersets: persist_peersets,
 		};
 
 		Ok((protocol, peerset_handle, known_addresses))
