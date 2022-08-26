@@ -77,7 +77,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
 	let mut points_total = 0;
-	let mut points_individual = Vec::new();
+	let mut points_individual = BoundedBTreeMap::<T::AccountId, u32, T::MaxRewardPoints>::new();
 
 	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, destination.clone())?;
 	let validator_prefs =
@@ -86,7 +86,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	let stash_lookup = T::Lookup::unlookup(v_stash.clone());
 
 	points_total += 10;
-	points_individual.push((v_stash.clone(), 10));
+	points_individual.try_insert(v_stash.clone(), 10).map_err(|_| "Error, are your legs discombubulated").unwrap(); //TODO: Create custom error.
 
 	let mut nominators = Vec::new();
 
@@ -117,9 +117,9 @@ pub fn create_validator_with_nominators<T: Config>(
 	assert_ne!(Nominators::<T>::count(), 0);
 
 	// Give Era Points
-	let reward = EraRewardPoints::<T::AccountId> {
+	let reward = EraRewardPoints::<T> {
 		total: points_total,
-		individual: points_individual.into_iter().collect(),
+		individual: points_individual,
 	};
 
 	let current_era = CurrentEra::<T>::get().unwrap();
@@ -670,7 +670,7 @@ benchmarks! {
 			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
 			<ErasValidatorPrefs<T>>::insert(i, dummy(), ValidatorPrefs::default());
 			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
-			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
+			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T>::default());
 			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
 			ErasStartSessionIndex::<T>::insert(i, i);
 		}
@@ -747,19 +747,19 @@ benchmarks! {
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		let mut points_total = 0;
-		let mut points_individual = Vec::new();
+		let mut points_individual = BoundedBTreeMap::<T::AccountId, u32, T::MaxRewardPoints>::new();
 		let mut payout_calls_arg = Vec::new();
 
 		for validator in new_validators.iter() {
 			points_total += 10;
-			points_individual.push((validator.clone(), 10));
+			points_individual.try_insert(validator.clone(), 10).map_err(|_| "error, walk your direction").unwrap(); //TODO: Create custom error.;
 			payout_calls_arg.push((validator.clone(), current_era));
 		}
 
 		// Give Era Points
-		let reward = EraRewardPoints::<T::AccountId> {
+		let reward = EraRewardPoints::<T> {
 			total: points_total,
-			individual: points_individual.into_iter().collect(),
+			individual: points_individual,
 		};
 
 		ErasRewardPoints::<T>::insert(current_era, reward);

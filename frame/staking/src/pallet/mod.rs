@@ -200,6 +200,9 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		// Maximum reward points for each validator.
+		type MaxRewardPoints: Get<u32>;
 	}
 
 	#[pallet::type_value]
@@ -399,7 +402,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn eras_reward_points)]
 	pub type ErasRewardPoints<T: Config> =
-		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T>, ValueQuery>;
 
 	/// The total amount staked for the last `HISTORY_DEPTH` eras.
 	/// If total hasn't been set or has been removed then 0 stake is returned.
@@ -683,7 +686,7 @@ pub mod pallet {
 		AlreadyClaimed,
 		/// Incorrect previous history depth input provided.
 		IncorrectHistoryDepth,
-		/// Incorrect number of slashing spans provided.
+		/// Incorrect number Bound RewardPointsin pallet-staking #12039  of slashing spans provided.
 		IncorrectSlashingSpans,
 		/// Internal state has become somehow corrupted and the operation cannot continue.
 		BadState,
@@ -701,6 +704,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
+		/// Maximum reward points for given validator reached.
+		MaxRewardPointsReached,
 	}
 
 	#[pallet::hooks]

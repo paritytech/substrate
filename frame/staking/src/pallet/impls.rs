@@ -23,6 +23,7 @@ use frame_election_provider_support::{
 };
 use frame_support::{
 	pallet_prelude::*,
+	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{
 		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
 		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
@@ -623,11 +624,16 @@ impl<T: Config> Pallet<T> {
 	/// relatively to their points.
 	///
 	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
-	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
+	pub fn reward_by_ids(validators_points: BoundedBTreeMap<T::AccountId, u32, T::MaxRewardPoints>) {
 		if let Some(active_era) = Self::active_era() {
 			<ErasRewardPoints<T>>::mutate(active_era.index, |era_rewards| {
-				for (validator, points) in validators_points.into_iter() {
-					*era_rewards.individual.entry(validator).or_default() += points;
+				for (validator, points) in validators_points.iter() {
+					let mut indie_points: u32 = 0;
+					if let Some(prev_indie_points) = era_rewards.individual.remove(&validator) {
+						indie_points = prev_indie_points;
+					}
+					indie_points += points;
+					era_rewards.individual.try_insert(validator.clone(), indie_points);
 					era_rewards.total += points;
 				}
 			});
@@ -1128,12 +1134,20 @@ where
 	T: Config + pallet_authorship::Config + pallet_session::Config,
 {
 	fn note_author(author: T::AccountId) {
-		Self::reward_by_ids(vec![(author, 20)])
+		// vec![(author, 20)]
+		let mut validator_points = BoundedBTreeMap::new();
+		validator_points.try_insert(author, 20);
+		Self::reward_by_ids(validator_points);
 	}
 	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
 		// defensive-only: block author must exist.
+		// vec![(block_author, 2), (uncle_author, 1)]
+		let mut validator_points = BoundedBTreeMap::new();
+		
 		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
-			Self::reward_by_ids(vec![(block_author, 2), (uncle_author, 1)])
+			validator_points.try_insert(block_author, 2);
+		    validator_points.try_insert(uncle_author, 1);
+			Self::reward_by_ids(validator_points);
 		} else {
 			crate::log!(warn, "block author not set, this should never happen");
 		}

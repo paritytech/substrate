@@ -164,6 +164,7 @@
 //! 	use super::*;
 //! 	use frame_support::pallet_prelude::*;
 //! 	use frame_system::pallet_prelude::*;
+//! 	use frame_support::BoundedBTreeMap;
 //!
 //! 	#[pallet::pallet]
 //! 	pub struct Pallet<T>(_);
@@ -177,7 +178,9 @@
 //!         #[pallet::weight(0)]
 //!         pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
 //!             let reported = ensure_signed(origin)?;
-//!             <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
+//! 			let mut validator_point = BoundedBTreeMap::new();
+//! 			validator_point.try_insert(reported, 10).map_err(|_| staking::Error::<T>::MaxRewardPointsReached)?;
+//!             <staking::Pallet<T>>::reward_by_ids(validator_point);
 //!             Ok(())
 //!         }
 //!     }
@@ -299,9 +302,11 @@ pub mod weights;
 
 mod pallet;
 
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode, HasCompact};  // {Decode, Encode, 
 use frame_support::{
 	parameter_types,
+	pallet_prelude::{MaxEncodedLen, CloneNoBound},
+	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Defensive, Get},
 	weights::Weight,
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
@@ -335,7 +340,6 @@ macro_rules! log {
 }
 
 /// Counter for the number of "reward" points earned by a given validator.
-pub type RewardPoint = u32;
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> = <T as Config>::CurrencyBalance;
@@ -368,17 +372,24 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct EraRewardPoints<AccountId: Ord> {
+/// TODO: this need more comments?
+// #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
+// check if i need DefaultnoBound as is in the lib.rs file for nomination_pool
+// MaxEncodedLen was also removed from this 
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
+#[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound))]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct EraRewardPoints<T: Config> {
 	/// Total number of points. Equals the sum of reward points for each validator.
-	pub total: RewardPoint,
+	pub total: u32,
 	/// The reward points earned by a given validator.
-	pub individual: BTreeMap<AccountId, RewardPoint>,
+	pub individual: BoundedBTreeMap<T::AccountId, u32, T::MaxRewardPoints>,
 }
 
-impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
+impl<T: Config> Default for EraRewardPoints<T> {
 	fn default() -> Self {
-		EraRewardPoints { total: Default::default(), individual: BTreeMap::new() }
+		EraRewardPoints { total: Default::default(), individual: BoundedBTreeMap::new() }
 	}
 }
 
