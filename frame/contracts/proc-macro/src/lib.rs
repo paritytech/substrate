@@ -187,11 +187,7 @@ impl HostFn {
 		}?;
 
 		let name = if item.attrs.iter().any(|a| {
-			a.path
-				.get_ident()
-				.unwrap_or(&syn::Ident::new("nope", proc_macro2::Span::call_site()))
-				.to_string()
-				.eq("prefixed_alias")
+			a.path.get_ident().map(|i| i.to_string().eq("prefixed_alias")).unwrap_or(false)
 		}) {
 			"seal_".to_string() + &item.sig.ident.to_string()
 		} else {
@@ -337,11 +333,7 @@ impl EnvDef {
 			};
 
 			i.attrs.iter().any(|a| {
-				a.path
-					.get_ident()
-					.unwrap_or(&syn::Ident::new("nope", proc_macro2::Span::call_site()))
-					.to_string()
-					.eq("prefixed_alias")
+				a.path.get_ident().map(|i| i.to_string().eq("prefixed_alias")).unwrap_or(false)
 			})
 		});
 
