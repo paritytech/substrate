@@ -340,15 +340,13 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 pub struct TestFilter;
 
 #[derive(Clone)]
-pub struct Filters{
-	filter: fn(&Call) -> bool
+pub struct Filters {
+	filter: fn(&Call) -> bool,
 }
 
-impl Default for Filters{
+impl Default for Filters {
 	fn default() -> Self {
-		Filters{
-			filter: (|_| true)
-		}
+		Filters { filter: (|_| true) }
 	}
 }
 
