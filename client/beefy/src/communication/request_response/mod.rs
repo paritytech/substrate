@@ -18,7 +18,7 @@
 
 //! Request/response protocol for syncing BEEFY justifications.
 
-pub(crate) mod incoming_handler;
+pub mod incoming_handler;
 
 use futures::{
 	channel::{mpsc, oneshot},

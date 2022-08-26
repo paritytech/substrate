@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use beefy_primitives::{BeefyApi, MmrRootHash};
+use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_consensus::BlockImport;
@@ -43,9 +44,12 @@ pub mod justification;
 mod tests;
 
 use crate::{
-	communication::notification::{
-		BeefyBestBlockSender, BeefyBestBlockStream, BeefyVersionedFinalityProofSender,
-		BeefyVersionedFinalityProofStream,
+	communication::{
+		notification::{
+			BeefyBestBlockSender, BeefyBestBlockStream, BeefyVersionedFinalityProofSender,
+			BeefyVersionedFinalityProofStream,
+		},
+		peers::KnownPeers,
 	},
 	import::BeefyBlockImport,
 };
@@ -197,10 +201,11 @@ where
 		links,
 	} = beefy_params;
 
-	let sync_oracle = network.clone();
-	let gossip_validator = Arc::new(communication::gossip::GossipValidator::new());
+	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+	let gossip_validator =
+		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
 	let gossip_engine = sc_network_gossip::GossipEngine::new(
-		network,
+		network.clone(),
 		protocol_name,
 		gossip_validator.clone(),
 		None,
@@ -224,8 +229,9 @@ where
 		client,
 		backend,
 		runtime,
-		sync_oracle,
+		network,
 		key_store: key_store.into(),
+		known_peers,
 		gossip_engine,
 		gossip_validator,
 		links,

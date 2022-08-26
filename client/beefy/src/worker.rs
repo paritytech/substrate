@@ -26,8 +26,10 @@ use std::{
 use codec::{Codec, Decode, Encode};
 use futures::StreamExt;
 use log::{debug, error, info, log_enabled, trace, warn};
+use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification};
+use sc_network_common::{protocol::event::Event as NetEvent, service::NetworkEventStream};
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
@@ -54,7 +56,7 @@ use crate::{
 	metric_inc, metric_set,
 	metrics::Metrics,
 	round::Rounds,
-	BeefyVoterLinks, Client,
+	BeefyVoterLinks, Client, KnownPeers,
 };
 
 enum RoundAction {
@@ -174,12 +176,13 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
+pub(crate) struct WorkerParams<B: Block, BE, C, R, N> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub runtime: Arc<R>,
-	pub sync_oracle: SO,
+	pub network: N,
 	pub key_store: BeefyKeystore,
+	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
 	pub links: BeefyVoterLinks<B>,
@@ -188,13 +191,16 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, SO> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
+pub(crate) struct BeefyWorker<B: Block, BE, C, R, N> {
 	// utilities
 	client: Arc<C>,
 	backend: Arc<BE>,
 	runtime: Arc<R>,
-	sync_oracle: SO,
+	network: N,
 	key_store: BeefyKeystore,
+
+	// communication
+	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
 
@@ -217,14 +223,14 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO> {
 	voting_oracle: VoterOracle<B>,
 }
 
-impl<B, BE, C, R, SO> BeefyWorker<B, BE, C, R, SO>
+impl<B, BE, C, R, N> BeefyWorker<B, BE, C, R, N>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
+	N: NetworkEventStream + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -232,15 +238,16 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, N>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
 			runtime,
 			key_store,
-			sync_oracle,
+			network,
 			gossip_engine,
 			gossip_validator,
+			known_peers,
 			links,
 			metrics,
 			min_block_delta,
@@ -254,7 +261,8 @@ where
 			client: client.clone(),
 			backend,
 			runtime,
-			sync_oracle,
+			network,
+			known_peers,
 			key_store,
 			gossip_engine,
 			gossip_validator,
@@ -670,6 +678,7 @@ where
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
 		self.wait_for_runtime_pallet().await;
 
+		let mut network_events = self.network.event_stream("network-gossip").fuse();
 		let mut finality_notifications = self.client.finality_notification_stream().fuse();
 		let mut votes = Box::pin(
 			self.gossip_engine
@@ -696,6 +705,7 @@ where
 					if let Some(notification) = notification {
 						self.handle_finality_notification(&notification);
 					} else {
+						error!(target: "beefy", "🥩 Finality stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -709,6 +719,7 @@ where
 							debug!(target: "beefy", "🥩 {}", err);
 						}
 					} else {
+						error!(target: "beefy", "🥩 Block import stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -719,17 +730,26 @@ where
 							debug!(target: "beefy", "🥩 {}", err);
 						}
 					} else {
+						error!(target: "beefy", "🥩 Votes gossiping stream terminated, closing worker.");
+						return;
+					}
+				},
+				net_event = network_events.next() => {
+					if let Some(net_event) = net_event {
+						self.handle_network_event(net_event);
+					} else {
+						error!(target: "beefy", "🥩 Network events stream terminated, closing worker.");
 						return;
 					}
 				},
 				_ = gossip_engine => {
-					error!(target: "beefy", "🥩 Gossip engine has terminated.");
+					error!(target: "beefy", "🥩 Gossip engine has terminated, closing worker.");
 					return;
 				}
 			}
 
 			// Don't bother acting on 'state' changes during major sync.
-			if !self.sync_oracle.is_major_syncing() {
+			if !self.network.is_major_syncing() {
 				// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
 				if let Err(err) = self.try_pending_justif_and_votes() {
 					debug!(target: "beefy", "🥩 {}", err);
@@ -740,6 +760,20 @@ where
 					debug!(target: "beefy", "🥩 {}", err);
 				}
 			}
+		}
+	}
+
+	/// Update known peers based on network events.
+	fn handle_network_event(&mut self, event: NetEvent) {
+		match event {
+			NetEvent::SyncConnected { remote } => {
+				self.known_peers.lock().add_new(remote);
+			},
+			NetEvent::SyncDisconnected { remote } => {
+				self.known_peers.lock().remove(&remote);
+			},
+			// We don't care about other events.
+			_ => (),
 		}
 	}
 }
@@ -880,21 +914,22 @@ pub(crate) mod tests {
 
 		let api = Arc::new(TestApi {});
 		let network = peer.network_service().clone();
-		let sync_oracle = network.clone();
-		let gossip_validator = Arc::new(crate::communication::gossip::GossipValidator::new());
+		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
 		let gossip_engine =
-			GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+			GossipEngine::new(network.clone(), BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
 		let worker_params = crate::worker::WorkerParams {
 			client: peer.client().as_client(),
 			backend: peer.client().as_backend(),
 			runtime: api,
 			key_store: Some(keystore).into(),
+			known_peers,
 			links,
 			gossip_engine,
 			gossip_validator,
 			min_block_delta,
 			metrics: None,
-			sync_oracle,
+			network,
 		};
 		BeefyWorker::<_, _, _, _, _>::new(worker_params)
 	}

@@ -55,7 +55,7 @@ where
 	async fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
 		// TODO: validate `request.begin` and change peer reputation for invalid requests.
 
-		let encoded_proof = self
+		let maybe_encoded_proof = self
 			.client
 			.justifications(&BlockId::Number(request.payload.begin))
 			.map_err(Error::Client)?
@@ -67,7 +67,7 @@ where
 		request
 			.pending_response
 			.send(netconfig::OutgoingResponse {
-				result: encoded_proof,
+				result: maybe_encoded_proof,
 				reputation_changes: Vec::new(),
 				sent_feedback: None,
 			})

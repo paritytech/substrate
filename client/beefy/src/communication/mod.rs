@@ -22,6 +22,7 @@ pub mod notification;
 pub mod request_response;
 
 pub(crate) mod gossip;
+pub(crate) mod peers;
 
 pub(crate) mod beefy_protocol_name {
 	/// BEEFY votes gossip protocol name suffix.
