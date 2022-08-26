@@ -18,6 +18,7 @@
 //! Utils for parsing user input
 
 use sp_version::StateVersion;
+use std::num::ParseIntError;
 
 pub(crate) fn hash(block_hash: &str) -> Result<String, String> {
 	let (block_hash, offset) = if let Some(block_hash) = block_hash.strip_prefix("0x") {
@@ -46,10 +47,7 @@ pub(crate) fn url(s: &str) -> Result<String, &'static str> {
 }
 
 pub(crate) fn state_version(s: &str) -> Result<StateVersion, &'static str> {
-	match s.parse::<u32>() {
-		Ok(0) => Ok(StateVersion::V0),
-		Ok(1) => Ok(StateVersion::V1),
-		Ok(_) => Err("State version not supported."),
-		_ => Err("Invalid state version."),
-	}
+	s.parse::<u8>()
+		.and_then(StateVersion::try_from)
+		.map_err(|_| "Invalid state version.")
 }
