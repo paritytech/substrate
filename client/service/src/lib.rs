@@ -235,7 +235,7 @@ async fn build_network_future<
 								network.add_reserved_peer(peer)
 							},
 							Err(err) => {
-								Err(format!("{}", err))
+								Err(err.to_string())
 							},
 						};
 						let x = result.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
