@@ -34,7 +34,7 @@ use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
-use sp_runtime::traits::Convert;
+use sp_runtime::traits::{Convert, Hash};
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -815,8 +815,11 @@ where
 				}
 
 				// Deposit an instantiation event.
-				deposit_event::<T>(
-					vec![],
+				Contracts::<T>::deposit_event(
+					vec![
+						T::Hashing::hash_of(self.caller()),
+						T::Hashing::hash_of(&frame.account_id),
+					],
 					Event::Instantiated {
 						deployer: self.caller().clone(),
 						contract: frame.account_id.clone(),
@@ -1134,10 +1137,13 @@ where
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
-		Contracts::<T>::deposit_event(Event::Terminated {
-			contract: frame.account_id.clone(),
-			beneficiary: beneficiary.clone(),
-		});
+		Contracts::<T>::deposit_event(
+			vec![T::Hashing::hash_of(&frame.account_id), T::Hashing::hash_of(&beneficiary)],
+			Event::Terminated {
+				contract: frame.account_id.clone(),
+				beneficiary: beneficiary.clone(),
+			},
+		);
 		Ok(())
 	}
 
@@ -1242,7 +1248,7 @@ where
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
-		deposit_event::<Self::T>(
+		Contracts::<Self::T>::deposit_event(
 			topics,
 			Event::ContractEmitted { contract: self.top_frame().account_id.clone(), data },
 		);
@@ -1304,20 +1310,16 @@ where
 		let prev_hash = top_frame.contract_info().code_hash;
 		E::remove_user(prev_hash);
 		top_frame.contract_info().code_hash = hash;
-		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
-			contract: top_frame.account_id.clone(),
-			new_code_hash: hash,
-			old_code_hash: prev_hash,
-		});
+		Contracts::<Self::T>::deposit_event(
+			vec![T::Hashing::hash_of(&top_frame.account_id), hash, prev_hash],
+			Event::ContractCodeUpdated {
+				contract: top_frame.account_id.clone(),
+				new_code_hash: hash,
+				old_code_hash: prev_hash,
+			},
+		);
 		Ok(())
 	}
-}
-
-fn deposit_event<T: Config>(topics: Vec<T::Hash>, event: Event<T>) {
-	<frame_system::Pallet<T>>::deposit_event_indexed(
-		&topics,
-		<T as Config>::Event::from(event).into(),
-	)
 }
 
 mod sealing {

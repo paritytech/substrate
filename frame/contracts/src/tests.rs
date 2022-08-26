@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use self::test_utils::hash;
 use crate::{
 	chain_extension::{
 		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
@@ -74,8 +75,9 @@ frame_support::construct_runtime!(
 
 #[macro_use]
 pub mod test_utils {
-	use super::{Balances, Test};
+	use super::{Balances, Hash, SysConfig, Test};
 	use crate::{exec::AccountIdOf, storage::Storage, CodeHash, Config, ContractInfoOf, Nonce};
+	use codec::Encode;
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
@@ -94,6 +96,9 @@ pub mod test_utils {
 	}
 	pub fn get_balance(who: &AccountIdOf<Test>) -> u64 {
 		Balances::free_balance(who)
+	}
+	pub fn hash<S: Encode>(s: &S) -> <<Test as SysConfig>::Hashing as Hash>::Output {
+		<<Test as SysConfig>::Hashing as Hash>::hash_of(s)
 	}
 	macro_rules! assert_return_code {
 		( $x:expr , $y:expr $(,)? ) => {{
@@ -567,7 +572,7 @@ fn instantiate_and_call_and_deposit_event() {
 						deployer: ALICE,
 						contract: addr.clone()
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -853,7 +858,7 @@ fn deploy_and_call_other_contract() {
 						deployer: caller_addr.clone(),
 						contract: callee_addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&caller_addr), hash(&callee_addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -1170,7 +1175,7 @@ fn self_destruct_works() {
 						contract: addr.clone(),
 						beneficiary: DJANGO
 					}),
-					topics: vec![],
+					topics: vec![hash(&addr), hash(&DJANGO)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2617,7 +2622,7 @@ fn upload_code_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2696,7 +2701,7 @@ fn remove_code_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2709,7 +2714,7 @@ fn remove_code_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeRemoved { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2751,7 +2756,7 @@ fn remove_code_wrong_origin() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2882,7 +2887,7 @@ fn instantiate_with_zero_balance_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2890,7 +2895,7 @@ fn instantiate_with_zero_balance_works() {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -2982,7 +2987,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2990,7 +2995,7 @@ fn instantiate_with_below_existential_deposit_works() {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -3189,11 +3194,11 @@ fn set_code_extrinsic() {
 			vec![EventRecord {
 				phase: Phase::Initialization,
 				event: Event::Contracts(pallet_contracts::Event::ContractCodeUpdated {
-					contract: addr,
+					contract: addr.clone(),
 					new_code_hash,
 					old_code_hash: code_hash,
 				}),
-				topics: vec![],
+				topics: vec![hash(&addr), new_code_hash, code_hash],
 			},]
 		);
 	});
@@ -3481,7 +3486,7 @@ fn set_code_hash() {
 					new_code_hash,
 					old_code_hash: code_hash,
 				}),
-				topics: vec![],
+				topics: vec![hash(&contract_addr), new_code_hash, code_hash],
 			},
 		);
 	});

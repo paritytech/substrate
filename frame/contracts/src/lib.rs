@@ -631,11 +631,14 @@ pub mod pallet {
 				};
 				<PrefabWasmModule<T>>::add_user(code_hash)?;
 				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
-				Self::deposit_event(Event::ContractCodeUpdated {
-					contract: dest.clone(),
-					new_code_hash: code_hash,
-					old_code_hash: contract.code_hash,
-				});
+				Self::deposit_event(
+					vec![T::Hashing::hash_of(&dest), code_hash, contract.code_hash],
+					Event::ContractCodeUpdated {
+						contract: dest.clone(),
+						new_code_hash: code_hash,
+						old_code_hash: contract.code_hash,
+					},
+				);
 				contract.code_hash = code_hash;
 				Ok(())
 			})
@@ -643,7 +646,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Contract deployed by address at the specified address.
 		Instantiated { deployer: T::AccountId, contract: T::AccountId },
@@ -1083,5 +1085,12 @@ where
 			result
 		};
 		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
+	}
+
+	fn deposit_event(topics: Vec<T::Hash>, event: Event<T>) {
+		<frame_system::Pallet<T>>::deposit_event_indexed(
+			&topics,
+			<T as Config>::Event::from(event).into(),
+		)
 	}
 }
