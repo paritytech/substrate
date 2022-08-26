@@ -482,6 +482,8 @@ where
 			self.best_beefy_block = Some(block_num);
 			metric_set!(self, beefy_best_block, block_num);
 
+			self.on_demand_justifications.cancel_requests_older_than(block_num);
+
 			self.client.hash(block_num).ok().flatten().map(|hash| {
 				self.links
 					.to_rpc_best_block_sender

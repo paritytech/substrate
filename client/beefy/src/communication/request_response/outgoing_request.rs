@@ -27,7 +27,6 @@ use sc_network_common::{
 };
 use sp_runtime::traits::{Block, NumberFor};
 use std::{
-	marker::PhantomData,
 	pin::Pin,
 	task::{Context, Poll, Waker},
 };
@@ -40,17 +39,16 @@ use crate::{
 /// Used to receive a response from the network.
 type ResponseReceiver = oneshot::Receiver<std::result::Result<Vec<u8>, RequestFailure>>;
 
-enum State {
+enum State<B: Block> {
 	Init,
 	Idle(Waker),
-	AwaitingResponse(ResponseReceiver),
+	AwaitingResponse(NumberFor<B>, ResponseReceiver),
 }
 
-pub struct OnDemandJustififactionsEngine<B, N> {
+pub struct OnDemandJustififactionsEngine<B: Block, N> {
 	network: N,
 	protocol_name: std::borrow::Cow<'static, str>,
-	state: State,
-	_phantom: PhantomData<B>,
+	state: State<B>,
 }
 
 impl<B, N> OnDemandJustififactionsEngine<B, N>
@@ -59,7 +57,7 @@ where
 	N: NetworkRequest,
 {
 	pub fn new(network: N, protocol_name: std::borrow::Cow<'static, str>) -> Self {
-		Self { network, protocol_name, state: State::Init, _phantom: PhantomData }
+		Self { network, protocol_name, state: State::Init }
 	}
 
 	pub fn fire_request_for(&mut self, block: NumberFor<B>) {
@@ -78,7 +76,20 @@ where
 			IfDisconnected::ImmediateError,
 		);
 
-		self.state = State::AwaitingResponse(rx);
+		self.state = State::AwaitingResponse(block, rx);
+	}
+
+	/// Cancel any pending request for block numbers smaller or equal to `latest_block`.
+	pub fn cancel_requests_older_than(&mut self, latest_block: NumberFor<B>) {
+		match &self.state {
+			State::Init | State::Idle(_) => (),
+			State::AwaitingResponse(block, _) if *block <= latest_block => {
+				// TODO: this should be `State::Idle` but I need to figure out if I need that
+				// `Waker` or not.
+				self.state = State::Init;
+			},
+			_ => (),
+		}
 	}
 }
 
@@ -100,7 +111,7 @@ where
 				// do nothing.
 				return Poll::Pending
 			},
-			State::AwaitingResponse(receiver) => receiver,
+			State::AwaitingResponse(_block, receiver) => receiver,
 		};
 
 		match response_receiver.poll_unpin(cx) {
