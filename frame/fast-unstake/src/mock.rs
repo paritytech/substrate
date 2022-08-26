@@ -413,3 +413,18 @@ pub(crate) fn run_to_block(n: u64) {
 		FastUnstake::on_initialize(System::block_number());
 	}
 }
+
+parameter_types! {
+	storage FastUnstakeEvents: u32 = 0;
+}
+
+pub(crate) fn fast_unstake_events_since_last_call() -> Vec<super::Event<Runtime>> {
+	let events = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::FastUnstake(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>();
+	let already_seen = FastUnstakeEvents::get();
+	FastUnstakeEvents::set(&(events.len() as u32));
+	events.into_iter().skip(already_seen as usize).collect()
+}
