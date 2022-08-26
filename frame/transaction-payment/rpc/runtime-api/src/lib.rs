@@ -31,4 +31,16 @@ sp_api::decl_runtime_apis! {
 		fn query_info(uxt: Block::Extrinsic, len: u32) -> RuntimeDispatchInfo<Balance>;
 		fn query_fee_details(uxt: Block::Extrinsic, len: u32) -> FeeDetails<Balance>;
 	}
+
+	pub trait TransactionPaymentCallApi<Balance, Call>
+	where
+		Balance: Codec + MaybeDisplay,
+		Call: Codec,
+	{
+		/// Query information of a dispatch class, weight, and fee of a given encoded `Call`.
+		fn query_call_info(call: Call, len: u32) -> RuntimeDispatchInfo<Balance>;
+
+		/// Query fee details of a given encoded `Call`.
+		fn query_call_fee_details(call: Call, len: u32) -> FeeDetails<Balance>;
+	}
 }

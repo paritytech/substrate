@@ -1895,6 +1895,7 @@ mod tests {
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 		ext.execute_with(|| {
 			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let pair_unused = sr25519::Pair::generate_with_phrase(None).0;
 			crypto::start_batch_verify();
 			for it in 0..70 {
 				let msg = format!("Schnorrkel {}!", it);
@@ -1902,8 +1903,10 @@ mod tests {
 				crypto::sr25519_batch_verify(&signature, msg.as_bytes(), &pair.public());
 			}
 
-			// push invlaid
-			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
+			// push invalid
+			let msg = b"asdf!";
+			let signature = pair.sign(msg);
+			crypto::sr25519_batch_verify(&signature, msg, &pair_unused.public());
 			assert!(!crypto::finish_batch_verify());
 
 			crypto::start_batch_verify();
@@ -1938,10 +1941,10 @@ mod tests {
 		ext.register_extension(TaskExecutorExt::new(TaskExecutor::new()));
 
 		ext.execute_with(|| {
-			// invalid ed25519 signature
+			// valid ed25519 signature
 			crypto::start_batch_verify();
 			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
-			assert!(!crypto::finish_batch_verify());
+			assert!(crypto::finish_batch_verify());
 
 			// 2 valid ed25519 signatures
 			crypto::start_batch_verify();
@@ -1961,12 +1964,14 @@ mod tests {
 			// 1 valid, 1 invalid ed25519 signature
 			crypto::start_batch_verify();
 
-			let pair = ed25519::Pair::generate_with_phrase(None).0;
+			let pair1 = ed25519::Pair::generate_with_phrase(None).0;
+			let pair2 = ed25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Important message";
-			let signature = pair.sign(msg);
-			crypto::ed25519_batch_verify(&signature, msg, &pair.public());
+			let signature = pair1.sign(msg);
 
 			crypto::ed25519_batch_verify(&zero_ed_sig(), &Vec::new(), &zero_ed_pub());
+			crypto::ed25519_batch_verify(&signature, msg, &pair1.public());
+			crypto::ed25519_batch_verify(&signature, msg, &pair2.public());
 
 			assert!(!crypto::finish_batch_verify());
 
@@ -1993,11 +1998,13 @@ mod tests {
 			// 1 valid sr25519, 1 invalid sr25519
 			crypto::start_batch_verify();
 
-			let pair = sr25519::Pair::generate_with_phrase(None).0;
+			let pair1 = sr25519::Pair::generate_with_phrase(None).0;
+			let pair2 = sr25519::Pair::generate_with_phrase(None).0;
 			let msg = b"Schnorrkcel!";
-			let signature = pair.sign(msg);
-			crypto::sr25519_batch_verify(&signature, msg, &pair.public());
+			let signature = pair1.sign(msg);
 
+			crypto::sr25519_batch_verify(&signature, msg, &pair1.public());
+			crypto::sr25519_batch_verify(&signature, msg, &pair2.public());
 			crypto::sr25519_batch_verify(&zero_sr_sig(), &Vec::new(), &zero_sr_pub());
 
 			assert!(!crypto::finish_batch_verify());
