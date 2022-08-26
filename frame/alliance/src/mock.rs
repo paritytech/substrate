@@ -85,10 +85,10 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-const MOTION_DURATION: BlockNumber = 3;
+const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
 
 parameter_types! {
-	pub const MotionDuration: BlockNumber = MOTION_DURATION;
+	pub const MotionDuration: BlockNumber = MOTION_DURATION_IN_BLOCKS;
 	pub const MaxProposals: u32 = 100;
 	pub const MaxMembers: u32 = 100;
 }
@@ -203,7 +203,7 @@ parameter_types! {
 	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: u64 = 25;
-	pub const RetirementPeriod: BlockNumber = MOTION_DURATION + 1;
+	pub const RetirementPeriod: BlockNumber = MOTION_DURATION_IN_BLOCKS + 1;
 }
 impl Config for Test {
 	type Event = Event;
