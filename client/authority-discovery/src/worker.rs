@@ -44,7 +44,6 @@ use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
 use sc_network_common::{
-	header_backend::NetworkHeaderBackend,
 	protocol::event::DhtEvent,
 	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
 };
@@ -52,6 +51,7 @@ use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
+use sp_blockchain::HeaderBackend;
 
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
@@ -179,7 +179,7 @@ impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtE
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + NetworkHeaderBackend<Block> + 'static,
+	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].

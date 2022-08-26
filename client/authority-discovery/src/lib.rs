@@ -40,9 +40,9 @@ use futures::{
 };
 
 use libp2p::{Multiaddr, PeerId};
-use sc_client_api::blockchain::HeaderBackend;
-use sc_network_common::{header_backend::NetworkHeaderBackend, protocol::event::DhtEvent};
+use sc_network_common::protocol::event::DhtEvent;
 use sp_authority_discovery::AuthorityId;
+use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::Block as BlockT;
 
 mod error;
@@ -148,7 +148,7 @@ pub fn new_worker_and_service_with_config<Client, Network, Block, DhtEventStream
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + NetworkHeaderBackend<Block> + 'static,
+	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	let (to_worker, from_service) = mpsc::channel(0);

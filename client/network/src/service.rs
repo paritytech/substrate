@@ -61,7 +61,6 @@ use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
 	config::parse_str_addr,
-	header_backend::NetworkHeaderBackend,
 	protocol::event::{DhtEvent, Event},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
@@ -74,6 +73,7 @@ use sc_network_common::{
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	borrow::Cow,
@@ -135,7 +135,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: NetworkHeaderBackend<B> + 'static,
+	Client: sp_blockchain::HeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
@@ -1290,7 +1290,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: NetworkHeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1323,7 +1323,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: NetworkHeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	type Output = ();
 
@@ -1968,7 +1968,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: NetworkHeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 }
 
@@ -1976,7 +1976,7 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: NetworkHeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -1984,7 +1984,7 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: NetworkHeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn blocks_processed(
 		&mut self,
