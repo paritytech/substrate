@@ -17,7 +17,7 @@ async-trait = "0.1.50"
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 futures = "0.3.21"
 merlin = { version = "2.0", default-features = false }
-parking_lot = { version = "0.12.0", default-features = false }
+parking_lot = { version = "0.12.1", default-features = false }
 schnorrkel = { version = "0.9.1", default-features = false, features = ["preaudit_deprecated", "u64_backend"] }
 serde = { version = "1.0", optional = true }
 thiserror = "1.0"

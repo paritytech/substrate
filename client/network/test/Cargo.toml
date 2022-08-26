@@ -19,7 +19,7 @@ futures = "0.3.21"
 futures-timer = "3.0.1"
 libp2p = { version = "0.46.1", default-features = false }
 log = "0.4.17"
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 rand = "0.7.2"
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
