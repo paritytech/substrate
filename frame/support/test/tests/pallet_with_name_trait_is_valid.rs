@@ -69,7 +69,7 @@ impl<T: Config> sp_runtime::traits::ValidateUnsigned for Module<T> {
 
 pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"12345678";
 
-impl<T: Trait> sp_inherents::ProvideInherent for Module<T> {
+impl<T: Config> sp_inherents::ProvideInherent for Module<T> {
 	type Call = Call<T>;
 	type Error = sp_inherents::MakeFatalError<sp_inherents::Error>;
 	const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = INHERENT_IDENTIFIER;

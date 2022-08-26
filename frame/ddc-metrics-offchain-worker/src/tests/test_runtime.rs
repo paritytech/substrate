@@ -83,8 +83,10 @@ parameter_types! {
     pub const MaximumBlockLength: u32 = 2 * 1024;
     pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
-impl frame_system::Trait for Test {
+impl frame_system::Config for Test {
     type BaseCallFilter = ();
+    type BlockWeights = ();
+    type BlockLength = ();
     type Origin = Origin;
     type Index = u64;
     type BlockNumber = BlockNumber;
@@ -97,13 +99,7 @@ impl frame_system::Trait for Test {
     type Header = generic::Header<BlockNumber, BlakeTwo256>;
     type Event = MetaEvent;
     type BlockHashCount = BlockHashCount;
-    type MaximumBlockWeight = MaximumBlockWeight;
     type DbWeight = ();
-    type BlockExecutionWeight = ();
-    type ExtrinsicBaseWeight = ();
-    type MaximumExtrinsicWeight = MaximumBlockWeight;
-    type AvailableBlockRatio = AvailableBlockRatio;
-    type MaximumBlockLength = MaximumBlockLength;
     type Version = ();
     type PalletInfo = ();
     type AccountData = pallet_balances::AccountData<Balance>;
@@ -112,14 +108,14 @@ impl frame_system::Trait for Test {
     type SystemWeightInfo = ();
 }
 
-impl pallet_balances::Trait for Test {
-    type MaxLocks = ();
+impl pallet_balances::Config for Test {
     type Balance = Balance;
-    type Event = MetaEvent;
     type DustRemoval = ();
+    type Event = MetaEvent;
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
     type WeightInfo = ();
+    type MaxLocks = ();
 }
 
 thread_local! {
@@ -137,7 +133,7 @@ impl Get<Balance> for ExistentialDeposit {
 parameter_types! {
     pub const MinimumPeriod: u64 = 1;
 }
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
     type Moment = Moment;
     type OnTimestampSet = ();
     type MinimumPeriod = MinimumPeriod;
@@ -156,15 +152,13 @@ parameter_types! {
 
 // Contracts for Test Runtime.
 
-use contracts::{BalanceOf, SimpleAddressDeterminer, TrieIdFromParentCounter};
+use contracts::{BalanceOf};
 
-impl contracts::Trait for Test {
+impl contracts::Config for Test {
     type Time = Timestamp;
     type Randomness = Randomness;
     type Currency = Balances;
-    type DetermineContractAddress = SimpleAddressDeterminer<Self>;
     type Event = MetaEvent;
-    type TrieIdGenerator = TrieIdFromParentCounter<Self>;
     type RentPayment = ();
     type SignedClaimHandicap = SignedClaimHandicap;
     type TombstoneDeposit = TombstoneDeposit;
@@ -227,11 +221,9 @@ parameter_types! {
     pub const OcwBlockInterval: u32 = crate::BLOCK_INTERVAL;
 }
 
-impl Trait for Test {
+impl Config for Test {
     type BlockInterval = OcwBlockInterval;
 
-    type CT = Self;
-    type CST = Self;
     type AuthorityId = crypto::TestAuthId;
 
     type Event = MetaEvent;

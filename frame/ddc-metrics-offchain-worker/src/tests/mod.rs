@@ -1,7 +1,7 @@
 use frame_support::traits::{Currency, OffchainWorker};
-use frame_system::Trait as FST;
+use frame_system::Config as FSC;
 use pallet_contracts::Gas;
-use pallet_contracts::{self as contracts, ContractAddressFor, Trait as CT};
+use pallet_contracts::{self as contracts, Config as CC};
 use sp_core::{
     offchain::{testing, OffchainExt, Timestamp as OCWTimestamp, TransactionPoolExt}
 };
@@ -329,14 +329,14 @@ fn should_run_contract() {
         )
         .unwrap();
 
-        let (exec_result, _gas_consumed) = pallet_contracts::Module::<T>::bare_call(
+        let contract_exec_result = pallet_contracts::Module::<T>::bare_call(
             alice.clone(),
             contract_id,
             0,
             100_000_000_000,
             call_data,
         );
-        match exec_result {
+        match &contract_exec_result.exec_result {
             Ok(res) => {
                 //println!("XXX Contract returned {:?}", res.data);
                 assert_eq!(res.data.len(), 8); // size of u64
@@ -364,7 +364,7 @@ fn deploy_contract() -> AccountId {
 
     // Load the contract code.
     let wasm = &include_bytes!("./test_data/ddc.wasm")[..];
-    let wasm_hash = <T as FST>::Hashing::hash(wasm);
+    let wasm_hash = <T as FSC>::Hashing::hash(wasm);
     let contract_args = encode_constructor();
 
     // Deploy the contract.
@@ -378,14 +378,15 @@ fn deploy_contract() -> AccountId {
         GAS_LIMIT,
         wasm_hash.into(),
         contract_args.clone(),
+        vec![]
     )
     .unwrap();
 
     // Configure worker with the contract address.
-    let contract_id = <T as CT>::DetermineContractAddress::contract_address_for(
-        &wasm_hash,
-        &contract_args,
+    let contract_id = Contracts::contract_address(
         &alice,
+        &wasm_hash,
+        &vec![],
     );
 
     pub const ADD_DDC_NODE_SELECTOR: [u8; 4] = hex!("11a9e1b9");
