@@ -57,6 +57,7 @@ use crate::{
 pub use communication::beefy_protocol_name::{
 	gossip_protocol_name, justifications_protocol_name as justifs_protocol_name,
 };
+use sc_network_common::service::NetworkRequest;
 
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
@@ -155,7 +156,7 @@ where
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
-	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -187,7 +188,7 @@ where
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
-	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,

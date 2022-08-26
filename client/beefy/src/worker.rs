@@ -29,7 +29,10 @@ use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification};
-use sc_network_common::{protocol::event::Event as NetEvent, service::NetworkEventStream};
+use sc_network_common::{
+	protocol::event::Event as NetEvent,
+	service::{NetworkEventStream, NetworkRequest},
+};
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
@@ -49,7 +52,10 @@ use beefy_primitives::{
 };
 
 use crate::{
-	communication::gossip::{topic, GossipValidator},
+	communication::{
+		gossip::{topic, GossipValidator},
+		request_response::outgoing_request::OnDemandJustififactionsEngine,
+	},
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
 	keystore::BeefyKeystore,
@@ -203,6 +209,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, N> {
 	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
+	on_demand_justifications: OnDemandJustififactionsEngine<B, N>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
@@ -230,7 +237,7 @@ where
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
-	N: NetworkEventStream + SyncOracle + Send + Sync + Clone + 'static,
+	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -257,6 +264,12 @@ where
 			.expect_header(BlockId::number(client.info().finalized_number))
 			.expect("latest block always has header available; qed.");
 
+		let on_demand_justifications = OnDemandJustififactionsEngine::new(
+			network.clone(),
+			// FIXME: use right protocol name.
+			"TODO: FIXME: proto-name-here".into(),
+		);
+
 		BeefyWorker {
 			client: client.clone(),
 			backend,
@@ -266,6 +279,7 @@ where
 			key_store,
 			gossip_engine,
 			gossip_validator,
+			on_demand_justifications,
 			links,
 			metrics,
 			best_grandpa_block_header: last_finalized_header,
@@ -358,6 +372,7 @@ where
 				self.init_session_at(new_validator_set, *header.number());
 				// TODO: when adding SYNC protocol, fire up a request for justification for this
 				// mandatory block here.
+				self.on_demand_justifications.fire_request_for(*header.number());
 			}
 		}
 	}
@@ -709,8 +724,6 @@ where
 						return;
 					}
 				},
-				// TODO: when adding SYNC protocol, join the on-demand justifications stream to
-				// this one, and handle them both here.
 				justif = block_import_justif.next() => {
 					if let Some(justif) = justif {
 						// Block import justifications have already been verified to be valid
@@ -720,6 +733,18 @@ where
 						}
 					} else {
 						error!(target: "beefy", "🥩 Block import stream terminated, closing worker.");
+						return;
+					}
+				},
+				// TODO: join this stream's branch with the one above; how? .. ¯\_(ツ)_/¯
+				justif = self.on_demand_justifications.next() => {
+					if let Some(justif) = justif {
+						// TODO: make sure proofs are verified before consuming.
+						if let Err(err) = self.triage_incoming_justif(justif) {
+							debug!(target: "beefy", "🥩 {}", err);
+						}
+					} else {
+						error!(target: "beefy", "🥩 On demand justifications stream terminated, closing worker.");
 						return;
 					}
 				},
