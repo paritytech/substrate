@@ -869,6 +869,22 @@ fn deploy_and_call_other_contract() {
 					}),
 					topics: vec![],
 				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: caller_addr.clone(),
+						contract: callee_addr.clone(),
+					}),
+					topics: vec![hash(&caller_addr), hash(&callee_addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: caller_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&caller_addr)],
+				},
 			]
 		);
 	});
@@ -1070,6 +1086,14 @@ fn cannot_self_destruct_by_refund_after_slash() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
 						from: addr.clone(),
 						to: ALICE,
@@ -1176,6 +1200,14 @@ fn self_destruct_works() {
 						beneficiary: DJANGO
 					}),
 					topics: vec![hash(&addr), hash(&DJANGO)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3077,6 +3109,14 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
@@ -3094,6 +3134,14 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
@@ -3108,6 +3156,14 @@ fn storage_deposit_works() {
 						amount: charged1,
 					}),
 					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3227,7 +3283,7 @@ fn call_after_killed_account_needs_funding() {
 
 		// Destroy the account of the contract by slashing.
 		// Slashing can actually happen if the contract takes part in staking.
-		// It is a corner case and we except the destruction of the account.
+		// It is a corner case and we accept the destruction of the account.
 		let _ = <Test as Config>::Currency::slash(
 			&addr,
 			<Test as Config>::Currency::total_balance(&addr),
@@ -3287,6 +3343,14 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
 					topics: vec![],
 				},
@@ -3306,6 +3370,14 @@ fn call_after_killed_account_needs_funding() {
 						amount: min_balance
 					}),
 					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -3455,6 +3527,8 @@ fn set_code_hash() {
 		// upload new code
 		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm.clone(), None));
 
+		System::reset_events();
+
 		// First call sets new code_hash and returns 1
 		let result = Contracts::bare_call(
 			ALICE,
@@ -3478,16 +3552,34 @@ fn set_code_hash() {
 
 		// Checking for the last event only
 		assert_eq!(
-			System::events().pop().unwrap(),
-			EventRecord {
-				phase: Phase::Initialization,
-				event: Event::Contracts(crate::Event::ContractCodeUpdated {
-					contract: contract_addr.clone(),
-					new_code_hash,
-					old_code_hash: code_hash,
-				}),
-				topics: vec![hash(&contract_addr), new_code_hash, code_hash],
-			},
+			&System::events(),
+			&[
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::ContractCodeUpdated {
+						contract: contract_addr.clone(),
+						new_code_hash,
+						old_code_hash: code_hash,
+					}),
+					topics: vec![hash(&contract_addr), new_code_hash, code_hash],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: contract_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&contract_addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: contract_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&contract_addr)],
+				},
+			],
 		);
 	});
 }

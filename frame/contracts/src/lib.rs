@@ -687,6 +687,24 @@ pub mod pallet {
 			/// Previous code hash of the contract.
 			old_code_hash: T::Hash,
 		},
+
+		/// A contract was called either by a plain account or another contract.
+		///
+		/// # Note
+		///
+		/// Please keep in mind that like all events this is only emitted for successful
+		/// calls. This is because on failure all storage changes including events are
+		/// rolled back.
+		Called { caller: T::AccountId, contract: T::AccountId },
+
+		/// A contract delegate called a code hash.
+		///
+		/// # Note
+		///
+		/// Please keep in mind that like all events this is only emitted for successful
+		/// calls. This is because on failure all storage changes including events are
+		/// rolled back.
+		DelegateCalled { contract: T::AccountId, code_hash: CodeHash<T> },
 	}
 
 	#[pallet::error]
