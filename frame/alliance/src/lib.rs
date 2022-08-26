@@ -633,7 +633,7 @@ pub mod pallet {
 			T::MaxFellows::get(),
 			T::MaxAllies::get(),
 			witness.proposals,
-			witness.members,
+			witness.voting_members,
 		))]
 		pub fn force_set_members(
 			origin: OriginFor<T>,
@@ -655,7 +655,7 @@ pub mod pallet {
 					Error::<T, I>::BadWitness
 				);
 				ensure!(
-					Self::votable_members_count() <= witness.members,
+					Self::votable_members_count() <= witness.voting_members,
 					Error::<T, I>::BadWitness
 				);
 
@@ -665,12 +665,15 @@ pub mod pallet {
 
 				T::MembershipChanged::change_members_sorted(&[], &Self::votable_members(), &[]);
 				ensure!(
-					// `MemberRole` variants count never greater than members count.
-					Members::<T, I>::clear(witness.members, None).maybe_cursor.is_none(),
+					// `MemberRole` variants, the key of the `StorageMap`, is not expected to grow
+					// to 255.
+					Members::<T, I>::clear(255, None).maybe_cursor.is_none(),
 					Error::<T, I>::AllianceNotReset
 				);
 				ensure!(
-					UpForKicking::<T, I>::clear(witness.members, None).maybe_cursor.is_none(),
+					UpForKicking::<T, I>::clear(T::MaxMembersCount::get(), None)
+						.maybe_cursor
+						.is_none(),
 					Error::<T, I>::AllianceNotReset
 				);
 			}
