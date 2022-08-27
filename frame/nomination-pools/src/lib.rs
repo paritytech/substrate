@@ -2168,6 +2168,7 @@ impl<T: Config> Pallet<T> {
 		BalanceOf::<T>::default()
 	}
 
+
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
 	///
 	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
@@ -2179,6 +2180,19 @@ impl<T: Config> Pallet<T> {
 		T::StakingInterface::minimum_bond()
 			.max(MinCreateBond::<T>::get())
 			.max(MinJoinBond::<T>::get())
+	}
+	/// Remove metadata of bonded pool.
+	///
+	/// All metadata from non-existent bonded_pools are also deleted.
+	pub fn remove_metadata(bonded_pool_id: PoolId){
+		Metadata::<T>::remove(bonded_pool_id);
+		let metadata_keys = Metadata::<T>::iter_keys();
+
+		for key in metadata_keys{
+			if !BondedPools::<T>::contains_key(key){
+				Metadata::<T>::remove(key);
+			}
+		}
 	}
 	/// Remove everything related to the given bonded pool.
 	///
@@ -2220,6 +2234,7 @@ impl<T: Config> Pallet<T> {
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
+		Pallet::<T>::remove_metadata(bonded_pool.id);
 		bonded_pool.remove();
 	}
 
