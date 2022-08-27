@@ -187,13 +187,13 @@ impl Def {
 		match (self.config.has_event_type, self.event.is_some()) {
 			(true, false) => {
 				let msg = "Invalid usage of RuntimeEvent, `Config` contains associated type `RuntimeEvent`, \
-					but enum `RuntimeEvent` is not declared (i.e. no use of `#[pallet::event]`). \
+					but enum `Event` is not declared (i.e. no use of `#[pallet::event]`). \
 					Note that type `RuntimeEvent` in trait is reserved to work alongside pallet event.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
 			(false, true) => {
 				let msg = "Invalid usage of RuntimeEvent, `Config` contains no associated type \
-					`RuntimeEvent`, but enum `RuntimeEvent` is declared (in use of `#[pallet::event]`). \
+					`RuntimeEvent`, but enum `Event` is declared (in use of `#[pallet::event]`). \
 					An RuntimeEvent associated type must be declare on trait `Config`.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
