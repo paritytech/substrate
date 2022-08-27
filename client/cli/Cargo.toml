@@ -26,7 +26,7 @@ rand = "0.7.3"
 regex = "1.5.5"
 rpassword = "7.0.0"
 serde = "1.0.136"
-serde_json = "1.0.79"
+serde_json = "1.0.85"
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
 tokio = { version = "1.17.0", features = ["signal", "rt-multi-thread", "parking_lot"] }
