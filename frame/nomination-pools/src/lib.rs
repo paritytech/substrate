@@ -2168,7 +2168,6 @@ impl<T: Config> Pallet<T> {
 		BalanceOf::<T>::default()
 	}
 
-
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
 	///
 	/// It is the responsibility of the depositor to put these funds into the pool initially. Upon
@@ -2184,12 +2183,12 @@ impl<T: Config> Pallet<T> {
 	/// Remove metadata of bonded pool.
 	///
 	/// All metadata from non-existent bonded_pools are also deleted.
-	pub fn remove_metadata(bonded_pool_id: PoolId){
+	pub fn remove_metadata(bonded_pool_id: PoolId) {
 		Metadata::<T>::remove(bonded_pool_id);
 		let metadata_keys = Metadata::<T>::iter_keys();
 
-		for key in metadata_keys{
-			if !BondedPools::<T>::contains_key(key){
+		for key in metadata_keys {
+			if !BondedPools::<T>::contains_key(key) {
 				Metadata::<T>::remove(key);
 			}
 		}
