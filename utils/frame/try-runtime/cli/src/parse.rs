@@ -17,6 +17,8 @@
 
 //! Utils for parsing user input
 
+use sp_version::StateVersion;
+
 pub(crate) fn hash(block_hash: &str) -> Result<String, String> {
 	let (block_hash, offset) = if let Some(block_hash) = block_hash.strip_prefix("0x") {
 		(block_hash, 2)
@@ -41,4 +43,11 @@ pub(crate) fn url(s: &str) -> Result<String, &'static str> {
 	} else {
 		Err("not a valid WS(S) url: must start with 'ws://' or 'wss://'")
 	}
+}
+
+pub(crate) fn state_version(s: &str) -> Result<StateVersion, &'static str> {
+	s.parse::<u8>()
+		.map_err(|_| ())
+		.and_then(StateVersion::try_from)
+		.map_err(|_| "Invalid state version.")
 }
