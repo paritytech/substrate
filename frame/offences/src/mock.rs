@@ -44,7 +44,7 @@ use sp_staking::{
 pub struct OnOffenceHandler;
 
 parameter_types! {
-	pub static OnOffencePerBill: Vec<Perbill> = Default::default();
+	pub static OnOffencePerbill: Vec<Perbill> = Default::default();
 	pub static OffenceWeight: Weight = Default::default();
 }
 
@@ -57,7 +57,7 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
 		_offence_session: SessionIndex,
 		_disable_strategy: DisableStrategy,
 	) -> Weight {
-		OnOffencePerBill::mutate(|f| {
+		OnOffencePerbill::mutate(|f| {
 			*f = slash_fraction.to_vec();
 		});
 
@@ -66,7 +66,7 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
 }
 
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
-	OnOffencePerBill::mutate(|fractions| f(fractions))
+	OnOffencePerbill::mutate(|fractions| f(fractions))
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

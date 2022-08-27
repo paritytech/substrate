@@ -76,8 +76,7 @@ fn should_report_offline_validators() {
 		advance_session();
 
 		// then
-		let offences = OFFENCES::get();
-		OFFENCES::mutate(|l| l.clear());
+		let offences = Offences::take();
 		assert_eq!(
 			offences,
 			vec![(
@@ -97,8 +96,7 @@ fn should_report_offline_validators() {
 		advance_session();
 
 		// then
-		let offences = OFFENCES::get();
-		OFFENCES::mutate(|l| l.clear());
+		let offences = Offences::take();
 		assert_eq!(
 			offences,
 			vec![(
