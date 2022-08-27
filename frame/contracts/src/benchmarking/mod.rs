@@ -920,7 +920,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_set_storage",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -968,7 +968,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_set_storage",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1016,7 +1016,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_set_storage",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1068,7 +1068,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_clear_storage",
+				name: "clear_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1115,7 +1115,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_clear_storage",
+				name: "clear_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1163,7 +1163,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_get_storage",
+				name: "get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1217,7 +1217,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_get_storage",
+				name: "get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1272,7 +1272,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_contains_storage",
+				name: "contains_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1319,7 +1319,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_contains_storage",
+				name: "contains_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1367,7 +1367,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_take_storage",
+				name: "take_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1421,7 +1421,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_take_storage",
+				name: "take_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
