@@ -62,14 +62,15 @@ pub mod v11 {
 		let old_pallet_name = old_pallet_name.as_ref();
 		let new_pallet_name = <P as PalletInfoAccess>::name();
 
-		if new_pallet_name == old_pallet_name {
-			log!(warn, "new bags-list name is equal to the old one, no need to migrate");
-			return 0
-		}
-
 		if StorageVersion::<T>::get() == Releases::V10_0_0 {
-			move_pallet(old_pallet_name.as_bytes(), new_pallet_name.as_bytes());
+			// bump version anyway, even if we don't need to move the prefix
 			StorageVersion::<T>::put(Releases::V11_0_0);
+			if new_pallet_name == old_pallet_name {
+				log!(warn, "new bags-list name is equal to the old one, only bumping the version");
+				return T::DbWeight::get().reads(1).saturating_add(T::DbWeight::get().writes(1))
+			}
+
+			move_pallet(old_pallet_name.as_bytes(), new_pallet_name.as_bytes());
 			<T as frame_system::Config>::BlockWeights::get().max_block
 		} else {
 			log!(warn, "v11::migrate should be removed.");
