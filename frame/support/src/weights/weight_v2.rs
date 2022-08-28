@@ -327,3 +327,79 @@ impl sp_runtime::traits::Printable for Weight {
 		self.ref_time().print()
 	}
 }
+
+// TODO: Eventually remove these
+
+impl<T> WeighData<T> for RefTimeWeight {
+	fn weigh_data(&self, _: T) -> Weight {
+		return Weight::new().set_ref_time(*self)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for RefTimeWeight {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for RefTimeWeight {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> WeighData<T> for (RefTimeWeight, DispatchClass, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (RefTimeWeight, DispatchClass, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (RefTimeWeight, DispatchClass, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.2
+	}
+}
+
+impl<T> WeighData<T> for (RefTimeWeight, DispatchClass) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (RefTimeWeight, DispatchClass) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (RefTimeWeight, DispatchClass) {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> WeighData<T> for (RefTimeWeight, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (RefTimeWeight, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for (RefTimeWeight, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.1
+	}
+}
+
+// END TODO

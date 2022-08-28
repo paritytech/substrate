@@ -332,7 +332,7 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -417,7 +417,7 @@ benchmarks_instance_pallet! {
 			index,
 			true,
 		)?;
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -489,7 +489,7 @@ benchmarks_instance_pallet! {
 
 		System::<T>::set_block_number(T::BlockNumber::max_value());
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -562,7 +562,7 @@ benchmarks_instance_pallet! {
 		// caller is prime, prime already votes aye by creating the proposal
 		System::<T>::set_block_number(T::BlockNumber::max_value());
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);

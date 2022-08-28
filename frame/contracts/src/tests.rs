@@ -1826,7 +1826,7 @@ fn lazy_removal_works() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Run the lazy removal
-		Contracts::on_idle(System::block_number(), Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::MAX);
 
 		// Value should be gone now
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
@@ -1896,7 +1896,7 @@ fn lazy_batch_removal_works() {
 		}
 
 		// Run single lazy removal
-		Contracts::on_idle(System::block_number(), Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::MAX);
 
 		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
@@ -2085,7 +2085,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 		assert_matches!(child::get::<i32>(trie, &[99]), Some(42));
 
 		// Run on_idle with max remaining weight, this should remove the value
-		Contracts::on_idle(System::block_number(), Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::MAX);
 
 		// Value should be gone
 		assert_matches!(child::get::<i32>(trie, &[99]), None);

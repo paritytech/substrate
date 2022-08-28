@@ -883,17 +883,14 @@ mod tests {
 
 	#[test]
 	fn polynomial_does_not_overflow() {
-		assert_eq!(Poly::weight_to_fee(&Weight::max_value()), Balance::max_value() - 10_000);
+		assert_eq!(Poly::weight_to_fee(&Weight::MAX), Balance::max_value() - 10_000);
 	}
 
 	#[test]
 	fn identity_fee_works() {
 		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&0), 0);
 		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&50), 50);
-		assert_eq!(
-			IdentityFee::<Balance>::weight_to_fee(&Weight::max_value()),
-			Balance::max_value()
-		);
+		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::MAX), Balance::max_value());
 	}
 
 	#[test]

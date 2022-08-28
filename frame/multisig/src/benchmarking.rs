@@ -182,7 +182,7 @@ benchmarks! {
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller2);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
-	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false, Weight::max_value())
+	}: as_multi(RawOrigin::Signed(caller2), s as u16, signatories2, Some(timepoint), call, false, Weight::MAX)
 	verify {
 		assert!(!Multisigs::<T>::contains_key(&multi_account_id, call_hash));
 	}
@@ -270,7 +270,7 @@ benchmarks! {
 		signatories2,
 		Some(timepoint),
 		call_hash,
-		Weight::max_value()
+		Weight::MAX
 	)
 	verify {
 		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));

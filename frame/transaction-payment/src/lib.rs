@@ -1100,7 +1100,7 @@ mod tests {
 			assert_ok!(ChargeTransactionPayment::<Runtime>::from(0).pre_dispatch(
 				&1,
 				CALL,
-				&info_from_weight(Weight::max_value()),
+				&info_from_weight(Weight::MAX),
 				10
 			));
 			// fee will be proportional to what is the actual maximum weight in the runtime.
@@ -1383,7 +1383,7 @@ mod tests {
 			.execute_with(|| {
 				// Overflow is handled
 				let dispatch_info = DispatchInfo {
-					weight: Weight::max_value(),
+					weight: Weight::MAX,
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};

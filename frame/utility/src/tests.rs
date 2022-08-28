@@ -99,7 +99,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::max_value());
+		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = TestBaseCallFilter;
@@ -364,14 +364,14 @@ fn batch_weight_calculation_doesnt_overflow() {
 	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
 		let big_call = Call::System(SystemCall::fill_block { ratio: Perbill::from_percent(50) });
-		assert_eq!(big_call.get_dispatch_info().weight, Weight::max_value() / 2);
+		assert_eq!(big_call.get_dispatch_info().weight, Weight::MAX / 2);
 
 		// 3 * 50% saturates to 100%
 		let batch_call = Call::Utility(crate::Call::batch {
 			calls: vec![big_call.clone(), big_call.clone(), big_call.clone()],
 		});
 
-		assert_eq!(batch_call.get_dispatch_info().weight, Weight::max_value());
+		assert_eq!(batch_call.get_dispatch_info().weight, Weight::MAX);
 	});
 }
 

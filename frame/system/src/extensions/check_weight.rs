@@ -19,11 +19,11 @@ use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Decode, Encode};
 use frame_support::{
 	traits::Get,
-	weights::{DispatchClass, DispatchInfo, PostDispatchInfo},
+	weights::{DispatchClass, DispatchInfo, PostDispatchInfo, Weight},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension},
+	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, Saturating, SignedExtension, Zero},
 	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };
@@ -238,7 +238,7 @@ where
 		}
 
 		let unspent = post_info.calc_unspent(info);
-		if unspent > 0 {
+		if unspent > Weight::zero() {
 			crate::BlockWeight::<T>::mutate(|current_weight| {
 				current_weight.sub(unspent, info.class);
 			})
@@ -297,7 +297,7 @@ mod tests {
 		fn check(call: impl FnOnce(&DispatchInfo, usize)) {
 			new_test_ext().execute_with(|| {
 				let max = DispatchInfo {
-					weight: Weight::max_value(),
+					weight: Weight::MAX,
 					class: DispatchClass::Mandatory,
 					..Default::default()
 				};
@@ -309,7 +309,7 @@ mod tests {
 
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(max, len));
-			assert_eq!(System::block_weight().total(), Weight::max_value());
+			assert_eq!(System::block_weight().total(), Weight::MAX);
 			assert!(System::block_weight().total() > block_weight_limit());
 		});
 		check(|max, len| {
@@ -364,8 +364,8 @@ mod tests {
 	#[test]
 	fn register_extra_weight_unchecked_doesnt_care_about_limits() {
 		new_test_ext().execute_with(|| {
-			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Normal);
-			assert_eq!(System::block_weight().total(), Weight::max_value());
+			System::register_extra_weight_unchecked(Weight::MAX, DispatchClass::Normal);
+			assert_eq!(System::block_weight().total(), Weight::MAX);
 			assert!(System::block_weight().total() > block_weight_limit());
 		});
 	}
@@ -423,7 +423,7 @@ mod tests {
 	fn operational_works_on_full_block() {
 		new_test_ext().execute_with(|| {
 			// An on_initialize takes up the whole block! (Every time!)
-			System::register_extra_weight_unchecked(Weight::max_value(), DispatchClass::Mandatory);
+			System::register_extra_weight_unchecked(Weight::MAX, DispatchClass::Mandatory);
 			let dispatch_normal =
 				DispatchInfo { weight: 251, class: DispatchClass::Normal, ..Default::default() };
 			let dispatch_operational = DispatchInfo {
