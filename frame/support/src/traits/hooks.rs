@@ -348,7 +348,6 @@ pub trait OnTimestampSet<Moment> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::traits::Zero;
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
@@ -381,7 +380,7 @@ mod tests {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test1");
 				}
-				0
+				Weight::zero()
 			}
 		}
 		impl OnIdle<u32> for Test2 {
@@ -389,7 +388,7 @@ mod tests {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test2");
 				}
-				0
+				Weight::zero()
 			}
 		}
 		impl OnIdle<u32> for Test3 {
@@ -397,7 +396,7 @@ mod tests {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test3");
 				}
-				0
+				Weight::zero()
 			}
 		}
 

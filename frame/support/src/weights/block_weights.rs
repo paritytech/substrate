@@ -58,6 +58,7 @@ parameter_types! {
 
 #[cfg(test)]
 mod test_weights {
+	use super::*;
 	use frame_support::weights::constants;
 
 	/// Checks that the weight exists and is sane.
@@ -68,8 +69,14 @@ mod test_weights {
 		let w = super::BlockExecutionWeight::get();
 
 		// At least 100 µs.
-		assert!(w >= 100 * constants::WEIGHT_PER_MICROS, "Weight should be at least 100 µs.");
+		assert!(
+			w >= Weight::from_ref_time(100 * constants::WEIGHT_PER_MICROS),
+			"Weight should be at least 100 µs."
+		);
 		// At most 50 ms.
-		assert!(w <= 50 * constants::WEIGHT_PER_MILLIS, "Weight should be at most 50 ms.");
+		assert!(
+			w <= Weight::from_ref_time(50 * constants::WEIGHT_PER_MILLIS),
+			"Weight should be at most 50 ms."
+		);
 	}
 }

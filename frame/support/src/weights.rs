@@ -388,7 +388,7 @@ pub trait WithPostDispatchInfo {
 	/// # Example
 	///
 	/// ```ignore
-	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(100))?;
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100)))?;
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
 	/// ```
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
@@ -718,7 +718,7 @@ mod tests {
 			fn f03(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
+			#[weight = ((_a * 10 + _eb * 1) as RefTimeWeight, DispatchClass::Normal, Pays::Yes)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
@@ -737,80 +737,98 @@ mod tests {
 	fn weights_are_correct() {
 		// #[weight = 1000]
 		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
-		assert_eq!(info.weight, 1000);
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, DispatchClass::Mandatory)]
 		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
-		assert_eq!(info.weight, 1000);
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, Pays::No)]
 		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
-		assert_eq!(info.weight, 1000);
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
 		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
-		assert_eq!(info.weight, 1000);
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, 150); // 13*10 + 20
+		assert_eq!(info.weight, Weight::from_ref_time(150)); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
 		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, 0);
+		assert_eq!(info.weight, Weight::from_ref_time(0));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
 		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
-		assert_eq!(info.weight, 12300); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.weight, Weight::from_ref_time(12300)); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
 		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
-		assert_eq!(info.weight, 45600); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.weight, Weight::from_ref_time(45600)); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 	}
 
 	#[test]
 	fn extract_actual_weight_works() {
-		let pre = DispatchInfo { weight: 1000, ..Default::default() };
-		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), 7);
-		assert_eq!(extract_actual_weight(&Ok(Some(1000).into()), &pre), 1000);
-		assert_eq!(extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(9)), &pre), 9);
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::from_ref_time(7));
+		assert_eq!(
+			extract_actual_weight(&Ok(Some(1000).into()), &pre),
+			Weight::from_ref_time(1000)
+		);
+		assert_eq!(
+			extract_actual_weight(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&pre
+			),
+			Weight::from_ref_time(9)
+		);
 	}
 
 	#[test]
 	fn extract_actual_weight_caps_at_pre_weight() {
-		let pre = DispatchInfo { weight: 1000, ..Default::default() };
-		assert_eq!(extract_actual_weight(&Ok(Some(1250).into()), &pre), 1000);
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
 		assert_eq!(
-			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(1300)), &pre),
-			1000
+			extract_actual_weight(&Ok(Some(1250).into()), &pre),
+			Weight::from_ref_time(1000)
+		);
+		assert_eq!(
+			extract_actual_weight(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(1300))),
+				&pre
+			),
+			Weight::from_ref_time(1000),
 		);
 	}
 
 	#[test]
 	fn extract_actual_pays_fee_works() {
-		let pre = DispatchInfo { weight: 1000, ..Default::default() };
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
 		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::Yes);
 		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::Yes);
 		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::Yes);
 		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::No).into()), &pre), Pays::No);
 		assert_eq!(
-			extract_actual_pays_fee(&Err(DispatchError::BadOrigin.with_weight(9)), &pre),
+			extract_actual_pays_fee(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&pre
+			),
 			Pays::Yes
 		);
 		assert_eq!(
@@ -824,7 +842,11 @@ mod tests {
 			Pays::No
 		);
 
-		let pre = DispatchInfo { weight: 1000, pays_fee: Pays::No, ..Default::default() };
+		let pre = DispatchInfo {
+			weight: Weight::from_ref_time(1000),
+			pays_fee: Pays::No,
+			..Default::default()
+		};
 		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::No);
 		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::No);
 		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::No);
@@ -896,11 +918,26 @@ mod tests {
 	#[test]
 	fn constant_fee_works() {
 		use crate::traits::ConstU128;
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::weight_to_fee(&Weight::zero()), 0);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::weight_to_fee(&Weight::from_ref_time(50)), 500);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::weight_to_fee(&Weight::from_ref_time(16)), 16384);
 		assert_eq!(
-			ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::weight_to_fee(&Weight::from_ref_time(2)),
+			ConstantMultiplier::<u128, ConstU128<100u128>>::weight_to_fee(&Weight::zero()),
+			0
+		);
+		assert_eq!(
+			ConstantMultiplier::<u128, ConstU128<10u128>>::weight_to_fee(&Weight::from_ref_time(
+				50
+			)),
+			500
+		);
+		assert_eq!(
+			ConstantMultiplier::<u128, ConstU128<1024u128>>::weight_to_fee(&Weight::from_ref_time(
+				16
+			)),
+			16384
+		);
+		assert_eq!(
+			ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::weight_to_fee(
+				&Weight::from_ref_time(2)
+			),
 			u128::MAX
 		);
 	}

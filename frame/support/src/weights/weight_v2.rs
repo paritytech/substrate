@@ -341,6 +341,27 @@ impl Weight {
 
 // TODO: Eventually remove these
 
+impl From<Option<RefTimeWeight>> for PostDispatchInfo {
+	fn from(maybe_actual_computation: Option<RefTimeWeight>) -> Self {
+		let actual_weight = match maybe_actual_computation {
+			Some(actual_computation) => Some(Weight::new().set_ref_time(actual_computation)),
+			None => None,
+		};
+		Self { actual_weight, pays_fee: Default::default() }
+	}
+}
+
+impl From<(Option<RefTimeWeight>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<RefTimeWeight>, Pays)) -> Self {
+		let (maybe_actual_time, pays_fee) = post_weight_info;
+		let actual_weight = match maybe_actual_time {
+			Some(actual_time) => Some(Weight::new().set_ref_time(actual_time)),
+			None => None,
+		};
+		Self { actual_weight, pays_fee }
+	}
+}
+
 impl<T> WeighData<T> for RefTimeWeight {
 	fn weigh_data(&self, _: T) -> Weight {
 		return Weight::new().set_ref_time(*self)
