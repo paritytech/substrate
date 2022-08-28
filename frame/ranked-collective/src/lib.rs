@@ -645,7 +645,7 @@ pub mod pallet {
 			})
 		}
 
-		#[pallet::weight(100)]
+		#[pallet::weight(T::WeightInfo::add_member_to_rank(*rank as u32))]
 		pub fn add_member_to_rank(
 			origin: OriginFor<T>,
 			member: T::AccountId,

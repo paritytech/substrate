@@ -51,6 +51,8 @@ pub trait WeightInfo {
 	fn demote_member(r: u32, ) -> Weight;
 	fn vote() -> Weight;
 	fn cleanup_poll(n: u32, ) -> Weight;
+	fn add_member_to_rank(r: u32, ) -> Weight;
+
 }
 
 /// Weights for pallet_ranked_collective using the Substrate node and recommended hardware.
@@ -118,6 +120,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as Weight))
 			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(n as Weight)))
 	}
+	// Storage: RankedCollective Members (r:1 w:0)
+	fn add_member_to_rank(r: u32, ) -> Weight {
+		(8_263_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((251_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+	}
 }
 
 // For backwards compatibility and tests
@@ -183,5 +192,12 @@ impl WeightInfo for () {
 			.saturating_add((867_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(n as Weight)))
+	}
+	// Storage: RankedCollective Members (r:1 w:0)
+	fn add_member_to_rank(r: u32, ) -> Weight {
+		(8_263_000 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((251_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
 	}
 }
