@@ -328,6 +328,17 @@ impl sp_runtime::traits::Printable for Weight {
 	}
 }
 
+// Re-export common functions so you do not need to import trait.
+impl Weight {
+	pub fn zero() -> Self {
+		<Self as Zero>::zero()
+	}
+
+	pub fn one() -> Self {
+		<Self as One>::one()
+	}
+}
+
 // TODO: Eventually remove these
 
 impl<T> WeighData<T> for RefTimeWeight {

@@ -870,15 +870,15 @@ mod tests {
 	#[test]
 	fn polynomial_works() {
 		// 100^3/2=500000 100^2*(2+1/3)=23333 700 -10000
-		assert_eq!(Poly::weight_to_fee(&100), 514033);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(100)), 514033);
 		// 10123^3/2=518677865433 10123^2*(2+1/3)=239108634 70861 -10000
-		assert_eq!(Poly::weight_to_fee(&10_123), 518917034928);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(10_123)), 518917034928);
 	}
 
 	#[test]
 	fn polynomial_does_not_underflow() {
-		assert_eq!(Poly::weight_to_fee(&0), 0);
-		assert_eq!(Poly::weight_to_fee(&10), 0);
+		assert_eq!(Poly::weight_to_fee(&Weight::zero()), 0);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(10)), 0);
 	}
 
 	#[test]
@@ -888,19 +888,19 @@ mod tests {
 
 	#[test]
 	fn identity_fee_works() {
-		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&0), 0);
-		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&50), 50);
+		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::zero()), 0);
+		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::from_ref_time(50)), 50);
 		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::MAX), Balance::max_value());
 	}
 
 	#[test]
 	fn constant_fee_works() {
 		use crate::traits::ConstU128;
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::weight_to_fee(&0), 0);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::weight_to_fee(&50), 500);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::weight_to_fee(&16), 16384);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::weight_to_fee(&Weight::zero()), 0);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::weight_to_fee(&Weight::from_ref_time(50)), 500);
+		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::weight_to_fee(&Weight::from_ref_time(16)), 16384);
 		assert_eq!(
-			ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::weight_to_fee(&2),
+			ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::weight_to_fee(&Weight::from_ref_time(2)),
 			u128::MAX
 		);
 	}

@@ -28,7 +28,7 @@
 use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, Weight};
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, Saturating, Zero},
+	traits::{Bounded, Saturating},
 	Perbill, RuntimeDebug,
 };
 

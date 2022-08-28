@@ -348,23 +348,24 @@ pub trait OnTimestampSet<Moment> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_runtime::traits::Zero;
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
 		struct Test;
 		impl OnInitialize<u8> for Test {
 			fn on_initialize(_n: u8) -> Weight {
-				10
+				Weight::from_ref_time(10)
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
 			fn on_runtime_upgrade() -> Weight {
-				20
+				Weight::from_ref_time(20)
 			}
 		}
 
-		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
-		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+		assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
+		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
 	}
 
 	#[test]
@@ -401,23 +402,23 @@ mod tests {
 		}
 
 		unsafe {
-			TestTuple::on_idle(0, 0);
+			TestTuple::on_idle(0, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(1, 0);
+			TestTuple::on_idle(1, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(2, 0);
+			TestTuple::on_idle(2, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test3", "Test1", "Test2"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(3, 0);
+			TestTuple::on_idle(3, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(4, 0);
+			TestTuple::on_idle(4, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 		}
