@@ -1415,6 +1415,12 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::unbond(RawOrigin::Signed(controller).into(), value)
 	}
 
+	fn rebond(controller: Self::AccountId, value: BalanceOf<T>) -> DispatchResult {
+		Self::rebond(RawOrigin::Signed(controller).into(), value)
+			.map(|_| ())
+			.map_err(|with_post| with_post.error)
+	}
+
 	fn chill(controller: Self::AccountId) -> DispatchResult {
 		Self::chill(RawOrigin::Signed(controller).into())
 	}

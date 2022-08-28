@@ -768,6 +768,22 @@ impl<T: Config> BondedPool<T> {
 		Ok(())
 	}
 
+	fn ok_to_rebond(
+		&self,
+		member: &PoolMember<T>,
+		new_funds: BalanceOf<T>,
+	) -> Result<(), DispatchError> {
+		// The member may just be kicked, thus reject to rebond. Note that this check also reject
+		// member who didn't be kicked but happen to fully unbond and try to rebond when the
+		// pool is blocked
+		// TODO: shoule also add this check to `bond_extra`?
+		if matches!(self.state, PoolState::Blocked) && member.active_points().is_zero() {
+			return Err(Error::<T>::FullyUnbonding.into())
+		}
+		self.ok_to_be_open(new_funds)?;
+		Ok(())
+	}
+
 	/// Check that the pool can accept a member with `new_funds`.
 	fn ok_to_join(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
@@ -1107,6 +1123,11 @@ impl<T: Config> SubPools<T> {
 		}
 
 		self
+	}
+
+	fn get_pool(&mut self, era: &EraIndex) -> &mut UnbondPool<T> {
+		// `era` not found in `with_era` then it must have been merged to `no_era`
+		self.with_era.get_mut(era).unwrap_or(&mut self.no_era)
 	}
 
 	/// The sum of all unbonding balance, regardless of whether they are actually unlocked or not.
@@ -1451,6 +1472,8 @@ pub mod pallet {
 		Defensive(DefensiveError),
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+		/// Can not rebond without unlocking chunks.
+		NoUnlockChunk,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError)]
@@ -1466,6 +1489,8 @@ pub mod pallet {
 		/// The bonded account should only be killed by the staking system when the depositor is
 		/// withdrawing
 		BondedStashKilledPrematurely,
+		/// The unlo
+		RebondFundsNotMatch,
 	}
 
 	impl<T> From<DefensiveError> for Error<T> {
@@ -1579,6 +1604,120 @@ pub mod pallet {
 				bonded,
 				joined: false,
 			});
+			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
+
+			Ok(())
+		}
+
+		// FIXME: recorrect weight
+		#[pallet::weight(
+			T::WeightInfo::bond_extra_transfer()
+			.max(T::WeightInfo::bond_extra_reward())
+		)]
+		#[transactional]
+		pub fn rebond(
+			origin: OriginFor<T>,
+			#[pallet::compact] mut amount: BalanceOf<T>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
+			let mut sub_pools = match SubPoolsStorage::<T>::get(member.pool_id) {
+				Some(p) => p,
+				// unbonding pool is lazily created, `None` means the underlying nominator do
+				// not have any unbonding fund
+				None => return Err(Error::<T>::NoUnlockChunk.into()),
+			};
+
+			// this member's share of the unbonded funds may had been withdrawn in the nominator
+			// account (by other members), and its unlocking funds may larger than the nominator's,
+			// thus need to limit `amount` to the nominator's unlocking funds, which is the max
+			// rebondable funds of the nominator
+			let bonded_account = bonded_pool.bonded_account();
+			let pre_active = T::StakingInterface::active_stake(&bonded_account).unwrap_or_default();
+			amount = {
+				let total = T::StakingInterface::total_stake(&bonded_account).unwrap_or_default();
+				amount.min(total.saturating_sub(pre_active))
+			};
+			ensure!(
+				!(member.unbonding_eras.is_empty() || amount.is_zero()),
+				Error::<T>::NoUnlockChunk
+			);
+
+			// payout related stuff: we must claim the payouts, and updated recorded payout data
+			// before updating the bonded pool points, similar to that of `join` transaction.
+			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
+			// Currently, bonding rewards is like a batch. In the same PR, also make this function
+			// take a boolean argument that make it either 100% pure (no storage update), or make it
+			// also emit event and do the transfer. #11671
+			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+
+			// deduct unlocking funds from the pool member and unbonding pool
+			let mut unlocking_balance = BalanceOf::<T>::zero();
+			member.unbonding_eras = member
+				.unbonding_eras
+				.try_mutate(|unbonding_eras| {
+					// rebond from the most recent era (most recent era have longer duration to
+					// withdraw) to the last
+					// we can't use `BtreeMap::retain` directly here because we need visit items in
+					// reverse order but we can use `BtreeMap::last_entry` once it is stable
+					for (era, points) in unbonding_eras.iter_mut().rev() {
+						let unbonding_pool = sub_pools.get_pool(era);
+						let value = unbonding_pool.point_to_balance(*points);
+
+						if unlocking_balance.saturating_add(value) <= amount {
+							unbonding_pool.dissolve(*points);
+							*points = BalanceOf::<T>::zero();
+							unlocking_balance = unlocking_balance.saturating_add(value);
+						} else {
+							let diff = amount.saturating_sub(unlocking_balance);
+							let diff_points = unbonding_pool.balance_to_point(diff);
+
+							unbonding_pool.dissolve(diff_points);
+							*points = points.saturating_sub(diff_points);
+							unlocking_balance = unlocking_balance.saturating_add(diff);
+						}
+
+						if unlocking_balance >= amount {
+							break
+						}
+					}
+					sub_pools.with_era.retain(|_, pool| !pool.points.is_zero());
+					unbonding_eras.retain(|_, p| !p.is_zero());
+				})
+				.expect("the length of the map only ever decrease here; qed");
+
+			bonded_pool.ok_to_rebond(&member, unlocking_balance)?;
+
+			// We must calculate the points issued *before* we rebond the funds, else points:balance
+			// ratio will be wrong.
+			let points_issued = bonded_pool.issue(unlocking_balance);
+			member.points = member.points.saturating_add(points_issued);
+			// NOTE: it maybe important to rebond the underlying nominator's unlocking chunks
+			// proportionally (according to the member's era unbonding chunks) instead of fully
+			// rebond from the nominator's most recent chunk to the last (i.e. calling
+			// `StakingInterface::rebond` directly), which may lead to some funds become
+			// withdrawable shorter than the `BondingDuration` and thus causing the newly rebond
+			// funds have a larger slash proportion in the proportionally slashing mechanism
+			T::StakingInterface::rebond(bonded_pool.bonded_account(), unlocking_balance)?;
+
+			// Last check if the funds deduct from the member match the actualy rebond funds
+			let post_active =
+				T::StakingInterface::active_stake(&bonded_account).unwrap_or_default();
+			ensure!(
+				post_active.saturating_sub(pre_active) == unlocking_balance,
+				Error::<T>::Defensive(DefensiveError::RebondFundsNotMatch)
+			);
+
+			Self::deposit_event(Event::<T>::Bonded {
+				member: who.clone(),
+				pool_id: member.pool_id,
+				bonded: unlocking_balance,
+				joined: false,
+			});
+
+			// write the modified item back to storage
+			SubPoolsStorage::insert(&member.pool_id, sub_pools);
 			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
 
 			Ok(())
