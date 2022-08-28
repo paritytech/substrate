@@ -1286,6 +1286,59 @@ mod claim_payout {
 	}
 
 	#[test]
+	fn pending_rewards_per_member_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let ed = Balances::minimum_balance();
+
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			assert_eq!(Pools::pending_rewards(10), Some(30));
+			assert_eq!(Pools::pending_rewards(20), None);
+
+			Balances::make_free_balance_be(&20, ed + 10);
+			assert_ok!(Pools::join(Origin::signed(20), 10, 1));
+
+			assert_eq!(Pools::pending_rewards(10), Some(30));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::pending_rewards(20), Some(50));
+			assert_eq!(Pools::pending_rewards(30), None);
+
+			Balances::make_free_balance_be(&30, ed + 10);
+			assert_ok!(Pools::join(Origin::signed(30), 10, 1));
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::pending_rewards(20), Some(50));
+			assert_eq!(Pools::pending_rewards(30), Some(0));
+
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50 + 20));
+			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			// 10 should claim 10, 20 should claim nothing.
+			assert_ok!(Pools::claim_payout(Origin::signed(10)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+			assert_eq!(Pools::pending_rewards(30), Some(0));
+		});
+	}
+
+	#[test]
 	fn rewards_distribution_is_fair_bond_extra() {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
