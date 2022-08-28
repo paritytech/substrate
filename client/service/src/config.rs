@@ -25,13 +25,12 @@ pub use sc_executor::WasmExecutionMethod;
 pub use sc_executor::WasmtimeInstantiationStrategy;
 pub use sc_network::{
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role,
-		SetConfig, TransportConfig,
+		NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role, SetConfig, TransportConfig,
 	},
 	Multiaddr,
 };
 pub use sc_network_common::{
-	config::ProtocolId,
+	config::{MultiaddrWithPeerId, ProtocolId},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
