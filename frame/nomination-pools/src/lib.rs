@@ -2234,6 +2234,7 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
 		Pallet::<T>::remove_metadata(bonded_pool.id);
+		assert!(!Metadata::<T>::contains_key(bonded_pool.id));
 		bonded_pool.remove();
 	}
 
