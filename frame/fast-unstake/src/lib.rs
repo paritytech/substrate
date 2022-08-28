@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -119,7 +119,9 @@ pub mod pallet {
 		> + pallet_nomination_pools::Config
 	{
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>>
+			+ IsType<<Self as frame_system::Config>::Event>
+			+ TryInto<Event<Self>>;
 
 		/// The amount of balance slashed per each era that was wastefully checked.
 		///
@@ -417,6 +419,14 @@ pub mod pallet {
 					eras_checked.saturating_inc();
 					Self::is_exposed_in_era(&stash, e)
 				});
+
+				log!(
+					debug,
+					"checked {:?} eras, (v: {:?}, u: {:?})",
+					eras_checked,
+					validator_count,
+					eras_to_check.len()
+				);
 
 				// NOTE: you can be extremely unlucky and get slashed here: You are not exposed in
 				// the last 28 eras, have registered yourself to be unstaked, midway being checked,
