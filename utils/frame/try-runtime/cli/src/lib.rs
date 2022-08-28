@@ -343,7 +343,7 @@ pub enum Command {
 	/// use [`State::Live`], and the parent hash of the target block is used to scrape the state.
 	/// If [`State::Snap`] is being used, then this needs to be manually taken into consideration.
 	///
-	/// This does not executes the same runtime api as normal block import, namely
+	/// This does not execute the same runtime api as normal block import do, namely
 	/// `Core_execute_block`. Instead, it uses `TryRuntime_execute_block`, which can optionally
 	/// skip state-root check (useful for trying a unreleased runtime), and can execute runtime
 	/// sanity checks as well.
