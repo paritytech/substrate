@@ -651,8 +651,8 @@ pub mod pallet {
 			member: T::AccountId,
 			rank: Rank
 		) -> DispatchResult {
-			let _= ensure_root(origin)?;
-			Self::do_add_member_to_rank(member,rank)?;
+			ensure_root(origin)?;
+			Self::do_add_member_to_rank(member,rank);
 			Ok(())
 		}
 	}

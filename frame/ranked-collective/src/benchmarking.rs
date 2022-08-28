@@ -160,5 +160,19 @@ benchmarks_instance_pallet! {
 		assert_eq!(Voting::<T, I>::iter().count(), 0);
 	}
 
+	add_member_to_rank {
+		let r in 0..10;
+		let rank = r as u16;
+		let member = make_member::<T, I>(rank);
+		let call = Call::<T, I>::add_member_to_rank{member:member.clone(),rank};
+		let origin = T::PromoteOrigin::successful_origin();
+	} : {call.dispatch_bypass_filter(origin)?}
+	verify {
+		// Checking member records first n rank
+		assert_eq!(Members::<T, I>::get(&member).unwrap().rank, rank);
+		assert_eq!(MemberCount::<T, I>::get(0),1);
+		assert_eq!(MemberCount::<T, I>::get(rank),1);
+
+	}
 	impl_benchmark_test_suite!(RankedCollective, crate::tests::new_test_ext(), crate::tests::Test);
 }

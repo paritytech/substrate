@@ -311,7 +311,12 @@ fn promote_demote_works() {
 #[test]
 pub fn add_member_to_rank_work(){
 	new_test_ext().execute_with(||{
-		assert_ok!(Club::add_member_to_rank(Origin::root(), 2,1));
+		let max_rank = 4u16;
+		assert_ok!(Club::add_member_to_rank(Origin::root(), 2,max_rank));
+		for i  in 0..=max_rank{
+			assert_eq!(member_count(i),1);
+		}
+
 		//-- Should fail ----------------------------------------
 		assert_noop!(Club::add_member_to_rank(Origin::signed(1),2,1), BadOrigin);
 	})
