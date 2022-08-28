@@ -1153,6 +1153,8 @@ macro_rules! impl_benchmark {
 // This creates a unit test for one benchmark of the main benchmark macro.
 // It runs the benchmark using the `high` and `low` value for each component
 // and ensure that everything completes successfully.
+// Instances each component with six values which can be controlled with the
+// env variable `VALUES_PER_COMPONENT`.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! impl_benchmark_test {
@@ -1197,16 +1199,42 @@ macro_rules! impl_benchmark_test {
 					if components.is_empty() {
 						execute_benchmark(Default::default())?;
 					} else {
-						for (name, low, high) in components.iter() {
-							// Test only the low and high value, assuming values in the middle
-							// won't break
-							for component_value in $crate::vec![low, high] {
+						let num_values: u32 = if let Ok(ev) = std::env::var("VALUES_PER_COMPONENT") {
+							ev.parse().map_err(|_| {
+								$crate::BenchmarkError::Stop(
+									"Could not parse env var `VALUES_PER_COMPONENT` as u32."
+								)
+							})?
+						} else {
+							6
+						};
+
+						if num_values < 2 {
+							return Err("`VALUES_PER_COMPONENT` must be at least 2".into());
+						}
+
+						for (name, low, high) in components.clone().into_iter() {
+							// Test the lowest, highest (if its different from the lowest)
+							// and up to num_values-2 more equidistant values in between.
+							// For 0..10 and num_values=6 this would mean: [0, 2, 4, 6, 8, 10]
+
+							let mut values = $crate::vec![low];
+							let diff = (high - low).min(num_values - 1);
+							let slope = (high - low) as f32 / diff as f32;
+
+							for i in 1..=diff {
+								let value = ((low as f32 + slope * i as f32) as u32)
+												.clamp(low, high);
+								values.push(value);
+							}
+
+							for component_value in values {
 								// Select the max value for all the other components.
 								let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components
 									.iter()
 									.map(|(n, _, h)|
-										if n == name {
-											(*n, *component_value)
+										if *n == name {
+											(*n, component_value)
 										} else {
 											(*n, *h)
 										}
