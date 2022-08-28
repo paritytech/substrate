@@ -28,7 +28,7 @@ use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::ExecuteBlock`].
 ///
-/// This will always call into `TryRuntime_execute_block`, which can optionally skip state-root
+/// This will always call into `TryRuntime_execute_block`, which can optionally skip the state-root
 /// check (useful for trying a unreleased runtime), and can execute runtime sanity checks as well.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
@@ -40,7 +40,10 @@ pub struct ExecuteBlockCmd {
 	#[clap(long)]
 	no_state_root_check: bool,
 
-	/// Which sanity check targets to execute when running this command.
+	/// Which try-state targets to execute when running this command.
+	///
+	/// Expected values: `all`, `none`, or a comma separated list of pallets, as per pallet names
+	/// in `construct_runtime!()` (e.g. `Staking, System`).
 	#[clap(long, default_value = "none")]
 	try_state: frame_try_runtime::TryStateSelect,
 

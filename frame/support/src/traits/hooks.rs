@@ -242,8 +242,8 @@ pub trait Hooks<BlockNumber> {
 
 	/// Execute the sanity checks of this pallet, per block.
 	///
-	/// It should focus on certain checks to ensure that the state is sensible. Can consume as much
-	/// weight as it needs.
+	/// It should focus on certain checks to ensure that the state is sensible. This is never
+	/// executed in a consensus code-path, therefore it can consume as much weight as it needs.
 	#[cfg(feature = "try-runtime")]
 	fn try_state(_n: BlockNumber) -> Result<(), &'static str> {
 		Ok(())

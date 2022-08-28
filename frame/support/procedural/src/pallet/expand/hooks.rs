@@ -63,7 +63,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			<T as #frame_system::Config>::PalletInfo
 			as
 			#frame_support::traits::PalletInfo
-		>::name::<Self>().unwrap_or("<unknown pallet name>");
+		>::name::<Self>().expect("Every active pallet has a name in the runtime; qed");
 		#frame_support::log::debug!(
 			target: #frame_support::LOG_TARGET,
 			"🩺 try-state pallet {:?}",

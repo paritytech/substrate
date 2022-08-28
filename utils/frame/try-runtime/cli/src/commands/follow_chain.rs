@@ -45,7 +45,10 @@ pub struct FollowChainCmd {
 	#[clap(long)]
 	state_root_check: bool,
 
-	/// Which sanity checks to run.
+	/// Which try-state targets to execute when running this command.
+	///
+	/// Expected values: `all`, `none`, or a comma separated list of pallets, as per pallet names
+	/// in `construct_runtime!()` (e.g. `Staking, System`).
 	#[clap(long, default_value = "none")]
 	try_state: frame_try_runtime::TryStateSelect,
 }

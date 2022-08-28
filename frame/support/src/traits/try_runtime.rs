@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -85,7 +85,9 @@ impl sp_std::fmt::Debug for Select {
 			Select::Only(x) => write!(
 				f,
 				"Only({:?})",
-				x.iter().map(|x| sp_std::str::from_utf8(x).unwrap()).collect::<Vec<_>>(),
+				x.iter()
+					.map(|x| sp_std::str::from_utf8(x).unwrap_or("<invalid?>"))
+					.collect::<Vec<_>>(),
 			),
 			Select::All => write!(f, "All"),
 			Select::None => write!(f, "None"),
@@ -115,21 +117,20 @@ impl sp_std::str::FromStr for Select {
 	}
 }
 
-/// Execute some checks a pallet to ensure the state is consistent.
+/// Execute some checks to ensure the internal state of a pallet is consistent.
+///
+/// Similar
+///
+/// Usually, these checks should check all of the invariants that are expected to be help on all of
+/// the storage items of your pallet.
 pub trait TryState<BlockNumber> {
-	/// Execute the state sanity checks.
+	/// Execute the state checks.
 	fn try_state(_: BlockNumber, _: Select) -> Result<(), &'static str>;
 }
 
-#[cfg_attr(
-	all(feature = "try-runtime", not(feature = "tuples-96"), not(feature = "tuples-128")),
-	impl_for_tuples(64)
-)]
-#[cfg_attr(
-	all(feature = "try-runtime", feature = "tuples-96", not(feature = "tuples-128")),
-	impl_for_tuples(96)
-)]
-#[cfg_attr(all(feature = "try-runtime", feature = "tuples-128"), impl_for_tuples(128))]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(all(feature = "tuples-128"), impl_for_tuples(128))]
 impl<BlockNumber: Clone + AtLeast32BitUnsigned> TryState<BlockNumber> for Tuple {
 	for_tuples!( where #( Tuple: crate::traits::PalletInfoAccess )* );
 	fn try_state(n: BlockNumber, targets: Select) -> Result<(), &'static str> {
@@ -144,7 +145,8 @@ impl<BlockNumber: Clone + AtLeast32BitUnsigned> TryState<BlockNumber> for Tuple 
 				let functions: &[fn(BlockNumber, Select) -> Result<(), &'static str>] =
 					&[for_tuples!(#( Tuple::try_state ),*)];
 				let skip = n.clone() % (len as u32).into();
-				let skip: u32 = skip.try_into().ok().expect("TODO");
+				let skip: u32 =
+					skip.try_into().unwrap_or_else(|_| sp_runtime::traits::Bounded::max_value());
 				let mut result = Ok(());
 				for try_state_fn in functions.iter().cycle().skip(skip as usize).take(len as usize)
 				{
@@ -153,15 +155,15 @@ impl<BlockNumber: Clone + AtLeast32BitUnsigned> TryState<BlockNumber> for Tuple 
 				result
 			},
 			Select::Only(ref pallet_names) => {
-				let functions: &[(
+				let try_state_fns: &[(
 					&'static str,
 					fn(BlockNumber, Select) -> Result<(), &'static str>,
 				)] = &[for_tuples!(
 					#( (<Tuple as crate::traits::PalletInfoAccess>::name(), Tuple::try_state) ),*
 				)];
 				let mut result = Ok(());
-				for (name, try_state_fn) in functions {
-					if pallet_names.contains(&name.as_bytes().to_vec()) {
+				for (name, try_state_fn) in try_state_fns {
+					if pallet_names.iter().any(|n| n == name.as_bytes()) {
 						result = result.and(try_state_fn(n.clone(), targets.clone()));
 					}
 				}

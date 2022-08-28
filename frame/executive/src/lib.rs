@@ -251,8 +251,7 @@ where
 			select,
 		)
 		.map_err(|e| {
-			sp_runtime::print("failure:");
-			sp_runtime::print(e);
+			frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
 			e
 		})?;
 
