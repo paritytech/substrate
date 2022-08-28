@@ -36,7 +36,7 @@ pub struct ExecuteBlockCmd {
 	#[clap(long)]
 	overwrite_wasm_code: bool,
 
-	/// If set, then the state root check is disabled.
+	/// If set the state root check is disabled.
 	#[clap(long)]
 	no_state_root_check: bool,
 
