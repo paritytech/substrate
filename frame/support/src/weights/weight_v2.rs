@@ -27,7 +27,18 @@ use super::*;
 pub type RefTimeWeight = u64;
 
 #[derive(
-	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	Eq,
+	PartialEq,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	Ord,
+	PartialOrd,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Weight {
