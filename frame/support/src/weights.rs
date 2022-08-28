@@ -140,7 +140,7 @@ use sp_arithmetic::{
 };
 use sp_runtime::{
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
-	traits::{SaturatedConversion, SignedExtension},
+	traits::{CheckedAdd, SaturatedConversion, SignedExtension},
 	RuntimeDebug,
 };
 
@@ -152,12 +152,12 @@ pub use weight_v2::*;
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
-	use super::Weight;
+	use super::RefTimeWeight;
 
-	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
-	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
-	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
-	pub const WEIGHT_PER_NANOS: Weight = WEIGHT_PER_MICROS / 1000; // 1_000
+	pub const WEIGHT_PER_SECOND: RefTimeWeight = 1_000_000_000_000;
+	pub const WEIGHT_PER_MILLIS: RefTimeWeight = 1_000_000_000;
+	pub const WEIGHT_PER_MICROS: RefTimeWeight = 1_000_000;
+	pub const WEIGHT_PER_NANOS: RefTimeWeight = 1_000;
 
 	// Expose the Block and Extrinsic base weights.
 	pub use super::{block_weights::BlockExecutionWeight, extrinsic_weights::ExtrinsicBaseWeight};
@@ -436,7 +436,11 @@ where
 impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
-		DispatchInfo { weight: self.encode().len() as _, pays_fee: Pays::Yes, ..Default::default() }
+		DispatchInfo {
+			weight: Weight::from_ref_time(self.encode().len() as _),
+			pays_fee: Pays::Yes,
+			..Default::default()
+		}
 	}
 }
 
@@ -448,15 +452,19 @@ pub struct RuntimeDbWeight {
 }
 
 impl RuntimeDbWeight {
-	pub fn reads(self, r: Weight) -> Weight {
+	pub fn reads(self, r: u64) -> Weight {
+		let r = Weight::from_ref_time(r);
 		self.read.saturating_mul(r)
 	}
 
-	pub fn writes(self, w: Weight) -> Weight {
+	pub fn writes(self, w: u64) -> Weight {
+		let w = Weight::from_ref_time(w);
 		self.write.saturating_mul(w)
 	}
 
-	pub fn reads_writes(self, r: Weight, w: Weight) -> Weight {
+	pub fn reads_writes(self, r: u64, w: u64) -> Weight {
+		let w = Weight::from_ref_time(w);
+		let r = Weight::from_ref_time(r);
 		let read_weight = self.read.saturating_mul(r);
 		let write_weight = self.write.saturating_mul(w);
 		read_weight.saturating_add(write_weight)
@@ -527,7 +535,8 @@ where
 		Self::polynomial()
 			.iter()
 			.fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
-				let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
+				let w = Self::Balance::saturated_from(weight.ref_time())
+					.saturating_pow(args.degree.into());
 
 				// The sum could get negative. Therefore we only sum with the accumulator.
 				// The Perbill Mul implementation is non overflowing.
@@ -557,7 +566,7 @@ where
 	type Balance = T;
 
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
-		Self::Balance::saturated_from(*weight)
+		Self::Balance::saturated_from(weight.ref_time())
 	}
 }
 
@@ -580,7 +589,7 @@ where
 	type Balance = T;
 
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
-		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
+		Self::Balance::saturated_from(weight.ref_time()).saturating_mul(M::get())
 	}
 }
 
@@ -636,7 +645,7 @@ impl<T: Clone> PerDispatchClass<T> {
 impl PerDispatchClass<Weight> {
 	/// Returns the total weight consumed by all extrinsics in the block.
 	pub fn total(&self) -> Weight {
-		let mut sum = 0;
+		let mut sum = Weight::new();
 		for class in DispatchClass::all() {
 			sum = sum.saturating_add(*self.get(*class));
 		}
@@ -653,7 +662,7 @@ impl PerDispatchClass<Weight> {
 	/// occur.
 	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
 		let value = self.get_mut(class);
-		*value = value.checked_add(weight).ok_or(())?;
+		*value = value.checked_add(&weight).ok_or(())?;
 		Ok(())
 	}
 

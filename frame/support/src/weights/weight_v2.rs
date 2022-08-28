@@ -24,7 +24,7 @@ use sp_runtime::{
 
 use super::*;
 
-pub type ComputationWeight = u64;
+pub type RefTimeWeight = u64;
 
 #[derive(
 	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
@@ -32,114 +32,103 @@ pub type ComputationWeight = u64;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Weight {
 	/// The weight of computational time used based on some reference hardware.
-	ref_time: ComputationWeight,
+	ref_time: RefTimeWeight,
 }
 
 impl Weight {
-	/// Create a new Weight with zero computation and bandwidth.
+	/// Create a new Weight with zero.
 	pub const fn new() -> Self {
-		Self { computation: 0 }
+		Self { ref_time: 0 }
 	}
 
-	/// Set the computational part of the weight.
-	pub const fn set_computation(mut self, c: ComputationWeight) -> Self {
-		self.computation = c;
+	/// Set the reference time part of the weight.
+	pub const fn set_ref_time(mut self, c: RefTimeWeight) -> Self {
+		self.ref_time = c;
 		self
 	}
 
-	/// Return the computational part of the weight.
-	pub const fn computation(&self) -> ComputationWeight {
-		self.computation
+	/// Return the reference time part of the weight.
+	pub const fn ref_time(&self) -> RefTimeWeight {
+		self.ref_time
 	}
 
-	/// Return a mutable computational part of the weight.
-	pub fn computation_mut(&mut self) -> &mut ComputationWeight {
-		&mut self.computation
+	/// Return a mutable reference time part of the weight.
+	pub fn ref_time_mut(&mut self) -> &mut RefTimeWeight {
+		&mut self.ref_time
 	}
 
-	pub const MAX: Self =
-		Self { computation: ComputationWeight::MAX };
+	pub const MAX: Self = Self { ref_time: RefTimeWeight::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.
 	pub fn min(&self, other: Self) -> Self {
-		Self {
-			computation: self.computation.min(other.computation),
-		}
+		Self { ref_time: self.ref_time.min(other.ref_time) }
 	}
 
 	/// Get the aggressive max of `self` and `other` weight.
 	pub fn max(&self, other: Self) -> Self {
-		Self {
-			computation: self.computation.max(other.computation),
-		}
+		Self { ref_time: self.ref_time.max(other.ref_time) }
 	}
 
 	/// Try to add some `other` weight while upholding the `limit`.
 	pub fn try_add(&self, other: &Self, limit: &Self) -> Option<Self> {
 		let total = self.checked_add(other)?;
-		if total.computation > limit.computation {
+		if total.ref_time > limit.ref_time {
 			None
 		} else {
 			Some(total)
 		}
 	}
 
-	/// Construct with computation weight only (zero `bandwith`).
-	pub const fn from_computation(computation: ComputationWeight) -> Self {
-		Self { computation }
+	/// Construct with reference time weight.
+	pub const fn from_ref_time(ref_time: RefTimeWeight) -> Self {
+		Self { ref_time }
 	}
 
 	pub fn checked_mul(self, rhs: u64) -> Option<Self> {
-		let computation = self.computation.checked_mul(rhs)?;
-		Some(Self { computation })
+		let ref_time = self.ref_time.checked_mul(rhs)?;
+		Some(Self { ref_time })
 	}
 
 	pub fn checked_div(self, rhs: u64) -> Option<Self> {
-		let computation = self.computation.checked_div(rhs)?;
-		Some(Self { computation })
+		let ref_time = self.ref_time.checked_div(rhs)?;
+		Some(Self { ref_time })
 	}
 }
 
 impl Zero for Weight {
 	fn zero() -> Self {
-		Self { computation: 0 }
+		Self { ref_time: 0 }
 	}
 
 	fn is_zero(&self) -> bool {
-		self.computation == 0
+		self.ref_time == 0
 	}
 }
 
 impl One for Weight {
 	fn one() -> Self {
-		Self { computation: 1 }
+		Self { ref_time: 1 }
 	}
 }
 
 impl Add for Weight {
 	type Output = Self;
 	fn add(self, rhs: Self) -> Self {
-		Self {
-			computation: self.computation + rhs.computation,
-		}
+		Self { ref_time: self.ref_time + rhs.ref_time }
 	}
 }
 
 impl Sub for Weight {
 	type Output = Self;
 	fn sub(self, rhs: Self) -> Self {
-		Self {
-			computation: self.computation - rhs.computation,
-		}
+		Self { ref_time: self.ref_time - rhs.ref_time }
 	}
 }
 
 impl Mul for Weight {
 	type Output = Self;
 	fn mul(self, b: Self) -> Self {
-		Self {
-			computation: b.computation * self.computation,
-		}
+		Self { ref_time: b.ref_time * self.ref_time }
 	}
 }
 
@@ -149,7 +138,21 @@ where
 {
 	type Output = Self;
 	fn mul(self, b: T) -> Self {
-		Self { computation: b * self.computation }
+		Self { ref_time: b * self.ref_time }
+	}
+}
+
+impl Mul<Weight> for Perbill {
+	type Output = Weight;
+	fn mul(self, b: Weight) -> Weight {
+		Weight { ref_time: self * b.ref_time }
+	}
+}
+
+impl Mul<Weight> for u64 {
+	type Output = Weight;
+	fn mul(self, b: Weight) -> Weight {
+		Weight { ref_time: self * b.ref_time }
 	}
 }
 
@@ -160,54 +163,39 @@ where
 {
 	type Output = Self;
 	fn div(self, b: T) -> Self {
-		Self { computation: self.computation / b }
-	}
-}
-
-impl Mul<Weight> for Perbill {
-	type Output = Weight;
-	fn mul(self, b: Weight) -> Weight {
-		Weight { computation: self * b.computation }
+		Self { ref_time: self.ref_time / b }
 	}
 }
 
 impl Saturating for Weight {
 	fn saturating_add(self, rhs: Self) -> Self {
-		Self {
-			computation: self.computation.saturating_add(rhs.computation),
-		}
+		Self { ref_time: self.ref_time.saturating_add(rhs.ref_time) }
 	}
 
 	fn saturating_sub(self, rhs: Self) -> Self {
-		Self {
-			computation: self.computation.saturating_sub(rhs.computation),
-		}
+		Self { ref_time: self.ref_time.saturating_sub(rhs.ref_time) }
 	}
 
 	fn saturating_mul(self, rhs: Self) -> Self {
-		Self {
-			computation: self.computation.saturating_mul(rhs.computation),
-		}
+		Self { ref_time: self.ref_time.saturating_mul(rhs.ref_time) }
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		Self {
-			computation: self.computation.saturating_pow(exp as u32),
-		}
+		Self { ref_time: self.ref_time.saturating_pow(exp as u32) }
 	}
 }
 
 impl CheckedAdd for Weight {
 	fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		let computation = self.computation.checked_add(rhs.computation)?;
-		Some(Self { computation })
+		let ref_time = self.ref_time.checked_add(rhs.ref_time)?;
+		Some(Self { ref_time })
 	}
 }
 
 impl CheckedSub for Weight {
 	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		let computation = self.computation.checked_sub(rhs.computation)?;
-		Some(Self { computation })
+		let ref_time = self.ref_time.checked_sub(rhs.ref_time)?;
+		Some(Self { ref_time })
 	}
 }
 
@@ -298,7 +286,7 @@ impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
 
 impl core::fmt::Display for Weight {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "Weight(computation: {})", self.computation)
+		write!(f, "Weight(ref_time: {})", self.ref_time)
 	}
 }
 
@@ -313,16 +301,18 @@ impl Bounded for Weight {
 
 impl AddAssign for Weight {
 	fn add_assign(&mut self, other: Self) {
-		*self = Self {
-			computation: self.computation + other.computation,
-		};
+		*self = Self { ref_time: self.ref_time + other.ref_time };
 	}
 }
 
 impl SubAssign for Weight {
 	fn sub_assign(&mut self, other: Self) {
-		*self = Self {
-			computation: self.computation - other.computation,
-		};
+		*self = Self { ref_time: self.ref_time - other.ref_time };
+	}
+}
+
+impl sp_runtime::traits::Printable for Weight {
+	fn print(&self) {
+		self.ref_time().print()
 	}
 }
