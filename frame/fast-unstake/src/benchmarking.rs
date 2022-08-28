@@ -62,9 +62,10 @@ fn fund_and_bond_account<T: Config>(account: &T::AccountId) {
 		stake,
 		pallet_staking::RewardDestination::Controller,
 	));
-	assert_ok!(
-		Staking::<T>::nominate(RawOrigin::Signed(account.clone()).into(), vec![account_lookup])
-	);
+	assert_ok!(Staking::<T>::nominate(
+		RawOrigin::Signed(account.clone()).into(),
+		vec![account_lookup]
+	));
 }
 
 /// All events of the `Balances` pallet.

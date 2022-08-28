@@ -18,11 +18,12 @@
 //! A pallet that's designed to ONLY do:
 //!
 //! If a nominator is not exposed at all in any `ErasStakers` (i.e. "has not backed any validators
-//! in the last 28 days"), then they can register themselves in this pallet, and move quickly into
-//! a nomination pool.
+//! in the last `BondingDuration` days"), then they can register themselves in this pallet, and move
+//! quickly into a nomination pool.
 //!
 //! This pallet works of the basis of `on_idle`, meaning that it provides no guarantee about when it
-//! will succeed, if at all.
+//! will succeed, if at all. Moreover, the queue implementation is unordered. In case of congestion,
+//! not FIFO ordering is provided.
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
 //! [`Call::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them in
@@ -31,12 +32,15 @@
 //! Once queued, but not being actively processed, stakers can withdraw their request via
 //! [`Call::deregister`].
 //!
+//! Once queued, a staker wishing to unbond can perform to further action in pallet-staking. This is
+//! to prevent them from accidentally exposing themselves behind a validator etc.
+//!
 //! Once processed, if successful, no additional fees for the checking process is taken, and the
 //! staker is instantly unbonded. Optionally, if the have asked to join a pool, their *entire* stake
 //! is joined into their pool of choice.
 //!
-//! If unsuccessful, meaning that the staker was exposed sometime in the last 28 eras they will end
-//! up being slashed for the amount of wasted work they have inflicted on the chian.
+//! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
+//! they will end up being slashed for the amount of wasted work they have inflicted on the chian.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
