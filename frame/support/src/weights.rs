@@ -447,24 +447,20 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 /// The weight of database operations that the runtime can invoke.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct RuntimeDbWeight {
-	pub read: Weight,
-	pub write: Weight,
+	pub read: RefTimeWeight,
+	pub write: RefTimeWeight,
 }
 
 impl RuntimeDbWeight {
-	pub fn reads(self, r: u64) -> Weight {
-		let r = Weight::from_ref_time(r);
+	pub fn reads(self, r: u64) -> RefTimeWeight {
 		self.read.saturating_mul(r)
 	}
 
-	pub fn writes(self, w: u64) -> Weight {
-		let w = Weight::from_ref_time(w);
+	pub fn writes(self, w: u64) -> RefTimeWeight {
 		self.write.saturating_mul(w)
 	}
 
-	pub fn reads_writes(self, r: u64, w: u64) -> Weight {
-		let w = Weight::from_ref_time(w);
-		let r = Weight::from_ref_time(r);
+	pub fn reads_writes(self, r: u64, w: u64) -> RefTimeWeight {
 		let read_weight = self.read.saturating_mul(r);
 		let write_weight = self.write.saturating_mul(w);
 		read_weight.saturating_add(write_weight)

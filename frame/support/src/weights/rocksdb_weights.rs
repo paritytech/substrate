@@ -18,15 +18,15 @@
 pub mod constants {
 	use frame_support::{
 		parameter_types,
-		weights::{constants, RuntimeDbWeight, Weight},
+		weights::{constants, RuntimeDbWeight},
 	};
 
 	parameter_types! {
 		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
 		/// the runtime.
 		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: Weight::from_ref_time(constants::WEIGHT_PER_NANOS * 25_000),
-			write: Weight::from_ref_time(100_000 * constants::WEIGHT_PER_NANOS),
+			read: constants::WEIGHT_PER_NANOS * 25_000,
+			write: 100_000 * constants::WEIGHT_PER_NANOS,
 		};
 	}
 
