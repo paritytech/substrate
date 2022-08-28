@@ -299,7 +299,7 @@ where
 		// This means the format of all the event related storages must always be compatible.
 		<frame_system::Pallet<System>>::reset_events();
 
-		let mut weight = 0;
+		let mut weight = Weight::new();
 		if Self::runtime_upgraded() {
 			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}

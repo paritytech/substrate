@@ -314,7 +314,7 @@ pub mod pallet {
 
 			let next = now + One::one();
 
-			let mut total_weight: Weight = T::WeightInfo::on_initialize(0);
+			let mut total_weight: Weight = Weight::from_ref_time(T::WeightInfo::on_initialize(0));
 			for (order, (index, mut s)) in queued.into_iter().enumerate() {
 				let named = if let Some(ref id) = s.maybe_id {
 					Lookup::<T>::remove(id);

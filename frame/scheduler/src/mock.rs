@@ -151,7 +151,7 @@ impl logger::Config for Test {
 	type Event = Event;
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
+	pub MaximumSchedulerWeight: Weight = Weight::from_ref_time(Perbill::from_percent(80) * BlockWeights::get().max_block);
 	pub const NoPreimagePostponement: Option<u64> = Some(2);
 }
 ord_parameter_types! {

@@ -107,7 +107,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
+	pub MaximumSchedulerWeight: Weight = Weight::from_ref_time(Perbill::from_percent(80) * BlockWeights::get().max_block);
 }
 impl pallet_scheduler::Config for Test {
 	type Event = Event;

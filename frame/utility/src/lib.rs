@@ -208,7 +208,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight: Weight = 0;
+			let mut weight = Weight::new();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 				// If origin is root, don't apply any dispatch filters; root can call anything.
@@ -324,7 +324,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight: Weight = 0;
+			let mut weight = Weight::new();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 				// If origin is root, bypass any dispatch filter; root can call anything.
@@ -429,7 +429,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight: Weight = 0;
+			let mut weight = Weight::new();
 			// Track failed dispatch occur.
 			let mut has_error: bool = false;
 			for call in calls.into_iter() {

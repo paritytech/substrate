@@ -271,12 +271,12 @@ parameter_types! {
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
-	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
+	pub static SignedMaxWeight: Weight = Weight::from_ref_time(BlockWeights::get().max_block);
 	pub static MinerTxPriority: u64 = 100;
 	pub static BetterSignedThreshold: Perbill = Perbill::zero();
 	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
-	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
+	pub static MinerMaxWeight: Weight = Weight::from_ref_time(BlockWeights::get().max_block);
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();

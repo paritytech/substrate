@@ -381,7 +381,7 @@ fn batch_handles_weight_refund() {
 		let start_weight = 100;
 		let end_weight = 75;
 		let diff = start_weight - end_weight;
-		let batch_len: Weight = 4;
+		let batch_len = Weight::from_ref_time(4);
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);
@@ -497,7 +497,7 @@ fn batch_all_handles_weight_refund() {
 		let start_weight = 100;
 		let end_weight = 75;
 		let diff = start_weight - end_weight;
-		let batch_len: Weight = 4;
+		let batch_len = Weight::from_ref_time(4);
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);

@@ -500,7 +500,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Spend some money! returns number of approvals before spend.
 	pub fn spend_funds() -> Weight {
-		let mut total_weight: Weight = Zero::zero();
+		let mut total_weight = Weight::new();
 
 		let mut budget_remaining = Self::pot();
 		Self::deposit_event(Event::Spending { budget_remaining });
