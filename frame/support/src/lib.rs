@@ -2406,7 +2406,7 @@ pub mod pallet_prelude {
 /// 	```
 /// 5. **migrate Config**: move trait into the module with
 /// 	* all const in decl_module to `#[pallet::constant]`
-/// 	* add bound `IsType<<Self as frame_system::Config>::RuntimeEvent>` to `type Event`
+/// 	* add bound `IsType<<Self as frame_system::Config>::RuntimeEvent>` to `type RuntimeEvent`
 /// 7. **migrate decl_module**: write:
 /// 	```ignore
 /// 	#[pallet::hooks]

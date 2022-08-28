@@ -214,7 +214,7 @@ impl syn::parse::Parse for FromEventParse {
 	}
 }
 
-/// Check if trait_item is `type Event`, if so checks its bounds are those expected.
+/// Check if trait_item is `type RuntimeEvent`, if so checks its bounds are those expected.
 /// (Event type is reserved type)
 fn check_event_type(
 	frame_system: &syn::Ident,
@@ -260,7 +260,7 @@ fn check_event_type(
 
 			if from_event_bound.is_generic && (from_event_bound.has_instance != trait_has_instance)
 			{
-				let msg = "Invalid `type Event`, associated type `Event` bounds inconsistent \
+				let msg = "Invalid `type RuntimeEvent`, associated type `RuntimeEvent` bounds inconsistent \
 					`From<Event..>`. Config and generic Event must be both with instance or \
 					without instance";
 				return Err(syn::Error::new(type_.span(), msg))

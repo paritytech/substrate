@@ -61,7 +61,7 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 	let event_where_clause = &event.where_clause;
 
 	// NOTE: actually event where clause must be a subset of config where clause because of
-	// `type Event: From<Event<Self>>`. But we merge either way for potential better error
+	// `type RuntimeEvent: From<Event<Self>>`. But we merge either way for potential better error
 	// message
 	let completed_where_clause =
 		super::merge_where_clauses(&[&event.where_clause, &def.config.where_clause]);

@@ -182,7 +182,7 @@ impl Def {
 	}
 
 	/// Check that usage of trait `Event` is consistent with the definition, i.e. it is declared
-	/// and trait defines type Event, or not declared and no trait associated type.
+	/// and trait defines type RuntimeEvent, or not declared and no trait associated type.
 	fn check_event_usage(&self) -> syn::Result<()> {
 		match (self.config.has_event_type, self.event.is_some()) {
 			(true, false) => {
