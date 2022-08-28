@@ -662,7 +662,7 @@ benchmarks_instance_pallet! {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
 
-		let outsider_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(outsider.clone());
+		let outsider_lookup = T::Lookup::unlookup(outsider.clone());
 	}: _(SystemOrigin::Signed(founder1.clone()), outsider_lookup)
 	verify {
 		assert!(Alliance::<T, I>::is_member_of(&outsider, MemberRole::Ally)); // outsider is now an ally
@@ -681,7 +681,7 @@ benchmarks_instance_pallet! {
 		let ally1 = ally::<T, I>(1);
 		assert!(Alliance::<T, I>::is_ally(&ally1));
 
-		let ally1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(ally1.clone());
+		let ally1_lookup = T::Lookup::unlookup(ally1.clone());
 		let call = Call::<T, I>::elevate_ally { ally: ally1_lookup };
 		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -720,7 +720,7 @@ benchmarks_instance_pallet! {
 
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::AllyDeposit::get()));
 
-		let fellow2_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(fellow2.clone());
+		let fellow2_lookup = T::Lookup::unlookup(fellow2.clone());
 		let call = Call::<T, I>::kick_member { who: fellow2_lookup };
 		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }

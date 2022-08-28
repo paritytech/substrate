@@ -230,18 +230,12 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		})
 	}
 
-	/// Get the state cache size.
+	/// Get the trie cache maximum size.
 	///
 	/// By default this is retrieved from `ImportParams` if it is available. Otherwise its `0`.
-	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.import_params().map(|x| x.state_cache_size()).unwrap_or_default())
-	}
-
-	/// Get the state cache child ratio (if any).
-	///
-	/// By default this is `None`.
-	fn state_cache_child_ratio(&self) -> Result<Option<usize>> {
-		Ok(Default::default())
+	/// If `None` is returned the trie cache is disabled.
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
 	}
 
 	/// Get the state pruning mode.
@@ -533,8 +527,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			keystore_remote,
 			keystore,
 			database: self.database_config(&config_dir, database_cache_size, database)?,
-			state_cache_size: self.state_cache_size()?,
-			state_cache_child_ratio: self.state_cache_child_ratio()?,
+			trie_cache_maximum_size: self.trie_cache_maximum_size()?,
 			state_pruning: self.state_pruning()?,
 			blocks_pruning: self.blocks_pruning()?,
 			wasm_method: self.wasm_method()?,
