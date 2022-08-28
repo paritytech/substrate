@@ -21,13 +21,16 @@
 
 use crate::{Pallet as FastUnstake, *};
 use frame_benchmarking::{benchmarks, whitelist_account};
-use frame_support::traits::{Currency, EnsureOrigin, Get};
+use frame_support::{
+	assert_ok,
+	traits::{Currency, EnsureOrigin, Get, Hooks},
+};
 use frame_system::RawOrigin;
 use pallet_nomination_pools::{Pallet as Pools, PoolId};
 use pallet_staking::Pallet as Staking;
-use sp_runtime::traits::{Bounded, StaticLookup, Zero};
+use sp_runtime::traits::{StaticLookup, Zero};
+use sp_staking::EraIndex;
 use sp_std::prelude::*;
-use frame_support::traits::Hooks;
 
 const USER_SEED: u32 = 0;
 const DEFAULT_BACKER_PER_VALIDATOR: u32 = 128;
@@ -79,33 +82,18 @@ fn setup_pool<T: Config>() -> PoolId {
 	pallet_nomination_pools::LastPoolId::<T>::get()
 }
 
-fn setup_staking<T: Config>(v: u32) {
+fn setup_staking<T: Config>(v: u32, until: EraIndex) {
 	let ed = CurrencyOf::<T>::minimum_balance();
 
-	// make sure there are enough validator candidates
-	// NOTE: seems like these actually don't need to be real validators..
-	for seed in 0..(pallet_staking::Validators::<T>::iter().count().saturating_sub(v as usize)) {
-		let account =
-			frame_benchmarking::account::<T::AccountId>("validator", seed as u32, USER_SEED);
-		let account_lookup = l::<T>(account.clone());
+	log!(debug, "registering {} validators and {} eras.", v, until);
 
-		let stake = ed * 100u32.into();
-		CurrencyOf::<T>::make_free_balance_be(&account, stake * 10u32.into());
+	// our validators don't actually need to registered in staking -- just generate `v` random
+	// accounts.
+	let validators = (0..v)
+		.map(|x| frame_benchmarking::account::<T::AccountId>("validator", x, USER_SEED))
+		.collect::<Vec<_>>();
 
-		Staking::<T>::bond(
-			RawOrigin::Signed(account.clone()).into(),
-			account_lookup.clone(),
-			stake,
-			pallet_staking::RewardDestination::Controller,
-		)
-		.unwrap();
-		Staking::<T>::validate(RawOrigin::Signed(account.clone()).into(), Default::default())
-			.unwrap();
-	}
-
-	let validators = pallet_staking::Validators::<T>::iter_keys().collect::<Vec<_>>();
-
-	for era in 0..(2 * <T as pallet_staking::Config>::BondingDuration::get()) {
+	for era in 0..=until {
 		let others = (0..DEFAULT_BACKER_PER_VALIDATOR)
 			.map(|s| {
 				let who = frame_benchmarking::account::<T::AccountId>("nominator", era, s);
@@ -131,32 +119,58 @@ benchmarks! {
 	on_idle_unstake {
 		let who = create_unexposed_nominator::<T>();
 		let pool_id = setup_pool::<T>();
-		FastUnstake::<T>::register_fast_unstake(
+		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
 			Some(pool_id)
-		).unwrap();
+		));
 		ErasToCheckPerBlock::<T>::put(1);
 
-		// no era to check, because staking era is still 0.
-		assert_eq!(pallet_staking::CurrentEra::<T>::get().unwrap_or_default(), 0);
-
-		// run on_idle once.
+		// run on_idle once. This will check era 0.
+		assert_eq!(Head::<T>::get(), None);
 		on_idle_full_block::<T>();
+		assert_eq!(
+			Head::<T>::get(),
+			Some(UnstakeRequest { stash: who.clone(), checked: vec![0], maybe_pool_id: Some(1) })
+		);
 	}
 	: {
 		on_idle_full_block::<T>();
 	}
-	verify {}
+	verify {
+		// TODO: make sure who os not staked anymore, and has indeed joined a pool.
+	}
 
 	// on_idle, when we check some number of eras,
 	on_idle_check {
-		// staking should have enough validators and progress to a state where enough eras exist.
-		// add non-exposed nominator
-		// register
-		//
+		// number of validators
+		let v in 1 .. 1000;
+		// number of eras to check.
+		let u in 1 .. (<T as pallet_staking::Config>::BondingDuration::get() / 4);
+
+		ErasToCheckPerBlock::<T>::put(u);
+		pallet_staking::CurrentEra::<T>::put(u);
+
+		// setup staking with v validators and u eras of data (0..=u)
+		setup_staking::<T>(v, u);
+		let who = create_unexposed_nominator::<T>();
+		assert_ok!(FastUnstake::<T>::register_fast_unstake(
+			RawOrigin::Signed(who.clone()).into(),
+			None,
+		));
+
+		// no one is queued thus far.
+		assert_eq!(Head::<T>::get(), None);
 	}
-	: {}
-	verify {}
+	: {
+		on_idle_full_block::<T>();
+	}
+	verify {
+		let checked = (1..=u).rev().collect::<Vec<EraIndex>>();
+		assert_eq!(
+			Head::<T>::get(),
+			Some(UnstakeRequest { stash: who.clone(), checked, maybe_pool_id: None })
+		);
+	}
 
 	// same as above, but we do the entire check and realize that we had to slash our nominator now.
 	on_idle_check_slash {}
@@ -172,10 +186,10 @@ benchmarks! {
 
 	deregister {
 		let who = create_unexposed_nominator::<T>();
-		FastUnstake::<T>::register_fast_unstake(
+		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
 			None
-		).unwrap();
+		));
 		whitelist_account!(who);
 	}
 	:_(RawOrigin::Signed(who.clone()))
