@@ -2165,7 +2165,7 @@ impl<T: Config> Pallet<T> {
 				let current_reward_counter = reward_pool
 					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
 					.ok()?;
-				return Some(pool_member.pending_rewards(current_reward_counter).unwrap_or_default())
+				return pool_member.pending_rewards(current_reward_counter).ok()
 			}
 		}
 
