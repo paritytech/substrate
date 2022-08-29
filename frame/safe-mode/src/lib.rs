@@ -19,10 +19,13 @@
 
 use frame_support::{
 	pallet_prelude::*,
-	traits::{CallMetadata, Contains, Defensive, GetCallMetadata, PalletInfoAccess},
+	traits::{
+		CallMetadata, Contains, Currency, Defensive, GetCallMetadata, PalletInfoAccess,
+		ReservableCurrency,
+	},
 };
 use frame_system::pallet_prelude::*;
-use sp_runtime::traits::{ Saturating};
+use sp_runtime::traits::Saturating;
 use sp_std::{convert::TryInto, prelude::*};
 
 mod benchmarking;
@@ -30,6 +33,9 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
+
+type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -49,19 +55,26 @@ pub mod pallet {
 		/// The `SafeMode` pallet is always included and does not need to be added here.
 		type SafeModeFilter: Contains<Self::Call>;
 
+		/// Currency type for this pallet.
+		type Currency: ReservableCurrency<Self::AccountId>;
+
 		/// How long the safe-mode will stay active when enabled with [`Pallet::enable`].
 		#[pallet::constant]
 		type EnableDuration: Get<Self::BlockNumber>;
-
 		/// How much the safe-mode can be extended by each [`Pallet::extend`] call.
 		///
 		/// This does not impose a hard limit as the safe-mode can be extended multiple times.
 		#[pallet::constant]
 		type ExtendDuration: Get<Self::BlockNumber>;
 
+		#[pallet::constant]
+		type EnableStakeAmount: Get<Option<BalanceOf<Self>>>;
+		#[pallet::constant]
+		type ExtendStakeAmount: Get<Option<BalanceOf<Self>>>;
+
 		type EnableOrigin: EnsureOrigin<Self::Origin>;
 		type ExtendOrigin: EnsureOrigin<Self::Origin>;
-		type PreemptiveDisableOrigin: EnsureOrigin<Self::Origin>;
+		type DisableOrigin: EnsureOrigin<Self::Origin>;
 
 		// Weight information for extrinsics in this pallet.
 		//type WeightInfo: WeightInfo;
@@ -74,6 +87,8 @@ pub mod pallet {
 
 		/// The safe-mode is (already) disabled.
 		IsDisabled,
+
+		CannotStake,
 	}
 
 	#[pallet::event]
@@ -95,9 +110,8 @@ pub mod pallet {
 		/// The safe-mode was automatically disabled after `EnableDuration` had passed.
 		Timeout,
 
-		/// The safe-mode was preemptively disabled by the
-		/// [`Config::PreemptiveDisableOrigin`] origin.
-		Preemptive,
+		/// The safe-mode was forcefully disabled by the [`Config::DisableOrigin`] origin.
+		Force,
 	}
 
 	/// Contains the last block number that the safe-mode will stay enabled.
@@ -107,53 +121,69 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Enabled<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
 
+	#[pallet::storage]
+	pub type Stakes<T: Config> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T>, ValueQuery>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Enable the safe-mode.
+		/// Enable the safe-mode permissionlessly for [`Config::ExtendDuration`] blocks.
 		///
-		/// Enables the safe-mode for [`Config::EnableDuration`] blocks.
+		/// Reserves `EnableStakeAmount` from the caller's account.
+		/// Errors if the safe-mode is already enabled.
+		/// Can be permanently disabled by configuring `EnableStakeAmount` to `None`.
+		#[pallet::weight(0)]
+		pub fn enable(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			Self::do_enable(Some(who))
+		}
+
+		/// Enable the safe-mode by force for [`Config::EnableDuration`] blocks.
+		///
 		/// Can only be called by the [`Config::EnableOrigin`] origin.
 		/// Errors if the safe-mode is already enabled.
 		/// Emits an [`Event::Enabled`] event on success.
 		#[pallet::weight(0)]
-		pub fn enable(origin: OriginFor<T>) -> DispatchResult {
+		pub fn force_enable(origin: OriginFor<T>) -> DispatchResult {
 			T::EnableOrigin::ensure_origin(origin)?;
 
-			ensure!(!Enabled::<T>::exists(), Error::<T>::IsEnabled);
-			let limit =
-				<frame_system::Pallet<T>>::block_number().saturating_add(T::EnableDuration::get());
-			Enabled::<T>::put(limit);
-			Self::deposit_event(Event::Enabled(limit));
-
-			Ok(())
+			Self::do_enable(None)
 		}
 
-		/// Extend the safe-mode.
+		/// Extend the safe-mode permissionlessly for [`Config::ExtendDuration`] blocks.
 		///
-		/// The safe-mode must already be enabled for this to succeed.
-		/// Can only be called by the [`Config::ExtendOrigin`] origin.
+		/// Reserves `ExtendStakeAmount` from the caller's account.
+		/// Errors if the safe-mode is disabled.
+		/// Can be permanently disabled by configuring `ExtendStakeAmount` to `None`.
 		#[pallet::weight(0)]
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
-			T::ExtendOrigin::ensure_origin(origin)?;
+			let who = ensure_signed(origin)?;
 
-			let limit = Enabled::<T>::take()
-				.ok_or(Error::<T>::IsDisabled)?
-				.saturating_add(T::ExtendDuration::get());
-			Enabled::<T>::put(limit);
-			Self::deposit_event(Event::<T>::Extended(limit));
-
-			Ok(())
+			Self::do_extend(Some(who))
 		}
 
-		/// Disable the safe-mode.
+		/// Extend the safe-mode by force for [`Config::ExtendDuration`] blocks.
 		///
-		/// Can be called either by the [`Config::PreemptiveDisableOrigin`] origin at any time.
-		/// Will be automatically called after the safe-mode period ran out.
+		/// Errors if the safe-mode is disabled.
+		/// Can only be called by the [`Config::ExtendOrigin`] origin.
 		#[pallet::weight(0)]
-		pub fn disable(origin: OriginFor<T>) -> DispatchResult {
-			T::PreemptiveDisableOrigin::ensure_origin(origin.clone())?;
+		pub fn force_extend(origin: OriginFor<T>) -> DispatchResult {
+			T::ExtendOrigin::ensure_origin(origin)?;
 
-			Self::do_disable(DisableReason::Preemptive)
+			Self::do_extend(None)
+		}
+
+		/// Disable the safe-mode by force.
+		///
+		/// Will be automatically called after the safe-mode period ran out.
+		/// Errors if the safe-mode is disabled.
+		/// Can only be called by the [`Config::DisableOrigin`] origin.
+		#[pallet::weight(0)]
+		pub fn force_disable(origin: OriginFor<T>) -> DispatchResult {
+			T::DisableOrigin::ensure_origin(origin.clone())?;
+
+			Self::do_disable(DisableReason::Force)
 		}
 	}
 
@@ -165,7 +195,8 @@ pub mod pallet {
 		fn on_initialize(current: T::BlockNumber) -> Weight {
 			match Enabled::<T>::get() {
 				Some(limit) if current > limit => {
-					let _ = Self::do_disable(DisableReason::Timeout).defensive_proof("Must be disabled; qed");
+					let _ = Self::do_disable(DisableReason::Timeout)
+						.defensive_proof("Must be disabled; qed");
 					T::DbWeight::get().reads_writes(1, 1)
 				},
 				_ => T::DbWeight::get().reads(1), // TODO benchmark
@@ -175,7 +206,41 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Logic of the [`crate::Pallet::disable`] extrinsic.
+	pub fn do_enable(who: Option<T::AccountId>) -> DispatchResult {
+		if let Some(who) = who {
+			let stake = T::EnableStakeAmount::get().ok_or(Error::<T>::CannotStake)?;
+			Self::reserve(who, stake)?;
+		}
+
+		ensure!(!Enabled::<T>::exists(), Error::<T>::IsEnabled);
+		let limit =
+			<frame_system::Pallet<T>>::block_number().saturating_add(T::EnableDuration::get());
+		Enabled::<T>::put(limit);
+		Self::deposit_event(Event::Enabled(limit));
+		Ok(())
+	}
+
+	pub fn do_extend(who: Option<T::AccountId>) -> DispatchResult {
+		if let Some(who) = who {
+			let stake = T::ExtendStakeAmount::get().ok_or(Error::<T>::CannotStake)?;
+			Self::reserve(who, stake)?;
+		}
+
+		let limit = Enabled::<T>::take()
+			.ok_or(Error::<T>::IsDisabled)?
+			.saturating_add(T::ExtendDuration::get());
+		Enabled::<T>::put(limit);
+		Self::deposit_event(Event::<T>::Extended(limit));
+		Ok(())
+	}
+
+	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
+		T::Currency::reserve(&who, stake)?;
+		Stakes::<T>::mutate(&who, |s| s.saturating_accrue(stake));
+		Ok(())
+	}
+
+	/// Logic of the [`crate::Pallet::force_disable`] extrinsic.
 	///
 	/// Does not check the origin. Errors if the safe-mode is already disabled.
 	pub fn do_disable(reason: DisableReason) -> DispatchResult {
