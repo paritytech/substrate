@@ -119,9 +119,7 @@ impl sp_std::str::FromStr for Select {
 
 /// Execute some checks to ensure the internal state of a pallet is consistent.
 ///
-/// Similar
-///
-/// Usually, these checks should check all of the invariants that are expected to be help on all of
+/// Usually, these checks should check all of the invariants that are expected to be held on all of
 /// the storage items of your pallet.
 pub trait TryState<BlockNumber> {
 	/// Execute the state checks.
