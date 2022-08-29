@@ -43,7 +43,10 @@ use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
-	protocol::event::{DhtEvent, ObservedRole},
+	protocol::{
+		event::{DhtEvent, ObservedRole},
+		ProtocolName,
+	},
 	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
 };
 use sc_peerset::PeersetHandle;
@@ -54,7 +57,6 @@ use sp_runtime::{
 	Justifications,
 };
 use std::{
-	borrow::Cow,
 	collections::{HashSet, VecDeque},
 	iter,
 	task::{Context, Poll},
@@ -124,7 +126,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Peer which sent us a request.
 		peer: PeerId,
 		/// Protocol name of the request.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// If `Ok`, contains the time elapsed between when we received the request and when we
 		/// sent back the response. If `Err`, the error that happened.
 		result: Result<Duration, ResponseFailure>,
@@ -137,7 +139,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Peer that we send a request to.
 		peer: PeerId,
 		/// Name of the protocol in question.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// Duration the request took.
 		duration: Duration,
 		/// Result of the request.
@@ -151,12 +153,12 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Node we opened the substream with.
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// If the negotiation didn't use the main name of the protocol (the one in
 		/// `notifications_protocol`), then this field contains which name has actually been
 		/// used.
 		/// See also [`crate::Event::NotificationStreamOpened`].
-		negotiated_fallback: Option<Cow<'static, str>>,
+		negotiated_fallback: Option<ProtocolName>,
 		/// Object that permits sending notifications to the peer.
 		notifications_sink: NotificationsSink,
 		/// Role of the remote.
@@ -172,7 +174,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Id of the peer we are connected to.
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// Replacement for the previous [`NotificationsSink`].
 		notifications_sink: NotificationsSink,
 	},
@@ -183,7 +185,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Node we closed the substream with.
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	},
 
 	/// Received one or more messages from the given node using the given protocol.
@@ -191,7 +193,7 @@ pub enum BehaviourOut<B: BlockT> {
 		/// Node we received the message from.
 		remote: PeerId,
 		/// Concerned protocol and associated message.
-		messages: Vec<(Cow<'static, str>, Bytes)>,
+		messages: Vec<(ProtocolName, Bytes)>,
 	},
 
 	/// Now connected to a new peer for syncing purposes.
