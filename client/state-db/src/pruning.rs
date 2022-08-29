@@ -77,7 +77,7 @@ enum DeathRowQueue<BlockHash: Hash, Key: Hash, D: MetaDb> {
 		cache: VecDeque<DeathRow<BlockHash, Key>>,
 		/// A soft limit of the cache's size
 		cache_capacity: usize,
-		/// The number of blocks that not loaded into `cache`
+		/// The number of blocks in queue that are not loaded into `cache`.
 		uncached_blocks: usize,
 	},
 }
