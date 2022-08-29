@@ -452,18 +452,18 @@ pub struct RuntimeDbWeight {
 }
 
 impl RuntimeDbWeight {
-	pub fn reads(self, r: u64) -> RefTimeWeight {
-		self.read.saturating_mul(r)
+	pub fn reads(self, r: u64) -> Weight {
+		Weight::from_ref_time(self.read.saturating_mul(r))
 	}
 
-	pub fn writes(self, w: u64) -> RefTimeWeight {
-		self.write.saturating_mul(w)
+	pub fn writes(self, w: u64) -> Weight {
+		Weight::from_ref_time(self.write.saturating_mul(w))
 	}
 
-	pub fn reads_writes(self, r: u64, w: u64) -> RefTimeWeight {
+	pub fn reads_writes(self, r: u64, w: u64) -> Weight {
 		let read_weight = self.read.saturating_mul(r);
 		let write_weight = self.write.saturating_mul(w);
-		read_weight.saturating_add(write_weight)
+		Weight::from_ref_time(read_weight.saturating_add(write_weight))
 	}
 }
 

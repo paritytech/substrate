@@ -39,7 +39,7 @@ impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelpe
 		let version = <T as GetStorageVersion>::current_storage_version();
 		version.put::<T>();
 
-		Weight::from_ref_time(db_weight.writes(2))
+		db_weight.writes(2)
 	}
 }
 
