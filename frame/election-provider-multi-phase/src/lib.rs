@@ -730,12 +730,12 @@ pub mod pallet {
 					match Self::create_snapshot() {
 						Ok(_) => {
 							Self::on_initialize_open_signed();
-							Weight::from_ref_time(T::WeightInfo::on_initialize_open_signed())
+							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
 							// Not much we can do about this at this point.
 							log!(warn, "failed to open signed phase due to {:?}", why);
-							Weight::from_ref_time(T::WeightInfo::on_initialize_nothing())
+							T::WeightInfo::on_initialize_nothing()
 						},
 					}
 				},
@@ -769,19 +769,19 @@ pub mod pallet {
 						match Self::create_snapshot() {
 							Ok(_) => {
 								Self::on_initialize_open_unsigned(enabled, now);
-								Weight::from_ref_time(T::WeightInfo::on_initialize_open_unsigned())
+								T::WeightInfo::on_initialize_open_unsigned()
 							},
 							Err(why) => {
 								log!(warn, "failed to open unsigned phase due to {:?}", why);
-								Weight::from_ref_time(T::WeightInfo::on_initialize_nothing())
+								T::WeightInfo::on_initialize_nothing()
 							},
 						}
 					} else {
 						Self::on_initialize_open_unsigned(enabled, now);
-						Weight::from_ref_time(T::WeightInfo::on_initialize_open_unsigned())
+						T::WeightInfo::on_initialize_open_unsigned()
 					}
 				},
-				_ => Weight::from_ref_time(T::WeightInfo::on_initialize_nothing()),
+				_ => T::WeightInfo::on_initialize_nothing(),
 			}
 		}
 
@@ -1400,10 +1400,8 @@ impl<T: Config> Pallet<T> {
 		let (targets, voters, desired_targets) = Self::create_snapshot_external()?;
 
 		// ..therefore we only measure the weight of this and add it.
-		let internal_weight = Weight::from_ref_time(T::WeightInfo::create_snapshot_internal(
-			voters.len() as u32,
-			targets.len() as u32,
-		));
+		let internal_weight =
+			T::WeightInfo::create_snapshot_internal(voters.len() as u32, targets.len() as u32);
 		Self::create_snapshot_internal(targets, voters, desired_targets);
 		Self::register_weight(internal_weight);
 		Ok(())
@@ -1563,10 +1561,7 @@ impl<T: Config> Pallet<T> {
 			.map(|(_, x)| x)
 			.fold(Zero::zero(), |acc, next| acc + next.voters.len() as u32);
 		let desired_targets = supports.len() as u32;
-		Self::register_weight(Weight::from_ref_time(T::WeightInfo::elect_queued(
-			active_voters,
-			desired_targets,
-		)));
+		Self::register_weight(T::WeightInfo::elect_queued(active_voters, desired_targets));
 	}
 }
 
@@ -2199,12 +2194,12 @@ mod tests {
 		let all_targets: u32 = 5_000;
 		let desired: u32 = 1_000;
 		let weight_with = |active| {
-			Weight::from_ref_time(<Runtime as Config>::WeightInfo::submit_unsigned(
+			<Runtime as Config>::WeightInfo::submit_unsigned(
 				all_voters,
 				all_targets,
 				active,
 				desired,
-			))
+			)
 		};
 
 		let mut active = 1;

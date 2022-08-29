@@ -150,7 +150,7 @@ pub use preimage_provider::PreimageProviderAndMaybeRecipient;
 
 pub(crate) trait MarginalWeightInfo: WeightInfo {
 	fn item(periodic: bool, named: bool, resolved: Option<bool>) -> Weight {
-		let ref_time_weight = match (periodic, named, resolved) {
+		match (periodic, named, resolved) {
 			(_, false, None) => Self::on_initialize_aborted(2) - Self::on_initialize_aborted(1),
 			(_, true, None) =>
 				Self::on_initialize_named_aborted(2) - Self::on_initialize_named_aborted(1),
@@ -170,9 +170,7 @@ pub(crate) trait MarginalWeightInfo: WeightInfo {
 			(true, true, Some(true)) =>
 				Self::on_initialize_periodic_named_resolved(2) -
 					Self::on_initialize_periodic_named_resolved(1),
-		};
-
-		Weight::from_ref_time(ref_time_weight)
+		}
 	}
 }
 impl<T: WeightInfo> MarginalWeightInfo for T {}
@@ -316,7 +314,7 @@ pub mod pallet {
 
 			let next = now + One::one();
 
-			let mut total_weight: Weight = Weight::from_ref_time(T::WeightInfo::on_initialize(0));
+			let mut total_weight: Weight = T::WeightInfo::on_initialize(0);
 			for (order, (index, mut s)) in queued.into_iter().enumerate() {
 				let named = if let Some(ref id) = s.maybe_id {
 					Lookup::<T>::remove(id);
@@ -360,9 +358,7 @@ pub mod pallet {
 						.into();
 				if ensure_signed(origin).is_ok() {
 					// Weights of Signed dispatches expect their signing account to be whitelisted.
-					item_weight.saturating_accrue(
-						T::DbWeight::get().reads_writes(1, 1),
-					);
+					item_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 				}
 
 				// We allow a scheduled call if any is true:
@@ -578,7 +574,7 @@ impl<T: Config> Pallet<T> {
 
 		StorageVersion::new(3).put::<Self>();
 
-		Weight::from_ref_time(weight + T::DbWeight::get().writes(2))
+		weight + T::DbWeight::get().writes(2)
 	}
 
 	/// Migrate storage format from V2 to V3.
@@ -615,7 +611,7 @@ impl<T: Config> Pallet<T> {
 
 		StorageVersion::new(3).put::<Self>();
 
-		Weight::from_ref_time(weight + T::DbWeight::get().writes(2))
+		weight + T::DbWeight::get().writes(2)
 	}
 
 	#[cfg(feature = "try-runtime")]

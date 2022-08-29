@@ -593,10 +593,10 @@ pub mod pallet {
 			let y = T::MaxFellows::get();
 			let p1 = *proposal_weight_bound;
 			let p2 = T::MaxProposals::get();
-			Weight::from_ref_time(T::WeightInfo::close_early_approved(b, x, y, p2)
+			T::WeightInfo::close_early_approved(b, x, y, p2)
 				.max(T::WeightInfo::close_early_disapproved(x, y, p2))
 				.max(T::WeightInfo::close_approved(b, x, y, p2))
-				.max(T::WeightInfo::close_disapproved(x, y, p2)))
+				.max(T::WeightInfo::close_disapproved(x, y, p2))
 				.saturating_add(p1)
 		})]
 		pub fn close(

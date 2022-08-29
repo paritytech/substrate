@@ -435,7 +435,7 @@ macro_rules! call_zero {
 
 macro_rules! cost_args {
 	($name:ident, $( $arg: expr ),+) => {
-		(T::WeightInfo::$name($( $arg ),+).saturating_sub(call_zero!($name, $( $arg ),+)))
+		(T::WeightInfo::$name($( $arg ),+).saturating_sub(call_zero!($name, $( $arg ),+))).ref_time()
 	}
 }
 

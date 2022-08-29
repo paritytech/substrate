@@ -264,7 +264,7 @@ impl RegisteredChainExtension<Test> for TempStorageExtension {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(2 * WEIGHT_PER_SECOND));
+		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 	pub static ExistentialDeposit: u64 = 1;
 }
 impl frame_system::Config for Test {
@@ -478,7 +478,7 @@ fn calling_plain_account_fails() {
 			Err(DispatchErrorWithPostInfo {
 				error: Error::<Test>::ContractNotFound.into(),
 				post_info: PostDispatchInfo {
-					actual_weight: Some(Weight::from_ref_time(base_cost)),
+					actual_weight: Some(base_cost),
 					pays_fee: Default::default(),
 				},
 			})
@@ -2021,9 +2021,7 @@ fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
 		// Check that on_initialize() tries to perform lazy removal but removes nothing
 		//  as no more weight is left for that.
 		let weight_used = Contracts::on_initialize(System::block_number());
-		let base = Weight::from_ref_time(
-			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch(),
-		);
+		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 		assert_eq!(weight_used, base);
 
 		// Check that the deletion queue is still full after execution of the
@@ -2075,9 +2073,8 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Assign a remaining weight which is too low for a successfull deletion of the contract
-		let low_remaining_weight = Weight::from_ref_time(
-			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch(),
-		);
+		let low_remaining_weight =
+			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
 
 		// Run the lazy removal
 		Contracts::on_idle(System::block_number(), low_remaining_weight);
@@ -2329,7 +2326,7 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
-			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len),
+			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
 		);
 	});
 }

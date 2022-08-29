@@ -377,8 +377,7 @@ pub mod pallet {
 				Err(_) => {
 					// roughly same as a 4 byte remark since perbill is u32.
 					Err(DispatchErrorWithPostInfo {
-						post_info: Some(T::SystemWeightInfo::remark(4u32))
-							.into(),
+						post_info: Some(T::SystemWeightInfo::remark(4u32)).into(),
 						error: DispatchError::BadOrigin,
 					})
 				},

@@ -386,9 +386,8 @@ pub mod pallet {
 		T::AccountId: AsRef<[u8]>,
 	{
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
-			Storage::<T>::process_deletion_queue_batch(remaining_weight).saturating_add(
-				Weight::from_ref_time(T::WeightInfo::on_process_deletion_queue_batch()),
-			)
+			Storage::<T>::process_deletion_queue_batch(remaining_weight)
+				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 		}
 
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
@@ -403,11 +402,10 @@ pub mod pallet {
 					.max_block
 					.saturating_sub(System::<T>::block_weight().total())
 					.min(T::DeletionWeightLimit::get());
-				Storage::<T>::process_deletion_queue_batch(weight_limit).saturating_add(
-					Weight::from_ref_time(T::WeightInfo::on_process_deletion_queue_batch()),
-				)
+				Storage::<T>::process_deletion_queue_batch(weight_limit)
+					.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
 			} else {
-				Weight::from_ref_time(T::WeightInfo::on_process_deletion_queue_batch())
+				T::WeightInfo::on_process_deletion_queue_batch()
 			}
 		}
 	}
@@ -435,7 +433,7 @@ pub mod pallet {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[pallet::weight(Weight::from_ref_time(T::WeightInfo::call()).saturating_add(*gas_limit))]
+		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
 		pub fn call(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
@@ -460,9 +458,7 @@ pub mod pallet {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
-			output
-				.gas_meter
-				.into_dispatch_result(output.result, Weight::from_ref_time(T::WeightInfo::call()))
+			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -492,7 +488,7 @@ pub mod pallet {
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
-			Weight::from_ref_time(T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32))
+			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
@@ -524,7 +520,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				Weight::from_ref_time(T::WeightInfo::instantiate_with_code(code_len, salt_len)),
+				T::WeightInfo::instantiate_with_code(code_len, salt_len),
 			)
 		}
 
@@ -534,7 +530,7 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			Weight::from_ref_time(T::WeightInfo::instantiate(salt.len() as u32)).saturating_add(*gas_limit)
+			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
@@ -564,7 +560,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				Weight::from_ref_time(T::WeightInfo::instantiate(salt_len)),
+				T::WeightInfo::instantiate(salt_len),
 			)
 		}
 

@@ -849,7 +849,9 @@ pub mod pallet {
 		fn dynamic_weight(items: u32, size: u32) -> frame_support::pallet_prelude::Weight {
 			let items = items as u64;
 			let ref_time_weight = items
-				.saturating_mul(<T as frame_system::Config>::DbWeight::get().reads_writes_ref_time(1, 1))
+				.saturating_mul(
+					<T as frame_system::Config>::DbWeight::get().reads_writes_ref_time(1, 1),
+				)
 				// we assume that the read/write per-byte weight is the same for child and top tree.
 				.saturating_add(T::WeightInfo::process_top_key(size));
 

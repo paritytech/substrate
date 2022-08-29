@@ -1778,13 +1778,11 @@ impl<T: Config> Pallet<T> {
 			if Self::launch_next(now).is_ok() {
 				weight = max_block_weight;
 			} else {
-				weight = weight.saturating_add(Weight::from_ref_time(
-					T::WeightInfo::on_initialize_base_with_launch_period(r),
-				));
+				weight =
+					weight.saturating_add(T::WeightInfo::on_initialize_base_with_launch_period(r));
 			}
 		} else {
-			weight =
-				weight.saturating_add(Weight::from_ref_time(T::WeightInfo::on_initialize_base(r)));
+			weight = weight.saturating_add(T::WeightInfo::on_initialize_base(r));
 		}
 
 		// tally up votes for any expiring referenda.

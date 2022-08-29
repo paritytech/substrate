@@ -443,7 +443,7 @@ impl<T: Config> Pallet<T> {
 			discarded
 		);
 
-		(Weight::from_ref_time(weight), found_solution)
+		(weight, found_solution)
 	}
 	/// Helper function for the case where a solution is accepted in the signed phase.
 	///
