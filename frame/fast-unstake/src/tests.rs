@@ -199,6 +199,59 @@ fn control_must_be_control_origin() {
 }
 
 #[test]
+fn process_head_tests() {
+	ExtBuilder::default().build_and_execute(|| {
+		// put 1 era per block
+		ErasToCheckPerBlock::<Runtime>::put(1);
+
+		// TODO: go to block number after BondingDuration eras have passed.
+		// is there an accurate calculation for this?
+		run_to_block(50_000);
+
+		// register for fast unstake
+		FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32));
+		assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+
+		// process on idle
+		let remaining_weight = BlockWeights::get().max_block;
+		FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+		// assert queue item has been moved to head
+		assert_eq!(Queue::<Runtime>::get(STASH), None);
+
+		// assert head item present
+		assert_eq!(
+			Head::<Runtime>::get(),
+			Some(UnstakeRequest { stash: 1, checked: vec![0], maybe_pool_id: Some(1) })
+		);
+
+		// run on_idle until BondingDuration - 1
+		let bond_duration: u64 = BondingDuration::get().into();
+		let next_block: u64 = System::block_number() + 1;
+		let last_block: u64 = next_block + bond_duration - 2;
+
+		// checking blocks to loop...
+		assert_eq!(next_block, 50001);
+		assert_eq!(last_block, 50002);
+
+		for i in next_block..last_block {
+			run_to_block(i);
+			FastUnstake::on_idle(i.into(), remaining_weight);
+		}
+
+		// check head item still exists on last era, all eras checked - last
+		assert_eq!(
+			Head::<Runtime>::get(),
+			Some(UnstakeRequest { stash: 1, checked: vec![0], maybe_pool_id: Some(1) })
+		);
+
+		// run on_idle again to process last era for head item, should be fully processed
+		run_to_block(System::block_number() + 1);
+		assert_eq!(Head::<Runtime>::get(), None);
+	});
+}
+
+#[test]
 fn unstake_paused_mid_election() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Initiate staking position

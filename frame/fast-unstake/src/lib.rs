@@ -313,7 +313,7 @@ pub mod pallet {
 		/// in all use cases, even a single nominator cannot be unbonded in a single call. Multiple
 		/// calls to this function are thus not needed. 2. We will only mark a staker
 		#[cfg_attr(feature = "runtime-benchmarks", allow(unused_variables))]
-		fn process_head(remaining_weight: Weight) -> Weight {
+		pub(crate) fn process_head(remaining_weight: Weight) -> Weight {
 			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
 				return T::DbWeight::get().reads(1)

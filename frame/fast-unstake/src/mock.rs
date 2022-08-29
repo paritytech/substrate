@@ -351,9 +351,6 @@ impl ExtBuilder {
 		self
 	}
 
-	/// Utility function to mint a stash and controller account with 200 tokens
-	/// and start staking: stash bonds 100 tokens and nominates account 3.
-	/// returns the accounts [stash, ctrl]
 	pub(crate) fn mint_and_initiate_staking() {
 		// Mint accounts 1 and 2 with 200 tokens.
 		for i in [STASH, CONTROLLER] {
@@ -367,7 +364,6 @@ impl ExtBuilder {
 			RewardDestination::Controller
 		));
 
-		// Stash nominates a validator
 		// NOTE: not sure where this validator is coming from (not an actual validator).
 		assert_ok!(Staking::nominate(Origin::signed(CONTROLLER), vec![3_u128]));
 	}
