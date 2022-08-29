@@ -406,7 +406,7 @@ fn give_retirement_notice_work() {
 		assert_ok!(Alliance::give_retirement_notice(Origin::signed(3)));
 		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
 		assert_eq!(Alliance::members(MemberRole::Retiring), vec![3]);
-		System::assert_last_event(mock::Event::Alliance(
+		System::assert_last_event(mock::RuntimeEvent::Alliance(
 			crate::Event::MemberRetirementPeriodStarted { member: (3) },
 		));
 
@@ -439,7 +439,7 @@ fn retire_works() {
 		System::set_block_number(System::block_number() + RetirementPeriod::get());
 		assert_ok!(Alliance::retire(Origin::signed(3)));
 		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
-		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberRetired {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MemberRetired {
 			member: (3),
 			unreserved: None,
 		}));
@@ -488,7 +488,7 @@ fn kick_member_works() {
 		assert_ok!(Alliance::kick_member(Origin::signed(2), 2));
 		assert_eq!(Alliance::members(MemberRole::Founder), vec![1]);
 		assert_eq!(<DepositOf<Test, ()>>::get(2), None);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberKicked {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MemberKicked {
 			member: (2),
 			slashed: Some(25),
 		}));
