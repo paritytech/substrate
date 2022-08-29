@@ -27,7 +27,6 @@ use futures::prelude::*;
 use parity_scale_codec::Encode;
 use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
 use sc_network_common::{
-	config::MultiaddrWithPeerId,
 	protocol::event::{Event as NetworkEvent, ObservedRole},
 	service::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
@@ -88,7 +87,7 @@ impl NetworkPeers for TestNetwork {
 		unimplemented!();
 	}
 
-	fn add_reserved_peer(&self, _peer: MultiaddrWithPeerId) -> Result<(), String> {
+	fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
 		unimplemented!();
 	}
 

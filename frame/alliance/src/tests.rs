@@ -38,9 +38,7 @@ fn force_set_members_works() {
 		let (k_proposal, k_proposal_len, k_hash) = make_kick_member_proposal(2);
 		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(k_proposal), k_proposal_len));
 
-		assert_ok!(Alliance::give_retirement_notice(Origin::signed(2)));
-
-		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
+		assert!(Alliance::up_for_kicking(&2));
 		// ensure proposal is listed as active proposal
 		assert_eq!(<Test as Config>::ProposalProvider::proposals(), vec![hash, k_hash]);
 		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 2);
@@ -100,6 +98,7 @@ fn force_set_members_works() {
 		assert_eq!(Alliance::votable_members_sorted(), vec![4, 5, 8]);
 		// assert new members
 		assert!(Alliance::is_ally(&2));
+		assert!(!Alliance::up_for_kicking(&2));
 		assert!(!Alliance::is_member(&1));
 		assert!(!Alliance::is_member(&3));
 		// all proposals are removed
@@ -318,9 +317,6 @@ fn set_rule_works() {
 fn announce_works() {
 	new_test_ext().execute_with(|| {
 		let cid = test_cid();
-
-		assert_noop!(Alliance::announce(Origin::signed(2), cid.clone()), BadOrigin);
-
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
@@ -470,120 +466,46 @@ fn elevate_ally_works() {
 }
 
 #[test]
-fn give_retirement_notice_work() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Alliance::give_retirement_notice(Origin::signed(4)),
-			Error::<Test, ()>::NotMember
-		);
-
-		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
-		assert_ok!(Alliance::give_retirement_notice(Origin::signed(3)));
-		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
-		assert_eq!(Alliance::members(MemberRole::Retiring), vec![3]);
-		System::assert_last_event(mock::Event::Alliance(
-			crate::Event::MemberRetirementPeriodStarted { member: (3) },
-		));
-
-		assert_noop!(
-			Alliance::give_retirement_notice(Origin::signed(3)),
-			Error::<Test, ()>::AlreadyRetiring
-		);
-	});
-}
-
-#[test]
 fn retire_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Alliance::retire(Origin::signed(2)),
-			Error::<Test, ()>::RetirementNoticeNotGiven
-		);
+		let (proposal, proposal_len, _) = make_kick_member_proposal(2);
+		assert_ok!(Alliance::propose(
+			Origin::signed(1),
+			3,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+		assert_noop!(Alliance::retire(Origin::signed(2)), Error::<Test, ()>::UpForKicking);
 
-		assert_noop!(
-			Alliance::retire(Origin::signed(4)),
-			Error::<Test, ()>::RetirementNoticeNotGiven
-		);
+		assert_noop!(Alliance::retire(Origin::signed(4)), Error::<Test, ()>::NotMember);
 
 		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
-		assert_ok!(Alliance::give_retirement_notice(Origin::signed(3)));
-		assert_noop!(
-			Alliance::retire(Origin::signed(3)),
-			Error::<Test, ()>::RetirementPeriodNotPassed
-		);
-		System::set_block_number(System::block_number() + RetirementPeriod::get());
 		assert_ok!(Alliance::retire(Origin::signed(3)));
 		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
-		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberRetired {
-			member: (3),
-			unreserved: None,
-		}));
-
-		// Move time on:
-		System::set_block_number(System::block_number() + RetirementPeriod::get());
-
-		assert_powerless(Origin::signed(3));
 	});
-}
-
-fn assert_powerless(user: Origin) {
-	//vote / veto with a valid propsal
-	let cid = test_cid();
-	let (proposal, _, _) = make_kick_member_proposal(42);
-
-	assert_noop!(
-		Alliance::force_set_members(
-			user.clone(),
-			vec![],
-			vec![],
-			vec![],
-			ForceSetWitness { voting_members: 3, ..Default::default() }
-		),
-		BadOrigin
-	);
-
-	assert_noop!(Alliance::set_rule(user.clone(), cid.clone()), BadOrigin);
-
-	assert_noop!(Alliance::retire(user.clone()), Error::<Test, ()>::RetirementNoticeNotGiven);
-
-	assert_noop!(Alliance::give_retirement_notice(user.clone()), Error::<Test, ()>::NotMember);
-
-	assert_noop!(Alliance::elevate_ally(user.clone(), 4), BadOrigin);
-
-	assert_noop!(Alliance::kick_member(user.clone(), 1), BadOrigin);
-
-	assert_noop!(Alliance::nominate_ally(user.clone(), 4), Error::<Test, ()>::NoVotingRights);
-
-	assert_noop!(
-		Alliance::propose(user.clone(), 5, Box::new(proposal), 1000),
-		Error::<Test, ()>::NoVotingRights
-	);
 }
 
 #[test]
 fn kick_member_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Alliance::kick_member(Origin::signed(4), 4), BadOrigin);
-
-		assert_noop!(Alliance::kick_member(Origin::signed(2), 4), Error::<Test, ()>::NotMember);
-
-		<DepositOf<Test, ()>>::insert(2, 25);
+		let (proposal, proposal_len, _) = make_kick_member_proposal(2);
+		assert_ok!(Alliance::propose(
+			Origin::signed(1),
+			3,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+		assert_eq!(Alliance::up_for_kicking(2), true);
 		assert_eq!(Alliance::members(MemberRole::Founder), vec![1, 2]);
+
 		assert_ok!(Alliance::kick_member(Origin::signed(2), 2));
 		assert_eq!(Alliance::members(MemberRole::Founder), vec![1]);
-		assert_eq!(<DepositOf<Test, ()>>::get(2), None);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberKicked {
-			member: (2),
-			slashed: Some(25),
-		}));
 	});
 }
 
 #[test]
 fn add_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Alliance::add_unscrupulous_items(Origin::signed(2), vec![]), BadOrigin);
-
 		assert_ok!(Alliance::add_unscrupulous_items(
 			Origin::signed(3),
 			vec![
@@ -607,8 +529,6 @@ fn add_unscrupulous_items_works() {
 #[test]
 fn remove_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Alliance::remove_unscrupulous_items(Origin::signed(2), vec![]), BadOrigin);
-
 		assert_noop!(
 			Alliance::remove_unscrupulous_items(
 				Origin::signed(3),

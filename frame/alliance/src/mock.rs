@@ -38,10 +38,8 @@ pub use crate as pallet_alliance;
 
 use super::*;
 
-type BlockNumber = u64;
-
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 250;
+	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -50,7 +48,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
-	type BlockNumber = BlockNumber;
+	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -86,10 +84,8 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
-
 parameter_types! {
-	pub const MotionDuration: BlockNumber = MOTION_DURATION_IN_BLOCKS;
+	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 100;
 	pub const MaxMembers: u32 = 100;
 }
@@ -212,7 +208,6 @@ parameter_types! {
 	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: u64 = 25;
-	pub const RetirementPeriod: BlockNumber = MOTION_DURATION_IN_BLOCKS + 1;
 }
 impl Config for Test {
 	type Event = Event;
@@ -239,7 +234,6 @@ impl Config for Test {
 	type MaxMembersCount = MaxMembers;
 	type AllyDeposit = AllyDeposit;
 	type WeightInfo = ();
-	type RetirementPeriod = RetirementPeriod;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

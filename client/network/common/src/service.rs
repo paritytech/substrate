@@ -19,7 +19,6 @@
 // If you read this, you are very thorough, congratulations.
 
 use crate::{
-	config::MultiaddrWithPeerId,
 	protocol::event::Event,
 	request_responses::{IfDisconnected, RequestFailure},
 	sync::{warp::WarpSyncProgress, StateDownloadProgress, SyncState},
@@ -180,11 +179,12 @@ pub trait NetworkPeers {
 	/// purposes.
 	fn deny_unreserved_peers(&self);
 
-	/// Adds a `PeerId` and its `Multiaddr` as reserved.
+	/// Adds a `PeerId` and its address as reserved. The string should encode the address
+	/// and peer ID of the remote node.
 	///
 	/// Returns an `Err` if the given string is not a valid multiaddress
 	/// or contains an invalid peer ID (which includes the local peer ID).
-	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String>;
+	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
 
 	/// Removes a `PeerId` from the list of reserved peers.
 	fn remove_reserved_peer(&self, peer_id: PeerId);
@@ -285,7 +285,7 @@ where
 		T::deny_unreserved_peers(self)
 	}
 
-	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
+	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		T::add_reserved_peer(self, peer)
 	}
 
@@ -387,7 +387,7 @@ pub trait NotificationSenderReady {
 
 /// A `NotificationSender` allows for sending notifications to a peer with a chosen protocol.
 #[async_trait::async_trait]
-pub trait NotificationSender: Send + Sync + 'static {
+pub trait NotificationSender {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a
 	/// notification.
 	async fn ready(&self)

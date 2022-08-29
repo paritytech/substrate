@@ -24,12 +24,9 @@ use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
 use sc_network::{
 	config::{NetworkConfiguration, TransportConfig},
-	multiaddr,
+	multiaddr, Multiaddr,
 };
-use sc_network_common::{
-	config::MultiaddrWithPeerId,
-	service::{NetworkBlock, NetworkPeers, NetworkStateInfo},
-};
+use sc_network_common::service::{NetworkBlock, NetworkPeers, NetworkStateInfo};
 use sc_service::{
 	client::Client,
 	config::{BasePath, DatabaseSource, KeystoreConfig},
@@ -52,8 +49,8 @@ const MAX_WAIT_TIME: Duration = Duration::from_secs(60 * 3);
 
 struct TestNet<G, E, F, U> {
 	runtime: Runtime,
-	authority_nodes: Vec<(usize, F, U, MultiaddrWithPeerId)>,
-	full_nodes: Vec<(usize, F, U, MultiaddrWithPeerId)>,
+	authority_nodes: Vec<(usize, F, U, Multiaddr)>,
+	full_nodes: Vec<(usize, F, U, Multiaddr)>,
 	chain_spec: GenericChainSpec<G, E>,
 	base_port: u16,
 	nodes: usize,
@@ -323,7 +320,7 @@ where
 
 			handle.spawn(service.clone().map_err(|_| ()));
 			let addr =
-				MultiaddrWithPeerId { multiaddr: addr, peer_id: service.network().local_peer_id() };
+				addr.with(multiaddr::Protocol::P2p((service.network().local_peer_id()).into()));
 			self.authority_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -343,7 +340,7 @@ where
 
 			handle.spawn(service.clone().map_err(|_| ()));
 			let addr =
-				MultiaddrWithPeerId { multiaddr: addr, peer_id: service.network().local_peer_id() };
+				addr.with(multiaddr::Protocol::P2p((service.network().local_peer_id()).into()));
 			self.full_nodes.push((self.nodes, service, user_data, addr));
 			self.nodes += 1;
 		}
@@ -385,7 +382,7 @@ where
 			for (_, service, _, _) in network.full_nodes.iter().skip(1) {
 				service
 					.network()
-					.add_reserved_peer(first_address.clone())
+					.add_reserved_peer(first_address.to_string())
 					.expect("Error adding reserved peer");
 			}
 
@@ -417,7 +414,7 @@ where
 					if let Some((_, service, _, node_id)) = network.full_nodes.get(i) {
 						service
 							.network()
-							.add_reserved_peer(address)
+							.add_reserved_peer(address.to_string())
 							.expect("Error adding reserved peer");
 						address = node_id.clone();
 					}
@@ -482,7 +479,7 @@ pub fn sync<G, E, Fb, F, B, ExF, U>(
 	for (_, service, _, _) in network.full_nodes.iter().skip(1) {
 		service
 			.network()
-			.add_reserved_peer(first_address.clone())
+			.add_reserved_peer(first_address.to_string())
 			.expect("Error adding reserved peer");
 	}
 
@@ -535,13 +532,13 @@ pub fn consensus<G, E, Fb, F>(
 	for (_, service, _, _) in network.full_nodes.iter() {
 		service
 			.network()
-			.add_reserved_peer(first_address.clone())
+			.add_reserved_peer(first_address.to_string())
 			.expect("Error adding reserved peer");
 	}
 	for (_, service, _, _) in network.authority_nodes.iter().skip(1) {
 		service
 			.network()
-			.add_reserved_peer(first_address.clone())
+			.add_reserved_peer(first_address.to_string())
 			.expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
@@ -559,7 +556,7 @@ pub fn consensus<G, E, Fb, F>(
 	for (_, service, _, _) in network.full_nodes.iter() {
 		service
 			.network()
-			.add_reserved_peer(first_address.clone())
+			.add_reserved_peer(first_address.to_string())
 			.expect("Error adding reserved peer");
 	}
 

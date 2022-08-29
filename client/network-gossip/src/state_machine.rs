@@ -514,7 +514,6 @@ mod tests {
 	use crate::multiaddr::Multiaddr;
 	use futures::prelude::*;
 	use sc_network_common::{
-		config::MultiaddrWithPeerId,
 		protocol::event::Event,
 		service::{
 			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
@@ -611,7 +610,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_reserved_peer(&self, _peer: MultiaddrWithPeerId) -> Result<(), String> {
+		fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
 			unimplemented!();
 		}
 

@@ -249,7 +249,6 @@ mod tests {
 	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network_common::config::MultiaddrWithPeerId;
 	use sc_peerset::ReputationChange;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
@@ -301,7 +300,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_reserved_peer(&self, _peer: MultiaddrWithPeerId) -> Result<(), String> {
+		fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
 			unimplemented!();
 		}
 
