@@ -2156,16 +2156,20 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Returns the pending rewards for the specified `member_account`.
 	///
-	/// In the case of error the function returns balance of zero.
-	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
+	/// In the case of error, `None` is returned.
+	pub fn pending_rewards(member_account: T::AccountId) -> Option<BalanceOf<T>> {
 		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
-			if let Some(reward_pool) = RewardPools::<T>::get(pool_member.pool_id) {
-				return pool_member
-					.pending_rewards(reward_pool.last_recorded_reward_counter())
-					.unwrap_or_default()
+			if let Some((reward_pool, bonded_pool)) = RewardPools::<T>::get(pool_member.pool_id)
+				.zip(BondedPools::<T>::get(pool_member.pool_id))
+			{
+				let current_reward_counter = reward_pool
+					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
+					.ok()?;
+				return pool_member.pending_rewards(current_reward_counter).ok()
 			}
 		}
-		BalanceOf::<T>::default()
+
+		None
 	}
 
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
