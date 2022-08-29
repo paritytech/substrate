@@ -8,13 +8,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Label drafts
-        uses: andymckay/labeler@master
+        uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90 # 1.0.4
         if: github.event.pull_request.draft == true
         with:
           add-labels: 'A3-inprogress'
           remove-labels: 'A0-pleasereview'
       - name: Label PRs
-        uses: andymckay/labeler@master
+        uses: andymckay/labeler@e6c4322d0397f3240f0e7e30a33b5c5df2d39e90 # 1.0.4
         if: github.event.pull_request.draft == false && ! contains(github.event.pull_request.labels.*.name, 'A2-insubstantial')
         with:
           add-labels: 'A0-pleasereview'

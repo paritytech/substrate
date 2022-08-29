@@ -30,7 +30,7 @@
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
 	bitswap::Bitswap,
-	config::{parse_str_addr, Params, TransportConfig},
+	config::{Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -62,6 +62,7 @@ use parking_lot::Mutex;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
+	config::MultiaddrWithPeerId,
 	protocol::event::{DhtEvent, Event},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
@@ -159,18 +160,7 @@ where
 			.network_config
 			.boot_nodes
 			.into_iter()
-			.filter(|boot_node| {
-				if boot_node.peer_id == local_peer_id {
-					warn!(
-						target: "sub-libp2p",
-						"Local peer ID used in bootnode, ignoring: {}",
-						boot_node,
-					);
-					false
-				} else {
-					true
-				}
-			})
+			.filter(|boot_node| boot_node.peer_id != local_peer_id)
 			.collect();
 		params.network_config.default_peers_set.reserved_nodes = params
 			.network_config
@@ -712,9 +702,8 @@ where
 		self.service.remove_reserved_peer(peer);
 	}
 
-	/// Adds a `PeerId` and its address as reserved. The string should encode the address
-	/// and peer ID of the remote node.
-	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+	/// Adds a `PeerId` and its `Multiaddr` as reserved.
+	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
 
@@ -922,17 +911,16 @@ where
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(true));
 	}
 
-	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		// Make sure the local peer ID is never added to the PSM.
-		if peer_id == self.local_peer_id {
+		if peer.peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
 
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer.peer_id, peer.multiaddr));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer.peer_id));
 		Ok(())
 	}
 
@@ -1824,7 +1812,7 @@ where
 								if let ConnectedPoint::Dialer { address, role_override: _ } =
 									endpoint
 								{
-									error!(
+									warn!(
 										"💔 The bootnode you want to connect to at `{}` provided a different peer ID `{}` than the one you expect `{}`.",
 										address,
 										obtained,
