@@ -24,6 +24,8 @@ use sp_runtime::{
 
 use super::*;
 
+/// The unit of measurement for computational time spent when executing runtime logic on reference
+/// hardware.
 pub type RefTimeWeight = u64;
 
 #[derive(
