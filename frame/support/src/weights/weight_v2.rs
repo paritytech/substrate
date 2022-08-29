@@ -104,6 +104,10 @@ impl Weight {
 		let ref_time = self.ref_time.checked_div(rhs)?;
 		Some(Self { ref_time })
 	}
+
+	pub fn scalar_saturating_mul(self, rhs: impl Into<u64>) -> Self {
+		Self { ref_time: self.ref_time.saturating_mul(rhs.into()) }
+	}
 }
 
 impl Zero for Weight {

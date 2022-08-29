@@ -175,7 +175,7 @@ impl ChainExtension<Test> for TestExtension {
 			},
 			0x8002 => {
 				let mut env = env.buf_in_buf_out();
-				let weight = env.read(5)?[4].into();
+				let weight = Weight::from_ref_time(env.read(5)?[4].into());
 				env.charge_weight(weight)?;
 				Ok(RetVal::Converging(id))
 			},
@@ -264,7 +264,7 @@ impl RegisteredChainExtension<Test> for TempStorageExtension {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(2 * WEIGHT_PER_SECOND));
 	pub static ExistentialDeposit: u64 = 1;
 }
 impl frame_system::Config for Test {
@@ -332,7 +332,7 @@ parameter_types! {
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
 	fn convert(w: Weight) -> BalanceOf<Self> {
-		w
+		w.ref_time()
 	}
 }
 
@@ -355,6 +355,10 @@ impl Contains<Call> for TestFilter {
 	}
 }
 
+parameter_types! {
+	pub const DeletionWeightLimit: Weight = Weight::from_ref_time(500_000_000_000);
+}
+
 impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
@@ -368,7 +372,7 @@ impl Config for Test {
 	type ChainExtension =
 		(TestExtension, DisabledExtension, RevertingExtension, TempStorageExtension);
 	type DeletionQueueDepth = ConstU32<1024>;
-	type DeletionWeightLimit = ConstU64<500_000_000_000>;
+	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
@@ -474,7 +478,7 @@ fn calling_plain_account_fails() {
 			Err(DispatchErrorWithPostInfo {
 				error: Error::<Test>::ContractNotFound.into(),
 				post_info: PostDispatchInfo {
-					actual_weight: Some(base_cost),
+					actual_weight: Some(Weight::from_ref_time(base_cost)),
 					pays_fee: Default::default(),
 				},
 			})
@@ -642,7 +646,7 @@ fn run_out_of_gas() {
 				Origin::signed(ALICE),
 				addr, // newly created account
 				0,
-				1_000_000_000_000,
+				Weight::from_ref_time(1_000_000_000_000),
 				None,
 				vec![],
 			),
@@ -1911,7 +1915,7 @@ fn lazy_removal_partial_remove_works() {
 
 	// We create a contract with some extra keys above the weight limit
 	let extra_keys = 7u32;
-	let weight_limit = 5_000_000_000;
+	let weight_limit = Weight::from_ref_time(5_000_000_000);
 	let (_, max_keys) = Storage::<Test>::deletion_budget(1, weight_limit);
 	let vals: Vec<_> = (0..max_keys + extra_keys)
 		.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))
@@ -2017,7 +2021,9 @@ fn lazy_removal_does_no_run_on_full_queue_and_full_block() {
 		// Check that on_initialize() tries to perform lazy removal but removes nothing
 		//  as no more weight is left for that.
 		let weight_used = Contracts::on_initialize(System::block_number());
-		let base = <<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
+		let base = Weight::from_ref_time(
+			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch(),
+		);
 		assert_eq!(weight_used, base);
 
 		// Check that the deletion queue is still full after execution of the
@@ -2069,8 +2075,9 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Assign a remaining weight which is too low for a successfull deletion of the contract
-		let low_remaining_weight =
-			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch();
+		let low_remaining_weight = Weight::from_ref_time(
+			<<Test as Config>::WeightInfo as WeightInfo>::on_process_deletion_queue_batch(),
+		);
 
 		// Run the lazy removal
 		Contracts::on_idle(System::block_number(), low_remaining_weight);
@@ -2096,7 +2103,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 fn lazy_removal_does_not_use_all_weight() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 
-	let weight_limit = 5_000_000_000;
+	let weight_limit = Weight::from_ref_time(5_000_000_000);
 	let mut ext = ExtBuilder::default().existential_deposit(50).build();
 
 	let (trie, vals, weight_per_key) = ext.execute_with(|| {
@@ -2167,7 +2174,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit);
 
 		// We have one less key in our trie than our weight limit suffices for
-		assert_eq!(weight_used, weight_limit - weight_per_key);
+		assert_eq!(weight_used, weight_limit - Weight::from_ref_time(weight_per_key));
 
 		// All the keys are removed
 		for val in vals {
@@ -2430,7 +2437,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 		let input: Vec<u8> = AsRef::<[u8]>::as_ref(&addr_callee)
 			.iter()
 			.cloned()
-			.chain((GAS_LIMIT / 5).to_le_bytes())
+			.chain((GAS_LIMIT / 5).ref_time().to_le_bytes())
 			.collect();
 
 		// Call in order to determine the gas that is required for this call
@@ -2454,7 +2461,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 				ALICE,
 				addr_caller,
 				0,
-				result.gas_required,
+				Weight::from_ref_time(result.gas_required),
 				Some(result.storage_deposit.charge_or_zero()),
 				input,
 				false,

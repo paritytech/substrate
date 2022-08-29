@@ -110,7 +110,7 @@ use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
 	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
-	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, RefTimeWeight, Weight},
 	BoundedVec,
 };
 use frame_system::{limits::BlockWeights, Pallet as System};
@@ -214,7 +214,7 @@ impl<B: Get<BlockWeights>, const P: u32> Get<Weight> for DefaultContractAccessWe
 			.get(DispatchClass::Normal)
 			.max_total
 			.unwrap_or(block_weights.max_block) /
-			Weight::from(P)
+			RefTimeWeight::from(P)
 	}
 }
 
@@ -386,8 +386,9 @@ pub mod pallet {
 		T::AccountId: AsRef<[u8]>,
 	{
 		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
-			Storage::<T>::process_deletion_queue_batch(remaining_weight)
-				.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
+			Storage::<T>::process_deletion_queue_batch(remaining_weight).saturating_add(
+				Weight::from_ref_time(T::WeightInfo::on_process_deletion_queue_batch()),
+			)
 		}
 
 		fn on_initialize(_block: T::BlockNumber) -> Weight {
@@ -402,10 +403,11 @@ pub mod pallet {
 					.max_block
 					.saturating_sub(System::<T>::block_weight().total())
 					.min(T::DeletionWeightLimit::get());
-				Storage::<T>::process_deletion_queue_batch(weight_limit)
-					.saturating_add(T::WeightInfo::on_process_deletion_queue_batch())
+				Storage::<T>::process_deletion_queue_batch(weight_limit).saturating_add(
+					Weight::from_ref_time(T::WeightInfo::on_process_deletion_queue_batch()),
+				)
 			} else {
-				T::WeightInfo::on_process_deletion_queue_batch()
+				Weight::from_ref_time(T::WeightInfo::on_process_deletion_queue_batch())
 			}
 		}
 	}
@@ -433,12 +435,12 @@ pub mod pallet {
 		/// * If the account is a regular account, any value will be transferred.
 		/// * If no account exists and the call value is not less than `existential_deposit`,
 		/// a regular account will be created and any value will be transferred.
-		#[pallet::weight(T::WeightInfo::call().saturating_add(*gas_limit))]
+		#[pallet::weight(Weight::from_ref_time(T::WeightInfo::call()).saturating_add(*gas_limit))]
 		pub fn call(
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
@@ -458,7 +460,9 @@ pub mod pallet {
 					output.result = Err(<Error<T>>::ContractReverted.into());
 				}
 			}
-			output.gas_meter.into_dispatch_result(output.result, T::WeightInfo::call())
+			output
+				.gas_meter
+				.into_dispatch_result(output.result, Weight::from_ref_time(T::WeightInfo::call()))
 		}
 
 		/// Instantiates a new contract from the supplied `code` optionally transferring
@@ -488,13 +492,13 @@ pub mod pallet {
 		/// - The `value` is transferred to the new account.
 		/// - The `deploy` function is executed in the context of the newly-created account.
 		#[pallet::weight(
-			T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32)
+			Weight::from_ref_time(T::WeightInfo::instantiate_with_code(code.len() as u32, salt.len() as u32))
 			.saturating_add(*gas_limit)
 		)]
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code: Vec<u8>,
 			data: Vec<u8>,
@@ -520,7 +524,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, result)| result),
-				T::WeightInfo::instantiate_with_code(code_len, salt_len),
+				Weight::from_ref_time(T::WeightInfo::instantiate_with_code(code_len, salt_len)),
 			)
 		}
 
@@ -530,12 +534,12 @@ pub mod pallet {
 		/// code deployment step. Instead, the `code_hash` of an on-chain deployed wasm binary
 		/// must be supplied.
 		#[pallet::weight(
-			T::WeightInfo::instantiate(salt.len() as u32).saturating_add(*gas_limit)
+			Weight::from_ref_time(T::WeightInfo::instantiate(salt.len() as u32)).saturating_add(*gas_limit)
 		)]
 		pub fn instantiate(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>,
@@ -560,7 +564,7 @@ pub mod pallet {
 			}
 			output.gas_meter.into_dispatch_result(
 				output.result.map(|(_address, output)| output),
-				T::WeightInfo::instantiate(salt_len),
+				Weight::from_ref_time(T::WeightInfo::instantiate(salt_len)),
 			)
 		}
 
@@ -873,8 +877,8 @@ where
 		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
-			gas_consumed: output.gas_meter.gas_consumed(),
-			gas_required: output.gas_meter.gas_required(),
+			gas_consumed: output.gas_meter.gas_consumed().ref_time(),
+			gas_required: output.gas_meter.gas_required().ref_time(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
@@ -918,8 +922,8 @@ where
 				.result
 				.map(|(account_id, result)| InstantiateReturnValue { result, account_id })
 				.map_err(|e| e.error),
-			gas_consumed: output.gas_meter.gas_consumed(),
-			gas_required: output.gas_meter.gas_required(),
+			gas_consumed: output.gas_meter.gas_consumed().ref_time(),
+			gas_required: output.gas_meter.gas_required().ref_time(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
