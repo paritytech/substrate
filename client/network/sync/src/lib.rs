@@ -392,12 +392,18 @@ where
 		let median_seen = self.median_seen();
 		let best_seen_block =
 			median_seen.and_then(|median| (median > self.best_queued_number).then_some(median));
-		let sync_state = if let Some(n) = median_seen {
+		let sync_state = if let Some(n) = best_seen_block.or(median_seen) {
 			// A chain is classified as downloading if the provided best block is
-			// more than `MAJOR_SYNC_BLOCKS` behind the best block.
+			// more than `MAJOR_SYNC_BLOCKS` behind the best block or as importing
+			// if the same can be said about queued blocks.
 			let best_block = self.client.info().best_number;
 			if n > best_block && n - best_block > MAJOR_SYNC_BLOCKS.into() {
-				SyncState::Downloading
+				// If target is not queued, we're downloading, otherwise importing.
+				if n > self.best_queued_number {
+					SyncState::Downloading
+				} else {
+					SyncState::Importing
+				}
 			} else {
 				SyncState::Idle
 			}
@@ -416,7 +422,7 @@ where
 			_ => None,
 		};
 
-		let is_major_syncing = matches!(sync_state, SyncState::Downloading);
+		let is_major_syncing = !matches!(sync_state, SyncState::Idle);
 
 		SyncStatus {
 			state: sync_state,

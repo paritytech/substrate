@@ -126,8 +126,9 @@ impl<B: BlockT> InformantDisplay<B> {
 			(SyncState::Idle, _, _, _) => ("💤", "Idle".into(), "".into()),
 			(SyncState::Downloading, None, _, _) =>
 				("⚙️ ", format!("Preparing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n), None, _) =>
+			(SyncState::Downloading, Some(n), _, _) =>
 				("⚙️ ", format!("Syncing{}", speed), format!(", target=#{}", n)),
+			(SyncState::Importing, _, _, _) => ("⚙️ ", format!("Importing{}", speed), "".into()),
 		};
 
 		if self.format.enable_color {

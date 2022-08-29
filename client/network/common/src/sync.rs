@@ -49,6 +49,8 @@ pub enum SyncState {
 	Idle,
 	/// Actively catching up with the chain.
 	Downloading,
+	/// All blocks are downloaded and are being imported.
+	Importing,
 }
 
 /// Reported state download progress.
