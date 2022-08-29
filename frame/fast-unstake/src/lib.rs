@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,11 +18,12 @@
 //! A pallet that's designed to ONLY do:
 //!
 //! If a nominator is not exposed at all in any `ErasStakers` (i.e. "has not backed any validators
-//! in the last 28 days"), then they can register themselves in this pallet, and move quickly into
-//! a nomination pool.
+//! in the last `BondingDuration` days"), then they can register themselves in this pallet, and move
+//! quickly into a nomination pool.
 //!
 //! This pallet works of the basis of `on_idle`, meaning that it provides no guarantee about when it
-//! will succeed, if at all.
+//! will succeed, if at all. Moreover, the queue implementation is unordered. In case of congestion,
+//! not FIFO ordering is provided.
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
 //! [`Call::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them in
@@ -31,12 +32,15 @@
 //! Once queued, but not being actively processed, stakers can withdraw their request via
 //! [`Call::deregister`].
 //!
+//! Once queued, a staker wishing to unbond can perform to further action in pallet-staking. This is
+//! to prevent them from accidentally exposing themselves behind a validator etc.
+//!
 //! Once processed, if successful, no additional fees for the checking process is taken, and the
 //! staker is instantly unbonded. Optionally, if the have asked to join a pool, their *entire* stake
 //! is joined into their pool of choice.
 //!
-//! If unsuccessful, meaning that the staker was exposed sometime in the last 28 eras they will end
-//! up being slashed for the amount of wasted work they have inflicted on the chian.
+//! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
+//! they will end up being slashed for the amount of wasted work they have inflicted on the chian.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -80,14 +84,14 @@ pub mod pallet {
 		DispatchResult,
 	};
 	use sp_staking::EraIndex;
-	use sp_std::{ops::Div, prelude::*, vec::Vec};
+	use sp_std::{prelude::*, vec::Vec};
 
 	pub trait WeightInfo {
 		fn register_fast_unstake() -> Weight;
 		fn deregister() -> Weight;
 		fn control() -> Weight;
 		fn on_idle_unstake() -> Weight;
-		fn on_idle_check(e: u32) -> Weight;
+		fn on_idle_check(v: u32, e: u32) -> Weight;
 	}
 
 	impl WeightInfo for () {
@@ -103,7 +107,7 @@ pub mod pallet {
 		fn on_idle_unstake() -> Weight {
 			0
 		}
-		fn on_idle_check(_: u32) -> Weight {
+		fn on_idle_check(_: u32, _: u32) -> Weight {
 			0
 		}
 	}
@@ -123,7 +127,9 @@ pub mod pallet {
 		> + pallet_nomination_pools::Config
 	{
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Event: From<Event<Self>>
+			+ IsType<<Self as frame_system::Config>::Event>
+			+ TryInto<Event<Self>>;
 
 		/// The amount of balance slashed per each era that was wastefully checked.
 		///
@@ -138,14 +144,16 @@ pub mod pallet {
 	}
 
 	/// An unstake request.
-	#[derive(Encode, Decode, Eq, PartialEq, Clone, scale_info::TypeInfo)]
+	#[derive(
+		Encode, Decode, Eq, PartialEq, Clone, scale_info::TypeInfo, frame_support::RuntimeDebug,
+	)]
 	pub struct UnstakeRequest<AccountId> {
 		/// Their stash account.
-		pub stash: AccountId,
+		pub(crate) stash: AccountId,
 		/// The list of eras for which they have been checked.
-		pub checked: Vec<EraIndex>,
+		pub pub(crate) checked: Vec<EraIndex>,
 		/// The pool they wish to join, if any.
-		pub maybe_pool_id: Option<PoolId>,
+		pub(crate) maybe_pool_id: Option<PoolId>,
 	}
 
 	/// The current "head of the queue" being unstaked.
@@ -304,30 +312,45 @@ pub mod pallet {
 		/// 1. We assume this is only ever called once per `on_idle`. This is because we know that
 		/// in all use cases, even a single nominator cannot be unbonded in a single call. Multiple
 		/// calls to this function are thus not needed. 2. We will only mark a staker
+		#[cfg_attr(feature = "runtime-benchmarks", allow(unused_variables))]
 		fn process_head(remaining_weight: Weight) -> Weight {
 			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
 				return T::DbWeight::get().reads(1)
 			}
 
-			#[cfg(feature = "runtime-benchmarks")]
-			let total_worse_case_weight = <T as Config>::WeightInfo::on_idle_check(eras_to_check_per_block)
-				.max(<T as Config>::WeightInfo::on_idle_unstake());
-			// TODO: not sure if this is needed.
-			#[cfg(not(feature = "runtime-benchmarks"))]
-			let total_worse_case_weight = 0;
+			// NOTE: here we're assuming that the number of validators has only ever increased,
+			// meaning that the number of exposures to check is either this per era, or less.s
+			let validator_count = pallet_staking::ValidatorCount::<T>::get();
 
-			if total_worse_case_weight > remaining_weight {
-				log!(warn, "total_worse_case_weight > remaining_weight, early exiting");
-				return T::DbWeight::get().reads(1)
-			}
+			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
+			// and `remaining_weight` passed on to us from the runtime executive.
+			#[cfg(feature = "runtime-benchmarks")]
+			let final_eras_to_check = eras_to_check_per_block;
+			#[cfg(not(feature = "runtime-benchmarks"))]
+			let final_eras_to_check = {
+				let worse_weight = |v, u| {
+					<T as Config>::WeightInfo::on_idle_check(v, u)
+						.max(<T as Config>::WeightInfo::on_idle_unstake())
+				};
+				let mut try_eras_to_check = eras_to_check_per_block;
+				while worse_weight(validator_count, try_eras_to_check) > remaining_weight {
+					try_eras_to_check.saturating_dec();
+					if try_eras_to_check.is_zero() {
+						return T::DbWeight::get().reads(1)
+					}
+				}
+
+				drop(eras_to_check_per_block);
+				try_eras_to_check
+			};
 
 			if <T as pallet_staking::Config>::ElectionProvider::ongoing() {
 				// NOTE: we assume `ongoing` does not consume any weight.
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
 				// taken. In this time period, we don't want to accidentally unstake them.
-				return T::DbWeight::get().reads(1)
+				return T::DbWeight::get().reads(2)
 			}
 
 			let UnstakeRequest { stash, mut checked, maybe_pool_id } = match Head::<T>::take()
@@ -343,27 +366,12 @@ pub mod pallet {
 				}) {
 				None => {
 					// There's no `Head` and nothing in the `Queue`, nothing to do here.
-					return T::DbWeight::get().reads_writes(2, 1)
+					return T::DbWeight::get().reads(4)
 				},
 				Some(head) => head,
 			};
 
-			// determine the amount of eras to check. this is minimum of two criteria:
-			// `ErasToCheckPerBlock`, and how much weight is given to the on_idle hook. For the sake
-			// of simplicity, we assume we check at most one staker's eras per-block.
-			let final_eras_to_check = {
-				// NOTE: here we're assuming that the number of validators has only ever increased,
-				// meaning that the number of exposures to check is either this per era, or less.
-				let weight_per_era_check = T::DbWeight::get().reads(1) *
-					pallet_staking::ValidatorCount::<T>::get() as Weight;
-				let eras_to_check_weight_limit = remaining_weight.div(weight_per_era_check);
-				eras_to_check_per_block.min(eras_to_check_weight_limit as u32)
-			};
-
-			// return weight consumed if no eras to check..
-			if final_eras_to_check.is_zero() {
-				return T::DbWeight::get().reads_writes(2, 1)
-			}
+			log!(debug, "checking {:?}", stash);
 
 			// the range that we're allowed to check in this round.
 			let current_era = pallet_staking::CurrentEra::<T>::get().unwrap_or_default();
@@ -376,7 +384,11 @@ pub mod pallet {
 					current_era)
 					.rev()
 					.collect::<Vec<_>>();
-				debug_assert!(total_check_range.len() <= bonding_duration as usize);
+				debug_assert!(
+					total_check_range.len() <= (bonding_duration + 1) as usize,
+					"{:?}",
+					total_check_range
+				);
 
 				// remove eras that have already been checked, take a maximum of
 				// final_eras_to_check.
@@ -386,6 +398,8 @@ pub mod pallet {
 					.take(final_eras_to_check as usize)
 					.collect::<Vec<_>>()
 			};
+
+			log!(debug, "{} eras to check: {:?}", eras_to_check.len(), eras_to_check);
 
 			if eras_to_check.is_empty() {
 				// `stash` is not exposed in any era now -- we can let go of them now.
@@ -435,6 +449,14 @@ pub mod pallet {
 					Self::is_exposed_in_era(&stash, e)
 				});
 
+				log!(
+					debug,
+					"checked {:?} eras, (v: {:?}, u: {:?})",
+					eras_checked,
+					validator_count,
+					eras_to_check.len()
+				);
+
 				// NOTE: you can be extremely unlucky and get slashed here: You are not exposed in
 				// the last 28 eras, have registered yourself to be unstaked, midway being checked,
 				// you are exposed.
@@ -455,7 +477,7 @@ pub mod pallet {
 					Self::deposit_event(Event::<T>::Checked { stash, eras: eras_to_check });
 				}
 
-				<T as Config>::WeightInfo::on_idle_check(final_eras_to_check)
+				<T as Config>::WeightInfo::on_idle_check(validator_count, final_eras_to_check)
 			}
 		}
 
