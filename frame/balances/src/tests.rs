@@ -529,6 +529,22 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn transferring_reserved_balance_to_yourself_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = Balances::deposit_creating(&1, 110);
+				assert_ok!(Balances::reserve(&1, 50));
+				assert_ok!(Balances::repatriate_reserved(&1, &1, 50, Status::Free), 0);
+				assert_eq!(Balances::free_balance(1), 110);
+				assert_eq!(Balances::reserved_balance(1), 0);
+
+				assert_ok!(Balances::reserve(&1, 50));
+				assert_ok!(Balances::repatriate_reserved(&1, &1, 60, Status::Free), 10);
+				assert_eq!(Balances::free_balance(1), 110);
+				assert_eq!(Balances::reserved_balance(1), 0);
+			});
+		}
+
+		#[test]
 		fn transferring_reserved_balance_to_nonexistent_should_fail() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
@@ -1164,6 +1180,25 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::reserved_balance_named(&id_2, &1), 0);
 
 				assert_eq!(Balances::free_balance(&1), 52);
+			});
+		}
+
+		#[test]
+		fn reserved_named_to_yourself_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = Balances::deposit_creating(&1, 110);
+
+				let id = [1u8; 8];
+
+				assert_ok!(Balances::reserve_named(&id, &1, 50));
+				assert_ok!(Balances::repatriate_reserved_named(&id, &1, &1, 50, Status::Free), 0);
+				assert_eq!(Balances::free_balance(1), 110);
+				assert_eq!(Balances::reserved_balance_named(&id, &1), 0);
+
+				assert_ok!(Balances::reserve_named(&id, &1, 50));
+				assert_ok!(Balances::repatriate_reserved_named(&id, &1, &1, 60, Status::Free), 10);
+				assert_eq!(Balances::free_balance(1), 110);
+				assert_eq!(Balances::reserved_balance_named(&id, &1), 0);
 			});
 		}
 
