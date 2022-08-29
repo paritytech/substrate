@@ -19,6 +19,7 @@
 
 use super::Config;
 use crate::weights::WeightInfo;
+use frame_support::weights::Weight;
 
 /// Branches within the `begin_deciding` function.
 pub enum BeginDecidingBranch {
@@ -61,7 +62,7 @@ impl ServiceBranch {
 	/// Return the weight of the `nudge` function when it takes the branch denoted by `self`.
 	pub fn weight_of_nudge<T: Config<I>, I: 'static>(self) -> frame_support::weights::Weight {
 		use ServiceBranch::*;
-		match self {
+		let ref_time_weight = match self {
 			NoDeposit => T::WeightInfo::nudge_referendum_no_deposit(),
 			Preparing => T::WeightInfo::nudge_referendum_preparing(),
 			Queued => T::WeightInfo::nudge_referendum_queued(),
@@ -77,12 +78,15 @@ impl ServiceBranch {
 			Approved => T::WeightInfo::nudge_referendum_approved(),
 			Rejected => T::WeightInfo::nudge_referendum_rejected(),
 			TimedOut | Fail => T::WeightInfo::nudge_referendum_timed_out(),
-		}
+		};
+
+		Weight::from_ref_time(ref_time_weight)
 	}
 
 	/// Return the maximum possible weight of the `nudge` function.
 	pub fn max_weight_of_nudge<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		0.max(T::WeightInfo::nudge_referendum_no_deposit())
+		let ref_time_weight = 0
+			.max(T::WeightInfo::nudge_referendum_no_deposit())
 			.max(T::WeightInfo::nudge_referendum_preparing())
 			.max(T::WeightInfo::nudge_referendum_queued())
 			.max(T::WeightInfo::nudge_referendum_not_queued())
@@ -96,7 +100,9 @@ impl ServiceBranch {
 			.max(T::WeightInfo::nudge_referendum_continue_not_confirming())
 			.max(T::WeightInfo::nudge_referendum_approved())
 			.max(T::WeightInfo::nudge_referendum_rejected())
-			.max(T::WeightInfo::nudge_referendum_timed_out())
+			.max(T::WeightInfo::nudge_referendum_timed_out());
+
+		Weight::from_ref_time(ref_time_weight)
 	}
 
 	/// Return the weight of the `place_decision_deposit` function when it takes the branch denoted
@@ -105,7 +111,7 @@ impl ServiceBranch {
 		self,
 	) -> Option<frame_support::weights::Weight> {
 		use ServiceBranch::*;
-		Some(match self {
+		let ref_time_weight = match self {
 			Preparing => T::WeightInfo::place_decision_deposit_preparing(),
 			Queued => T::WeightInfo::place_decision_deposit_queued(),
 			NotQueued => T::WeightInfo::place_decision_deposit_not_queued(),
@@ -122,7 +128,9 @@ impl ServiceBranch {
 			TimedOut |
 			Fail |
 			NoDeposit => return None,
-		})
+		};
+
+		Some(Weight::from_ref_time(ref_time_weight))
 	}
 
 	/// Return the maximum possible weight of the `place_decision_deposit` function.
