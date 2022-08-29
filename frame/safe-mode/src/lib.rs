@@ -19,10 +19,10 @@
 
 use frame_support::{
 	pallet_prelude::*,
-	traits::{CallMetadata, Contains, GetCallMetadata, PalletInfoAccess},
+	traits::{CallMetadata, Contains, Defensive, GetCallMetadata, PalletInfoAccess},
 };
 use frame_system::pallet_prelude::*;
-use sp_runtime::traits::Saturating;
+use sp_runtime::traits::{ Saturating};
 use sp_std::{convert::TryInto, prelude::*};
 
 mod benchmarking;
@@ -46,7 +46,7 @@ pub mod pallet {
 
 		/// Contains all calls that can be dispatched when the safe-mode is enabled.
 		///
-		/// The `SafeMode` pallet is always included and does not need to be added.
+		/// The `SafeMode` pallet is always included and does not need to be added here.
 		type SafeModeFilter: Contains<Self::Call>;
 
 		/// How long the safe-mode will stay active when enabled with [`Pallet::enable`].
@@ -74,35 +74,47 @@ pub mod pallet {
 
 		/// The safe-mode is (already) disabled.
 		IsDisabled,
-
-		/// No permission to disable the safe-mode (yet).
-		NoPermission,
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The safe-mode was enabled until inclusively this block.
+		/// The safe-mode was enabled until inclusively this \[block number\].
 		Enabled(T::BlockNumber),
 
-		/// The safe-mode was extended until inclusively this block.
+		/// The safe-mode was extended until inclusively this \[block number\].
 		Extended(T::BlockNumber),
 
-		/// The safe-mode was disabled.
-		Disabled,
+		/// The safe-mode was disabled for a specific \[reason\].
+		Disabled(DisableReason),
+	}
+
+	/// The reason why the safe-mode was disabled.
+	#[derive(Copy, Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+	pub enum DisableReason {
+		/// The safe-mode was automatically disabled after `EnableDuration` had passed.
+		Timeout,
+
+		/// The safe-mode was preemptively disabled by the
+		/// [`Config::PreemptiveDisableOrigin`] origin.
+		Preemptive,
 	}
 
 	/// Contains the last block number that the safe-mode will stay enabled.
 	///
 	/// This is set to `None` if the safe-mode is disabled.
-	/// In any block after this block number is reached,
-	/// the safe-mode can be disabled permissionlessly by any-one.
+	/// The safe-mode is automatically disabled when the current block number is greater than this.
 	#[pallet::storage]
 	pub type Enabled<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Enable the safe-mode.
+		///
+		/// Enables the safe-mode for [`Config::EnableDuration`] blocks.
+		/// Can only be called by the [`Config::EnableOrigin`] origin.
+		/// Errors if the safe-mode is already enabled.
+		/// Emits an [`Event::Enabled`] event on success.
 		#[pallet::weight(0)]
 		pub fn enable(origin: OriginFor<T>) -> DispatchResult {
 			T::EnableOrigin::ensure_origin(origin)?;
@@ -116,16 +128,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Extends the safe-mode duration.
+		/// Extend the safe-mode.
 		///
-		/// Can only be called by the [`Config::ExtendOrigin`] origin.
 		/// The safe-mode must already be enabled for this to succeed.
-		///
-		/// NOTE: This extends the *original* safe-mode duration.
-		/// The extension period can be less than [`Config::ExtendDuration`]
-		/// if the safe-mode period already ran out.
-		/// So to say: even a delayed call to `extend` will never result in
-		/// an extension period of more than [`Config::ExtendDuration`] blocks.
+		/// Can only be called by the [`Config::ExtendOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
 			T::ExtendOrigin::ensure_origin(origin)?;
@@ -141,33 +147,43 @@ pub mod pallet {
 
 		/// Disable the safe-mode.
 		///
-		/// Can be called either by
-		///  [`Config::PreemptiveDisableOrigin`] at any time
-		/// or
-		///	 anyone after block number [`Enabled`]+1 is reached.
+		/// Can be called either by the [`Config::PreemptiveDisableOrigin`] origin at any time.
+		/// Will be automatically called after the safe-mode period ran out.
 		#[pallet::weight(0)]
 		pub fn disable(origin: OriginFor<T>) -> DispatchResult {
-			let can_preempt = if T::PreemptiveDisableOrigin::ensure_origin(origin.clone()).is_ok() {
-				true
-			} else {
-				ensure_signed(origin)?;
-				false
-			};
+			T::PreemptiveDisableOrigin::ensure_origin(origin.clone())?;
 
-			let limit = Enabled::<T>::take().ok_or(Error::<T>::IsDisabled)?;
+			Self::do_disable(DisableReason::Preemptive)
+		}
+	}
 
-			if can_preempt || <frame_system::Pallet<T>>::block_number() > limit {
-				Enabled::<T>::kill();
-				Self::deposit_event(Event::Disabled);
-				Ok(())
-			} else {
-				Err(Error::<T>::NoPermission.into())
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Automatically disables the safe-mode when the period ran out.
+		///
+		/// Bypasses any call filters to avoid getting rejected by them.
+		fn on_initialize(current: T::BlockNumber) -> Weight {
+			match Enabled::<T>::get() {
+				Some(limit) if current > limit => {
+					let _ = Self::do_disable(DisableReason::Timeout).defensive_proof("Must be disabled; qed");
+					T::DbWeight::get().reads_writes(1, 1)
+				},
+				_ => T::DbWeight::get().reads(1), // TODO benchmark
 			}
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
+	/// Logic of the [`crate::Pallet::disable`] extrinsic.
+	///
+	/// Does not check the origin. Errors if the safe-mode is already disabled.
+	pub fn do_disable(reason: DisableReason) -> DispatchResult {
+		let _limit = Enabled::<T>::take().ok_or(Error::<T>::IsDisabled)?;
+		Self::deposit_event(Event::Disabled(reason));
+		Ok(())
+	}
+
 	/// Return whether the `safe-mode` is currently enabled.
 	pub fn is_enabled() -> bool {
 		Enabled::<T>::exists()
