@@ -1842,7 +1842,7 @@ impl_runtime_apis! {
 
 	impl pallet_nomination_pools_runtime_api::NominationPoolsApi<Block, AccountId, Balance> for Runtime {
 		fn pending_rewards(member_account: AccountId) -> Balance {
-			NominationPools::pending_rewards(member_account)
+			NominationPools::pending_rewards(member_account).unwrap_or_default()
 		}
 	}
 

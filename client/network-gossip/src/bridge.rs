@@ -317,6 +317,7 @@ mod tests {
 	};
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network_common::{
+		config::MultiaddrWithPeerId,
 		protocol::event::ObservedRole,
 		service::{
 			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
@@ -371,7 +372,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+		fn add_reserved_peer(&self, _peer: MultiaddrWithPeerId) -> Result<(), String> {
 			unimplemented!();
 		}
 
