@@ -75,6 +75,7 @@ pub mod pallet {
 		type EnableOrigin: EnsureOrigin<Self::Origin>;
 		type ExtendOrigin: EnsureOrigin<Self::Origin>;
 		type DisableOrigin: EnsureOrigin<Self::Origin>;
+		type RepayOrigin: EnsureOrigin<Self::Origin>;
 
 		// Weight information for extrinsics in this pallet.
 		//type WeightInfo: WeightInfo;
@@ -89,6 +90,7 @@ pub mod pallet {
 		IsDisabled,
 
 		CannotStake,
+		NotStaked,
 	}
 
 	#[pallet::event]
@@ -102,6 +104,9 @@ pub mod pallet {
 
 		/// The safe-mode was disabled for a specific \[reason\].
 		Disabled(DisableReason),
+
+		StakeRepaid(T::AccountId, BalanceOf<T>),
+		StakeSlashed(T::AccountId, BalanceOf<T>),
 	}
 
 	/// The reason why the safe-mode was disabled.
@@ -121,9 +126,17 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Enabled<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
 
+	// Maps (account, block number) to the amount of stake that was staked at that block.
 	#[pallet::storage]
-	pub type Stakes<T: Config> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, BalanceOf<T>, ValueQuery>;
+	pub type Stakes<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		T::AccountId,
+		Blake2_128Concat,
+		T::BlockNumber,
+		BalanceOf<T>,
+		OptionQuery,
+	>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -185,6 +198,30 @@ pub mod pallet {
 
 			Self::do_disable(DisableReason::Force)
 		}
+
+		/// Repay an honest account that put the chain into safe-mode earlier.
+		#[pallet::weight(0)]
+		pub fn repay_stake(
+			origin: OriginFor<T>,
+			account: T::AccountId,
+			block: T::BlockNumber,
+		) -> DispatchResult {
+			T::RepayOrigin::ensure_origin(origin.clone())?;
+
+			Self::do_repay_stake(account, block)
+		}
+
+		/// Slash a dishonest account that put the chain into safe-mode earlier.
+		#[pallet::weight(0)]
+		pub fn slash_stake(
+			origin: OriginFor<T>,
+			account: T::AccountId,
+			block: T::BlockNumber,
+		) -> DispatchResult {
+			T::RepayOrigin::ensure_origin(origin.clone())?;
+
+			Self::do_slash_stake(account, block)
+		}
 	}
 
 	#[pallet::hooks]
@@ -236,7 +273,8 @@ impl<T: Config> Pallet<T> {
 
 	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
 		T::Currency::reserve(&who, stake)?;
-		Stakes::<T>::mutate(&who, |s| s.saturating_accrue(stake));
+		let block = <frame_system::Pallet<T>>::block_number();
+		Stakes::<T>::mutate(&who, &block, |s| s.unwrap_or_default().saturating_accrue(stake));
 		Ok(())
 	}
 
@@ -246,6 +284,24 @@ impl<T: Config> Pallet<T> {
 	pub fn do_disable(reason: DisableReason) -> DispatchResult {
 		let _limit = Enabled::<T>::take().ok_or(Error::<T>::IsDisabled)?;
 		Self::deposit_event(Event::Disabled(reason));
+		Ok(())
+	}
+
+	pub fn do_repay_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
+		ensure!(!Self::is_enabled(), Error::<T>::IsEnabled);
+		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
+
+		T::Currency::unreserve(&account, stake);
+		Self::deposit_event(Event::<T>::StakeRepaid(account, stake));
+		Ok(())
+	}
+
+	pub fn do_slash_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
+		ensure!(!Self::is_enabled(), Error::<T>::IsEnabled);
+		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
+
+		T::Currency::slash_reserved(&account, stake);
+		Self::deposit_event(Event::<T>::StakeSlashed(account, stake));
 		Ok(())
 	}
 
