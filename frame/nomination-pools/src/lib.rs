@@ -1609,6 +1609,7 @@ pub mod pallet {
 			Ok(())
 		}
 
+		// TODO: add tests
 		// FIXME: recorrect weight
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
@@ -1659,8 +1660,7 @@ pub mod pallet {
 				.try_mutate(|unbonding_eras| {
 					// rebond from the most recent era (most recent era have longer duration to
 					// withdraw) to the last
-					// we can't use `BtreeMap::retain` directly here because we need visit items in
-					// reverse order but we can use `BtreeMap::last_entry` once it is stable
+					// TODO: use `BtreeMap::last_entry` once it is stable
 					for (era, points) in unbonding_eras.iter_mut().rev() {
 						let unbonding_pool = sub_pools.get_pool(era);
 						let value = unbonding_pool.point_to_balance(*points);
@@ -1677,7 +1677,6 @@ pub mod pallet {
 							*points = points.saturating_sub(diff_points);
 							unlocking_balance = unlocking_balance.saturating_add(diff);
 						}
-
 						if unlocking_balance >= amount {
 							break
 						}
@@ -1689,7 +1688,7 @@ pub mod pallet {
 
 			bonded_pool.ok_to_rebond(&member, unlocking_balance)?;
 
-			// We must calculate the points issued *before* we rebond the funds, else points:balance
+			// We must calculate the points issued *before* rebond the funds, else points:balance
 			// ratio will be wrong.
 			let points_issued = bonded_pool.issue(unlocking_balance);
 			member.points = member.points.saturating_add(points_issued);
