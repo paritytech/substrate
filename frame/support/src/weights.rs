@@ -140,7 +140,7 @@ use sp_arithmetic::{
 };
 use sp_runtime::{
 	generic::{CheckedExtrinsic, UncheckedExtrinsic},
-	traits::{CheckedAdd, SaturatedConversion, SignedExtension},
+	traits::{SaturatedConversion, SignedExtension},
 	RuntimeDebug,
 };
 

@@ -348,6 +348,18 @@ impl Weight {
 	pub fn saturating_add(self, rhs: Self) -> Self {
 		<Self as Saturating>::saturating_add(self, rhs)
 	}
+
+	pub fn saturating_sub(self, rhs: Self) -> Self {
+		<Self as Saturating>::saturating_sub(self, rhs)
+	}
+
+	pub fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		<Self as CheckedAdd>::checked_add(self, rhs)
+	}
+
+	pub fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		<Self as CheckedSub>::checked_sub(self, rhs)
+	}
 }
 
 // TODO: Eventually remove these

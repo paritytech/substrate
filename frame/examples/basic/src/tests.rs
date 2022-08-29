@@ -190,7 +190,7 @@ fn weights_work() {
 	let default_call = pallet_example_basic::Call::<Test>::accumulate_dummy { increase_by: 10 };
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert!(info1.weight > 0);
+	assert!(info1.weight > Weight::zero());
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.

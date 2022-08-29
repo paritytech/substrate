@@ -121,7 +121,7 @@ where
 
 	/// Absorb the remaining gas of a nested meter after we are done using it.
 	pub fn absorb_nested(&mut self, nested: Self) {
-		if self.gas_left == 0 {
+		if self.gas_left == Weight::zero() {
 			// All of the remaining gas was inherited by the nested gas meter. When absorbing
 			// we can therefore safely inherit the lowest gas that the nested gas meter experienced
 			// as long as it is lower than the lowest gas that was experienced by the parent.

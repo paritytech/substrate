@@ -27,10 +27,7 @@
 
 use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, Weight};
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{Bounded, Saturating},
-	Perbill, RuntimeDebug,
-};
+use sp_runtime::{traits::Bounded, Perbill, RuntimeDebug};
 
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]

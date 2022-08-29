@@ -128,7 +128,7 @@ use frame_support::{
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, Header, NumberFor, One, Saturating,
+		self, Applyable, CheckEqual, Checkable, Dispatchable, Header, NumberFor, One,
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
