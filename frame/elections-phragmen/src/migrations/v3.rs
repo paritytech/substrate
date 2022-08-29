@@ -108,7 +108,7 @@ pub fn apply<V: V2ToV3, T: Config>(
 			"Attempted to apply migration to V3 but failed because storage version is {:?}",
 			storage_version,
 		);
-		0
+		Weight::zero()
 	}
 }
 

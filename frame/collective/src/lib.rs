@@ -424,10 +424,10 @@ pub mod pallet {
 		/// - 1 event
 		/// # </weight>
 		#[pallet::weight((
-			T::WeightInfo::execute(
+			Weight::from_ref_time(T::WeightInfo::execute(
 				*length_bound, // B
 				T::MaxMembers::get(), // M
-			).saturating_add(proposal.get_dispatch_info().weight), // P
+			)).saturating_add(proposal.get_dispatch_info().weight), // P
 			DispatchClass::Operational
 		))]
 		pub fn execute(
@@ -450,10 +450,10 @@ pub mod pallet {
 
 			Ok(get_result_weight(result)
 				.map(|w| {
-					T::WeightInfo::execute(
+					Weight::from_ref_time(T::WeightInfo::execute(
 						proposal_len as u32,  // B
 						members.len() as u32, // M
-					)
+					))
 					.saturating_add(w) // P
 				})
 				.into())
@@ -488,16 +488,16 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight((
 			if *threshold < 2 {
-				T::WeightInfo::propose_execute(
+				Weight::from_ref_time(T::WeightInfo::propose_execute(
 					*length_bound, // B
 					T::MaxMembers::get(), // M
-				).saturating_add(proposal.get_dispatch_info().weight) // P1
+				)).saturating_add(proposal.get_dispatch_info().weight) // P1
 			} else {
-				T::WeightInfo::propose_proposed(
+				Weight::from_ref_time(T::WeightInfo::propose_proposed(
 					*length_bound, // B
 					T::MaxMembers::get(), // M
 					T::MaxProposals::get(), // P2
-				)
+				))
 			},
 			DispatchClass::Operational
 		))]
@@ -516,10 +516,10 @@ pub mod pallet {
 
 				Ok(get_result_weight(result)
 					.map(|w| {
-						T::WeightInfo::propose_execute(
+						Weight::from_ref_time(T::WeightInfo::propose_execute(
 							proposal_len as u32,  // B
 							members.len() as u32, // M
-						)
+						))
 						.saturating_add(w) // P1
 					})
 					.into())
@@ -610,10 +610,10 @@ pub mod pallet {
 				let m = T::MaxMembers::get();
 				let p1 = *proposal_weight_bound;
 				let p2 = T::MaxProposals::get();
-				T::WeightInfo::close_early_approved(b, m, p2)
+				Weight::from_ref_time(T::WeightInfo::close_early_approved(b, m, p2)
 					.max(T::WeightInfo::close_early_disapproved(m, p2))
 					.max(T::WeightInfo::close_approved(b, m, p2))
-					.max(T::WeightInfo::close_disapproved(m, p2))
+					.max(T::WeightInfo::close_disapproved(m, p2)))
 					.saturating_add(p1)
 			},
 			DispatchClass::Operational
@@ -622,7 +622,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: Weight,
+			proposal_weight_bound: Weight,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
@@ -810,8 +810,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 			return Ok((
 				Some(
-					T::WeightInfo::close_early_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight),
+					Weight::from_ref_time(T::WeightInfo::close_early_approved(
+						len as u32,
+						seats,
+						proposal_count,
+					))
+					.saturating_add(proposal_weight),
 				),
 				Pays::Yes,
 			)
@@ -852,8 +856,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Self::do_approve_proposal(seats, yes_votes, proposal_hash, proposal);
 			Ok((
 				Some(
-					T::WeightInfo::close_approved(len as u32, seats, proposal_count)
-						.saturating_add(proposal_weight),
+					Weight::from_ref_time(T::WeightInfo::close_approved(
+						len as u32,
+						seats,
+						proposal_count,
+					))
+					.saturating_add(proposal_weight),
 				),
 				Pays::Yes,
 			)
