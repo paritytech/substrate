@@ -19,7 +19,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_runtime::{
 	traits::{Bounded, CheckedAdd, CheckedSub, One, Zero},
-	RuntimeDebug,
+	Perquintill, RuntimeDebug,
 };
 
 use super::*;
@@ -154,6 +154,13 @@ where
 }
 
 impl Mul<Weight> for Perbill {
+	type Output = Weight;
+	fn mul(self, b: Weight) -> Weight {
+		Weight { ref_time: self * b.ref_time }
+	}
+}
+
+impl Mul<Weight> for Perquintill {
 	type Output = Weight;
 	fn mul(self, b: Weight) -> Weight {
 		Weight { ref_time: self * b.ref_time }
@@ -336,6 +343,10 @@ impl Weight {
 
 	pub fn one() -> Self {
 		<Self as One>::one()
+	}
+
+	pub fn saturating_add(self, rhs: Self) -> Self {
+		<Self as Saturating>::saturating_add(self, rhs)
 	}
 }
 
