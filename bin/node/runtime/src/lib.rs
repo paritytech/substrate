@@ -1518,8 +1518,10 @@ impl pallet_state_trie_migration::Config for Runtime {
 	type WeightInfo = ();
 }
 
+const ALLIANCE_MOTION_DURATION_IN_BLOCKS: BlockNumber = 5 * DAYS;
+
 parameter_types! {
-	pub const AllianceMotionDuration: BlockNumber = 5 * DAYS;
+	pub const AllianceMotionDuration: BlockNumber = ALLIANCE_MOTION_DURATION_IN_BLOCKS;
 	pub const AllianceMaxProposals: u32 = 100;
 	pub const AllianceMaxMembers: u32 = 100;
 }
@@ -1541,6 +1543,7 @@ parameter_types! {
 	pub const MaxFellows: u32 = AllianceMaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: Balance = 10 * DOLLARS;
+	pub const RetirementPeriod: BlockNumber = ALLIANCE_MOTION_DURATION_IN_BLOCKS + (1 * DAYS);
 }
 
 impl pallet_alliance::Config for Runtime {
@@ -1577,6 +1580,7 @@ impl pallet_alliance::Config for Runtime {
 	type MaxMembersCount = AllianceMaxMembers;
 	type AllyDeposit = AllyDeposit;
 	type WeightInfo = pallet_alliance::weights::SubstrateWeight<Runtime>;
+	type RetirementPeriod = RetirementPeriod;
 }
 
 construct_runtime!(
@@ -1682,8 +1686,15 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
+	Migrations,
 >;
+
+// All migrations executed on runtime upgrade as a nested tuple of types implementing
+// `OnRuntimeUpgrade`.
+type Migrations = (
+	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
+	pallet_alliance::migration::Migration<Runtime>,
+);
 
 /// MMR helper types.
 mod mmr {
@@ -1703,6 +1714,7 @@ extern crate frame_benchmarking;
 mod benches {
 	define_benchmarks!(
 		[frame_benchmarking, BaselineBench::<Runtime>]
+		[pallet_alliance, Alliance]
 		[pallet_assets, Assets]
 		[pallet_babe, Babe]
 		[pallet_bags_list, BagsList]
