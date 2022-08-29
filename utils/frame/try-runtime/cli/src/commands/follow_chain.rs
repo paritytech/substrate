@@ -50,8 +50,10 @@ pub struct FollowChainCmd {
 	/// Expected values:
 	/// - `all`
 	/// - `none`
-	/// - A comma separated list of pallets, as per pallet names in `construct_runtime!()` (e.g. `Staking, System`).
-	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a round-robin fashion.
+	/// - A comma separated list of pallets, as per pallet names in `construct_runtime!()` (e.g.
+	///   `Staking, System`).
+	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
+	///   round-robin fashion.
 	#[clap(long, default_value = "none")]
 	try_state: frame_try_runtime::TryStateSelect,
 }
