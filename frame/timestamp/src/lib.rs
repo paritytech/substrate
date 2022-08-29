@@ -168,7 +168,7 @@ pub mod pallet {
 		/// dummy `on_initialize` to return the weight used in `on_finalize`.
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			// weight of `on_finalize`
-			T::WeightInfo::on_finalize()
+			Weight::from_ref_time(T::WeightInfo::on_finalize())
 		}
 
 		/// # <weight>

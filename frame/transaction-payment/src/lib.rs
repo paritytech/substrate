@@ -963,7 +963,12 @@ mod tests {
 
 	impl Default for ExtBuilder {
 		fn default() -> Self {
-			Self { balance_factor: 1, base_weight: 0, byte_fee: 1, weight_to_fee: 1 }
+			Self {
+				balance_factor: 1,
+				base_weight: Weight::from_ref_time(0),
+				byte_fee: 1,
+				weight_to_fee: 1,
+			}
 		}
 	}
 
@@ -1134,7 +1139,7 @@ mod tests {
 
 				// This is a completely free (and thus wholly insecure/DoS-ridden) transaction.
 				let operational_transaction = DispatchInfo {
-					weight: 0,
+					weight: Weight::from_ref_time(0),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::No,
 				};
@@ -1146,8 +1151,11 @@ mod tests {
 				));
 
 				// like a InsecureFreeNormal
-				let free_transaction =
-					DispatchInfo { weight: 0, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				let free_transaction = DispatchInfo {
+					weight: Weight::from_ref_time(0),
+					class: DispatchClass::Normal,
+					pays_fee: Pays::Yes,
+				};
 				assert_noop!(
 					ChargeTransactionPayment::<Runtime>::from(0).validate(
 						&1,
@@ -1291,14 +1299,14 @@ mod tests {
 
 				// Tip only, no fees works
 				let dispatch_info = DispatchInfo {
-					weight: 0,
+					weight: Weight::from_ref_time(0),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::No,
 				};
 				assert_eq!(Pallet::<Runtime>::compute_fee(0, &dispatch_info, 10), 10);
 				// No tip, only base fee works
 				let dispatch_info = DispatchInfo {
-					weight: 0,
+					weight: Weight::from_ref_time(0),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1309,7 +1317,7 @@ mod tests {
 				assert_eq!(Pallet::<Runtime>::compute_fee(42, &dispatch_info, 0), 520);
 				// Weight fee + base fee works
 				let dispatch_info = DispatchInfo {
-					weight: 1000,
+					weight: Weight::from_ref_time(1000),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1329,7 +1337,7 @@ mod tests {
 				<NextFeeMultiplier<Runtime>>::put(Multiplier::saturating_from_rational(3, 2));
 				// Base fee is unaffected by multiplier
 				let dispatch_info = DispatchInfo {
-					weight: 0,
+					weight: Weight::from_ref_time(0),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1337,7 +1345,7 @@ mod tests {
 
 				// Everything works together :)
 				let dispatch_info = DispatchInfo {
-					weight: 123,
+					weight: Weight::from_ref_time(123),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1362,7 +1370,7 @@ mod tests {
 
 				// Base fee is unaffected by multiplier.
 				let dispatch_info = DispatchInfo {
-					weight: 0,
+					weight: Weight::from_ref_time(0),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1370,7 +1378,7 @@ mod tests {
 
 				// Everything works together.
 				let dispatch_info = DispatchInfo {
-					weight: 123,
+					weight: Weight::from_ref_time(123),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};
@@ -1477,8 +1485,11 @@ mod tests {
 				// So events are emitted
 				System::set_block_number(10);
 				let len = 10;
-				let dispatch_info =
-					DispatchInfo { weight: 100, pays_fee: Pays::No, class: DispatchClass::Normal };
+				let dispatch_info = DispatchInfo {
+					weight: Weight::from_ref_time(100),
+					pays_fee: Pays::No,
+					class: DispatchClass::Normal,
+				};
 				let user = 69;
 				let pre = ChargeTransactionPayment::<Runtime>::from(0)
 					.pre_dispatch(&user, CALL, &dispatch_info, len)
@@ -1547,8 +1558,11 @@ mod tests {
 		let len = 10;
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: Weight::from_ref_time(100),
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+			};
 			let priority = ChargeTransactionPayment::<Runtime>(tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
@@ -1566,7 +1580,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let op = DispatchInfo {
-				weight: 100,
+				weight: Weight::from_ref_time(100),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -1590,8 +1604,11 @@ mod tests {
 		let len = 10;
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: Weight::from_ref_time(100),
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+			};
 			let priority = ChargeTransactionPayment::<Runtime>(tip)
 				.validate(&2, CALL, &normal, len)
 				.unwrap()
@@ -1602,7 +1619,7 @@ mod tests {
 
 		ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 			let op = DispatchInfo {
-				weight: 100,
+				weight: Weight::from_ref_time(100),
 				class: DispatchClass::Operational,
 				pays_fee: Pays::Yes,
 			};
@@ -1621,8 +1638,11 @@ mod tests {
 			let mut priority2 = 0;
 			let len = 10;
 			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
-				let normal =
-					DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+				let normal = DispatchInfo {
+					weight: Weight::from_ref_time(100),
+					class: DispatchClass::Normal,
+					pays_fee: Pays::Yes,
+				};
 				priority1 = ChargeTransactionPayment::<Runtime>(tip)
 					.validate(&2, CALL, &normal, len)
 					.unwrap()
@@ -1631,7 +1651,7 @@ mod tests {
 
 			ExtBuilder::default().balance_factor(100).build().execute_with(|| {
 				let op = DispatchInfo {
-					weight: 100,
+					weight: Weight::from_ref_time(100),
 					class: DispatchClass::Operational,
 					pays_fee: Pays::Yes,
 				};

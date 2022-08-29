@@ -60,9 +60,9 @@ parameter_types! {
 		write: 100,
 	};
 	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
-		.base_block(10)
+		.base_block(Weight::from_ref_time(10))
 		.for_class(DispatchClass::all(), |weights| {
-			weights.base_extrinsic = 5;
+			weights.base_extrinsic = Weight::from_ref_time(5);
 		})
 		.for_class(DispatchClass::Normal, |weights| {
 			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);

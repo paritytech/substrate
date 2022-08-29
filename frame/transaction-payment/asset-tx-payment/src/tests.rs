@@ -215,7 +215,12 @@ pub struct ExtBuilder {
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { balance_factor: 1, base_weight: 0, byte_fee: 1, weight_to_fee: 1 }
+		Self {
+			balance_factor: 1,
+			base_weight: Weight::from_ref_time(0),
+			byte_fee: 1,
+			weight_to_fee: 1,
+		}
 	}
 }
 

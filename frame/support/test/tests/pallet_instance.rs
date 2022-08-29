@@ -350,7 +350,11 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo {
+			weight: Weight::from_ref_time(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		}
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_storage_layer"]);
@@ -358,7 +362,11 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo { foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo {
+			weight: Weight::from_ref_time(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		}
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(

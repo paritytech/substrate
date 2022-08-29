@@ -20,7 +20,6 @@ use crate::{
 	weights::{RuntimeDbWeight, Weight},
 };
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_runtime::traits::Saturating;
 
 /// Trait used by [`migrate_from_pallet_version_to_storage_version`] to do the actual migration.
 pub trait PalletVersionToStorageVersionHelper {
