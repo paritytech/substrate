@@ -326,21 +326,29 @@ impl EnvDef {
 			.ok_or(err("Invalid environment definition, expected `mod` to be inlined."))?
 			.1;
 
-		let aliases = items.iter().filter(|i| {
-			let i = match i {
-				syn::Item::Fn(i_fn) => i_fn,
-				_ => return false,
-			};
+		let extract_fn = |i: &syn::Item| match i {
+			syn::Item::Fn(i_fn) => Some(i_fn.clone()),
+			_ => None,
+		};
 
-			i.attrs.iter().any(|a| {
-				a.path.get_ident().map(|i| i.to_string().eq("prefixed_alias")).unwrap_or(false)
+		let selector = |a: &syn::Attribute| {
+			a.path.get_ident().map(|i| i.to_string().eq("prefixed_alias")).unwrap_or(false)
+		};
+
+		let aliases = items
+			.iter()
+			.filter_map(extract_fn)
+			.filter(|i| i.attrs.iter().any(selector))
+			.map(|mut i| {
+				i.attrs.retain(|i| !selector(i));
+				i
 			})
-		});
+			.map(|i| HostFn::try_from(syn::Item::Fn(i)));
 
 		let host_funcs = items
 			.iter()
-			.chain(aliases)
 			.map(|i| HostFn::try_from(i.clone()))
+			.chain(aliases)
 			.collect::<Result<Vec<_>, _>>()?;
 
 		Ok(Self { host_funcs })
