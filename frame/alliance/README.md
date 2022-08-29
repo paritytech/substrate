@@ -43,6 +43,7 @@ to update the Alliance's rule and make announcements.
 
 #### For Members (All)
 
+- `give_retirement_notice` - Give a retirement notice and start a retirement period required to pass in order to retire.
 - `retire` - Retire from the Alliance and release the caller's deposit.
 
 #### For Members (Founders/Fellows)

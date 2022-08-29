@@ -8249,6 +8249,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-wasm 0.42.2",
  "paste 1.0.6",
+ "rustix 0.33.7",
  "rustix 0.35.6",
  "sc-allocator",
  "sc-executor-common",
