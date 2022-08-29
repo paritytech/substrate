@@ -42,6 +42,7 @@ use frame_support::{
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
+use sp_std::vec;
 
 /// Put the instrumented module in storage.
 ///
