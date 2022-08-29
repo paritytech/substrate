@@ -363,10 +363,10 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 			PruningMode::ArchiveAll => IsPruned::NotPruned,
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 				if self.best_canonical().map(|c| number > c).unwrap_or(true) {
-					if !self.non_canonical.have_block(hash) {
-						IsPruned::Pruned
-					} else {
+					if self.non_canonical.have_block(hash) {
 						IsPruned::NotPruned
+					} else {
+						IsPruned::Pruned
 					}
 				} else {
 					match self.pruning.as_ref() {

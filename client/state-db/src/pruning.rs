@@ -462,7 +462,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		// if the queue is empty or the block number exceed the pruning window, we definitely
 		// do not have this block
 		if self.is_empty() ||
-			!(number >= self.pending() && number < self.base + self.queue.len() as u64)
+			number < self.pending() ||
+			number >= self.base + self.queue.len() as u64
 		{
 			return HaveBlock::NotHave
 		}
@@ -903,7 +904,7 @@ mod tests {
 
 		// revert the last add that no apply yet
 		// NOTE: do not commit the previous `CommitSet` to db
-		pruning.queue.revert_recent_add(0, 1);
+		pruning.revert_pending();
 		assert_eq!(pruning.queue.len(), cache_capacity + 10);
 		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity);
