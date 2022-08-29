@@ -374,7 +374,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 						Some(pruning) => match pruning.have_block(hash, number) {
 							HaveBlock::NotHave => IsPruned::Pruned,
 							HaveBlock::Have => IsPruned::NotPruned,
-							HaveBlock::MayHave => return IsPruned::MaybePruned,
+							HaveBlock::MayHave => IsPruned::MaybePruned,
 						},
 					}
 				}
