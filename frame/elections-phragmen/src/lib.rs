@@ -279,7 +279,7 @@ pub mod pallet {
 			if !term_duration.is_zero() && (n % term_duration).is_zero() {
 				Self::do_phragmen()
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}
@@ -363,7 +363,7 @@ pub mod pallet {
 			T::Currency::set_lock(T::PalletId::get(), &who, locked_stake, WithdrawReasons::all());
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 
 		/// Remove `origin` as a voter.
@@ -372,11 +372,11 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be signed and be a voter.
 		#[pallet::weight(T::WeightInfo::remove_voter())]
-		pub fn remove_voter(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn remove_voter(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);
 			Self::do_remove_voter(&who);
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Submit oneself for candidacy. A fixed amount of deposit is recorded.
@@ -398,7 +398,7 @@ pub mod pallet {
 		pub fn submit_candidacy(
 			origin: OriginFor<T>,
 			#[pallet::compact] candidate_count: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
@@ -417,7 +417,7 @@ pub mod pallet {
 				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
 
 			<Candidates<T>>::mutate(|c| c.insert(index, (who, T::CandidacyBond::get())));
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Renounce one's intention to be a candidate for the next election round. 3 potential
@@ -443,10 +443,7 @@ pub mod pallet {
 			Renouncing::Member => T::WeightInfo::renounce_candidacy_members(),
 			Renouncing::RunnerUp => T::WeightInfo::renounce_candidacy_runners_up(),
 		})]
-		pub fn renounce_candidacy(
-			origin: OriginFor<T>,
-			renouncing: Renouncing,
-		) -> DispatchResultWithPostInfo {
+		pub fn renounce_candidacy(origin: OriginFor<T>, renouncing: Renouncing) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			match renouncing {
 				Renouncing::Member => {
@@ -482,7 +479,7 @@ pub mod pallet {
 					})?;
 				},
 			};
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Remove a particular member from the set. This is effective immediately and the bond of
@@ -513,7 +510,7 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 			slash_bond: bool,
 			rerun_election: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -525,7 +522,7 @@ pub mod pallet {
 			}
 
 			// no refund needed.
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Clean all voters who are defunct (i.e. they do not serve any purpose at all). The
@@ -543,13 +540,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			_num_voters: u32,
 			_num_defunct: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let _ = ensure_root(origin)?;
 			<Voting<T>>::iter()
 				.filter(|(_, x)| Self::is_defunct_voter(&x.votes))
 				.for_each(|(dv, _)| Self::do_remove_voter(&dv));
 
-			Ok(None.into())
+			Ok(())
 		}
 	}
 
@@ -908,7 +905,7 @@ impl<T: Config> Pallet<T> {
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
-			return T::DbWeight::get().reads(3)
+			return Weight::from_ref_time(T::DbWeight::get().reads(3))
 		}
 
 		// All of the new winners that come out of phragmen will thus have a deposit recorded.
@@ -940,7 +937,7 @@ impl<T: Config> Pallet<T> {
 					"Failed to run election. Number of voters exceeded",
 				);
 				Self::deposit_event(Event::ElectionError);
-				return T::DbWeight::get().reads(3 + max_voters as u64)
+				return Weight::from_ref_time(T::DbWeight::get().reads(3 + max_voters as u64))
 			},
 		}
 
@@ -1108,7 +1105,11 @@ impl<T: Config> Pallet<T> {
 					Self::deposit_event(Event::ElectionError);
 				});
 
-		T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges)
+		Weight::from_ref_time(T::WeightInfo::election_phragmen(
+			weight_candidates,
+			weight_voters,
+			weight_edges,
+		))
 	}
 }
 
@@ -1488,7 +1489,7 @@ mod tests {
 		ensure_members_has_approval_stake();
 	}
 
-	fn submit_candidacy(origin: Origin) -> DispatchResultWithPostInfo {
+	fn submit_candidacy(origin: Origin) -> sp_runtime::DispatchResult {
 		Elections::submit_candidacy(origin, Elections::candidates().len() as u32)
 	}
 
