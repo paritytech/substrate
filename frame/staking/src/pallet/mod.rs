@@ -707,7 +707,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
 			// just return the weight of the on_finalize.
-			T::DbWeight::get().reads(1)
+			Weight::from_ref_time(T::DbWeight::get().reads(1))
 		}
 
 		fn on_finalize(_n: BlockNumberFor<T>) {

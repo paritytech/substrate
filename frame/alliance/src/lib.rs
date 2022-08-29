@@ -580,17 +580,17 @@ pub mod pallet {
 			let y = T::MaxFellows::get();
 			let p1 = *proposal_weight_bound;
 			let p2 = T::MaxProposals::get();
-			T::WeightInfo::close_early_approved(b, x, y, p2)
+			Weight::from_ref_time(T::WeightInfo::close_early_approved(b, x, y, p2)
 				.max(T::WeightInfo::close_early_disapproved(x, y, p2))
 				.max(T::WeightInfo::close_approved(b, x, y, p2))
-				.max(T::WeightInfo::close_disapproved(x, y, p2))
+				.max(T::WeightInfo::close_disapproved(x, y, p2)))
 				.saturating_add(p1)
 		})]
 		pub fn close(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: Weight,
+			proposal_weight_bound: Weight,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;

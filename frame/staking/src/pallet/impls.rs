@@ -98,24 +98,25 @@ impl<T: Config> Pallet<T> {
 		// Validate input data
 		let current_era = CurrentEra::<T>::get().ok_or_else(|| {
 			Error::<T>::InvalidEraToReward
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+				.with_weight(Weight::from_ref_time(T::WeightInfo::payout_stakers_alive_staked(0)))
 		})?;
 		let history_depth = Self::history_depth();
 		ensure!(
 			era <= current_era && era >= current_era.saturating_sub(history_depth),
 			Error::<T>::InvalidEraToReward
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+				.with_weight(Weight::from_ref_time(T::WeightInfo::payout_stakers_alive_staked(0)))
 		);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.claimed_rewards` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era).ok_or_else(|| {
 			Error::<T>::InvalidEraToReward
-				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+				.with_weight(Weight::from_ref_time(T::WeightInfo::payout_stakers_alive_staked(0)))
 		})?;
 
 		let controller = Self::bonded(&validator_stash).ok_or_else(|| {
-			Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			Error::<T>::NotStash
+				.with_weight(Weight::from_ref_time(T::WeightInfo::payout_stakers_alive_staked(0)))
 		})?;
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
 
@@ -124,8 +125,9 @@ impl<T: Config> Pallet<T> {
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
 			Ok(_) =>
-				return Err(Error::<T>::AlreadyClaimed
-					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
+				return Err(Error::<T>::AlreadyClaimed.with_weight(Weight::from_ref_time(
+					T::WeightInfo::payout_stakers_alive_staked(0),
+				))),
 			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
@@ -735,11 +737,11 @@ impl<T: Config> Pallet<T> {
 		// all_voters should have not re-allocated.
 		debug_assert!(all_voters.capacity() == max_allowed_len);
 
-		Self::register_weight(T::WeightInfo::get_npos_voters(
+		Self::register_weight(Weight::from_ref_time(T::WeightInfo::get_npos_voters(
 			validators_taken,
 			nominators_taken,
 			slashing_spans.len() as u32,
-		));
+		)));
 
 		log!(
 			info,
@@ -764,7 +766,9 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect::<Vec<_>>();
 
-		Self::register_weight(T::WeightInfo::get_npos_targets(validator_count));
+		Self::register_weight(Weight::from_ref_time(T::WeightInfo::get_npos_targets(
+			validator_count,
+		)));
 
 		targets
 	}
@@ -882,7 +886,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type MaxVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
-		Self::register_weight(T::DbWeight::get().reads(1));
+		Self::register_weight(Weight::from_ref_time(T::DbWeight::get().reads(1)));
 		Ok(Self::validator_count())
 	}
 
@@ -1169,7 +1173,8 @@ where
 		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight = Weight::from_ref_time(0);
 		let mut add_db_reads_writes = |reads, writes| {
-			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
+			consumed_weight +=
+				Weight::from_ref_time(T::DbWeight::get().reads_writes(reads, writes));
 		};
 
 		let active_era = {

@@ -3359,19 +3359,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		assert_noop!(
 			Staking::payout_stakers(Origin::signed(1337), 11, 0),
 			// Fail: Era out of history
-			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+			Error::<Test>::InvalidEraToReward.with_weight(Weight::from_ref_time(err_weight))
 		);
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
 		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 2));
 		assert_noop!(
 			Staking::payout_stakers(Origin::signed(1337), 11, 2),
 			// Fail: Double claim
-			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+			Error::<Test>::AlreadyClaimed.with_weight(Weight::from_ref_time(err_weight))
 		);
 		assert_noop!(
 			Staking::payout_stakers(Origin::signed(1337), 11, active_era),
 			// Fail: Era not finished yet
-			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+			Error::<Test>::InvalidEraToReward.with_weight(Weight::from_ref_time(err_weight))
 		);
 
 		// Era 0 can't be rewarded anymore and current era can't be rewarded yet
@@ -3679,7 +3679,8 @@ fn payout_stakers_handles_basic_errors() {
 	// Here we will test payouts handle all errors.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// Consumed weight for all payout_stakers dispatches that fail
-		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+		let err_weight =
+			Weight::from_ref_time(weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0));
 
 		// Same setup as the test above
 		let balance = 1000;
@@ -3754,12 +3755,15 @@ fn payout_stakers_handles_weight_refund() {
 		assert!(half_max_nom_rewarded > 0);
 		assert!(max_nom_rewarded > half_max_nom_rewarded);
 
-		let max_nom_rewarded_weight =
-			<Test as Config>::WeightInfo::payout_stakers_alive_staked(max_nom_rewarded);
-		let half_max_nom_rewarded_weight =
-			<Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded);
-		let zero_nom_payouts_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
-		assert!(zero_nom_payouts_weight > 0);
+		let max_nom_rewarded_weight = Weight::from_ref_time(
+			<Test as Config>::WeightInfo::payout_stakers_alive_staked(max_nom_rewarded),
+		);
+		let half_max_nom_rewarded_weight = Weight::from_ref_time(
+			<Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded),
+		);
+		let zero_nom_payouts_weight =
+			Weight::from_ref_time(<Test as Config>::WeightInfo::payout_stakers_alive_staked(0));
+		assert!(zero_nom_payouts_weight > Weight::zero());
 		assert!(half_max_nom_rewarded_weight > zero_nom_payouts_weight);
 		assert!(max_nom_rewarded_weight > half_max_nom_rewarded_weight);
 
@@ -3898,42 +3902,70 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 fn offences_weight_calculated_correctly() {
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// On offence with zero offenders: 4 Reads, 1 Write
-		let zero_offence_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
-		assert_eq!(Staking::on_offence(&[], &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), zero_offence_weight);
+		let zero_offence_weight = Weight::from_ref_time(
+			<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1),
+		);
+		assert_eq!(
+			Staking::on_offence(&[], &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed),
+			zero_offence_weight
+		);
 
 		// On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
-		let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
-			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 5);
+		let n_offence_unapplied_weight = Weight::from_ref_time(
+			<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1) +
+				<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 5),
+		);
 
-		let offenders: Vec<OffenceDetails<<Test as frame_system::Config>::AccountId, pallet_session::historical::IdentificationTuple<Test>>>
-			= (1..10).map(|i|
-				OffenceDetails {
-					offender: (i, Staking::eras_stakers(active_era(), i)),
-					reporters: vec![],
-				}
-			).collect();
-		assert_eq!(Staking::on_offence(&offenders, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), n_offence_unapplied_weight);
+		let offenders: Vec<
+			OffenceDetails<
+				<Test as frame_system::Config>::AccountId,
+				pallet_session::historical::IdentificationTuple<Test>,
+			>,
+		> = (1..10)
+			.map(|i| OffenceDetails {
+				offender: (i, Staking::eras_stakers(active_era(), i)),
+				reporters: vec![],
+			})
+			.collect();
+		assert_eq!(
+			Staking::on_offence(
+				&offenders,
+				&[Perbill::from_percent(50)],
+				0,
+				DisableStrategy::WhenSlashed
+			),
+			n_offence_unapplied_weight
+		);
 
 		// On Offence with one offenders, Applied
-		let one_offender = [
-			OffenceDetails {
-				offender: (11, Staking::eras_stakers(active_era(), 11)),
-				reporters: vec![1],
-			},
-		];
+		let one_offender = [OffenceDetails {
+			offender: (11, Staking::eras_stakers(active_era(), 11)),
+			reporters: vec![1],
+		}];
 
 		let n = 1; // Number of offenders
 		let rw = 3 + 3 * n; // rw reads and writes
-		let one_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
-			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(rw, rw)
+		let one_offence_unapplied_weight = Weight::from_ref_time(
+			<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1),
+		) + Weight::from_ref_time(
+			<Test as frame_system::Config>::DbWeight::get().reads_writes(rw, rw)
 			// One `slash_cost`
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(6, 5)
 			// `slash_cost` * nominators (1)
 			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(6, 5)
 			// `reward_cost` * reporters (1)
-			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2);
+			+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2),
+		);
 
-		assert_eq!(Staking::on_offence(&one_offender, &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed), one_offence_unapplied_weight);
+		assert_eq!(
+			Staking::on_offence(
+				&one_offender,
+				&[Perbill::from_percent(50)],
+				0,
+				DisableStrategy::WhenSlashed
+			),
+			one_offence_unapplied_weight
+		);
 	});
 }
 
@@ -4211,7 +4243,8 @@ fn do_not_die_when_active_is_ed() {
 #[test]
 fn on_finalize_weight_is_nonzero() {
 	ExtBuilder::default().build_and_execute(|| {
-		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
+		let on_finalize_weight =
+			Weight::from_ref_time(<Test as frame_system::Config>::DbWeight::get().reads(1));
 		assert!(<Staking as Hooks<u64>>::on_initialize(1) >= on_finalize_weight);
 	})
 }
