@@ -503,7 +503,7 @@ fn call_encode_is_correct_and_decode_works() {
 fn call_weight_should_attach_to_call_enum() {
 	use frame_support::{
 		dispatch::{DispatchInfo, GetDispatchInfo},
-		weights::{DispatchClass, Pays},
+		weights::{DispatchClass, Pays, Weight},
 	};
 	// operational.
 	assert_eq!(
