@@ -113,6 +113,7 @@ members = [
 	"frame/offences",
 	"frame/preimage",
 	"frame/proxy",
+	"frame/nfts",
 	"frame/nomination-pools",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",

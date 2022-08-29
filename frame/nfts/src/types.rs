@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Various basic types for use in the Uniques pallet.
+//! Various basic types for use in the Nfts pallet.
 
 use super::*;
 use frame_support::{

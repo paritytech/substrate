@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Uniques pallet.
+//! Test environment for Nfts pallet.
 
 use super::*;
-use crate as pallet_uniques;
+use crate as pallet_nfts;
 
 use frame_support::{
 	construct_runtime,
@@ -41,7 +41,7 @@ construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
+		Nfts: pallet_nfts::{Pallet, Call, Storage, Event<T>},
 	}
 );
 

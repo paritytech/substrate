@@ -1,12 +1,12 @@
 [package]
-name = "pallet-uniques"
+name = "pallet-nfts"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "FRAME NFT asset management pallet"
+description = "FRAME NFTs pallet"
 readme = "README.md"
 
 [package.metadata.docs.rs]

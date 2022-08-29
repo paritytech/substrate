@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Uniques pallet benchmarking.
+//! Nfts pallet benchmarking.
 
 #![cfg(feature = "runtime-benchmarks")]
 
@@ -32,7 +32,7 @@ use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::Bounded;
 use sp_std::prelude::*;
 
-use crate::Pallet as Uniques;
+use crate::Pallet as Nfts;
 
 const SEED: u32 = 0;
 
@@ -42,7 +42,7 @@ fn create_collection<T: Config<I>, I: 'static>(
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	assert!(Uniques::<T, I>::force_create(
+	assert!(Nfts::<T, I>::force_create(
 		SystemOrigin::Root.into(),
 		collection,
 		caller_lookup.clone(),
@@ -58,7 +58,7 @@ fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, Account
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	assert!(Uniques::<T, I>::set_collection_metadata(
+	assert!(Nfts::<T, I>::set_collection_metadata(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
@@ -77,7 +77,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let item = T::Helper::item(index);
-	assert!(Uniques::<T, I>::mint(
+	assert!(Nfts::<T, I>::mint(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		item,
@@ -95,7 +95,7 @@ fn add_item_metadata<T: Config<I>, I: 'static>(
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	assert!(Uniques::<T, I>::set_metadata(
+	assert!(Nfts::<T, I>::set_metadata(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		item,
@@ -115,7 +115,7 @@ fn add_item_attribute<T: Config<I>, I: 'static>(
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let key: BoundedVec<_, _> = vec![0; T::KeyLimit::get() as usize].try_into().unwrap();
-	assert!(Uniques::<T, I>::set_attribute(
+	assert!(Nfts::<T, I>::set_attribute(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		Some(item),
@@ -209,7 +209,7 @@ benchmarks_instance_pallet! {
 		let i in 0 .. 5_000;
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let items = (0..i).map(|x| mint_item::<T, I>(x as u16).0).collect::<Vec<_>>();
-		Uniques::<T, I>::force_item_status(
+		Nfts::<T, I>::force_item_status(
 			SystemOrigin::Root.into(),
 			collection,
 			caller_lookup.clone(),
@@ -235,7 +235,7 @@ benchmarks_instance_pallet! {
 	thaw {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-		Uniques::<T, I>::freeze(
+		Nfts::<T, I>::freeze(
 			SystemOrigin::Signed(caller.clone()).into(),
 			collection,
 			item,
@@ -255,7 +255,7 @@ benchmarks_instance_pallet! {
 	thaw_collection {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let origin = SystemOrigin::Signed(caller.clone()).into();
-		Uniques::<T, I>::freeze_collection(origin, collection)?;
+		Nfts::<T, I>::freeze_collection(origin, collection)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection)
 	verify {
 		assert_last_event::<T, I>(Event::CollectionThawed { collection }.into());
@@ -267,7 +267,7 @@ benchmarks_instance_pallet! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 		let origin = SystemOrigin::Signed(target.clone()).into();
-		Uniques::<T, I>::set_accept_ownership(origin, Some(collection))?;
+		Nfts::<T, I>::set_accept_ownership(origin, Some(collection))?;
 	}: _(SystemOrigin::Signed(caller), collection, target_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::OwnerChanged { collection, new_owner: target }.into());
@@ -379,7 +379,7 @@ benchmarks_instance_pallet! {
 		let delegate: T::AccountId = account("delegate", 0, SEED);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 		let origin = SystemOrigin::Signed(caller.clone()).into();
-		Uniques::<T, I>::approve_transfer(origin, collection, item, delegate_lookup.clone())?;
+		Nfts::<T, I>::approve_transfer(origin, collection, item, delegate_lookup.clone())?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(delegate_lookup))
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { collection, item, owner: caller, delegate }.into());
@@ -430,7 +430,7 @@ benchmarks_instance_pallet! {
 		let buyer_lookup = T::Lookup::unlookup(buyer.clone());
 		let price = ItemPrice::<T, I>::from(0u32);
 		let origin = SystemOrigin::Signed(seller.clone()).into();
-		Uniques::<T, I>::set_price(origin, collection, item, Some(price.clone()), Some(buyer_lookup))?;
+		Nfts::<T, I>::set_price(origin, collection, item, Some(price.clone()), Some(buyer_lookup))?;
 		T::Currency::make_free_balance_be(&buyer, DepositBalanceOf::<T, I>::max_value());
 	}: _(SystemOrigin::Signed(buyer.clone()), collection, item, price.clone())
 	verify {
@@ -443,5 +443,5 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	impl_benchmark_test_suite!(Uniques, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Nfts, crate::mock::new_test_ext(), crate::mock::Test);
 }
