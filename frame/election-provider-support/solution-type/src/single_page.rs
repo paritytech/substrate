@@ -178,7 +178,6 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 
 				all_targets.into_iter().collect()
 			}
-
 		}
 
 		type __IndexAssignment = _feps::IndexAssignment<
