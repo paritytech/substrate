@@ -2179,6 +2179,7 @@ impl<T: Config> Pallet<T> {
 		T::StakingInterface::minimum_bond()
 			.max(MinCreateBond::<T>::get())
 			.max(MinJoinBond::<T>::get())
+			.max(T::Currency::minimum_balance())
 	}
 	/// Remove everything related to the given bonded pool.
 	///
