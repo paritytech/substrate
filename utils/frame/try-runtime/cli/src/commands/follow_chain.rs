@@ -102,11 +102,13 @@ where
 
 		// create an ext at the state of this block, whatever is the first subscription event.
 		if maybe_state_ext.is_none() {
-			let builder = Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
-				transport: command.uri.clone().into(),
-				at: Some(*header.parent_hash()),
-				..Default::default()
-			}));
+			let builder = Builder::<Block>::new()
+				.mode(Mode::Online(OnlineConfig {
+					transport: command.uri.clone().into(),
+					at: Some(*header.parent_hash()),
+					..Default::default()
+				}))
+				.state_version(shared.state_version);
 
 			let new_ext = builder
 				.inject_hashed_key_value(&[(code_key.clone(), code.clone())])
