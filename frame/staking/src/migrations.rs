@@ -91,6 +91,14 @@ pub mod v11 {
 				"wrong version after the upgrade"
 			);
 
+			let old_pallet_name = N::get();
+			let new_pallet_name = <P as PalletInfoAccess>::name();
+
+			// skip storage prefix checks for the same pallet names
+			if new_pallet_name == old_pallet_name {
+				return Ok(())
+			}
+
 			let old_pallet_prefix = twox_128(N::get().as_bytes());
 			frame_support::ensure!(
 				sp_io::storage::next_key(&old_pallet_prefix).is_none(),
