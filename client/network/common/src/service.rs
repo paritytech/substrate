@@ -387,7 +387,7 @@ pub trait NotificationSenderReady {
 
 /// A `NotificationSender` allows for sending notifications to a peer with a chosen protocol.
 #[async_trait::async_trait]
-pub trait NotificationSender {
+pub trait NotificationSender: Send + Sync + 'static {
 	/// Returns a future that resolves when the `NotificationSender` is ready to send a
 	/// notification.
 	async fn ready(&self)
