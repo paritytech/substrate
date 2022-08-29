@@ -1533,35 +1533,48 @@ impl<T: Config> Pallet<T> {
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		let _ = Self::finalize_signed_phase();
-		<QueuedSolution<T>>::take()
-			.map_or_else(
-				|| {
-					T::Fallback::elect().map_err(|fe| ElectionError::Fallback(fe)).map(|supports| {
-						(supports.clone(), supports.evaluate(), ElectionCompute::Fallback)
-					})
+		match <QueuedSolution<T>>::take() {
+			Some(ready_solution) => {
+				Self::deposit_event(Event::ElectionFinalized {
+					election_compute: Some(ready_solution.compute),
+					score: Some(ready_solution.score),
+				});
+				if Self::round() != 1 {
+					log!(
+						info,
+						"Finalized election round with compute {:?}.",
+						ready_solution.compute
+					);
+				}
+				Ok(ready_solution.supports)
+			},
+			None => match T::Fallback::elect() {
+				Ok(supports) => {
+					Self::deposit_event(Event::ElectionFinalized {
+						election_compute: Some(ElectionCompute::Fallback),
+						score: None,
+					});
+					if Self::round() != 1 {
+						log!(
+							info,
+							"Finalized election round with compute {:?}.",
+							ElectionCompute::Fallback
+						);
+					}
+					Ok(supports)
 				},
-				|ReadySolution { supports, score, compute }| Ok((supports, score, compute)),
-			)
-			.map(|(supports, score, compute)| {
-				Self::deposit_event(Event::ElectionFinalized {
-					election_compute: Some(compute),
-					score: Some(score),
-				});
-				if Self::round() != 1 {
-					log!(info, "Finalized election round with compute {:?}.", compute);
-				}
-				supports
-			})
-			.map_err(|err| {
-				Self::deposit_event(Event::ElectionFinalized {
-					election_compute: None,
-					score: None,
-				});
-				if Self::round() != 1 {
-					log!(warn, "Failed to finalize election round. reason {:?}", err);
-				}
-				err
-			})
+				Err(err) => {
+					Self::deposit_event(Event::ElectionFinalized {
+						election_compute: None,
+						score: None,
+					});
+					if Self::round() != 1 {
+						log!(warn, "Failed to finalize election round. reason {:?}", err);
+					}
+					Err(ElectionError::Fallback(err))
+				},
+			},
+		}
 	}
 
 	/// record the weight of the given `supports`.
@@ -1810,8 +1823,9 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, roll_to, AccountId, ExtBuilder, MockWeightInfo, MockedWeightInfo,
-			MultiPhase, Origin, Runtime, SignedMaxSubmissions, System, TargetIndex, Targets,
+			multi_phase_events, raw_solution, roll_to, AccountId, ExtBuilder, MockWeightInfo,
+			MockedWeightInfo, MultiPhase, Origin, Runtime, SignedMaxSubmissions, System,
+			TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -1979,11 +1993,7 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized {
 						election_compute: Some(ElectionCompute::Fallback),
-						score: Some(ElectionScore {
-							minimal_stake: 40,
-							sum_stake: 100,
-							sum_stake_squared: 5200
-						})
+						score: None
 					}
 				],
 			);
@@ -2030,6 +2040,91 @@ mod tests {
 			assert!(MultiPhase::desired_targets().is_none());
 			assert!(MultiPhase::queued_solution().is_none());
 			assert!(MultiPhase::signed_submissions().is_empty());
+		})
+	}
+
+	#[test]
+	fn check_events_with_election_compute_signed() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(14);
+			assert_eq!(MultiPhase::current_phase(), Phase::Off);
+
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			let solution = raw_solution();
+			assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
+
+			roll_to(30);
+			assert_ok!(MultiPhase::elect());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored {
+						election_compute: ElectionCompute::Signed,
+						prev_ejected: false
+					},
+					Event::Rewarded { account: 99, value: 7 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						election_compute: Some(ElectionCompute::Signed),
+						score: Some(ElectionScore {
+							minimal_stake: 40,
+							sum_stake: 100,
+							sum_stake_squared: 5200
+						})
+					}
+				],
+			);
+		})
+	}
+
+	#[test]
+	fn check_events_with_election_compute_unsigned() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(25);
+			assert!(MultiPhase::current_phase().is_unsigned());
+
+			// ensure we have snapshots in place.
+			assert!(MultiPhase::snapshot().is_some());
+			assert_eq!(MultiPhase::desired_targets().unwrap(), 2);
+
+			// mine seq_phragmen solution with 2 iters.
+			let (solution, witness) = MultiPhase::mine_solution().unwrap();
+
+			// ensure this solution is valid.
+			assert!(MultiPhase::queued_solution().is_none());
+			assert_ok!(MultiPhase::submit_unsigned(
+				crate::mock::Origin::none(),
+				Box::new(solution),
+				witness
+			));
+			assert!(MultiPhase::queued_solution().is_some());
+
+			roll_to(30);
+			assert_ok!(MultiPhase::elect());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::SolutionStored {
+						election_compute: ElectionCompute::Unsigned,
+						prev_ejected: false
+					},
+					Event::ElectionFinalized {
+						election_compute: Some(ElectionCompute::Unsigned),
+						score: Some(ElectionScore {
+							minimal_stake: 40,
+							sum_stake: 100,
+							sum_stake_squared: 5200
+						})
+					}
+				],
+			);
 		})
 	}
 
