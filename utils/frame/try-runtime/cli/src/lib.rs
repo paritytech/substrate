@@ -657,21 +657,27 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 			if expected_spec_version == version {
 				log::info!(target: LOG_TARGET, "found matching spec version: {:?}", version);
 			} else {
-				log::warn!(
-					target: LOG_TARGET,
+				let msg = format!(
 					"spec version mismatch (local {} != remote {}). This could cause some issues.",
-					expected_spec_version,
-					version
+					expected_spec_version, version
 				);
+				if relaxed {
+					log::warn!(target: LOG_TARGET, "{}", msg);
+				} else {
+					panic!("{}", msg);
+				}
 			}
 		},
 		Err(why) => {
-			log::error!(
-				target: LOG_TARGET,
+			let msg = format!(
 				"failed to fetch runtime version from {}: {:?}. Skipping the check",
-				uri,
-				why
+				uri, why
 			);
+			if relaxed {
+				log::error!(target: LOG_TARGET, "{}", msg);
+			} else {
+				panic!("{}", msg);
+			}
 		},
 	}
 }
