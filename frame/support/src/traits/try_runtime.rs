@@ -129,7 +129,9 @@ pub trait TryState<BlockNumber> {
 #[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(all(feature = "tuples-128"), impl_for_tuples(128))]
-impl<BlockNumber: Clone + AtLeast32BitUnsigned> TryState<BlockNumber> for Tuple {
+impl<BlockNumber: Clone + sp_std::fmt::Debug + AtLeast32BitUnsigned> TryState<BlockNumber>
+	for Tuple
+{
 	for_tuples!( where #( Tuple: crate::traits::PalletInfoAccess )* );
 	fn try_state(n: BlockNumber, targets: Select) -> Result<(), &'static str> {
 		match targets {
@@ -142,7 +144,7 @@ impl<BlockNumber: Clone + AtLeast32BitUnsigned> TryState<BlockNumber> for Tuple 
 			Select::RoundRobin(len) => {
 				let functions: &[fn(BlockNumber, Select) -> Result<(), &'static str>] =
 					&[for_tuples!(#( Tuple::try_state ),*)];
-				let skip = n.clone() % (len as u32).into();
+				let skip = n.clone() % (functions.len() as u32).into();
 				let skip: u32 =
 					skip.try_into().unwrap_or_else(|_| sp_runtime::traits::Bounded::max_value());
 				let mut result = Ok(());
