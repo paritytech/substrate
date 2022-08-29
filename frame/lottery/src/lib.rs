@@ -267,11 +267,11 @@ pub mod pallet {
 							LotteryIndex::<T>::mutate(|index| *index = index.saturating_add(1));
 							// Set a new start with the current block.
 							config.start = n;
-							return Weight::from_ref_time(T::WeightInfo::on_initialize_repeat())
+							return T::WeightInfo::on_initialize_repeat()
 						} else {
 							// Else, kill the lottery storage.
 							*lottery = None;
-							return Weight::from_ref_time(T::WeightInfo::on_initialize_end())
+							return T::WeightInfo::on_initialize_end()
 						}
 						// We choose not need to kill Participants and Tickets to avoid a large
 						// number of writes at one time. Instead, data persists between lotteries,
@@ -297,7 +297,7 @@ pub mod pallet {
 		///
 		/// This extrinsic must be called by a signed origin.
 		#[pallet::weight(
-			Weight::from_ref_time(T::WeightInfo::buy_ticket())
+			T::WeightInfo::buy_ticket()
 				.saturating_add(call.get_dispatch_info().weight)
 		)]
 		pub fn buy_ticket(origin: OriginFor<T>, call: Box<<T as Config>::Call>) -> DispatchResult {

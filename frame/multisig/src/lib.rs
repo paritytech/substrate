@@ -256,7 +256,7 @@ pub mod pallet {
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				Weight::from_ref_time(T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32)))
+				T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
 					// AccountData for inner call origin accountdata.
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 					.saturating_add(dispatch_info.weight),
@@ -285,19 +285,15 @@ pub mod pallet {
 					post_dispatch_info
 						.actual_weight
 						.map(|actual_weight| {
-							Weight::from_ref_time(T::WeightInfo::as_multi_threshold_1(
-								call_len as u32,
-							))
-							.saturating_add(actual_weight)
+							T::WeightInfo::as_multi_threshold_1(call_len as u32)
+								.saturating_add(actual_weight)
 						})
 						.into()
 				})
 				.map_err(|err| match err.post_info.actual_weight {
 					Some(actual_weight) => {
-						let weight_used = Weight::from_ref_time(
-							T::WeightInfo::as_multi_threshold_1(call_len as u32),
-						)
-						.saturating_add(actual_weight);
+						let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
+							.saturating_add(actual_weight);
 						let post_info = Some(weight_used).into();
 						DispatchErrorWithPostInfo { post_info, error: err.error }
 					},
@@ -354,10 +350,10 @@ pub mod pallet {
 			let s = other_signatories.len() as u32;
 			let z = call.encoded_len() as u32;
 
-			Weight::from_ref_time(T::WeightInfo::as_multi_create(s, z)
+			T::WeightInfo::as_multi_create(s, z)
 			.max(T::WeightInfo::as_multi_create_store(s, z))
 			.max(T::WeightInfo::as_multi_approve(s, z))
-			.max(T::WeightInfo::as_multi_complete(s, z)))
+			.max(T::WeightInfo::as_multi_complete(s, z))
 			.saturating_add(*max_weight)
 		})]
 		pub fn as_multi(
@@ -418,9 +414,9 @@ pub mod pallet {
 		#[pallet::weight({
 			let s = other_signatories.len() as u32;
 
-			Weight::from_ref_time(T::WeightInfo::approve_as_multi_create(s)
+			T::WeightInfo::approve_as_multi_create(s)
 				.max(T::WeightInfo::approve_as_multi_approve(s))
-				.max(T::WeightInfo::approve_as_multi_complete(s)))
+				.max(T::WeightInfo::approve_as_multi_complete(s))
 				.saturating_add(*max_weight)
 		})]
 		pub fn approve_as_multi(
@@ -585,10 +581,10 @@ impl<T: Config> Pallet<T> {
 				});
 				Ok(get_result_weight(result)
 					.map(|actual_weight| {
-						Weight::from_ref_time(T::WeightInfo::as_multi_complete(
+						T::WeightInfo::as_multi_complete(
 							other_signatories_len as u32,
 							call_len as u32,
-						))
+						)
 						.saturating_add(actual_weight)
 					})
 					.into())

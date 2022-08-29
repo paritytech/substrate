@@ -211,10 +211,7 @@ pub mod v7 {
 		StorageVersion::<T>::put(Releases::V7_0_0);
 		log!(info, "Completed staking migration to Releases::V7_0_0");
 
-		Weight::from_ref_time(
-			T::DbWeight::get()
-				.reads_writes(validator_count.saturating_add(nominator_count).into(), 2),
-		)
+		T::DbWeight::get().reads_writes(validator_count.saturating_add(nominator_count).into(), 2)
 	}
 }
 
@@ -265,6 +262,6 @@ pub mod v6 {
 
 		StorageVersion::<T>::put(Releases::V6_0_0);
 		log!(info, "Done.");
-		Weight::from_ref_time(T::DbWeight::get().writes(6 + 1))
+		T::DbWeight::get().writes(6 + 1)
 	}
 }

@@ -546,9 +546,7 @@ pub mod pallet {
 			Members::<T, I>::remove(&who);
 			Self::deposit_event(Event::MemberRemoved { who, rank });
 			Ok(PostDispatchInfo {
-				actual_weight: Some(Weight::from_ref_time(T::WeightInfo::remove_member(
-					rank as u32,
-				))),
+				actual_weight: Some(T::WeightInfo::remove_member(rank as u32)),
 				pays_fee: Pays::Yes,
 			})
 		}
@@ -642,7 +640,7 @@ pub mod pallet {
 				VotingCleanup::<T, I>::insert(poll_index, BoundedVec::truncate_from(cursor));
 			}
 			Ok(PostDispatchInfo {
-				actual_weight: Some(Weight::from_ref_time(T::WeightInfo::cleanup_poll(r.unique))),
+				actual_weight: Some(T::WeightInfo::cleanup_poll(r.unique)),
 				pays_fee: Pays::No,
 			})
 		}
