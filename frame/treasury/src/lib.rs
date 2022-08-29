@@ -541,7 +541,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			proposals_approvals_len
 		});
 
-		total_weight += T::WeightInfo::on_initialize_proposals(proposals_len);
+		total_weight +=
+			Weight::from_ref_time(T::WeightInfo::on_initialize_proposals(proposals_len));
 
 		// Call Runtime hooks to external pallet using treasury to compute spend funds.
 		T::SpendFunds::spend_funds(

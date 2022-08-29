@@ -392,7 +392,7 @@ pub mod pallet {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
-			0
+			Weight::zero()
 		}
 
 		// `on_finalize` is executed at the end of block after all extrinsic are dispatched.
