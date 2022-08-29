@@ -194,6 +194,7 @@ pub mod pallet {
 
 		/// WIP: This is a noop as of now, the actual business logic that's described below is going
 		/// to be introduced in a follow-up PR.
+		///
 		/// Something that provides a best-effort sorted list of targets aka electable validators,
 		/// used for NPoS election.
 		///
