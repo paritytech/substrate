@@ -217,7 +217,7 @@ mod tests {
 			let voters_best: HashSet<_> = vec![voter_id_1].into_iter().collect();
 
 			let best_round_state = sc_finality_grandpa::report::RoundState {
-				total_weight: Weight::from_ref_time(100_u64).try_into().unwrap(),
+				total_weight: 100_u64.try_into().unwrap(),
 				threshold_weight: 67_u64.try_into().unwrap(),
 				prevote_current_weight: 50.into(),
 				prevote_ids: voters_best,
@@ -226,11 +226,11 @@ mod tests {
 			};
 
 			let past_round_state = sc_finality_grandpa::report::RoundState {
-				total_weight: Weight::from_ref_time(100_u64).try_into().unwrap(),
+				total_weight: 100_u64.try_into().unwrap(),
 				threshold_weight: 67_u64.try_into().unwrap(),
-				prevote_current_weight: Weight::from_ref_time(100).into(),
+				prevote_current_weight: 100.into(),
 				prevote_ids: voters(),
-				precommit_current_weight: Weight::from_ref_time(100).into(),
+				precommit_current_weight: 100.into(),
 				precommit_ids: voters(),
 			};
 
