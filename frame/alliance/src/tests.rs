@@ -17,9 +17,7 @@
 
 //! Tests for the alliance pallet.
 
-use sp_runtime::traits::Hash;
-
-use frame_support::{assert_noop, assert_ok, error::BadOrigin, Hashable};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use frame_system::{EventRecord, Phase};
 
 use super::*;
@@ -40,7 +38,9 @@ fn force_set_members_works() {
 		let (k_proposal, k_proposal_len, k_hash) = make_kick_member_proposal(2);
 		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(k_proposal), k_proposal_len));
 
-		assert!(Alliance::up_for_kicking(&2));
+		assert_ok!(Alliance::give_retirement_notice(Origin::signed(2)));
+
+		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
 		// ensure proposal is listed as active proposal
 		assert_eq!(<Test as Config>::ProposalProvider::proposals(), vec![hash, k_hash]);
 		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 2);
@@ -100,7 +100,6 @@ fn force_set_members_works() {
 		assert_eq!(Alliance::votable_members_sorted(), vec![4, 5, 8]);
 		// assert new members
 		assert!(Alliance::is_ally(&2));
-		assert!(!Alliance::up_for_kicking(&2));
 		assert!(!Alliance::is_member(&1));
 		assert!(!Alliance::is_member(&3));
 		// all proposals are removed
@@ -530,9 +529,18 @@ fn retire_works() {
 fn assert_powerless(user: Origin) {
 	//vote / veto with a valid propsal
 	let cid = test_cid();
-	let proposal = make_proposal(42);
+	let (proposal, _, _) = make_kick_member_proposal(42);
 
-	assert_noop!(Alliance::init_members(user.clone(), vec![], vec![], vec![]), BadOrigin);
+	assert_noop!(
+		Alliance::force_set_members(
+			user.clone(),
+			vec![],
+			vec![],
+			vec![],
+			ForceSetWitness { voting_members: 3, ..Default::default() }
+		),
+		BadOrigin
+	);
 
 	assert_noop!(Alliance::set_rule(user.clone(), cid.clone()), BadOrigin);
 

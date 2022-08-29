@@ -684,7 +684,7 @@ pub mod pallet {
 					Error::<T, I>::AllianceNotReset
 				);
 				ensure!(
-					UpForKicking::<T, I>::clear(T::MaxMembersCount::get(), None)
+					RetiringMembers::<T, I>::clear(T::MaxMembersCount::get(), None)
 						.maybe_cursor
 						.is_none(),
 					Error::<T, I>::AllianceNotReset
