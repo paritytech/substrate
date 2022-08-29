@@ -181,24 +181,20 @@ impl HostFn {
 		};
 		let msg = "only #[version(<u8>)] or #[unstable] attribute is allowed.";
 		let span = item.span();
-		let item = match item {
+		let mut item = match item {
 			syn::Item::Fn(i_fn) => Ok(i_fn),
 			_ => Err(err(span, msg)),
 		}?;
 
-		let name = if item.attrs.iter().any(|a| {
-			a.path.get_ident().map(|i| i.to_string().eq("prefixed_alias")).unwrap_or(false)
-		}) {
+		let attrs = &mut item.attrs;
+
+		let name = if attrs.iter().any(|a| a.path.is_ident("prefixed_alias")) {
 			"seal_".to_string() + &item.sig.ident.to_string()
 		} else {
 			item.sig.ident.to_string()
 		};
 
-		let attrs: Vec<&syn::Attribute> = item
-			.attrs
-			.iter()
-			.filter(|m| !(m.path.is_ident("doc") || m.path.is_ident("prefixed_alias")))
-			.collect();
+		attrs.retain(|a| !(a.path.is_ident("doc") || a.path.is_ident("prefixed_alias")));
 
 		let module = match attrs.len() {
 			0 => Ok("seal0".to_string()),
@@ -316,6 +312,7 @@ impl HostFn {
 		}
 	}
 }
+
 impl EnvDef {
 	pub fn try_from(item: syn::ItemMod) -> syn::Result<Self> {
 		let span = item.span();
@@ -331,9 +328,7 @@ impl EnvDef {
 			_ => None,
 		};
 
-		let selector = |a: &syn::Attribute| {
-			a.path.get_ident().map(|i| i.to_string().eq("prefixed_alias")).unwrap_or(false)
-		};
+		let selector = |a: &syn::Attribute| a.path.is_ident("prefixed_alias");
 
 		let aliases = items
 			.iter()
