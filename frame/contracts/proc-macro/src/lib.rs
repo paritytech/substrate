@@ -539,7 +539,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 ///
 /// ## Example
 ///
-/// ```nocompile
+/// ```no_run
 /// #[define_env]
 /// pub mod some_env {
 /// 	#[version(1)]
