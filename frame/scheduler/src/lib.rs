@@ -360,9 +360,9 @@ pub mod pallet {
 						.into();
 				if ensure_signed(origin).is_ok() {
 					// Weights of Signed dispatches expect their signing account to be whitelisted.
-					item_weight.saturating_accrue(Weight::from_ref_time(
+					item_weight.saturating_accrue(
 						T::DbWeight::get().reads_writes(1, 1),
-					));
+					);
 				}
 
 				// We allow a scheduled call if any is true:

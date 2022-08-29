@@ -146,7 +146,7 @@ where
 	}
 
 	fn weight(&self) -> Weight {
-		Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1))
+		T::DbWeight::get().reads_writes(1, 1)
 	}
 
 	fn cancel(&self, source: &AccountId) {
@@ -243,7 +243,7 @@ pub mod pallet {
 		/// - `duration`: Locked duration of the atomic swap. For safety reasons, it is recommended
 		///   that the revealer uses a shorter duration than the counterparty, to prevent the
 		///   situation where the revealer reveals the proof too late around the end block.
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+		#[pallet::weight(T::DbWeight::get().reads_writes_ref_time(1, 1).saturating_add(40_000_000))]
 		pub fn create_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
@@ -279,7 +279,7 @@ pub mod pallet {
 		/// - `action`: Action defined in the swap, it must match the entry in blockchain. Otherwise
 		///   the operation fails. This is used for weight calculation.
 		#[pallet::weight(
-			Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1)
+			Weight::from_ref_time(T::DbWeight::get().reads_writes_ref_time(1, 1)
 				.saturating_add(40_000_000)
 				.saturating_add((proof.len() as u64).saturating_mul(100)))
 				.saturating_add(action.weight())
@@ -317,7 +317,7 @@ pub mod pallet {
 		///
 		/// - `target`: Target of the original atomic swap.
 		/// - `hashed_proof`: Hashed proof of the original atomic swap.
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+		#[pallet::weight(T::DbWeight::get().reads_writes_ref_time(1, 1).saturating_add(40_000_000))]
 		pub fn cancel_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,

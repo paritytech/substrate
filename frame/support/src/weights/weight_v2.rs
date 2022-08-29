@@ -359,6 +359,10 @@ impl Weight {
 		<Self as Saturating>::saturating_sub(self, rhs)
 	}
 
+	pub fn saturating_mul(self, rhs: Self) -> Self {
+		<Self as Saturating>::saturating_mul(self, rhs)
+	}
+
 	pub fn checked_add(&self, rhs: &Self) -> Option<Self> {
 		<Self as CheckedAdd>::checked_add(self, rhs)
 	}

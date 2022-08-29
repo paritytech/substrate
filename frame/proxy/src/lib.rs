@@ -198,9 +198,9 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
-			(Weight::from_ref_time(T::WeightInfo::proxy(T::MaxProxies::get())
+			(Weight::from_ref_time(T::WeightInfo::proxy(T::MaxProxies::get()))
 				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1)))
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 				.saturating_add(di.weight),
 			di.class)
 		})]
@@ -528,9 +528,9 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
-			(Weight::from_ref_time(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get())
+			(Weight::from_ref_time(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get()))
 				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1)))
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
 				.saturating_add(di.weight),
 			di.class)
 		})]

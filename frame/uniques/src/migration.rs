@@ -52,6 +52,6 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 			"Attempted to apply migration to v1 but failed because storage version is {:?}",
 			on_chain_storage_version,
 		);
-		Weight::from_ref_time(T::DbWeight::get().reads(1))
+		T::DbWeight::get().reads(1)
 	}
 }

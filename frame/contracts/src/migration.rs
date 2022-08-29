@@ -58,7 +58,7 @@ mod v4 {
 	pub fn migrate<T: Config>() -> Weight {
 		#[allow(deprecated)]
 		migration::remove_storage_prefix(<Pallet<T>>::name().as_bytes(), b"CurrentSchedule", b"");
-		Weight::from_ref_time(T::DbWeight::get().writes(1))
+		T::DbWeight::get().writes(1)
 	}
 }
 
@@ -130,8 +130,7 @@ mod v5 {
 		let mut weight = Weight::new();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
-			weight =
-				weight.saturating_add(Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1)));
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			match old {
 				OldContractInfo::Alive(old) => Some(ContractInfo::<T> {
 					trie_id: old.trie_id,
@@ -143,8 +142,7 @@ mod v5 {
 		});
 
 		DeletionQueue::<T>::translate(|old: Option<Vec<OldDeletedContract>>| {
-			weight =
-				weight.saturating_add(Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1)));
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			old.map(|old| old.into_iter().map(|o| DeletedContract { trie_id: o.trie_id }).collect())
 		})
 		.ok();
@@ -221,8 +219,7 @@ mod v6 {
 		let mut weight = Weight::new();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
-			weight =
-				weight.saturating_add(Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1)));
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			Some(ContractInfo::<T> {
 				trie_id: old.trie_id,
 				code_hash: old.code_hash,
@@ -234,8 +231,7 @@ mod v6 {
 			.expect("Infinite input; no dead input space; qed");
 
 		<CodeStorage<T>>::translate(|key, old: OldPrefabWasmModule| {
-			weight =
-				weight.saturating_add(Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 2)));
+			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 2));
 			<OwnerInfoOf<T>>::insert(
 				key,
 				OwnerInfo {
@@ -267,6 +263,6 @@ mod v7 {
 		type Nonce<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
 
 		Nonce::<T>::set(AccountCounter::<T>::take());
-		Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 2))
+		T::DbWeight::get().reads_writes(1, 2)
 	}
 }

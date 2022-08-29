@@ -14,7 +14,7 @@ pub fn migrate<T: Config>(to_migrate: Vec<T::AccountId>) -> Weight {
 		if let Ok(mut voter) = Voting::<T>::try_get(who) {
 			let free_balance = T::Currency::free_balance(who);
 
-			weight = weight.saturating_add(Weight::from_ref_time(T::DbWeight::get().reads(2)));
+			weight = weight.saturating_add(T::DbWeight::get().reads(2));
 
 			if voter.stake > free_balance {
 				voter.stake = free_balance;
@@ -23,7 +23,7 @@ pub fn migrate<T: Config>(to_migrate: Vec<T::AccountId>) -> Weight {
 				let pallet_id = T::PalletId::get();
 				T::Currency::set_lock(pallet_id, who, free_balance, WithdrawReasons::all());
 
-				weight = weight.saturating_add(Weight::from_ref_time(T::DbWeight::get().writes(2)));
+				weight = weight.saturating_add(T::DbWeight::get().writes(2));
 			}
 		}
 	}

@@ -25,7 +25,7 @@ use frame_support::weights::{
 
 impl crate::WeightInfo for () {
 	fn plan_config_change() -> Weight {
-		Weight::from_ref_time(DbWeight::get().writes(1))
+		DbWeight::get().writes(1)
 	}
 
 	fn report_equivocation(validator_count: u32) -> Weight {
@@ -39,7 +39,7 @@ impl crate::WeightInfo for () {
 
 		// checking membership proof
 		let ref_time_weight = (35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+			.saturating_add((175 * WEIGHT_PER_NANOS).scalar_saturating_mul(validator_count))
 			.saturating_add(DbWeight::get().reads(5))
 			// check equivocation proof
 			.saturating_add(110 * WEIGHT_PER_MICROS)
@@ -49,6 +49,6 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
 			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS));
 
-		Weight::from_ref_time(ref_time_weight)
+		ref_time_weight
 	}
 }

@@ -94,7 +94,7 @@ pub mod v1 {
 				)
 			} else {
 				log!(info, "Migration did not executed. This probably should be removed");
-				Weight::from_ref_time(T::DbWeight::get().reads(1))
+				T::DbWeight::get().reads(1)
 			}
 		}
 
@@ -345,7 +345,7 @@ pub mod v2 {
 				Self::run(current)
 			} else {
 				log!(info, "MigrateToV2 did not executed. This probably should be removed");
-				Weight::from_ref_time(T::DbWeight::get().reads(1))
+				T::DbWeight::get().reads(1)
 			}
 		}
 

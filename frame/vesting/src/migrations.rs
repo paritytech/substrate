@@ -61,7 +61,7 @@ pub mod v1 {
 			},
 		);
 
-		Weight::from_ref_time(T::DbWeight::get().reads_writes(reads_writes, reads_writes))
+		T::DbWeight::get().reads_writes(reads_writes, reads_writes)
 	}
 
 	#[cfg(feature = "try-runtime")]

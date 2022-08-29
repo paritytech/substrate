@@ -886,7 +886,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type MaxVotesPerVoter = T::MaxNominations;
 
 	fn desired_targets() -> data_provider::Result<u32> {
-		Self::register_weight(Weight::from_ref_time(T::DbWeight::get().reads(1)));
+		Self::register_weight(T::DbWeight::get().reads(1));
 		Ok(Self::validator_count())
 	}
 
@@ -1173,8 +1173,7 @@ where
 		let reward_proportion = SlashRewardFraction::<T>::get();
 		let mut consumed_weight = Weight::from_ref_time(0);
 		let mut add_db_reads_writes = |reads, writes| {
-			consumed_weight +=
-				Weight::from_ref_time(T::DbWeight::get().reads_writes(reads, writes));
+			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 		};
 
 		let active_era = {

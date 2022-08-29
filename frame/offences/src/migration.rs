@@ -34,7 +34,7 @@ type DeferredOffences<T: Config> =
 	StorageValue<crate::Pallet<T>, Vec<DeferredOffenceOf<T>>, ValueQuery>;
 
 pub fn remove_deferred_storage<T: Config>() -> Weight {
-	let mut weight = Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1));
+	let mut weight = T::DbWeight::get().reads_writes(1, 1);
 	let deferred = <DeferredOffences<T>>::take();
 	log::info!(target: "runtime::offences", "have {} deferred offences, applying.", deferred.len());
 	for (offences, perbill, session) in deferred.iter() {

@@ -278,7 +278,7 @@ pub mod pallet {
 						// but is not used if it is not relevant.
 					}
 				}
-				Weight::from_ref_time(T::DbWeight::get().reads(1))
+				T::DbWeight::get().reads(1)
 			})
 		}
 	}

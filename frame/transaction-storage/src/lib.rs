@@ -156,7 +156,7 @@ pub mod pallet {
 				<ChunkCount<T>>::remove(obsolete);
 			}
 			// 2 writes in `on_initialize` and 2 writes + 2 reads in `on_finalize`
-			Weight::from_ref_time(T::DbWeight::get().reads_writes(2, 4))
+			T::DbWeight::get().reads_writes(2, 4)
 		}
 
 		fn on_finalize(n: T::BlockNumber) {

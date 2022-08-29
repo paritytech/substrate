@@ -32,7 +32,7 @@ pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 	}
 
 	STORAGE_VERSION.put::<Pallet<T, I>>();
-	weight = weight.saturating_add(Weight::from_ref_time(T::DbWeight::get().writes(1)));
+	weight = weight.saturating_add(T::DbWeight::get().writes(1));
 
 	weight
 }
@@ -67,6 +67,6 @@ mod v0_to_v1 {
 			);
 		}
 
-		Weight::from_ref_time(T::DbWeight::get().writes(1))
+		T::DbWeight::get().writes(1)
 	}
 }

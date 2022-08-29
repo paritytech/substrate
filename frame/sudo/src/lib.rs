@@ -223,7 +223,7 @@ pub mod pallet {
 			(
 				dispatch_info.weight
 					// AccountData for inner call origin accountdata.
-					.saturating_add(Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1))),
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
 			)
 		})]

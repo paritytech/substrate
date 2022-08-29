@@ -50,10 +50,10 @@ pub mod v10 {
 				StorageVersion::<T>::put(Releases::V10_0_0);
 
 				log!(info, "MigrateToV10 executed successfully");
-				Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1))
+				T::DbWeight::get().reads_writes(1, 1)
 			} else {
 				log!(warn, "MigrateToV10 should be removed.");
-				Weight::from_ref_time(T::DbWeight::get().reads(1))
+				T::DbWeight::get().reads(1)
 			}
 		}
 	}
@@ -94,7 +94,7 @@ pub mod v9 {
 					"InjectValidatorsIntoVoterList being executed on the wrong storage \
 				version, expected Releases::V8_0_0"
 				);
-				Weight::from_ref_time(T::DbWeight::get().reads(1))
+				T::DbWeight::get().reads(1)
 			}
 		}
 
@@ -164,7 +164,7 @@ pub mod v8 {
 
 			T::BlockWeights::get().max_block
 		} else {
-			Weight::from_ref_time(T::DbWeight::get().reads(1))
+			T::DbWeight::get().reads(1)
 		}
 	}
 

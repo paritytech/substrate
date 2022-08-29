@@ -253,9 +253,10 @@ pub mod pallet {
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				Weight::from_ref_time(T::WeightInfo::as_derivative()
+				Weight::from_ref_time(T::WeightInfo::as_derivative())
 					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1))).saturating_add(dispatch_info.weight),
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+					.saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)
 		})]
@@ -272,8 +273,8 @@ pub mod pallet {
 			let result = call.dispatch(origin);
 			// Always take into account the base weight of this call.
 			let mut weight = Weight::from_ref_time(
-				T::WeightInfo::as_derivative()
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				T::WeightInfo::as_derivative())
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1),
 			);
 			// Add the real weight of the dispatch.
 			weight = weight.saturating_add(extract_actual_weight(&result, &info));
