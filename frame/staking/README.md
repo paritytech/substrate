@@ -152,9 +152,11 @@ pub mod pallet {
         /// Reward a validator.
         #[pallet::weight(0)]
         pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
-            let reported = ensure_signed(origin)?;
-            <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
-            Ok(())
+          let reported = ensure_signed(origin)?;
+          let mut validator_point = BoundedBTreeMap::new();
+          validator_point.try_insert(reported, 10).map_err(|_| staking::Error::<T>::MaxRewardPointsReached)?;
+          <staking::Pallet<T>>::reward_by_ids(validator_point);
+          Ok(())
         }
     }
 }

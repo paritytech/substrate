@@ -201,8 +201,9 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		// Maximum reward points for each validator.
-		type MaxRewardPoints: Get<u32>;
+		// Maximum number of validators.
+		#[pallet::constant]
+		type MaxValidators: Get<u32>;
 	}
 
 	#[pallet::type_value]

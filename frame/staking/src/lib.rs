@@ -180,8 +180,8 @@
 //!             let reported = ensure_signed(origin)?;
 //! 			let mut validator_point = BoundedBTreeMap::new();
 //! 			validator_point.try_insert(reported, 10).map_err(|_| staking::Error::<T>::MaxRewardPointsReached)?;
-//!             <staking::Pallet<T>>::reward_by_ids(validator_point);
-//!             Ok(())
+//!             <staking::Pallet<T>>::reward_by_ids(validator_point)?;
+//! 			Ok(())
 //!         }
 //!     }
 //! }
@@ -302,9 +302,9 @@ pub mod weights;
 
 mod pallet;
 
-use codec::{Decode, Encode, HasCompact};  // {Decode, Encode, 
+use codec::{Decode, Encode, HasCompact};
 use frame_support::{
-	parameter_types,
+	defensive, parameter_types,
 	pallet_prelude::{MaxEncodedLen, CloneNoBound},
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Defensive, Get},
@@ -372,10 +372,6 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-/// TODO: this need more comments?
-// #[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-// check if i need DefaultnoBound as is in the lib.rs file for nomination_pool
-// MaxEncodedLen was also removed from this 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
 #[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound))]
 #[codec(mel_bound(T: Config))]
@@ -384,12 +380,39 @@ pub struct EraRewardPoints<T: Config> {
 	/// Total number of points. Equals the sum of reward points for each validator.
 	pub total: u32,
 	/// The reward points earned by a given validator.
-	pub individual: BoundedBTreeMap<T::AccountId, u32, T::MaxRewardPoints>,
+	pub individual: BoundedBTreeMap<T::AccountId, u32, T::MaxValidators>,
 }
 
 impl<T: Config> Default for EraRewardPoints<T> {
 	fn default() -> Self {
 		EraRewardPoints { total: Default::default(), individual: BoundedBTreeMap::new() }
+	}	
+}
+
+impl<T: Config> EraRewardPoints<T> {
+	fn add_points(&mut self, validator: T::AccountId, reward_points: u32) -> Result<(), Error<T>> {
+		let mut points = self.individual.get(&validator).map(|x| *x).unwrap_or_default();
+		points += reward_points;
+		if points < T::MaxValidators::get() {
+			match self.individual.get_mut(&validator) {
+				Some(current_reward_points) =>
+					*current_reward_points = 
+						current_reward_points.saturating_add(reward_points),
+				None => self
+					.individual
+					.try_insert(validator.clone(), reward_points.clone())
+					.map(|old| {
+						if old.is_some() {
+							defensive!("value checked to not exist in the map");
+						}
+					})
+					.map_err(|_| Error::<T>::TooManyValidators)?,
+			}
+			self.total += reward_points;
+			Ok(())
+		} else {
+			Err(Error::<T>::TooManyValidators)
+		}
 	}
 }
 

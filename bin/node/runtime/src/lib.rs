@@ -569,7 +569,7 @@ impl pallet_staking::Config for Runtime {
 	type OnStakerSlash = NominationPools;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
-	type MaxRewardPoints = ConstU32<300>;
+	type MaxValidators = ConstU32<3072>;
 }
 
 parameter_types! {

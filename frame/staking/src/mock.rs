@@ -302,7 +302,7 @@ impl crate::pallet::pallet::Config for Test {
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
-	type MaxRewardPoints = ConstU32<300>;
+	type MaxValidators = ConstU32<3072>;
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;
@@ -770,12 +770,12 @@ pub(crate) fn reward_time_per_era() -> u64 {
 }
 
 pub(crate) fn reward_all_elected() {
-	let mut rewards = BoundedBTreeMap::new(); // = <Test as Config>::SessionInterface::validators().into_iter().map(|v| (v, 1));
+	let mut rewards = BoundedBTreeMap::new();
 
 	for validator in <Test as Config>::SessionInterface::validators().iter() {
 		rewards.try_insert(validator.clone(), 1).expect("Maximum points for validator reached");
 	};
-	<Pallet<Test>>::reward_by_ids(rewards.clone());
+	<Pallet<Test>>::reward_by_ids(rewards.clone()).unwrap();
 }
 
 pub(crate) fn validator_controllers() -> Vec<AccountId> {

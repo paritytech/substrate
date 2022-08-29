@@ -77,7 +77,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	// Clean up any existing state.
 	clear_validators_and_nominators::<T>();
 	let mut points_total = 0;
-	let mut points_individual = BoundedBTreeMap::<T::AccountId, u32, T::MaxRewardPoints>::new();
+	let mut points_individual = BoundedBTreeMap::new();
 
 	let (v_stash, v_controller) = create_stash_controller::<T>(0, 100, destination.clone())?;
 	let validator_prefs =
@@ -85,8 +85,8 @@ pub fn create_validator_with_nominators<T: Config>(
 	Staking::<T>::validate(RawOrigin::Signed(v_controller).into(), validator_prefs)?;
 	let stash_lookup = T::Lookup::unlookup(v_stash.clone());
 
+	points_individual.try_insert(v_stash.clone(), 10).expect("maximum reward points reached");
 	points_total += 10;
-	points_individual.try_insert(v_stash.clone(), 10).map_err(|_| "Error, are your legs discombubulated").unwrap(); //TODO: Create custom error.
 
 	let mut nominators = Vec::new();
 
@@ -747,12 +747,12 @@ benchmarks! {
 
 		let current_era = CurrentEra::<T>::get().unwrap();
 		let mut points_total = 0;
-		let mut points_individual = BoundedBTreeMap::<T::AccountId, u32, T::MaxRewardPoints>::new();
+		let mut points_individual = BoundedBTreeMap::new();
 		let mut payout_calls_arg = Vec::new();
 
 		for validator in new_validators.iter() {
 			points_total += 10;
-			points_individual.try_insert(validator.clone(), 10).map_err(|_| "error, walk your direction").unwrap(); //TODO: Create custom error.;
+			points_individual.try_insert(validator.clone(), 10).expect("maximum reward points reached");
 			payout_calls_arg.push((validator.clone(), current_era));
 		}
 

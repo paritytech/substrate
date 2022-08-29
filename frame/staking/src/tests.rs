@@ -264,26 +264,28 @@ fn rewards_should_work() {
 		let init_balance_100 = Balances::total_balance(&100);
 		let init_balance_101 = Balances::total_balance(&101);
 		let mut validator_1_era_0 = BoundedBTreeMap::new();
-		validator_1_era_0.try_insert(11, 50);
 		let mut validator_2_era_0 = BoundedBTreeMap::new();
-		validator_2_era_0.try_insert(21, 50);
+		validator_2_era_0.try_insert(21, 50).unwrap_or_default();
+		validator_1_era_0.try_insert(11, 50).unwrap_or_default();
+		validator_1_era_0.try_insert(11, 50).unwrap_or_default();
 
 		// Set payees
 		Payee::<Test>::insert(11, RewardDestination::Controller);
 		Payee::<Test>::insert(21, RewardDestination::Controller);
 		Payee::<Test>::insert(101, RewardDestination::Controller);
 
-		Pallet::<Test>::reward_by_ids(validator_1_era_0.clone());
-		Pallet::<Test>::reward_by_ids(validator_1_era_0.clone());
+		Pallet::<Test>::reward_by_ids(validator_1_era_0.clone()).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_1_era_0.clone()).unwrap();
+
 		// This is the second validator of the current elected set.
-		Pallet::<Test>::reward_by_ids(validator_2_era_0);
+		Pallet::<Test>::reward_by_ids(validator_2_era_0).unwrap();
 
 		// Compute total payout now for whole duration of the session.
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 		let maximum_payout = maximum_payout_for_duration(reward_time_per_era());
 		let mut validator_points_era_0 = BoundedBTreeMap::new();
-		validator_points_era_0.try_insert(11, 100);
-		validator_points_era_0.try_insert(21, 50);
+		validator_points_era_0.try_insert(11, 100).unwrap_or_default();
+		validator_points_era_0.try_insert(21, 50).unwrap_or_default();
 
 		start_session(1);
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
@@ -320,7 +322,7 @@ fn rewards_should_work() {
 		);
 		mock::make_all_reward_payment(0);
 		let mut validator_1_era_1 = BoundedBTreeMap::new();
-		validator_1_era_1.try_insert(11, 1);
+		validator_1_era_1.try_insert(11, 1).unwrap_or_default();
 
 		assert_eq_error_rate!(
 			Balances::total_balance(&10),
@@ -344,7 +346,7 @@ fn rewards_should_work() {
 		assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
 		assert_eq_uvec!(Session::validators(), vec![11, 21]);
-		Pallet::<Test>::reward_by_ids(validator_1_era_1);
+		Pallet::<Test>::reward_by_ids(validator_1_era_1).unwrap();
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
@@ -582,11 +584,11 @@ fn nominating_and_rewards_should_work() {
 			// the total reward for era 0
 			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 			let mut validator_1_era_0 = BoundedBTreeMap::new();
-			validator_1_era_0.try_insert(41, 1);
+			validator_1_era_0.try_insert(41, 1).unwrap_or_default();
 			let mut validator_2_era_0 = BoundedBTreeMap::new();
-			validator_2_era_0.try_insert(21, 1);
-			Pallet::<Test>::reward_by_ids(validator_1_era_0);
-			Pallet::<Test>::reward_by_ids(validator_2_era_0);
+			validator_2_era_0.try_insert(21, 1).unwrap_or_default();
+			Pallet::<Test>::reward_by_ids(validator_1_era_0).unwrap();
+			Pallet::<Test>::reward_by_ids(validator_2_era_0).unwrap();
 
 			mock::start_active_era(1);
 
@@ -628,11 +630,11 @@ fn nominating_and_rewards_should_work() {
 			// the total reward for era 1
 			let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 			let mut validator_2_era_1 = BoundedBTreeMap::new();
-			validator_2_era_1.try_insert(21, 2);
+			validator_2_era_1.try_insert(21, 2).unwrap_or_default();
 			let mut validator_3_era_1 = BoundedBTreeMap::new();
-			validator_3_era_1.try_insert(11, 1);
-			Pallet::<Test>::reward_by_ids(validator_2_era_1);
-			Pallet::<Test>::reward_by_ids(validator_3_era_1);
+			validator_3_era_1.try_insert(11, 1).unwrap_or_default();
+			Pallet::<Test>::reward_by_ids(validator_2_era_1).unwrap();
+			Pallet::<Test>::reward_by_ids(validator_3_era_1).unwrap();
 
 			mock::start_active_era(2);
 
@@ -1013,8 +1015,8 @@ fn reward_destination_works() {
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 		let mut validator_1 = BoundedBTreeMap::new();
-		validator_1.try_insert(11, 1);
-		Pallet::<Test>::reward_by_ids(validator_1.clone());
+		validator_1.try_insert(11, 1).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_1.clone()).unwrap();
 
 		mock::start_active_era(1);
 		mock::make_all_reward_payment(0);
@@ -1040,7 +1042,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-		Pallet::<Test>::reward_by_ids(validator_1.clone());
+		Pallet::<Test>::reward_by_ids(validator_1.clone()).unwrap();
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -1071,7 +1073,7 @@ fn reward_destination_works() {
 
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
-		Pallet::<Test>::reward_by_ids(validator_1.clone());
+		Pallet::<Test>::reward_by_ids(validator_1.clone()).unwrap();
 
 		mock::start_active_era(3);
 		mock::make_all_reward_payment(2);
@@ -1119,8 +1121,8 @@ fn validator_payment_prefs_work() {
 		let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
 		let exposure_1 = Staking::eras_stakers(active_era(), 11);
 		let mut validator_1_era_1 = BoundedBTreeMap::new();
-		validator_1_era_1.try_insert(11, 1);
-		Pallet::<Test>::reward_by_ids(validator_1_era_1);
+		validator_1_era_1.try_insert(11, 1).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_1_era_1).unwrap();
 
 		mock::start_active_era(2);
 		mock::make_all_reward_payment(1);
@@ -1687,11 +1689,11 @@ fn reward_to_stake_works() {
 			// Compute total payout now for whole duration as other parameter won't change
 			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 			let mut validator_1_era_0 = BoundedBTreeMap::new();
-			validator_1_era_0.try_insert(11, 1);
+			validator_1_era_0.try_insert(11, 1).unwrap();
 			let mut validator_2_era_0 = BoundedBTreeMap::new();
-			validator_2_era_0.try_insert(21, 1);
-			Pallet::<Test>::reward_by_ids(validator_1_era_0);
-			Pallet::<Test>::reward_by_ids(validator_2_era_0);
+			validator_2_era_0.try_insert(21, 1).unwrap();
+			Pallet::<Test>::reward_by_ids(validator_1_era_0).unwrap();
+			Pallet::<Test>::reward_by_ids(validator_2_era_0).unwrap();
 
 			// New era --> rewards are paid --> stakes are changed
 			mock::start_active_era(1);
@@ -2090,7 +2092,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 
 
 		let mut validator_1 = BoundedBTreeMap::new();
-		validator_1.try_insert(11, 1);
+		validator_1.try_insert(11, 1).unwrap();
 		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
 		let reward = EraRewardPoints::<Test> {
 			total: 1,
@@ -2154,8 +2156,8 @@ fn reward_from_authorship_event_handler_works() {
 		// 21 is rewarded as an uncle producer
 		// 11 is rewarded as a block producer and uncle referencer and uncle producer
 		let mut validator_points = BoundedBTreeMap::new();
-		validator_points.try_insert(11, 23);
-		validator_points.try_insert(21, 1);
+		validator_points.try_insert(11, 23).unwrap();
+		validator_points.try_insert(21, 1).unwrap();
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints::<Test> {
@@ -2175,21 +2177,21 @@ fn add_reward_points_fns_works() {
 		assert_eq_uvec!(Session::validators(), vec![21, 11]);
 
 		let mut validator_1_era_0 = BoundedBTreeMap::new();
-		validator_1_era_0.try_insert(21, 1);
+		validator_1_era_0.try_insert(21, 1).unwrap();
 
 		let mut validator_2_era_0 = BoundedBTreeMap::new();
-		validator_2_era_0.try_insert(11, 1);
+		validator_2_era_0.try_insert(11, 1).unwrap();
 
-		Pallet::<Test>::reward_by_ids(validator_1_era_0.clone());
-		Pallet::<Test>::reward_by_ids(validator_2_era_0.clone());
-		Pallet::<Test>::reward_by_ids(validator_2_era_0.clone());
-		Pallet::<Test>::reward_by_ids(validator_1_era_0);
-		Pallet::<Test>::reward_by_ids(validator_2_era_0.clone());
-		Pallet::<Test>::reward_by_ids(validator_2_era_0);
+		Pallet::<Test>::reward_by_ids(validator_1_era_0.clone()).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_2_era_0.clone()).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_2_era_0.clone()).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_1_era_0).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_2_era_0.clone()).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_2_era_0).unwrap();
 
 		let mut validator_points = BoundedBTreeMap::new();
-		validator_points.try_insert(11, 4);
-		validator_points.try_insert(21, 2);
+		validator_points.try_insert(11, 4).unwrap();
+		validator_points.try_insert(21, 2).unwrap();
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints::<Test> { individual: validator_points, total: 6 },
@@ -3369,19 +3371,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		let part_for_100 = Perbill::from_rational::<u32>(125, 1125);
 
 		let mut validator_point = BoundedBTreeMap::new();
-		validator_point.try_insert(11, 1);
+		validator_point.try_insert(11, 1).unwrap();
 
 		// Check state
 		Payee::<Test>::insert(11, RewardDestination::Controller);
 		Payee::<Test>::insert(101, RewardDestination::Controller);
 
-		Pallet::<Test>::reward_by_ids(validator_point.clone());
+		Pallet::<Test>::reward_by_ids(validator_point.clone()).unwrap();
 		// Compute total payout now for whole duration as other parameter won't change
 		let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 
 		mock::start_active_era(1);
 
-		Pallet::<Test>::reward_by_ids(validator_point.clone());
+		Pallet::<Test>::reward_by_ids(validator_point.clone()).unwrap();
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3390,7 +3392,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 
 		mock::start_active_era(2);
 
-		Pallet::<Test>::reward_by_ids(validator_point);
+		Pallet::<Test>::reward_by_ids(validator_point).unwrap();
 		// Change total issuance in order to modify total payout
 		let _ = Balances::deposit_creating(&999, 1_000_000_000);
 		// Compute total payout now for whole duration as other parameter won't change
@@ -3481,9 +3483,9 @@ fn six_session_delay() {
 		let init_session = Session::current_index();
 		let init_active_era = active_era();
 		let mut validator_1_point = BoundedBTreeMap::new();
-		validator_1_point.try_insert(11, 1);
+		validator_1_point.try_insert(11, 1).unwrap();
 		let mut validator_2_point = BoundedBTreeMap::new();
-		validator_2_point.try_insert(21, 2);
+		validator_2_point.try_insert(21, 2).unwrap();
 
 		// pallet-session is delaying session by one, thus the next session to plan is +2.
 		assert_eq!(<Staking as SessionManager<_>>::new_session(init_session + 2), None);
@@ -3507,7 +3509,7 @@ fn six_session_delay() {
 		assert_eq!(active_era(), init_active_era);
 
 		// Reward current era
-		Staking::reward_by_ids(validator_1_point);
+		Staking::reward_by_ids(validator_1_point).unwrap();
 
 		// New active era is triggered here.
 		<Staking as SessionManager<_>>::end_session(init_session + 2);
@@ -3523,7 +3525,7 @@ fn six_session_delay() {
 		assert_eq!(active_era(), init_active_era + 1);
 
 		// Reward current era
-		Staking::reward_by_ids(validator_2_point);
+		Staking::reward_by_ids(validator_2_point).unwrap();
 
 		// New active era is triggered here.
 		<Staking as SessionManager<_>>::end_session(init_session + 5);
@@ -3555,8 +3557,8 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 		mock::start_active_era(1);
 
 		let mut validator_1_era_1 = BoundedBTreeMap::new();
-		validator_1_era_1.try_insert(11, 1);
-		Pallet::<Test>::reward_by_ids(validator_1_era_1);
+		validator_1_era_1.try_insert(11, 1).unwrap();
+		Pallet::<Test>::reward_by_ids(validator_1_era_1).unwrap();
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 
@@ -3607,7 +3609,7 @@ fn test_payout_stakers() {
 		let mut payout_exposure = balance;
 
 		let mut validator_point = BoundedBTreeMap::new();
-		validator_point.try_insert(11, 1);
+		validator_point.try_insert(11, 1).unwrap();
 
 		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
@@ -3625,7 +3627,7 @@ fn test_payout_stakers() {
 		let payout_exposure_part = Perbill::from_rational(payout_exposure, total_exposure);
 
 		mock::start_active_era(1);
-		Staking::reward_by_ids(validator_point.clone());
+		Staking::reward_by_ids(validator_point.clone()).unwrap();
 
 		// compute and ensure the reward amount is greater than zero.
 		let payout = current_total_payout_for_duration(reward_time_per_era());
@@ -3667,7 +3669,7 @@ fn test_payout_stakers() {
 		);
 
 		for i in 3..16 {
-			Staking::reward_by_ids(validator_point.clone());
+			Staking::reward_by_ids(validator_point.clone()).unwrap();
 
 			// compute and ensure the reward amount is greater than zero.
 			let payout = current_total_payout_for_duration(reward_time_per_era());
@@ -3698,7 +3700,7 @@ fn test_payout_stakers() {
 		);
 
 		for i in 16..100 {
-			Staking::reward_by_ids(validator_point.clone());
+			Staking::reward_by_ids(validator_point.clone()).unwrap();
 			// compute and ensure the reward amount is greater than zero.
 			let _ = current_total_payout_for_duration(reward_time_per_era());
 			mock::start_active_era(i);
@@ -3743,7 +3745,7 @@ fn payout_stakers_handles_basic_errors() {
 		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
 
 		let mut validator_point = BoundedBTreeMap::new();
-		validator_point.try_insert(11, 1);
+		validator_point.try_insert(11, 1).unwrap();
 		// Same setup as the test above
 		let balance = 1000;
 		bond_validator(11, 10, balance); // Default(64)
@@ -3754,7 +3756,7 @@ fn payout_stakers_handles_basic_errors() {
 		}
 
 		mock::start_active_era(1);
-		Staking::reward_by_ids(validator_point.clone());
+		Staking::reward_by_ids(validator_point.clone()).unwrap();
 
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
@@ -3773,7 +3775,7 @@ fn payout_stakers_handles_basic_errors() {
 		);
 
 		for i in 3..100 {
-			Staking::reward_by_ids(validator_point.clone());
+			Staking::reward_by_ids(validator_point.clone()).unwrap();
 			// compute and ensure the reward amount is greater than zero.
 			let _ = current_total_payout_for_duration(reward_time_per_era());
 			mock::start_active_era(i);
@@ -3833,10 +3835,10 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(1);
 
 		let mut validator_point = BoundedBTreeMap::new();
-		validator_point.try_insert(11, 1);
+		validator_point.try_insert(11, 1).unwrap();
 
 		// Reward just the validator.
-		Staking::reward_by_ids(validator_point.clone());
+		Staking::reward_by_ids(validator_point.clone()).unwrap();
 
 		// Add some `half_max_nom_rewarded` nominators who will start backing the validator in the
 		// next era.
@@ -3870,7 +3872,7 @@ fn payout_stakers_handles_weight_refund() {
 		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
 
 		// Reward the validator and its nominators.
-		Staking::reward_by_ids(validator_point.clone());
+		Staking::reward_by_ids(validator_point.clone()).unwrap();
 
 		// Era 4
 		start_active_era(4);
@@ -3894,7 +3896,7 @@ fn payout_stakers_handles_weight_refund() {
 		// We now have `max_nom_rewarded` nominators actively nominating our validator.
 
 		// Reward the validator so we can collect for everyone in the next era.
-		Staking::reward_by_ids(validator_point);
+		Staking::reward_by_ids(validator_point).unwrap();
 
 		// Era 6
 		start_active_era(6);
@@ -4009,7 +4011,7 @@ fn payout_creates_controller() {
 		let balance = 1000;
 
 		let mut validator_point = BoundedBTreeMap::new();
-		validator_point.try_insert(11, 1);
+		validator_point.try_insert(11, 1).unwrap();
 
 		// Create a validator:
 		bond_validator(11, 10, balance);
@@ -4022,7 +4024,7 @@ fn payout_creates_controller() {
 		assert_eq!(Balances::free_balance(1337), 0);
 
 		mock::start_active_era(1);
-		Staking::reward_by_ids(validator_point);
+		Staking::reward_by_ids(validator_point).unwrap();
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
@@ -4038,7 +4040,7 @@ fn payout_to_any_account_works() {
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		let balance = 1000;
 		let mut validator_point = BoundedBTreeMap::new();
-		validator_point.try_insert(11, 1);
+		validator_point.try_insert(11, 1).unwrap();
 		// Create a validator:
 		bond_validator(11, 10, balance); // Default(64)
 
@@ -4052,7 +4054,7 @@ fn payout_to_any_account_works() {
 		assert_eq!(Balances::free_balance(42), 0);
 
 		mock::start_active_era(1);
-		Staking::reward_by_ids(validator_point);
+		Staking::reward_by_ids(validator_point).unwrap();
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
