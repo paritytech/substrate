@@ -31,6 +31,7 @@ use sp_runtime::{
 
 use frame_system::RawOrigin;
 use pallet_nomination_pools::{BondedPools, LastPoolId, PoolId, PoolState};
+use pallet_staking::RewardDestination;
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub type AccountId = u128;
@@ -197,7 +198,7 @@ impl fast_unstake::WeightInfo for FastUnstakeWeightInfo {
 	fn on_idle_unstake() -> Weight {
 		10
 	}
-	fn on_idle_check(e: u32) -> Weight {
+	fn on_idle_check(v: u32, e: u32) -> Weight {
 		10
 	}
 }
@@ -310,6 +311,9 @@ impl Default for ExtBuilder {
 	}
 }
 
+pub(crate) const STASH: u128 = 1;
+pub(crate) const CONTROLLER: u128 = 2;
+
 impl ExtBuilder {
 	// Add members to pool 0.
 	pub(crate) fn add_members(mut self, members: Vec<(AccountId, Balance)>) -> Self {
@@ -347,6 +351,27 @@ impl ExtBuilder {
 		self
 	}
 
+	/// Utility function to mint a stash and controller account with 200 tokens
+	/// and start staking: stash bonds 100 tokens and nominates account 3.
+	/// returns the accounts [stash, ctrl]
+	pub(crate) fn mint_and_initiate_staking() {
+		// Mint accounts 1 and 2 with 200 tokens.
+		for i in [STASH, CONTROLLER] {
+			let _ = Balances::make_free_balance_be(&i, 200);
+		}
+		// stash bonds 200 tokens with controller.
+		assert_ok!(Staking::bond(
+			Origin::signed(STASH),
+			CONTROLLER,
+			100,
+			RewardDestination::Controller
+		));
+
+		// Stash nominates a validator
+		// NOTE: not sure where this validator is coming from (not an actual validator).
+		assert_ok!(Staking::nominate(Origin::signed(CONTROLLER), vec![3_u128]));
+	}
+
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -366,6 +391,9 @@ impl ExtBuilder {
 		ext.execute_with(|| {
 			// for events to be deposited.
 			frame_system::Pallet::<Runtime>::set_block_number(1);
+
+			// initial staking setup with some accounts 1 and 2
+			Self::mint_and_initiate_staking();
 
 			// make a pool
 			let amount_to_bond = MinJoinBondConfig::get();

@@ -151,7 +151,7 @@ pub mod pallet {
 		/// Their stash account.
 		pub(crate) stash: AccountId,
 		/// The list of eras for which they have been checked.
-		pub pub(crate) checked: Vec<EraIndex>,
+		pub(crate) checked: Vec<EraIndex>,
 		/// The pool they wish to join, if any.
 		pub(crate) maybe_pool_id: Option<PoolId>,
 	}
