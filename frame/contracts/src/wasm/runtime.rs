@@ -327,7 +327,7 @@ impl RuntimeCosts {
 			EcdsaRecovery => s.ecdsa_recover,
 			ChainExtension(amount) => amount,
 			#[cfg(feature = "unstable-interface")]
-			CallRuntime(weight) => weight,
+			CallRuntime(weight) => weight.ref_time(),
 			SetCodeHash => s.set_code_hash,
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};

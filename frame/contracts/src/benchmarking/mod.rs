@@ -2854,7 +2854,7 @@ benchmarks! {
 			println!("###############################################");
 			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
 				weight_limit / weight_per_key,
-				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key,
+				(weight_limit - Weight::from_ref_time(weight_per_queue_item * queue_depth)) / weight_per_key,
 			);
 		}
 		#[cfg(not(feature = "std"))]
