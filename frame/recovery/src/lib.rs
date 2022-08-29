@@ -378,7 +378,7 @@ pub mod pallet {
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
 			(
-				T::WeightInfo::as_recovered().saturating_add(dispatch_info.weight),
+				Weight::from_ref_time(T::WeightInfo::as_recovered()).saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)})]
 		pub fn as_recovered(

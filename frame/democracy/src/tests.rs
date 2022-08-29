@@ -78,7 +78,7 @@ impl Contains<Call> for BaseFilter {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1_000_000);
+		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
@@ -107,7 +107,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Weight::from_ref_time(Perbill::from_percent(80) * BlockWeights::get().max_block);
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 }
 impl pallet_scheduler::Config for Test {
 	type Event = Event;

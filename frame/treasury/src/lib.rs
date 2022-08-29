@@ -319,7 +319,7 @@ pub mod pallet {
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds()
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}

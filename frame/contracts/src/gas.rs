@@ -107,7 +107,7 @@ where
 	///
 	/// Passing `0` as amount is interpreted as "all remaining gas".
 	pub fn nested(&mut self, amount: Weight) -> Result<Self, DispatchError> {
-		let amount = if amount == 0 { self.gas_left } else { amount };
+		let amount = if amount == Weight::zero() { self.gas_left } else { amount };
 
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.

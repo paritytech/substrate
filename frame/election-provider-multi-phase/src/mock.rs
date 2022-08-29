@@ -226,7 +226,7 @@ const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
-		::with_sensible_defaults(2 * frame_support::weights::constants::WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
+		::with_sensible_defaults(Weight::from_ref_time(2 * frame_support::weights::constants::WEIGHT_PER_SECOND), NORMAL_DISPATCH_RATIO);
 }
 
 impl pallet_balances::Config for Runtime {
@@ -271,12 +271,12 @@ parameter_types! {
 	pub static SignedDepositByte: Balance = 0;
 	pub static SignedDepositWeight: Balance = 0;
 	pub static SignedRewardBase: Balance = 7;
-	pub static SignedMaxWeight: Weight = Weight::from_ref_time(BlockWeights::get().max_block);
+	pub static SignedMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerTxPriority: u64 = 100;
 	pub static BetterSignedThreshold: Perbill = Perbill::zero();
 	pub static BetterUnsignedThreshold: Perbill = Perbill::zero();
 	pub static OffchainRepeat: BlockNumber = 5;
-	pub static MinerMaxWeight: Weight = Weight::from_ref_time(BlockWeights::get().max_block);
+	pub static MinerMaxWeight: Weight = BlockWeights::get().max_block;
 	pub static MinerMaxLength: u32 = 256;
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
@@ -348,13 +348,15 @@ impl MinerConfig for Runtime {
 	type Solution = TestNposSolution;
 
 	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
-		match MockWeightInfo::get() {
+		let ref_time_weight = match MockWeightInfo::get() {
 			MockedWeightInfo::Basic =>
-				(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight)),
-			MockedWeightInfo::Complex => (0 * v + 0 * t + 1000 * a + 0 * d) as Weight,
+				(10 as u64).saturating_add((5 as u64).saturating_mul(a as u64)),
+			MockedWeightInfo::Complex => (0 * v + 0 * t + 1000 * a + 0 * d) as u64,
 			MockedWeightInfo::Real =>
 				<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d),
-		}
+		};
+
+		Weight::from_ref_time(ref_time_weight)
 	}
 }
 

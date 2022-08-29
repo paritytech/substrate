@@ -234,7 +234,6 @@ use frame_election_provider_support::{
 	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
@@ -731,12 +730,12 @@ pub mod pallet {
 					match Self::create_snapshot() {
 						Ok(_) => {
 							Self::on_initialize_open_signed();
-							T::WeightInfo::on_initialize_open_signed()
+							Weight::from_ref_time(T::WeightInfo::on_initialize_open_signed())
 						},
 						Err(why) => {
 							// Not much we can do about this at this point.
 							log!(warn, "failed to open signed phase due to {:?}", why);
-							T::WeightInfo::on_initialize_nothing()
+							Weight::from_ref_time(T::WeightInfo::on_initialize_nothing())
 						},
 					}
 				},
@@ -770,19 +769,19 @@ pub mod pallet {
 						match Self::create_snapshot() {
 							Ok(_) => {
 								Self::on_initialize_open_unsigned(enabled, now);
-								T::WeightInfo::on_initialize_open_unsigned()
+								Weight::from_ref_time(T::WeightInfo::on_initialize_open_unsigned())
 							},
 							Err(why) => {
 								log!(warn, "failed to open unsigned phase due to {:?}", why);
-								T::WeightInfo::on_initialize_nothing()
+								Weight::from_ref_time(T::WeightInfo::on_initialize_nothing())
 							},
 						}
 					} else {
 						Self::on_initialize_open_unsigned(enabled, now);
-						T::WeightInfo::on_initialize_open_unsigned()
+						Weight::from_ref_time(T::WeightInfo::on_initialize_open_unsigned())
 					}
 				},
-				_ => T::WeightInfo::on_initialize_nothing(),
+				_ => Weight::from_ref_time(T::WeightInfo::on_initialize_nothing()),
 			}
 		}
 
@@ -877,7 +876,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			raw_solution: Box<RawSolution<SolutionOf<T::MinerConfig>>>,
 			witness: SolutionOrSnapshotSize,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_none(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
 				 deprive validator from their authoring reward.";
@@ -905,7 +904,7 @@ pub mod pallet {
 				prev_ejected: ejected_a_solution,
 			});
 
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Set a new value for `MinimumUntrustedScore`.
@@ -992,7 +991,7 @@ pub mod pallet {
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let call_fee = {
 				let call = Call::submit { raw_solution: raw_solution.clone() };
-				T::EstimateCallFee::estimate_call_fee(&call, None.into())
+				T::EstimateCallFee::estimate_call_fee(&call, None::<Weight>.into())
 			};
 
 			let submission = SignedSubmission {
@@ -1401,8 +1400,10 @@ impl<T: Config> Pallet<T> {
 		let (targets, voters, desired_targets) = Self::create_snapshot_external()?;
 
 		// ..therefore we only measure the weight of this and add it.
-		let internal_weight =
-			T::WeightInfo::create_snapshot_internal(voters.len() as u32, targets.len() as u32);
+		let internal_weight = Weight::from_ref_time(T::WeightInfo::create_snapshot_internal(
+			voters.len() as u32,
+			targets.len() as u32,
+		));
 		Self::create_snapshot_internal(targets, voters, desired_targets);
 		Self::register_weight(internal_weight);
 		Ok(())
@@ -1562,7 +1563,10 @@ impl<T: Config> Pallet<T> {
 			.map(|(_, x)| x)
 			.fold(Zero::zero(), |acc, next| acc + next.voters.len() as u32);
 		let desired_targets = supports.len() as u32;
-		Self::register_weight(T::WeightInfo::elect_queued(active_voters, desired_targets));
+		Self::register_weight(Weight::from_ref_time(T::WeightInfo::elect_queued(
+			active_voters,
+			desired_targets,
+		)));
 	}
 }
 
@@ -2195,12 +2199,12 @@ mod tests {
 		let all_targets: u32 = 5_000;
 		let desired: u32 = 1_000;
 		let weight_with = |active| {
-			<Runtime as Config>::WeightInfo::submit_unsigned(
+			Weight::from_ref_time(<Runtime as Config>::WeightInfo::submit_unsigned(
 				all_voters,
 				all_targets,
 				active,
 				desired,
-			)
+			))
 		};
 
 		let mut active = 1;
