@@ -63,7 +63,7 @@ pub fn migrate<T: crate::Config, N: AsRef<str>>(new_pallet_name: N) -> Weight {
 			"Attempted to apply migration to v4 but failed because storage version is {:?}",
 			storage_version,
 		);
-		0
+		Weight::zero()
 	}
 }
 

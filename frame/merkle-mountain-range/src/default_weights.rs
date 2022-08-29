@@ -32,9 +32,11 @@ impl crate::WeightInfo for () {
 		// No-op hook.
 		let hook_weight = 0;
 
-		leaf_weight
+		let ref_time_weight = leaf_weight
 			.saturating_add(hash_weight)
 			.saturating_add(hook_weight)
-			.saturating_add(DbWeight::get().reads_writes(2 + peaks, 2 + peaks))
+			.saturating_add(DbWeight::get().reads_writes(2 + peaks, 2 + peaks));
+
+		Weight::from_ref_time(ref_time_weight)
 	}
 }
