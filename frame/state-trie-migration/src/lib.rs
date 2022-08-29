@@ -581,7 +581,7 @@ pub mod pallet {
 			// the migration process
 			Pallet::<T>::dynamic_weight(limits.item, * real_size_upper)
 			// rest of the operations, like deposit etc.
-			+ Weight::from_ref_time(T::WeightInfo::continue_migrate())
+			+ T::WeightInfo::continue_migrate()
 		)]
 		pub fn continue_migrate(
 			origin: OriginFor<T>,
@@ -608,9 +608,7 @@ pub mod pallet {
 				DispatchErrorWithPostInfo {
 					error: Error::<T>::BadWitness.into(),
 					post_info: PostDispatchInfo {
-						actual_weight: Some(Weight::from_ref_time(
-							T::WeightInfo::continue_migrate_wrong_witness()
-						)),
+						actual_weight: Some(T::WeightInfo::continue_migrate_wrong_witness()),
 						pays_fee: Pays::Yes
 					}
 				}
@@ -635,7 +633,7 @@ pub mod pallet {
 			// refund and correct the weight.
 			let actual_weight = Some(
 				Pallet::<T>::dynamic_weight(limits.item, task.dyn_size)
-					.saturating_add(Weight::from_ref_time(T::WeightInfo::continue_migrate())),
+					.saturating_add(T::WeightInfo::continue_migrate()),
 			);
 
 			MigrationProcess::<T>::put(task);
@@ -651,8 +649,8 @@ pub mod pallet {
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
 		#[pallet::weight(
-			Weight::from_ref_time(T::WeightInfo::migrate_custom_top_success()
-				.max(T::WeightInfo::migrate_custom_top_fail()))
+			T::WeightInfo::migrate_custom_top_success()
+				.max(T::WeightInfo::migrate_custom_top_fail())
 			.saturating_add(
 				Pallet::<T>::dynamic_weight(keys.len() as u32, *witness_size)
 			)
@@ -691,11 +689,9 @@ pub mod pallet {
 				});
 				Ok(PostDispatchInfo {
 					actual_weight: Some(
-						Weight::from_ref_time(T::WeightInfo::migrate_custom_top_success())
-							.saturating_add(Pallet::<T>::dynamic_weight(
-								keys.len() as u32,
-								dyn_size,
-							)),
+						T::WeightInfo::migrate_custom_top_success().saturating_add(
+							Pallet::<T>::dynamic_weight(keys.len() as u32, dyn_size),
+						),
 					),
 					pays_fee: Pays::Yes,
 				})
@@ -709,8 +705,8 @@ pub mod pallet {
 		/// This does not affect the global migration process tracker ([`MigrationProcess`]), and
 		/// should only be used in case any keys are leftover due to a bug.
 		#[pallet::weight(
-			Weight::from_ref_time(T::WeightInfo::migrate_custom_child_success()
-				.max(T::WeightInfo::migrate_custom_child_fail()))
+			T::WeightInfo::migrate_custom_child_success()
+				.max(T::WeightInfo::migrate_custom_child_fail())
 			.saturating_add(
 				Pallet::<T>::dynamic_weight(child_keys.len() as u32, *total_size)
 			)
@@ -747,9 +743,7 @@ pub mod pallet {
 				debug_assert!(_remainder.is_zero());
 				Self::deposit_event(Event::<T>::Slashed { who, amount: deposit });
 				Ok(PostDispatchInfo {
-					actual_weight: Some(Weight::from_ref_time(
-						T::WeightInfo::migrate_custom_child_fail(),
-					)),
+					actual_weight: Some(T::WeightInfo::migrate_custom_child_fail()),
 					pays_fee: Pays::Yes,
 				})
 			} else {
@@ -760,11 +754,9 @@ pub mod pallet {
 				});
 				Ok(PostDispatchInfo {
 					actual_weight: Some(
-						Weight::from_ref_time(T::WeightInfo::migrate_custom_child_success())
-							.saturating_add(Pallet::<T>::dynamic_weight(
-								child_keys.len() as u32,
-								total_size,
-							)),
+						T::WeightInfo::migrate_custom_child_success().saturating_add(
+							Pallet::<T>::dynamic_weight(child_keys.len() as u32, total_size),
+						),
 					),
 					pays_fee: Pays::Yes,
 				})
@@ -848,14 +840,11 @@ pub mod pallet {
 		/// The real weight of a migration of the given number of `items` with total `size`.
 		fn dynamic_weight(items: u32, size: u32) -> frame_support::pallet_prelude::Weight {
 			let items = items as u64;
-			let ref_time_weight = items
-				.saturating_mul(
-					<T as frame_system::Config>::DbWeight::get().reads_writes_ref_time(1, 1),
-				)
+			<T as frame_system::Config>::DbWeight::get()
+				.reads_writes(1, 1)
+				.scalar_saturating_mul(items)
 				// we assume that the read/write per-byte weight is the same for child and top tree.
-				.saturating_add(T::WeightInfo::process_top_key(size));
-
-			Weight::from_ref_time(ref_time_weight)
+				.saturating_add(T::WeightInfo::process_top_key(size))
 		}
 
 		/// Put a stop to all ongoing migrations and logs an error.
@@ -1140,26 +1129,26 @@ mod mock {
 	pub struct StateMigrationTestWeight;
 
 	impl WeightInfo for StateMigrationTestWeight {
-		fn process_top_key(_: u32) -> frame_support::weights::RefTimeWeight {
-			1000000
+		fn process_top_key(_: u32) -> Weight {
+			Weight::from_ref_time(1000000)
 		}
-		fn continue_migrate() -> frame_support::weights::RefTimeWeight {
-			1000000
+		fn continue_migrate() -> Weight {
+			Weight::from_ref_time(1000000)
 		}
-		fn continue_migrate_wrong_witness() -> frame_support::weights::RefTimeWeight {
-			1000000
+		fn continue_migrate_wrong_witness() -> Weight {
+			Weight::from_ref_time(1000000)
 		}
-		fn migrate_custom_top_fail() -> frame_support::weights::RefTimeWeight {
-			1000000
+		fn migrate_custom_top_fail() -> Weight {
+			Weight::from_ref_time(1000000)
 		}
-		fn migrate_custom_top_success() -> frame_support::weights::RefTimeWeight {
-			1000000
+		fn migrate_custom_top_success() -> Weight {
+			Weight::from_ref_time(1000000)
 		}
-		fn migrate_custom_child_fail() -> frame_support::weights::RefTimeWeight {
-			1000000
+		fn migrate_custom_child_fail() -> Weight {
+			Weight::from_ref_time(1000000)
 		}
-		fn migrate_custom_child_success() -> frame_support::weights::RefTimeWeight {
-			1000000
+		fn migrate_custom_child_success() -> Weight {
+			Weight::from_ref_time(1000000)
 		}
 	}
 
