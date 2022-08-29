@@ -16,4 +16,69 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use std::{
+	fmt,
+	hash::{Hash, Hasher},
+	ops::Deref,
+	sync::Arc,
+};
+
 pub mod event;
+
+/// The protocol name transmitted on the wire.
+#[derive(Debug, Clone)]
+pub enum ProtocolName {
+	/// The protocol name as a static string.
+	Static(&'static str),
+	/// The protocol name as a dynamically allocated string.
+	OnHeap(Arc<str>),
+}
+
+impl From<&'static str> for ProtocolName {
+	fn from(name: &'static str) -> Self {
+		Self::Static(name)
+	}
+}
+
+impl From<Arc<str>> for ProtocolName {
+	fn from(name: Arc<str>) -> Self {
+		Self::OnHeap(name)
+	}
+}
+
+impl From<String> for ProtocolName {
+	fn from(name: String) -> Self {
+		Self::OnHeap(Arc::from(name))
+	}
+}
+
+impl Deref for ProtocolName {
+	type Target = str;
+
+	fn deref(&self) -> &str {
+		match self {
+			Self::Static(name) => name,
+			Self::OnHeap(name) => &name,
+		}
+	}
+}
+
+impl PartialEq for ProtocolName {
+	fn eq(&self, other: &Self) -> bool {
+		(self as &str) == (other as &str)
+	}
+}
+
+impl Eq for ProtocolName {}
+
+impl Hash for ProtocolName {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		(self as &str).hash(state)
+	}
+}
+
+impl fmt::Display for ProtocolName {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.write_str(self)
+	}
+}
