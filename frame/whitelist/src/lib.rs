@@ -148,7 +148,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(
-			T::WeightInfo::dispatch_whitelisted_call().saturating_add(*call_weight_witness)
+			Weight::from_ref_time(T::WeightInfo::dispatch_whitelisted_call()).saturating_add(*call_weight_witness)
 		)]
 		pub fn dispatch_whitelisted_call(
 			origin: OriginFor<T>,
@@ -176,8 +176,9 @@ pub mod pallet {
 				Error::<T>::InvalidCallWeightWitness
 			);
 
-			let actual_weight = Self::clean_and_dispatch(call_hash, call)
-				.map(|w| w.saturating_add(T::WeightInfo::dispatch_whitelisted_call()));
+			let actual_weight = Self::clean_and_dispatch(call_hash, call).map(|w| {
+				w.saturating_add(Weight::from_ref_time(T::WeightInfo::dispatch_whitelisted_call()))
+			});
 
 			Ok(actual_weight.into())
 		}
@@ -186,7 +187,7 @@ pub mod pallet {
 			let call_weight = call.get_dispatch_info().weight;
 			let call_len = call.encoded_size() as u32;
 
-			T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len)
+			Weight::from_ref_time(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len))
 				.saturating_add(call_weight)
 		})]
 		pub fn dispatch_whitelisted_call_with_preimage(
@@ -204,7 +205,9 @@ pub mod pallet {
 
 			let call_len = call.encoded_size() as u32;
 			let actual_weight = Self::clean_and_dispatch(call_hash, *call).map(|w| {
-				w.saturating_add(T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len))
+				w.saturating_add(Weight::from_ref_time(
+					T::WeightInfo::dispatch_whitelisted_call_with_preimage(call_len),
+				))
 			});
 
 			Ok(actual_weight.into())

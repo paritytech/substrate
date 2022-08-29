@@ -583,7 +583,7 @@ impl<AccountId: IdentifierT, Accuracy: PerThing128, Balancing: Get<Option<Balanc
 	}
 
 	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
-		T::phragmen(voters, targets, vote_degree)
+		Weight::from_ref_time(T::phragmen(voters, targets, vote_degree))
 	}
 }
 
@@ -608,7 +608,7 @@ impl<AccountId: IdentifierT, Accuracy: PerThing128, Balancing: Get<Option<Balanc
 	}
 
 	fn weight<T: WeightInfo>(voters: u32, targets: u32, vote_degree: u32) -> Weight {
-		T::phragmms(voters, targets, vote_degree)
+		Weight::from_ref_time(T::phragmms(voters, targets, vote_degree))
 	}
 }
 

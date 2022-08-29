@@ -191,7 +191,7 @@ fn call_transfer(dest: u64, value: u64) -> Call {
 	Call::Balances(BalancesCall::transfer { dest, value })
 }
 
-fn call_foobar(err: bool, start_weight: u64, end_weight: Option<u64>) -> Call {
+fn call_foobar(err: bool, start_weight: Weight, end_weight: Option<Weight>) -> Call {
 	Call::Example(ExampleCall::foobar { err, start_weight, end_weight })
 }
 
@@ -213,8 +213,8 @@ fn as_derivative_works() {
 #[test]
 fn as_derivative_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = 100;
-		let end_weight = 75;
+		let start_weight = Weight::from_ref_time(100);
+		let end_weight = Weight::from_ref_time(75);
 		let diff = start_weight - end_weight;
 
 		// Full weight when ok
@@ -378,10 +378,10 @@ fn batch_weight_calculation_doesnt_overflow() {
 #[test]
 fn batch_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = 100;
-		let end_weight = 75;
+		let start_weight = Weight::from_ref_time(100);
+		let end_weight = Weight::from_ref_time(75);
 		let diff = start_weight - end_weight;
-		let batch_len = Weight::from_ref_time(4);
+		let batch_len = 4;
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);
@@ -420,7 +420,7 @@ fn batch_handles_weight_refund() {
 		let good_call = call_foobar(false, start_weight, Some(end_weight));
 		let bad_call = call_foobar(true, start_weight, Some(end_weight));
 		let batch_calls = vec![good_call, bad_call];
-		let batch_len = batch_calls.len() as Weight;
+		let batch_len = Weight::from_ref_time(batch_calls.len() as u64);
 		let call = Call::Utility(UtilityCall::batch { calls: batch_calls });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
@@ -444,7 +444,7 @@ fn batch_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			<Test as Config>::WeightInfo::batch(2) + end_weight * 2,
+			Weight::from_ref_time(<Test as Config>::WeightInfo::batch(2)) + end_weight * 2,
 		);
 	});
 }
@@ -479,7 +479,8 @@ fn batch_all_revert() {
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
 					actual_weight: Some(
-						<Test as Config>::WeightInfo::batch_all(2) + info.weight * 2
+						Weight::from_ref_time(<Test as Config>::WeightInfo::batch_all(2)) +
+							info.weight * 2
 					),
 					pays_fee: Pays::Yes
 				},
@@ -494,10 +495,10 @@ fn batch_all_revert() {
 #[test]
 fn batch_all_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = 100;
-		let end_weight = 75;
+		let start_weight = Weight::from_ref_time(100);
+		let end_weight = Weight::from_ref_time(75);
 		let diff = start_weight - end_weight;
-		let batch_len = Weight::from_ref_time(4);
+		let batch_len = 4;
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);
@@ -533,7 +534,7 @@ fn batch_all_handles_weight_refund() {
 		let good_call = call_foobar(false, start_weight, Some(end_weight));
 		let bad_call = call_foobar(true, start_weight, Some(end_weight));
 		let batch_calls = vec![good_call, bad_call];
-		let batch_len = batch_calls.len() as Weight;
+		let batch_len = Weight::from_ref_time(batch_calls.len() as u64);
 		let call = Call::Utility(UtilityCall::batch_all { calls: batch_calls });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
@@ -551,7 +552,7 @@ fn batch_all_handles_weight_refund() {
 		assert_eq!(
 			extract_actual_weight(&result, &info),
 			// Real weight is 2 calls at end_weight
-			<Test as Config>::WeightInfo::batch_all(2) + end_weight * 2,
+			Weight::from_ref_time(<Test as Config>::WeightInfo::batch_all(2)) + end_weight * 2,
 		);
 	});
 }
@@ -572,7 +573,10 @@ fn batch_all_does_not_nest() {
 			Utility::batch_all(Origin::signed(1), vec![batch_all.clone()]),
 			DispatchErrorWithPostInfo {
 				post_info: PostDispatchInfo {
-					actual_weight: Some(<Test as Config>::WeightInfo::batch_all(1) + info.weight),
+					actual_weight: Some(
+						Weight::from_ref_time(<Test as Config>::WeightInfo::batch_all(1)) +
+							info.weight
+					),
 					pays_fee: Pays::Yes
 				},
 				error: frame_system::Error::<Test>::CallFiltered.into(),
@@ -616,7 +620,7 @@ fn force_batch_works() {
 			Origin::signed(1),
 			vec![
 				call_transfer(2, 5),
-				call_foobar(true, 75, None),
+				call_foobar(true, Weight::from_ref_time(75), None),
 				call_transfer(2, 10),
 				call_transfer(2, 5),
 			]

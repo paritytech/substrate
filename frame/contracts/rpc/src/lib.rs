@@ -56,11 +56,11 @@ pub type Weight = u64;
 /// As 1 gas is equal to 1 weight we base this on the conducted benchmarks which
 /// determined runtime weights:
 /// <https://github.com/paritytech/substrate/pull/5446>
-const GAS_PER_SECOND: Weight = Weight::from_ref_time(1_000_000_000_000);
+const GAS_PER_SECOND: Weight = 1_000_000_000_000;
 
 /// The maximum amount of weight that the call and instantiate rpcs are allowed to consume.
 /// This puts a ceiling on the weight limit that is supplied to the rpc as an argument.
-const GAS_LIMIT: Weight = Weight::from_ref_time(5 * GAS_PER_SECOND);
+const GAS_LIMIT: Weight = 5 * GAS_PER_SECOND;
 
 /// A private newtype for converting `ContractAccessError` into an RPC error.
 struct ContractAccessError(pallet_contracts_primitives::ContractAccessError);
@@ -229,7 +229,7 @@ where
 			call_request;
 
 		let value: Balance = decode_hex(value, "balance")?;
-		let gas_limit = Weight::from_ref_time(decode_hex(gas_limit, "weight")?);
+		let gas_limit = decode_hex(gas_limit, "weight")?;
 		let storage_deposit_limit: Option<Balance> =
 			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
 		limit_gas(gas_limit)?;
@@ -259,7 +259,7 @@ where
 		} = instantiate_request;
 
 		let value: Balance = decode_hex(value, "balance")?;
-		let gas_limit = Weight::from_ref_time(decode_hex(gas_limit, "weight")?);
+		let gas_limit = decode_hex(gas_limit, "weight")?;
 		let storage_deposit_limit: Option<Balance> =
 			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
 		limit_gas(gas_limit)?;

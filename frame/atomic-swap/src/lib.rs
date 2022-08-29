@@ -146,7 +146,7 @@ where
 	}
 
 	fn weight(&self) -> Weight {
-		T::DbWeight::get().reads_writes(1, 1)
+		Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1))
 	}
 
 	fn cancel(&self, source: &AccountId) {
@@ -279,9 +279,9 @@ pub mod pallet {
 		/// - `action`: Action defined in the swap, it must match the entry in blockchain. Otherwise
 		///   the operation fails. This is used for weight calculation.
 		#[pallet::weight(
-			T::DbWeight::get().reads_writes(1, 1)
+			Weight::from_ref_time(T::DbWeight::get().reads_writes(1, 1)
 				.saturating_add(40_000_000)
-				.saturating_add((proof.len() as Weight).saturating_mul(100))
+				.saturating_add((proof.len() as u64).saturating_mul(100)))
 				.saturating_add(action.weight())
 		)]
 		pub fn claim_swap(
