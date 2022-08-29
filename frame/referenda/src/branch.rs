@@ -135,11 +135,13 @@ impl ServiceBranch {
 
 	/// Return the maximum possible weight of the `place_decision_deposit` function.
 	pub fn max_weight_of_deposit<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		0.max(T::WeightInfo::place_decision_deposit_preparing())
-			.max(T::WeightInfo::place_decision_deposit_queued())
-			.max(T::WeightInfo::place_decision_deposit_not_queued())
-			.max(T::WeightInfo::place_decision_deposit_passing())
-			.max(T::WeightInfo::place_decision_deposit_failing())
+		Weight::from_ref_time(
+			0.max(T::WeightInfo::place_decision_deposit_preparing())
+				.max(T::WeightInfo::place_decision_deposit_queued())
+				.max(T::WeightInfo::place_decision_deposit_not_queued())
+				.max(T::WeightInfo::place_decision_deposit_passing())
+				.max(T::WeightInfo::place_decision_deposit_failing()),
+		)
 	}
 }
 
@@ -166,17 +168,22 @@ impl OneFewerDecidingBranch {
 	/// by `self`.
 	pub fn weight<T: Config<I>, I: 'static>(self) -> frame_support::weights::Weight {
 		use OneFewerDecidingBranch::*;
-		match self {
+		let ref_time_weight = match self {
 			QueueEmpty => T::WeightInfo::one_fewer_deciding_queue_empty(),
 			BeginDecidingPassing => T::WeightInfo::one_fewer_deciding_passing(),
 			BeginDecidingFailing => T::WeightInfo::one_fewer_deciding_failing(),
-		}
+		};
+
+		Weight::from_ref_time(ref_time_weight)
 	}
 
 	/// Return the maximum possible weight of the `one_fewer_deciding` function.
 	pub fn max_weight<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		0.max(T::WeightInfo::one_fewer_deciding_queue_empty())
+		let ref_time_weight = 0
+			.max(T::WeightInfo::one_fewer_deciding_queue_empty())
 			.max(T::WeightInfo::one_fewer_deciding_passing())
-			.max(T::WeightInfo::one_fewer_deciding_failing())
+			.max(T::WeightInfo::one_fewer_deciding_failing());
+
+		Weight::from_ref_time(ref_time_weight)
 	}
 }

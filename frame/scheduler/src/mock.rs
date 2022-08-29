@@ -119,7 +119,7 @@ impl Contains<Call> for BaseFilter {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
+		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(2_000_000_000_000));
 }
 impl system::Config for Test {
 	type BaseCallFilter = BaseFilter;
@@ -151,7 +151,7 @@ impl logger::Config for Test {
 	type Event = Event;
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Weight::from_ref_time(Perbill::from_percent(80) * BlockWeights::get().max_block);
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
 	pub const NoPreimagePostponement: Option<u64> = Some(2);
 }
 ord_parameter_types! {
