@@ -31,7 +31,7 @@ use pallet_balances::Error as BalancesError;
 use pallet_nomination_pools::{
 	BondedPool, BondedPools, LastPoolId, PoolId, PoolRoles, RewardPools,
 };
-use pallet_staking::RewardDestination;
+use pallet_staking::{CurrentEra, RewardDestination};
 
 use sp_runtime::{
 	assert_eq_error_rate,
@@ -44,9 +44,6 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
-
-pub const DEFAULT_ROLES: PoolRoles<AccountId> =
-	PoolRoles { depositor: 10, root: Some(900), nominator: Some(901), state_toggler: Some(902) };
 
 #[test]
 fn test_setup_works() {
@@ -119,7 +116,7 @@ fn cannot_register_if_has_unlocking_chunks() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Start unbonding half of staked tokens
 		assert_ok!(Staking::unbond(Origin::signed(CONTROLLER), 50_u128));
-		// Cannot regsiter for fast unstake with unlock chunks active
+		// Cannot register for fast unstake with unlock chunks active
 		assert_noop!(
 			FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32)),
 			Error::<Runtime>::NotFullyBonded
@@ -131,7 +128,7 @@ fn cannot_register_if_has_unlocking_chunks() {
 fn deregister_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Controller account registers for fast unstake.
-		FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32));
+		assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32)));
 		// Controller then changes mind and deregisters.
 		assert_ok!(FastUnstake::deregister(Origin::signed(CONTROLLER)));
 		// Ensure stash no longer exists in the queue.
@@ -143,7 +140,7 @@ fn deregister_works() {
 fn cannot_deregister_if_not_controller() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Controller account registers for fast unstake.
-		FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32));
+		assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32)));
 		// Stash tries to deregister.
 		assert_noop!(
 			FastUnstake::deregister(Origin::signed(STASH)),
@@ -167,7 +164,7 @@ fn cannot_deregister_if_not_queued() {
 fn cannot_deregister_already_head() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Controller attempts to regsiter, should fail
-		FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32));
+		assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32)));
 		// Insert some Head item for stash.
 		Head::<Runtime>::put(UnstakeRequest {
 			stash: STASH.clone(),
@@ -198,69 +195,242 @@ fn control_must_be_control_origin() {
 	});
 }
 
-#[test]
-fn process_head_tests() {
-	ExtBuilder::default().build_and_execute(|| {
-		// put 1 era per block
-		ErasToCheckPerBlock::<Runtime>::put(1);
+mod on_idle {
+	use super::*;
 
-		// TODO: go to block number after BondingDuration eras have passed.
-		// is there an accurate calculation for this?
-		run_to_block(50_000);
+	#[test]
+	fn early_exit() {
+		todo!("remaining_weight = 0 should do NOTHING");
+	}
 
-		// register for fast unstake
-		FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32));
-		assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+	#[test]
+	fn respects_weight() {
+		// TODO: KIAN
+		todo!("ErasToCheckPerBlock is 5, but the remaining weight is such that we can only process 2");
+	}
 
-		// process on idle
-		let remaining_weight = BlockWeights::get().max_block;
-		FastUnstake::on_idle(Zero::zero(), remaining_weight);
 
-		// assert queue item has been moved to head
-		assert_eq!(Queue::<Runtime>::get(STASH), None);
+	#[test]
+	fn successful_multi_queue() {
+		todo!("multiple stakers in queue, all leaving")
+	}
 
-		// assert head item present
-		assert_eq!(
-			Head::<Runtime>::get(),
-			Some(UnstakeRequest { stash: 1, checked: vec![0], maybe_pool_id: Some(1) })
-		);
+	#[test]
+	fn successful_unstake_without_pool_join() {
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::<Runtime>::put(BondingDuration::get() + 1);
+			CurrentEra::<Runtime>::put(BondingDuration::get());
 
-		// run on_idle until BondingDuration - 1
-		let bond_duration: u64 = BondingDuration::get().into();
-		let next_block: u64 = System::block_number() + 1;
-		let last_block: u64 = next_block + bond_duration - 2;
+			// register for fast unstake
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), None));
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(None));
 
-		// checking blocks to loop...
-		assert_eq!(next_block, 50001);
-		assert_eq!(last_block, 50002);
+			// process on idle
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
 
-		for i in next_block..last_block {
-			run_to_block(i);
-			FastUnstake::on_idle(i.into(), remaining_weight);
-		}
+			// assert queue item has been moved to head
+			assert_eq!(Queue::<Runtime>::get(STASH), None);
 
-		// check head item still exists on last era, all eras checked - last
-		assert_eq!(
-			Head::<Runtime>::get(),
-			Some(UnstakeRequest { stash: 1, checked: vec![0], maybe_pool_id: Some(1) })
-		);
+			// assert head item present
+			assert_eq!(
+				Head::<Runtime>::get(),
+				Some(UnstakeRequest { stash: 1, checked: vec![3, 2, 1, 0], maybe_pool_id: None })
+			);
 
-		// run on_idle again to process last era for head item, should be fully processed
-		run_to_block(System::block_number() + 1);
-		assert_eq!(Head::<Runtime>::get(), None);
-	});
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			assert_eq!(Head::<Runtime>::get(), None,);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![
+					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 1, maybe_pool_id: None, result: Ok(()) }
+				]
+			);
+			assert_unstaked(&STASH);
+		});
+	}
+
+	#[test]
+	fn successful_unstake_joining_bad_pool() {
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::<Runtime>::put(BondingDuration::get() + 1);
+			CurrentEra::<Runtime>::put(BondingDuration::get());
+
+			// register for fast unstake
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(0)));
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(0)));
+
+			// process on idle
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			// assert queue item has been moved to head
+			assert_eq!(Queue::<Runtime>::get(STASH), None);
+
+			// assert head item present
+			assert_eq!(
+				Head::<Runtime>::get(),
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: vec![3, 2, 1, 0],
+					maybe_pool_id: Some(0)
+				})
+			);
+
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			assert_eq!(Head::<Runtime>::get(), None,);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![
+					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 1, maybe_pool_id: Some(0), result: Ok(()) }
+				]
+			);
+			assert_unstaked(&STASH);
+		});
+	}
+
+	#[test]
+	fn successful_unstake_all_eras_per_block() {
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::<Runtime>::put(BondingDuration::get() + 1);
+			CurrentEra::<Runtime>::put(BondingDuration::get());
+
+			// register for fast unstake
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32)));
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+
+			// process on idle
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			// assert queue item has been moved to head
+			assert_eq!(Queue::<Runtime>::get(STASH), None);
+
+			// assert head item present
+			assert_eq!(
+				Head::<Runtime>::get(),
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: vec![3, 2, 1, 0],
+					maybe_pool_id: Some(1)
+				})
+			);
+
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			assert_eq!(Head::<Runtime>::get(), None,);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![
+					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) }
+				]
+			);
+			assert_unstaked(&STASH);
+			assert!(pallet_nomination_pools::PoolMembers::<T>::contains_key(&STASH));
+		});
+	}
+
+	#[test]
+	fn successful_unstake_one_era_per_block() {
+		ExtBuilder::default().build_and_execute(|| {
+			// put 1 era per block
+			ErasToCheckPerBlock::<Runtime>::put(1);
+			CurrentEra::<Runtime>::put(BondingDuration::get());
+
+			// register for fast unstake
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32)));
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+
+			// process on idle
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			// assert queue item has been moved to head
+			assert_eq!(Queue::<Runtime>::get(STASH), None);
+
+			// assert head item present
+			assert_eq!(
+				Head::<Runtime>::get(),
+				Some(UnstakeRequest { stash: 1, checked: vec![3], maybe_pool_id: Some(1) })
+			);
+
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			assert_eq!(
+				Head::<Runtime>::get(),
+				Some(UnstakeRequest { stash: 1, checked: vec![3, 2], maybe_pool_id: Some(1) })
+			);
+
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			assert_eq!(
+				Head::<Runtime>::get(),
+				Some(UnstakeRequest { stash: 1, checked: vec![3, 2, 1], maybe_pool_id: Some(1) })
+			);
+
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			assert_eq!(
+				Head::<Runtime>::get(),
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: vec![3, 2, 1, 0],
+					maybe_pool_id: Some(1)
+				})
+			);
+
+			let remaining_weight = BlockWeights::get().max_block;
+			FastUnstake::on_idle(Zero::zero(), remaining_weight);
+
+			assert_eq!(Head::<Runtime>::get(), None,);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![
+					Event::Checked { stash: 1, eras: vec![3] },
+					Event::Checked { stash: 1, eras: vec![2] },
+					Event::Checked { stash: 1, eras: vec![1] },
+					Event::Checked { stash: 1, eras: vec![0] },
+					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) }
+				]
+			);
+			assert_unstaked(&STASH);
+			assert!(pallet_nomination_pools::PoolMembers::<T>::contains_key(&STASH));
+		});
+	}
+
+	#[test]
+	fn unstake_paused_mid_election() {
+		// TODO: KIAN
+		ExtBuilder::default().build_and_execute(|| {
+			// Initiate staking position
+			// Controller account registers for fast unstake.
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32)));
+			// 	todo!(
+			// 		"a dude is being unstaked, midway being checked, election happens, they are still not
+			// exposed, but a new era needs to be checked, therefore this unstake takes longer than
+			// expected."
+			// 	)
+		});
+	}
 }
 
-#[test]
-fn unstake_paused_mid_election() {
-	ExtBuilder::default().build_and_execute(|| {
-		// Initiate staking position
-		// Controller account registers for fast unstake.
-		FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1_u32));
-		todo!(
-			"a dude is being unstaked, midway being checked, election happens, they are still not
-	exposed, but a new era needs to be checked, therefore this unstake takes longer than
-	expected."
-		)
-	});
+
+mod signed_extension {
+	use super::*;
+	// TODO:
 }

@@ -166,7 +166,7 @@ pub mod pallet {
 	/// Points the `AccountId` wishing to unstake to the optional `PoolId` they wish to join
 	/// thereafter.
 	#[pallet::storage]
-	pub type Queue<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, Option<PoolId>>;
+	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, Option<PoolId>>;
 
 	/// Number of eras to check per block.
 	///
@@ -211,7 +211,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
-		fn on_idle(_block: T::BlockNumber, remaining_weight: Weight) -> Weight {
+		fn on_idle(_: T::BlockNumber, remaining_weight: Weight) -> Weight {
 			Self::process_head(remaining_weight)
 		}
 	}

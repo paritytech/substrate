@@ -29,15 +29,16 @@ use sp_runtime::{
 	FixedU128,
 };
 
-use frame_system::RawOrigin;
+use frame_system::{Account, RawOrigin};
 use pallet_nomination_pools::{BondedPools, LastPoolId, PoolId, PoolState};
-use pallet_staking::RewardDestination;
+use pallet_staking::{Exposure, IndividualExposure, RewardDestination};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub type AccountId = u128;
 pub type AccountIndex = u32;
 pub type BlockNumber = u64;
 pub type Balance = u128;
+pub type T = Runtime;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
@@ -222,59 +223,31 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
-		System: frame_system::{Pallet, Call, Event<Runtime>},
-		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<Runtime>, Event<Runtime>},
-		Staking: pallet_staking::{Pallet, Call, Config<Runtime>, Storage, Event<Runtime>},
-		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<Runtime>},
-		FastUnstake: fast_unstake::{Pallet, Call, Storage, Event<Runtime>},
+		System: frame_system,
+		Timestamp: pallet_timestamp,
+		Balances: pallet_balances,
+		Staking: pallet_staking,
+		Pools: pallet_nomination_pools,
+		FastUnstake: fast_unstake,
 	}
 );
-
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	sp_tracing::try_init_simple();
-	let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
-	let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
-		min_join_bond: 2,
-		min_create_bond: 2,
-		max_pools: Some(3),
-		max_members_per_pool: Some(5),
-		max_members: Some(3 * 5),
-	}
-	.assimilate_storage(&mut storage)
-	.unwrap();
-
-	let _ = pallet_balances::GenesisConfig::<Runtime> {
-		balances: vec![(10, 100), (20, 100), (21, 100), (22, 100)],
-	}
-	.assimilate_storage(&mut storage)
-	.unwrap();
-
-	let mut ext = sp_io::TestExternalities::from(storage);
-
-	ext.execute_with(|| {
-		// for events to be deposited.
-		frame_system::Pallet::<Runtime>::set_block_number(1);
-
-		// set some limit for nominations.
-		assert_ok!(Staking::set_staking_configs(
-			Origin::root(),
-			pallet_staking::ConfigOp::Set(10), // minimum nominator bond
-			pallet_staking::ConfigOp::Noop,
-			pallet_staking::ConfigOp::Noop,
-			pallet_staking::ConfigOp::Noop,
-			pallet_staking::ConfigOp::Noop,
-			pallet_staking::ConfigOp::Noop,
-		));
-	});
-
-	ext
-}
 
 parameter_types! {
 	static ObservedEventsPools: usize = 0;
 	static ObservedEventsStaking: usize = 0;
 	static ObservedEventsBalances: usize = 0;
+	static FastUnstakeEvents: u32 = 0;
+}
+
+pub(crate) fn fast_unstake_events_since_last_call() -> Vec<super::Event<Runtime>> {
+	let events = System::events()
+		.into_iter()
+		.map(|r| r.event)
+		.filter_map(|e| if let Event::FastUnstake(inner) = e { Some(inner) } else { None })
+		.collect::<Vec<_>>();
+	let already_seen = FastUnstakeEvents::get();
+	FastUnstakeEvents::set(events.len() as u32);
+	events.into_iter().skip(already_seen as usize).collect()
 }
 
 pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Event<Runtime>> {
@@ -351,23 +324,6 @@ impl ExtBuilder {
 		self
 	}
 
-	pub(crate) fn mint_and_initiate_staking() {
-		// Mint accounts 1 and 2 with 200 tokens.
-		for i in [STASH, CONTROLLER] {
-			let _ = Balances::make_free_balance_be(&i, 200);
-		}
-		// stash bonds 200 tokens with controller.
-		assert_ok!(Staking::bond(
-			Origin::signed(STASH),
-			CONTROLLER,
-			100,
-			RewardDestination::Controller
-		));
-
-		// NOTE: not sure where this validator is coming from (not an actual validator).
-		assert_ok!(Staking::nominate(Origin::signed(CONTROLLER), vec![3_u128]));
-	}
-
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -389,7 +345,31 @@ impl ExtBuilder {
 			frame_system::Pallet::<Runtime>::set_block_number(1);
 
 			// initial staking setup with some accounts 1 and 2
-			Self::mint_and_initiate_staking();
+			Balances::make_free_balance_be(&STASH, 200);
+			Balances::make_free_balance_be(&CONTROLLER, 200);
+			assert_ok!(Staking::bond(
+				Origin::signed(STASH),
+				CONTROLLER,
+				100,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(Origin::signed(CONTROLLER), vec![3_u128]));
+
+			// KIAN stuff
+			let validators = 32 as AccountId;
+			let nominators = 4 as AccountId;
+			for era in 0..(BondingDuration::get()) {
+				(100..100 + validators)
+					.map(|v| {
+						let others = (1000..(1000 + nominators))
+							.map(|n| IndividualExposure { who: n, value: 0 as Balance })
+							.collect::<Vec<_>>();
+						(v, Exposure { total: 0, own: 0, others })
+					})
+					.for_each(|(validator, exposure)| {
+						pallet_staking::ErasStakers::<T>::insert(era, validator, exposure);
+					});
+			}
 
 			// make a pool
 			let amount_to_bond = MinJoinBondConfig::get();
@@ -413,15 +393,6 @@ impl ExtBuilder {
 	}
 }
 
-pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
-	BondedPools::<Runtime>::try_mutate(pool_id, |maybe_bonded_pool| {
-		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
-			bonded_pool.state = state;
-		})
-	})
-	.unwrap()
-}
-
 pub(crate) fn run_to_block(n: u64) {
 	let current_block = System::block_number();
 	assert!(n > current_block);
@@ -430,7 +401,9 @@ pub(crate) fn run_to_block(n: u64) {
 		Staking::on_finalize(System::block_number());
 		Pools::on_finalize(System::block_number());
 		FastUnstake::on_finalize(System::block_number());
+
 		System::set_block_number(System::block_number() + 1);
+
 		Balances::on_initialize(System::block_number());
 		Staking::on_initialize(System::block_number());
 		Pools::on_initialize(System::block_number());
@@ -438,17 +411,9 @@ pub(crate) fn run_to_block(n: u64) {
 	}
 }
 
-parameter_types! {
-	storage FastUnstakeEvents: u32 = 0;
-}
-
-pub(crate) fn fast_unstake_events_since_last_call() -> Vec<super::Event<Runtime>> {
-	let events = System::events()
-		.into_iter()
-		.map(|r| r.event)
-		.filter_map(|e| if let Event::FastUnstake(inner) = e { Some(inner) } else { None })
-		.collect::<Vec<_>>();
-	let already_seen = FastUnstakeEvents::get();
-	FastUnstakeEvents::set(&(events.len() as u32));
-	events.into_iter().skip(already_seen as usize).collect()
+pub fn assert_unstaked(stash: &AccountId) {
+	assert!(!pallet_staking::Bonded::<T>::contains_key(stash));
+	assert!(!pallet_staking::Payee::<T>::contains_key(stash));
+	assert!(!pallet_staking::Validators::<T>::contains_key(stash));
+	assert!(!pallet_staking::Nominators::<T>::contains_key(stash));
 }
