@@ -568,6 +568,8 @@ fn approved_account_gets_reset_after_transfer() {
 
 		// this shouldn't work because we have just transfered the item to another account.
 		assert_noop!(Uniques::transfer(Origin::signed(3), 0, 42, 4), Error::<Test>::NoPermission);
+		// The new owner can transfer fine:
+		assert_ok!(Uniques::transfer(Origin::signed(5), 0, 42, 6));
 	});
 }
 
