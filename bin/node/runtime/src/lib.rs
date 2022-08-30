@@ -170,7 +170,7 @@ const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
 /// by  Operational  extrinsics.
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 /// We allow for 2 seconds of compute with a 6 second average block time.
-const MAXIMUM_BLOCK_WEIGHT: Weight = Weight::from_ref_time(2 * WEIGHT_PER_SECOND);
+const MAXIMUM_BLOCK_WEIGHT: Weight = Weight::from_ref_time(2 * WEIGHT_PER_SECOND.ref_time());
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -677,13 +677,11 @@ impl pallet_election_provider_multi_phase::MinerConfig for Runtime {
 	// The unsigned submissions have to respect the weight of the submit_unsigned call, thus their
 	// weight estimate function is wired to this call's weight.
 	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
-		let ref_time_weight = <
+		<
 			<Self as pallet_election_provider_multi_phase::Config>::WeightInfo
 			as
 			pallet_election_provider_multi_phase::WeightInfo
-		>::submit_unsigned(v, t, a, d);
-
-		Weight::from_ref_time(ref_time_weight)
+		>::submit_unsigned(v, t, a, d)
 	}
 }
 
