@@ -604,7 +604,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Move an item from the sender account to another. 
+		/// Move an item from the sender account to another.
 		///
 		/// This resets the approved account of the item.
 		///
