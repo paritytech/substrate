@@ -916,7 +916,7 @@ pub mod pallet {
 		/// - `item`: The item of the item to be approved for delegated transfer.
 		/// - `delegate`: The account to delegate permission to transfer the item.
 		///
-		/// Important NOTE: The `approved` account gets resest after each transfer.
+		/// Important NOTE: The `approved` account gets reset after each transfer.
 		///
 		/// Emits `ApprovedTransfer` on success.
 		///
