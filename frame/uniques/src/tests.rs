@@ -588,7 +588,7 @@ fn approved_account_gets_reset_after_buy_item() {
 		assert_ok!(Uniques::set_price(Origin::signed(1), 0, item, Some(price), None));
 
 		assert_ok!(Uniques::buy_item(Origin::signed(2), 0, item, price));
-		
+
 		// this shouldn't work because the item has been bough and the approved account should be
 		// reset.
 		assert_noop!(Uniques::transfer(Origin::signed(5), 0, item, 4), Error::<Test>::NoPermission);
