@@ -218,14 +218,14 @@ quick-benchmarks:
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
-    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    # RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
     RUST_BACKTRACE:                "full"
     WASM_BUILD_NO_COLOR:           1
-    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+    # WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
   script:
-    # - rusty-cachier snapshot create
+    - rusty-cachier snapshot create
     - time cargo run --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
-    # - rusty-cachier cache upload
+    - rusty-cachier cache upload
   tags:
     - linux-docker-benches
 
