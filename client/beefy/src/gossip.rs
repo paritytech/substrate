@@ -18,6 +18,8 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
+use std::marker::PhantomData;
+
 use sc_network::PeerId;
 use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorContext};
 use sp_core::hashing::twox_64;
@@ -96,24 +98,29 @@ impl<B: Block> KnownVotes<B> {
 /// rejected/expired.
 ///
 ///All messaging is handled in a single BEEFY global topic.
-pub(crate) struct GossipValidator<B>
+pub(crate) struct GossipValidator<B, BKS>
 where
 	B: Block,
+        BKS: BeefyKeystore
 {
 	topic: B::Hash,
 	known_votes: RwLock<KnownVotes<B>>,
 	next_rebroadcast: Mutex<Instant>,
+	keystore_type: PhantomData<BKS>,
+	
 }
 
-impl<B> GossipValidator<B>
+impl<B, BKS> GossipValidator<B, BKS>
 where
 	B: Block,
+BKS: BeefyKeystore,
 {
-	pub fn new() -> GossipValidator<B> {
+	pub fn new() -> GossipValidator<B, BKS> {
 		GossipValidator {
 			topic: topic::<B>(),
 			known_votes: RwLock::new(KnownVotes::new()),
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
+			//keystore
 		}
 	}
 
@@ -134,9 +141,10 @@ where
 	}
 }
 
-impl<B> Validator<B> for GossipValidator<B>
+impl<B, BKS> Validator<B> for GossipValidator<B, BKS>
 where
 	B: Block,
+        BKS: BeefyKeystore
 {
 	fn validate(
 		&self,
@@ -163,7 +171,7 @@ where
 				}
 			}
 
-			if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
+			if BKS::verify(&msg.id, &msg.signature, &msg.commitment.encode ()) {
 				self.known_votes.write().add_known(&round, msg_hash);
 				return ValidationResult::ProcessAndKeep(self.topic)
 			} else {

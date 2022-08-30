@@ -59,7 +59,7 @@ use crate::{
 	Client,
 };
 
-pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, BKS> {
+pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, BKS: BeefyKeystore> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub runtime: Arc<R>,
@@ -67,21 +67,21 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, BKS> {
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	pub gossip_engine: GossipEngine<B>,
-	pub gossip_validator: Arc<GossipValidator<B>>,
+	pub gossip_validator: Arc<GossipValidator<B, BKS>>,
 	pub min_block_delta: u32,
 	pub metrics: Option<Metrics>,
 	pub sync_oracle: SO,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, BKS> {
+pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, BKS: BeefyKeystore> {
 	client: Arc<C>,
 	backend: Arc<BE>,
 	runtime: Arc<R>,
 	key_store: BKS,
 	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
-	gossip_validator: Arc<GossipValidator<B>>,
+	gossip_validator: Arc<GossipValidator<B, BKS>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
@@ -111,6 +111,7 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
+        BKS: BeefyKeystore,
 {
 	/// Return a new BEEFY worker instance.
 	///

@@ -111,7 +111,7 @@ where
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B, BE, C, N, R>
+pub struct BeefyParams<B, BE, C, N, R, BKS>
 where
 	B: Block,
 	BE: Backend<B>,
@@ -127,7 +127,7 @@ where
 	/// Runtime Api Provider
 	pub runtime: Arc<R>,
 	/// Local key store
-	pub key_store: Option<SyncCryptoStorePtr>,
+	pub key_store: BKS,
 	/// Gossip network
 	pub network: N,
 	/// BEEFY signed commitment sender
@@ -145,7 +145,7 @@ where
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, R>(beefy_params: BeefyParams<B, BE, C, N, R>)
+pub async fn start_beefy_gadget<B, BE, C, N, R, BKS>(beefy_params: BeefyParams<B, BE, C, N, R, BKS>)
 where
 	B: Block,
 	BE: Backend<B>,
@@ -153,6 +153,7 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
+        BKS: keystore::BeefyKeystore,
 {
 	let BeefyParams {
 		client,
@@ -194,7 +195,7 @@ where
 		client,
 		backend,
 		runtime,
-		key_store: key_store.into(),
+		key_store: key_store,
 		signed_commitment_sender,
 		beefy_best_block_sender,
 		gossip_engine,
@@ -204,7 +205,7 @@ where
 		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _, _>::new(worker_params);
 
 	worker.run().await
 }

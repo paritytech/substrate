@@ -47,11 +47,11 @@ pub(crate)  trait BeefyKeystore : From<Option<SyncCryptoStorePtr>> {
 }
 
 
-struct BeefyECDSAKeystore (Option<SyncCryptoStorePtr>);
+pub struct BeefyECDSAKeystore (Option<SyncCryptoStorePtr>);
 
-struct BeefyBLSKeystore(Option<SyncCryptoStorePtr>);
+pub struct BeefyBLSKeystore(Option<SyncCryptoStorePtr>);
 
-struct BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>);
+pub struct BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>);
 
 impl BeefyKeystore for BeefyECDSAKeystore {
 	type Public = ECDSAPublic;
@@ -238,11 +238,19 @@ impl BeefyKeystore for BeefyBLSnECDSAKeystore {
 	
 }
     
-impl From<Option<SyncCryptoStorePtr>> for BeefyECDSAKeystore {
-	fn from(store: Option<SyncCryptoStorePtr>) -> BeefyECDSAKeystore {
-		BeefyECDSAKeystore(store)
-	}
+macro_rules! impl_from_cryptostore_for_keystore {
+    ($keystore:tt) => {
+	    impl From<Option<SyncCryptoStorePtr>> for $keystore {
+		    fn from(store: Option<SyncCryptoStorePtr>) -> $keystore {
+			    $keystore(store)
+		    }
+	    }
+    }
 }
+
+impl_from_cryptostore_for_keystore!(BeefyECDSAKeystore);
+impl_from_cryptostore_for_keystore!(BeefyBLSKeystore);
+impl_from_cryptostore_for_keystore!(BeefyBLSnECDSAKeystore);
 
 #[cfg(test)]
 pub mod tests {
