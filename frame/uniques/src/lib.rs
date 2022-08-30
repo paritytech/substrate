@@ -908,7 +908,8 @@ pub mod pallet {
 
 		/// Approve an item to be transferred by a delegated third-party account.
 		///
-		/// The origin must be Signed and the owner of the `item` or the admin of the collection.
+		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be
+		/// either the owner of the `item` or the admin of the collection.
 		///
 		/// - `collection`: The collection of the item to be approved for delegated transfer.
 		/// - `item`: The item of the item to be approved for delegated transfer.
