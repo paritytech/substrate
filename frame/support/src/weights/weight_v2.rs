@@ -110,6 +110,10 @@ impl Weight {
 	pub const fn scalar_saturating_mul(self, rhs: u64) -> Self {
 		Self { ref_time: self.ref_time.saturating_mul(rhs) }
 	}
+
+	pub const fn scalar_div(self, rhs: u64) -> Self {
+		Self { ref_time: self.ref_time / rhs }
+	}
 }
 
 impl Zero for Weight {
