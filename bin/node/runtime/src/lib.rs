@@ -219,14 +219,24 @@ impl pallet_tx_pause::Config for Runtime {
 	type PauseTooLongNames = ConstBool<true>;
 }
 
+parameter_types! {
+	// signed config
+	pub const EnableStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement! 
+	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement! 
+}
+
 impl pallet_safe_mode::Config for Runtime {
 	type Event = Event;
+	type Currency = Balances;
 	type SafeModeFilter = Nothing; // TODO add TxPause pallet
 	type EnableDuration = ConstU32<{ 2 * DAYS }>;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
 	type EnableOrigin = EnsureRoot<AccountId>;
 	type ExtendOrigin = EnsureRoot<AccountId>;
-	type PreemptiveDisableOrigin = EnsureRoot<AccountId>;
+	type DisableOrigin = EnsureRoot<AccountId>;
+	type RepayOrigin = EnsureRoot<AccountId>;
+	type EnableStakeAmount = EnableStakeAmount;
+	type ExtendStakeAmount = ExtendStakeAmount;
 }
 
 impl frame_system::Config for Runtime {
