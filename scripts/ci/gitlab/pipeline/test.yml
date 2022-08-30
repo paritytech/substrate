@@ -61,10 +61,12 @@ cargo-check-benches:
     - .docker-env
     - .test-refs
     - .collect-artifacts
+    - .pipeline-stopper-artifacts
   before_script:
     # perform rusty-cachier operations before any further modifications to the git repo to make cargo feel cheated not so much
     - !reference [.rust-info-script, script]
     - !reference [.rusty-cachier, before_script]
+    - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
     - if [ $CI_COMMIT_REF_NAME != "master" ]; then
         git fetch origin +master:master;
@@ -131,6 +133,7 @@ cargo-check-subkey:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   script:
     - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
@@ -181,13 +184,13 @@ test-deterministic-wasm:
   script:
     - rusty-cachier snapshot create
     # build runtime
-    - cargo build --verbose --release -p node-runtime
+    - cargo build --verbose --release -p kitchensink-runtime
     # make checksum
-    - sha256sum $CARGO_TARGET_DIR/release/wbuild/node-runtime/target/wasm32-unknown-unknown/release/node_runtime.wasm > checksum.sha256
+    - sha256sum $CARGO_TARGET_DIR/release/wbuild/kitchensink-runtime/target/wasm32-unknown-unknown/release/kitchensink_runtime.wasm > checksum.sha256
     # clean up
     - rm -rf $CARGO_TARGET_DIR/release/wbuild
     # build again
-    - cargo build --verbose --release -p node-runtime
+    - cargo build --verbose --release -p kitchensink-runtime
     # confirm checksum
     - sha256sum -c ./checksum.sha256
     # clean up again, don't put release binaries into the cache
@@ -199,6 +202,7 @@ test-linux-stable:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
@@ -213,8 +217,6 @@ test-linux-stable:
   parallel: 3
   script:
     - rusty-cachier snapshot create
-    # TODO: remove when current paritytech/ci-linux:staging (with rust stable 1.62) is switched to production
-    - time cargo install cargo-nextest
     # this job runs all tests in former runtime-benchmarks, frame-staking and wasmtime tests
     # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
     # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
@@ -301,6 +303,7 @@ test-linux-stable-int:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   variables:
     # Enable debug assertions since we are running optimized builds for testing
     # but still want to have debug assertions.
@@ -330,6 +333,7 @@ check-tracing:
   extends:
     - .docker-env
     - .test-refs
+    - .pipeline-stopper-artifacts
   script:
     - rusty-cachier snapshot create
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
@@ -373,8 +377,6 @@ test-wasmer-sandbox:
   parallel: 3
   script:
     - rusty-cachier snapshot create
-    # TODO: remove when current paritytech/ci-linux:staging (with rust stable 1.62) is switched to production
-    - cargo install cargo-nextest
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
     - time cargo nextest run --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi

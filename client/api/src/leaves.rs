@@ -259,6 +259,11 @@ where
 
 		removed
 	}
+
+	/// Returns the highest leaf and all hashes associated to it.
+	pub fn highest_leaf(&self) -> Option<(N, &[H])> {
+		self.storage.iter().next().map(|(k, v)| (k.0.clone(), &v[..]))
+	}
 }
 
 /// Helper for undoing operations.

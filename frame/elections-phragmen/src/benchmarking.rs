@@ -36,7 +36,7 @@ fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, 0);
 	// Fund each account with at-least his stake but still a sane amount as to not mess up
 	// the vote calculation.
-	let amount = default_stake::<T>(MAX_VOTERS) * BalanceOf::<T>::from(BALANCE_FACTOR);
+	let amount = default_stake::<T>(T::MaxVoters::get()) * BalanceOf::<T>::from(BALANCE_FACTOR);
 	let _ = T::Currency::make_free_balance_be(&account, amount);
 	// important to increase the total issuance since T::CurrencyToVote will need it to be sane for
 	// phragmen to work.
@@ -230,7 +230,7 @@ benchmarks! {
 
 	submit_candidacy {
 		// number of already existing candidates.
-		let c in 1 .. MAX_CANDIDATES;
+		let c in 1 .. T::MaxCandidates::get();
 		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
@@ -261,7 +261,7 @@ benchmarks! {
 		// this will check members, runners-up and candidate for removal. Members and runners-up are
 		// limited by the runtime bound, nonetheless we fill them by `m`.
 		// number of already existing candidates.
-		let c in 1 .. MAX_CANDIDATES;
+		let c in 1 .. T::MaxCandidates::get();
 		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
@@ -362,14 +362,14 @@ benchmarks! {
 
 	clean_defunct_voters {
 		// total number of voters.
-		let v in (MAX_VOTERS / 2) .. MAX_VOTERS;
+		let v in (T::MaxVoters::get() / 2) .. T::MaxVoters::get();
 		// those that are defunct and need removal.
-		let d in 1 .. (MAX_VOTERS / 2);
+		let d in 1 .. (T::MaxVoters::get() / 2);
 
 		// remove any previous stuff.
 		clean::<T>();
 
-		let all_candidates = submit_candidates::<T>(MAX_CANDIDATES, "candidates")?;
+		let all_candidates = submit_candidates::<T>(T::MaxCandidates::get(), "candidates")?;
 		distribute_voters::<T>(all_candidates, v, MAXIMUM_VOTE)?;
 
 		// all candidates leave.
@@ -389,9 +389,9 @@ benchmarks! {
 		// members, this is hard-coded in the runtime and cannot be trivially changed at this stage.
 		// Yet, change the number of voters, candidates and edge per voter to see the impact. Note
 		// that we give all candidates a self vote to make sure they are all considered.
-		let c in 1 .. MAX_CANDIDATES;
-		let v in 1 .. MAX_VOTERS;
-		let e in MAX_VOTERS .. MAX_VOTERS * MAXIMUM_VOTE as u32;
+		let c in 1 .. T::MaxCandidates::get();
+		let v in 1 .. T::MaxVoters::get();
+		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() as u32 * MAXIMUM_VOTE as u32;
 		clean::<T>();
 
 		// so we have a situation with v and e. we want e to basically always be in the range of `e
@@ -425,9 +425,9 @@ benchmarks! {
 
 	#[extra]
 	election_phragmen_c_e {
-		let c in 1 .. MAX_CANDIDATES;
-		let e in MAX_VOTERS .. MAX_VOTERS * MAXIMUM_VOTE as u32;
-		let fixed_v = MAX_VOTERS;
+		let c in 1 .. T::MaxCandidates::get();
+		let e in (T::MaxVoters::get()) .. T::MaxVoters::get() * MAXIMUM_VOTE as u32;
+		let fixed_v = T::MaxVoters::get();
 		clean::<T>();
 
 		let votes_per_voter = e / fixed_v;
@@ -459,7 +459,7 @@ benchmarks! {
 	#[extra]
 	election_phragmen_v {
 		let v in 4 .. 16;
-		let fixed_c = MAX_CANDIDATES / 10;
+		let fixed_c = T::MaxCandidates::get() / 10;
 		let fixed_e = 64;
 		clean::<T>();
 

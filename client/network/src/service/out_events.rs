@@ -31,11 +31,10 @@
 //! - Send events by calling [`OutChannels::send`]. Events are cloned for each sender in the
 //! collection.
 
-use crate::Event;
-
 use futures::{channel::mpsc, prelude::*, ready, stream::FusedStream};
 use parking_lot::Mutex;
 use prometheus_endpoint::{register, CounterVec, GaugeVec, Opts, PrometheusError, Registry, U64};
+use sc_network_common::protocol::event::Event;
 use std::{
 	cell::RefCell,
 	fmt,
