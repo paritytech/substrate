@@ -576,7 +576,7 @@ pub mod pallet {
 				let first_from_each_queue = T::WeightInfo::pursue_target_per_queue(queues_hit);
 				let rest_from_each_queue = T::WeightInfo::pursue_target_per_item(bids_taken)
 					.saturating_sub(T::WeightInfo::pursue_target_per_item(queues_hit));
-				Weight::from_ref_time(first_from_each_queue + rest_from_each_queue)
+				first_from_each_queue + rest_from_each_queue
 			} else {
 				T::WeightInfo::pursue_target_noop()
 			}

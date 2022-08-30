@@ -892,7 +892,7 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
 		});
 
 		*total_weight +=
-			Weight::from_ref_time(<T as pallet::Config<I>>::WeightInfo::spend_funds(bounties_len));
+			<T as pallet::Config<I>>::WeightInfo::spend_funds(bounties_len);
 	}
 }
 

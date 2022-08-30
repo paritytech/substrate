@@ -62,7 +62,7 @@ impl ServiceBranch {
 	/// Return the weight of the `nudge` function when it takes the branch denoted by `self`.
 	pub fn weight_of_nudge<T: Config<I>, I: 'static>(self) -> frame_support::weights::Weight {
 		use ServiceBranch::*;
-		let ref_time_weight = match self {
+		match self {
 			NoDeposit => T::WeightInfo::nudge_referendum_no_deposit(),
 			Preparing => T::WeightInfo::nudge_referendum_preparing(),
 			Queued => T::WeightInfo::nudge_referendum_queued(),
@@ -78,14 +78,12 @@ impl ServiceBranch {
 			Approved => T::WeightInfo::nudge_referendum_approved(),
 			Rejected => T::WeightInfo::nudge_referendum_rejected(),
 			TimedOut | Fail => T::WeightInfo::nudge_referendum_timed_out(),
-		};
-
-		Weight::from_ref_time(ref_time_weight)
+		}
 	}
 
 	/// Return the maximum possible weight of the `nudge` function.
 	pub fn max_weight_of_nudge<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		let ref_time_weight = 0
+		Weight::new()
 			.max(T::WeightInfo::nudge_referendum_no_deposit())
 			.max(T::WeightInfo::nudge_referendum_preparing())
 			.max(T::WeightInfo::nudge_referendum_queued())
@@ -100,9 +98,7 @@ impl ServiceBranch {
 			.max(T::WeightInfo::nudge_referendum_continue_not_confirming())
 			.max(T::WeightInfo::nudge_referendum_approved())
 			.max(T::WeightInfo::nudge_referendum_rejected())
-			.max(T::WeightInfo::nudge_referendum_timed_out());
-
-		Weight::from_ref_time(ref_time_weight)
+			.max(T::WeightInfo::nudge_referendum_timed_out())
 	}
 
 	/// Return the weight of the `place_decision_deposit` function when it takes the branch denoted
@@ -130,18 +126,17 @@ impl ServiceBranch {
 			NoDeposit => return None,
 		};
 
-		Some(Weight::from_ref_time(ref_time_weight))
+		Some(ref_time_weight)
 	}
 
 	/// Return the maximum possible weight of the `place_decision_deposit` function.
 	pub fn max_weight_of_deposit<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		Weight::from_ref_time(
-			0.max(T::WeightInfo::place_decision_deposit_preparing())
-				.max(T::WeightInfo::place_decision_deposit_queued())
-				.max(T::WeightInfo::place_decision_deposit_not_queued())
-				.max(T::WeightInfo::place_decision_deposit_passing())
-				.max(T::WeightInfo::place_decision_deposit_failing()),
-		)
+		Weight::new()
+			.max(T::WeightInfo::place_decision_deposit_preparing())
+			.max(T::WeightInfo::place_decision_deposit_queued())
+			.max(T::WeightInfo::place_decision_deposit_not_queued())
+			.max(T::WeightInfo::place_decision_deposit_passing())
+			.max(T::WeightInfo::place_decision_deposit_failing())
 	}
 }
 
@@ -168,22 +163,18 @@ impl OneFewerDecidingBranch {
 	/// by `self`.
 	pub fn weight<T: Config<I>, I: 'static>(self) -> frame_support::weights::Weight {
 		use OneFewerDecidingBranch::*;
-		let ref_time_weight = match self {
+		match self {
 			QueueEmpty => T::WeightInfo::one_fewer_deciding_queue_empty(),
 			BeginDecidingPassing => T::WeightInfo::one_fewer_deciding_passing(),
 			BeginDecidingFailing => T::WeightInfo::one_fewer_deciding_failing(),
-		};
-
-		Weight::from_ref_time(ref_time_weight)
+		}
 	}
 
 	/// Return the maximum possible weight of the `one_fewer_deciding` function.
 	pub fn max_weight<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		let ref_time_weight = 0
+		Weight::new()
 			.max(T::WeightInfo::one_fewer_deciding_queue_empty())
 			.max(T::WeightInfo::one_fewer_deciding_passing())
-			.max(T::WeightInfo::one_fewer_deciding_failing());
-
-		Weight::from_ref_time(ref_time_weight)
+			.max(T::WeightInfo::one_fewer_deciding_failing())
 	}
 }

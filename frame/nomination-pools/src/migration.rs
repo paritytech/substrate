@@ -89,9 +89,7 @@ pub mod v1 {
 
 				log!(info, "Upgraded {} pools, storage to version {:?}", translated, current);
 
-				Weight::from_ref_time(
-					T::DbWeight::get().reads_writes(translated + 1, translated + 1),
-				)
+				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
 			} else {
 				log!(info, "Migration did not executed. This probably should be removed");
 				T::DbWeight::get().reads(1)
@@ -322,10 +320,8 @@ pub mod v2 {
 				current
 			);
 			current.put::<Pallet<T>>();
-			Weight::from_ref_time(
-				T::DbWeight::get()
-					.reads_writes(members_translated + 1, reward_pools_translated + 1),
-			)
+
+			T::DbWeight::get().reads_writes(members_translated + 1, reward_pools_translated + 1)
 		}
 	}
 

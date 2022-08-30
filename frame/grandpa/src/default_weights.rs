@@ -34,8 +34,8 @@ impl crate::WeightInfo for () {
 		const MAX_NOMINATORS: u64 = 200;
 
 		// checking membership proof
-		let ref_time_weight = (35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+		(35 * WEIGHT_PER_MICROS)
+			.saturating_add((175 * WEIGHT_PER_NANOS).scalar_saturating_mul(validator_count))
 			.saturating_add(DbWeight::get().reads(5))
 			// check equivocation proof
 			.saturating_add(95 * WEIGHT_PER_MICROS)
@@ -45,12 +45,10 @@ impl crate::WeightInfo for () {
 			.saturating_add(DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
 			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS))
 			// fetching set id -> session index mappings
-			.saturating_add(DbWeight::get().reads(2));
-
-		Weight::from_ref_time(ref_time_weight)
+			.saturating_add(DbWeight::get().reads(2))
 	}
 
 	fn note_stalled() -> Weight {
-		Weight::from_ref_time((3 * WEIGHT_PER_MICROS).saturating_add(DbWeight::get().writes(1)))
+		(3 * WEIGHT_PER_MICROS).saturating_add(DbWeight::get().writes(1))
 	}
 }
