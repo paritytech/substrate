@@ -49,10 +49,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let origin = details.owner;
 		details.owner = dest;
 
-		// The approved account has to be reset to None, because otherwise
-		// pre-approve attack would be possible, where the owner can approve his
-		// second account before making the transaction and then claiming the
-		// item back.
+		// The approved account has to be reset to None, because otherwise pre-approve attack would
+		// be possible, where the owner can approve his second account before making the transaction
+		// and then claiming the item back.
 		details.approved = None;
 
 		Item::<T, I>::insert(&collection, &item, &details);
