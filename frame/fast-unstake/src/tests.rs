@@ -229,16 +229,25 @@ mod on_idle {
 			assert_eq!(Queue::<Runtime>::count(), 2);
 			assert_eq!(Head::<Runtime>::get(), None);
 
-			// process on idle & run to next block
+			// process on idle and check eras for next Queue item
 			FastUnstake::on_idle(System::block_number(), max_block_weight);
 			run_to_block(System::block_number() + 1);
 
-			// make sure there is some Queue item remaining
-			// TODO: check Head state at this stage - should be empty?
+			// process on idle & let go of current Head
+			FastUnstake::on_idle(System::block_number(), max_block_weight);
+			run_to_block(System::block_number() + 1);
+
+			// confirm Head / Queue items remaining
+			assert_eq!(Head::<Runtime>::get(), None);
 			assert_eq!(Queue::<Runtime>::count(), 1);
 
-			// running on_idle again
+			// process on idle and check eras for next Queue item
 			FastUnstake::on_idle(System::block_number(), max_block_weight);
+			run_to_block(System::block_number() + 1);
+
+			// process on idle & let go of current Head
+			FastUnstake::on_idle(System::block_number(), max_block_weight);
+			run_to_block(System::block_number() + 1);
 
 			// Head & Queue should now be empty
 			assert_eq!(Head::<Runtime>::get(), None);
