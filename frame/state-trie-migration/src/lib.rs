@@ -1619,7 +1619,7 @@ pub(crate) mod remote_tests {
 		n: <Runtime as frame_system::Config>::BlockNumber,
 	) -> (H256, u64) {
 		let mut root = Default::default();
-		let mut weight_sum = 0;
+		let mut weight_sum = Weight::new();
 		while System::<Runtime>::block_number() < n {
 			System::<Runtime>::set_block_number(System::<Runtime>::block_number() + One::one());
 			System::<Runtime>::on_initialize(System::<Runtime>::block_number());
