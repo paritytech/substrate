@@ -84,9 +84,7 @@ mod test {
 			// when
 			assert_eq!(
 				remove_deferred_storage::<T>(),
-				Weight::from_ref_time(
-					<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1)
-				),
+				<T as frame_system::Config>::DbWeight::get().reads_writes(1, 1),
 			);
 
 			// then

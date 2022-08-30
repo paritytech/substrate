@@ -86,7 +86,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(2 * WEIGHT_PER_SECOND));
+		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;

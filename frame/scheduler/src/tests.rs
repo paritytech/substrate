@@ -436,11 +436,9 @@ fn scheduler_respects_priority_ordering() {
 #[test]
 fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 	new_test_ext().execute_with(|| {
-		let max_weight = MaximumSchedulerWeight::get() -
-			Weight::from_ref_time(<() as WeightInfo>::on_initialize(0));
-		let item_weight = Weight::from_ref_time(
-			<() as WeightInfo>::on_initialize(1) - <() as WeightInfo>::on_initialize(0),
-		);
+		let max_weight = MaximumSchedulerWeight::get() - <() as WeightInfo>::on_initialize(0);
+		let item_weight =
+			<() as WeightInfo>::on_initialize(1) - <() as WeightInfo>::on_initialize(0);
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -479,7 +477,7 @@ fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 #[test]
 fn on_initialize_weight_is_correct() {
 	new_test_ext().execute_with(|| {
-		let base_weight = Weight::from_ref_time(<() as WeightInfo>::on_initialize(0));
+		let base_weight = <() as WeightInfo>::on_initialize(0);
 		let call_weight = MaximumSchedulerWeight::get() / 4;
 
 		// Named

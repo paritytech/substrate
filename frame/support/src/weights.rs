@@ -724,10 +724,10 @@ mod tests {
 			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
+			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_ref_time(10_000)]
 			fn f20(_origin) { unimplemented!(); }
 
-			#[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+			#[weight = T::DbWeight::get().reads_writes(6, 5) + Weight::from_ref_time(40_000)]
 			fn f21(_origin) { unimplemented!(); }
 
 		}
