@@ -234,6 +234,7 @@ mod on_idle {
 			run_to_block(System::block_number() + 1);
 
 			// make sure there is some Queue item remaining
+			// TODO: check Head state at this stage - should be empty?
 			assert_eq!(Queue::<Runtime>::count(), 1);
 
 			// running on_idle again
