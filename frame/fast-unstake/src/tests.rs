@@ -200,7 +200,21 @@ mod on_idle {
 
 	#[test]
 	fn early_exit() {
-		todo!("remaining_weight = 0 should do NOTHING");
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::<Runtime>::put(BondingDuration::get() + 1);
+			CurrentEra::<Runtime>::put(BondingDuration::get());
+
+			// set up Queue item
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1)));
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+
+			// call on_idle with no remaining weight
+			FastUnstake::on_idle(System::block_number(), 0);
+
+			// assert nothing changed in Queue and Head
+			assert_eq!(Head::<Runtime>::get(), None);
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+		});
 	}
 
 	#[test]
