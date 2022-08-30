@@ -107,8 +107,8 @@ impl Weight {
 		Some(Self { ref_time })
 	}
 
-	pub fn scalar_saturating_mul(self, rhs: impl Into<u64>) -> Self {
-		Self { ref_time: self.ref_time.saturating_mul(rhs.into()) }
+	pub const fn scalar_saturating_mul(self, rhs: u64) -> Self {
+		Self { ref_time: self.ref_time.saturating_mul(rhs) }
 	}
 }
 
