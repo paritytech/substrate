@@ -36,6 +36,7 @@ mod transactional;
 mod tt_macro;
 
 use proc_macro::TokenStream;
+use syn::{ItemType, parse_macro_input};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 
@@ -582,4 +583,14 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 	storage_alias::storage_alias(input.into())
 		.unwrap_or_else(|r| r.into_compile_error())
 		.into()
+}
+
+#[proc_macro_attribute]
+pub fn cached(_attr: TokenStream, item: TokenStream) -> TokenStream {
+	let typ = item.clone();
+	let typ: ItemType = parse_macro_input!(typ as ItemType);
+	let type_name = typ.ident.to_string();
+	// need name of pallet
+	// use macro_state here
+	item
 }
