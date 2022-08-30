@@ -199,15 +199,35 @@ skip-if-draft:
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
      - ./scripts/ci/gitlab/skip_if_draft.sh
 
-include:
-  # check jobs
-  - scripts/ci/gitlab/pipeline/check.yml
-  # tests jobs
-  - scripts/ci/gitlab/pipeline/test.yml
-  # build jobs
-  - scripts/ci/gitlab/pipeline/build.yml
-  # publish jobs
-  - scripts/ci/gitlab/pipeline/publish.yml
+# include:
+#   # check jobs
+#   - scripts/ci/gitlab/pipeline/check.yml
+#   # tests jobs
+#   - scripts/ci/gitlab/pipeline/test.yml
+#   # build jobs
+#   - scripts/ci/gitlab/pipeline/build.yml
+#   # publish jobs
+#   - scripts/ci/gitlab/pipeline/publish.yml
+
+# This job runs all benchmarks defined in the `/bin/node/runtime` once to check that there are no errors.
+quick-benchmarks:
+  stage:                           test
+  extends:
+    - .docker-env
+    - .test-refs
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                "full"
+    WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+  script:
+    - rusty-cachier snapshot create
+    - time cargo run --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
+    - rusty-cachier cache upload
+  tags:
+    - linux-docker-benches
 
 #### stage:                        deploy
 
