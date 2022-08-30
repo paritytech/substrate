@@ -343,12 +343,12 @@ impl sp_runtime::traits::Printable for Weight {
 
 // Re-export common functions so you do not need to import trait.
 impl Weight {
-	pub fn zero() -> Self {
-		<Self as Zero>::zero()
+	pub const fn zero() -> Self {
+		Self { ref_time: 0 }
 	}
 
-	pub fn one() -> Self {
-		<Self as One>::one()
+	pub const fn one() -> Self {
+		Self { ref_time: 1 }
 	}
 
 	pub fn saturating_add(self, rhs: Self) -> Self {
