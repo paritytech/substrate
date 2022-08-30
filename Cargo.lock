@@ -3954,7 +3954,6 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "hex-literal",
  "node-primitives",
- "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
  "pallet-babe",
@@ -3975,7 +3974,6 @@ dependencies = [
  "pallet-im-online",
  "pallet-indices",
  "pallet-membership",
- "pallet-mmr",
  "pallet-multisig",
  "pallet-offences",
  "pallet-offences-benchmarking",
@@ -4353,7 +4351,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-cere-ddc"
-version = "2.0.0"
+version = "3.0.0"
 dependencies = [
  "frame-support",
  "frame-system",
