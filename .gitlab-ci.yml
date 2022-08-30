@@ -231,7 +231,7 @@ quick-benchmarks:
 
 #### stage:                        deploy
 
-deploy-prometheus-alerting-rules:
+.deploy-prometheus-alerting-rules:
   stage:                           deploy
   needs:
     - job:                         test-prometheus-alerting-rules
