@@ -29,8 +29,8 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{
 	ensure,
-	traits::{Defensive, Get},
-	DefaultNoBound, PalletError,
+	traits::{Defensive, Get, DefensiveOption},
+	DefaultNoBound, PalletError, defensive,
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{Bounded, Zero};
@@ -326,8 +326,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		crate::log!(
 			debug,
-			"inserted {:?} with score {:?
-			} into bag {:?}, new count is {}",
+			"inserted {:?} with score {:?} into bag {:?}, new count is {}",
 			id,
 			score,
 			bag_score,
@@ -458,9 +457,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
-		let lighter_node = Node::<T, I>::get(lighter_id).ok_or_else(|| {
-			debug_assert!(false, "id that should exist cannot be found");
-			crate::log!(warn, "id that should exist cannot be found");
+		let lighter_node = Node::<T, I>::get(lighter_id).defensive_ok_or_else(|| {
 			ListError::NodeNotFound
 		})?;
 
@@ -696,8 +693,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 			if *tail == node.id {
 				// this should never happen, but this check prevents one path to a worst case
 				// infinite loop.
-				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
-				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
+				defensive!("system logic error: inserting a node who has the id of tail");
 				return
 			};
 		}

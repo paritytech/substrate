@@ -861,7 +861,6 @@ pub mod pallet {
 				if T::VoterList::contains(&stash) {
 					let _ =
 						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
-					debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash, extra));
