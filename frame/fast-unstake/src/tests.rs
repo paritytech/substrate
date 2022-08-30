@@ -233,8 +233,7 @@ mod on_idle {
 			FastUnstake::on_idle(System::block_number(), max_block_weight);
 			run_to_block(System::block_number() + 1);
 
-			// make sure there is some Queue item left in head
-			assert_ne!(Head::<Runtime>::get(), None);
+			// make sure there is some Queue item remaining
 			assert_eq!(Queue::<Runtime>::count(), 1);
 
 			// running on_idle again
