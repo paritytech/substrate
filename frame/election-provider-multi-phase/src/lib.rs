@@ -495,6 +495,8 @@ pub enum ElectionError<T: Config> {
 	DataProvider(&'static str),
 	/// An error nested in the fallback.
 	Fallback(FallbackErrorOf<T>),
+	/// No solution has been queued.
+	NothingQueued,
 }
 
 // NOTE: we have to do this manually because of the additional where clause needed on
@@ -901,7 +903,7 @@ pub mod pallet {
 			let ejected_a_solution = <QueuedSolution<T>>::exists();
 			<QueuedSolution<T>>::put(ready);
 			Self::deposit_event(Event::SolutionStored {
-				election_compute: ElectionCompute::Unsigned,
+				compute: ElectionCompute::Unsigned,
 				prev_ejected: ejected_a_solution,
 			});
 
@@ -949,7 +951,7 @@ pub mod pallet {
 			};
 
 			Self::deposit_event(Event::SolutionStored {
-				election_compute: ElectionCompute::Emergency,
+				compute: ElectionCompute::Emergency,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
@@ -1025,7 +1027,7 @@ pub mod pallet {
 
 			signed_submissions.put();
 			Self::deposit_event(Event::SolutionStored {
-				election_compute: ElectionCompute::Signed,
+				compute: ElectionCompute::Signed,
 				prev_ejected: ejected_a_solution,
 			});
 			Ok(())
@@ -1063,7 +1065,7 @@ pub mod pallet {
 			};
 
 			Self::deposit_event(Event::SolutionStored {
-				election_compute: ElectionCompute::Fallback,
+				compute: ElectionCompute::Fallback,
 				prev_ejected: QueuedSolution::<T>::exists(),
 			});
 
@@ -1081,13 +1083,17 @@ pub mod pallet {
 		/// solution is unsigned, this means that it has also been processed.
 		///
 		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
-		SolutionStored { election_compute: ElectionCompute, prev_ejected: bool },
+		SolutionStored { compute: ElectionCompute, prev_ejected: bool },
 		/// The election has been finalized, with `Some` of the given computation and score, or
 		/// else if the election failed, `None`.
 		ElectionFinalized {
-			election_compute: Option<ElectionCompute>,
-			score: Option<ElectionScore>,
+			compute: ElectionCompute,
+			score: ElectionScore,
 		},
+		/// An election failed.
+		///
+		/// Not much can be said about which computes failed in the process.
+		ElectionFailed,
 		/// An account has been rewarded for their signed submission being finalized.
 		Rewarded { account: <T as frame_system::Config>::AccountId, value: BalanceOf<T> },
 		/// An account has been slashed for submitting an invalid signed submission.
@@ -1524,6 +1530,7 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
+
 	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
@@ -1533,48 +1540,23 @@ impl<T: Config> Pallet<T> {
 		// - signed phase was complete or not started, in which case finalization is idempotent and
 		//   inexpensive (1 read of an empty vector).
 		let _ = Self::finalize_signed_phase();
-		match <QueuedSolution<T>>::take() {
-			Some(ready_solution) => {
-				Self::deposit_event(Event::ElectionFinalized {
-					election_compute: Some(ready_solution.compute),
-					score: Some(ready_solution.score),
-				});
+		<QueuedSolution<T>>::take()
+			.ok_or(ElectionError::<T>::NothingQueued)
+			.or_else(|_| T::Fallback::elect().map(|supports| ReadySolution { supports, score: Default::default(), compute: ElectionCompute::Fallback }).map_err(|fe| ElectionError::Fallback(fe)))
+			.map(|ReadySolution { compute, score, supports }| {
+				Self::deposit_event(Event::ElectionFinalized { compute, score });
 				if Self::round() != 1 {
-					log!(
-						info,
-						"Finalized election round with compute {:?}.",
-						ready_solution.compute
-					);
+					log!(info, "Finalized election round with compute {:?}.", compute);
 				}
-				Ok(ready_solution.supports)
-			},
-			None => match T::Fallback::elect() {
-				Ok(supports) => {
-					Self::deposit_event(Event::ElectionFinalized {
-						election_compute: Some(ElectionCompute::Fallback),
-						score: None,
-					});
-					if Self::round() != 1 {
-						log!(
-							info,
-							"Finalized election round with compute {:?}.",
-							ElectionCompute::Fallback
-						);
-					}
-					Ok(supports)
-				},
-				Err(err) => {
-					Self::deposit_event(Event::ElectionFinalized {
-						election_compute: None,
-						score: None,
-					});
-					if Self::round() != 1 {
-						log!(warn, "Failed to finalize election round. reason {:?}", err);
-					}
-					Err(ElectionError::Fallback(err))
-				},
-			},
-		}
+				supports
+			})
+			.map_err(|err| {
+				Self::deposit_event(Event::ElectionFailed);
+				if Self::round() != 1 {
+					log!(warn, "Failed to finalize election round. reason {:?}", err);
+				}
+				err
+			})
 	}
 
 	/// record the weight of the given `supports`.
@@ -1992,8 +1974,8 @@ mod tests {
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized {
-						election_compute: Some(ElectionCompute::Fallback),
-						score: None
+						compute: ElectionCompute::Fallback,
+						score: Default::default()
 					}
 				],
 			);
@@ -2044,7 +2026,7 @@ mod tests {
 	}
 
 	#[test]
-	fn check_events_with_election_compute_signed() {
+	fn check_events_with_compute_signed() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(14);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
@@ -2063,18 +2045,18 @@ mod tests {
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
-						election_compute: ElectionCompute::Signed,
+						compute: ElectionCompute::Signed,
 						prev_ejected: false
 					},
 					Event::Rewarded { account: 99, value: 7 },
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized {
-						election_compute: Some(ElectionCompute::Signed),
-						score: Some(ElectionScore {
+						compute: ElectionCompute::Signed,
+						score: ElectionScore {
 							minimal_stake: 40,
 							sum_stake: 100,
 							sum_stake_squared: 5200
-						})
+						}
 					}
 				],
 			);
@@ -2082,7 +2064,7 @@ mod tests {
 	}
 
 	#[test]
-	fn check_events_with_election_compute_unsigned() {
+	fn check_events_with_compute_unsigned() {
 		ExtBuilder::default().build_and_execute(|| {
 			roll_to(25);
 			assert!(MultiPhase::current_phase().is_unsigned());
@@ -2112,16 +2094,16 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::SolutionStored {
-						election_compute: ElectionCompute::Unsigned,
+						compute: ElectionCompute::Unsigned,
 						prev_ejected: false
 					},
 					Event::ElectionFinalized {
-						election_compute: Some(ElectionCompute::Unsigned),
-						score: Some(ElectionScore {
+						compute: ElectionCompute::Unsigned,
+						score: ElectionScore {
 							minimal_stake: 40,
 							sum_stake: 100,
 							sum_stake_squared: 5200
-						})
+						}
 					}
 				],
 			);
@@ -2192,18 +2174,14 @@ mod tests {
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
 					Event::UnsignedPhaseStarted { round: 1 },
-					Event::ElectionFinalized { election_compute: None, score: None },
+					Event::ElectionFailed,
 					Event::SolutionStored {
-						election_compute: ElectionCompute::Fallback,
+						compute: ElectionCompute::Fallback,
 						prev_ejected: false
 					},
 					Event::ElectionFinalized {
-						election_compute: Some(ElectionCompute::Fallback),
-						score: Some(ElectionScore {
-							minimal_stake: 0,
-							sum_stake: 0,
-							sum_stake_squared: 0
-						})
+						compute: ElectionCompute::Fallback,
+						score: Default::default()
 					}
 				]
 			);
