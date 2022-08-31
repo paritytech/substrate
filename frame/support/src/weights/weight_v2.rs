@@ -479,10 +479,4 @@ impl<T> PaysFee<T> for (RefTimeWeight, Pays) {
 	}
 }
 
-impl From<Pays> for PostDispatchInfo {
-	fn from(pays_fee: Pays) -> Self {
-		Self { actual_weight: None, pays_fee }
-	}
-}
-
 // END TODO

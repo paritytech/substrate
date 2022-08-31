@@ -204,6 +204,12 @@ impl Default for Pays {
 	}
 }
 
+impl From<Pays> for PostDispatchInfo {
+	fn from(pays_fee: Pays) -> Self {
+		Self { actual_weight: None, pays_fee }
+	}
+}
+
 /// A generalized group of dispatch types.
 ///
 /// NOTE whenever upgrading the enum make sure to also update
