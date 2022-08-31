@@ -103,20 +103,16 @@ pub trait WhitelistedStorageKeys {
 	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey>;
 }
 
-impl<A, B> WhitelistedStorageKeys for (A, B)
-where
-	A: WhitelistedStorageKeys,
-	B: WhitelistedStorageKeys,
-{
+#[impl_for_tuples(5)]
+impl WhitelistedStorageKeys for Tuple {
 	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey> {
 		// use BTreeSet so the resulting list of keys is unique
 		let mut combined_keys = BTreeSet::new();
-		for key in A::whitelisted_storage_keys() {
-			combined_keys.insert(key);
-		}
-		for key in B::whitelisted_storage_keys() {
-			combined_keys.insert(key);
-		}
+		for_tuples!( #(
+			for key in Tuple::whitelisted_storage_keys() {
+				combined_keys.insert(key);
+			}
+		 )* );
 		// flatten BTreeSet down to a vec
 		let mut combined_keys_vec = Vec::new();
 		for key in combined_keys {
