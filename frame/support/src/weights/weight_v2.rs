@@ -118,7 +118,7 @@ impl Weight {
 
 impl Zero for Weight {
 	fn zero() -> Self {
-		Self { ref_time: 0 }
+		Self::zero()
 	}
 
 	fn is_zero(&self) -> bool {
@@ -128,7 +128,7 @@ impl Zero for Weight {
 
 impl One for Weight {
 	fn one() -> Self {
-		Self { ref_time: 1 }
+		Self::one()
 	}
 }
 
@@ -197,33 +197,31 @@ where
 
 impl Saturating for Weight {
 	fn saturating_add(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_add(rhs.ref_time) }
+		self.saturating_add(rhs)
 	}
 
 	fn saturating_sub(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_sub(rhs.ref_time) }
+		self.saturating_sub(rhs)
 	}
 
 	fn saturating_mul(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_mul(rhs.ref_time) }
+		self.saturating_mul(rhs)
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		Self { ref_time: self.ref_time.saturating_pow(exp as u32) }
+		self.saturating_pow(exp)
 	}
 }
 
 impl CheckedAdd for Weight {
 	fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		let ref_time = self.ref_time.checked_add(rhs.ref_time)?;
-		Some(Self { ref_time })
+		self.checked_add(rhs)
 	}
 }
 
 impl CheckedSub for Weight {
 	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		let ref_time = self.ref_time.checked_sub(rhs.ref_time)?;
-		Some(Self { ref_time })
+		self.checked_sub(rhs)
 	}
 }
 
@@ -355,24 +353,34 @@ impl Weight {
 		Self { ref_time: 1 }
 	}
 
-	pub fn saturating_add(self, rhs: Self) -> Self {
-		<Self as Saturating>::saturating_add(self, rhs)
+	pub const fn saturating_add(self, rhs: Self) -> Self {
+		Self { ref_time: self.ref_time.saturating_add(rhs.ref_time) }
 	}
 
-	pub fn saturating_sub(self, rhs: Self) -> Self {
-		<Self as Saturating>::saturating_sub(self, rhs)
+	pub const fn saturating_sub(self, rhs: Self) -> Self {
+		Self { ref_time: self.ref_time.saturating_sub(rhs.ref_time) }
 	}
 
-	pub fn saturating_mul(self, rhs: Self) -> Self {
-		<Self as Saturating>::saturating_mul(self, rhs)
+	pub const fn saturating_mul(self, rhs: Self) -> Self {
+		Self { ref_time: self.ref_time.saturating_mul(rhs.ref_time) }
 	}
 
-	pub fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		<Self as CheckedAdd>::checked_add(self, rhs)
+	pub const fn saturating_pow(self, exp: usize) -> Self {
+		Self { ref_time: self.ref_time.saturating_pow(exp as u32) }
 	}
 
-	pub fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		<Self as CheckedSub>::checked_sub(self, rhs)
+	pub const fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		match self.ref_time.checked_add(rhs.ref_time) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
+	}
+
+	pub const fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		match self.ref_time.checked_sub(rhs.ref_time) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
 	}
 }
 
