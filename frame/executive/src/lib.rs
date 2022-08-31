@@ -107,7 +107,7 @@
 //! impl frame_support::traits::OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
 //!     fn on_runtime_upgrade() -> frame_support::weights::Weight {
 //!         // Do whatever you want.
-//!         0
+//!         frame_support::weights::Weight::zero()
 //!     }
 //! }
 //!
@@ -123,12 +123,12 @@ use frame_support::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
 		OnRuntimeUpgrade,
 	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 };
 use sp_runtime::{
 	generic::Digest,
 	traits::{
-		self, Applyable, CheckEqual, Checkable, Dispatchable, Header, NumberFor, One, Saturating,
+		self, Applyable, CheckEqual, Checkable, Dispatchable, Header, NumberFor, One,
 		ValidateUnsigned, Zero,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
@@ -299,7 +299,7 @@ where
 		// This means the format of all the event related storages must always be compatible.
 		<frame_system::Pallet<System>>::reset_events();
 
-		let mut weight = 0;
+		let mut weight = Weight::new();
 		if Self::runtime_upgraded() {
 			weight = weight.saturating_add(Self::execute_on_runtime_upgrade());
 		}
@@ -413,7 +413,7 @@ where
 		let max_weight = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
-		if remaining_weight > 0 {
+		if remaining_weight > Weight::zero() {
 			let used_weight = <AllPalletsWithSystem as OnIdle<System::BlockNumber>>::on_idle(
 				block_number,
 				remaining_weight,
@@ -593,12 +593,12 @@ mod tests {
 			// one with block number arg and one without
 			fn on_initialize(n: T::BlockNumber) -> Weight {
 				println!("on_initialize({})", n);
-				175
+				Weight::from_ref_time(175)
 			}
 
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight) -> Weight {
 				println!("on_idle{}, {})", n, remaining_weight);
-				175
+				Weight::from_ref_time(175)
 			}
 
 			fn on_finalize(n: T::BlockNumber) {
@@ -607,7 +607,7 @@ mod tests {
 
 			fn on_runtime_upgrade() -> Weight {
 				sp_io::storage::set(super::TEST_KEY, "module".as_bytes());
-				200
+				Weight::from_ref_time(200)
 			}
 
 			fn offchain_worker(n: T::BlockNumber) {
@@ -721,9 +721,9 @@ mod tests {
 	parameter_types! {
 		pub BlockWeights: frame_system::limits::BlockWeights =
 			frame_system::limits::BlockWeights::builder()
-				.base_block(10)
-				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = 5)
-				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = 1024.into())
+				.base_block(Weight::from_ref_time(10))
+				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_ref_time(5))
+				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Weight::from_ref_time(1024).into())
 				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
@@ -814,7 +814,7 @@ mod tests {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());
 			sp_io::storage::set(CUSTOM_ON_RUNTIME_KEY, &true.encode());
 			System::deposit_event(frame_system::Event::CodeUpdated);
-			100
+			Weight::from_ref_time(100)
 		}
 	}
 
@@ -988,12 +988,12 @@ mod tests {
 			sign_extra(1, 0, 0),
 		);
 		let encoded = xt.encode();
-		let encoded_len = encoded.len() as Weight;
+		let encoded_len = encoded.len() as u64;
 		// on_initialize weight + base block execution weight
 		let block_weights = <Runtime as frame_system::Config>::BlockWeights::get();
-		let base_block_weight = 175 + block_weights.base_block;
+		let base_block_weight = Weight::from_ref_time(175) + block_weights.base_block;
 		let limit = block_weights.get(DispatchClass::Normal).max_total.unwrap() - base_block_weight;
-		let num_to_exhaust_block = limit / (encoded_len + 5);
+		let num_to_exhaust_block = limit.ref_time() / (encoded_len + 5);
 		t.execute_with(|| {
 			Executive::initialize_block(&Header::new(
 				1,
@@ -1016,7 +1016,7 @@ mod tests {
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::block_weight().total(),
 						//--------------------- on_initialize + block_execution + extrinsic_base weight
-						(encoded_len + 5) * (nonce + 1) + base_block_weight,
+						Weight::from_ref_time((encoded_len + 5) * (nonce + 1)) + base_block_weight,
 					);
 					assert_eq!(
 						<frame_system::Pallet<Runtime>>::extrinsic_index(),
@@ -1047,8 +1047,8 @@ mod tests {
 		let mut t = new_test_ext(1);
 		t.execute_with(|| {
 			// Block execution weight + on_initialize weight from custom module
-			let base_block_weight =
-				175 + <Runtime as frame_system::Config>::BlockWeights::get().base_block;
+			let base_block_weight = Weight::from_ref_time(175) +
+				<Runtime as frame_system::Config>::BlockWeights::get().base_block;
 
 			Executive::initialize_block(&Header::new(
 				1,
@@ -1066,7 +1066,7 @@ mod tests {
 			assert!(Executive::apply_extrinsic(x2.clone()).unwrap().is_ok());
 
 			// default weight for `TestXt` == encoded length.
-			let extrinsic_weight = len as Weight +
+			let extrinsic_weight = Weight::from_ref_time(len as u64) +
 				<Runtime as frame_system::Config>::BlockWeights::get()
 					.get(DispatchClass::Normal)
 					.base_extrinsic;
@@ -1180,7 +1180,10 @@ mod tests {
 			// NOTE: might need updates over time if new weights are introduced.
 			// For now it only accounts for the base block execution weight and
 			// the `on_initialize` weight defined in the custom test module.
-			assert_eq!(<frame_system::Pallet<Runtime>>::block_weight().total(), 175 + 175 + 10);
+			assert_eq!(
+				<frame_system::Pallet<Runtime>>::block_weight().total(),
+				Weight::from_ref_time(175 + 175 + 10)
+			);
 		})
 	}
 

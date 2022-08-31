@@ -19,7 +19,9 @@
 
 use crate::mock::*;
 use codec::Encode;
-use frame_support::{assert_noop, assert_ok, dispatch::GetDispatchInfo, traits::PreimageProvider};
+use frame_support::{
+	assert_noop, assert_ok, dispatch::GetDispatchInfo, traits::PreimageProvider, weights::Weight,
+};
 use sp_runtime::{traits::Hash, DispatchError};
 
 #[test]
@@ -94,7 +96,11 @@ fn test_whitelist_call_and_execute() {
 		assert!(Preimage::preimage_requested(&call_hash));
 
 		assert_noop!(
-			Whitelist::dispatch_whitelisted_call(Origin::root(), call_hash, call_weight - 1),
+			Whitelist::dispatch_whitelisted_call(
+				Origin::root(),
+				call_hash,
+				call_weight - Weight::one()
+			),
 			crate::Error::<Test>::InvalidCallWeightWitness,
 		);
 
@@ -114,7 +120,7 @@ fn test_whitelist_call_and_execute_failing_call() {
 	new_test_ext().execute_with(|| {
 		let call = Call::Whitelist(crate::Call::dispatch_whitelisted_call {
 			call_hash: Default::default(),
-			call_weight_witness: 0,
+			call_weight_witness: Weight::zero(),
 		});
 		let call_weight = call.get_dispatch_info().weight;
 		let encoded_call = call.encode();
