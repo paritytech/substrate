@@ -125,9 +125,7 @@ impl Weight {
 
 	/// Increment [`Weight`] by `amount` via saturating addition.
 	pub fn saturating_accrue(&mut self, amount: Self) {
-		let mut o = Self::zero();
-		sp_std::mem::swap(&mut o, self);
-		*self = o.saturating_add(amount);
+		*self = self.saturating_add(amount);
 	}
 
 	/// Checked [`Weight`] addition. Computes `self + rhs`, returning `None` if overflow occurred.
