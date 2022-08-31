@@ -1441,16 +1441,14 @@ mod test {
 
 	#[test]
 	fn find_node_index_with_predicate_works() {
-		fn is_descendent_of(parent: &char, child: &char) -> Result<bool, std::convert::Infallible> {
-			match *parent {
-				'A' => Ok(['B', 'C', 'D', 'E', 'F'].contains(child)),
-				'B' => Ok(['C', 'D'].contains(child)),
-				'C' => Ok(['D'].contains(child)),
-				'E' => Ok(['F'].contains(child)),
-				'D' | 'F' => Ok(false),
-				_ => unreachable!(),
-			}
-		}
+		let is_descendent_of = |parent: &char, child: &char| match *parent {
+			'A' => Ok(['B', 'C', 'D', 'E', 'F'].contains(child)),
+			'B' => Ok(['C', 'D'].contains(child)),
+			'C' => Ok(['D'].contains(child)),
+			'E' => Ok(['F'].contains(child)),
+			'D' | 'F' => Ok(false),
+			_ => Err(TestError),
+		};
 
 		// A(t) --- B(f) --- C(t) --- D(f)
 		//      \-- E(t) --- F(f)

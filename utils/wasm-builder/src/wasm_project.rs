@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{write_file_if_changed, CargoCommandVersioned};
+use crate::{write_file_if_changed, CargoCommandVersioned, OFFLINE};
 
 use build_helper::rerun_if_changed;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand};
@@ -51,6 +51,11 @@ impl WasmBinaryBloaty {
 	pub fn wasm_binary_bloaty_path_escaped(&self) -> String {
 		self.0.display().to_string().escape_default().to_string()
 	}
+
+	/// Returns the path to the wasm binary.
+	pub fn wasm_binary_bloaty_path(&self) -> &Path {
+		&self.0
+	}
 }
 
 /// Holds the path to the WASM binary.
@@ -83,12 +88,12 @@ fn crate_metadata(cargo_manifest: &Path) -> Metadata {
 		cargo_manifest.to_path_buf()
 	};
 
-	let crate_metadata = MetadataCommand::new()
-		.manifest_path(cargo_manifest)
-		.features(CargoOpt::AllFeatures)
+	let mut crate_metadata_command = create_metadata_command(cargo_manifest);
+	crate_metadata_command.features(CargoOpt::AllFeatures);
+
+	let crate_metadata = crate_metadata_command
 		.exec()
 		.expect("`cargo metadata` can not fail on project `Cargo.toml`; qed");
-
 	// If the `Cargo.lock` didn't exist, we need to remove it after
 	// calling `cargo metadata`. This is required to ensure that we don't change
 	// the build directory outside of the `target` folder. Commands like
@@ -137,9 +142,49 @@ pub(crate) fn create_and_compile(
 		copy_wasm_to_target_directory(project_cargo_toml, wasm_binary_compressed)
 	});
 
-	generate_rerun_if_changed_instructions(project_cargo_toml, &project, &wasm_workspace);
+	let final_wasm_binary = wasm_binary_compressed.or(wasm_binary);
 
-	(wasm_binary_compressed.or(wasm_binary), bloaty)
+	generate_rerun_if_changed_instructions(
+		project_cargo_toml,
+		&project,
+		&wasm_workspace,
+		final_wasm_binary.as_ref(),
+		&bloaty,
+	);
+
+	if let Err(err) = adjust_mtime(&bloaty, final_wasm_binary.as_ref()) {
+		build_helper::warning!("Error while adjusting the mtime of the wasm binaries: {}", err)
+	}
+
+	(final_wasm_binary, bloaty)
+}
+
+/// Adjust the mtime of the bloaty and compressed/compact wasm files.
+///
+/// We add the bloaty and the compressed/compact wasm file to the `rerun-if-changed` files.
+/// Cargo/Rustc determines based on the timestamp of the `invoked.timestamp` file that can be found
+/// in the `OUT_DIR/..`, if it needs to rerun a `build.rs` script. The problem is that this
+/// `invoked.timestamp` is created when the `build.rs` is executed and the wasm binaries are created
+/// later. This leads to them having a later mtime than the `invoked.timestamp` file and thus,
+/// cargo/rustc always re-executes the `build.rs` script. To hack around this, we copy the mtime of
+/// the `invoked.timestamp` to the wasm binaries.
+fn adjust_mtime(
+	bloaty_wasm: &WasmBinaryBloaty,
+	compressed_or_compact_wasm: Option<&WasmBinary>,
+) -> std::io::Result<()> {
+	let out_dir = build_helper::out_dir();
+	let invoked_timestamp = out_dir.join("../invoked.timestamp");
+
+	// Get the mtime of the `invoked.timestamp`
+	let metadata = fs::metadata(invoked_timestamp)?;
+	let mtime = filetime::FileTime::from_last_modification_time(&metadata);
+
+	filetime::set_file_mtime(bloaty_wasm.wasm_binary_bloaty_path(), mtime)?;
+	if let Some(binary) = compressed_or_compact_wasm.as_ref() {
+		filetime::set_file_mtime(binary.wasm_binary_path(), mtime)?;
+	}
+
+	Ok(())
 }
 
 /// Find the `Cargo.lock` relative to the `OUT_DIR` environment variable.
@@ -548,6 +593,11 @@ impl Profile {
 	}
 }
 
+/// Check environment whether we should build without network
+fn offline_build() -> bool {
+	env::var(OFFLINE).map_or(false, |v| v == "true")
+}
+
 /// Build the project to create the WASM binary.
 fn build_project(
 	project: &Path,
@@ -585,6 +635,10 @@ fn build_project(
 	let profile = Profile::detect(project);
 	build_cmd.arg("--profile");
 	build_cmd.arg(profile.name());
+
+	if offline_build() {
+		build_cmd.arg("--offline");
+	}
 
 	println!("{}", colorize_info_message("Information that should be included in a bug report."));
 	println!("{} {:?}", colorize_info_message("Executing build command:"), build_cmd);
@@ -706,20 +760,31 @@ impl<'a> Deref for DeduplicatePackage<'a> {
 	}
 }
 
+fn create_metadata_command(path: impl Into<PathBuf>) -> MetadataCommand {
+	let mut metadata_command = MetadataCommand::new();
+	metadata_command.manifest_path(path);
+
+	if offline_build() {
+		metadata_command.other_options(vec!["--offline".to_owned()]);
+	}
+	metadata_command
+}
+
 /// Generate the `rerun-if-changed` instructions for cargo to make sure that the WASM binary is
 /// rebuilt when needed.
 fn generate_rerun_if_changed_instructions(
 	cargo_manifest: &Path,
 	project_folder: &Path,
 	wasm_workspace: &Path,
+	compressed_or_compact_wasm: Option<&WasmBinary>,
+	bloaty_wasm: &WasmBinaryBloaty,
 ) {
 	// Rerun `build.rs` if the `Cargo.lock` changes
 	if let Some(cargo_lock) = find_cargo_lock(cargo_manifest) {
 		rerun_if_changed(cargo_lock);
 	}
 
-	let metadata = MetadataCommand::new()
-		.manifest_path(project_folder.join("Cargo.toml"))
+	let metadata = create_metadata_command(project_folder.join("Cargo.toml"))
 		.exec()
 		.expect("`cargo metadata` can not fail!");
 
@@ -760,6 +825,9 @@ fn generate_rerun_if_changed_instructions(
 
 	// Make sure that if any file/folder of a dependency change, we need to rerun the `build.rs`
 	packages.iter().for_each(package_rerun_if_changed);
+
+	compressed_or_compact_wasm.map(|w| rerun_if_changed(w.wasm_binary_path()));
+	rerun_if_changed(bloaty_wasm.wasm_binary_bloaty_path());
 
 	// Register our env variables
 	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);

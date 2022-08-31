@@ -990,7 +990,7 @@ mod tests {
 
 			let (validator_stash, nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get(),
+				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				RewardDestination::Staked,
 			)
@@ -1015,7 +1015,7 @@ mod tests {
 
 			let (validator_stash, _nominators) = create_validator_with_nominators::<Test>(
 				n,
-				<Test as Config>::MaxNominatorRewardedPerValidator::get(),
+				<<Test as Config>::MaxNominatorRewardedPerValidator as Get<_>>::get(),
 				false,
 				RewardDestination::Staked,
 			)

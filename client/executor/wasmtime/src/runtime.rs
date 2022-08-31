@@ -21,7 +21,7 @@
 use crate::{
 	host::HostState,
 	instance_wrapper::{EntryPoint, InstanceWrapper},
-	util,
+	util::{self, replace_strategy_if_broken},
 };
 
 use sc_allocator::FreeingBumpHeapAllocator;
@@ -323,7 +323,6 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	config.wasm_bulk_memory(false);
 	config.wasm_multi_value(false);
 	config.wasm_multi_memory(false);
-	config.wasm_module_linking(false);
 	config.wasm_threads(false);
 	config.wasm_memory64(false);
 
@@ -412,6 +411,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// See [here][stack_height] for more details of the instrumentation
 ///
 /// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
+#[derive(Clone)]
 pub struct DeterministicStackLimit {
 	/// A number of logical "values" that can be pushed on the wasm stack. A trap will be triggered
 	/// if exceeded.
@@ -469,6 +469,7 @@ enum InternalInstantiationStrategy {
 	Builtin,
 }
 
+#[derive(Clone)]
 pub struct Semantics {
 	/// The instantiation strategy to use.
 	pub instantiation_strategy: InstantiationStrategy,
@@ -599,11 +600,13 @@ where
 /// [`create_runtime_from_artifact`] to get more details.
 unsafe fn do_create_runtime<H>(
 	code_supply_mode: CodeSupplyMode<'_>,
-	config: Config,
+	mut config: Config,
 ) -> std::result::Result<WasmtimeRuntime, WasmError>
 where
 	H: HostFunctions,
 {
+	replace_strategy_if_broken(&mut config.semantics.instantiation_strategy);
+
 	let mut wasmtime_config = common_config(&config.semantics)?;
 	if let Some(ref cache_path) = config.cache_path {
 		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut wasmtime_config) {
@@ -720,9 +723,12 @@ pub fn prepare_runtime_artifact(
 	blob: RuntimeBlob,
 	semantics: &Semantics,
 ) -> std::result::Result<Vec<u8>, WasmError> {
-	let blob = prepare_blob_for_compilation(blob, semantics)?;
+	let mut semantics = semantics.clone();
+	replace_strategy_if_broken(&mut semantics.instantiation_strategy);
 
-	let engine = Engine::new(&common_config(semantics)?)
+	let blob = prepare_blob_for_compilation(blob, &semantics)?;
+
+	let engine = Engine::new(&common_config(&semantics)?)
 		.map_err(|e| WasmError::Other(format!("cannot create the engine: {}", e)))?;
 
 	engine

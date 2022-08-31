@@ -112,6 +112,7 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	);
 

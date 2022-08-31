@@ -45,6 +45,9 @@ pub use sp_core::Void;
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use sp_runtime::{bounded_btree_map, bounded_vec};
 #[doc(hidden)]
 pub use sp_runtime::{RuntimeDebug, StateVersion};
 #[cfg(feature = "std")]
@@ -117,46 +120,6 @@ pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
-}
-
-/// Build a bounded vec from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_vec {
-	($ ($values:expr),* $(,)?) => {
-		{
-			$crate::sp_std::vec![$($values),*].try_into().unwrap()
-		}
-	};
-	( $value:expr ; $repetition:expr ) => {
-		{
-			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
-		}
-	}
-}
-
-/// Build a bounded btree-map from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_btree_map {
-	($ ( $key:expr => $value:expr ),* $(,)?) => {
-		{
-			$crate::traits::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
-				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
-			).unwrap()
-		}
-	};
-
 }
 
 /// Generate a new type alias for [`storage::types::StorageValue`],
@@ -350,6 +313,13 @@ macro_rules! parameter_types {
 				I::from(Self::get())
 			}
 		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
 	};
 	(IMPL $name:ident, $type:ty, $value:expr) => {
 		impl $name {
@@ -362,6 +332,13 @@ macro_rules! parameter_types {
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -395,6 +372,13 @@ macro_rules! parameter_types {
 		impl<I: From<$type>> $crate::traits::Get<I> for $name {
 			fn get() -> I {
 				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -741,7 +725,7 @@ macro_rules! assert_err_with_weight {
 	($call:expr, $err:expr, $weight:expr $(,)? ) => {
 		if let Err(dispatch_err_with_post) = $call {
 			$crate::assert_err!($call.map(|_| ()).map_err(|e| e.error), $err);
-			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight.into());
+			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight);
 		} else {
 			panic!("expected Err(_), got Ok(_).")
 		}
@@ -805,7 +789,7 @@ pub mod tests {
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
-	use sp_io::TestExternalities;
+	use sp_io::{MultiRemovalResults, TestExternalities};
 	use sp_std::result;
 
 	/// A PalletInfo implementation which just panics.
@@ -1066,15 +1050,16 @@ pub mod tests {
 	}
 
 	#[test]
-	fn double_map_basic_insert_remove_remove_prefix_should_work() {
-		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
+	fn double_map_basic_insert_remove_remove_prefix_with_commit_should_work() {
+		let key1 = 17u32;
+		let key2 = 18u32;
+		type DoubleMap = DataDM;
+		let mut e = new_test_ext();
+		e.execute_with(|| {
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
 			// get / insert / take
-			let key1 = 17u32;
-			let key2 = 18u32;
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			DoubleMap::insert(&key1, &key2, &4u64);
 			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
@@ -1082,9 +1067,7 @@ pub mod tests {
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// mutate
-			DoubleMap::mutate(&key1, &key2, |val| {
-				*val = 15;
-			});
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
 			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
 
 			// remove
@@ -1096,9 +1079,62 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+		});
+		e.commit_all().unwrap();
+		e.execute_with(|| {
 			assert!(matches!(
-				DoubleMap::remove_prefix(&key1, None),
-				sp_io::KillStorageResult::AllRemoved(0), // all in overlay
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 2, unique: 2, loops: 2 }
+			));
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
+		});
+	}
+
+	#[test]
+	fn double_map_basic_insert_remove_remove_prefix_should_work() {
+		new_test_ext().execute_with(|| {
+			let key1 = 17u32;
+			let key2 = 18u32;
+			type DoubleMap = DataDM;
+
+			// initialized during genesis
+			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
+
+			// get / insert / take
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// mutate
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
+			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
+
+			// remove
+			DoubleMap::remove(&key1, &key2);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// remove prefix
+			DoubleMap::insert(&key1, &key2, &4u64);
+			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
+			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
+			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+			// all in overlay
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
+			));
+			// Note this is the incorrect answer (for now), since we are using v2 of
+			// `clear_prefix`.
+			// When we switch to v3, then this will become:
+			//   MultiRemovalResults:: { maybe_cursor: None, backend: 0, unique: 2, loops: 2 },
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
 			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
@@ -1317,7 +1353,7 @@ pub mod pallet_prelude {
 		},
 		traits::{
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
-			PalletInfoAccess, StorageInfoTrait, StorageVersion,
+			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		weights::{DispatchClass, Pays, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,

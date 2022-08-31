@@ -77,6 +77,8 @@ pub struct Configuration {
 	/// State pruning settings.
 	pub state_pruning: Option<PruningMode>,
 	/// Number of blocks to keep in the db.
+	///
+	/// NOTE: only finalized blocks are subject for removal!
 	pub keep_blocks: KeepBlocks,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,

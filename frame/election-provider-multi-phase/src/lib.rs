@@ -1808,7 +1808,7 @@ mod tests {
 	};
 	use frame_election_provider_support::ElectionProvider;
 	use frame_support::{assert_noop, assert_ok};
-	use sp_npos_elections::Support;
+	use sp_npos_elections::{BalancingConfig, Support};
 
 	#[test]
 	fn phase_rotation_works() {
@@ -2163,7 +2163,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			// set the solution balancing to get the desired score.
-			crate::mock::Balancing::set(Some((2, 0)));
+			crate::mock::Balancing::set(Some(BalancingConfig { iterations: 2, tolerance: 0 }));
 
 			let (solution, _) = MultiPhase::mine_solution().unwrap();
 			// Default solution's score.

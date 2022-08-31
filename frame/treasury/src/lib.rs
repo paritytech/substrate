@@ -198,6 +198,11 @@ pub mod pallet {
 		/// NOTE: This parameter is also used within the Bounties Pallet extension if enabled.
 		#[pallet::constant]
 		type MaxApprovals: Get<u32>;
+
+		/// The origin required for approving spends from the treasury outside of the proposal
+		/// process. The `Success` value is the maximum amount that this origin is allowed to
+		/// spend at a time.
+		type SpendOrigin: EnsureOrigin<Self::Origin, Success = BalanceOf<Self, I>>;
 	}
 
 	/// Number of proposals that have been made.
@@ -275,6 +280,12 @@ pub mod pallet {
 		Rollover { rollover_balance: BalanceOf<T, I> },
 		/// Some funds have been deposited.
 		Deposit { value: BalanceOf<T, I> },
+		/// A new spend proposal has been approved.
+		SpendApproved {
+			proposal_index: ProposalIndex,
+			amount: BalanceOf<T, I>,
+			beneficiary: T::AccountId,
+		},
 	}
 
 	/// Error for the treasury pallet.
@@ -286,6 +297,9 @@ pub mod pallet {
 		InvalidIndex,
 		/// Too many approvals in the queue.
 		TooManyApprovals,
+		/// The spend origin is valid but the amount it is allowed to spend is lower than the
+		/// amount to be spent.
+		InsufficientPermission,
 		/// Proposal has not been approved.
 		ProposalNotApproved,
 	}
@@ -390,6 +404,40 @@ pub mod pallet {
 			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidIndex);
 			Approvals::<T, I>::try_append(proposal_id)
 				.map_err(|_| Error::<T, I>::TooManyApprovals)?;
+			Ok(())
+		}
+
+		/// Propose and approve a spend of treasury funds.
+		///
+		/// - `origin`: Must be `SpendOrigin` with the `Success` value being at least `amount`.
+		/// - `amount`: The amount to be transferred from the treasury to the `beneficiary`.
+		/// - `beneficiary`: The destination account for the transfer.
+		///
+		/// NOTE: For record-keeping purposes, the proposer is deemed to be equivalent to the
+		/// beneficiary.
+		#[pallet::weight(T::WeightInfo::spend())]
+		pub fn spend(
+			origin: OriginFor<T>,
+			#[pallet::compact] amount: BalanceOf<T, I>,
+			beneficiary: <T::Lookup as StaticLookup>::Source,
+		) -> DispatchResult {
+			let max_amount = T::SpendOrigin::ensure_origin(origin)?;
+			let beneficiary = T::Lookup::lookup(beneficiary)?;
+
+			ensure!(amount <= max_amount, Error::<T, I>::InsufficientPermission);
+			let proposal_index = Self::proposal_count();
+			Approvals::<T, I>::try_append(proposal_index)
+				.map_err(|_| Error::<T, I>::TooManyApprovals)?;
+			let proposal = Proposal {
+				proposer: beneficiary.clone(),
+				value: amount,
+				beneficiary: beneficiary.clone(),
+				bond: Default::default(),
+			};
+			Proposals::<T, I>::insert(proposal_index, proposal);
+			ProposalCount::<T, I>::put(proposal_index + 1);
+
+			Self::deposit_event(Event::SpendApproved { proposal_index, amount, beneficiary });
 			Ok(())
 		}
 

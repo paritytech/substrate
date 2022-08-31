@@ -900,7 +900,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// Remove all received heartbeats and number of authored blocks from the
 		// current session, they have already been processed and won't be needed
 		// anymore.
+		#[allow(deprecated)]
 		ReceivedHeartbeats::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
+		#[allow(deprecated)]
 		AuthoredBlocks::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
 
 		if offenders.is_empty() {
