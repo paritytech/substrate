@@ -2186,8 +2186,8 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Remove everything related to the given bonded pool.
 	///
-	/// All sub-pools are also deleted. All accounts are dusted and the leftover of the reward
-	/// account is returned to the depositor.
+	/// Metadata and all of the sub-pools are also deleted. All accounts are dusted and the leftover
+	/// of the reward account is returned to the depositor.
 	pub fn dissolve_pool(bonded_pool: BondedPool<T>) {
 		let reward_account = bonded_pool.reward_account();
 		let bonded_account = bonded_pool.bonded_account();
@@ -2224,7 +2224,13 @@ impl<T: Config> Pallet<T> {
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
+		Self::remove_metadata(bonded_pool.id);
 		bonded_pool.remove();
+	}
+
+	/// Remove bonded pool metadata.
+	pub fn remove_metadata(bonded_pool_id: PoolId) {
+		Metadata::<T>::remove(bonded_pool_id);
 	}
 
 	/// Create the main, bonded account of a pool with the given id.

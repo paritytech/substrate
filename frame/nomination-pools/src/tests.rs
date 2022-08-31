@@ -1911,6 +1911,10 @@ mod claim_payout {
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(20), 20, 0));
 			assert_ok!(fully_unbond_permissioned(10));
 
+			// set metadata to check that it's being removed on dissolve
+			assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
+			assert!(Metadata::<T>::contains_key(1));
+
 			CurrentEra::set(6);
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
@@ -1928,6 +1932,7 @@ mod claim_payout {
 				]
 			);
 
+			assert!(!Metadata::<T>::contains_key(1));
 			// original ed + ed put into reward account + reward + bond + dust.
 			assert_eq!(Balances::free_balance(&10), 35 + 5 + 13 + 10 + 1);
 		})
@@ -3148,6 +3153,10 @@ mod withdraw_unbonded {
 				current_era += 3;
 				CurrentEra::set(current_era);
 
+				// set metadata to check that it's being removed on dissolve
+				assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
+				assert!(Metadata::<T>::contains_key(1));
+
 				// when
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 				assert_eq!(
@@ -3159,6 +3168,7 @@ mod withdraw_unbonded {
 						Event::Destroyed { pool_id: 1 }
 					]
 				);
+				assert!(!Metadata::<T>::contains_key(1));
 				assert_eq!(
 					balances_events_since_last_call(),
 					vec![
@@ -3269,6 +3279,10 @@ mod withdraw_unbonded {
 
 				CurrentEra::set(CurrentEra::get() + 3);
 
+				// set metadata to check that it's being removed on dissolve
+				assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
+				assert!(Metadata::<T>::contains_key(1));
+
 				// when
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
@@ -3287,6 +3301,7 @@ mod withdraw_unbonded {
 						Event::Destroyed { pool_id: 1 }
 					]
 				);
+				assert!(!Metadata::<T>::contains_key(1));
 				assert_eq!(
 					balances_events_since_last_call(),
 					vec![
@@ -3764,6 +3779,10 @@ mod withdraw_unbonded {
 			);
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 10));
 
+			// set metadata to check that it's being removed on dissolve
+			assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
+			assert!(Metadata::<T>::contains_key(1));
+
 			// now the 7 should be free.
 			CurrentEra::set(3);
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
@@ -3797,6 +3816,7 @@ mod withdraw_unbonded {
 					Event::Destroyed { pool_id: 1 },
 				]
 			);
+			assert!(!Metadata::<T>::contains_key(1));
 		})
 	}
 }
@@ -4039,7 +4059,7 @@ mod set_state {
 			// Then
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
-			// If the pool is not ok to be open, it cannot be permissionleslly set to a state that
+			// If the pool is not ok to be open, it cannot be permissionlessly set to a state that
 			// isn't destroying
 			unsafe_set_state(1, PoolState::Open);
 			assert_noop!(
