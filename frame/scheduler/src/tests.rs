@@ -54,7 +54,7 @@ fn scheduling_with_preimages_works() {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
-		let hashed = Preimage::pick(hash.clone(), len);
+		let hashed = Preimage::pick(hash, len);
 		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
 		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
 		assert!(Preimage::is_requested(&hash));
