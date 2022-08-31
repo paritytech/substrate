@@ -27,7 +27,7 @@
 
 use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, Weight};
 use scale_info::TypeInfo;
-use sp_runtime::{Perbill, RuntimeDebug};
+use sp_runtime::{traits::Bounded, Perbill, RuntimeDebug};
 
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
@@ -230,14 +230,15 @@ impl BlockWeights {
 			// base_for_class
 			error_assert!(
 				(max_for_class > self.base_block && max_for_class > base_for_class)
-				|| max_for_class == 0,
+				|| max_for_class == Weight::zero(),
 				&mut error,
 				"[{:?}] {:?} (total) has to be greater than {:?} (base block) & {:?} (base extrinsic)",
 				class, max_for_class, self.base_block, base_for_class,
 			);
 			// Max extrinsic can't be greater than max_for_class.
 			error_assert!(
-				weights.max_extrinsic.unwrap_or(0) <= max_for_class.saturating_sub(base_for_class),
+				weights.max_extrinsic.unwrap_or(Weight::zero()) <=
+					max_for_class.saturating_sub(base_for_class),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
 				class,
@@ -246,14 +247,14 @@ impl BlockWeights {
 			);
 			// Max extrinsic should not be 0
 			error_assert!(
-				weights.max_extrinsic.unwrap_or_else(Weight::max_value) > 0,
+				weights.max_extrinsic.unwrap_or_else(Weight::max_value) > Weight::zero(),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
 				class, weights.max_extrinsic,
 			);
 			// Make sure that if reserved is set it's greater than base_for_class.
 			error_assert!(
-				reserved > base_for_class || reserved == 0,
+				reserved > base_for_class || reserved == Weight::zero(),
 				&mut error,
 				"[{:?}] {:?} (reserved) has to be greater than {:?} (base extrinsic) if set",
 				class,
@@ -262,7 +263,7 @@ impl BlockWeights {
 			);
 			// Make sure max block is greater than max_total if it's set.
 			error_assert!(
-				self.max_block >= weights.max_total.unwrap_or(0),
+				self.max_block >= weights.max_total.unwrap_or(Weight::zero()),
 				&mut error,
 				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
 				class,
@@ -294,9 +295,9 @@ impl BlockWeights {
 	/// is not suitable for production deployments.
 	pub fn simple_max(block_weight: Weight) -> Self {
 		Self::builder()
-			.base_block(0)
+			.base_block(Weight::new())
 			.for_class(DispatchClass::all(), |weights| {
-				weights.base_extrinsic = 0;
+				weights.base_extrinsic = Weight::new();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
 				weights.max_total = block_weight.into();
@@ -333,9 +334,10 @@ impl BlockWeights {
 		BlockWeightsBuilder {
 			weights: BlockWeights {
 				base_block: constants::BlockExecutionWeight::get(),
-				max_block: 0,
+				max_block: Weight::zero(),
 				per_class: PerDispatchClass::new(|class| {
-					let initial = if class == DispatchClass::Mandatory { None } else { Some(0) };
+					let initial =
+						if class == DispatchClass::Mandatory { None } else { Some(Weight::zero()) };
 					WeightsPerClass {
 						base_extrinsic: constants::ExtrinsicBaseWeight::get(),
 						max_extrinsic: None,

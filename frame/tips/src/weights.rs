@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_tips.
@@ -58,59 +58,59 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Tips Reasons (r:1 w:1)
 	// Storage: Tips Tips (r:1 w:1)
 	fn report_awesome(r: u32, ) -> Weight {
-		(30_669_000 as Weight)
+		Weight::from_ref_time(30_669_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add((4_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(4_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Tips Tips (r:1 w:1)
 	// Storage: Tips Reasons (r:0 w:1)
 	fn retract_tip() -> Weight {
-		(28_768_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(28_768_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Elections Members (r:1 w:0)
 	// Storage: Tips Reasons (r:1 w:1)
 	// Storage: Tips Tips (r:0 w:1)
 	fn tip_new(r: u32, t: u32, ) -> Weight {
-		(20_385_000 as Weight)
+		Weight::from_ref_time(20_385_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(2_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
 			// Standard Error: 3_000
-			.saturating_add((166_000 as Weight).saturating_mul(t as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(166_000 as RefTimeWeight).scalar_saturating_mul(t as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Elections Members (r:1 w:0)
 	// Storage: Tips Tips (r:1 w:1)
 	fn tip(t: u32, ) -> Weight {
-		(12_287_000 as Weight)
+		Weight::from_ref_time(12_287_000 as RefTimeWeight)
 			// Standard Error: 6_000
-			.saturating_add((363_000 as Weight).saturating_mul(t as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(363_000 as RefTimeWeight).scalar_saturating_mul(t as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Tips Tips (r:1 w:1)
 	// Storage: Elections Members (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
 	// Storage: Tips Reasons (r:0 w:1)
 	fn close_tip(t: u32, ) -> Weight {
-		(45_656_000 as Weight)
+		Weight::from_ref_time(45_656_000 as RefTimeWeight)
 			// Standard Error: 14_000
-			.saturating_add((276_000 as Weight).saturating_mul(t as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(276_000 as RefTimeWeight).scalar_saturating_mul(t as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Tips Tips (r:1 w:1)
 	// Storage: Tips Reasons (r:0 w:1)
 	fn slash_tip(t: u32, ) -> Weight {
-		(18_525_000 as Weight)
+		Weight::from_ref_time(18_525_000 as RefTimeWeight)
 			// Standard Error: 5_000
-			.saturating_add((37_000 as Weight).saturating_mul(t as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(37_000 as RefTimeWeight).scalar_saturating_mul(t as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 }
 
@@ -119,58 +119,58 @@ impl WeightInfo for () {
 	// Storage: Tips Reasons (r:1 w:1)
 	// Storage: Tips Tips (r:1 w:1)
 	fn report_awesome(r: u32, ) -> Weight {
-		(30_669_000 as Weight)
+		Weight::from_ref_time(30_669_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add((4_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(4_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Tips Tips (r:1 w:1)
 	// Storage: Tips Reasons (r:0 w:1)
 	fn retract_tip() -> Weight {
-		(28_768_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(28_768_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Elections Members (r:1 w:0)
 	// Storage: Tips Reasons (r:1 w:1)
 	// Storage: Tips Tips (r:0 w:1)
 	fn tip_new(r: u32, t: u32, ) -> Weight {
-		(20_385_000 as Weight)
+		Weight::from_ref_time(20_385_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(2_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
 			// Standard Error: 3_000
-			.saturating_add((166_000 as Weight).saturating_mul(t as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(166_000 as RefTimeWeight).scalar_saturating_mul(t as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Elections Members (r:1 w:0)
 	// Storage: Tips Tips (r:1 w:1)
 	fn tip(t: u32, ) -> Weight {
-		(12_287_000 as Weight)
+		Weight::from_ref_time(12_287_000 as RefTimeWeight)
 			// Standard Error: 6_000
-			.saturating_add((363_000 as Weight).saturating_mul(t as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(363_000 as RefTimeWeight).scalar_saturating_mul(t as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Tips Tips (r:1 w:1)
 	// Storage: Elections Members (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
 	// Storage: Tips Reasons (r:0 w:1)
 	fn close_tip(t: u32, ) -> Weight {
-		(45_656_000 as Weight)
+		Weight::from_ref_time(45_656_000 as RefTimeWeight)
 			// Standard Error: 14_000
-			.saturating_add((276_000 as Weight).saturating_mul(t as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(276_000 as RefTimeWeight).scalar_saturating_mul(t as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Tips Tips (r:1 w:1)
 	// Storage: Tips Reasons (r:0 w:1)
 	fn slash_tip(t: u32, ) -> Weight {
-		(18_525_000 as Weight)
+		Weight::from_ref_time(18_525_000 as RefTimeWeight)
 			// Standard Error: 5_000
-			.saturating_add((37_000 as Weight).saturating_mul(t as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(37_000 as RefTimeWeight).scalar_saturating_mul(t as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 }

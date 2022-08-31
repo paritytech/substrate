@@ -1374,7 +1374,7 @@ pub mod pallet_prelude {
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
 			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
-		weights::{DispatchClass, Pays, Weight},
+		weights::{DispatchClass, Pays, RefTimeWeight, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};

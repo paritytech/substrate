@@ -234,7 +234,6 @@ use frame_election_provider_support::{
 	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
 	weights::{DispatchClass, Weight},
@@ -879,7 +878,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			raw_solution: Box<RawSolution<SolutionOf<T::MinerConfig>>>,
 			witness: SolutionOrSnapshotSize,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_none(origin)?;
 			let error_message = "Invalid unsigned submission must produce invalid block and \
 				 deprive validator from their authoring reward.";
@@ -907,7 +906,7 @@ pub mod pallet {
 				prev_ejected: ejected_a_solution,
 			});
 
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Set a new value for `MinimumUntrustedScore`.
@@ -994,7 +993,7 @@ pub mod pallet {
 			let deposit = Self::deposit_for(&raw_solution, size);
 			let call_fee = {
 				let call = Call::submit { raw_solution: raw_solution.clone() };
-				T::EstimateCallFee::estimate_call_fee(&call, None.into())
+				T::EstimateCallFee::estimate_call_fee(&call, None::<Weight>.into())
 			};
 
 			let submission = SignedSubmission {
