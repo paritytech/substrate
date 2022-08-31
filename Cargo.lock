@@ -7742,6 +7742,7 @@ dependencies = [
 name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
+ "async-trait",
  "futures",
  "futures-timer",
  "ip_network",
@@ -8451,6 +8452,7 @@ dependencies = [
  "sc-peerset",
  "serde",
  "smallvec",
+ "sp-blockchain",
  "sp-consensus",
  "sp-finality-grandpa",
  "sp-runtime",
