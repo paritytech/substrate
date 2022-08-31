@@ -91,7 +91,7 @@ const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
 parameter_types! {
 	pub const MotionDuration: BlockNumber = MOTION_DURATION_IN_BLOCKS;
 	pub const MaxProposals: u32 = 100;
-	pub const MaxMembers: u32 = 200;
+	pub const MaxMembers: u32 = 100;
 }
 type AllianceCollective = pallet_collective::Instance1;
 impl pallet_collective::Config<AllianceCollective> for Test {
@@ -208,10 +208,9 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 }
 
 parameter_types! {
-	pub const MaxBenchMembers: u32 = MaxMembers::get() / 2;
-	pub const MaxBenchFounders: u32 = 10;
-	pub const MaxBenchFellows: u32 = MaxBenchMembers::get() / 2 - MaxBenchFounders::get();
-	pub const MaxBenchAllies: u32 = MaxBenchMembers::get() / 2;
+	pub const MaxFounders: u32 = 10;
+	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
+	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: u64 = 25;
 	pub const RetirementPeriod: BlockNumber = MOTION_DURATION_IN_BLOCKS + 1;
 }
@@ -231,9 +230,9 @@ impl Config for Test {
 	type IdentityVerifier = ();
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxProposals = MaxProposals;
-	type MaxFounders = MaxBenchFounders;
-	type MaxFellows = MaxBenchFellows;
-	type MaxAllies = MaxBenchAllies;
+	type MaxFounders = MaxFounders;
+	type MaxFellows = MaxFellows;
+	type MaxAllies = MaxAllies;
 	type MaxUnscrupulousItems = ConstU32<100>;
 	type MaxWebsiteUrlLength = ConstU32<255>;
 	type MaxAnnouncementsCount = ConstU32<100>;
