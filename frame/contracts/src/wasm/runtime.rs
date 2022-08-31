@@ -1142,11 +1142,7 @@ pub mod env {
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
 	#[unstable]
-	fn contains_storage(
-		ctx: Runtime<E>,
-		key_ptr: u32,
-		key_len: u32,
-	) -> Result<u32, TrapReason> {
+	fn contains_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
 		ctx.contains_storage(KeyType::Variable(key_len), key_ptr)
 	}
 
@@ -1647,11 +1643,7 @@ pub mod env {
 	/// - `out_len_ptr`: in-out pointer into linear memory where the buffer length is read from and
 	///   the value length is written to.
 	#[prefixed_alias]
-	fn own_code_hash(
-		ctx: Runtime<E>,
-		out_ptr: u32,
-		out_len_ptr: u32,
-	) -> Result<(), TrapReason> {
+	fn own_code_hash(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::OwnCodeHash)?;
 		let code_hash_encoded = &ctx.ext.own_code_hash().encode();
 		Ok(ctx.write_sandbox_output(
@@ -1886,11 +1878,7 @@ pub mod env {
 	///
 	/// The data is encoded as T::Balance.
 	#[prefixed_alias]
-	fn minimum_balance(
-		ctx: Runtime<E>,
-		out_ptr: u32,
-		out_len_ptr: u32,
-	) -> Result<(), TrapReason> {
+	fn minimum_balance(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::MinimumBalance)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr,
@@ -2061,11 +2049,7 @@ pub mod env {
 	/// The state rent functionality was removed. This is stub only exists for
 	/// backwards compatiblity.
 	#[prefixed_alias]
-	fn rent_allowance(
-		ctx: Runtime<E>,
-		out_ptr: u32,
-		out_len_ptr: u32,
-	) -> Result<(), TrapReason> {
+	fn rent_allowance(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Balance)?;
 		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
 		Ok(ctx.write_sandbox_output(
@@ -2084,11 +2068,7 @@ pub mod env {
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	#[prefixed_alias]
-	fn block_number(
-		ctx: Runtime<E>,
-		out_ptr: u32,
-		out_len_ptr: u32,
-	) -> Result<(), TrapReason> {
+	fn block_number(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::BlockNumber)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr,
