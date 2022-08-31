@@ -241,7 +241,8 @@ benchmarks! {
 
 		fill_schedule::<T>(when, s)?;
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
-	}: _(RawOrigin::Root, when, 0)
+		let schedule_origin = T::ScheduleOrigin::successful_origin();
+	}: _<SystemOrigin<T>>(schedule_origin, when, 0)
 	verify {
 		ensure!(
 			Lookup::<T>::get(u32_to_name(0)).is_none(),

@@ -666,14 +666,20 @@ fn migration_to_v4_works() {
 				Some(ScheduledV1 {
 					maybe_id: None,
 					priority: i as u8 + 10,
-					call: Call::Logger(LoggerCall::log { i: 96, weight: 100 }),
+					call: Call::Logger(LoggerCall::log {
+						i: 96,
+						weight: Weight::from_ref_time(100),
+					}),
 					maybe_periodic: None,
 				}),
 				None,
 				Some(ScheduledV1 {
 					maybe_id: Some(b"test".to_vec()),
 					priority: 123,
-					call: Call::Logger(LoggerCall::log { i: 69, weight: 10 }),
+					call: Call::Logger(LoggerCall::log {
+						i: 69,
+						weight: Weight::from_ref_time(10),
+					}),
 					maybe_periodic: Some((456u64, 10)),
 				}),
 			];
