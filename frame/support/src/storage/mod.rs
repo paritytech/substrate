@@ -1470,8 +1470,6 @@ pub fn storage_prefix(pallet_name: &[u8], storage_name: &[u8]) -> [u8; 32] {
 	final_key
 }
 
-pub use frame_support_procedural::cached;
-
 #[cfg(test)]
 mod test {
 	use super::*;

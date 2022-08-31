@@ -38,7 +38,7 @@ mod tt_macro;
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
-use syn::{parse_macro_input, ItemType};
+use syn::{parse_macro_input, Ident};
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -586,11 +586,13 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn cached(_attr: TokenStream, item: TokenStream) -> TokenStream {
-	let typ = item.clone();
-	let typ: ItemType = parse_macro_input!(typ as ItemType);
-	let type_name = typ.ident.to_string();
-	// need name of pallet
-	// use macro_state here
+pub fn benchmarking(attr: TokenStream, item: TokenStream) -> TokenStream {
+	match parse_macro_input!(attr as Ident).to_string().as_str() {
+		"cached" => benchmarking_cached(item),
+		_ => panic!("unsupported argument provided to benchmarking macro"),
+	}
+}
+
+fn benchmarking_cached(item: TokenStream) -> TokenStream {
 	item
 }

@@ -210,6 +210,9 @@ impl TypeId for PalletId {
 /// ```
 pub use frame_support_procedural::storage_alias;
 
+/// TODO: docs for benchmarking
+pub use frame_support_procedural::benchmarking;
+
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
 /// The so-called parameter type can be created in four different ways:
