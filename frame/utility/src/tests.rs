@@ -420,7 +420,7 @@ fn batch_handles_weight_refund() {
 		let good_call = call_foobar(false, start_weight, Some(end_weight));
 		let bad_call = call_foobar(true, start_weight, Some(end_weight));
 		let batch_calls = vec![good_call, bad_call];
-		let batch_len = Weight::from_ref_time(batch_calls.len() as u64);
+		let batch_len = batch_calls.len() as u64;
 		let call = Call::Utility(UtilityCall::batch { calls: batch_calls });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
@@ -533,7 +533,7 @@ fn batch_all_handles_weight_refund() {
 		let good_call = call_foobar(false, start_weight, Some(end_weight));
 		let bad_call = call_foobar(true, start_weight, Some(end_weight));
 		let batch_calls = vec![good_call, bad_call];
-		let batch_len = Weight::from_ref_time(batch_calls.len() as u64);
+		let batch_len = batch_calls.len() as u64;
 		let call = Call::Utility(UtilityCall::batch_all { calls: batch_calls });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));

@@ -1072,7 +1072,7 @@ mod tests {
 					.base_extrinsic;
 			assert_eq!(
 				<frame_system::Pallet<Runtime>>::block_weight().total(),
-				base_block_weight + 3 * extrinsic_weight,
+				base_block_weight + 3u64 * extrinsic_weight,
 			);
 			assert_eq!(<frame_system::Pallet<Runtime>>::all_extrinsics_len(), 3 * len);
 
