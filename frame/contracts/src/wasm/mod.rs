@@ -365,7 +365,7 @@ mod tests {
 				events: Default::default(),
 				runtime_calls: Default::default(),
 				schedule: Default::default(),
-				gas_meter: GasMeter::new(10_000_000_000),
+				gas_meter: GasMeter::new(Weight::from_ref_time(10_000_000_000)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
 			}
@@ -403,10 +403,10 @@ mod tests {
 			salt: &[u8],
 		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
-				code_hash: code_hash.clone(),
+				code_hash,
 				value,
 				data: data.to_vec(),
-				gas_left: gas_limit,
+				gas_left: gas_limit.ref_time(),
 				salt: salt.to_vec(),
 			});
 			Ok((
@@ -520,7 +520,7 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
+			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.ref_time().into())
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
@@ -541,7 +541,7 @@ mod tests {
 			signature: &[u8; 65],
 			message_hash: &[u8; 32],
 		) -> Result<[u8; 33], ()> {
-			self.ecdsa_recover.borrow_mut().push((signature.clone(), message_hash.clone()));
+			self.ecdsa_recover.borrow_mut().push((*signature, *message_hash));
 			Ok([3; 33])
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
@@ -1911,7 +1911,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left() > 0);
+		assert!(mock_ext.gas_meter.gas_left() > Weight::zero());
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"

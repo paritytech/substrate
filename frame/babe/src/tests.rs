@@ -659,7 +659,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		equivocation_proof.second_header = equivocation_proof.first_header.clone();
 		assert_invalid_equivocation(equivocation_proof);
 
-		// missing preruntime digest from one header
+		// missing pre-runtime digest from one header
 		let mut equivocation_proof = generate_equivocation_proof(
 			offending_validator_index as u32,
 			&offending_authority_pair,
@@ -852,7 +852,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		.get_dispatch_info();
 
 		// it should have non-zero weight and the fee has to be paid.
-		assert!(info.weight > 0);
+		assert!(info.weight > Weight::zero());
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// report the equivocation.

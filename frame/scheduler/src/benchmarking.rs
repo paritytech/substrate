@@ -24,6 +24,7 @@ use frame_support::{
 	traits::{schedule::Priority, BoundedInline},
 };
 use frame_system::RawOrigin;
+use sp_runtime::traits::Hash;
 use sp_std::{prelude::*, vec};
 
 use crate::Pallet as Scheduler;
@@ -32,6 +33,8 @@ use frame_system::Call as SystemCall;
 const SEED: u32 = 0;
 
 const BLOCK_NUMBER: u32 = 2;
+
+type SystemOrigin<T> = <T as frame_system::Config>::Origin;
 
 /// Add `n` items to the schedule.
 ///
@@ -227,7 +230,8 @@ benchmarks! {
 		let call = Box::new(SystemCall::set_storage { items: vec![] }.into());
 
 		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, when, periodic, priority, call)
+		let schedule_origin = T::ScheduleOrigin::successful_origin();
+	}: _<SystemOrigin<T>>(schedule_origin, when, periodic, priority, call)
 	verify {
 		ensure!(
 			Agenda::<T>::get(when).len() == (s + 1) as usize,
@@ -241,7 +245,8 @@ benchmarks! {
 
 		fill_schedule::<T>(when, s)?;
 		assert_eq!(Agenda::<T>::get(when).len(), s as usize);
-	}: _(RawOrigin::Root, when, 0)
+		let schedule_origin = T::ScheduleOrigin::successful_origin();
+	}: _<SystemOrigin<T>>(schedule_origin, when, 0)
 	verify {
 		ensure!(
 			Lookup::<T>::get(u32_to_name(0)).is_none(),
@@ -264,7 +269,8 @@ benchmarks! {
 		let call = Box::new(SystemCall::set_storage { items: vec![] }.into());
 
 		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, id, when, periodic, priority, call)
+		let schedule_origin = T::ScheduleOrigin::successful_origin();
+	}: _<SystemOrigin<T>>(RawOrigin::Root, id, when, periodic, priority, call)
 	verify {
 		ensure!(
 			Agenda::<T>::get(when).len() == (s + 1) as usize,
@@ -277,7 +283,8 @@ benchmarks! {
 		let when = BLOCK_NUMBER.into();
 
 		fill_schedule::<T>(when, s)?;
-	}: _(RawOrigin::Root, u32_to_name(0))
+		let schedule_origin = T::ScheduleOrigin::successful_origin();
+	}: _<SystemOrigin<T>>(RawOrigin::Root, u32_to_name(0))
 	verify {
 		ensure!(
 			Lookup::<T>::get(u32_to_name(0)).is_none(),

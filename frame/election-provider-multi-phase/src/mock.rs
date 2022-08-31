@@ -349,9 +349,11 @@ impl MinerConfig for Runtime {
 
 	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		match MockWeightInfo::get() {
-			MockedWeightInfo::Basic =>
-				(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight)),
-			MockedWeightInfo::Complex => (0 * v + 0 * t + 1000 * a + 0 * d) as Weight,
+			MockedWeightInfo::Basic => Weight::from_ref_time(
+				(10 as u64).saturating_add((5 as u64).saturating_mul(a as u64)),
+			),
+			MockedWeightInfo::Complex =>
+				Weight::from_ref_time((0 * v + 0 * t + 1000 * a + 0 * d) as u64),
 			MockedWeightInfo::Real =>
 				<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d),
 		}

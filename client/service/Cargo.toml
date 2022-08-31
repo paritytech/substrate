@@ -22,18 +22,18 @@ wasmtime = ["sc-executor/wasmtime"]
 test-helpers = []
 
 [dependencies]
-jsonrpsee = { version = "0.14.0", features = ["server"] }
+jsonrpsee = { version = "0.15.1", features = ["server"] }
 thiserror = "1.0.30"
 futures = "0.3.21"
 rand = "0.7.3"
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 log = "0.4.17"
 futures-timer = "3.0.1"
 exit-future = "0.2.0"
 pin-project = "1.0.10"
 hash-db = "0.15.2"
 serde = "1.0.136"
-serde_json = "1.0.79"
+serde_json = "1.0.85"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
@@ -50,8 +50,10 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-storage = { version = "6.0.0", path = "../../primitives/storage" }
-sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
+sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
+sc-network-light = { version = "0.10.0-dev", path = "../network/light" }
+sc-network-sync = { version = "0.10.0-dev", path = "../network/sync" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
@@ -78,7 +80,7 @@ tracing-futures = { version = "0.2.4" }
 parity-util-mem = { version = "0.11.0", default-features = false, features = [
 	"primitive-types",
 ] }
-async-trait = "0.1.50"
+async-trait = "0.1.57"
 tokio = { version = "1.17.0", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
 directories = "4.0.1"

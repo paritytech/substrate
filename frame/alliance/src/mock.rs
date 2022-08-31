@@ -26,7 +26,7 @@ pub use sp_runtime::{
 use sp_std::convert::{TryFrom, TryInto};
 
 pub use frame_support::{
-	assert_ok, ord_parameter_types, parameter_types,
+	assert_noop, assert_ok, ord_parameter_types, parameter_types,
 	traits::{EitherOfDiverse, GenesisBuild, SortedMembers},
 	BoundedVec,
 };
@@ -37,8 +37,10 @@ pub use crate as pallet_alliance;
 
 use super::*;
 
+type BlockNumber = u64;
+
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
+	pub const BlockHashCount: BlockNumber = 250;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -47,7 +49,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Call = Call;
 	type Index = u64;
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
@@ -83,8 +85,10 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
+
 parameter_types! {
-	pub const MotionDuration: u64 = 3;
+	pub const MotionDuration: BlockNumber = MOTION_DURATION_IN_BLOCKS;
 	pub const MaxProposals: u32 = 100;
 	pub const MaxMembers: u32 = 100;
 }
@@ -199,6 +203,7 @@ parameter_types! {
 	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: u64 = 25;
+	pub const RetirementPeriod: BlockNumber = MOTION_DURATION_IN_BLOCKS + 1;
 }
 impl Config for Test {
 	type Event = Event;
@@ -225,6 +230,7 @@ impl Config for Test {
 	type MaxMembersCount = MaxMembers;
 	type AllyDeposit = AllyDeposit;
 	type WeightInfo = ();
+	type RetirementPeriod = RetirementPeriod;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -291,6 +297,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 5, Judgement::KnownGood));
 		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
 
+		// Joining before init should fail.
+		assert_noop!(
+			Alliance::join_alliance(Origin::signed(1)),
+			Error::<Test, ()>::AllianceNotYetInitialized
+		);
+
 		assert_ok!(Alliance::init_members(Origin::root(), vec![1, 2], vec![3], vec![]));
 
 		System::set_block_number(1);
@@ -317,8 +329,4 @@ pub fn make_proposal(value: u64) -> Call {
 
 pub fn make_set_rule_proposal(rule: Cid) -> Call {
 	Call::Alliance(pallet_alliance::Call::set_rule { rule })
-}
-
-pub fn make_kick_member_proposal(who: u64) -> Call {
-	Call::Alliance(pallet_alliance::Call::kick_member { who })
 }

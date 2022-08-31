@@ -288,15 +288,13 @@ benchmarks! {
 		let (offenders, raw_offenders) = make_offenders_im_online::<T>(o, n)?;
 		let keys =  ImOnline::<T>::keys();
 		let validator_set_count = keys.len() as u32;
-
-		let slash_fraction = UnresponsivenessOffence::<T::AccountId>::slash_fraction(
-			offenders.len() as u32, validator_set_count,
-		);
+		let offenders_count = offenders.len() as u32;
 		let offence = UnresponsivenessOffence {
 			session_index: 0,
 			validator_set_count,
 			offenders,
 		};
+		let slash_fraction = offence.slash_fraction(offenders_count);
 		assert_eq!(System::<T>::event_count(), 0);
 	}: {
 		let _ = <T as ImOnlineConfig>::ReportUnresponsiveness::report_offence(
@@ -307,7 +305,7 @@ benchmarks! {
 	verify {
 		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
 		let slash_amount = slash_fraction * bond_amount;
-		let reward_amount = slash_amount * (1 + n) / 2;
+		let reward_amount = slash_amount.saturating_mul(1 + n) / 2;
 		let reward = reward_amount / r;
 		let slash = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
