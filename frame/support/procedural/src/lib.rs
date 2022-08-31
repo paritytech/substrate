@@ -589,7 +589,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 pub fn benchmarking(attr: TokenStream, item: TokenStream) -> TokenStream {
 	match parse_macro_input!(attr as Ident).to_string().as_str() {
 		"cached" => benchmarking_cached(item),
-		_ => panic!("unsupported argument provided to benchmarking macro"),
+		_ => panic!("only benchmarking(cached) is supported at this time"),
 	}
 }
 

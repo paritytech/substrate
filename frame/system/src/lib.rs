@@ -84,6 +84,7 @@ use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_support::{
+	benchmarking,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
 	traits::{
@@ -584,6 +585,7 @@ pub mod pallet {
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
+	#[benchmarking(cached)]
 	#[pallet::getter(fn block_number)]
 	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
