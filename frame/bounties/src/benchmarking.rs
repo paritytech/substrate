@@ -56,7 +56,11 @@ fn setup_bounty<T: Config<I>, I: 'static>(
 		T::DataDepositPerByte::get() * T::MaximumReasonLength::get().into();
 	let _ = T::Currency::make_free_balance_be(&caller, deposit);
 	let curator = account("curator", u, SEED);
-	let _ = T::Currency::make_free_balance_be(&curator, fee / 2u32.into());
+	let mut curator_deposit = fee;
+	if let Some(curator_min_deposit) = T::CuratorDepositMin::get() {
+		curator_deposit = curator_deposit.max(curator_min_deposit);
+	}
+	let _ = T::Currency::make_free_balance_be(&curator, curator_deposit);
 	let reason = vec![0; d as usize];
 	(caller, curator, fee, value, reason)
 }
