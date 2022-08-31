@@ -20,6 +20,7 @@
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_core::storage::TrackedStorageKey;
 use sp_std::prelude::*;
+use crate::sp_std::collections::btree_set::BTreeSet;
 
 /// An instance of a pallet in the storage.
 ///
@@ -100,4 +101,27 @@ pub trait WhitelistedStorageKeys {
 	/// should be whitelisted during benchmarking. This means that those keys
 	/// will be excluded from the benchmarking performance calculation.
     fn whitelisted_storage_keys() -> Vec<TrackedStorageKey>;
+}
+
+impl<A, B> WhitelistedStorageKeys for (A, B)
+where
+    A: WhitelistedStorageKeys,
+    B: WhitelistedStorageKeys,
+{
+    fn whitelisted_storage_keys() -> Vec<TrackedStorageKey> {
+		// use BTreeSet so the resulting list of keys is unique
+		let mut combined_keys = BTreeSet::new();
+		for key in A::whitelisted_storage_keys() {
+			combined_keys.insert(key);
+		}
+		for key in B::whitelisted_storage_keys() {
+			combined_keys.insert(key);
+		}
+		// flatten BTreeSet down to a vec
+		let mut combined_keys_vec = Vec::new();
+		for key in combined_keys {
+			combined_keys_vec.push(key);
+		}
+		combined_keys_vec
+    }
 }
