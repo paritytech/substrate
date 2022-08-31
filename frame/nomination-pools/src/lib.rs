@@ -1648,11 +1648,11 @@ pub mod pallet {
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
 			// before updating the bonded pool points, similar to that of `join` transaction.
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
-			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
-			// Currently, bonding rewards is like a batch. In the same PR, also make this function
-			// take a boolean argument that make it either 100% pure (no storage update), or make it
-			// also emit event and do the transfer. #11671
-			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+			// a member who has fully unbonded have no reward to claim about
+			if !member.active_points().is_zero() {
+				let _ =
+					Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
+			}
 
 			// deduct unlocking funds from the pool member and unbonding pool
 			let initial_chunks = member.unbonding_eras.len() as u32;
@@ -1702,7 +1702,7 @@ pub mod pallet {
 			// funds have a larger slash proportion in the proportionally slashing mechanism
 			T::StakingInterface::rebond(bonded_pool.bonded_account(), unlocking_balance)?;
 
-			// Last check if the funds deduct from the member match the actualy rebond funds
+			// Last check if the funds deduct from the member match the actual rebond funds
 			let post_active =
 				T::StakingInterface::active_stake(&bonded_account).unwrap_or_default();
 			ensure!(

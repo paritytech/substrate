@@ -127,6 +127,7 @@ pub trait StakingInterface {
 	/// schedules have reached their unlocking era should allow more calls to this function.
 	fn unbond(stash: Self::AccountId, value: Self::Balance) -> DispatchResult;
 
+	/// Rebond a portion of funds which had scheduled to be unlocked
 	fn rebond(stash: Self::AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Unlock any funds schedule to unlock before or at the current era.
