@@ -672,7 +672,7 @@ impl<T: Config> Pallet<T> {
 		when: T::BlockNumber,
 		what: ScheduledOf<T>,
 	) -> Result<TaskAddress<T::BlockNumber>, (DispatchError, ScheduledOf<T>)> {
-		let maybe_name = what.maybe_id.clone();
+		let maybe_name = what.maybe_id;
 		let index = Self::push_to_agenda(when, what)?;
 		let address = (when, index);
 		if let Some(name) = maybe_name {
@@ -992,7 +992,7 @@ impl<T: Config> Pallet<T> {
 			Err(Unavailable) => {
 				Self::deposit_event(Event::CallUnavailable {
 					task: (when, agenda_index),
-					id: task.maybe_id.clone(),
+					id: task.maybe_id,
 				});
 				Err((Unavailable, Some(task)))
 			},
@@ -1000,7 +1000,7 @@ impl<T: Config> Pallet<T> {
 				T::Preimages::drop(&task.call);
 				Self::deposit_event(Event::PermanentlyOverweight {
 					task: (when, agenda_index),
-					id: task.maybe_id.clone(),
+					id: task.maybe_id,
 				});
 				Err((Unavailable, Some(task)))
 			},
@@ -1008,7 +1008,7 @@ impl<T: Config> Pallet<T> {
 			Ok(result) => {
 				Self::deposit_event(Event::Dispatched {
 					task: (when, agenda_index),
-					id: task.maybe_id.clone(),
+					id: task.maybe_id,
 					result,
 				});
 				if let &Some((period, count)) = &task.maybe_periodic {
@@ -1026,7 +1026,7 @@ impl<T: Config> Pallet<T> {
 							T::Preimages::drop(&task.call);
 							Self::deposit_event(Event::PeriodicFailed {
 								task: (when, agenda_index),
-								id: task.maybe_id.clone(),
+								id: task.maybe_id,
 							});
 						},
 					}
