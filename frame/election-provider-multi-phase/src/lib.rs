@@ -1084,12 +1084,8 @@ pub mod pallet {
 		///
 		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
 		SolutionStored { compute: ElectionCompute, prev_ejected: bool },
-		/// The election has been finalized, with `Some` of the given computation and score, or
-		/// else if the election failed, `None`.
-		ElectionFinalized {
-			compute: ElectionCompute,
-			score: ElectionScore,
-		},
+		/// The election has been finalized, with the given computation and score.
+		ElectionFinalized { compute: ElectionCompute, score: ElectionScore },
 		/// An election failed.
 		///
 		/// Not much can be said about which computes failed in the process.
@@ -1530,7 +1526,6 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-
 	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
@@ -1542,7 +1537,15 @@ impl<T: Config> Pallet<T> {
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
-			.or_else(|_| T::Fallback::elect().map(|supports| ReadySolution { supports, score: Default::default(), compute: ElectionCompute::Fallback }).map_err(|fe| ElectionError::Fallback(fe)))
+			.or_else(|_| {
+				T::Fallback::elect()
+					.map(|supports| ReadySolution {
+						supports,
+						score: Default::default(),
+						compute: ElectionCompute::Fallback,
+					})
+					.map_err(|fe| ElectionError::Fallback(fe))
+			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });
 				if Self::round() != 1 {
@@ -2044,10 +2047,7 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored {
-						compute: ElectionCompute::Signed,
-						prev_ejected: false
-					},
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
 					Event::Rewarded { account: 99, value: 7 },
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized {
