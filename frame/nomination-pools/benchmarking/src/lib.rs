@@ -98,6 +98,13 @@ fn vote_to_balance<T: pallet_nomination_pools::Config>(
 	vote.try_into().map_err(|_| "could not convert u64 to Balance")
 }
 
+fn pool_unlocking_funds<T: pallet_nomination_pools::Config>(
+	pool_account: &T::AccountId,
+) -> BalanceOf<T> {
+	T::StakingInterface::total_stake(pool_account).unwrap() -
+		T::StakingInterface::active_stake(pool_account).unwrap()
+}
+
 #[allow(unused)]
 struct ListScenario<T: pallet_nomination_pools::Config> {
 	/// Stash/Controller that is expected to be moved.
@@ -272,6 +279,49 @@ frame_benchmarking::benchmarks! {
 			T::StakingInterface::active_stake(&scenario.origin1).unwrap() >=
 			scenario.dest_weight
 		);
+	}
+
+	rebond {
+		// setup the worst case list scenario.
+		let origin_weight = min_create_bond::<T>() * 2u32.into();
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
+		let extra = scenario.dest_weight - origin_weight;
+
+		let scenario = scenario.add_joiner(extra);
+		let member_id = scenario.origin1_member.unwrap().clone();
+		let member_id_lookup = T::Lookup::unlookup(member_id.clone());
+		let origin_unlocking_funds = pool_unlocking_funds::<T>(&scenario.origin1);
+
+		// bond `extra` before unbond `extra` to keep the underlying pool account maintain the
+		// same bonded balance, then `rebond` will bond `extra` again to trigger the worst case 
+		// list scenario.
+		CurrencyOf::<T>::make_free_balance_be(&member_id, extra + CurrencyOf::<T>::minimum_balance());
+		Pools::<T>::bond_extra(Origin::Signed(member_id.clone()).into(), BondExtra::FreeBalance(extra)).unwrap();
+		// create `MaxUnbonding` unlocking chunks
+		let max_unlocking_chunk = T::MaxUnbonding::get();
+		for i in 0..max_unlocking_chunk {
+			pallet_staking::CurrentEra::<T>::put(i);
+			// we don't care the distribution of funds as long as the sum of them equal to `extra`
+			let amount = if i == max_unlocking_chunk - 1 {
+				extra - BalanceOf::<T>::from(max_unlocking_chunk - 1)
+			} else {
+				BalanceOf::<T>::from(1u32)
+			};
+			Pools::<T>::unbond(Origin::Signed(member_id.clone()).into(), member_id_lookup.clone(), amount).unwrap();
+		}
+
+		let member = PoolMembers::<T>::get(&member_id).unwrap();
+		assert_eq!(member.points, extra);
+		assert_eq!(member.unbonding_eras.len() as u32, max_unlocking_chunk);
+		assert_eq!(pool_unlocking_funds::<T>(&scenario.origin1), origin_unlocking_funds + extra);
+
+		whitelist_account!(member_id);
+	}: _(Origin::Signed(member_id.clone()), extra)
+	verify {
+		let member = PoolMembers::<T>::get(&member_id).unwrap();
+		assert_eq!(member.points, extra * 2u32.into());
+		assert!(member.unbonding_eras.is_empty());
+		assert_eq!(pool_unlocking_funds::<T>(&scenario.origin1), origin_unlocking_funds);
 	}
 
 	claim_payout {

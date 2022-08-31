@@ -1610,11 +1610,7 @@ pub mod pallet {
 		}
 
 		// TODO: add tests
-		// FIXME: recorrect weight
-		#[pallet::weight(
-			T::WeightInfo::bond_extra_transfer()
-			.max(T::WeightInfo::bond_extra_reward())
-		)]
+		#[pallet::weight(T::WeightInfo::rebond())]
 		#[transactional]
 		pub fn rebond(
 			origin: OriginFor<T>,

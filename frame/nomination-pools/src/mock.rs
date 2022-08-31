@@ -80,6 +80,16 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
+	fn rebond(who: Self::AccountId, amount: Self::Balance) -> DispatchResult {
+		let mut y = UnbondingBalanceMap::get();
+		*y.get_mut(&who).unwrap() = y.get_mut(&who).unwrap().saturating_sub(amount);
+		UnbondingBalanceMap::set(&y);
+		let mut x = BondedBalanceMap::get();
+		*x.get_mut(&who).unwrap() = x.get_mut(&who).unwrap().saturating_add(amount);
+		BondedBalanceMap::set(&x);
+		Ok(())
+	}
+
 	fn unbond(who: Self::AccountId, amount: Self::Balance) -> DispatchResult {
 		let mut x = BondedBalanceMap::get();
 		*x.get_mut(&who).unwrap() = x.get_mut(&who).unwrap().saturating_sub(amount);
