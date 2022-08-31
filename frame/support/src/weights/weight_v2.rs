@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_runtime::{
 	traits::{Bounded, CheckedAdd, CheckedSub, One, Zero},
@@ -41,6 +41,7 @@ pub type RefTimeWeight = u64;
 	Default,
 	Ord,
 	PartialOrd,
+	CompactAs,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Weight {
