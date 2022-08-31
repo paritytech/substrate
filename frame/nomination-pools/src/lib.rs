@@ -1417,6 +1417,8 @@ pub mod pallet {
 		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
+		/// A member has rebonded a portion of funds, which had previously scheduled to be unlocked, into a pool
+		Rebonded { member: T::AccountId, pool_id: PoolId, rebonded: BalanceOf<T> },
 	}
 
 	#[pallet::error]
@@ -1710,11 +1712,10 @@ pub mod pallet {
 				Error::<T>::Defensive(DefensiveError::RebondFundsNotMatch)
 			);
 
-			Self::deposit_event(Event::<T>::Bonded {
+			Self::deposit_event(Event::<T>::Rebonded {
 				member: who.clone(),
 				pool_id: member.pool_id,
-				bonded: unlocking_balance,
-				joined: false,
+				rebonded: unlocking_balance,
 			});
 
 			let removed_chunks = initial_chunks
