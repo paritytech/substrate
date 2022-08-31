@@ -57,9 +57,9 @@ impl<T> Bounded<T> {
 	pub fn hash(&self) -> H256 {
 		use Bounded::*;
 		match self {
-			Legacy { hash, .. } => hash.clone(),
+			Legacy { hash, .. } => hash,
 			Inline(x) => blake2_256(x.as_ref()).into(),
-			Lookup { hash, .. } => hash.clone(),
+			Lookup { hash, .. } => hash,
 		}
 	}
 }
