@@ -15,4 +15,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg(test)]
+//! Test utilities for the safe mode pallet.
+
+
+use super::*;
+use crate::mock::*;
+
+use frame_support::{assert_noop, assert_ok, assert_err};
+
+#[test]
+fn disable_fails_if_not_enabled() {
+	new_test_ext().execute_with(|| {
+    assert_noop!(SafeMode::force_disable(Origin::root()), Error::<Test>::IsDisabled);
+    // TODO add exhaustive checks for all calls 
+	});
+}
+
+#[test]
+fn root_can_enable() {
+	new_test_ext().execute_with(|| {
+    assert_ok!(SafeMode::force_enable(Origin::root()));
+    assert_eq!(SafeMode::enabled().unwrap(), System::block_number() + 1); // TODO read mock::EnableDuration instead of hard coded?
+	});
+}
+
+#[test]
+fn root_can_disable() {
+	new_test_ext().execute_with(|| {
+    assert_eq!(SafeMode::enabled(), None);
+    assert_err!(SafeMode::force_disable(Origin::root()),Error::<Test>::IsDisabled);
+	});
+}
