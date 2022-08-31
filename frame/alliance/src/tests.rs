@@ -39,8 +39,8 @@ fn force_set_members_works() {
 		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(k_proposal), k_proposal_len));
 		let mut proposals = vec![hash, k_hash];
 
+		// give a retirement notice to check later a retiring member not removed
 		assert_ok!(Alliance::give_retirement_notice(Origin::signed(2)));
-
 		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
 
 		// join alliance and reserve funds
@@ -86,6 +86,8 @@ fn force_set_members_works() {
 			),
 			Error::<Test, ()>::AllianceAlreadyInitialized,
 		);
+
+		// wrong witness data checks
 		assert_noop!(
 			Alliance::force_set_members(
 				Origin::root(),
@@ -117,6 +119,7 @@ fn force_set_members_works() {
 			Error::<Test, ()>::BadWitness,
 		);
 
+		// founders missing, other members given
 		assert_noop!(
 			Alliance::force_set_members(
 				Origin::root(),
@@ -139,8 +142,10 @@ fn force_set_members_works() {
 
 		// assert new set of voting members
 		assert_eq!(Alliance::votable_members_sorted(), vec![4, 5, 8]);
-		// assert new members
+		// assert new ally member
 		assert!(Alliance::is_ally(&2));
+		// assert a retiring member from previous Alliance not removed
+		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
 		// assert old alliance disband.
 		assert!(!Alliance::is_member(&1));
 		assert!(!Alliance::is_member(&3));
@@ -151,6 +156,7 @@ fn force_set_members_works() {
 		assert_eq!(<Test as Config>::ProposalProvider::proposals(), vec![]);
 		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 0);
 
+		// assert events
 		proposals.sort();
 		assert_prev_event(mock::Event::Alliance(crate::Event::AllianceDisband {
 			members: vec![1, 3, 9],

@@ -633,6 +633,8 @@ benchmarks_instance_pallet! {
 			voting_members: c,
 			ally_members: m,
 		};
+		let mut old_fellows: Vec<T::AccountId> = Vec::new();
+		let mut old_allies: Vec<T::AccountId> = Vec::new();
 
 		let mut cc = c;
 		if (m > 0 && c == 0) || (p > 0 && c == 0) {
@@ -643,8 +645,8 @@ benchmarks_instance_pallet! {
 			// one voting member required to create proposal.
 			cc = 1;
 		}
-		let mut old_fellows: Vec<T::AccountId> = Vec::new();
-		let mut old_allies: Vec<T::AccountId> = Vec::new();
+
+		// setting the Alliance to disband on the benchmark call
 		if cc > 0 {
 			old_fellows = (0..cc).map(fellow::<T, I>).collect::<Vec<_>>();
 			old_allies = (0..m).map(ally::<T, I>).collect::<Vec<_>>();
@@ -687,11 +689,11 @@ benchmarks_instance_pallet! {
 			assert_eq!(Alliance::<T, I>::ally_members_count(), m);
 		}
 
-		// Add previous proposals.
+		// adding proposals to veto on the Alliance reset
 		for i in 0..p {
 			let threshold = cc;
 			let bytes_in_storage = i + size_of::<Cid>() as u32 + 32;
-			// Proposals should be different so that different proposal hashes are generated
+			// proposals should be different so that different proposal hashes are generated
 			let proposal: T::Proposal =
 				AllianceCall::<T, I>::set_rule { rule: rule(vec![i as u8; i as usize]) }.into();
 			Alliance::<T, I>::propose(
