@@ -2107,6 +2107,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "paste 1.0.6",
+ "rusty-fork",
  "scale-info",
  "serde",
  "sp-api",
@@ -7671,6 +7672,17 @@ name = "rustversion"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2cc38e8fa666e2de3c4aba7edeb5ffc5246c1c2ed0e3d17e560aeeba736b23f"
+
+[[package]]
+name = "rusty-fork"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb3dcc6e454c328bb824492db107ab7c0ae8fcffe4ad210136ef014458c1bc4f"
+dependencies = [
+ "fnv",
+ "quick-error 1.2.3",
+ "tempfile",
+]
 
 [[package]]
 name = "rw-stream-sink"
