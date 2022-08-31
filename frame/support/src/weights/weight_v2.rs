@@ -128,6 +128,13 @@ impl Weight {
 		Self { ref_time: self.ref_time.saturating_pow(exp) }
 	}
 
+	/// Increment [`Weight`] by `amount` via saturating addition.
+	pub fn saturating_accrue(&mut self, amount: Self) {
+		let mut o = Self::zero();
+		sp_std::mem::swap(&mut o, self);
+		*self = o.saturating_add(amount);
+	}
+
 	/// Checked [`Weight`] addition. Computes `self + rhs`, returning `None` if overflow occurred.
 	pub const fn checked_add(&self, rhs: &Self) -> Option<Self> {
 		match self.ref_time.checked_add(rhs.ref_time) {
