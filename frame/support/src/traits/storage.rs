@@ -103,7 +103,9 @@ pub trait WhitelistedStorageKeys {
 	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey>;
 }
 
-#[impl_for_tuples(5)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl WhitelistedStorageKeys for Tuple {
 	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey> {
 		// use BTreeSet so the resulting list of keys is unique
