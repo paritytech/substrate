@@ -18,8 +18,7 @@
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_runtime::{
-	traits::{Bounded, CheckedAdd, CheckedSub, Zero},
-	Perquintill, RuntimeDebug,
+	traits::{Bounded, CheckedAdd, CheckedSub, Zero}, RuntimeDebug,
 };
 
 use super::*;
@@ -195,13 +194,6 @@ impl Sub for Weight {
 	}
 }
 
-impl Mul for Weight {
-	type Output = Self;
-	fn mul(self, b: Self) -> Self {
-		Self { ref_time: b.ref_time * self.ref_time }
-	}
-}
-
 impl<T> Mul<T> for Weight
 where
 	T: Mul<u64, Output = u64> + Copy,
@@ -212,26 +204,40 @@ where
 	}
 }
 
-impl Mul<Weight> for Perbill {
-	type Output = Weight;
-	fn mul(self, b: Weight) -> Weight {
-		Weight { ref_time: self * b.ref_time }
+macro_rules! weight_mul_per_impl {
+	($($t:ty),* $(,)?) => {
+		$(
+			impl Mul<Weight> for $t {
+				type Output = Weight;
+				fn mul(self, b: Weight) -> Weight {
+					Weight { ref_time: self * b.ref_time }
+				}
+			}
+		)*
 	}
 }
+weight_mul_per_impl!(sp_runtime::Percent, sp_runtime::Permill, sp_runtime::Perbill, sp_runtime::Perquintill);
 
-impl Mul<Weight> for Perquintill {
-	type Output = Weight;
-	fn mul(self, b: Weight) -> Weight {
-		Weight { ref_time: self * b.ref_time }
-	}
-}
+macro_rules! weight_mul_div_primitive_impl {
+	($($t:ty),* $(,)?) => {
+		$(
+			impl Mul<Weight> for $t {
+				type Output = Weight;
+				fn mul(self, b: Weight) -> Weight {
+					Weight { ref_time: b.ref_time * u64::from(self) }
+				}
+			}
 
-impl Mul<Weight> for u64 {
-	type Output = Weight;
-	fn mul(self, b: Weight) -> Weight {
-		Weight { ref_time: self * b.ref_time }
+			impl Div<Weight> for $t {
+				type Output = Weight;
+				fn div(self, b: Weight) -> Weight {
+					Weight { ref_time: b.ref_time / u64::from(self) }
+				}
+			}
+		)*
 	}
 }
+weight_mul_div_primitive_impl!(u8, u16, u32, u64);
 
 impl<T> Div<T> for Weight
 where
