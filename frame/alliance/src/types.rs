@@ -103,15 +103,24 @@ pub struct ForceSetWitness {
 	/// Number of active proposals which will be vetoed and removed.
 	#[codec(compact)]
 	pub(super) proposals: u32,
-	/// Total number of voting members in the current alliance to remove.
+	/// Total number of voting members in the current alliance.
 	#[codec(compact)]
 	pub(super) voting_members: u32,
+	/// Total number of ally members in the current alliance.
+	#[codec(compact)]
+	pub(super) ally_members: u32,
 }
 
 #[cfg(test)]
 impl ForceSetWitness {
 	// Creates new ForceSetWitness.
-	pub(super) fn new(proposals: u32, voting_members: u32) -> Self {
-		Self { proposals, voting_members }
+	pub(super) fn new(proposals: u32, voting_members: u32, ally_members: u32) -> Self {
+		Self { proposals, voting_members, ally_members }
+	}
+}
+
+impl ForceSetWitness {
+	pub(super) fn is_zero(self) -> bool {
+		self == Self::default()
 	}
 }

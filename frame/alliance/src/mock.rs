@@ -91,7 +91,7 @@ const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
 parameter_types! {
 	pub const MotionDuration: BlockNumber = MOTION_DURATION_IN_BLOCKS;
 	pub const MaxProposals: u32 = 100;
-	pub const MaxMembers: u32 = 100;
+	pub const MaxMembers: u32 = 200;
 }
 type AllianceCollective = pallet_collective::Instance1;
 impl pallet_collective::Config<AllianceCollective> for Test {
@@ -208,9 +208,10 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 }
 
 parameter_types! {
-	pub const MaxFounders: u32 = 10;
-	pub const MaxFellows: u32 = MaxMembers::get() - MaxFounders::get();
-	pub const MaxAllies: u32 = 100;
+	pub const MaxBenchMembers: u32 = MaxMembers::get() / 2;
+	pub const MaxBenchFounders: u32 = 10;
+	pub const MaxBenchFellows: u32 = MaxBenchMembers::get() / 2 - MaxBenchFounders::get();
+	pub const MaxBenchAllies: u32 = MaxBenchMembers::get() / 2;
 	pub const AllyDeposit: u64 = 25;
 	pub const RetirementPeriod: BlockNumber = MOTION_DURATION_IN_BLOCKS + 1;
 }
@@ -230,9 +231,9 @@ impl Config for Test {
 	type IdentityVerifier = ();
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxProposals = MaxProposals;
-	type MaxFounders = MaxFounders;
-	type MaxFellows = MaxFellows;
-	type MaxAllies = MaxAllies;
+	type MaxFounders = MaxBenchFounders;
+	type MaxFellows = MaxBenchFellows;
+	type MaxAllies = MaxBenchAllies;
 	type MaxUnscrupulousItems = ConstU32<100>;
 	type MaxWebsiteUrlLength = ConstU32<255>;
 	type MaxAnnouncementsCount = ConstU32<100>;
@@ -263,7 +264,17 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 50), (2, 50), (3, 50), (4, 50), (5, 30), (6, 50), (7, 50), (8, 50)],
+		balances: vec![
+			(1, 50),
+			(2, 50),
+			(3, 50),
+			(4, 50),
+			(5, 30),
+			(6, 50),
+			(7, 50),
+			(8, 50),
+			(9, 50),
+		],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
@@ -307,6 +318,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
 		assert_ok!(Identity::set_identity(Origin::signed(8), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 8, Judgement::KnownGood));
+		assert_ok!(Identity::set_identity(Origin::signed(9), Box::new(info.clone())));
+		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 9, Judgement::KnownGood));
 
 		// Joining before init should fail.
 		assert_noop!(
@@ -356,4 +369,9 @@ pub fn make_proposal(proposal: Call) -> (Call, u32, H256) {
 	let len: u32 = proposal.using_encoded(|p| p.len() as u32);
 	let hash = BlakeTwo256::hash_of(&proposal);
 	(proposal, len, hash)
+}
+
+pub fn assert_prev_event(event: Event) {
+	let events = System::events();
+	assert_eq!(events.get(events.len() - 2).expect("events expected").event, event);
 }

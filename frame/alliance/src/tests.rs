@@ -37,12 +37,21 @@ fn force_set_members_works() {
 
 		let (k_proposal, k_proposal_len, k_hash) = make_kick_member_proposal(2);
 		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(k_proposal), k_proposal_len));
+		let mut proposals = vec![hash, k_hash];
 
 		assert_ok!(Alliance::give_retirement_notice(Origin::signed(2)));
 
 		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
+
+		// join alliance and reserve funds
+		assert_eq!(Balances::free_balance(9), 40);
+		assert_ok!(Alliance::join_alliance(Origin::signed(9)));
+		assert_eq!(Alliance::deposit_of(9), Some(25));
+		assert_eq!(Balances::free_balance(9), 15);
+		assert!(Alliance::is_member_of(&9, MemberRole::Ally));
+
 		// ensure proposal is listed as active proposal
-		assert_eq!(<Test as Config>::ProposalProvider::proposals(), vec![hash, k_hash]);
+		assert_eq!(<Test as Config>::ProposalProvider::proposals(), proposals);
 		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 2);
 
 		// fails without root
@@ -57,34 +66,66 @@ fn force_set_members_works() {
 			BadOrigin
 		);
 
+		// nothing to do, witness data is default, new members not provided.
+		assert_ok!(Alliance::force_set_members(
+			Origin::root(),
+			vec![],
+			vec![],
+			vec![],
+			Default::default()
+		));
+
+		// alliance must be reset first, no witness data.
 		assert_noop!(
-			Alliance::force_set_members(Origin::root(), vec![], vec![], vec![], Default::default()),
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![8],
+				vec![],
+				vec![],
+				Default::default()
+			),
+			Error::<Test, ()>::AllianceAlreadyInitialized,
+		);
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![],
+				vec![],
+				ForceSetWitness::new(1, 3, 1)
+			),
+			Error::<Test, ()>::BadWitness,
+		);
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![],
+				vec![],
+				ForceSetWitness::new(2, 1, 1)
+			),
+			Error::<Test, ()>::BadWitness,
+		);
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![],
+				vec![],
+				ForceSetWitness::new(1, 3, 0)
+			),
 			Error::<Test, ()>::BadWitness,
 		);
 
 		assert_noop!(
-			Alliance::force_set_members(Origin::root(), vec![], vec![], vec![], Default::default()),
-			Error::<Test, ()>::BadWitness,
-		);
-		assert_noop!(
 			Alliance::force_set_members(
 				Origin::root(),
 				vec![],
-				vec![],
-				vec![],
-				ForceSetWitness::new(1, 3)
+				vec![4],
+				vec![2],
+				ForceSetWitness::new(2, 3, 1)
 			),
-			Error::<Test, ()>::BadWitness,
-		);
-		assert_noop!(
-			Alliance::force_set_members(
-				Origin::root(),
-				vec![],
-				vec![],
-				vec![],
-				ForceSetWitness::new(2, 1)
-			),
-			Error::<Test, ()>::BadWitness,
+			Error::<Test, ()>::FoundersMissing,
 		);
 
 		// success call
@@ -93,18 +134,28 @@ fn force_set_members_works() {
 			vec![8, 5],
 			vec![4],
 			vec![2],
-			ForceSetWitness::new(2, 3)
+			ForceSetWitness::new(2, 3, 1)
 		));
 
 		// assert new set of voting members
 		assert_eq!(Alliance::votable_members_sorted(), vec![4, 5, 8]);
 		// assert new members
 		assert!(Alliance::is_ally(&2));
+		// assert old alliance disband.
 		assert!(!Alliance::is_member(&1));
 		assert!(!Alliance::is_member(&3));
+		assert!(!Alliance::is_member(&9));
+		// deposit unreserved
+		assert_eq!(Balances::free_balance(9), 40);
 		// all proposals are removed
 		assert_eq!(<Test as Config>::ProposalProvider::proposals(), vec![]);
 		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 0);
+
+		proposals.sort();
+		assert_prev_event(mock::Event::Alliance(crate::Event::AllianceDisband {
+			members: vec![1, 3, 9],
+			proposals,
+		}));
 
 		System::assert_last_event(mock::Event::Alliance(crate::Event::MembersInitialized {
 			founders: vec![5, 8],
