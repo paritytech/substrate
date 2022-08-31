@@ -18,7 +18,7 @@
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_runtime::{
-	traits::{Bounded, CheckedAdd, CheckedSub, One, Zero},
+	traits::{Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, One, Zero},
 	Perquintill, RuntimeDebug,
 };
 
@@ -98,22 +98,69 @@ impl Weight {
 		Self { ref_time }
 	}
 
-	pub fn checked_mul(self, rhs: u64) -> Option<Self> {
-		let ref_time = self.ref_time.checked_mul(rhs)?;
-		Some(Self { ref_time })
+	/// Saturating [`Weight`] addition. Computes `self + rhs`, saturating at the numeric bounds of
+	/// all fields instead of overflowing.
+	pub const fn saturating_add(self, rhs: Self) -> Self {
+		Self { ref_time: self.ref_time.saturating_add(rhs.ref_time) }
 	}
 
-	pub fn checked_div(self, rhs: u64) -> Option<Self> {
-		let ref_time = self.ref_time.checked_div(rhs)?;
-		Some(Self { ref_time })
+	/// Saturating [`Weight`] subtraction. Computes `self - rhs`, saturating at the numeric bounds
+	/// of all fields instead of overflowing.
+	pub const fn saturating_sub(self, rhs: Self) -> Self {
+		Self { ref_time: self.ref_time.saturating_sub(rhs.ref_time) }
 	}
 
-	pub const fn scalar_saturating_mul(self, rhs: u64) -> Self {
-		Self { ref_time: self.ref_time.saturating_mul(rhs) }
+	/// Saturating [`Weight`] scalar multiplication. Computes `self.field * scalar` for all fields,
+	/// saturating at the numeric bounds of all fields instead of overflowing.
+	pub const fn saturating_mul(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time.saturating_mul(scalar) }
 	}
 
-	pub const fn scalar_div(self, rhs: u64) -> Self {
-		Self { ref_time: self.ref_time / rhs }
+	/// Saturating [`Weight`] scalar division. Computes `self.field / scalar` for all fields,
+	/// saturating at the numeric bounds of all fields instead of overflowing.
+	pub const fn saturating_div(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time.saturating_mul(scalar) }
+	}
+
+	/// Saturating [`Weight`] scalar exponentiation. Computes `self.field.pow(exp)` for all fields,
+	/// saturating at the numeric bounds of all fields instead of overflowing.
+	pub const fn saturating_pow(self, exp: u32) -> Self {
+		Self { ref_time: self.ref_time.saturating_pow(exp) }
+	}
+
+	/// Checked [`Weight`] addition. Computes `self + rhs`, returning `None` if overflow occurred.
+	pub const fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		match self.ref_time.checked_add(rhs.ref_time) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
+	}
+
+	/// Checked [`Weight`] subtraction. Computes `self - rhs`, returning `None` if overflow
+	/// occurred.
+	pub const fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		match self.ref_time.checked_sub(rhs.ref_time) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
+	}
+
+	/// Checked [`Weight`] scalar multiplication. Computes `self.field * scalar` for each field,
+	/// returning `None` if overflow occurred.
+	pub const fn checked_mul(self, scalar: u64) -> Option<Self> {
+		match self.ref_time.checked_mul(scalar) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
+	}
+
+	/// Checked [`Weight`] scalar division. Computes `self.field / scalar` for each field, returning
+	/// `None` if overflow occurred.
+	pub const fn checked_div(self, scalar: u64) -> Option<Self> {
+		match self.ref_time.checked_div(scalar) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
 	}
 }
 
@@ -193,24 +240,6 @@ where
 	type Output = Self;
 	fn div(self, b: T) -> Self {
 		Self { ref_time: self.ref_time / b }
-	}
-}
-
-impl Saturating for Weight {
-	fn saturating_add(self, rhs: Self) -> Self {
-		self.saturating_add(rhs)
-	}
-
-	fn saturating_sub(self, rhs: Self) -> Self {
-		self.saturating_sub(rhs)
-	}
-
-	fn saturating_mul(self, rhs: Self) -> Self {
-		self.saturating_mul(rhs)
-	}
-
-	fn saturating_pow(self, exp: usize) -> Self {
-		self.saturating_pow(exp)
 	}
 }
 
@@ -352,36 +381,6 @@ impl Weight {
 
 	pub const fn one() -> Self {
 		Self { ref_time: 1 }
-	}
-
-	pub const fn saturating_add(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_add(rhs.ref_time) }
-	}
-
-	pub const fn saturating_sub(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_sub(rhs.ref_time) }
-	}
-
-	pub const fn saturating_mul(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_mul(rhs.ref_time) }
-	}
-
-	pub const fn saturating_pow(self, exp: usize) -> Self {
-		Self { ref_time: self.ref_time.saturating_pow(exp as u32) }
-	}
-
-	pub const fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		match self.ref_time.checked_add(rhs.ref_time) {
-			Some(ref_time) => Some(Self { ref_time }),
-			None => None,
-		}
-	}
-
-	pub const fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		match self.ref_time.checked_sub(rhs.ref_time) {
-			Some(ref_time) => Some(Self { ref_time }),
-			None => None,
-		}
 	}
 }
 
