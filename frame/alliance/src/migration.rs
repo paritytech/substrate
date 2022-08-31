@@ -25,7 +25,7 @@ pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 /// Wrapper for all migrations of this pallet.
 pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 	let onchain_version = Pallet::<T, I>::on_chain_storage_version();
-	let mut weight: Weight = 0;
+	let mut weight: Weight = Weight::new();
 
 	if onchain_version < 1 {
 		weight = weight.saturating_add(v0_to_v1::migrate::<T, I>());

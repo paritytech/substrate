@@ -8,7 +8,7 @@ use super::super::*;
 /// situation where they could increase their free balance but still not be able to use their funds
 /// because they were less than the lock.
 pub fn migrate<T: Config>(to_migrate: Vec<T::AccountId>) -> Weight {
-	let mut weight = 0;
+	let mut weight = Weight::new();
 
 	for who in to_migrate.iter() {
 		if let Ok(mut voter) = Voting::<T>::try_get(who) {
