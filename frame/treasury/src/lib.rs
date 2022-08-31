@@ -320,7 +320,7 @@ pub mod pallet {
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds()
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}
@@ -501,7 +501,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Spend some money! returns number of approvals before spend.
 	pub fn spend_funds() -> Weight {
-		let mut total_weight: Weight = Zero::zero();
+		let mut total_weight = Weight::new();
 
 		let mut budget_remaining = Self::pot();
 		Self::deposit_event(Event::Spending { budget_remaining });

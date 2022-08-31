@@ -99,7 +99,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::max_value());
+		frame_system::limits::BlockWeights::simple_max(Weight::MAX);
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = TestBaseCallFilter;
@@ -191,7 +191,7 @@ fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
 	RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 }
 
-fn call_foobar(err: bool, start_weight: u64, end_weight: Option<u64>) -> RuntimeCall {
+fn call_foobar(err: bool, start_weight: Weight, end_weight: Option<Weight>) -> RuntimeCall {
 	RuntimeCall::Example(ExampleCall::foobar { err, start_weight, end_weight })
 }
 
@@ -213,8 +213,8 @@ fn as_derivative_works() {
 #[test]
 fn as_derivative_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = 100;
-		let end_weight = 75;
+		let start_weight = Weight::from_ref_time(100);
+		let end_weight = Weight::from_ref_time(75);
 		let diff = start_weight - end_weight;
 
 		// Full weight when ok
@@ -383,26 +383,25 @@ fn batch_early_exit_works() {
 fn batch_weight_calculation_doesnt_overflow() {
 	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
-		let big_call =
-			RuntimeCall::System(SystemCall::fill_block { ratio: Perbill::from_percent(50) });
-		assert_eq!(big_call.get_dispatch_info().weight, Weight::max_value() / 2);
+		let big_call = RuntimeCall::System(SystemCall::fill_block { ratio: Perbill::from_percent(50) });
+		assert_eq!(big_call.get_dispatch_info().weight, Weight::MAX / 2);
 
 		// 3 * 50% saturates to 100%
 		let batch_call = RuntimeCall::Utility(crate::Call::batch {
 			calls: vec![big_call.clone(), big_call.clone(), big_call.clone()],
 		});
 
-		assert_eq!(batch_call.get_dispatch_info().weight, Weight::max_value());
+		assert_eq!(batch_call.get_dispatch_info().weight, Weight::MAX);
 	});
 }
 
 #[test]
 fn batch_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = 100;
-		let end_weight = 75;
+		let start_weight = Weight::from_ref_time(100);
+		let end_weight = Weight::from_ref_time(75);
 		let diff = start_weight - end_weight;
-		let batch_len: Weight = 4;
+		let batch_len = 4;
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);
@@ -441,7 +440,7 @@ fn batch_handles_weight_refund() {
 		let good_call = call_foobar(false, start_weight, Some(end_weight));
 		let bad_call = call_foobar(true, start_weight, Some(end_weight));
 		let batch_calls = vec![good_call, bad_call];
-		let batch_len = batch_calls.len() as Weight;
+		let batch_len = Weight::from_ref_time(batch_calls.len() as u64);
 		let call = RuntimeCall::Utility(UtilityCall::batch { calls: batch_calls });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
@@ -515,10 +514,10 @@ fn batch_all_revert() {
 #[test]
 fn batch_all_handles_weight_refund() {
 	new_test_ext().execute_with(|| {
-		let start_weight = 100;
-		let end_weight = 75;
+		let start_weight = Weight::from_ref_time(100);
+		let end_weight = Weight::from_ref_time(75);
 		let diff = start_weight - end_weight;
-		let batch_len: Weight = 4;
+		let batch_len = 4;
 
 		// Full weight when ok
 		let inner_call = call_foobar(false, start_weight, None);
@@ -554,7 +553,7 @@ fn batch_all_handles_weight_refund() {
 		let good_call = call_foobar(false, start_weight, Some(end_weight));
 		let bad_call = call_foobar(true, start_weight, Some(end_weight));
 		let batch_calls = vec![good_call, bad_call];
-		let batch_len = batch_calls.len() as Weight;
+		let batch_len = Weight::from_ref_time(batch_calls.len() as u64);
 		let call = RuntimeCall::Utility(UtilityCall::batch_all { calls: batch_calls });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(1));
@@ -637,7 +636,7 @@ fn force_batch_works() {
 			Origin::signed(1),
 			vec![
 				call_transfer(2, 5),
-				call_foobar(true, 75, None),
+				call_foobar(true, Weight::from_ref_time(75), None),
 				call_transfer(2, 10),
 				call_transfer(2, 5),
 			]

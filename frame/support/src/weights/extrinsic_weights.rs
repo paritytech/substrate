@@ -53,7 +53,7 @@ parameter_types! {
 	///   99th: 86_924
 	///   95th: 86_828
 	///   75th: 86_347
-	pub const ExtrinsicBaseWeight: Weight = 86_298 * WEIGHT_PER_NANOS;
+	pub const ExtrinsicBaseWeight: Weight = WEIGHT_PER_NANOS.scalar_saturating_mul(86_298);
 }
 
 #[cfg(test)]

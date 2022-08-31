@@ -17,8 +17,8 @@
 
 //! Traits for hooking tasks to events in a blockchain's lifecycle.
 
+use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 
 /// The block initialization trait.
@@ -33,8 +33,8 @@ pub trait OnInitialize<BlockNumber> {
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
 	/// including inherent extrinsics. Hence for instance, if you runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
-		0
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Weight::new()
 	}
 }
 
@@ -42,8 +42,8 @@ pub trait OnInitialize<BlockNumber> {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
-	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
-		let mut weight = 0;
+	fn on_initialize(n: BlockNumber) -> Weight {
+		let mut weight = Weight::new();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
@@ -75,11 +75,8 @@ pub trait OnIdle<BlockNumber> {
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
 	/// in a block are applied but before `on_finalize` is executed.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight,
-	) -> crate::weights::Weight {
-		0
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
+		Weight::new()
 	}
 }
 
@@ -87,12 +84,10 @@ pub trait OnIdle<BlockNumber> {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
-	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
-		let on_idle_functions: &[fn(
-			BlockNumber,
-			crate::weights::Weight,
-		) -> crate::weights::Weight] = &[for_tuples!( #( Tuple::on_idle ),* )];
-		let mut weight = 0;
+	fn on_idle(n: BlockNumber, remaining_weight: Weight) -> Weight {
+		let on_idle_functions: &[fn(BlockNumber, Weight) -> Weight] =
+			&[for_tuples!( #( Tuple::on_idle ),* )];
+		let mut weight = Weight::new();
 		let len = on_idle_functions.len();
 		let start_index = n % (len as u32).into();
 		let start_index = start_index.try_into().ok().expect(
@@ -174,8 +169,8 @@ pub trait OnRuntimeUpgrade {
 	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+	fn on_runtime_upgrade() -> Weight {
+		Weight::new()
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
@@ -199,8 +194,8 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		let mut weight = 0;
+	fn on_runtime_upgrade() -> Weight {
+		let mut weight = Weight::new();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
 	}
@@ -243,18 +238,15 @@ pub trait Hooks<BlockNumber> {
 	/// Will not fire if the remaining weight is 0.
 	/// Return the weight used, the hook will subtract it from current weight used
 	/// and pass the result to the next `on_idle` hook if it exists.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight,
-	) -> crate::weights::Weight {
-		0
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
+		Weight::new()
 	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
-		0
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Weight::new()
 	}
 
 	/// Perform a module upgrade.
@@ -276,8 +268,8 @@ pub trait Hooks<BlockNumber> {
 	/// pallet is discouraged and might get deprecated in the future. Alternatively, export the same
 	/// logic as a free-function from your pallet, and pass it to `type Executive` from the
 	/// top-level runtime.
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+	fn on_runtime_upgrade() -> Weight {
+		Weight::new()
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
@@ -360,18 +352,18 @@ mod tests {
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
 		struct Test;
 		impl OnInitialize<u8> for Test {
-			fn on_initialize(_n: u8) -> crate::weights::Weight {
-				10
+			fn on_initialize(_n: u8) -> Weight {
+				Weight::from_ref_time(10)
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
-			fn on_runtime_upgrade() -> crate::weights::Weight {
-				20
+			fn on_runtime_upgrade() -> Weight {
+				Weight::from_ref_time(20)
 			}
 		}
 
-		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
-		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+		assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
+		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
 	}
 
 	#[test]
@@ -383,48 +375,48 @@ mod tests {
 		struct Test3;
 		type TestTuple = (Test1, Test2, Test3);
 		impl OnIdle<u32> for Test1 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test1");
 				}
-				0
+				Weight::zero()
 			}
 		}
 		impl OnIdle<u32> for Test2 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test2");
 				}
-				0
+				Weight::zero()
 			}
 		}
 		impl OnIdle<u32> for Test3 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test3");
 				}
-				0
+				Weight::zero()
 			}
 		}
 
 		unsafe {
-			TestTuple::on_idle(0, 0);
+			TestTuple::on_idle(0, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(1, 0);
+			TestTuple::on_idle(1, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(2, 0);
+			TestTuple::on_idle(2, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test3", "Test1", "Test2"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(3, 0);
+			TestTuple::on_idle(3, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(4, 0);
+			TestTuple::on_idle(4, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 		}

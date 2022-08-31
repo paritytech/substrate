@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 use frame_support::{
 	assert_noop, assert_ok,
 	error::BadOrigin,
+	pallet_prelude::Weight,
 	parameter_types,
 	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling},
 };
@@ -50,7 +51,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1_000_000);
+		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;

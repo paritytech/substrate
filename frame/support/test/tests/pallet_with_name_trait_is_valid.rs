@@ -54,7 +54,7 @@ frame_support::decl_module! {
 		}
 
 		fn on_initialize(_n: T::BlockNumber) -> frame_support::weights::Weight {
-			0
+			frame_support::weights::Weight::zero()
 		}
 	}
 }

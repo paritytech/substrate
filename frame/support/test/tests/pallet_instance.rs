@@ -55,10 +55,10 @@ pub mod pallet {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(10));
-				10
+				Weight::from_ref_time(10)
 			} else {
 				Self::deposit_event(Event::Something(11));
-				11
+				Weight::from_ref_time(11)
 			}
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
@@ -71,10 +71,10 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(30));
-				30
+				Weight::from_ref_time(30)
 			} else {
 				Self::deposit_event(Event::Something(31));
-				31
+				Weight::from_ref_time(31)
 			}
 		}
 		fn integrity_test() {}
@@ -83,7 +83,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
-		#[pallet::weight(Weight::from(*_foo))]
+		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -347,12 +347,18 @@ frame_support::construct_runtime!(
 	}
 );
 
+use frame_support::weights::Weight;
+
 #[test]
 fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo {
+			weight: Weight::from_ref_time(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		}
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_storage_layer"]);
@@ -360,7 +366,11 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo { foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo {
+			weight: Weight::from_ref_time(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		}
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
@@ -653,10 +663,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 21);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(21));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 61);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(61));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,

@@ -40,7 +40,9 @@ type Balance = u64;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(
+			2 * WEIGHT_PER_SECOND
+		);
 }
 
 impl frame_system::Config for Test {
