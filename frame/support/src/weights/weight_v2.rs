@@ -219,6 +219,7 @@ macro_rules! weight_mul_per_impl {
 }
 weight_mul_per_impl!(
 	sp_runtime::Percent,
+	sp_runtime::PerU16,
 	sp_runtime::Permill,
 	sp_runtime::Perbill,
 	sp_runtime::Perquintill,
