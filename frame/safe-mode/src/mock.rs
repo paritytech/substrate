@@ -97,7 +97,7 @@ impl Config for Test {
 	type SafeModeFilter = MockSafeModeFilter;
 	type EnableDuration = EnableDuration;
 	type ExtendDuration = ExtendDuration;
-	type EnableOrigin = EnsureSigned<Self::AccountId>;
+	type EnableOrigin = EnsureRoot<Self::AccountId>;
 	type ExtendOrigin = EnsureRoot<Self::AccountId>;
 	type DisableOrigin = EnsureRoot<Self::AccountId>;
 	type RepayOrigin = EnsureRoot<Self::AccountId>;

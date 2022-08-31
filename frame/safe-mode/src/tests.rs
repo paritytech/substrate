@@ -26,7 +26,7 @@ use frame_support::{assert_err, assert_noop, assert_ok};
 fn disable_fails_if_not_enabled() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(SafeMode::force_disable(Origin::root()), Error::<Test>::IsDisabled);
-		// TODO add exhaustive checks for all calls
+		// TODO add exhaustive checks for all calls. Good idea, but keep it simple for a first version
 	});
 }
 
@@ -34,7 +34,7 @@ fn disable_fails_if_not_enabled() {
 fn root_can_enable() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::force_enable(Origin::root()));
-		assert_eq!(SafeMode::enabled().unwrap(), System::block_number() + 1); // TODO read mock::EnableDuration instead of hard coded?
+		assert_eq!(SafeMode::enabled().unwrap(), System::block_number() + 1); // TODO read mock::EnableDuration instead of hard coded? Yes please
 	});
 }
 
