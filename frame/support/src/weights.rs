@@ -451,6 +451,9 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 }
 
 /// The weight of database operations that the runtime can invoke.
+///
+/// NOTE: This is currently only measured in computational time, and will probably
+/// be updated all together once proof size is accounted for.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct RuntimeDbWeight {
 	pub read: RefTimeWeight,
