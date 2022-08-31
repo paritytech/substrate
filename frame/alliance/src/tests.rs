@@ -19,7 +19,7 @@
 
 use sp_runtime::traits::Hash;
 
-use frame_support::{assert_noop, assert_ok, Hashable};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin, Hashable};
 use frame_system::{EventRecord, Phase};
 
 use super::*;
@@ -76,7 +76,7 @@ fn vote_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Alliance::vote(Origin::signed(2), hash.clone(), 0, true));
+		assert_ok!(Alliance::vote(Origin::signed(2), hash, 0, true));
 
 		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
@@ -85,12 +85,12 @@ fn vote_works() {
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					threshold: 3
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 2,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0,
@@ -114,7 +114,7 @@ fn veto_works() {
 		));
 		// only set_rule/elevate_ally can be veto
 		assert_noop!(
-			Alliance::veto(Origin::signed(1), hash.clone()),
+			Alliance::veto(Origin::signed(1), hash),
 			Error::<Test, ()>::NotVetoableProposal
 		);
 
@@ -131,11 +131,11 @@ fn veto_works() {
 
 		// only founder have veto rights, 3 is fellow
 		assert_noop!(
-			Alliance::veto(Origin::signed(3), vetoable_hash.clone()),
+			Alliance::veto(Origin::signed(3), vetoable_hash),
 			Error::<Test, ()>::NotFounder
 		);
 
-		assert_ok!(Alliance::veto(Origin::signed(2), vetoable_hash.clone()));
+		assert_ok!(Alliance::veto(Origin::signed(2), vetoable_hash));
 		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
 			System::events(),
@@ -143,17 +143,17 @@ fn veto_works() {
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					threshold: 3
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 1,
-					proposal_hash: vetoable_hash.clone(),
+					proposal_hash: vetoable_hash,
 					threshold: 3
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Disapproved {
-					proposal_hash: vetoable_hash.clone()
+					proposal_hash: vetoable_hash
 				})),
 			]
 		);
@@ -173,16 +173,10 @@ fn close_works() {
 			Box::new(proposal.clone()),
 			proposal_len
 		));
-		assert_ok!(Alliance::vote(Origin::signed(1), hash.clone(), 0, true));
-		assert_ok!(Alliance::vote(Origin::signed(2), hash.clone(), 0, true));
-		assert_ok!(Alliance::vote(Origin::signed(3), hash.clone(), 0, true));
-		assert_ok!(Alliance::close(
-			Origin::signed(1),
-			hash.clone(),
-			0,
-			proposal_weight,
-			proposal_len
-		));
+		assert_ok!(Alliance::vote(Origin::signed(1), hash, 0, true));
+		assert_ok!(Alliance::vote(Origin::signed(2), hash, 0, true));
+		assert_ok!(Alliance::vote(Origin::signed(3), hash, 0, true));
+		assert_ok!(Alliance::close(Origin::signed(1), hash, 0, proposal_weight, proposal_len));
 
 		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
 		assert_eq!(
@@ -191,40 +185,40 @@ fn close_works() {
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					threshold: 3
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 1,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0,
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 2,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0,
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 3,
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					voted: true,
 					yes: 3,
 					no: 0,
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Closed {
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					yes: 3,
 					no: 0,
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Approved {
-					proposal_hash: hash.clone()
+					proposal_hash: hash
 				})),
 				record(mock::Event::AllianceMotion(AllianceMotionEvent::Executed {
-					proposal_hash: hash.clone(),
+					proposal_hash: hash,
 					result: Err(DispatchError::BadOrigin),
 				}))
 			]
@@ -247,6 +241,9 @@ fn set_rule_works() {
 fn announce_works() {
 	new_test_ext().execute_with(|| {
 		let cid = test_cid();
+
+		assert_noop!(Alliance::announce(Origin::signed(2), cid.clone()), BadOrigin);
+
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
@@ -396,48 +393,111 @@ fn elevate_ally_works() {
 }
 
 #[test]
-fn retire_works() {
+fn give_retirement_notice_work() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_kick_member_proposal(2);
-		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
-		assert_ok!(Alliance::propose(
-			Origin::signed(1),
-			3,
-			Box::new(proposal.clone()),
-			proposal_len
-		));
-		assert_noop!(Alliance::retire(Origin::signed(2)), Error::<Test, ()>::UpForKicking);
-
-		assert_noop!(Alliance::retire(Origin::signed(4)), Error::<Test, ()>::NotMember);
+		assert_noop!(
+			Alliance::give_retirement_notice(Origin::signed(4)),
+			Error::<Test, ()>::NotMember
+		);
 
 		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
+		assert_ok!(Alliance::give_retirement_notice(Origin::signed(3)));
+		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
+		assert_eq!(Alliance::members(MemberRole::Retiring), vec![3]);
+		System::assert_last_event(mock::Event::Alliance(
+			crate::Event::MemberRetirementPeriodStarted { member: (3) },
+		));
+
+		assert_noop!(
+			Alliance::give_retirement_notice(Origin::signed(3)),
+			Error::<Test, ()>::AlreadyRetiring
+		);
+	});
+}
+
+#[test]
+fn retire_works() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			Alliance::retire(Origin::signed(2)),
+			Error::<Test, ()>::RetirementNoticeNotGiven
+		);
+
+		assert_noop!(
+			Alliance::retire(Origin::signed(4)),
+			Error::<Test, ()>::RetirementNoticeNotGiven
+		);
+
+		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
+		assert_ok!(Alliance::give_retirement_notice(Origin::signed(3)));
+		assert_noop!(
+			Alliance::retire(Origin::signed(3)),
+			Error::<Test, ()>::RetirementPeriodNotPassed
+		);
+		System::set_block_number(System::block_number() + RetirementPeriod::get());
 		assert_ok!(Alliance::retire(Origin::signed(3)));
 		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
+		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberRetired {
+			member: (3),
+			unreserved: None,
+		}));
+
+		// Move time on:
+		System::set_block_number(System::block_number() + RetirementPeriod::get());
+
+		assert_powerless(Origin::signed(3));
 	});
+}
+
+fn assert_powerless(user: Origin) {
+	//vote / veto with a valid propsal
+	let cid = test_cid();
+	let proposal = make_proposal(42);
+
+	assert_noop!(Alliance::init_members(user.clone(), vec![], vec![], vec![]), BadOrigin);
+
+	assert_noop!(Alliance::set_rule(user.clone(), cid.clone()), BadOrigin);
+
+	assert_noop!(Alliance::retire(user.clone()), Error::<Test, ()>::RetirementNoticeNotGiven);
+
+	assert_noop!(Alliance::give_retirement_notice(user.clone()), Error::<Test, ()>::NotMember);
+
+	assert_noop!(Alliance::elevate_ally(user.clone(), 4), BadOrigin);
+
+	assert_noop!(Alliance::kick_member(user.clone(), 1), BadOrigin);
+
+	assert_noop!(Alliance::nominate_ally(user.clone(), 4), Error::<Test, ()>::NoVotingRights);
+
+	assert_noop!(
+		Alliance::propose(user.clone(), 5, Box::new(proposal), 1000),
+		Error::<Test, ()>::NoVotingRights
+	);
 }
 
 #[test]
 fn kick_member_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_kick_member_proposal(2);
-		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
-		assert_ok!(Alliance::propose(
-			Origin::signed(1),
-			3,
-			Box::new(proposal.clone()),
-			proposal_len
-		));
-		assert_eq!(Alliance::up_for_kicking(2), true);
-		assert_eq!(Alliance::members(MemberRole::Founder), vec![1, 2]);
+		assert_noop!(Alliance::kick_member(Origin::signed(4), 4), BadOrigin);
 
+		assert_noop!(Alliance::kick_member(Origin::signed(2), 4), Error::<Test, ()>::NotMember);
+
+		<DepositOf<Test, ()>>::insert(2, 25);
+		assert_eq!(Alliance::members(MemberRole::Founder), vec![1, 2]);
 		assert_ok!(Alliance::kick_member(Origin::signed(2), 2));
 		assert_eq!(Alliance::members(MemberRole::Founder), vec![1]);
+		assert_eq!(<DepositOf<Test, ()>>::get(2), None);
+		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberKicked {
+			member: (2),
+			slashed: Some(25),
+		}));
 	});
 }
 
 #[test]
 fn add_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
+		assert_noop!(Alliance::add_unscrupulous_items(Origin::signed(2), vec![]), BadOrigin);
+
 		assert_ok!(Alliance::add_unscrupulous_items(
 			Origin::signed(3),
 			vec![
@@ -461,6 +521,8 @@ fn add_unscrupulous_items_works() {
 #[test]
 fn remove_unscrupulous_items_works() {
 	new_test_ext().execute_with(|| {
+		assert_noop!(Alliance::remove_unscrupulous_items(Origin::signed(2), vec![]), BadOrigin);
+
 		assert_noop!(
 			Alliance::remove_unscrupulous_items(
 				Origin::signed(3),

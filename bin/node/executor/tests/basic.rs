@@ -18,7 +18,7 @@
 use codec::{Decode, Encode, Joiner};
 use frame_support::{
 	traits::Currency,
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 };
 use frame_system::{self, AccountInfo, EventRecord, Phase};
 use sp_core::{storage::well_known_keys, traits::Externalities, NeverNativeValue};
@@ -26,12 +26,12 @@ use sp_runtime::{
 	traits::Hash as HashT, transaction_validity::InvalidTransaction, ApplyExtrinsicResult,
 };
 
-use node_primitives::{Balance, Hash};
-use node_runtime::{
+use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, Call, CheckedExtrinsic, Event, Header, Runtime, System, TransactionPayment,
 	UncheckedExtrinsic,
 };
+use node_primitives::{Balance, Hash};
 use node_testing::keyring::*;
 use wat;
 
@@ -44,7 +44,7 @@ use self::common::{sign, *};
 /// have to execute provided wasm code instead of the native equivalent. This trick is used to
 /// test code paths that differ between native and wasm versions.
 pub fn bloaty_code_unwrap() -> &'static [u8] {
-	node_runtime::WASM_BINARY_BLOATY.expect(
+	kitchensink_runtime::WASM_BINARY_BLOATY.expect(
 		"Development wasm binary is not available. \
 											 Testing is only supported with the flag disabled.",
 	)
@@ -127,7 +127,7 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 	let block2 = construct_block(
 		&mut t,
 		2,
-		block1.1.clone(),
+		block1.1,
 		vec![
 			CheckedExtrinsic {
 				signed: None,
@@ -733,7 +733,7 @@ fn deploying_wasm_contract_should_work() {
 				function: Call::Contracts(
 					pallet_contracts::Call::instantiate_with_code::<Runtime> {
 						value: 0,
-						gas_limit: 500_000_000,
+						gas_limit: Weight::from_ref_time(500_000_000),
 						storage_deposit_limit: None,
 						code: transfer_code,
 						data: Vec::new(),
@@ -746,7 +746,7 @@ fn deploying_wasm_contract_should_work() {
 				function: Call::Contracts(pallet_contracts::Call::call::<Runtime> {
 					dest: sp_runtime::MultiAddress::Id(addr.clone()),
 					value: 10,
-					gas_limit: 500_000_000,
+					gas_limit: Weight::from_ref_time(500_000_000),
 					storage_deposit_limit: None,
 					data: vec![0x00, 0x01, 0x02, 0x03],
 				}),

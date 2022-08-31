@@ -37,7 +37,7 @@ use crate::Pallet as Uniques;
 const SEED: u32 = 0;
 
 fn create_collection<T: Config<I>, I: 'static>(
-) -> (T::CollectionId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
@@ -52,8 +52,7 @@ fn create_collection<T: Config<I>, I: 'static>(
 	(collection, caller, caller_lookup)
 }
 
-fn add_collection_metadata<T: Config<I>, I: 'static>(
-) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -71,7 +70,7 @@ fn add_collection_metadata<T: Config<I>, I: 'static>(
 
 fn mint_item<T: Config<I>, I: 'static>(
 	index: u16,
-) -> (T::ItemId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::ItemId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().admin;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -90,7 +89,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 
 fn add_item_metadata<T: Config<I>, I: 'static>(
 	item: T::ItemId,
-) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -109,7 +108,7 @@ fn add_item_metadata<T: Config<I>, I: 'static>(
 
 fn add_item_attribute<T: Config<I>, I: 'static>(
 	item: T::ItemId,
-) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, AccountIdLookupOf<T>) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -405,6 +404,42 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::CollectionMaxSupplySet {
 			collection,
 			max_supply: u32::MAX,
+		}.into());
+	}
+
+	set_price {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let price = ItemPrice::<T, I>::from(100u32);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(price), Some(delegate_lookup))
+	verify {
+		assert_last_event::<T, I>(Event::ItemPriceSet {
+			collection,
+			item,
+			price,
+			whitelisted_buyer: Some(delegate),
+		}.into());
+	}
+
+	buy_item {
+		let (collection, seller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let buyer: T::AccountId = account("buyer", 0, SEED);
+		let buyer_lookup = T::Lookup::unlookup(buyer.clone());
+		let price = ItemPrice::<T, I>::from(0u32);
+		let origin = SystemOrigin::Signed(seller.clone()).into();
+		Uniques::<T, I>::set_price(origin, collection, item, Some(price.clone()), Some(buyer_lookup))?;
+		T::Currency::make_free_balance_be(&buyer, DepositBalanceOf::<T, I>::max_value());
+	}: _(SystemOrigin::Signed(buyer.clone()), collection, item, price.clone())
+	verify {
+		assert_last_event::<T, I>(Event::ItemBought {
+			collection,
+			item,
+			price,
+			seller,
+			buyer,
 		}.into());
 	}
 

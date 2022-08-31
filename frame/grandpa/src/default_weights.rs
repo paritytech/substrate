@@ -35,7 +35,7 @@ impl crate::WeightInfo for () {
 
 		// checking membership proof
 		(35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
+			.saturating_add((175 * WEIGHT_PER_NANOS).scalar_saturating_mul(validator_count))
 			.saturating_add(DbWeight::get().reads(5))
 			// check equivocation proof
 			.saturating_add(95 * WEIGHT_PER_MICROS)

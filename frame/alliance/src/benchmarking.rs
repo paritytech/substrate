@@ -332,7 +332,7 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -417,7 +417,7 @@ benchmarks_instance_pallet! {
 			index,
 			true,
 		)?;
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -489,7 +489,7 @@ benchmarks_instance_pallet! {
 
 		System::<T>::set_block_number(T::BlockNumber::max_value());
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -562,7 +562,7 @@ benchmarks_instance_pallet! {
 		// caller is prime, prime already votes aye by creating the proposal
 		System::<T>::set_block_number(T::BlockNumber::max_value());
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -662,7 +662,7 @@ benchmarks_instance_pallet! {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
 
-		let outsider_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(outsider.clone());
+		let outsider_lookup = T::Lookup::unlookup(outsider.clone());
 	}: _(SystemOrigin::Signed(founder1.clone()), outsider_lookup)
 	verify {
 		assert!(Alliance::<T, I>::is_member_of(&outsider, MemberRole::Ally)); // outsider is now an ally
@@ -681,7 +681,7 @@ benchmarks_instance_pallet! {
 		let ally1 = ally::<T, I>(1);
 		assert!(Alliance::<T, I>::is_ally(&ally1));
 
-		let ally1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(ally1.clone());
+		let ally1_lookup = T::Lookup::unlookup(ally1.clone());
 		let call = Call::<T, I>::elevate_ally { ally: ally1_lookup };
 		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -691,12 +691,37 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::AllyElevated { ally: ally1 }.into());
 	}
 
+	give_retirement_notice {
+		set_members::<T, I>();
+		let fellow2 = fellow::<T, I>(2);
+
+		assert!(Alliance::<T, I>::is_fellow(&fellow2));
+	}: _(SystemOrigin::Signed(fellow2.clone()))
+	verify {
+		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Retiring));
+
+		assert_eq!(
+			RetiringMembers::<T, I>::get(&fellow2),
+			Some(System::<T>::block_number() + T::RetirementPeriod::get())
+		);
+		assert_last_event::<T, I>(
+			Event::MemberRetirementPeriodStarted {member: fellow2}.into()
+		);
+	}
+
 	retire {
 		set_members::<T, I>();
 
 		let fellow2 = fellow::<T, I>(2);
 		assert!(Alliance::<T, I>::is_fellow(&fellow2));
-		assert!(!Alliance::<T, I>::is_up_for_kicking(&fellow2));
+
+		assert_eq!(
+			Alliance::<T, I>::give_retirement_notice(
+				SystemOrigin::Signed(fellow2.clone()).into()
+			),
+			Ok(())
+		);
+		System::<T>::set_block_number(System::<T>::block_number() + T::RetirementPeriod::get());
 
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::AllyDeposit::get()));
 	}: _(SystemOrigin::Signed(fellow2.clone()))
@@ -713,14 +738,10 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 
 		let fellow2 = fellow::<T, I>(2);
-		UpForKicking::<T, I>::insert(&fellow2, true);
-
 		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Fellow));
-		assert!(Alliance::<T, I>::is_up_for_kicking(&fellow2));
-
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::AllyDeposit::get()));
 
-		let fellow2_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(fellow2.clone());
+		let fellow2_lookup = T::Lookup::unlookup(fellow2.clone());
 		let call = Call::<T, I>::kick_member { who: fellow2_lookup };
 		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }

@@ -1,4 +1,4 @@
-// Copyright 2021 Parity Technologies (UK) Ltd.
+// Copyright 2022 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -118,8 +118,7 @@ where
 
 	fn upgrade_outbound(self, mut socket: TSocket, _info: Self::Info) -> Self::Future {
 		Box::pin(async move {
-			let mut data = Vec::with_capacity(self.encoded_len());
-			self.encode(&mut data)?;
+			let data = self.encode_to_vec();
 			upgrade::write_length_prefixed(&mut socket, data).await
 		})
 	}
@@ -179,24 +178,99 @@ impl Prefix {
 	}
 }
 
+/// Bitswap trait
+pub trait BitswapT<B: BlockT> {
+	/// Get single indexed transaction by content hash.
+	///
+	/// Note that this will only fetch transactions
+	/// that are indexed by the runtime with `storage_index_transaction`.
+	fn indexed_transaction(
+		&self,
+		hash: <B as BlockT>::Hash,
+	) -> sp_blockchain::Result<Option<Vec<u8>>>;
+
+	/// Queue of blocks ready to be sent out on `poll()`
+	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)>;
+}
+
 /// Network behaviour that handles sending and receiving IPFS blocks.
-pub struct Bitswap<B, Client> {
+struct BitswapInternal<B, Client> {
 	client: Arc<Client>,
 	ready_blocks: VecDeque<(PeerId, BitswapMessage)>,
 	_block: PhantomData<B>,
 }
 
-impl<B, Client> Bitswap<B, Client> {
+impl<B, Client> BitswapInternal<B, Client> {
 	/// Create a new instance of the bitswap protocol handler.
 	pub fn new(client: Arc<Client>) -> Self {
 		Self { client, ready_blocks: Default::default(), _block: PhantomData::default() }
 	}
 }
 
-impl<B, Client> NetworkBehaviour for Bitswap<B, Client>
+impl<Block, Client> BitswapT<Block> for BitswapInternal<Block, Client>
+where
+	Block: BlockT,
+	Client: BlockBackend<Block>,
+{
+	fn indexed_transaction(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.client.indexed_transaction(&hash)
+	}
+
+	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)> {
+		&mut self.ready_blocks
+	}
+}
+
+/// Wrapper for bitswap trait object  implement NetworkBehaviour
+pub struct Bitswap<Block: BlockT> {
+	inner: Box<dyn BitswapT<Block> + Sync + Send>,
+}
+
+impl<B: BlockT> Bitswap<B> {
+	/// Create new Bitswap wrapper
+	pub fn from_client<Client: BlockBackend<B> + Send + Sync + 'static>(
+		client: Arc<Client>,
+	) -> Self {
+		let inner = Box::new(BitswapInternal::new(client)) as Box<_>;
+		Self { inner }
+	}
+}
+
+impl<Block: BlockT> BitswapT<Block> for Bitswap<Block> {
+	fn indexed_transaction(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		self.inner.indexed_transaction(hash)
+	}
+
+	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)> {
+		self.inner.ready_blocks()
+	}
+}
+
+impl<Block: BlockT, T> BitswapT<Block> for Box<T>
+where
+	T: BitswapT<Block>,
+{
+	fn indexed_transaction(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> sp_blockchain::Result<Option<Vec<u8>>> {
+		T::indexed_transaction(self, hash)
+	}
+
+	fn ready_blocks(&mut self) -> &mut VecDeque<(PeerId, BitswapMessage)> {
+		T::ready_blocks(self)
+	}
+}
+
+impl<B> NetworkBehaviour for Bitswap<B>
 where
 	B: BlockT,
-	Client: BlockBackend<B> + Send + Sync + 'static,
 {
 	type ConnectionHandler = OneShotHandler<BitswapConfig, BitswapMessage, HandlerEvent>;
 	type OutEvent = void::Void;
@@ -215,10 +289,11 @@ where
 			HandlerEvent::Request(msg) => msg,
 		};
 		trace!(target: LOG_TARGET, "Received request: {:?} from {}", request, peer);
-		if self.ready_blocks.len() > MAX_RESPONSE_QUEUE {
+		if self.ready_blocks().len() > MAX_RESPONSE_QUEUE {
 			debug!(target: LOG_TARGET, "Ignored request: queue is full");
 			return
 		}
+
 		let mut response = BitswapMessage {
 			wantlist: None,
 			blocks: Default::default(),
@@ -254,7 +329,7 @@ where
 			}
 			let mut hash = B::Hash::default();
 			hash.as_mut().copy_from_slice(&cid.hash().digest()[0..32]);
-			let transaction = match self.client.indexed_transaction(&hash) {
+			let transaction = match self.indexed_transaction(hash) {
 				Ok(ex) => ex,
 				Err(e) => {
 					error!(target: LOG_TARGET, "Error retrieving transaction {}: {}", hash, e);
@@ -293,7 +368,7 @@ where
 			}
 		}
 		trace!(target: LOG_TARGET, "Response: {:?}", response);
-		self.ready_blocks.push_back((peer, response));
+		self.ready_blocks().push_back((peer, response));
 	}
 
 	fn poll(
@@ -301,7 +376,7 @@ where
 		_ctx: &mut Context,
 		_: &mut impl PollParameters,
 	) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
-		if let Some((peer_id, message)) = self.ready_blocks.pop_front() {
+		if let Some((peer_id, message)) = self.ready_blocks().pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::NotifyHandler {
 				peer_id,
 				handler: NotifyHandler::Any,
