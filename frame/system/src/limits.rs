@@ -295,9 +295,9 @@ impl BlockWeights {
 	/// is not suitable for production deployments.
 	pub fn simple_max(block_weight: Weight) -> Self {
 		Self::builder()
-			.base_block(Weight::new())
+			.base_block(Weight::zero())
 			.for_class(DispatchClass::all(), |weights| {
-				weights.base_extrinsic = Weight::new();
+				weights.base_extrinsic = Weight::zero();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
 				weights.max_total = block_weight.into();

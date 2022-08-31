@@ -50,11 +50,6 @@ pub struct Weight {
 }
 
 impl Weight {
-	/// Create a new Weight with zero.
-	pub const fn new() -> Self {
-		Self { ref_time: 0 }
-	}
-
 	/// Set the reference time part of the weight.
 	pub const fn set_ref_time(mut self, c: RefTimeWeight) -> Self {
 		self.ref_time = c;
@@ -384,7 +379,7 @@ impl sp_runtime::traits::Printable for Weight {
 impl From<Option<RefTimeWeight>> for PostDispatchInfo {
 	fn from(maybe_actual_computation: Option<RefTimeWeight>) -> Self {
 		let actual_weight = match maybe_actual_computation {
-			Some(actual_computation) => Some(Weight::new().set_ref_time(actual_computation)),
+			Some(actual_computation) => Some(Weight::zero().set_ref_time(actual_computation)),
 			None => None,
 		};
 		Self { actual_weight, pays_fee: Default::default() }
@@ -395,7 +390,7 @@ impl From<(Option<RefTimeWeight>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<RefTimeWeight>, Pays)) -> Self {
 		let (maybe_actual_time, pays_fee) = post_weight_info;
 		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(Weight::new().set_ref_time(actual_time)),
+			Some(actual_time) => Some(Weight::zero().set_ref_time(actual_time)),
 			None => None,
 		};
 		Self { actual_weight, pays_fee }
@@ -404,7 +399,7 @@ impl From<(Option<RefTimeWeight>, Pays)> for PostDispatchInfo {
 
 impl<T> WeighData<T> for RefTimeWeight {
 	fn weigh_data(&self, _: T) -> Weight {
-		return Weight::new().set_ref_time(*self)
+		return Weight::zero().set_ref_time(*self)
 	}
 }
 

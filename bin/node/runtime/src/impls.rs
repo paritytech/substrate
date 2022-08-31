@@ -229,7 +229,7 @@ mod multiplier_tests {
 	#[test]
 	fn multiplier_cannot_go_below_limit() {
 		// will not go any further below even if block is empty.
-		run_with_system_weight(Weight::new(), || {
+		run_with_system_weight(Weight::zero(), || {
 			let next = runtime_multiplier_update(min_multiplier());
 			assert_eq!(next, min_multiplier());
 		})
@@ -247,7 +247,7 @@ mod multiplier_tests {
 		// 1 < 0.00001 * k * 0.1875
 		// 10^9 / 1875 < k
 		// k > 533_333 ~ 18,5 days.
-		run_with_system_weight(Weight::new(), || {
+		run_with_system_weight(Weight::zero(), || {
 			// start from 1, the default.
 			let mut fm = Multiplier::one();
 			let mut iterations: u64 = 0;
