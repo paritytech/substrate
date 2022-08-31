@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -195,7 +195,8 @@ fn transactional_annotation() {
 	#[transactional]
 	fn value_rollbacks(v: u32) -> result::Result<u32, &'static str> {
 		set_value(v)?;
-		Err("nah")
+		Err("nah")?;
+		Ok(v)
 	}
 
 	TestExternalities::default().execute_with(|| {

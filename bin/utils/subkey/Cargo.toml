@@ -16,13 +16,5 @@ name = "subkey"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-node-runtime = { version = "2.0.0", path = "../../node/runtime" }
-node-primitives = { version = "2.0.0", path = "../../node/primitives" }
 sc-cli = { version = "0.8.0", path = "../../../client/cli" }
-substrate-frame-cli = { version = "2.0.0", path = "../../../utils/frame/frame-utilities-cli" }
 structopt = "0.3.14"
-frame-system = { version = "2.0.0", path = "../../../frame/system" }
-sp-core = { version = "2.0.0", path = "../../../primitives/core" }
-
-[features]
-bench = []

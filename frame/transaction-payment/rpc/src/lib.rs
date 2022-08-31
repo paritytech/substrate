@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,16 @@
 //! RPC interface for the transaction payment module.
 
 use std::sync::Arc;
+use std::convert::TryInto;
 use codec::{Codec, Decode};
 use sp_blockchain::HeaderBackend;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result};
 use jsonrpc_derive::rpc;
-use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay, MaybeFromStr}};
+use sp_runtime::{generic::BlockId, traits::{Block as BlockT, MaybeDisplay}};
 use sp_api::ProvideRuntimeApi;
 use sp_core::Bytes;
-use pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo;
+use sp_rpc::number::NumberOrHex;
+use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
 pub use pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi as TransactionPaymentRuntimeApi;
 pub use self::gen_client::Client as TransactionPaymentClient;
 
@@ -37,6 +39,12 @@ pub trait TransactionPaymentApi<BlockHash, ResponseType> {
 		encoded_xt: Bytes,
 		at: Option<BlockHash>
 	) -> Result<ResponseType>;
+	#[rpc(name = "payment_queryFeeDetails")]
+	fn query_fee_details(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<BlockHash>
+	) -> Result<FeeDetails<NumberOrHex>>;
 }
 
 /// A struct that implements the [`TransactionPaymentApi`].
@@ -48,7 +56,7 @@ pub struct TransactionPayment<C, P> {
 impl<C, P> TransactionPayment<C, P> {
 	/// Create new `TransactionPayment` with the given reference to the client.
 	pub fn new(client: Arc<C>) -> Self {
-		TransactionPayment { client, _marker: Default::default() }
+		Self { client, _marker: Default::default() }
 	}
 }
 
@@ -69,13 +77,15 @@ impl From<Error> for i64 {
 	}
 }
 
-impl<C, Block, Balance> TransactionPaymentApi<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
-	for TransactionPayment<C, Block>
+impl<C, Block, Balance> TransactionPaymentApi<
+	<Block as BlockT>::Hash,
+	RuntimeDispatchInfo<Balance>,
+> for TransactionPayment<C, Block>
 where
 	Block: BlockT,
-	C: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
+	C: 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: TransactionPaymentRuntimeApi<Block, Balance>,
-	Balance: Codec + MaybeDisplay + MaybeFromStr,
+	Balance: Codec + MaybeDisplay + Copy + TryInto<NumberOrHex>,
 {
 	fn query_info(
 		&self,
@@ -99,6 +109,50 @@ where
 			code: ErrorCode::ServerError(Error::RuntimeError.into()),
 			message: "Unable to query dispatch info.".into(),
 			data: Some(format!("{:?}", e).into()),
+		})
+	}
+
+	fn query_fee_details(
+		&self,
+		encoded_xt: Bytes,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> Result<FeeDetails<NumberOrHex>> {
+		let api = self.client.runtime_api();
+		let at = BlockId::hash(at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash
+		));
+
+		let encoded_len = encoded_xt.len() as u32;
+
+		let uxt: Block::Extrinsic = Decode::decode(&mut &*encoded_xt).map_err(|e| RpcError {
+			code: ErrorCode::ServerError(Error::DecodeError.into()),
+			message: "Unable to query fee details.".into(),
+			data: Some(format!("{:?}", e).into()),
+		})?;
+		let fee_details = api.query_fee_details(&at, uxt, encoded_len).map_err(|e| RpcError {
+			code: ErrorCode::ServerError(Error::RuntimeError.into()),
+			message: "Unable to query fee details.".into(),
+			data: Some(format!("{:?}", e).into()),
+		})?;
+
+		let try_into_rpc_balance = |value: Balance| value.try_into().map_err(|_| RpcError {
+			code: ErrorCode::InvalidParams,
+			message: format!("{} doesn't fit in NumberOrHex representation", value),
+			data: None,
+		});
+
+		Ok(FeeDetails {
+			inclusion_fee: if let Some(inclusion_fee) = fee_details.inclusion_fee {
+				Some(InclusionFee {
+					base_fee: try_into_rpc_balance(inclusion_fee.base_fee)?,
+					len_fee: try_into_rpc_balance(inclusion_fee.len_fee)?,
+					adjusted_weight_fee: try_into_rpc_balance(inclusion_fee.adjusted_weight_fee)?,
+				})
+			} else {
+				None
+			},
+			tip: Default::default(),
 		})
 	}
 }

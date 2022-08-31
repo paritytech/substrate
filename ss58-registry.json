@@ -120,12 +120,12 @@
 		},
 		{
 			"prefix": 12,
-			"network": "polymath",
-			"displayName": "Polymath",
-			"symbols": null,
-			"decimals": null,
+			"network": "polymesh",
+			"displayName": "Polymesh",
+			"symbols": ["POLYX"],
+			"decimals": [6],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://polymath.network/"
 		},
 		{
 			"prefix": 13,
@@ -245,6 +245,24 @@
 			"website": "https://zero.io"
 		},
 		{
+			"prefix": 26,
+			"network": "jupiter",
+			"displayName": "Jupiter",
+			"symbols": ["jDOT"],
+			"decimals": [10],
+			"standardAccount": "*25519",
+			"website": "https://jupiter.patract.io"
+		},
+		{
+			"prefix": 27,
+			"network": "patract",
+			"displayName": "Patract",
+			"symbols": ["pDOT", "pKSM"],
+			"decimals": [10, 12],
+			"standardAccount": "*25519",
+			"website": "https://patract.network"
+		},
+		{
 			"prefix": 28,
 			"network": "subsocial",
 			"displayName": "Subsocial",
@@ -252,6 +270,15 @@
 			"decimals": null,
 			"standardAccount": "*25519",
 			"website": null
+		},
+		{
+			"prefix": 29,
+			"network": "cord",
+			"displayName": "Dhiway CORD Network",
+			"symbols": ["DCU"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://dhiway.com/"
 		},
 		{
 			"prefix": 30,
@@ -263,13 +290,22 @@
 			"website": "https://phala.network"
 		},
 		{
+			"prefix": 31,
+			"network": "litentry",
+			"displayName": "Litentry Network",
+			"symbols": ["LIT"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://litentry.com/"
+		},
+		{
 			"prefix": 32,
 			"network": "robonomics",
-			"displayName": "Robonomics Network",
-			"symbols": null,
-			"decimals": null,
+			"displayName": "Robonomics",
+			"symbols": ["XRT"],
+			"decimals": [9],
 			"standardAccount": "*25519",
-			"website": null
+			"website": "https://robonomics.network"
 		},
 		{
 			"prefix": 33,
@@ -279,6 +315,15 @@
 			"decimals": null,
 			"standardAccount": "*25519",
 			"website": null
+		},
+		{
+			"prefix": 35,
+			"network": "vln",
+			"displayName": "Valiu Liquidity Network",
+			"symbols": ["USDv"],
+			"decimals": [15],
+			"standardAccount": "*25519",
+			"website": "https://valiu.com/"
 		},
 		{
 			"prefix": 36,
@@ -299,6 +344,15 @@
 			"website": "https://nodle.io/"
 		},
 		{
+			"prefix": 38,
+			"network": "kilt",
+			"displayName": "KILT Chain",
+			"symbols": ["KILT"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://kilt.io/"
+		},
+		{
 			"prefix": 39,
 			"network": "mathchain",
 			"displayName": "MathChain mainnet",
@@ -315,6 +369,15 @@
 			"decimals": [18],
 			"standardAccount": "*25519",
 			"website": "https://mathwallet.org"
+		},
+		{
+			"prefix": 41,
+			"network": "poli",
+			"displayName": "Polimec Chain",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://polimec.io/"
 		},
 		{
 			"prefix": 42,
@@ -342,6 +405,15 @@
 			"decimals": [8],
 			"standardAccount": "*25519",
 			"website": "https://chainx.org/"
+		},
+		{
+			"prefix": 45,
+			"network": "uniarts",
+			"displayName": "UniArts Network",
+			"symbols": ["UART", "UINK"],
+			"decimals": [12, 12],
+			"standardAccount": "*25519",
+			"website": "https://uniarts.me"
 		},
 		{
 			"prefix": 46,

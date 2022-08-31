@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -284,30 +284,6 @@ pub mod generic {
 		// messages that were removed.
 		#[codec(index = "17")]
 		ConsensusBatch(Vec<ConsensusMessage>),
-	}
-
-	impl<Header, Hash, Number, Extrinsic> Message<Header, Hash, Number, Extrinsic> {
-		/// Message id useful for logging.
-		pub fn id(&self) -> &'static str {
-			match self {
-				Message::Status(_) => "Status",
-				Message::BlockRequest(_) => "BlockRequest",
-				Message::BlockResponse(_) => "BlockResponse",
-				Message::BlockAnnounce(_) => "BlockAnnounce",
-				Message::Transactions(_) => "Transactions",
-				Message::Consensus(_) => "Consensus",
-				Message::RemoteCallRequest(_) => "RemoteCallRequest",
-				Message::RemoteCallResponse(_) => "RemoteCallResponse",
-				Message::RemoteReadRequest(_) => "RemoteReadRequest",
-				Message::RemoteReadResponse(_) => "RemoteReadResponse",
-				Message::RemoteHeaderRequest(_) => "RemoteHeaderRequest",
-				Message::RemoteHeaderResponse(_) => "RemoteHeaderResponse",
-				Message::RemoteChangesRequest(_) => "RemoteChangesRequest",
-				Message::RemoteChangesResponse(_) => "RemoteChangesResponse",
-				Message::RemoteReadChildRequest(_) => "RemoteReadChildRequest",
-				Message::ConsensusBatch(_) => "ConsensusBatch",
-			}
-		}
 	}
 
 	/// Status sent on connection.

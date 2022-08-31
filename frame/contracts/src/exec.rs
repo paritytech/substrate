@@ -1,18 +1,19 @@
-// Copyright 2018-2020 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
-// Substrate is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
 
-// Substrate is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use crate::{
 	CodeHash, ConfigCache, Event, RawEvent, Config, Module as Contracts,
@@ -23,7 +24,7 @@ use sp_core::crypto::UncheckedFrom;
 use sp_std::prelude::*;
 use sp_runtime::traits::{Bounded, Zero, Convert, Saturating};
 use frame_support::{
-	dispatch::DispatchError,
+	dispatch::DispatchResult,
 	traits::{ExistenceRequirement, Currency, Time, Randomness},
 	weights::Weight,
 	ensure, StorageMap,
@@ -64,7 +65,7 @@ pub trait Ext {
 
 	/// Sets the storage entry by the given key to the specified value. If `value` is `None` then
 	/// the storage entry is deleted.
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>);
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult;
 
 	/// Instantiate a contract from the given code.
 	///
@@ -84,7 +85,7 @@ pub trait Ext {
 		&mut self,
 		to: &AccountIdOf<Self::T>,
 		value: BalanceOf<Self::T>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	/// Transfer all funds to `beneficiary` and delete the contract.
 	///
@@ -96,7 +97,7 @@ pub trait Ext {
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	/// Call (possibly transferring some amount of funds) into the specified account.
 	fn call(
@@ -120,7 +121,7 @@ pub trait Ext {
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(), DispatchError>;
+	) -> DispatchResult;
 
 	/// Returns a reference to the account id of the caller.
 	fn caller(&self) -> &AccountIdOf<Self::T>;
@@ -267,12 +268,12 @@ where
 			Err(Error::<T>::MaxCallDepthReached)?
 		}
 
-		// Assumption: `collect` doesn't collide with overlay because
-		// `collect` will be done on first call and destination contract and balance
-		// cannot be changed before the first call
-		// We do not allow 'calling' plain accounts. For transfering value
-		// `seal_transfer` must be used.
-		let contract = if let Some(ContractInfo::Alive(info)) = Rent::<T>::collect(&dest) {
+		// This charges the rent and denies access to a contract that is in need of
+		// eviction by returning `None`. We cannot evict eagerly here because those
+		// changes would be rolled back in case this contract is called by another
+		// contract.
+		// See: https://github.com/paritytech/substrate/issues/6439#issuecomment-648754324
+		let contract = if let Ok(Some(ContractInfo::Alive(info))) = Rent::<T>::charge(&dest) {
 			info
 		} else {
 			Err(Error::<T>::NotCallable)?
@@ -321,53 +322,62 @@ where
 		let caller = self.self_account.clone();
 		let dest = Contracts::<T>::contract_address(&caller, code_hash, salt);
 
-		// TrieId has not been generated yet and storage is empty since contract is new.
-		//
-		// Generate it now.
-		let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
+		let output = frame_support::storage::with_transaction(|| {
+			// Generate the trie id in a new transaction to only increment the counter on success.
+			let dest_trie_id = Storage::<T>::generate_trie_id(&dest);
 
-		let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
-			Storage::<T>::place_contract(
-				&dest,
-				nested
-					.self_trie_id
-					.clone()
-					.expect("the nested context always has to have self_trie_id"),
-				code_hash.clone()
-			)?;
+			let output = self.with_nested_context(dest.clone(), dest_trie_id, |nested| {
+				Storage::<T>::place_contract(
+					&dest,
+					nested
+						.self_trie_id
+						.clone()
+						.expect("the nested context always has to have self_trie_id"),
+					code_hash.clone()
+				)?;
 
-			// Send funds unconditionally here. If the `endowment` is below existential_deposit
-			// then error will be returned here.
-			transfer(
-				TransferCause::Instantiate,
-				transactor_kind,
-				&caller,
-				&dest,
-				endowment,
-				nested,
-			)?;
+				// Send funds unconditionally here. If the `endowment` is below existential_deposit
+				// then error will be returned here.
+				transfer(
+					TransferCause::Instantiate,
+					transactor_kind,
+					&caller,
+					&dest,
+					endowment,
+					nested,
+				)?;
 
-			let executable = nested.loader.load_init(&code_hash)
-				.map_err(|_| Error::<T>::CodeNotFound)?;
-			let output = nested.vm
-				.execute(
-					&executable,
-					nested.new_call_context(caller.clone(), endowment),
-					input_data,
-					gas_meter,
-				).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
+				let executable = nested.loader.load_init(&code_hash)
+					.map_err(|_| Error::<T>::CodeNotFound)?;
+				let output = nested.vm
+					.execute(
+						&executable,
+						nested.new_call_context(caller.clone(), endowment),
+						input_data,
+						gas_meter,
+					).map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
-			// We need each contract that exists to be above the subsistence threshold
-			// in order to keep up the guarantuee that we always leave a tombstone behind
-			// with the exception of a contract that called `seal_terminate`.
-			if T::Currency::total_balance(&dest) < nested.config.subsistence_threshold() {
-				Err(Error::<T>::NewContractNotFunded)?
+
+				// Collect the rent for the first block to prevent the creation of very large
+				// contracts that never intended to pay for even one block.
+				// This also makes sure that it is above the subsistence threshold
+				// in order to keep up the guarantuee that we always leave a tombstone behind
+				// with the exception of a contract that called `seal_terminate`.
+				Rent::<T>::charge(&dest)?
+					.and_then(|c| c.get_alive())
+					.ok_or_else(|| Error::<T>::NewContractNotFunded)?;
+
+				// Deposit an instantiation event.
+				deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
+
+				Ok(output)
+			});
+
+			use frame_support::storage::TransactionOutcome::*;
+			match output {
+				Ok(_) => Commit(output),
+				Err(_) => Rollback(output),
 			}
-
-			// Deposit an instantiation event.
-			deposit_event::<T>(vec![], RawEvent::Instantiated(caller.clone(), dest.clone()));
-
-			Ok(output)
 		})?;
 
 		Ok((dest, output))
@@ -444,7 +454,7 @@ fn transfer<'a, T: Config, V: Vm<T>, L: Loader<T>>(
 	dest: &T::AccountId,
 	value: BalanceOf<T>,
 	ctx: &mut ExecutionContext<'a, T, V, L>,
-) -> Result<(), DispatchError>
+) -> DispatchResult
 where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
@@ -510,23 +520,19 @@ where
 		Storage::<T>::read(trie_id, key)
 	}
 
-	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) {
+	fn set_storage(&mut self, key: StorageKey, value: Option<Vec<u8>>) -> DispatchResult {
 		let trie_id = self.ctx.self_trie_id.as_ref().expect(
 			"`ctx.self_trie_id` points to an alive contract within the `CallContext`;\
 				it cannot be `None`;\
 				expect can't fail;\
 				qed",
 		);
-		if let Err(storage::ContractAbsentError) =
-			Storage::<T>::write(&self.ctx.self_account, trie_id, &key, value)
-		{
-			panic!(
-				"the contract must be in the alive state within the `CallContext`;\
-				the contract cannot be absent in storage;
-				write cannot return `None`;
-				qed"
-			);
-		}
+		// write panics if the passed account is not alive.
+		// the contract must be in the alive state within the `CallContext`;\
+		// the contract cannot be absent in storage;
+		// write cannot return `None`;
+		// qed
+		Storage::<T>::write(&self.ctx.self_account, trie_id, &key, value)
 	}
 
 	fn instantiate(
@@ -544,7 +550,7 @@ where
 		&mut self,
 		to: &T::AccountId,
 		value: BalanceOf<T>,
-	) -> Result<(), DispatchError> {
+	) -> DispatchResult {
 		transfer(
 			TransferCause::Call,
 			TransactorKind::Contract,
@@ -558,7 +564,7 @@ where
 	fn terminate(
 		&mut self,
 		beneficiary: &AccountIdOf<Self::T>,
-	) -> Result<(), DispatchError> {
+	) -> DispatchResult {
 		let self_id = self.ctx.self_account.clone();
 		let value = T::Currency::free_balance(&self_id);
 		if let Some(caller_ctx) = self.ctx.caller {
@@ -574,13 +580,16 @@ where
 			value,
 			self.ctx,
 		)?;
-		let self_trie_id = self.ctx.self_trie_id.as_ref().expect(
-			"this function is only invoked by in the context of a contract;\
-				a contract has a trie id;\
-				this can't be None; qed",
-		);
-		Storage::<T>::destroy_contract(&self_id, self_trie_id);
-		Ok(())
+		if let Some(ContractInfo::Alive(info)) = ContractInfoOf::<T>::take(&self_id) {
+			Storage::<T>::queue_trie_for_deletion(&info)?;
+			Ok(())
+		} else {
+			panic!(
+				"this function is only invoked by in the context of a contract;\
+				this contract is therefore alive;\
+				qed"
+			);
+		}
 	}
 
 	fn call(
@@ -599,7 +608,7 @@ where
 		code_hash: CodeHash<Self::T>,
 		rent_allowance: BalanceOf<Self::T>,
 		delta: Vec<StorageKey>,
-	) -> Result<(), DispatchError> {
+	) -> DispatchResult {
 		if let Some(caller_ctx) = self.ctx.caller {
 			if caller_ctx.is_live(&self.ctx.self_account) {
 				return Err(Error::<T>::ReentranceDenied.into());
@@ -904,7 +913,7 @@ mod tests {
 			let mut ctx = ExecutionContext::top_level(origin.clone(), &cfg, &vm, &loader);
 			place_contract(&BOB, return_ch);
 			set_balance(&origin, 100);
-			set_balance(&dest, 0);
+			let balance = get_balance(&dest);
 
 			let output = ctx.call(
 				dest.clone(),
@@ -915,7 +924,9 @@ mod tests {
 
 			assert!(!output.is_success());
 			assert_eq!(get_balance(&origin), 100);
-			assert_eq!(get_balance(&dest), 0);
+
+			// the rent is still charged
+			assert!(get_balance(&dest) < balance);
 		});
 	}
 
@@ -1053,10 +1064,10 @@ mod tests {
 			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
 
-			set_balance(&ALICE, 100);
+			set_balance(&ALICE, cfg.subsistence_threshold() * 10);
 
 			let result = ctx.instantiate(
-				cfg.subsistence_threshold(),
+				cfg.subsistence_threshold() * 3,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&input_data_ch,
 				vec![1, 2, 3, 4],
@@ -1303,7 +1314,7 @@ mod tests {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output) = ctx.ext.instantiate(
 					&dummy_ch,
-					ConfigCache::<Test>::subsistence_threshold_uncached(),
+					ConfigCache::<Test>::subsistence_threshold_uncached() * 3,
 					ctx.gas_meter,
 					vec![],
 					&[48, 49, 50],
@@ -1317,8 +1328,7 @@ mod tests {
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
 			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			set_balance(&ALICE, 1000);
-			set_balance(&BOB, 100);
+			set_balance(&ALICE, cfg.subsistence_threshold() * 100);
 			place_contract(&BOB, instantiator_ch);
 
 			assert_matches!(
@@ -1427,19 +1437,20 @@ mod tests {
 		let vm = MockVm::new();
 		let mut loader = MockLoader::empty();
 		let rent_allowance_ch = loader.insert(|ctx| {
+			let allowance = ConfigCache::<Test>::subsistence_threshold_uncached() * 3;
 			assert_eq!(ctx.ext.rent_allowance(), <BalanceOf<Test>>::max_value());
-			ctx.ext.set_rent_allowance(10);
-			assert_eq!(ctx.ext.rent_allowance(), 10);
+			ctx.ext.set_rent_allowance(allowance);
+			assert_eq!(ctx.ext.rent_allowance(), allowance);
 			exec_success()
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
 			let cfg = ConfigCache::preload();
 			let mut ctx = ExecutionContext::top_level(ALICE, &cfg, &vm, &loader);
-			set_balance(&ALICE, 100);
+			set_balance(&ALICE, cfg.subsistence_threshold() * 10);
 
 			let result = ctx.instantiate(
-				cfg.subsistence_threshold(),
+				cfg.subsistence_threshold() * 5,
 				&mut GasMeter::<Test>::new(GAS_LIMIT),
 				&rent_allowance_ch,
 				vec![],

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -107,8 +107,7 @@ pub fn with_transaction<R>(f: impl FnOnce() -> TransactionOutcome<R>) -> R {
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
 ///
-/// Details on implementation can be found at
-/// [`generator::StorageValue`]
+/// Details on implementation can be found at [`generator::StorageValue`].
 pub trait StorageValue<T: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -122,8 +121,9 @@ pub trait StorageValue<T: FullCodec> {
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
 
-	/// Try to get the underlying value from the provided storage instance; `Ok` if it exists,
-	/// `Err` if not.
+	/// Try to get the underlying value from the provided storage instance.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
 	fn try_get() -> Result<T, ()>;
 
 	/// Translate a value from some previous type (`O`) to the current type.
@@ -200,8 +200,7 @@ pub trait StorageValue<T: FullCodec> {
 
 /// A strongly-typed map in storage.
 ///
-/// Details on implementation can be found at
-/// [`generator::StorageMap`]
+/// Details on implementation can be found at [`generator::StorageMap`].
 pub trait StorageMap<K: FullEncode, V: FullCodec> {
 	/// The type that get/take return.
 	type Query;
@@ -214,6 +213,11 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 
 	/// Load the value associated with the given key from the map.
 	fn get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Self::Query;
+
+	/// Try to get the value for the given key from the map.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
+	fn try_get<KeyArg: EncodeLike<K>>(key: KeyArg) -> Result<V, ()>;
 
 	/// Swap the values of two keys.
 	fn swap<KeyArg1: EncodeLike<K>, KeyArg2: EncodeLike<K>>(key1: KeyArg1, key2: KeyArg2);
@@ -233,7 +237,9 @@ pub trait StorageMap<K: FullEncode, V: FullCodec> {
 		f: F,
 	) -> Result<R, E>;
 
-	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
+	/// Mutate the value under a key.
+	///
+	/// Deletes the item if mutated to a `None`.
 	fn mutate_exists<KeyArg: EncodeLike<K>, R, F: FnOnce(&mut Option<V>) -> R>(key: KeyArg, f: F) -> R;
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
@@ -354,8 +360,7 @@ pub trait IterableStorageDoubleMap<
 /// It provides an important ability to efficiently remove all entries
 /// that have a common first key.
 ///
-/// Details on implementation can be found at
-/// [`generator::StorageDoubleMap`]
+/// Details on implementation can be found at [`generator::StorageDoubleMap`].
 pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 	/// The type that get/take returns.
 	type Query;
@@ -374,6 +379,14 @@ pub trait StorageDoubleMap<K1: FullEncode, K2: FullEncode, V: FullCodec> {
 
 	/// Load the value associated with the given key from the double map.
 	fn get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Self::Query
+	where
+		KArg1: EncodeLike<K1>,
+		KArg2: EncodeLike<K2>;
+
+	/// Try to get the value for the given key from the double map.
+	///
+	/// Returns `Ok` if it exists, `Err` if not.
+	fn try_get<KArg1, KArg2>(k1: KArg1, k2: KArg2) -> Result<V, ()>
 	where
 		KArg1: EncodeLike<K1>,
 		KArg2: EncodeLike<K2>;

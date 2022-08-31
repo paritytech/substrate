@@ -1,13 +1,13 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -212,9 +212,9 @@ impl BigUint {
 				let mut needs_borrow = false;
 				let mut t = 0;
 
-				if let Some(v) = u.checked_sub(v) {
-					if let Some(v2) = v.checked_sub(k) {
-						t = v2 % B;
+				if let Some(v1) = u.checked_sub(v) {
+					if let Some(v2) = v1.checked_sub(k) {
+						t = v2;
 						k = 0;
 					} else {
 						needs_borrow = true;
@@ -228,9 +228,9 @@ impl BigUint {
 				}
 				t
 			};
-			// PROOF: t either comes from `v2 % B`, or from `u + B - v - k`. The former is
+			// PROOF: t either comes from `v2`, or from `u + B - v - k`. The former is
 			// trivial. The latter will not overflow this branch will only happen if the sum of
-			// `u - v - k` part has been negative, hence `u + B - v - k < b`.
+			// `u - v - k` part has been negative, hence `u + B - v - k < B`.
 			w.set(j, s as Single);
 		}
 
@@ -287,9 +287,9 @@ impl BigUint {
 		let mut out = Self::with_capacity(n);
 		let mut r: Single = 0;
 		// PROOF: (B-1) * B + (B-1) still fits in double
-		let with_r = |x: Double, r: Single| { Double::from(r) * B + x };
+		let with_r = |x: Single, r: Single| { Double::from(r) * B + Double::from(x) };
 		for d in (0..n).rev() {
-			let (q, rr) = div_single(with_r(self.get(d).into(), r), other) ;
+			let (q, rr) = div_single(with_r(self.get(d), r), other) ;
 			out.set(d, q as Single);
 			r = rr;
 		}
@@ -581,13 +581,24 @@ pub mod tests {
 	}
 
 	#[test]
+	fn shift_check() {
+		let shift = sp_std::mem::size_of::<Double>() - sp_std::mem::size_of::<Single>();
+		assert_eq!(shift * 8, SHIFT);
+	}
+
+	#[test]
 	fn split_works() {
 		let a = SHIFT / 2;
 		let b = SHIFT * 3 / 2;
 		let num: Double = 1 << a | 1 << b;
-		// example when `Single = u8`
-		// assert_eq!(num, 0b_0001_0000_0001_0000)
+		assert_eq!(num, 0x_0001_0000_0001_0000);
 		assert_eq!(split(num), (1 << a, 1 << a));
+
+		let a = SHIFT / 2 + 4;
+		let b = SHIFT / 2 - 4;
+		let num: Double = 1 << (SHIFT + a) | 1 << b;
+		assert_eq!(num, 0x_0010_0000_0000_1000);
+		assert_eq!(split(num), (1 << a, 1 << b));
 	}
 
 	#[test]
@@ -734,6 +745,7 @@ pub mod tests {
 	fn div_unit_works() {
 		let a = BigUint { digits: vec![100] };
 		let b = BigUint { digits: vec![1, 100] };
+		let c = BigUint { digits: vec![14, 28, 100] };
 
 		assert_eq!(a.clone().div_unit(1), a);
 		assert_eq!(a.clone().div_unit(0), a);
@@ -745,5 +757,9 @@ pub mod tests {
 		assert_eq!(b.clone().div_unit(2), BigUint::from(((B + 100) / 2) as Single));
 		assert_eq!(b.clone().div_unit(7), BigUint::from(((B + 100) / 7) as Single));
 
+		assert_eq!(c.clone().div_unit(1), c);
+		assert_eq!(c.clone().div_unit(0), c);
+		assert_eq!(c.clone().div_unit(2), BigUint { digits: vec![7, 14, 50] });
+		assert_eq!(c.clone().div_unit(7), BigUint { digits: vec![2, 4, 14] });
 	}
 }

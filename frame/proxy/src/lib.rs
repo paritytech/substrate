@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -168,6 +168,8 @@ decl_error! {
 		NoPermission,
 		/// Announcement, if made at all, was made too recently.
 		Unannounced,
+		/// Cannot add self as proxy.
+		NoSelfProxy,
 	}
 }
 
@@ -567,6 +569,7 @@ impl<T: Config> Module<T> {
 		proxy_type: T::ProxyType,
 		delay: T::BlockNumber,
 	) -> DispatchResult {
+		ensure!(delegator != &delegatee, Error::<T>::NoSelfProxy);
 		Proxies::<T>::try_mutate(delegator, |(ref mut proxies, ref mut deposit)| {
 			ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
 			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
@@ -706,7 +709,7 @@ impl<T: Config> Module<T> {
 pub mod migration {
 	use super::*;
 
-	/// Migration code for https://github.com/paritytech/substrate/pull/6770
+	/// Migration code for <https://github.com/paritytech/substrate/pull/6770>
 	///
 	/// Details: This migration was introduced between Substrate 2.0-RC6 and Substrate 2.0 releases.
 	/// Before this migration, the `Proxies` storage item used a tuple of `AccountId` and

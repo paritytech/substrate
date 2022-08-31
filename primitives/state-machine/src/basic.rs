@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -262,8 +262,6 @@ impl Externalities for BasicExternalities {
 		let current = self.inner.top.entry(key).or_default();
 		crate::ext::StorageAppend::new(current).append(value);
 	}
-
-	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> Vec<u8> {
 		let mut top = self.inner.top.clone();

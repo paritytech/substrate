@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The Substrate runtime. This can be compiled with #[no_std], ready for Wasm.
+//! The Substrate runtime. This can be compiled with `#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -149,6 +149,8 @@ pub enum Extrinsic {
 	IncludeData(Vec<u8>),
 	StorageChange(Vec<u8>, Option<Vec<u8>>),
 	ChangesTrieConfigUpdate(Option<ChangesTrieConfiguration>),
+	OffchainIndexSet(Vec<u8>, Vec<u8>),
+	OffchainIndexClear(Vec<u8>),
 }
 
 parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
@@ -177,6 +179,10 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
+			Extrinsic::OffchainIndexSet(key, value) =>
+				Ok(Extrinsic::OffchainIndexSet(key, value)),
+			Extrinsic::OffchainIndexClear(key) =>
+				Ok(Extrinsic::OffchainIndexClear(key)),
 		}
 	}
 }
@@ -462,6 +468,7 @@ impl frame_system::Config for Runtime {
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = ();
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -732,8 +739,16 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> SlotNumber {
+				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -983,8 +998,16 @@ cfg_if! {
 					}
 				}
 
-				fn current_epoch_start() -> SlotNumber {
+				fn current_epoch_start() -> sp_consensus_babe::SlotNumber {
 					<pallet_babe::Module<Runtime>>::current_epoch_start()
+				}
+
+				fn current_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::current_epoch()
+				}
+
+				fn next_epoch() -> sp_consensus_babe::Epoch {
+					<pallet_babe::Module<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -1131,13 +1154,9 @@ fn test_witness(proof: StorageProof, root: crate::Hash) {
 		root,
 	);
 	let mut overlay = sp_state_machine::OverlayedChanges::default();
-	#[cfg(feature = "std")]
-	let mut offchain_overlay = Default::default();
 	let mut cache = sp_state_machine::StorageTransactionCache::<_, _, BlockNumber>::default();
 	let mut ext = sp_state_machine::Ext::new(
 		&mut overlay,
-		#[cfg(feature = "std")]
-		&mut offchain_overlay,
 		&mut cache,
 		&backend,
 		#[cfg(feature = "std")]

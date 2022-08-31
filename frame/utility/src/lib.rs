@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -133,22 +133,24 @@ decl_module! {
 		/// `BatchInterrupted` event is deposited, along with the number of successful calls made
 		/// and the error of the failed call. If all were successful, then the `BatchCompleted`
 		/// event is deposited.
-		#[weight = (
-			calls.iter()
-				.map(|call| call.get_dispatch_info().weight)
+		#[weight = {
+			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
+			let dispatch_weight = dispatch_infos.iter()
+				.map(|di| di.weight)
 				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(T::WeightInfo::batch(calls.len() as u32)),
-			{
-				let all_operational = calls.iter()
-					.map(|call| call.get_dispatch_info().class)
+				.saturating_add(T::WeightInfo::batch(calls.len() as u32));
+			let dispatch_class = {
+				let all_operational = dispatch_infos.iter()
+					.map(|di| di.class)
 					.all(|class| class == DispatchClass::Operational);
 				if all_operational {
 					DispatchClass::Operational
 				} else {
 					DispatchClass::Normal
 				}
-			},
-		)]
+			};
+			(dispatch_weight, dispatch_class)
+		}]
 		fn batch(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
@@ -190,13 +192,16 @@ decl_module! {
 		/// NOTE: Prior to version *12, this was called `as_limited_sub`.
 		///
 		/// The dispatch origin for this call must be _Signed_.
-		#[weight = (
-			T::WeightInfo::as_derivative()
-				.saturating_add(call.get_dispatch_info().weight)
-				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
-			call.get_dispatch_info().class,
-		)]
+		#[weight = {
+			let dispatch_info = call.get_dispatch_info();
+			(
+				T::WeightInfo::as_derivative()
+					.saturating_add(dispatch_info.weight)
+					// AccountData for inner call origin accountdata.
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				dispatch_info.class,
+			)
+		}]
 		fn as_derivative(origin, index: u16, call: Box<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
@@ -227,22 +232,24 @@ decl_module! {
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
 		/// # </weight>
-		#[weight = (
-			calls.iter()
-				.map(|call| call.get_dispatch_info().weight)
+		#[weight = {
+			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
+			let dispatch_weight = dispatch_infos.iter()
+				.map(|di| di.weight)
 				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
-				.saturating_add(T::WeightInfo::batch_all(calls.len() as u32)),
-			{
-				let all_operational = calls.iter()
-					.map(|call| call.get_dispatch_info().class)
+				.saturating_add(T::WeightInfo::batch_all(calls.len() as u32));
+			let dispatch_class = {
+				let all_operational = dispatch_infos.iter()
+					.map(|di| di.class)
 					.all(|class| class == DispatchClass::Operational);
 				if all_operational {
 					DispatchClass::Operational
 				} else {
 					DispatchClass::Normal
 				}
-			},
-		)]
+			};
+			(dispatch_weight, dispatch_class)
+		}]
 		#[transactional]
 		fn batch_all(origin, calls: Vec<<T as Config>::Call>) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,12 +18,11 @@
 
 use super::{TestExternalities, call_in_wasm};
 use crate::WasmExecutionMethod;
+use crate::test_wasm_execution;
 
 use codec::Encode;
-use test_case::test_case;
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(sandbox_should_work);
 fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -60,8 +59,7 @@ fn sandbox_should_work(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(sandbox_trap);
 fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -87,8 +85,7 @@ fn sandbox_trap(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(start_called);
 fn start_called(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -131,8 +128,7 @@ fn start_called(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(invoke_args);
 fn invoke_args(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -171,8 +167,7 @@ fn invoke_args(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(return_val);
 fn return_val(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -199,8 +194,7 @@ fn return_val(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(unlinkable_module);
 fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -225,8 +219,7 @@ fn unlinkable_module(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(corrupted_module);
 fn corrupted_module(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -245,8 +238,7 @@ fn corrupted_module(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(start_fn_ok);
 fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -274,8 +266,7 @@ fn start_fn_ok(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(start_fn_traps);
 fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();
@@ -304,8 +295,7 @@ fn start_fn_traps(wasm_method: WasmExecutionMethod) {
 	);
 }
 
-#[test_case(WasmExecutionMethod::Interpreted)]
-#[cfg_attr(feature = "wasmtime", test_case(WasmExecutionMethod::Compiled))]
+test_wasm_execution!(get_global_val_works);
 fn get_global_val_works(wasm_method: WasmExecutionMethod) {
 	let mut ext = TestExternalities::default();
 	let mut ext = ext.ext();

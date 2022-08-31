@@ -23,11 +23,12 @@ sp-externalities = { version = "0.8.0", path = "../../../primitives/externalitie
 sp-keystore = { version = "0.8.0", path = "../../../primitives/keystore" }
 sp-runtime = { version = "2.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.8.0", path = "../../../primitives/state-machine" }
-structopt = "0.3.8"
 codec = { version = "1.3.1", package = "parity-scale-codec" }
+structopt = "0.3.8"
 chrono = "0.4"
 serde = "1.0.116"
 handlebars = "3.5.0"
+Inflector = "0.11.4"
 
 [features]
 default = ["db"]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -78,7 +78,6 @@ pub struct Metrics {
 	pub requests_in_success_total: HistogramVec,
 	pub requests_out_failure_total: CounterVec<U64>,
 	pub requests_out_success_total: HistogramVec,
-	pub requests_out_started_total: CounterVec<U64>,
 }
 
 impl Metrics {
@@ -230,7 +229,8 @@ impl Metrics {
 				HistogramOpts {
 					common_opts: Opts::new(
 						"sub_libp2p_requests_in_success_total",
-						"Total number of requests received and answered"
+						"For successful incoming requests, time between receiving the request and \
+						 starting to send the response"
 					),
 					buckets: prometheus::exponential_buckets(0.001, 2.0, 16)
 						.expect("parameters are always valid values; qed"),
@@ -248,18 +248,11 @@ impl Metrics {
 				HistogramOpts {
 					common_opts: Opts::new(
 						"sub_libp2p_requests_out_success_total",
-						"For successful requests, time between a request's start and finish"
+						"For successful outgoing requests, time between a request's start and finish"
 					),
 					buckets: prometheus::exponential_buckets(0.001, 2.0, 16)
 						.expect("parameters are always valid values; qed"),
 				},
-				&["protocol"]
-			)?, registry)?,
-			requests_out_started_total: prometheus::register(CounterVec::new(
-				Opts::new(
-					"sub_libp2p_requests_out_started_total",
-					"Total number of requests emitted"
-				),
 				&["protocol"]
 			)?, registry)?,
 		})

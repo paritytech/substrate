@@ -147,3 +147,28 @@ groups:
       message: 'Authority discovery on node {{ $labels.instance }} fails to
       process more than 50 % of the values found on the DHT for more than 2
       hours.'
+
+  - alert: UnboundedChannelPersistentlyLarge
+    expr: '(
+        (polkadot_unbounded_channel_len{action = "send"} -
+            ignoring(action) polkadot_unbounded_channel_len{action = "received"})
+        or on(instance) polkadot_unbounded_channel_len{action = "send"}
+    ) >= 200'
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      message: 'Channel {{ $labels.entity }} on node {{ $labels.instance }} contains
+      more than 200 items for more than 5 minutes. Node might be frozen.'
+
+  - alert: UnboundedChannelVeryLarge
+    expr: '(
+        (polkadot_unbounded_channel_len{action = "send"} -
+            ignoring(action) polkadot_unbounded_channel_len{action = "received"})
+        or on(instance) polkadot_unbounded_channel_len{action = "send"}
+    ) > 15000'
+    labels:
+      severity: warning
+    annotations:
+      message: 'Channel {{ $labels.entity }} on node {{ $labels.instance }} contains more than
+      15000 items.'

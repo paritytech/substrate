@@ -84,11 +84,11 @@
 		)
 		(i32.store (i32.const 128) (i32.const 64))
 		(call $seal_input
-			(i32.const 104)
-			(i32.const 100)
+			(i32.const 132)
+			(i32.const 128)
 		)
 		(call $seal_set_rent_allowance
-			(i32.const 104)
+			(i32.const 132)
 			(i32.load (i32.const 128))
 		)
 	)

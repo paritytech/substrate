@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, gossip::QueuedSender, Event, NetworkService, NetworkWorker};
+use crate::block_request_handler::BlockRequestHandler;
+use crate::gossip::QueuedSender;
+use crate::{config,  Event, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -33,7 +35,7 @@ type TestNetworkService = NetworkService<
 ///
 /// > **Note**: We return the events stream in order to not possibly lose events between the
 /// >			construction of the service and the moment the events stream is grabbed.
-fn build_test_full_node(config: config::NetworkConfiguration)
+fn build_test_full_node(network_config: config::NetworkConfiguration)
 	-> (Arc<TestNetworkService>, impl Stream<Item = Event>)
 {
 	let client = Arc::new(
@@ -90,19 +92,31 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		None,
 	));
 
+	let protocol_id = config::ProtocolId::from("/test-protocol-name");
+
+	let block_request_protocol_config = {
+		let (handler, protocol_config) = BlockRequestHandler::new(
+			protocol_id.clone(),
+			client.clone(),
+		);
+		async_std::task::spawn(handler.run().boxed());
+		protocol_config
+	};
+
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
-		network_config: config,
+		network_config,
 		chain: client.clone(),
 		on_demand: None,
 		transaction_pool: Arc::new(crate::config::EmptyTransactionPool),
-		protocol_id: config::ProtocolId::from("/test-protocol-name"),
+		protocol_id,
 		import_queue,
 		block_announce_validator: Box::new(
 			sp_consensus::block_validation::DefaultBlockAnnounceValidator,
 		),
 		metrics_registry: None,
+		block_request_protocol_config,
 	})
 	.unwrap();
 
@@ -127,19 +141,33 @@ fn build_nodes_one_proto()
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (node1, events_stream1) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![PROTOCOL_NAME],
+		extra_sets: vec![
+			config::NonDefaultSetConfig {
+				notifications_protocol: PROTOCOL_NAME,
+				max_notification_size: 1024 * 1024,
+				set_config: Default::default()
+			}
+		],
 		listen_addresses: vec![listen_addr.clone()],
 		transport: config::TransportConfig::MemoryOnly,
 		.. config::NetworkConfiguration::new_local()
 	});
 
 	let (node2, events_stream2) = build_test_full_node(config::NetworkConfiguration {
-		notifications_protocols: vec![PROTOCOL_NAME],
 		listen_addresses: vec![],
-		reserved_nodes: vec![config::MultiaddrWithPeerId {
-			multiaddr: listen_addr,
-			peer_id: node1.local_peer_id().clone(),
-		}],
+		extra_sets: vec![
+			config::NonDefaultSetConfig {
+				notifications_protocol: PROTOCOL_NAME,
+				max_notification_size: 1024 * 1024,
+				set_config: config::SetConfig {
+					reserved_nodes: vec![config::MultiaddrWithPeerId {
+						multiaddr: listen_addr,
+						peer_id: node1.local_peer_id().clone(),
+					}],
+					.. Default::default()
+				},
+			}
+		],
 		transport: config::TransportConfig::MemoryOnly,
 		.. config::NetworkConfiguration::new_local()
 	});

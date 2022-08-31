@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde::Serialize;
+use inflector::Inflector;
 
 use crate::BenchmarkCmd;
 use frame_benchmarking::{BenchmarkBatch, BenchmarkSelector, Analysis, RegressionModel};
@@ -37,6 +38,7 @@ struct TemplateData {
 	date: String,
 	version: String,
 	pallet: String,
+	instance: String,
 	header: String,
 	cmd: CmdData,
 	benchmarks: Vec<BenchmarkData>,
@@ -102,7 +104,7 @@ fn io_error(s: &str) -> std::io::Error {
 // p1 -> [b1, b2, b3]
 // p2 -> [b1, b2]
 // ```
-fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, Vec<BenchmarkData>>, std::io::Error> {
+fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<(String, String), Vec<BenchmarkData>>, std::io::Error> {
 	// Skip if batches is empty.
 	if batches.is_empty() { return Err(io_error("empty batches")) }
 
@@ -115,6 +117,7 @@ fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, Vec<Benchma
 		if batch.results.is_empty() { continue }
 
 		let pallet_string = String::from_utf8(batch.pallet.clone()).unwrap();
+		let instance_string = String::from_utf8(batch.instance.clone()).unwrap();
 		let benchmark_data = get_benchmark_data(batch);
 		pallet_benchmarks.push(benchmark_data);
 
@@ -122,13 +125,14 @@ fn map_results(batches: &[BenchmarkBatch]) -> Result<HashMap<String, Vec<Benchma
 		if let Some(next) = batches_iter.peek() {
 			// Next pallet is different than current pallet, save and create new data.
 			let next_pallet = String::from_utf8(next.pallet.clone()).unwrap();
-			if next_pallet != pallet_string {
-				all_benchmarks.insert(pallet_string, pallet_benchmarks.clone());
+			let next_instance = String::from_utf8(next.instance.clone()).unwrap();
+			if next_pallet != pallet_string || next_instance != instance_string {
+				all_benchmarks.insert((pallet_string, instance_string), pallet_benchmarks.clone());
 				pallet_benchmarks = Vec::new();
 			}
 		} else {
 			// This is the end of the iterator, so push the final data.
-			all_benchmarks.insert(pallet_string, pallet_benchmarks.clone());
+			all_benchmarks.insert((pallet_string, instance_string), pallet_benchmarks.clone());
 		}
 	}
 	Ok(all_benchmarks)
@@ -272,12 +276,18 @@ pub fn write_results(
 
 	// Organize results by pallet into a JSON map
 	let all_results = map_results(batches)?;
-	for (pallet, results) in all_results.into_iter() {
+	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
 		// If a user only specified a directory...
 		if file_path.is_dir() {
-			// Create new file: "path/to/pallet_name.rs".
-			file_path.push(&pallet);
+			// Check if there might be multiple instances benchmarked.
+			if all_results.keys().any(|(p, i)| p == pallet && i != instance) {
+				// Create new file: "path/to/pallet_name_instance_name.rs".
+				file_path.push(pallet.clone() + "_" + &instance.to_snake_case());
+			} else {
+				// Create new file: "path/to/pallet_name.rs".
+				file_path.push(pallet.clone());
+			}
 			file_path.set_extension("rs");
 		}
 
@@ -285,10 +295,11 @@ pub fn write_results(
 			args: args.clone(),
 			date: date.clone(),
 			version: VERSION.to_string(),
-			pallet: pallet,
+			pallet: pallet.to_string(),
+			instance: instance.to_string(),
 			header: header_text.clone(),
 			cmd: cmd_data.clone(),
-			benchmarks: results,
+			benchmarks: results.clone(),
 		};
 
 		let mut output_file = fs::File::create(file_path)?;
@@ -393,6 +404,7 @@ mod test {
 
 		return BenchmarkBatch {
 			pallet: [pallet.to_vec(), b"_pallet".to_vec()].concat(),
+			instance: b"instance".to_vec(),
 			benchmark: [benchmark.to_vec(), b"_benchmark".to_vec()].concat(),
 			results,
 		}
@@ -445,15 +457,21 @@ mod test {
 			test_data(b"second", b"first", BenchmarkParameter::c, 3, 4),
 		]).unwrap();
 
-		let first_benchmark = &mapped_results.get("first_pallet").unwrap()[0];
+		let first_benchmark = &mapped_results.get(
+			&("first_pallet".to_string(), "instance".to_string())
+		).unwrap()[0];
 		assert_eq!(first_benchmark.name, "first_benchmark");
 		check_data(first_benchmark, "a", 10, 3);
 
-		let second_benchmark = &mapped_results.get("first_pallet").unwrap()[1];
+		let second_benchmark = &mapped_results.get(
+			&("first_pallet".to_string(), "instance".to_string())
+		).unwrap()[1];
 		assert_eq!(second_benchmark.name, "second_benchmark");
 		check_data(second_benchmark, "b", 9, 2);
 
-		let second_pallet_benchmark = &mapped_results.get("second_pallet").unwrap()[0];
+		let second_pallet_benchmark = &mapped_results.get(
+			&("second_pallet".to_string(), "instance".to_string())
+		).unwrap()[0];
 		assert_eq!(second_pallet_benchmark.name, "first_benchmark");
 		check_data(second_pallet_benchmark, "c", 3, 4);
 	}

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 
 /// Default maximum block size in bytes used by [`Proposer`].
 ///
-/// Can be overwritten by [`ProposerFactory::set_maxium_block_size`].
+/// Can be overwritten by [`ProposerFactory::set_maximum_block_size`].
 ///
 /// Be aware that there is also an upper packet size on what the networking code
 /// will accept. If the block doesn't fit in such a package, it can not be
@@ -408,6 +408,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
 			spawner.clone(),
 			client.clone(),
@@ -466,6 +467,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
 			spawner.clone(),
 			client.clone(),
@@ -506,6 +508,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
 			spawner.clone(),
 			client.clone(),
@@ -573,6 +576,7 @@ mod tests {
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let txpool = BasicPool::new_full(
 			Default::default(),
+			true.into(),
 			None,
 			spawner.clone(),
 			client.clone(),

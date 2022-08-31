@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -164,13 +164,19 @@ fn benchmark_main(c: &mut Criterion) {
 
 	c.bench_function("sequential 50 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::new_dependant().into()), 50);
+			bench_configured(
+				Pool::new(Default::default(), true.into(), TestApi::new_dependant().into()),
+				50,
+			);
 		});
 	});
 
 	c.bench_function("random 100 tx", |b| {
 		b.iter(|| {
-			bench_configured(Pool::new(Default::default(), TestApi::default().into()), 100);
+			bench_configured(
+				Pool::new(Default::default(), true.into(), TestApi::default().into()),
+				100,
+			);
 		});
 	});
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 use crate::params::node_key_params::NodeKeyParams;
 use sc_network::{
-	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, TransportConfig},
+	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig},
 	multiaddr::Protocol,
 };
 use sc_service::{ChainSpec, ChainType, config::{Multiaddr, MultiaddrWithPeerId}};
@@ -150,21 +150,23 @@ impl NetworkParams {
 		NetworkConfiguration {
 			boot_nodes,
 			net_config_path,
-			reserved_nodes: self.reserved_nodes.clone(),
-			non_reserved_mode: if self.reserved_only {
-				NonReservedPeerMode::Deny
-			} else {
-				NonReservedPeerMode::Accept
+			default_peers_set: SetConfig {
+				in_peers: self.in_peers,
+				out_peers: self.out_peers,
+				reserved_nodes: self.reserved_nodes.clone(),
+				non_reserved_mode: if self.reserved_only {
+					NonReservedPeerMode::Deny
+				} else {
+					NonReservedPeerMode::Accept
+				},
 			},
 			listen_addresses,
 			public_addresses,
-			notifications_protocols: Vec::new(),
+			extra_sets: Vec::new(),
 			request_response_protocols: Vec::new(),
 			node_key,
 			node_name: node_name.to_string(),
 			client_version: client_id.to_string(),
-			in_peers: self.in_peers,
-			out_peers: self.out_peers,
 			transport: TransportConfig::Normal {
 				enable_mdns: !is_dev && !self.no_mdns,
 				allow_private_ipv4: !self.no_private_ipv4,
@@ -173,6 +175,7 @@ impl NetworkParams {
 			max_parallel_downloads: self.max_parallel_downloads,
 			allow_non_globals_in_dht,
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
+			yamux_window_size: None,
 		}
 	}
 }

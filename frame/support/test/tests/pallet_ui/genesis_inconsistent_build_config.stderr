@@ -1,0 +1,5 @@
+error: `#[pallet::genesis_config]` and `#[pallet::genesis_build]` attributes must be either both used or both not used, instead genesis_config is unused and genesis_build is used
+ --> $DIR/genesis_inconsistent_build_config.rs:2:1
+  |
+2 | mod pallet {
+  | ^^^

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2020 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -388,11 +388,6 @@ pub trait Trie {
 /// Interface that provides miscellaneous functions for communicating between the runtime and the node.
 #[runtime_interface]
 pub trait Misc {
-	/// The current relay chain identifier.
-	fn chain_id(&self) -> u64 {
-		sp_externalities::Externalities::chain_id(*self)
-	}
-
 	/// Print a number.
 	fn print_num(val: u64) {
 		log::debug!(target: "runtime", "{}", val);
@@ -733,6 +728,11 @@ pub trait Hashing {
 	/// Conduct a 256-bit Keccak hash.
 	fn keccak_256(data: &[u8]) -> [u8; 32] {
 		sp_core::hashing::keccak_256(data)
+	}
+
+	/// Conduct a 512-bit Keccak hash.
+	fn keccak_512(data: &[u8]) -> [u8; 64] {
+		sp_core::hashing::keccak_512(data)
 	}
 
 	/// Conduct a 256-bit Sha2 hash.
