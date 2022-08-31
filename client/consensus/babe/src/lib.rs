@@ -87,6 +87,7 @@ use futures::{
 use log::{debug, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
+use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
 use sc_client_api::{
@@ -834,16 +835,17 @@ where
 		slot: Slot,
 		epoch_descriptor: &ViableEpochDescriptor<B::Hash, NumberFor<B>, Epoch>,
 	) {
-		let sinks = &mut self.slot_notification_sinks.lock();
-		sinks.retain_mut(|sink| match sink.try_send((slot, epoch_descriptor.clone())) {
-			Ok(()) => true,
-			Err(e) =>
-				if e.is_full() {
-					warn!(target: "babe", "Trying to notify a slot but the channel is full");
-					true
-				} else {
-					false
-				},
+		RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
+			match sink.try_send((slot, epoch_descriptor.clone())) {
+				Ok(()) => true,
+				Err(e) =>
+					if e.is_full() {
+						warn!(target: "babe", "Trying to notify a slot but the channel is full");
+						true
+					} else {
+						false
+					},
+			}
 		});
 	}
 

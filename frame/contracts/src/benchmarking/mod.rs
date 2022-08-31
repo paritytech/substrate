@@ -57,7 +57,7 @@ const INSTR_BENCHMARK_BATCHES: u32 = 50;
 struct Contract<T: Config> {
 	caller: T::AccountId,
 	account_id: T::AccountId,
-	addr: AccountIdLookupOf<T>,
+	addr: <T::Lookup as StaticLookup>::Source,
 	value: BalanceOf<T>,
 }
 
@@ -2853,8 +2853,8 @@ benchmarks! {
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
 			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
-				weight_limit / weight_per_key.ref_time(),
-				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key.ref_time(),
+				weight_limit / weight_per_key,
+				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key,
 			);
 		}
 		#[cfg(not(feature = "std"))]

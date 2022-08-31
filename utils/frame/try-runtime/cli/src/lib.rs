@@ -293,8 +293,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	DeserializeOwned,
 };
-use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
-use sp_version::StateVersion;
+use sp_state_machine::{InMemoryProvingBackend, OverlayedChanges, StateMachine};
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 mod commands;
@@ -422,10 +421,6 @@ pub struct SharedParams {
 	/// When enabled, the spec name check will not panic, and instead only show a warning.
 	#[clap(long)]
 	pub no_spec_name_check: bool,
-
-	/// State version that is used by the chain.
-	#[clap(long, default_value = "1", parse(try_from_str = parse::state_version))]
-	pub state_version: StateVersion,
 }
 
 /// Our `try-runtime` command.
@@ -477,10 +472,9 @@ pub enum State {
 		#[clap(short, long)]
 		snapshot_path: Option<PathBuf>,
 
-		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
-		/// be scraped.
+		/// The pallets to scrape. If empty, entire chain state will be scraped.
 		#[clap(short, long, multiple_values = true)]
-		pallet: Vec<String>,
+		pallets: Vec<String>,
 
 		/// Fetch the child-keys as well.
 		///
@@ -504,7 +498,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live { snapshot_path, pallet, uri, at, child_tree } => {
+			State::Live { snapshot_path, pallets, uri, at, child_tree } => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
@@ -513,7 +507,7 @@ impl State {
 					.mode(Mode::Online(OnlineConfig {
 						transport: uri.to_owned().into(),
 						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-						pallets: pallet.clone(),
+						pallets: pallets.clone(),
 						scrape_children: true,
 						at,
 					}))
@@ -751,11 +745,9 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 
 	let mut changes = Default::default();
 	let backend = ext.backend.clone();
-	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
+	let proving_backend = InMemoryProvingBackend::new(&backend);
 
-	let proving_backend =
-		TrieBackendBuilder::wrap(&backend).with_recorder(Default::default()).build();
-
+	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&proving_backend);
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
 	let pre_root = *backend.root();
@@ -774,9 +766,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
-	let proof = proving_backend
-		.extract_proof()
-		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
+	let proof = proving_backend.extract_proof();
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()

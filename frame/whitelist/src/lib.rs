@@ -38,7 +38,6 @@ mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
-pub use weights::WeightInfo;
 
 use codec::{DecodeLimit, Encode, FullCodec};
 use frame_support::{
@@ -55,6 +54,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::weights::WeightInfo;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 

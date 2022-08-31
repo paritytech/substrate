@@ -293,12 +293,6 @@ pub enum VersionedFinalityProof<N, S> {
 	V1(SignedCommitment<N, S>),
 }
 
-impl<N, S> From<SignedCommitment<N, S>> for VersionedFinalityProof<N, S> {
-	fn from(commitment: SignedCommitment<N, S>) -> Self {
-		VersionedFinalityProof::V1(commitment)
-	}
-}
-
 #[cfg(test)]
 mod tests {
 

@@ -236,6 +236,23 @@ pub trait UnfilteredDispatchable {
 	fn dispatch_bypass_filter(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
 }
 
+/// Type that can be dispatched with an additional storage layer which is used to execute the call.
+pub trait DispatchableWithStorageLayer {
+	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
+	type Origin;
+
+	/// Same as `dispatch` from the [`frame_support::dispatch::Dispatchable`] trait, but
+	/// specifically spawns a new storage layer to execute the call inside of.
+	fn dispatch_with_storage_layer(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
+
+	/// Same as `dispatch_bypass_filter` from the [`UnfilteredDispatchable`] trait, but specifically
+	/// spawns a new storage layer to execute the call inside of.
+	fn dispatch_bypass_filter_with_storage_layer(
+		self,
+		origin: Self::Origin,
+	) -> DispatchResultWithPostInfo;
+}
+
 /// The trait implemented by the overarching enumeration of the different pallets' origins.
 /// Unlike `OriginTrait` impls, this does not include any kind of dispatch/call filter. Also, this
 /// trait is more flexible in terms of how it can be used: it is a `Parameter` and `Member`, so it

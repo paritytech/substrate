@@ -93,9 +93,6 @@ impl<
 		let ayes = approval.mul_ceil(support);
 		Self { ayes, nays: support - ayes, support, dummy: PhantomData }
 	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn setup(_: Class, _: Perbill) {}
 }
 
 impl<

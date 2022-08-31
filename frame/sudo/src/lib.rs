@@ -88,7 +88,7 @@
 //!
 //! * [Democracy](../pallet_democracy/index.html)
 //!
-//! [`Origin`]: https://docs.substrate.io/main-docs/build/origins/
+//! [`Origin`]: https://docs.substrate.io/v3/runtime/origins
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -103,8 +103,6 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -139,7 +137,7 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
-			(dispatch_info.weight, dispatch_info.class)
+			(dispatch_info.weight.saturating_add(10_000), dispatch_info.class)
 		})]
 		pub fn sudo(
 			origin: OriginFor<T>,
@@ -194,7 +192,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn set_key(
 			origin: OriginFor<T>,
-			new: AccountIdLookupOf<T>,
+			new: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -222,6 +220,7 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(
 				dispatch_info.weight
+					.saturating_add(10_000)
 					// AccountData for inner call origin accountdata.
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
@@ -229,7 +228,7 @@ pub mod pallet {
 		})]
 		pub fn sudo_as(
 			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
+			who: <T::Lookup as StaticLookup>::Source,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.

@@ -16,17 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::time::Duration;
-
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use futures::{future, StreamExt};
-use kitchensink_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use node_cli::service::{create_extrinsic, fetch_nonce, FullClient, TransactionPool};
 use node_primitives::AccountId;
+use node_runtime::{constants::currency::*, BalancesCall, SudoCall};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_service::{
 	config::{
-		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
+		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
 		PruningMode, TransactionPoolOptions, WasmExecutionMethod,
 	},
 	BasePath, Configuration, Role,
@@ -60,15 +58,15 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 			ready: PoolLimit { count: 100_000, total_bytes: 100 * 1024 * 1024 },
 			future: PoolLimit { count: 100_000, total_bytes: 100 * 1024 * 1024 },
 			reject_future_transactions: false,
-			ban_time: Duration::from_secs(30 * 60),
 		},
 		network: network_config,
 		keystore: KeystoreConfig::InMemory,
 		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
-		trie_cache_maximum_size: Some(64 * 1024 * 1024),
+		state_cache_size: 67108864,
+		state_cache_child_ratio: None,
 		state_pruning: Some(PruningMode::ArchiveAll),
-		blocks_pruning: BlocksPruning::All,
+		keep_blocks: KeepBlocks::All,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
 		// NOTE: we enforce the use of the native runtime to make the errors more debuggable
@@ -242,25 +240,25 @@ fn transaction_pool_benchmarks(c: &mut Criterion) {
 		move |b| {
 			b.iter_batched(
 				|| {
-					let prepare_extrinsics = create_account_extrinsics(&node.client, &accounts);
+					let prepare_extrinsics = create_account_extrinsics(&*node.client, &accounts);
 
 					runtime.block_on(future::join_all(prepare_extrinsics.into_iter().map(|tx| {
 						submit_tx_and_wait_for_inclusion(
 							&node.transaction_pool,
 							tx,
-							&node.client,
+							&*node.client,
 							true,
 						)
 					})));
 
-					create_benchmark_extrinsics(&node.client, &accounts, extrinsics_per_account)
+					create_benchmark_extrinsics(&*node.client, &accounts, extrinsics_per_account)
 				},
 				|extrinsics| {
 					runtime.block_on(future::join_all(extrinsics.into_iter().map(|tx| {
 						submit_tx_and_wait_for_inclusion(
 							&node.transaction_pool,
 							tx,
-							&node.client,
+							&*node.client,
 							false,
 						)
 					})));

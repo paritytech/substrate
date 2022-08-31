@@ -17,7 +17,7 @@
 
 //! Miscellaneous types.
 
-use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, FullCodec};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
 use sp_runtime::{ArithmeticError, DispatchError, TokenError};
@@ -116,9 +116,7 @@ pub enum ExistenceRequirement {
 }
 
 /// Status of funds.
-#[derive(
-	PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
-)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -128,7 +126,7 @@ pub enum BalanceStatus {
 
 bitflags::bitflags! {
 	/// Reasons for moving funds out of an account.
-	#[derive(Encode, Decode, MaxEncodedLen)]
+	#[derive(Encode, Decode)]
 	pub struct WithdrawReasons: u8 {
 		/// In order to pay for (system) transaction costs.
 		const TRANSACTION_PAYMENT = 0b00000001;
@@ -163,29 +161,16 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId:
-	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
-{
-}
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
-	for T
-{
-}
+pub trait AssetId: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo {}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance:
-	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo + MaxEncodedLen
+	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo
 {
 }
-impl<
-		T: AtLeast32BitUnsigned
-			+ FullCodec
-			+ Copy
-			+ Default
-			+ Debug
-			+ scale_info::TypeInfo
-			+ MaxEncodedLen,
-	> Balance for T
+impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo> Balance
+	for T
 {
 }
 

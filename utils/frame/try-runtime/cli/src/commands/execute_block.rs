@@ -139,8 +139,7 @@ where
 			.state
 			.builder::<Block>()?
 			// make sure the state is being build with the parent hash, if it is online.
-			.overwrite_online_at(parent_hash.to_owned())
-			.state_version(shared.state_version);
+			.overwrite_online_at(parent_hash.to_owned());
 
 		let builder = if command.overwrite_wasm_code {
 			log::info!(

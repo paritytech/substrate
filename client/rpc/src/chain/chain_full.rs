@@ -26,7 +26,7 @@ use futures::{
 	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
 };
-use jsonrpsee::SubscriptionSink;
+use jsonrpsee::PendingSubscription;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -69,7 +69,7 @@ where
 		self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
 	}
 
-	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
+	fn subscribe_all_heads(&self, sink: PendingSubscription) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -83,7 +83,7 @@ where
 		)
 	}
 
-	fn subscribe_new_heads(&self, sink: SubscriptionSink) {
+	fn subscribe_new_heads(&self, sink: PendingSubscription) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -98,7 +98,7 @@ where
 		)
 	}
 
-	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) {
+	fn subscribe_finalized_heads(&self, sink: PendingSubscription) {
 		subscribe_headers(
 			&self.client,
 			&self.executor,
@@ -117,7 +117,7 @@ where
 fn subscribe_headers<Block, Client, F, G, S>(
 	client: &Arc<Client>,
 	executor: &SubscriptionTaskExecutor,
-	mut sink: SubscriptionSink,
+	pending: PendingSubscription,
 	best_block_hash: G,
 	stream: F,
 ) where
@@ -143,7 +143,9 @@ fn subscribe_headers<Block, Client, F, G, S>(
 	let stream = stream::iter(maybe_header).chain(stream());
 
 	let fut = async move {
-		sink.pipe_from_stream(stream).await;
+		if let Some(mut sink) = pending.accept() {
+			sink.pipe_from_stream(stream).await;
+		}
 	};
 
 	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());

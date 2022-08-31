@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, One, SaturatedConversion, Saturating, StaticLookup, Zero},
+	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
 use sp_staking::{
@@ -599,17 +599,20 @@ impl<T: Config> Pallet<T> {
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
 	fn apply_unapplied_slashes(active_era: EraIndex) {
-		let era_slashes = <Self as Store>::UnappliedSlashes::take(&active_era);
-		log!(
-			debug,
-			"found {} slashes scheduled to be executed in era {:?}",
-			era_slashes.len(),
-			active_era,
-		);
-		for slash in era_slashes {
-			let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
-			slashing::apply_slash::<T>(slash, slash_era);
-		}
+		let slash_defer_duration = T::SlashDeferDuration::get();
+		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
+			if let Some(ref mut earliest) = earliest {
+				let keep_from = active_era.saturating_sub(slash_defer_duration);
+				for era in (*earliest)..keep_from {
+					let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
+					for slash in era_slashes {
+						slashing::apply_slash::<T>(slash, era);
+					}
+				}
+
+				*earliest = (*earliest).max(keep_from)
+			}
+		})
 	}
 
 	/// Add reward points to validators using their stash account ID.
@@ -1167,7 +1170,7 @@ where
 		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
-		let mut consumed_weight = Weight::from_ref_time(0);
+		let mut consumed_weight: Weight = 0;
 		let mut add_db_reads_writes = |reads, writes| {
 			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 		};
@@ -1206,6 +1209,11 @@ where
 			}
 		};
 
+		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
+			if earliest.is_none() {
+				*earliest = Some(active_era)
+			}
+		});
 		add_db_reads_writes(1, 1);
 
 		let slash_defer_duration = T::SlashDeferDuration::get();
@@ -1255,18 +1263,9 @@ where
 					}
 				} else {
 					// Defer to end of some `slash_defer_duration` from now.
-					log!(
-						debug,
-						"deferring slash of {:?}% happened in {:?} (reported in {:?}) to {:?}",
-						slash_fraction,
-						slash_era,
-						active_era,
-						slash_era + slash_defer_duration + 1,
-					);
-					<Self as Store>::UnappliedSlashes::mutate(
-						slash_era.saturating_add(slash_defer_duration).saturating_add(One::one()),
-						move |for_later| for_later.push(unapplied),
-					);
+					<Self as Store>::UnappliedSlashes::mutate(active_era, move |for_later| {
+						for_later.push(unapplied)
+					});
 					add_db_reads_writes(1, 1);
 				}
 			} else {

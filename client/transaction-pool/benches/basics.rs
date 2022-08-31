@@ -66,7 +66,7 @@ impl ChainApi for TestApi {
 		uxt: <Self::Block as BlockT>::Extrinsic,
 	) -> Self::ValidationFuture {
 		let nonce = uxt.transfer().nonce;
-		let from = uxt.transfer().from;
+		let from = uxt.transfer().from.clone();
 
 		match self.block_id_to_number(at) {
 			Ok(Some(num)) if num > 5 => return ready(Ok(Err(InvalidTransaction::Stale.into()))),
@@ -76,7 +76,7 @@ impl ChainApi for TestApi {
 		ready(Ok(Ok(ValidTransaction {
 			priority: 4,
 			requires: if nonce > 1 && self.nonce_dependant {
-				vec![to_tag(nonce - 1, from)]
+				vec![to_tag(nonce - 1, from.clone())]
 			} else {
 				vec![]
 			},

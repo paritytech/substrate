@@ -25,7 +25,6 @@ use crate::{
 		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
-	StorageHasher, Twox128,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -92,10 +91,10 @@ impl<Prefix, Hasher1, Key1, Hasher2, Key2, Value, QueryKind, OnEmpty, MaxValues>
 	Key2: MaxEncodedLen,
 {
 	fn get() -> u32 {
-		// The `max_len` of both key hashes plus the pallet prefix and storage prefix (which both
-		// are hashed with `Twox128`).
-		let z =
-			Hasher1::max_len::<Key1>() + Hasher2::max_len::<Key2>() + Twox128::max_len::<()>() * 2;
+		let z = Hasher1::max_len::<Key1>() +
+			Hasher2::max_len::<Key2>() +
+			Prefix::pallet_prefix().len() +
+			Prefix::STORAGE_PREFIX.len();
 		z as u32
 	}
 }
@@ -754,16 +753,6 @@ mod test {
 		fn get() -> u32 {
 			97
 		}
-	}
-
-	#[test]
-	fn keylenof_works() {
-		// Works with Blake2_128Concat and Twox64Concat.
-		type A = StorageDoubleMap<Prefix, Blake2_128Concat, u64, Twox64Concat, u32, u32>;
-		let size = 16 * 2 // Two Twox128
-			+ 16 + 8 // Blake2_128Concat = hash + key
-			+ 8 + 4; // Twox64Concat = hash + key
-		assert_eq!(KeyLenOf::<A>::get(), size);
 	}
 
 	#[test]

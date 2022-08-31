@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod bench;
 pub mod cmd;
-pub mod template;
+mod template;
 
-pub use cmd::OverheadCmd;
+pub use cmd::{ExtrinsicBuilder, OverheadCmd};

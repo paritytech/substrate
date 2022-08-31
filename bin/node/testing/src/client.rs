@@ -16,14 +16,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Utilities to build a `TestClient` for `kitchensink-runtime`.
+//! Utilities to build a `TestClient` for `node-runtime`.
 
 use sc_service::client;
 use sp_runtime::BuildStorage;
 /// Re-export test-client utilities.
 pub use substrate_test_client::*;
 
-/// Call executor for `kitchensink-runtime` `TestClient`.
+/// Call executor for `node-runtime` `TestClient`.
 pub type ExecutorDispatch = sc_executor::NativeElseWasmExecutor<node_executor::ExecutorDispatch>;
 
 /// Default backend type.
@@ -34,10 +34,10 @@ pub type Client = client::Client<
 	Backend,
 	client::LocalCallExecutor<node_primitives::Block, Backend, ExecutorDispatch>,
 	node_primitives::Block,
-	kitchensink_runtime::RuntimeApi,
+	node_runtime::RuntimeApi,
 >;
 
-/// Transaction for kitchensink-runtime.
+/// Transaction for node-runtime.
 pub type Transaction = sc_client_api::backend::TransactionFor<Backend, node_primitives::Block>;
 
 /// Genesis configuration parameters for `TestClient`.

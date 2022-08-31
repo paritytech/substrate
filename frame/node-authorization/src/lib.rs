@@ -46,11 +46,8 @@ pub mod weights;
 
 pub use pallet::*;
 use sp_core::OpaquePeerId as PeerId;
-use sp_runtime::traits::StaticLookup;
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, prelude::*};
 pub use weights::WeightInfo;
-
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -214,10 +211,9 @@ pub mod pallet {
 		pub fn add_well_known_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: AccountIdLookupOf<T>,
+			owner: T::AccountId,
 		) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 
 			let mut nodes = WellKnownNodes::<T>::get();
@@ -359,10 +355,9 @@ pub mod pallet {
 		pub fn transfer_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: AccountIdLookupOf<T>,
+			owner: T::AccountId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
-			let owner = T::Lookup::lookup(owner)?;
 
 			ensure!(node.0.len() < T::MaxPeerIdLength::get() as usize, Error::<T>::PeerIdTooLong);
 			let pre_owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;

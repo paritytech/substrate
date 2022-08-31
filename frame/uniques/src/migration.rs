@@ -17,7 +17,10 @@
 
 //! Various pieces of common functionality.
 use super::*;
-use frame_support::traits::{Get, GetStorageVersion, PalletInfoAccess, StorageVersion};
+use frame_support::{
+	traits::{Get, GetStorageVersion, PalletInfoAccess, StorageVersion},
+	weights::Weight,
+};
 
 /// Migrate the pallet storage to v1.
 pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfoAccess>(
@@ -42,7 +45,7 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 			on_chain_storage_version,
 		);
 		// calculate and return migration weights
-		T::DbWeight::get().reads_writes(count as u64 + 1, count as u64 + 1)
+		T::DbWeight::get().reads_writes(count as Weight + 1, count as Weight + 1)
 	} else {
 		log::warn!(
 			target: "runtime::uniques",

@@ -45,7 +45,7 @@ use frame_system::{self as system};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Dispatchable, Hash, Saturating, StaticLookup, TrailingZeroInput, Zero},
+	traits::{Dispatchable, Hash, Saturating, TrailingZeroInput, Zero},
 	DispatchResult,
 };
 use sp_std::prelude::*;
@@ -57,8 +57,6 @@ type CallHashOf<T> = <<T as Config>::CallHasher as Hash>::Output;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// The parameters under which a particular account has a proxy relationship with some other
 /// account.
@@ -199,19 +197,18 @@ pub mod pallet {
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy(T::MaxProxies::get())
+				.saturating_add(di.weight)
 				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
-				.saturating_add(di.weight),
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			di.class)
 		})]
 		pub fn proxy(
 			origin: OriginFor<T>,
-			real: AccountIdLookupOf<T>,
+			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let real = T::Lookup::lookup(real)?;
 			let def = Self::find_proxy(&real, &who, force_proxy_type)?;
 			ensure!(def.delay.is_zero(), Error::<T>::Unannounced);
 
@@ -236,12 +233,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_proxy(T::MaxProxies::get()))]
 		pub fn add_proxy(
 			origin: OriginFor<T>,
-			delegate: AccountIdLookupOf<T>,
+			delegate: T::AccountId,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegate = T::Lookup::lookup(delegate)?;
 			Self::add_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
@@ -259,12 +255,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_proxy(T::MaxProxies::get()))]
 		pub fn remove_proxy(
 			origin: OriginFor<T>,
-			delegate: AccountIdLookupOf<T>,
+			delegate: T::AccountId,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegate = T::Lookup::lookup(delegate)?;
 			Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
 		}
 
@@ -364,14 +359,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::kill_anonymous(T::MaxProxies::get()))]
 		pub fn kill_anonymous(
 			origin: OriginFor<T>,
-			spawner: AccountIdLookupOf<T>,
+			spawner: T::AccountId,
 			proxy_type: T::ProxyType,
 			index: u16,
 			#[pallet::compact] height: T::BlockNumber,
 			#[pallet::compact] ext_index: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let spawner = T::Lookup::lookup(spawner)?;
 
 			let when = (height, ext_index);
 			let proxy = Self::anonymous_account(&spawner, &proxy_type, index, Some(when));
@@ -407,11 +401,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get()))]
 		pub fn announce(
 			origin: OriginFor<T>,
-			real: AccountIdLookupOf<T>,
+			real: T::AccountId,
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let real = T::Lookup::lookup(real)?;
 			Proxies::<T>::get(&real)
 				.0
 				.into_iter()
@@ -465,11 +458,10 @@ pub mod pallet {
 		))]
 		pub fn remove_announcement(
 			origin: OriginFor<T>,
-			real: AccountIdLookupOf<T>,
+			real: T::AccountId,
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let real = T::Lookup::lookup(real)?;
 			Self::edit_announcements(&who, |ann| ann.real != real || ann.call_hash != call_hash)?;
 
 			Ok(())
@@ -497,11 +489,10 @@ pub mod pallet {
 		))]
 		pub fn reject_announcement(
 			origin: OriginFor<T>,
-			delegate: AccountIdLookupOf<T>,
+			delegate: T::AccountId,
 			call_hash: CallHashOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let delegate = T::Lookup::lookup(delegate)?;
 			Self::edit_announcements(&delegate, |ann| {
 				ann.real != who || ann.call_hash != call_hash
 			})?;
@@ -529,21 +520,19 @@ pub mod pallet {
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get())
+				.saturating_add(di.weight)
 				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
-				.saturating_add(di.weight),
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			di.class)
 		})]
 		pub fn proxy_announced(
 			origin: OriginFor<T>,
-			delegate: AccountIdLookupOf<T>,
-			real: AccountIdLookupOf<T>,
+			delegate: T::AccountId,
+			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
 			call: Box<<T as Config>::Call>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
-			let delegate = T::Lookup::lookup(delegate)?;
-			let real = T::Lookup::lookup(real)?;
 			let def = Self::find_proxy(&real, &delegate, force_proxy_type)?;
 
 			let call_hash = T::CallHasher::hash_of(&call);

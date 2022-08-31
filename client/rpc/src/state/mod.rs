@@ -29,8 +29,7 @@ use crate::SubscriptionTaskExecutor;
 
 use jsonrpsee::{
 	core::{Error as JsonRpseeError, RpcResult},
-	types::SubscriptionResult,
-	ws_server::SubscriptionSink,
+	ws_server::PendingSubscription,
 };
 
 use sc_rpc_api::{state::ReadProof, DenyUnsafe};
@@ -156,10 +155,10 @@ where
 	) -> Result<sp_rpc::tracing::TraceBlockResponse, Error>;
 
 	/// New runtime version subscription
-	fn subscribe_runtime_version(&self, sink: SubscriptionSink);
+	fn subscribe_runtime_version(&self, sink: PendingSubscription);
 
 	/// New storage subscription
-	fn subscribe_storage(&self, sink: SubscriptionSink, keys: Option<Vec<StorageKey>>);
+	fn subscribe_storage(&self, sink: PendingSubscription, keys: Option<Vec<StorageKey>>);
 }
 
 /// Create new state API that works on full node.
@@ -319,25 +318,19 @@ where
 			.map_err(Into::into)
 	}
 
-	fn subscribe_runtime_version(&self, sink: SubscriptionSink) -> SubscriptionResult {
-		self.backend.subscribe_runtime_version(sink);
-		Ok(())
+	fn subscribe_runtime_version(&self, sink: PendingSubscription) {
+		self.backend.subscribe_runtime_version(sink)
 	}
 
-	fn subscribe_storage(
-		&self,
-		mut sink: SubscriptionSink,
-		keys: Option<Vec<StorageKey>>,
-	) -> SubscriptionResult {
+	fn subscribe_storage(&self, sink: PendingSubscription, keys: Option<Vec<StorageKey>>) {
 		if keys.is_none() {
 			if let Err(err) = self.deny_unsafe.check_if_safe() {
 				let _ = sink.reject(JsonRpseeError::from(err));
-				return Ok(())
+				return
 			}
 		}
 
-		self.backend.subscribe_storage(sink, keys);
-		Ok(())
+		self.backend.subscribe_storage(sink, keys)
 	}
 }
 

@@ -30,7 +30,7 @@ impl crate::WeightInfo for () {
 		// Blake2 hash cost.
 		let hash_weight = 2 * WEIGHT_PER_NANOS;
 		// No-op hook.
-		let hook_weight = Weight::zero();
+		let hook_weight = 0;
 
 		leaf_weight
 			.saturating_add(hash_weight)

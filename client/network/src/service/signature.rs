@@ -18,10 +18,7 @@
 //
 // If you read this, you are very thorough, congratulations.
 
-use libp2p::{
-	identity::{error::SigningError, Keypair, PublicKey},
-	PeerId,
-};
+use super::*;
 
 /// A result of signing a message with a network identity. Since `PeerId` is potentially a hash of a
 /// `PublicKey`, you need to reveal the `PublicKey` next to the signature, so the verifier can check

@@ -664,7 +664,7 @@ where
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(Self, E), ExecError> {
 		let (first_frame, executable, nonce) =
-			Self::new_frame(args, value, gas_meter, storage_meter, Weight::zero(), schedule)?;
+			Self::new_frame(args, value, gas_meter, storage_meter, 0, schedule)?;
 		let stack = Self {
 			origin,
 			schedule,
@@ -797,7 +797,7 @@ where
 				)?;
 			}
 
-			// Every non delegate call or instantiate also optionally transfers the balance.
+			// Every call or instantiate also optionally transferres balance.
 			self.initial_transfer()?;
 
 			// Call into the wasm blob.
@@ -959,14 +959,8 @@ where
 	// The transfer as performed by a call or instantiate.
 	fn initial_transfer(&self) -> DispatchResult {
 		let frame = self.top_frame();
-
-		// If it is a delegate call, then we've already transferred tokens in the
-		// last non-delegate frame.
-		if frame.delegate_caller.is_some() {
-			return Ok(())
-		}
-
 		let value = frame.value_transferred;
+
 		Self::transfer(ExistenceRequirement::KeepAlive, self.caller(), &frame.account_id, value)
 	}
 
@@ -1089,7 +1083,7 @@ where
 				delegated_call: Some(DelegatedCall { executable, caller: self.caller().clone() }),
 			},
 			value,
-			Weight::zero(),
+			0,
 		)?;
 		self.run(executable, input_data)
 	}
@@ -1315,7 +1309,7 @@ where
 
 fn deposit_event<T: Config>(topics: Vec<T::Hash>, event: Event<T>) {
 	<frame_system::Pallet<T>>::deposit_event_indexed(
-		&topics,
+		&*topics,
 		<T as Config>::Event::from(event).into(),
 	)
 }
@@ -1416,7 +1410,12 @@ mod tests {
 				loader.counter += 1;
 				loader.map.insert(
 					hash,
-					MockExecutable { func: Rc::new(f), func_type, code_hash: hash, refcount: 1 },
+					MockExecutable {
+						func: Rc::new(f),
+						func_type,
+						code_hash: hash.clone(),
+						refcount: 1,
+					},
 				);
 				hash
 			})
@@ -1558,82 +1557,6 @@ mod tests {
 
 			assert_eq!(get_balance(&origin), 45);
 			assert_eq!(get_balance(&dest), 55);
-		});
-	}
-
-	#[test]
-	fn correct_transfer_on_call() {
-		let origin = ALICE;
-		let dest = BOB;
-		let value = 55;
-
-		let success_ch = MockLoader::insert(Call, move |ctx, _| {
-			assert_eq!(ctx.ext.value_transferred(), value);
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
-		});
-
-		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <Test as Config>::Schedule::get();
-			place_contract(&dest, success_ch);
-			set_balance(&origin, 100);
-			let balance = get_balance(&dest);
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
-
-			let _ = MockStack::run_call(
-				origin.clone(),
-				dest.clone(),
-				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				&mut storage_meter,
-				&schedule,
-				value,
-				vec![],
-				None,
-			)
-			.unwrap();
-
-			assert_eq!(get_balance(&origin), 100 - value);
-			assert_eq!(get_balance(&dest), balance + value);
-		});
-	}
-
-	#[test]
-	fn correct_transfer_on_delegate_call() {
-		let origin = ALICE;
-		let dest = BOB;
-		let value = 35;
-
-		let success_ch = MockLoader::insert(Call, move |ctx, _| {
-			assert_eq!(ctx.ext.value_transferred(), value);
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
-		});
-
-		let delegate_ch = MockLoader::insert(Call, move |ctx, _| {
-			assert_eq!(ctx.ext.value_transferred(), value);
-			let _ = ctx.ext.delegate_call(success_ch, Vec::new())?;
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
-		});
-
-		ExtBuilder::default().build().execute_with(|| {
-			let schedule = <Test as Config>::Schedule::get();
-			place_contract(&dest, delegate_ch);
-			set_balance(&origin, 100);
-			let balance = get_balance(&dest);
-			let mut storage_meter = storage::meter::Meter::new(&origin, Some(0), 55).unwrap();
-
-			let _ = MockStack::run_call(
-				origin.clone(),
-				dest.clone(),
-				&mut GasMeter::<Test>::new(GAS_LIMIT),
-				&mut storage_meter,
-				&schedule,
-				value,
-				vec![],
-				None,
-			)
-			.unwrap();
-
-			assert_eq!(get_balance(&origin), 100 - value);
-			assert_eq!(get_balance(&dest), balance + value);
 		});
 	}
 
@@ -1825,7 +1748,7 @@ mod tests {
 		let value = Default::default();
 		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
-			let r = ctx.ext.call(Weight::zero(), BOB, 0, vec![], true);
+			let r = ctx.ext.call(0, BOB, 0, vec![], true);
 
 			REACHED_BOTTOM.with(|reached_bottom| {
 				let mut reached_bottom = reached_bottom.borrow_mut();
@@ -1880,7 +1803,7 @@ mod tests {
 				.with(|caller| *caller.borrow_mut() = Some(ctx.ext.caller().clone()));
 
 			// Call into CHARLIE contract.
-			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true), Ok(_));
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
@@ -2011,7 +1934,7 @@ mod tests {
 			// ALICE is the origin of the call stack
 			assert!(ctx.ext.caller_is_origin());
 			// BOB calls CHARLIE
-			ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true)
+			ctx.ext.call(0, CHARLIE, 0, vec![], true)
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -2041,7 +1964,7 @@ mod tests {
 			assert_eq!(*ctx.ext.address(), BOB);
 
 			// Call into charlie contract.
-			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true), Ok(_));
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
@@ -2184,13 +2107,14 @@ mod tests {
 		let dummy_ch = MockLoader::insert(Call, |_, _| exec_success());
 		let instantiated_contract_address = Rc::new(RefCell::new(None::<AccountIdOf<Test>>));
 		let instantiator_ch = MockLoader::insert(Call, {
+			let dummy_ch = dummy_ch.clone();
 			let instantiated_contract_address = Rc::clone(&instantiated_contract_address);
 			move |ctx, _| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				let (address, output) = ctx
 					.ext
 					.instantiate(
-						Weight::zero(),
+						0,
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2246,11 +2170,12 @@ mod tests {
 	fn instantiation_traps() {
 		let dummy_ch = MockLoader::insert(Constructor, |_, _| Err("It's a trap!".into()));
 		let instantiator_ch = MockLoader::insert(Call, {
+			let dummy_ch = dummy_ch.clone();
 			move |ctx, _| {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				assert_matches!(
 					ctx.ext.instantiate(
-						Weight::zero(),
+						0,
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2342,13 +2267,13 @@ mod tests {
 				let info = ctx.ext.contract_info();
 				assert_eq!(info.storage_deposit, 0);
 				info.storage_deposit = 42;
-				assert_eq!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), exec_trapped());
+				assert_eq!(ctx.ext.call(0, CHARLIE, 0, vec![], true), exec_trapped());
 				assert_eq!(ctx.ext.contract_info().storage_deposit, 42);
 			}
 			exec_success()
 		});
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			assert!(ctx.ext.call(Weight::zero(), BOB, 0, vec![99], true).is_ok());
+			assert!(ctx.ext.call(0, BOB, 0, vec![99], true).is_ok());
 			exec_trapped()
 		});
 
@@ -2377,7 +2302,7 @@ mod tests {
 	fn recursive_call_during_constructor_fails() {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
-				ctx.ext.call(Weight::zero(), ctx.ext.address().clone(), 0, vec![], true),
+				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![], true),
 				Err(ExecError{error, ..}) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
@@ -2479,7 +2404,7 @@ mod tests {
 		// call the contract passed as input with disabled reentry
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			let dest = Decode::decode(&mut ctx.input_data.as_ref()).unwrap();
-			ctx.ext.call(Weight::zero(), dest, 0, vec![], false)
+			ctx.ext.call(0, dest, 0, vec![], false)
 		});
 
 		let code_charlie = MockLoader::insert(Call, |_, _| exec_success());
@@ -2524,7 +2449,7 @@ mod tests {
 	fn call_deny_reentry() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
-				ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], false)
+				ctx.ext.call(0, CHARLIE, 0, vec![], false)
 			} else {
 				exec_success()
 			}
@@ -2532,7 +2457,7 @@ mod tests {
 
 		// call BOB with input set to '1'
 		let code_charlie =
-			MockLoader::insert(Call, |ctx, _| ctx.ext.call(Weight::zero(), BOB, 0, vec![1], true));
+			MockLoader::insert(Call, |ctx, _| ctx.ext.call(0, BOB, 0, vec![1], true));
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
@@ -2695,30 +2620,18 @@ mod tests {
 		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
 		let succ_fail_code = MockLoader::insert(Constructor, move |ctx, _| {
 			ctx.ext
-				.instantiate(
-					Weight::zero(),
-					fail_code,
-					ctx.ext.minimum_balance() * 100,
-					vec![],
-					&[],
-				)
+				.instantiate(0, fail_code, ctx.ext.minimum_balance() * 100, vec![], &[])
 				.ok();
 			exec_success()
 		});
 		let succ_succ_code = MockLoader::insert(Constructor, move |ctx, _| {
 			let (account_id, _) = ctx
 				.ext
-				.instantiate(
-					Weight::zero(),
-					success_code,
-					ctx.ext.minimum_balance() * 100,
-					vec![],
-					&[],
-				)
+				.instantiate(0, success_code, ctx.ext.minimum_balance() * 100, vec![], &[])
 				.unwrap();
 
 			// a plain call should not influence the account counter
-			ctx.ext.call(Weight::zero(), account_id, 0, vec![], false).unwrap();
+			ctx.ext.call(0, account_id, 0, vec![], false).unwrap();
 
 			exec_success()
 		});

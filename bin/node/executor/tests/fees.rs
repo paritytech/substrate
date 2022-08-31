@@ -20,11 +20,11 @@ use frame_support::{
 	traits::Currency,
 	weights::{constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFee},
 };
-use kitchensink_runtime::{
+use node_primitives::Balance;
+use node_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
 	Balances, Call, CheckedExtrinsic, Multiplier, Runtime, TransactionByteFee, TransactionPayment,
 };
-use node_primitives::Balance;
 use node_testing::keyring::*;
 use sp_core::NeverNativeValue;
 use sp_runtime::{traits::One, Perbill};
@@ -58,10 +58,8 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::Sudo(pallet_sudo::Call::sudo {
-					call: Box::new(Call::System(frame_system::Call::fill_block {
-						ratio: Perbill::from_percent(60),
-					})),
+				function: Call::System(frame_system::Call::fill_block {
+					ratio: Perbill::from_percent(60),
 				}),
 			},
 		],
@@ -73,7 +71,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let block2 = construct_block(
 		&mut tt,
 		2,
-		block1.1,
+		block1.1.clone(),
 		vec![
 			CheckedExtrinsic {
 				signed: None,
@@ -208,7 +206,7 @@ fn transaction_fee_is_correct() {
 		// we know that weight to fee multiplier is effect-less in block 1.
 		// current weight of transfer = 200_000_000
 		// Linear weight to fee is 1:1 right now (1 weight = 1 unit of balance)
-		assert_eq!(weight_fee, weight.ref_time() as Balance);
+		assert_eq!(weight_fee, weight as Balance);
 		balance_alice -= base_fee;
 		balance_alice -= weight_fee;
 		balance_alice -= tip;

@@ -17,7 +17,6 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
-use impl_trait_for_tuples::impl_for_tuples;
 use sp_std::prelude::*;
 
 /// An instance of a pallet in the storage.
@@ -72,9 +71,7 @@ pub trait StorageInfoTrait {
 	fn storage_info() -> Vec<StorageInfo>;
 }
 
-#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
-#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
-#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 impl StorageInfoTrait for Tuple {
 	fn storage_info() -> Vec<StorageInfo> {
 		let mut res = vec![];

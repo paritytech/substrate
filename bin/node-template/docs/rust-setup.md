@@ -3,7 +3,7 @@ title: Installation
 ---
 
 This guide is for reference only, please check the latest information on getting starting with Substrate 
-[here](https://docs.substrate.io/main-docs/install/).
+[here](https://docs.substrate.io/v3/getting-started/installation/).
 
 This page will guide you through the **2 steps** needed to prepare a computer for **Substrate** development.
 Since Substrate is built with [the Rust programming language](https://www.rust-lang.org/), the first
@@ -73,11 +73,11 @@ brew install openssl
 
 ### Windows
 
-**_PLEASE NOTE:_** Native Windows development of Substrate is _not_ very well supported! It is _highly_
+**_PLEASE NOTE:_** Native development of Substrate is _not_ very well supported! It is _highly_
 recommend to use [Windows Subsystem Linux](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
 (WSL) and follow the instructions for [Ubuntu/Debian](#ubuntudebian).
 Please refer to the separate
-[guide for native Windows development](https://docs.substrate.io/main-docs/install/windows/).
+[guide for native Windows development](https://docs.substrate.io/v3/getting-started/windows-users/).
 
 ## Rust developer environment
 

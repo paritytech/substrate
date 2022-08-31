@@ -34,7 +34,7 @@ const SEED: u32 = 0;
 // Create the pre-requisite information needed to create a treasury `propose_spend`.
 fn setup_proposal<T: Config<I>, I: 'static>(
 	u: u32,
-) -> (T::AccountId, BalanceOf<T, I>, AccountIdLookupOf<T>) {
+) -> (T::AccountId, BalanceOf<T, I>, <T::Lookup as StaticLookup>::Source) {
 	let caller = account("caller", u, SEED);
 	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100u32.into());
 	let _ = T::Currency::make_free_balance_be(&caller, value);
@@ -99,8 +99,7 @@ benchmarks_instance_pallet! {
 			beneficiary_lookup
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
-		let reject_origin = T::RejectOrigin::successful_origin();
-	}: _<T::Origin>(reject_origin, proposal_id)
+	}: _(RawOrigin::Root, proposal_id)
 
 	approve_proposal {
 		let p in 0 .. T::MaxApprovals::get() - 1;
@@ -112,8 +111,7 @@ benchmarks_instance_pallet! {
 			beneficiary_lookup
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
-		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: _<T::Origin>(approve_origin, proposal_id)
+	}: _(RawOrigin::Root, proposal_id)
 
 	remove_approval {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
@@ -124,8 +122,7 @@ benchmarks_instance_pallet! {
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
-		let reject_origin = T::RejectOrigin::successful_origin();
-	}: _<T::Origin>(reject_origin, proposal_id)
+	}: _(RawOrigin::Root, proposal_id)
 
 	on_initialize_proposals {
 		let p in 0 .. T::MaxApprovals::get();

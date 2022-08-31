@@ -151,11 +151,6 @@ impl Justifications {
 		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
 	}
 
-	/// Remove the encoded justification for the given consensus engine, if it exists.
-	pub fn remove(&mut self, engine_id: ConsensusEngineId) {
-		self.0.retain(|j| j.0 != engine_id)
-	}
-
 	/// Return a copy of the encoded justification for the given consensus
 	/// engine, if it exists.
 	pub fn into_justification(self, engine_id: ConsensusEngineId) -> Option<EncodedJustification> {
@@ -1131,7 +1126,7 @@ mod tests {
 		ext.insert(b"c".to_vec(), vec![3u8; 33]);
 		ext.insert(b"d".to_vec(), vec![4u8; 33]);
 
-		let pre_root = *ext.backend.root();
+		let pre_root = ext.backend.root().clone();
 		let (_, proof) = ext.execute_and_prove(|| {
 			sp_io::storage::get(b"a");
 			sp_io::storage::get(b"b");

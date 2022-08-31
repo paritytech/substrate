@@ -56,7 +56,7 @@
 use codec::FullCodec;
 use frame_election_provider_support::{ScoreProvider, SortedListProvider};
 use frame_system::ensure_signed;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded, StaticLookup};
+use sp_runtime::traits::{AtLeast32BitUnsigned, Bounded};
 use sp_std::prelude::*;
 
 #[cfg(any(feature = "runtime-benchmarks", test))]
@@ -89,8 +89,6 @@ macro_rules! log {
 		)
 	};
 }
-
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -224,9 +222,8 @@ pub mod pallet {
 		///
 		/// If `dislocated` does not exists, it returns an error.
 		#[pallet::weight(T::WeightInfo::rebag_non_terminal().max(T::WeightInfo::rebag_terminal()))]
-		pub fn rebag(origin: OriginFor<T>, dislocated: AccountIdLookupOf<T>) -> DispatchResult {
+		pub fn rebag(origin: OriginFor<T>, dislocated: T::AccountId) -> DispatchResult {
 			ensure_signed(origin)?;
-			let dislocated = T::Lookup::lookup(dislocated)?;
 			let current_score = T::ScoreProvider::score(&dislocated);
 			let _ = Pallet::<T, I>::do_rebag(&dislocated, current_score)
 				.map_err::<Error<T, I>, _>(Into::into)?;
@@ -242,12 +239,8 @@ pub mod pallet {
 		/// - both nodes are within the same bag,
 		/// - and `origin` has a greater `Score` than `lighter`.
 		#[pallet::weight(T::WeightInfo::put_in_front_of())]
-		pub fn put_in_front_of(
-			origin: OriginFor<T>,
-			lighter: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn put_in_front_of(origin: OriginFor<T>, lighter: T::AccountId) -> DispatchResult {
 			let heavier = ensure_signed(origin)?;
-			let lighter = T::Lookup::lookup(lighter)?;
 			List::<T, I>::put_in_front_of(&lighter, &heavier)
 				.map_err::<Error<T, I>, _>(Into::into)
 				.map_err::<DispatchError, _>(Into::into)

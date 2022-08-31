@@ -22,7 +22,6 @@ use std::collections::BTreeMap;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
 	traits::{ConstU32, ConstU64, Contains, Polling, VoteTally},
-	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -58,7 +57,7 @@ impl Contains<Call> for BaseFilter {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
+		frame_system::limits::BlockWeights::simple_max(1_000_000);
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;

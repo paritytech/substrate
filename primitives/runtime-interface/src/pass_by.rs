@@ -248,12 +248,12 @@ impl<T: codec::Codec> PassByImpl<T> for Codec<T> {
 		let len = len as usize;
 
 		let encoded = if len == 0 {
-			bytes::Bytes::new()
+			Vec::new()
 		} else {
-			bytes::Bytes::from(unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) })
+			unsafe { Vec::from_raw_parts(ptr as *mut u8, len, len) }
 		};
 
-		codec::decode_from_bytes(encoded).expect("Host to wasm values are encoded correctly; qed")
+		T::decode(&mut &encoded[..]).expect("Host to wasm values are encoded correctly; qed")
 	}
 }
 
