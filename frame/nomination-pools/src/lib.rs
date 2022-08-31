@@ -776,7 +776,6 @@ impl<T: Config> BondedPool<T> {
 		// The member may just be kicked, thus reject to rebond. Note that this check also reject
 		// member who didn't be kicked but happen to fully unbond and try to rebond when the
 		// pool is blocked
-		// TODO: shoule also add this check to `bond_extra`?
 		if matches!(self.state, PoolState::Blocked) && member.active_points().is_zero() {
 			return Err(Error::<T>::FullyUnbonding.into())
 		}
