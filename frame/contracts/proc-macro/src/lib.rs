@@ -509,7 +509,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// ```nocompile
 /// #[define_env]
 /// pub mod some_env {
-/// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<(), TrapReason> {
+/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<(), TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 /// }
@@ -524,12 +524,12 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// #[define_env]
 /// pub mod some_env {
 /// 	#[version(1)]
-/// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
+/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 ///
 /// 	#[unstable]
-/// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
+/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 /// }
@@ -542,22 +542,19 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 ///
 /// ## Example
 ///
-/// ```no_run
-/// # #[macro_use] extern crate foo;
-/// # fn main() {
-///   #[define_env]
-///   pub mod some_env {
-///   	#[version(1)]
+/// ```nocompile
+/// #[define_env]
+/// pub mod some_env {
+/// 	#[version(1)]
 /// 	#[prefixed_alias]
-/// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
+/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 ///
 /// 	#[unstable]
-/// 	fn some_host_fn(ctx: Runtime<E: Ext>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
+/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
-///   }
 /// }
 /// ```
 ///
