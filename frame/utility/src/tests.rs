@@ -383,7 +383,8 @@ fn batch_early_exit_works() {
 fn batch_weight_calculation_doesnt_overflow() {
 	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
-		let big_call = RuntimeCall::System(SystemCall::fill_block { ratio: Perbill::from_percent(50) });
+		let big_call =
+			RuntimeCall::System(SystemCall::fill_block { ratio: Perbill::from_percent(50) });
 		assert_eq!(big_call.get_dispatch_info().weight, Weight::MAX / 2);
 
 		// 3 * 50% saturates to 100%

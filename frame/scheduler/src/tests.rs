@@ -32,7 +32,8 @@ use substrate_test_utils::assert_eq_uvec;
 #[test]
 fn basic_scheduling_works() {
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call.into()));
 		run_to_block(3);
@@ -47,7 +48,8 @@ fn basic_scheduling_works() {
 #[test]
 fn scheduling_with_preimages_works() {
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let hashed = MaybeHashed::Hash(hash);
 		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
@@ -67,7 +69,8 @@ fn scheduling_with_preimages_works() {
 #[test]
 fn scheduling_with_preimage_postpones_correctly() {
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let hashed = MaybeHashed::Hash(hash);
 
@@ -100,7 +103,8 @@ fn scheduling_with_preimage_postpones_correctly() {
 fn schedule_after_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(2);
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 		assert_ok!(Scheduler::do_schedule(DispatchTime::After(3), None, 127, root(), call.into()));
@@ -117,7 +121,8 @@ fn schedule_after_works() {
 fn schedule_after_zero_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(2);
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_ok!(Scheduler::do_schedule(DispatchTime::After(0), None, 127, root(), call.into()));
 		// Will trigger on the next block.
@@ -137,7 +142,8 @@ fn periodic_scheduling_works() {
 			Some((3, 3)),
 			127,
 			root(),
-			RuntimeCall::Logger(logger::Call::log { i: 42, weight: Weight::from_ref_time(1000) }).into()
+			RuntimeCall::Logger(logger::Call::log { i: 42, weight: Weight::from_ref_time(1000) })
+				.into()
 		));
 		run_to_block(3);
 		assert!(logger::log().is_empty());
@@ -159,7 +165,8 @@ fn periodic_scheduling_works() {
 #[test]
 fn reschedule_works() {
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), call.into()).unwrap(),
@@ -190,7 +197,8 @@ fn reschedule_works() {
 #[test]
 fn reschedule_named_works() {
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule_named(
@@ -232,7 +240,8 @@ fn reschedule_named_works() {
 #[test]
 fn reschedule_named_perodic_works() {
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule_named(
@@ -294,7 +303,8 @@ fn cancel_named_scheduling_works_with_normal_cancel() {
 			None,
 			127,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) })
+				.into(),
 		)
 		.unwrap();
 		let i = Scheduler::do_schedule(
@@ -302,7 +312,8 @@ fn cancel_named_scheduling_works_with_normal_cancel() {
 			None,
 			127,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) })
+				.into(),
 		)
 		.unwrap();
 		run_to_block(3);
@@ -324,7 +335,8 @@ fn cancel_named_periodic_scheduling_works() {
 			Some((3, 3)),
 			127,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) })
+				.into(),
 		)
 		.unwrap();
 		// same id results in error.
@@ -334,7 +346,8 @@ fn cancel_named_periodic_scheduling_works() {
 			None,
 			127,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) })
+				.into(),
 		)
 		.is_err());
 		// different id is ok.
@@ -344,7 +357,8 @@ fn cancel_named_periodic_scheduling_works() {
 			None,
 			127,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) })
+				.into(),
 		)
 		.unwrap();
 		run_to_block(3);
@@ -509,7 +523,8 @@ fn on_initialize_weight_is_correct() {
 			None,
 			255,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 3, weight: call_weight + Weight::one() }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 3, weight: call_weight + Weight::one() })
+				.into(),
 		));
 		// Anon Periodic
 		assert_ok!(Scheduler::do_schedule(
@@ -517,8 +532,11 @@ fn on_initialize_weight_is_correct() {
 			Some((1000, 3)),
 			128,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: call_weight + Weight::from_ref_time(2) })
-				.into(),
+			RuntimeCall::Logger(LoggerCall::log {
+				i: 42,
+				weight: call_weight + Weight::from_ref_time(2)
+			})
+			.into(),
 		));
 		// Anon
 		assert_ok!(Scheduler::do_schedule(
@@ -526,8 +544,11 @@ fn on_initialize_weight_is_correct() {
 			None,
 			127,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: call_weight + Weight::from_ref_time(3) })
-				.into(),
+			RuntimeCall::Logger(LoggerCall::log {
+				i: 69,
+				weight: call_weight + Weight::from_ref_time(3)
+			})
+			.into(),
 		));
 		// Named Periodic
 		assert_ok!(Scheduler::do_schedule_named(
@@ -588,10 +609,12 @@ fn on_initialize_weight_is_correct() {
 fn root_calls_works() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) })
+				.into(),
 		);
 		let call2 = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) })
+				.into(),
 		);
 		assert_ok!(Scheduler::schedule_named(Origin::root(), 1u32.encode(), 4, None, 127, call,));
 		assert_ok!(Scheduler::schedule(Origin::root(), 4, None, 127, call2));
@@ -613,13 +636,16 @@ fn fails_to_schedule_task_in_the_past() {
 		run_to_block(3);
 
 		let call1 = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) })
+				.into(),
 		);
 		let call2 = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) })
+				.into(),
 		);
 		let call3 = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) })
+				.into(),
 		);
 		assert_err!(
 			Scheduler::schedule_named(Origin::root(), 1u32.encode(), 2, None, 127, call1),
@@ -642,11 +668,14 @@ fn fails_to_schedule_task_in_the_past() {
 fn should_use_orign() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) })
+				.into(),
 		);
 		let call2 = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) }).into(),
-		);		assert_ok!(Scheduler::schedule_named(
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) })
+				.into(),
+		);
+		assert_ok!(Scheduler::schedule_named(
 			system::RawOrigin::Signed(1).into(),
 			1u32.encode(),
 			4,
@@ -671,10 +700,12 @@ fn should_use_orign() {
 fn should_check_orign() {
 	new_test_ext().execute_with(|| {
 		let call = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(1000) })
+				.into(),
 		);
 		let call2 = Box::new(
-			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) }).into(),
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) })
+				.into(),
 		);
 		assert_noop!(
 			Scheduler::schedule_named(

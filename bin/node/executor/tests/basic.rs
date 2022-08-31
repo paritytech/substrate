@@ -736,16 +736,16 @@ fn deploying_wasm_contract_should_work() {
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: RuntimeCall::Contracts(
-					pallet_contracts::Call::instantiate_with_code::<Runtime> {
-						value: 0,
-						gas_limit: Weight::from_ref_time(500_000_000),
-						storage_deposit_limit: None,
-						code: transfer_code,
-						data: Vec::new(),
-						salt: Vec::new(),
-					},
-				),
+				function: RuntimeCall::Contracts(pallet_contracts::Call::instantiate_with_code::<
+					Runtime,
+				> {
+					value: 0,
+					gas_limit: Weight::from_ref_time(500_000_000),
+					storage_deposit_limit: None,
+					code: transfer_code,
+					data: Vec::new(),
+					salt: Vec::new(),
+				}),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
