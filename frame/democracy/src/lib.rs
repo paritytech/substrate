@@ -164,7 +164,7 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_runtime::{
-	traits::{Bounded as ArithBounded, One, Saturating, Zero},
+	traits::{Bounded as ArithBounded, One, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult,
 };
 use sp_std::prelude::*;
@@ -204,6 +204,7 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::NegativeImbalance;
 pub type CallOf<T> = <T as frame_system::Config>::Call;
 pub type BoundedCallOf<T> = Bounded<CallOf<T>>;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -525,6 +526,8 @@ pub mod pallet {
 		MaxVotesReached,
 		/// Maximum number of items reached.
 		TooMany,
+		/// Voting period too low
+		VotingPeriodLow,
 	}
 
 	#[pallet::hooks]
@@ -751,6 +754,7 @@ pub mod pallet {
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
 
+			ensure!(voting_period > T::BlockNumber::zero(), Error::<T>::VotingPeriodLow);
 			let (ext_proposal, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
@@ -900,7 +904,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R)` with R number of vote of target.
 		#[pallet::weight(T::WeightInfo::unlock_set().max(T::WeightInfo::unlock_remove()))]
-		pub fn unlock(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
+		pub fn unlock(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&target);

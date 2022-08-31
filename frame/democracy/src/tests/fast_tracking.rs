@@ -93,7 +93,7 @@ fn instant_next_block_referendum_backed() {
 		let majority_origin_id = 3;
 		let instant_origin_id = 6;
 		let voting_period = 1;
-		let proposal_hash = set_balance_proposal_hash_and_note(2);
+		let proposal = set_balance_proposal(2);
 		let delay = 2; // has no effect on test
 
 		// init
@@ -103,13 +103,13 @@ fn instant_next_block_referendum_backed() {
 		// propose with majority origin
 		assert_ok!(Democracy::external_propose_majority(
 			Origin::signed(majority_origin_id),
-			proposal_hash
+			proposal.clone()
 		));
 
 		// fast track with instant origin and voting period pointing to the next block
 		assert_ok!(Democracy::fast_track(
 			Origin::signed(instant_origin_id),
-			proposal_hash,
+			proposal.hash(),
 			voting_period,
 			delay
 		));
@@ -119,7 +119,7 @@ fn instant_next_block_referendum_backed() {
 			Democracy::referendum_status(0),
 			Ok(ReferendumStatus {
 				end: start_block_number + voting_period,
-				proposal_hash,
+				proposal,
 				threshold: VoteThreshold::SimpleMajority,
 				delay,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
