@@ -59,7 +59,7 @@ The relevant section in the output file looks like this:
 ///   99th: 68_758
 ///   95th: 67_843
 ///   75th: 67_749
-pub const ExtrinsicBaseWeight: Weight = Weight::from_ref_time(67_745 * WEIGHT_PER_NANOS);
+pub const ExtrinsicBaseWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(67_745);
 ```
 
 In this example it takes 67.7 µs to execute a NO-OP extrinsic. That means that it always takes at least 67.7 µs to execute *any* extrinsic.
