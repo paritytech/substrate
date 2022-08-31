@@ -36,9 +36,9 @@ mod transactional;
 mod tt_macro;
 
 use proc_macro::TokenStream;
-use syn::{ItemType, parse_macro_input};
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
+use syn::{parse_macro_input, ItemType};
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
