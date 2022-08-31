@@ -415,7 +415,7 @@ mod multiplier_tests {
 		// check that for all values it can compute, correctly.
 		vec![
 			Weight::zero(),
-			Weight::one(),
+			Weight::from_ref_time(1),
 			Weight::from_ref_time(10),
 			Weight::from_ref_time(1000),
 			kb,

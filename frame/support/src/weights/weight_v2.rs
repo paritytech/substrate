@@ -93,7 +93,7 @@ impl Weight {
 		}
 	}
 
-	/// Construct with reference time weight.
+	/// Construct [`Weight`] with reference time weight.
 	pub const fn from_ref_time(ref_time: RefTimeWeight) -> Self {
 		Self { ref_time }
 	}
@@ -162,6 +162,11 @@ impl Weight {
 			None => None,
 		}
 	}
+
+	/// Return a [`Weight`] where all fields are zero.
+	pub const fn zero() -> Self {
+		Self { ref_time: 0 }
+	}
 }
 
 impl Zero for Weight {
@@ -171,12 +176,6 @@ impl Zero for Weight {
 
 	fn is_zero(&self) -> bool {
 		self.ref_time == 0
-	}
-}
-
-impl One for Weight {
-	fn one() -> Self {
-		Self::one()
 	}
 }
 
@@ -370,17 +369,6 @@ impl SubAssign for Weight {
 impl sp_runtime::traits::Printable for Weight {
 	fn print(&self) {
 		self.ref_time().print()
-	}
-}
-
-// Re-export common functions so you do not need to import trait.
-impl Weight {
-	pub const fn zero() -> Self {
-		Self { ref_time: 0 }
-	}
-
-	pub const fn one() -> Self {
-		Self { ref_time: 1 }
 	}
 }
 
