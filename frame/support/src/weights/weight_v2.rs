@@ -18,7 +18,7 @@
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_runtime::{
-	traits::{Bounded, CheckedAdd, CheckedSub, One, Zero},
+	traits::{Bounded, CheckedAdd, CheckedSub, Zero},
 	Perquintill, RuntimeDebug,
 };
 
