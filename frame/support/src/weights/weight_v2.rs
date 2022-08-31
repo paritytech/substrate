@@ -114,7 +114,7 @@ impl Weight {
 	/// Saturating [`Weight`] scalar division. Computes `self.field / scalar` for all fields,
 	/// saturating at the numeric bounds of all fields instead of overflowing.
 	pub const fn saturating_div(self, scalar: u64) -> Self {
-		Self { ref_time: self.ref_time.saturating_mul(scalar) }
+		Self { ref_time: self.ref_time.saturating_div(scalar) }
 	}
 
 	/// Saturating [`Weight`] scalar exponentiation. Computes `self.field.pow(exp)` for all fields,
