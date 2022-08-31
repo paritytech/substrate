@@ -23,16 +23,13 @@ use frame_support::traits::{ConstU32, ConstU64};
 
 mod pallet_old {
 	use frame_support::{
-		decl_error, decl_event, decl_module, decl_storage,
-		traits::Get,
-		weights::{RefTimeWeight, Weight},
-		Parameter,
+		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,
 	};
 	use frame_system::ensure_root;
 
 	pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
 		type SomeConst: Get<Self::Balance>;
-		type Balance: Parameter + codec::HasCompact + From<u32> + Into<RefTimeWeight> + Default;
+		type Balance: Parameter + codec::HasCompact + From<u32> + Into<u64> + Default;
 		type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
 	}
 
@@ -65,7 +62,7 @@ mod pallet_old {
 			fn deposit_event() = default;
 			const SomeConst: T::Balance = T::SomeConst::get();
 
-			#[weight = <T::Balance as Into<RefTimeWeight>>::into(new_value.clone())]
+			#[weight = <T::Balance as Into<u64>>::into(new_value.clone())]
 			fn set_dummy(origin, #[compact] new_value: T::Balance) {
 				ensure_root(origin)?;
 
@@ -102,7 +99,7 @@ pub mod pallet {
 		type Balance: Parameter
 			+ codec::HasCompact
 			+ From<u32>
-			+ Into<RefTimeWeight>
+			+ Into<u64>
 			+ Default
 			+ MaybeSerializeDeserialize
 			+ scale_info::StaticTypeInfo;
@@ -129,7 +126,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		#[pallet::weight(<T::Balance as Into<RefTimeWeight>>::into(new_value.clone()))]
+		#[pallet::weight(<T::Balance as Into<u64>>::into(new_value.clone()))]
 		pub fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,

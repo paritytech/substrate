@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_transaction_storage.
@@ -59,11 +59,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: TransactionStorage BlockTransactions (r:1 w:1)
 	// Storage: TransactionStorage MaxBlockTransactions (r:1 w:0)
 	fn store(l: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(5_000 as RefTimeWeight).saturating_mul(l as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads(6 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(5_000 as u64).saturating_mul(l as u64))
+			.saturating_add(T::DbWeight::get().reads(6 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: TransactionStorage Transactions (r:1 w:0)
 	// Storage: TransactionStorage ByteFee (r:1 w:0)
@@ -72,9 +72,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: TransactionStorage BlockTransactions (r:1 w:1)
 	// Storage: TransactionStorage MaxBlockTransactions (r:1 w:0)
 	fn renew() -> Weight {
-		Weight::from_ref_time(50_978_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(6 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(50_978_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(6 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: TransactionStorage ProofChecked (r:1 w:1)
 	// Storage: TransactionStorage StoragePeriod (r:1 w:0)
@@ -82,9 +82,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System ParentHash (r:1 w:0)
 	// Storage: TransactionStorage Transactions (r:1 w:0)
 	fn check_proof_max() -> Weight {
-		Weight::from_ref_time(106_990_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(5 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(106_990_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 }
 
@@ -97,11 +97,11 @@ impl WeightInfo for () {
 	// Storage: TransactionStorage BlockTransactions (r:1 w:1)
 	// Storage: TransactionStorage MaxBlockTransactions (r:1 w:0)
 	fn store(l: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(5_000 as RefTimeWeight).saturating_mul(l as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads(6 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(5_000 as u64).saturating_mul(l as u64))
+			.saturating_add(RocksDbWeight::get().reads(6 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: TransactionStorage Transactions (r:1 w:0)
 	// Storage: TransactionStorage ByteFee (r:1 w:0)
@@ -110,9 +110,9 @@ impl WeightInfo for () {
 	// Storage: TransactionStorage BlockTransactions (r:1 w:1)
 	// Storage: TransactionStorage MaxBlockTransactions (r:1 w:0)
 	fn renew() -> Weight {
-		Weight::from_ref_time(50_978_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(6 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(50_978_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(6 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: TransactionStorage ProofChecked (r:1 w:1)
 	// Storage: TransactionStorage StoragePeriod (r:1 w:0)
@@ -120,8 +120,8 @@ impl WeightInfo for () {
 	// Storage: System ParentHash (r:1 w:0)
 	// Storage: TransactionStorage Transactions (r:1 w:0)
 	fn check_proof_max() -> Weight {
-		Weight::from_ref_time(106_990_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(5 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(106_990_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 }
