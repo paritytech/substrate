@@ -231,7 +231,7 @@ where
 			T::WeightInfo::on_initialize_per_trie_key(0))
 		.ref_time();
 		let decoding_weight =
-			weight_per_queue_item.scalar_saturating_mul(queue_len as RefTimeWeight);
+			weight_per_queue_item.saturating_mul(queue_len as RefTimeWeight);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.

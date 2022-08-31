@@ -842,7 +842,7 @@ pub mod pallet {
 			let items = items as u64;
 			<T as frame_system::Config>::DbWeight::get()
 				.reads_writes(1, 1)
-				.scalar_saturating_mul(items)
+				.saturating_mul(items)
 				// we assume that the read/write per-byte weight is the same for child and top tree.
 				.saturating_add(T::WeightInfo::process_top_key(size))
 		}
