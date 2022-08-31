@@ -3958,6 +3958,7 @@ dependencies = [
  "frame-system-rpc-runtime-api",
  "hex-literal",
  "node-primitives",
+ "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
  "pallet-babe",
@@ -3978,7 +3979,6 @@ dependencies = [
  "pallet-identity",
  "pallet-im-online",
  "pallet-indices",
- "pallet-lottery",
  "pallet-membership",
  "pallet-multisig",
  "pallet-offences",
@@ -4406,24 +4406,6 @@ dependencies = [
 
 [[package]]
 name = "pallet-collective"
-version = "2.0.0"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-balances",
- "pallet-treasury",
- "parity-scale-codec",
- "serde",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "sp-storage",
-]
-
-[[package]]
-name = "pallet-collective"
 version = "2.0.1"
 dependencies = [
  "frame-benchmarking",
@@ -4635,7 +4617,21 @@ dependencies = [
  "sp-std",
 ]
 
-
+[[package]]
+name = "pallet-example"
+version = "2.0.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
 
 [[package]]
 name = "pallet-example-parallel"
@@ -5124,7 +5120,7 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "serde",
- "serde_json",
+ "serde_json 1.0.59",
  "smallvec 1.5.0",
  "sp-core",
  "sp-io",
@@ -5155,8 +5151,6 @@ version = "2.0.1"
 dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
- "serde",
- "serde_json 1.0.59",
  "sp-api",
  "sp-runtime",
 ]
@@ -6969,6 +6963,7 @@ dependencies = [
  "sp-version",
  "sp-wasm-interface",
  "substrate-test-runtime",
+ "test-case",
  "tracing",
  "tracing-subscriber",
  "wasmi",
@@ -7210,8 +7205,6 @@ dependencies = [
  "sc-peerset",
  "serde",
  "serde_json 1.0.59",
- "slog",
- "slog_derive",
  "smallvec 1.5.0",
  "sp-arithmetic",
  "sp-blockchain",
@@ -7469,7 +7462,6 @@ dependencies = [
  "sc-transaction-pool",
  "serde",
  "serde_json 1.0.59",
- "slog",
  "sp-api",
  "sp-application-crypto",
  "sp-block-builder",
@@ -7582,7 +7574,7 @@ dependencies = [
  "pin-project 0.4.27",
  "rand 0.7.3",
  "serde",
- "serde_json",
+ "serde_json 1.0.59",
  "sp-utils",
  "take_mut",
  "tracing",
@@ -7608,7 +7600,6 @@ dependencies = [
  "sc-tracing-proc-macro",
  "serde",
  "serde_json 1.0.59",
- "slog",
  "sp-tracing",
  "thiserror",
  "tracing",
@@ -8005,50 +7996,6 @@ name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
-
-[[package]]
-name = "slog"
-version = "2.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cc9c640a4adbfbcc11ffb95efe5aa7af7309e002adab54b185507dbf2377b99"
-dependencies = [
- "erased-serde",
-]
-
-[[package]]
-name = "slog-json"
-version = "2.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddc0d2aff1f8f325ef660d9a0eb6e6dcd20b30b3f581a5897f58bf42d061c37a"
-dependencies = [
- "chrono",
- "erased-serde",
- "serde",
- "serde_json 1.0.59",
- "slog",
-]
-
-[[package]]
-name = "slog-scope"
-version = "4.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c44c89dd8b0ae4537d1ae318353eaf7840b4869c536e31c41e963d1ea523ee6"
-dependencies = [
- "arc-swap",
- "lazy_static",
- "slog",
-]
-
-[[package]]
-name = "slog_derive"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a945ec7f7ce853e89ffa36be1e27dce9a43e82ff9093bf3461c30d5da74ed11b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "smallvec"
