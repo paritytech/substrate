@@ -18,7 +18,7 @@
 use codec::{Decode, Encode, Joiner};
 use frame_support::{
 	traits::Currency,
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
 };
 use frame_system::{self, AccountInfo, EventRecord, Phase};
 use sp_core::{storage::well_known_keys, traits::Externalities, NeverNativeValue};
@@ -733,7 +733,7 @@ fn deploying_wasm_contract_should_work() {
 				function: Call::Contracts(
 					pallet_contracts::Call::instantiate_with_code::<Runtime> {
 						value: 0,
-						gas_limit: 500_000_000,
+						gas_limit: Weight::from_ref_time(500_000_000),
 						storage_deposit_limit: None,
 						code: transfer_code,
 						data: Vec::new(),
@@ -746,7 +746,7 @@ fn deploying_wasm_contract_should_work() {
 				function: Call::Contracts(pallet_contracts::Call::call::<Runtime> {
 					dest: sp_runtime::MultiAddress::Id(addr.clone()),
 					value: 10,
-					gas_limit: 500_000_000,
+					gas_limit: Weight::from_ref_time(500_000_000),
 					storage_deposit_limit: None,
 					data: vec![0x00, 0x01, 0x02, 0x03],
 				}),

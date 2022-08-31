@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_conviction_voting.
@@ -62,9 +62,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote_new() -> Weight {
-		(148_804_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+		Weight::from_ref_time(148_804_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(6 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(6 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
@@ -72,24 +72,24 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote_existing() -> Weight {
-		(313_333_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+		Weight::from_ref_time(313_333_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(6 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(6 as RefTimeWeight))
 	}
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn remove_vote() -> Weight {
-		(300_591_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(300_591_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:0)
 	fn remove_other_vote() -> Weight {
-		(53_887_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(53_887_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: ConvictionVoting VotingFor (r:2 w:2)
 	// Storage: ConvictionVoting ClassLocksFor (r:1 w:1)
@@ -97,33 +97,33 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn delegate(r: u32, ) -> Weight {
-		(51_518_000 as Weight)
+		Weight::from_ref_time(51_518_000 as RefTimeWeight)
 			// Standard Error: 83_000
-			.saturating_add((27_235_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(Weight::from_ref_time(27_235_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
+			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
 	}
 	// Storage: ConvictionVoting VotingFor (r:2 w:2)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn undelegate(r: u32, ) -> Weight {
-		(37_885_000 as Weight)
+		Weight::from_ref_time(37_885_000 as RefTimeWeight)
 			// Standard Error: 75_000
-			.saturating_add((24_395_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((3 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((3 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(Weight::from_ref_time(24_395_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
 	}
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	// Storage: ConvictionVoting ClassLocksFor (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	fn unlock() -> Weight {
-		(67_703_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(67_703_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 }
 
@@ -135,9 +135,9 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote_new() -> Weight {
-		(148_804_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+		Weight::from_ref_time(148_804_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(6 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(6 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
@@ -145,24 +145,24 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote_existing() -> Weight {
-		(313_333_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+		Weight::from_ref_time(313_333_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(6 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(6 as RefTimeWeight))
 	}
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn remove_vote() -> Weight {
-		(300_591_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(300_591_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:0)
 	fn remove_other_vote() -> Weight {
-		(53_887_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(53_887_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: ConvictionVoting VotingFor (r:2 w:2)
 	// Storage: ConvictionVoting ClassLocksFor (r:1 w:1)
@@ -170,32 +170,32 @@ impl WeightInfo for () {
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn delegate(r: u32, ) -> Weight {
-		(51_518_000 as Weight)
+		Weight::from_ref_time(51_518_000 as RefTimeWeight)
 			// Standard Error: 83_000
-			.saturating_add((27_235_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(Weight::from_ref_time(27_235_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
+			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
 	}
 	// Storage: ConvictionVoting VotingFor (r:2 w:2)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn undelegate(r: u32, ) -> Weight {
-		(37_885_000 as Weight)
+		Weight::from_ref_time(37_885_000 as RefTimeWeight)
 			// Standard Error: 75_000
-			.saturating_add((24_395_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((3 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((3 as Weight).saturating_mul(r as Weight)))
+			.saturating_add(Weight::from_ref_time(24_395_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
 	}
 	// Storage: ConvictionVoting VotingFor (r:1 w:1)
 	// Storage: ConvictionVoting ClassLocksFor (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	fn unlock() -> Weight {
-		(67_703_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(67_703_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 }

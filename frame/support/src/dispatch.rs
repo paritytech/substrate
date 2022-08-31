@@ -176,18 +176,18 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
+/// # use frame_support::{weights::Weight, dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}};
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100_000)))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
 /// 				// return None to indicate that we are using all weight (the default)
-/// 				return Ok(None.into());
+/// 				return Ok(None::<Weight>.into());
 /// 			}
 /// 			// expensive calculation not executed: use only a portion of the weight
 /// 			Ok(Some(100_000).into())
@@ -1614,7 +1614,7 @@ macro_rules! decl_module {
 					pallet_name,
 				);
 
-				0
+				$crate::dispatch::Weight::new()
 			}
 
 			#[cfg(feature = "try-runtime")]
@@ -2649,13 +2649,13 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
+			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_ref_time(7) }
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
-				if n.into() == 42 || remaining_weight == 42  { panic!("on_idle") }
-				7
+				if n.into() == 42 || remaining_weight == Weight::from_ref_time(42)  { panic!("on_idle") }
+				Weight::from_ref_time(7)
 			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { 10 }
+			fn on_runtime_upgrade() -> Weight { Weight::from_ref_time(10) }
 			fn offchain_worker() {}
 			/// Some doc
 			fn integrity_test() { panic!("integrity_test") }
@@ -2814,24 +2814,30 @@ mod tests {
 
 	#[test]
 	fn on_initialize_should_work_2() {
-		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), 7);
+		assert_eq!(
+			<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10),
+			Weight::from_ref_time(7)
+		);
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_1() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, 9);
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::from_ref_time(9));
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_2() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, 42);
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::from_ref_time(42));
 	}
 
 	#[test]
 	fn on_idle_should_work_3() {
-		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, 11), 7);
+		assert_eq!(
+			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::from_ref_time(11)),
+			Weight::from_ref_time(7)
+		);
 	}
 
 	#[test]
@@ -2843,7 +2849,10 @@ mod tests {
 	#[test]
 	fn on_runtime_upgrade_should_work() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
+			assert_eq!(
+				<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(),
+				Weight::from_ref_time(10)
+			)
 		});
 	}
 
@@ -2852,12 +2861,20 @@ mod tests {
 		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
+			DispatchInfo {
+				weight: Weight::from_ref_time(5),
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes
+			},
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
+			DispatchInfo {
+				weight: Weight::from_ref_time(3),
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes
+			},
 		);
 	}
 
