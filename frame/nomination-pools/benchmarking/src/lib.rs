@@ -282,6 +282,8 @@ frame_benchmarking::benchmarks! {
 	}
 
 	rebond {
+		let l in 1 .. T::MaxUnbonding::get() as u32;
+
 		// setup the worst case list scenario.
 		let origin_weight = min_create_bond::<T>() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
@@ -297,22 +299,22 @@ frame_benchmarking::benchmarks! {
 		// list scenario.
 		CurrencyOf::<T>::make_free_balance_be(&member_id, extra + CurrencyOf::<T>::minimum_balance());
 		Pools::<T>::bond_extra(Origin::Signed(member_id.clone()).into(), BondExtra::FreeBalance(extra)).unwrap();
-		// create `MaxUnbonding` unlocking chunks
-		let max_unlocking_chunk = T::MaxUnbonding::get();
-		for i in 0..max_unlocking_chunk {
+		// create `l` unlocking chunks
+		for i in 0..l {
 			pallet_staking::CurrentEra::<T>::put(i);
 			// we don't care the distribution of funds as long as the sum of them equal to `extra`
-			let amount = if i == max_unlocking_chunk - 1 {
-				extra - BalanceOf::<T>::from(max_unlocking_chunk - 1)
-			} else {
+			let amount = if i + 1 != l {
 				BalanceOf::<T>::from(1u32)
+			} else {
+				// put the rest to the last chunk
+				extra - BalanceOf::<T>::from(l - 1)
 			};
 			Pools::<T>::unbond(Origin::Signed(member_id.clone()).into(), member_id_lookup.clone(), amount).unwrap();
 		}
 
 		let member = PoolMembers::<T>::get(&member_id).unwrap();
 		assert_eq!(member.points, extra);
-		assert_eq!(member.unbonding_eras.len() as u32, max_unlocking_chunk);
+		assert_eq!(member.unbonding_eras.len() as u32, l);
 		assert_eq!(pool_unlocking_funds::<T>(&scenario.origin1), origin_unlocking_funds + extra);
 
 		whitelist_account!(member_id);

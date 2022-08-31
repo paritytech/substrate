@@ -1609,19 +1609,24 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Rebond a portion of funds that the member scheduled to be unlocked into the pool to
+		/// which they already belong.
+		///
+		/// The actual amount of the rebond funds will the minimal of the input `amount`, the
+		/// member's unbonding funds and the pool's unbonding funds.
 		// TODO: add tests
-		#[pallet::weight(T::WeightInfo::rebond())]
+		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnbonding::get() as u32))]
 		#[transactional]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] mut amount: BalanceOf<T>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
 			let mut sub_pools = match SubPoolsStorage::<T>::get(member.pool_id) {
 				Some(p) => p,
 				// unbonding pool is lazily created, `None` means the underlying nominator do
-				// not have any unbonding fund
+				// not have any unbonding funds
 				None => return Err(Error::<T>::NoUnlockChunk.into()),
 			};
 
@@ -1650,6 +1655,7 @@ pub mod pallet {
 			let _ = Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 			// deduct unlocking funds from the pool member and unbonding pool
+			let initial_chunks = member.unbonding_eras.len() as u32;
 			let mut unlocking_balance = BalanceOf::<T>::zero();
 			member.unbonding_eras = member
 				.unbonding_eras
@@ -1711,11 +1717,16 @@ pub mod pallet {
 				joined: false,
 			});
 
+			let removed_chunks = initial_chunks
+				.saturating_sub(member.unbonding_eras.len() as u32)
+				// for the case where the last iterated chunk is not removed
+				.max(1u32);
+
 			// write the modified item back to storage
 			SubPoolsStorage::insert(&member.pool_id, sub_pools);
 			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
 
-			Ok(())
+			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
 		}
 
 		/// A bonded member can use this to claim their payout based on the rewards that the pool

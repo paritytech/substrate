@@ -49,7 +49,7 @@ pub trait WeightInfo {
 	fn join() -> Weight;
 	fn bond_extra_transfer() -> Weight;
 	fn bond_extra_reward() -> Weight;
-	fn rebond() -> Weight;
+	fn rebond(l: u32, ) -> Weight;
 	fn claim_payout() -> Weight;
 	fn unbond() -> Weight;
 	fn pool_withdraw_unbonded(s: u32, ) -> Weight;
@@ -81,7 +81,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: BagsList ListBags (r:2 w:2)
 	fn join() -> Weight {
-		(106_000_000 as Weight)
+		(108_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(17 as Weight))
 			.saturating_add(T::DbWeight::get().writes(12 as Weight))
 	}
@@ -95,7 +95,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: BagsList ListBags (r:2 w:2)
 	fn bond_extra_transfer() -> Weight {
-		(111_000_000 as Weight)
+		(114_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(14 as Weight))
 			.saturating_add(T::DbWeight::get().writes(12 as Weight))
 	}
@@ -109,7 +109,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: BagsList ListBags (r:2 w:2)
 	fn bond_extra_reward() -> Weight {
-		(114_000_000 as Weight)
+		(115_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(14 as Weight))
 			.saturating_add(T::DbWeight::get().writes(13 as Weight))
 	}
@@ -123,8 +123,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: Staking Bonded (r:1 w:0)
 	// Storage: BagsList ListBags (r:2 w:2)
-	fn rebond() -> Weight {
-		(106_000_000 as Weight)
+	/// The range of component `l` is `[1, 8]`.
+	fn rebond(l: u32, ) -> Weight {
+		(100_173_000 as Weight)
+			// Standard Error: 28_000
+			.saturating_add((569_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(T::DbWeight::get().reads(14 as Weight))
 			.saturating_add(T::DbWeight::get().writes(12 as Weight))
 	}
@@ -152,7 +155,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: NominationPools SubPoolsStorage (r:1 w:1)
 	// Storage: NominationPools CounterForSubPoolsStorage (r:1 w:1)
 	fn unbond() -> Weight {
-		(107_000_000 as Weight)
+		(111_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(18 as Weight))
 			.saturating_add(T::DbWeight::get().writes(13 as Weight))
 	}
@@ -162,9 +165,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Balances Locks (r:1 w:1)
 	/// The range of component `s` is `[0, 100]`.
 	fn pool_withdraw_unbonded(s: u32, ) -> Weight {
-		(37_810_000 as Weight)
+		(37_654_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((5_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((9_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(4 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -178,9 +181,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	/// The range of component `s` is `[0, 100]`.
 	fn withdraw_unbonded_update(s: u32, ) -> Weight {
-		(67_907_000 as Weight)
+		(68_185_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((11_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((9_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(T::DbWeight::get().reads(8 as Weight))
 			.saturating_add(T::DbWeight::get().writes(7 as Weight))
 	}
@@ -205,7 +208,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking Payee (r:0 w:1)
 	/// The range of component `s` is `[0, 100]`.
 	fn withdraw_unbonded_kill(_s: u32, ) -> Weight {
-		(108_241_000 as Weight)
+		(111_781_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(19 as Weight))
 			.saturating_add(T::DbWeight::get().writes(16 as Weight))
 	}
@@ -232,7 +235,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: Staking Payee (r:0 w:1)
 	fn create() -> Weight {
-		(96_000_000 as Weight)
+		(98_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(22 as Weight))
 			.saturating_add(T::DbWeight::get().writes(15 as Weight))
 	}
@@ -250,9 +253,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Staking CounterForNominators (r:1 w:1)
 	/// The range of component `n` is `[1, 16]`.
 	fn nominate(n: u32, ) -> Weight {
-		(43_624_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((894_000 as Weight).saturating_mul(n as Weight))
+		(43_772_000 as Weight)
+			// Standard Error: 6_000
+			.saturating_add((945_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(T::DbWeight::get().reads(12 as Weight))
 			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
@@ -260,7 +263,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: Staking Ledger (r:1 w:0)
 	fn set_state() -> Weight {
-		(26_000_000 as Weight)
+		(25_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
@@ -269,7 +272,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: NominationPools CounterForMetadata (r:1 w:1)
 	/// The range of component `n` is `[1, 256]`.
 	fn set_metadata(_n: u32, ) -> Weight {
-		(11_383_000 as Weight)
+		(11_249_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
 	}
@@ -297,7 +300,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: BagsList ListBags (r:1 w:1)
 	// Storage: BagsList CounterForListNodes (r:1 w:1)
 	fn chill() -> Weight {
-		(44_000_000 as Weight)
+		(43_000_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(8 as Weight))
 			.saturating_add(T::DbWeight::get().writes(5 as Weight))
 	}
@@ -319,7 +322,7 @@ impl WeightInfo for () {
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: BagsList ListBags (r:2 w:2)
 	fn join() -> Weight {
-		(106_000_000 as Weight)
+		(108_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(17 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(12 as Weight))
 	}
@@ -333,7 +336,7 @@ impl WeightInfo for () {
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: BagsList ListBags (r:2 w:2)
 	fn bond_extra_transfer() -> Weight {
-		(111_000_000 as Weight)
+		(114_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(14 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(12 as Weight))
 	}
@@ -347,7 +350,7 @@ impl WeightInfo for () {
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: BagsList ListBags (r:2 w:2)
 	fn bond_extra_reward() -> Weight {
-		(114_000_000 as Weight)
+		(115_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(14 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(13 as Weight))
 	}
@@ -361,8 +364,11 @@ impl WeightInfo for () {
 	// Storage: BagsList ListNodes (r:3 w:3)
 	// Storage: Staking Bonded (r:1 w:0)
 	// Storage: BagsList ListBags (r:2 w:2)
-	fn rebond() -> Weight {
-		(106_000_000 as Weight)
+	/// The range of component `l` is `[1, 8]`.
+	fn rebond(l: u32, ) -> Weight {
+		(100_173_000 as Weight)
+			// Standard Error: 28_000
+			.saturating_add((569_000 as Weight).saturating_mul(l as Weight))
 			.saturating_add(RocksDbWeight::get().reads(14 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(12 as Weight))
 	}
@@ -390,7 +396,7 @@ impl WeightInfo for () {
 	// Storage: NominationPools SubPoolsStorage (r:1 w:1)
 	// Storage: NominationPools CounterForSubPoolsStorage (r:1 w:1)
 	fn unbond() -> Weight {
-		(107_000_000 as Weight)
+		(111_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(18 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(13 as Weight))
 	}
@@ -400,9 +406,9 @@ impl WeightInfo for () {
 	// Storage: Balances Locks (r:1 w:1)
 	/// The range of component `s` is `[0, 100]`.
 	fn pool_withdraw_unbonded(s: u32, ) -> Weight {
-		(37_810_000 as Weight)
+		(37_654_000 as Weight)
 			// Standard Error: 0
-			.saturating_add((5_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((9_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -416,9 +422,9 @@ impl WeightInfo for () {
 	// Storage: NominationPools CounterForPoolMembers (r:1 w:1)
 	/// The range of component `s` is `[0, 100]`.
 	fn withdraw_unbonded_update(s: u32, ) -> Weight {
-		(67_907_000 as Weight)
+		(68_185_000 as Weight)
 			// Standard Error: 1_000
-			.saturating_add((11_000 as Weight).saturating_mul(s as Weight))
+			.saturating_add((9_000 as Weight).saturating_mul(s as Weight))
 			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(7 as Weight))
 	}
@@ -443,7 +449,7 @@ impl WeightInfo for () {
 	// Storage: Staking Payee (r:0 w:1)
 	/// The range of component `s` is `[0, 100]`.
 	fn withdraw_unbonded_kill(_s: u32, ) -> Weight {
-		(108_241_000 as Weight)
+		(111_781_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(19 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(16 as Weight))
 	}
@@ -470,7 +476,7 @@ impl WeightInfo for () {
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: Staking Payee (r:0 w:1)
 	fn create() -> Weight {
-		(96_000_000 as Weight)
+		(98_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(22 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(15 as Weight))
 	}
@@ -488,9 +494,9 @@ impl WeightInfo for () {
 	// Storage: Staking CounterForNominators (r:1 w:1)
 	/// The range of component `n` is `[1, 16]`.
 	fn nominate(n: u32, ) -> Weight {
-		(43_624_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((894_000 as Weight).saturating_mul(n as Weight))
+		(43_772_000 as Weight)
+			// Standard Error: 6_000
+			.saturating_add((945_000 as Weight).saturating_mul(n as Weight))
 			.saturating_add(RocksDbWeight::get().reads(12 as Weight))
 			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(n as Weight)))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
@@ -498,7 +504,7 @@ impl WeightInfo for () {
 	// Storage: NominationPools BondedPools (r:1 w:1)
 	// Storage: Staking Ledger (r:1 w:0)
 	fn set_state() -> Weight {
-		(26_000_000 as Weight)
+		(25_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
@@ -507,7 +513,7 @@ impl WeightInfo for () {
 	// Storage: NominationPools CounterForMetadata (r:1 w:1)
 	/// The range of component `n` is `[1, 256]`.
 	fn set_metadata(_n: u32, ) -> Weight {
-		(11_383_000 as Weight)
+		(11_249_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
 	}
@@ -535,7 +541,7 @@ impl WeightInfo for () {
 	// Storage: BagsList ListBags (r:1 w:1)
 	// Storage: BagsList CounterForListNodes (r:1 w:1)
 	fn chill() -> Weight {
-		(44_000_000 as Weight)
+		(43_000_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(8 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
 	}
