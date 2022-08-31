@@ -221,8 +221,8 @@ impl pallet_tx_pause::Config for Runtime {
 
 parameter_types! {
 	// signed config
-	pub const EnableStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement! 
-	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement! 
+	pub const EnableStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
 }
 
 impl pallet_safe_mode::Config for Runtime {

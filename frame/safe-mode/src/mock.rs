@@ -21,12 +21,12 @@ use super::*;
 use crate as pallet_safe_mode;
 
 use frame_support::parameter_types;
+use frame_system::{EnsureRoot, EnsureSigned};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup}
+	traits::{BlakeTwo256, IdentityLookup},
 };
-use frame_system::{EnsureRoot, EnsureSigned};
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -79,9 +79,7 @@ pub struct MockSafeModeFilter;
 impl Contains<Call> for MockSafeModeFilter {
 	fn contains(call: &Call) -> bool {
 		match call {
-			Call::System(_) |
-			Call::Balances(_) |
-			Call::SafeMode(_) => true,
+			Call::System(_) | Call::Balances(_) | Call::SafeMode(_) => true,
 		}
 	}
 }
@@ -89,8 +87,8 @@ impl Contains<Call> for MockSafeModeFilter {
 parameter_types! {
 	pub const EnableDuration: u64 = 1;
 	pub const ExtendDuration: u64 = 1;
-	pub const EnableStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement! 
-	pub const ExtendStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement! 
+	pub const EnableStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
+	pub const ExtendStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
 }
 
 impl Config for Test {
