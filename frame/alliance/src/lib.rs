@@ -651,9 +651,9 @@ pub mod pallet {
 		/// Founders must be provided to initialize the Alliance.
 		///
 		/// Provide witness data to disband current Alliance before initializing new.
-		/// Alliance must be not already set to initialize new.
+		/// Alliance must be empty or disband first to initialize new.
 		///
-		/// Alliance can be only disband if no new members passed.
+		/// Alliance is only disband if new members set is not provided.
 		///
 		/// Must be called by the Root origin.
 		#[pallet::weight(T::WeightInfo::force_set_members(
@@ -718,8 +718,8 @@ pub mod pallet {
 			}
 
 			if founders.is_empty() {
-				// founders must be provided to initialize Alliance.
 				ensure!(fellows.is_empty() && allies.is_empty(), Error::<T, I>::FoundersMissing);
+				// new members set not provided.
 				return Ok(())
 			}
 			ensure!(!Self::is_initialized(), Error::<T, I>::AllianceAlreadyInitialized);
