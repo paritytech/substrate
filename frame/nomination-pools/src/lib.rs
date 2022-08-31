@@ -1141,7 +1141,7 @@ pub mod pallet {
 	use sp_runtime::traits::CheckedAdd;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
