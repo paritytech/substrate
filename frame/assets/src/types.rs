@@ -56,6 +56,8 @@ pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	pub(super) approvals: u32,
 	/// Whether the asset is frozen for non-admin transfers.
 	pub(super) is_frozen: bool,
+	/// Whether the asset is transferable or not
+	pub(super) is_transferable: bool,
 }
 
 impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, DepositBalance> {

@@ -510,7 +510,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Will fail if the amount transferred is so small that it cannot create the destination due
 	/// to minimum balance requirements.
-	pub(super) fn do_transfer(
+	pub fn do_transfer(
 		id: T::AssetId,
 		source: &T::AccountId,
 		dest: &T::AccountId,
@@ -628,11 +628,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///   this asset.
 	/// * `min_balance`: The minimum balance a user is allowed to have of this asset before they are
 	///   considered dust and cleaned up.
+	/// * `transferable`: Whether the new asset is transferable or not.
 	pub(super) fn do_force_create(
 		id: T::AssetId,
 		owner: T::AccountId,
 		is_sufficient: bool,
 		min_balance: T::Balance,
+		transferable: bool,
 	) -> DispatchResult {
 		ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
 		ensure!(!min_balance.is_zero(), Error::<T, I>::MinBalanceZero);
@@ -652,6 +654,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				sufficients: 0,
 				approvals: 0,
 				is_frozen: false,
+				is_transferable: transferable,
 			},
 		);
 		Self::deposit_event(Event::ForceCreated { asset_id: id, owner });
