@@ -139,7 +139,13 @@ pub fn run() -> sc_cli::Result<()> {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;
 						let ext_builder = RemarkBuilder::new(client.clone());
 
-						cmd.run(config, client, inherent_benchmark_data()?, Vec::new(), &ext_builder)
+						cmd.run(
+							config,
+							client,
+							inherent_benchmark_data()?,
+							Vec::new(),
+							&ext_builder,
+						)
 					},
 					BenchmarkCmd::Extrinsic(cmd) => {
 						let PartialComponents { client, .. } = service::new_partial(&config)?;
