@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 impl-trait-for-tuples = "0.2.2"
 log = { version = "0.4.17", optional = true }
 wasmi = { version = "0.9.1", optional = true }
-wasmtime = { version = "0.38.0", default-features = false, optional = true }
+wasmtime = { version = "0.40.1", default-features = false, optional = true }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [features]
