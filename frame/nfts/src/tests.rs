@@ -111,6 +111,7 @@ fn lifecycle_should_work() {
 		assert_ok!(Nfts::create(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::reserved_balance(&1), 2);
 		assert_eq!(collections(), vec![(1, 0)]);
+		assert_eq!(CollectionNextId::<Test>::get(), 1);
 		assert_ok!(Nfts::set_collection_metadata(Origin::signed(1), 0, bvec![0, 0], false));
 		assert_eq!(Balances::reserved_balance(&1), 5);
 		assert!(CollectionMetadataOf::<Test>::contains_key(0));
@@ -122,6 +123,7 @@ fn lifecycle_should_work() {
 		assert_eq!(items(), vec![(10, 0, 42), (20, 0, 69)]);
 		assert_eq!(Collection::<Test>::get(0).unwrap().items, 2);
 		assert_eq!(Collection::<Test>::get(0).unwrap().item_metadatas, 0);
+		assert_eq!(Collection::<Test>::get(0).unwrap().ref_id, 0);
 
 		assert_ok!(Nfts::set_metadata(Origin::signed(1), 0, 42, bvec![42, 42], false));
 		assert_eq!(Balances::reserved_balance(&1), 10);

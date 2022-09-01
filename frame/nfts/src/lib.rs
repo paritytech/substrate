@@ -267,6 +267,11 @@ pub mod pallet {
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
 
+	/// Stores the collection's next id.
+	#[pallet::storage]
+	pub(super) type CollectionNextId<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, u64, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {

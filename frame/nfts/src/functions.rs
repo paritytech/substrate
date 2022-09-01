@@ -72,6 +72,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		T::Currency::reserve(&owner, deposit)?;
 
+		let ref_id = CollectionNextId::<T, I>::get();
 		Collection::<T, I>::insert(
 			collection,
 			CollectionDetails {
@@ -85,11 +86,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				item_metadatas: 0,
 				attributes: 0,
 				is_frozen: false,
+				ref_id,
 			},
 		);
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
 		Self::deposit_event(event);
+
+		// update the next ref_id value
+		let next_ref_id = ref_id.saturating_add(1);
+		CollectionNextId::<T, I>::put(next_ref_id);
+
 		Ok(())
 	}
 
