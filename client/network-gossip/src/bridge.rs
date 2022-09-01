@@ -328,7 +328,6 @@ mod tests {
 		traits::{Block as BlockT, NumberFor},
 	};
 	use std::{
-		borrow::Cow,
 		collections::HashSet,
 		sync::{Arc, Mutex},
 	};

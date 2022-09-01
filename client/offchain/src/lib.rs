@@ -254,7 +254,7 @@ mod tests {
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
-	use std::{borrow::Cow, collections::HashSet, sync::Arc};
+	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
 		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
 		TestClientBuilderExt,

@@ -485,11 +485,10 @@ mod tests {
 	use async_std::net::{TcpListener, TcpStream};
 	use futures::{channel::oneshot, prelude::*};
 	use libp2p::core::upgrade;
-	use std::borrow::Cow;
 
 	#[test]
 	fn basic_works() {
-		const PROTO_NAME: ProtocolName = "/test/proto/1";
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -532,7 +531,7 @@ mod tests {
 	fn empty_handshake() {
 		// Check that everything still works when the handshake messages are empty.
 
-		const PROTO_NAME: ProtocolName = "/test/proto/1";
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -573,7 +572,7 @@ mod tests {
 
 	#[test]
 	fn refused() {
-		const PROTO_NAME: ProtocolName = "/test/proto/1";
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -614,7 +613,7 @@ mod tests {
 
 	#[test]
 	fn large_initial_message_refused() {
-		const PROTO_NAME: ProtocolName = "/test/proto/1";
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {
@@ -652,7 +651,7 @@ mod tests {
 
 	#[test]
 	fn large_handshake_refused() {
-		const PROTO_NAME: ProtocolName = "/test/proto/1";
+		const PROTO_NAME: &str = "/test/proto/1";
 		let (listener_addr_tx, listener_addr_rx) = oneshot::channel();
 
 		let client = async_std::task::spawn(async move {

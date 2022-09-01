@@ -333,7 +333,7 @@ mod tests {
 	};
 	use sc_peerset::ReputationChange;
 	use sp_core::offchain::{DbExternalities, Externalities};
-	use std::{borrow::Cow, time::SystemTime};
+	use std::time::SystemTime;
 
 	pub(super) struct TestNetwork();
 

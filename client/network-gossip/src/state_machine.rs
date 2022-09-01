@@ -527,7 +527,6 @@ mod tests {
 		traits::NumberFor,
 	};
 	use std::{
-		borrow::Cow,
 		collections::HashSet,
 		pin::Pin,
 		sync::{Arc, Mutex},

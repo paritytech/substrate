@@ -30,7 +30,7 @@ use sc_network_common::{
 	config::MultiaddrWithPeerId,
 	protocol::{
 		event::{Event as NetworkEvent, ObservedRole},
-		protocol::ProtocolName,
+		ProtocolName,
 	},
 	service::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
@@ -44,7 +44,6 @@ use sp_finality_grandpa::AuthorityList;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::traits::NumberFor;
 use std::{
-	borrow::Cow,
 	collections::HashSet,
 	pin::Pin,
 	sync::Arc,
