@@ -395,6 +395,7 @@ pub mod v3 {
 		current == CURRENT && onchain == ONCHAIN
 	}
 
+	/// This migration removes stale bonded-pool metadata.
 	pub struct MigrateToV3<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV3<T> {
 		fn on_runtime_upgrade() -> Weight {

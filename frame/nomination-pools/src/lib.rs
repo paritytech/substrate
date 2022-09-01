@@ -2225,7 +2225,7 @@ impl<T: Config> Pallet<T> {
 
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
 		// Remove bonded pool metadata.
-		Metadata::<T>::remove(bonded_pool_id);
+		Metadata::<T>::remove(bonded_pool.id);
 
 		bonded_pool.remove();
 	}
