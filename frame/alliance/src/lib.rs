@@ -84,7 +84,7 @@
 //!
 //! #### Root Calls
 //!
-//! - `init_founders` - Initialize the founding members.
+//! - `force_set_members` - Set the members via chain governance.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -172,6 +172,8 @@ impl<AccountId> IdentityVerifier<AccountId> for () {
 
 /// The provider of a collective action interface, for example an instance of `pallet-collective`.
 pub trait ProposalProvider<AccountId, Hash, Proposal> {
+	/// Add a new proposal.
+	/// Returns a proposal length and active proposals count if successful.
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
@@ -179,6 +181,8 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError>;
 
+	/// Add an aye or nay vote for the sender to the given proposal.
+	/// Returns true if the sender votes first time if successful.
 	fn vote_proposal(
 		who: AccountId,
 		proposal: Hash,
@@ -186,8 +190,11 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		approve: bool,
 	) -> Result<bool, DispatchError>;
 
+	/// Veto a proposal, closing and removing it from the system, regardless of its current state.
+	/// Returns an active proposals count, which includes removed proposal.
 	fn veto_proposal(proposal_hash: Hash) -> u32;
 
+	/// Close a proposal that is either approved, disapproved, or whose voting period has ended.
 	fn close_proposal(
 		proposal_hash: Hash,
 		index: ProposalIndex,
@@ -195,7 +202,16 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		length_bound: u32,
 	) -> DispatchResultWithPostInfo;
 
+	/// Return a proposal of the given hash.
 	fn proposal_of(proposal_hash: Hash) -> Option<Proposal>;
+
+	/// Return hashes of all active proposals.
+	fn proposals() -> Vec<Hash>;
+
+	// Return count of all active proposals.
+	//
+	// Used to check witness data for an extrinsic.
+	fn proposals_count() -> u32;
 }
 
 /// The various roles that a member can hold.
@@ -324,10 +340,10 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// The founders/fellows/allies have already been initialized.
-		AllianceAlreadyInitialized,
 		/// The Alliance has not been initialized yet, therefore accounts cannot join it.
 		AllianceNotYetInitialized,
+		/// The Alliance has been initialized, therefore cannot be initialized again.
+		AllianceAlreadyInitialized,
 		/// Account is already a member.
 		AlreadyMember,
 		/// Account is not a member.
@@ -367,12 +383,16 @@ pub mod pallet {
 		TooManyMembers,
 		/// Number of announcements exceeds `MaxAnnouncementsCount`.
 		TooManyAnnouncements,
+		/// Invalid witness data given.
+		BadWitness,
 		/// Account already gave retirement notice
 		AlreadyRetiring,
 		/// Account did not give a retirement notice required to retire.
 		RetirementNoticeNotGiven,
 		/// Retirement period has not passed.
 		RetirementPeriodNotPassed,
+		/// Founders must be provided to initialize the Alliance.
+		FoundersMissing,
 	}
 
 	#[pallet::event]
@@ -408,6 +428,8 @@ pub mod pallet {
 		UnscrupulousItemAdded { items: Vec<UnscrupulousItemOf<T, I>> },
 		/// Accounts or websites have been removed from the list of unscrupulous items.
 		UnscrupulousItemRemoved { items: Vec<UnscrupulousItemOf<T, I>> },
+		/// Alliance disbanded.
+		AllianceDisbanded { members: Vec<T::AccountId>, proposals: Vec<T::Hash> },
 	}
 
 	#[pallet::genesis_config]
@@ -451,15 +473,22 @@ pub mod pallet {
 					!Pallet::<T, I>::has_member(MemberRole::Fellow),
 					"Fellows are already initialized!"
 				);
+				assert!(
+					!self.founders.is_empty(),
+					"Founders must be provided to initialize the Alliance"
+				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
 					self.fellows.clone().try_into().expect("Too many genesis fellows");
 				Members::<T, I>::insert(MemberRole::Fellow, members);
 			}
 			if !self.allies.is_empty() {
-				// Only allow Allies if the Alliance is "initialized".
 				assert!(
-					Pallet::<T, I>::is_initialized(),
-					"Alliance must have Founders or Fellows to have Allies"
+					!Pallet::<T, I>::has_member(MemberRole::Ally),
+					"Allies are already initialized!"
+				);
+				assert!(
+					!self.founders.is_empty(),
+					"Founders must be provided to initialize the Alliance"
 				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
 					self.allies.clone().try_into().expect("Too many genesis allies");
@@ -619,24 +648,80 @@ pub mod pallet {
 		}
 
 		/// Initialize the founders, fellows, and allies.
+		/// Founders must be provided to initialize the Alliance.
 		///
-		/// This should only be called once, and must be called by the Root origin.
-		#[pallet::weight(T::WeightInfo::init_members(
+		/// Provide witness data to disband current Alliance before initializing new.
+		/// Alliance must be empty or disband first to initialize new.
+		///
+		/// Alliance is only disbanded if new member set is not provided.
+		///
+		/// Must be called by the Root origin.
+		#[pallet::weight(T::WeightInfo::force_set_members(
 			T::MaxFounders::get(),
 			T::MaxFellows::get(),
-			T::MaxAllies::get()
+			T::MaxAllies::get(),
+			witness.proposals,
+			witness.voting_members,
+			witness.ally_members,
 		))]
-		pub fn init_members(
+		pub fn force_set_members(
 			origin: OriginFor<T>,
 			founders: Vec<T::AccountId>,
 			fellows: Vec<T::AccountId>,
 			allies: Vec<T::AccountId>,
+			witness: ForceSetWitness,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			// Cannot be called if the Alliance already has Founders or Fellows.
-			// TODO: Remove check and allow Root to set members at any time.
-			// https://github.com/paritytech/substrate/issues/11928
+			if !witness.is_zero() {
+				// Disband Alliance by removing all members and returning deposits.
+				// Veto and remove all active proposals to avoid any unexpected behavior from
+				// actionable items managed outside of the pallet. Items managed within the pallet,
+				// like `UnscrupulousWebsites`, are left for the new Alliance to clean up or keep.
+
+				ensure!(
+					T::ProposalProvider::proposals_count() <= witness.proposals,
+					Error::<T, I>::BadWitness
+				);
+				ensure!(
+					Self::votable_members_count() <= witness.voting_members,
+					Error::<T, I>::BadWitness
+				);
+				ensure!(
+					Self::ally_members_count() <= witness.ally_members,
+					Error::<T, I>::BadWitness
+				);
+
+				let mut proposals = T::ProposalProvider::proposals();
+				for hash in proposals.iter() {
+					T::ProposalProvider::veto_proposal(*hash);
+				}
+
+				let mut members = Self::votable_members();
+				T::MembershipChanged::change_members_sorted(&[], &members, &[]);
+
+				members.append(&mut Self::members_of(MemberRole::Ally));
+				for member in members.iter() {
+					if let Some(deposit) = DepositOf::<T, I>::take(&member) {
+						let err_amount = T::Currency::unreserve(&member, deposit);
+						debug_assert!(err_amount.is_zero());
+					}
+				}
+
+				Members::<T, I>::remove(&MemberRole::Founder);
+				Members::<T, I>::remove(&MemberRole::Fellow);
+				Members::<T, I>::remove(&MemberRole::Ally);
+
+				members.sort();
+				proposals.sort();
+				Self::deposit_event(Event::AllianceDisbanded { members, proposals });
+			}
+
+			if founders.is_empty() {
+				ensure!(fellows.is_empty() && allies.is_empty(), Error::<T, I>::FoundersMissing);
+				// new members set not provided.
+				return Ok(())
+			}
 			ensure!(!Self::is_initialized(), Error::<T, I>::AllianceAlreadyInitialized);
 
 			let mut founders: BoundedVec<T::AccountId, T::MaxMembersCount> =
@@ -665,9 +750,11 @@ pub mod pallet {
 			T::InitializeMembers::initialize_members(&voteable_members);
 
 			log::debug!(
-				target: "runtime::alliance",
+				target: LOG_TARGET,
 				"Initialize alliance founders: {:?}, fellows: {:?}, allies: {:?}",
-				founders, fellows, allies
+				founders,
+				fellows,
+				allies
 			);
 
 			Self::deposit_event(Event::MembersInitialized {
@@ -913,7 +1000,9 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Check if the Alliance has been initialized.
 	fn is_initialized() -> bool {
-		Self::has_member(MemberRole::Founder) || Self::has_member(MemberRole::Fellow)
+		Self::has_member(MemberRole::Founder) ||
+			Self::has_member(MemberRole::Fellow) ||
+			Self::has_member(MemberRole::Ally)
 	}
 
 	/// Check if a given role has any members.
@@ -957,13 +1046,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::is_founder(who) || Self::is_fellow(who)
 	}
 
+	/// Count of ally members.
+	fn ally_members_count() -> u32 {
+		Members::<T, I>::decode_len(MemberRole::Ally).unwrap_or(0) as u32
+	}
+
+	/// Count of all members who have voting rights.
+	fn votable_members_count() -> u32 {
+		Members::<T, I>::decode_len(MemberRole::Founder)
+			.unwrap_or(0)
+			.saturating_add(Members::<T, I>::decode_len(MemberRole::Fellow).unwrap_or(0)) as u32
+	}
+
+	/// Get all members of a given role.
+	fn members_of(role: MemberRole) -> Vec<T::AccountId> {
+		Members::<T, I>::get(role).into_inner()
+	}
+
 	/// Collect all members who have voting rights into one list.
-	fn votable_members_sorted() -> Vec<T::AccountId> {
-		let mut founders = Members::<T, I>::get(MemberRole::Founder).into_inner();
-		let mut fellows = Members::<T, I>::get(MemberRole::Fellow).into_inner();
+	fn votable_members() -> Vec<T::AccountId> {
+		let mut founders = Self::members_of(MemberRole::Founder);
+		let mut fellows = Self::members_of(MemberRole::Fellow);
 		founders.append(&mut fellows);
-		founders.sort();
-		founders.into()
+		founders
+	}
+
+	/// Collect all members who have voting rights into one sorted list.
+	fn votable_members_sorted() -> Vec<T::AccountId> {
+		let mut members = Self::votable_members();
+		members.sort();
+		members
 	}
 
 	/// Add a user to the sorted alliance member set.
