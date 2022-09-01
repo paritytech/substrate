@@ -27,7 +27,7 @@ use serde::Serialize;
 use std::{env, fs, path::PathBuf};
 
 use crate::{
-	overhead::{bench::BenchmarkType, cmd::OverheadParams},
+	overhead::cmd::{BenchmarkType, OverheadParams},
 	shared::{Stats, UnderscoreHelper},
 };
 

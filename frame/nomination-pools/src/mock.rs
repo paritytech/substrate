@@ -2,9 +2,14 @@ use super::*;
 use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
+use sp_runtime::FixedU128;
 
 pub type AccountId = u128;
 pub type Balance = u128;
+pub type RewardCounter = FixedU128;
+// This sneaky little hack allows us to write code exactly as we would do in the pallet in the tests
+// as well, e.g. `StorageItem::<T>::get()`.
+pub type T = Runtime;
 
 // Ext builder creates a pool with id 1.
 pub fn default_bonded_account() -> AccountId {
@@ -17,12 +22,14 @@ pub fn default_reward_account() -> AccountId {
 }
 
 parameter_types! {
+	pub static MinJoinBondConfig: Balance = 2;
 	pub static CurrentEra: EraIndex = 0;
 	pub static BondingDuration: EraIndex = 3;
 	pub storage BondedBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
 	pub storage UnbondingBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
 	#[derive(Clone, PartialEq)]
 	pub static MaxUnbonding: u32 = 8;
+	pub static StakingMinBond: Balance = 10;
 	pub storage Nominations: Option<Vec<AccountId>> = None;
 }
 
@@ -40,7 +47,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	type AccountId = AccountId;
 
 	fn minimum_bond() -> Self::Balance {
-		10
+		StakingMinBond::get()
 	}
 
 	fn current_era() -> EraIndex {
@@ -111,6 +118,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
+	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
 	}
@@ -183,6 +191,8 @@ impl pools::Config for Runtime {
 	type Event = Event;
 	type WeightInfo = ();
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
+	type RewardCounter = RewardCounter;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = StakingMock;
@@ -190,7 +200,7 @@ impl pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
 	type MaxUnbonding = MaxUnbonding;
-	type MinPointsToBalance = frame_support::traits::ConstU32<10>;
+	type MaxPointsToBalance = frame_support::traits::ConstU8<10>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -207,9 +217,16 @@ frame_support::construct_runtime!(
 	}
 );
 
-#[derive(Default)]
 pub struct ExtBuilder {
 	members: Vec<(AccountId, Balance)>,
+	max_members: Option<u32>,
+	max_members_per_pool: Option<u32>,
+}
+
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self { members: Default::default(), max_members: Some(4), max_members_per_pool: Some(3) }
+	}
 }
 
 impl ExtBuilder {
@@ -224,21 +241,42 @@ impl ExtBuilder {
 		self
 	}
 
+	pub(crate) fn min_bond(self, min: Balance) -> Self {
+		StakingMinBond::set(min);
+		self
+	}
+
+	pub(crate) fn min_join_bond(self, min: Balance) -> Self {
+		MinJoinBondConfig::set(min);
+		self
+	}
+
 	pub(crate) fn with_check(self, level: u8) -> Self {
 		CheckLevel::set(level);
 		self
 	}
 
+	pub(crate) fn max_members(mut self, max: Option<u32>) -> Self {
+		self.max_members = max;
+		self
+	}
+
+	pub(crate) fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
+		self.max_members_per_pool = max;
+		self
+	}
+
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
+		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 		let _ = crate::GenesisConfig::<Runtime> {
-			min_join_bond: 2,
+			min_join_bond: MinJoinBondConfig::get(),
 			min_create_bond: 2,
 			max_pools: Some(2),
-			max_members_per_pool: Some(3),
-			max_members: Some(4),
+			max_members_per_pool: self.max_members_per_pool,
+			max_members: self.max_members,
 		}
 		.assimilate_storage(&mut storage);
 
@@ -249,8 +287,8 @@ impl ExtBuilder {
 			frame_system::Pallet::<Runtime>::set_block_number(1);
 
 			// make a pool
-			let amount_to_bond = <Runtime as pools::Config>::StakingInterface::minimum_bond();
-			Balances::make_free_balance_be(&10, amount_to_bond * 2);
+			let amount_to_bond = Pools::depositor_min_bond();
+			Balances::make_free_balance_be(&10, amount_to_bond * 5);
 			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
 
 			let last_pool = LastPoolId::<Runtime>::get();
@@ -266,22 +304,23 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			Pools::sanity_checks(CheckLevel::get()).unwrap();
+			Pools::do_try_state(CheckLevel::get()).unwrap();
 		})
 	}
 }
 
-pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) -> Result<(), ()> {
+pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
 	BondedPools::<Runtime>::try_mutate(pool_id, |maybe_bonded_pool| {
 		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
 			bonded_pool.state = state;
 		})
 	})
+	.unwrap()
 }
 
 parameter_types! {
-	static PoolsEvents: usize = 0;
-	static BalancesEvents: usize = 0;
+	storage PoolsEvents: u32 = 0;
+	storage BalancesEvents: u32 = 0;
 }
 
 /// All events of this pallet.
@@ -292,8 +331,8 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = PoolsEvents::get();
-	PoolsEvents::set(events.len());
-	events.into_iter().skip(already_seen).collect()
+	PoolsEvents::set(&(events.len() as u32));
+	events.into_iter().skip(already_seen as usize).collect()
 }
 
 /// All events of the `Balances` pallet.
@@ -304,8 +343,8 @@ pub(crate) fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Ru
 		.filter_map(|e| if let Event::Balances(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = BalancesEvents::get();
-	BalancesEvents::set(events.len());
-	events.into_iter().skip(already_seen).collect()
+	BalancesEvents::set(&(events.len() as u32));
+	events.into_iter().skip(already_seen as usize).collect()
 }
 
 /// Same as `fully_unbond`, in permissioned setting.

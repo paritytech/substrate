@@ -91,8 +91,8 @@ use frame_support::{
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
-		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
-		Weight,
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		PerDispatchClass, RuntimeDbWeight, Weight,
 	},
 	Parameter,
 };
@@ -197,6 +197,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
+	use sp_runtime::DispatchErrorWithPostInfo;
 
 	/// System configuration trait. Implemented by runtime.
 	#[pallet::config]
@@ -232,7 +233,8 @@ pub mod pallet {
 			+ Default
 			+ MaybeDisplay
 			+ AtLeast32Bit
-			+ Copy;
+			+ Copy
+			+ MaxEncodedLen;
 
 		/// The block number type used by the runtime.
 		type BlockNumber: Parameter
@@ -319,7 +321,7 @@ pub mod pallet {
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
 		/// pallet does regardless).
-		type AccountData: Member + FullCodec + Clone + Default + TypeInfo;
+		type AccountData: Member + FullCodec + Clone + Default + TypeInfo + MaxEncodedLen;
 
 		/// Handler for when a new account has just been created.
 		type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -331,7 +333,7 @@ pub mod pallet {
 
 		type SystemWeightInfo: WeightInfo;
 
-		/// The designated SS85 prefix of this chain.
+		/// The designated SS58 prefix of this chain.
 		///
 		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
 		/// that the runtime should know about the prefix in order to make use of it as
@@ -354,7 +356,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -371,8 +372,16 @@ pub mod pallet {
 		// that's not possible at present (since it's within the pallet macro).
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
-			ensure_root(origin)?;
-			Ok(().into())
+			match ensure_root(origin) {
+				Ok(_) => Ok(().into()),
+				Err(_) => {
+					// roughly same as a 4 byte remark since perbill is u32.
+					Err(DispatchErrorWithPostInfo {
+						post_info: Some(T::SystemWeightInfo::remark(4u32)).into(),
+						error: DispatchError::BadOrigin,
+					})
+				},
+			}
 		}
 
 		/// Make some on-chain remark.
@@ -569,6 +578,7 @@ pub mod pallet {
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_data)]
+	#[pallet::unbounded]
 	pub(super) type ExtrinsicData<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Vec<u8>, ValueQuery>;
 
@@ -584,6 +594,7 @@ pub mod pallet {
 
 	/// Digest of the current block, also part of the block header.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn digest)]
 	pub(super) type Digest<T: Config> = StorageValue<_, generic::Digest, ValueQuery>;
 
@@ -595,6 +606,7 @@ pub mod pallet {
 	/// Events have a large in-memory size. Box the events to not go out-of-memory
 	/// just in case someone still reads them from within the runtime.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(super) type Events<T: Config> =
 		StorageValue<_, Vec<Box<EventRecord<T::Event, T::Hash>>>, ValueQuery>;
 
@@ -614,12 +626,14 @@ pub mod pallet {
 	/// the `EventIndex` then in case if the topic has the same contents on the next block
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn event_topics)]
 	pub(super) type EventTopics<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
 
 	/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub type LastRuntimeUpgrade<T: Config> = StorageValue<_, LastRuntimeUpgradeInfo>;
 
 	/// True if we have upgraded so that `type RefCount` is `u32`. False (default) if not.
@@ -681,7 +695,7 @@ pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
@@ -729,7 +743,7 @@ type EventIndex = u32;
 pub type RefCount = u32;
 
 /// Information of an account.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,
@@ -1295,9 +1309,10 @@ impl<T: Config> Pallet<T> {
 	pub fn finalize() -> T::Header {
 		log::debug!(
 			target: "runtime::system",
-			"[{:?}] length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight: {} ({}%) \
-			/ op weight {} ({}%) / mandatory weight {} ({}%)",
+			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
+			 {} ({}%) op weight {} ({}%) / mandatory weight {} ({}%)",
 			Self::block_number(),
+			Self::extrinsic_index().unwrap_or_default(),
 			Self::all_extrinsics_len(),
 			sp_runtime::Percent::from_rational(
 				Self::all_extrinsics_len(),
@@ -1313,18 +1328,18 @@ impl<T: Config> Pallet<T> {
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Normal),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Normal),
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Normal).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Operational),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Operational),
-				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Operational).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Mandatory),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Mandatory),
-				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Mandatory).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 		);
 		ExecutionPhase::<T>::kill();
@@ -1491,6 +1506,7 @@ impl<T: Config> Pallet<T> {
 	/// To be called immediately after an extrinsic has been applied.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
 		info.weight = extract_actual_weight(r, &info);
+		info.pays_fee = extract_actual_pays_fee(r, &info);
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {

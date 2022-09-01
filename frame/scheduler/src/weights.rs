@@ -45,112 +45,46 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_scheduler.
 pub trait WeightInfo {
 	fn service_agendas() -> Weight;
-	fn service_agenda(i: u32, ) -> Weight;
+	fn service_agenda(_i: u32, ) -> Weight;
 	fn service_task_base() -> Weight;
 	fn service_task_periodic() -> Weight;
 	fn service_task_named() -> Weight;
-	fn service_task_fetched(s: u32, ) -> Weight;
+	fn service_task_fetched(_s: u32, ) -> Weight;
 	fn execute_dispatch_signed() -> Weight;
 	fn execute_dispatch_unsigned() -> Weight;
-	fn schedule(s: u32, ) -> Weight;
-	fn cancel(s: u32, ) -> Weight;
-	fn schedule_named(s: u32, ) -> Weight;
-	fn cancel_named(s: u32, ) -> Weight;
+	fn schedule(_s: u32, ) -> Weight;
+	fn cancel(_s: u32, ) -> Weight;
+	fn schedule_named(_s: u32, ) -> Weight;
+	fn cancel_named(_s: u32, ) -> Weight;
 }
 
-/// Weights for pallet_scheduler using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn service_agendas() -> Weight { 0 }
-	fn service_agenda(_i: u32, ) -> Weight { 0 }
-	fn service_task_base() -> Weight { 0 }
-	fn service_task_periodic() -> Weight { 0 }
-	fn service_task_named() -> Weight { 0 }
-	fn service_task_fetched(_s: u32, ) -> Weight { 0 }
-	fn execute_dispatch_signed() -> Weight { 0 }
-	fn execute_dispatch_unsigned() -> Weight { 0 }
-
-	// Storage: Scheduler Agenda (r:1 w:1)
-	fn schedule(s: u32, ) -> Weight {
-		(18_013_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((87_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-	}
-	// Storage: Scheduler Agenda (r:1 w:1)
-	// Storage: Scheduler Lookup (r:0 w:1)
-	fn cancel(s: u32, ) -> Weight {
-		(18_131_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((595_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-	}
-	// Storage: Scheduler Lookup (r:1 w:1)
-	// Storage: Scheduler Agenda (r:1 w:1)
-	fn schedule_named(s: u32, ) -> Weight {
-		(21_230_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((98_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-	}
-	// Storage: Scheduler Lookup (r:1 w:1)
-	// Storage: Scheduler Agenda (r:1 w:1)
-	fn cancel_named(s: u32, ) -> Weight {
-		(20_139_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((595_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-	}
+	fn service_agendas() -> Weight { Weight::zero() }
+	fn service_agenda(_i: u32, ) -> Weight { Weight::zero() }
+	fn service_task_base() -> Weight { Weight::zero() }
+	fn service_task_periodic() -> Weight { Weight::zero() }
+	fn service_task_named() -> Weight { Weight::zero() }
+	fn service_task_fetched(_s: u32, ) -> Weight { Weight::zero() }
+	fn execute_dispatch_signed() -> Weight { Weight::zero() }
+	fn execute_dispatch_unsigned() -> Weight { Weight::zero() }
+	fn schedule(_s: u32, ) -> Weight { Weight::zero() }
+	fn cancel(_s: u32, ) -> Weight { Weight::zero() }
+	fn schedule_named(_s: u32, ) -> Weight { Weight::zero() }
+	fn cancel_named(_s: u32, ) -> Weight { Weight::zero() }
 }
 
-// For backwards compatibility and tests
 impl WeightInfo for () {
-	fn service_agendas() -> Weight { 0 }
-	fn service_agenda(_i: u32, ) -> Weight { 0 }
-	fn service_task_base() -> Weight { 0 }
-	fn service_task_periodic() -> Weight { 0 }
-	fn service_task_named() -> Weight { 0 }
-	fn service_task_fetched(_s: u32, ) -> Weight { 0 }
-	fn execute_dispatch_signed() -> Weight { 0 }
-	fn execute_dispatch_unsigned() -> Weight { 0 }
-
-	// Storage: Scheduler Agenda (r:1 w:1)
-	fn schedule(s: u32, ) -> Weight {
-		(18_013_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((87_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-	}
-	// Storage: Scheduler Agenda (r:1 w:1)
-	// Storage: Scheduler Lookup (r:0 w:1)
-	fn cancel(s: u32, ) -> Weight {
-		(18_131_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((595_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-	}
-	// Storage: Scheduler Lookup (r:1 w:1)
-	// Storage: Scheduler Agenda (r:1 w:1)
-	fn schedule_named(s: u32, ) -> Weight {
-		(21_230_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((98_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-	}
-	// Storage: Scheduler Lookup (r:1 w:1)
-	// Storage: Scheduler Agenda (r:1 w:1)
-	fn cancel_named(s: u32, ) -> Weight {
-		(20_139_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((595_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-	}
+	fn service_agendas() -> Weight { Weight::zero() }
+	fn service_agenda(_i: u32, ) -> Weight { Weight::zero() }
+	fn service_task_base() -> Weight { Weight::zero() }
+	fn service_task_periodic() -> Weight { Weight::zero() }
+	fn service_task_named() -> Weight { Weight::zero() }
+	fn service_task_fetched(_s: u32, ) -> Weight { Weight::zero() }
+	fn execute_dispatch_signed() -> Weight { Weight::zero() }
+	fn execute_dispatch_unsigned() -> Weight { Weight::zero() }
+	fn schedule(_s: u32, ) -> Weight { Weight::zero() }
+	fn cancel(_s: u32, ) -> Weight { Weight::zero() }
+	fn schedule_named(_s: u32, ) -> Weight { Weight::zero() }
+	fn cancel_named(_s: u32, ) -> Weight { Weight::zero() }
 }

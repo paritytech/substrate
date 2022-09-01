@@ -18,7 +18,7 @@
 //! Tests for Uniques pallet.
 
 use crate::{mock::*, Event, *};
-use frame_support::{assert_noop, assert_ok, traits::Currency};
+use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::Currency};
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
 
@@ -558,6 +558,44 @@ fn approval_lifecycle_works() {
 }
 
 #[test]
+fn approved_account_gets_reset_after_transfer() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
+
+		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
+		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 42, 5));
+
+		// this shouldn't work because we have just transfered the item to another account.
+		assert_noop!(Uniques::transfer(Origin::signed(3), 0, 42, 4), Error::<Test>::NoPermission);
+		// The new owner can transfer fine:
+		assert_ok!(Uniques::transfer(Origin::signed(5), 0, 42, 6));
+	});
+}
+
+#[test]
+fn approved_account_gets_reset_after_buy_item() {
+	new_test_ext().execute_with(|| {
+		let item = 1;
+		let price = 15;
+
+		Balances::make_free_balance_be(&2, 100);
+
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, item, 1));
+		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, item, 5));
+
+		assert_ok!(Uniques::set_price(Origin::signed(1), 0, item, Some(price), None));
+
+		assert_ok!(Uniques::buy_item(Origin::signed(2), 0, item, price));
+
+		// this shouldn't work because the item has been bough and the approved account should be
+		// reset.
+		assert_noop!(Uniques::transfer(Origin::signed(5), 0, item, 4), Error::<Test>::NoPermission);
+	});
+}
+
+#[test]
 fn cancel_approval_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
@@ -692,5 +730,181 @@ fn max_supply_should_work() {
 			Collection::<Test>::get(collection_id).unwrap().destroy_witness()
 		));
 		assert!(!CollectionMaxSupply::<Test>::contains_key(collection_id));
+	});
+}
+
+#[test]
+fn set_price_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+
+		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_id, true));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_1, user_id));
+		assert_ok!(Uniques::mint(Origin::signed(user_id), collection_id, item_2, user_id));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_id),
+			collection_id,
+			item_1,
+			Some(1),
+			None,
+		));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_id),
+			collection_id,
+			item_2,
+			Some(2),
+			Some(3)
+		));
+
+		let item = ItemPriceOf::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(item.0, 1);
+		assert_eq!(item.1, None);
+
+		let item = ItemPriceOf::<Test>::get(collection_id, item_2).unwrap();
+		assert_eq!(item.0, 2);
+		assert_eq!(item.1, Some(3));
+
+		assert!(events().contains(&Event::<Test>::ItemPriceSet {
+			collection: collection_id,
+			item: item_1,
+			price: 1,
+			whitelisted_buyer: None,
+		}));
+
+		// validate we can unset the price
+		assert_ok!(Uniques::set_price(Origin::signed(user_id), collection_id, item_2, None, None));
+		assert!(events().contains(&Event::<Test>::ItemPriceRemoved {
+			collection: collection_id,
+			item: item_2
+		}));
+		assert!(!ItemPriceOf::<Test>::contains_key(collection_id, item_2));
+	});
+}
+
+#[test]
+fn buy_item_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let user_3 = 3;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+		let item_3 = 3;
+		let price_1 = 20;
+		let price_2 = 30;
+		let initial_balance = 100;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&user_3, initial_balance);
+
+		assert_ok!(Uniques::force_create(Origin::root(), collection_id, user_1, true));
+
+		assert_ok!(Uniques::mint(Origin::signed(user_1), collection_id, item_1, user_1));
+		assert_ok!(Uniques::mint(Origin::signed(user_1), collection_id, item_2, user_1));
+		assert_ok!(Uniques::mint(Origin::signed(user_1), collection_id, item_3, user_1));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_1),
+			collection_id,
+			item_1,
+			Some(price_1),
+			None,
+		));
+
+		assert_ok!(Uniques::set_price(
+			Origin::signed(user_1),
+			collection_id,
+			item_2,
+			Some(price_2),
+			Some(user_3),
+		));
+
+		// can't buy for less
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, 1),
+			Error::<Test>::BidTooLow
+		);
+
+		// pass the higher price to validate it will still deduct correctly
+		assert_ok!(Uniques::buy_item(Origin::signed(user_2), collection_id, item_1, price_1 + 1,));
+
+		// validate the new owner & balances
+		let item = Item::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(item.owner, user_2);
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + price_1);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - price_1);
+
+		// can't buy from yourself
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_1), collection_id, item_2, price_2),
+			Error::<Test>::NoPermission
+		);
+
+		// can't buy when the item is listed for a specific buyer
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_2, price_2),
+			Error::<Test>::NoPermission
+		);
+
+		// can buy when I'm a whitelisted buyer
+		assert_ok!(Uniques::buy_item(Origin::signed(user_3), collection_id, item_2, price_2,));
+
+		assert!(events().contains(&Event::<Test>::ItemBought {
+			collection: collection_id,
+			item: item_2,
+			price: price_2,
+			seller: user_1,
+			buyer: user_3,
+		}));
+
+		// ensure we reset the buyer field
+		assert!(!ItemPriceOf::<Test>::contains_key(collection_id, item_2));
+
+		// can't buy when item is not for sale
+		assert_noop!(
+			Uniques::buy_item(Origin::signed(user_2), collection_id, item_3, price_2),
+			Error::<Test>::NotForSale
+		);
+
+		// ensure we can't buy an item when the collection or an item is frozen
+		{
+			assert_ok!(Uniques::set_price(
+				Origin::signed(user_1),
+				collection_id,
+				item_3,
+				Some(price_1),
+				None,
+			));
+
+			// freeze collection
+			assert_ok!(Uniques::freeze_collection(Origin::signed(user_1), collection_id));
+
+			let buy_item_call = mock::Call::Uniques(crate::Call::<Test>::buy_item {
+				collection: collection_id,
+				item: item_3,
+				bid_price: price_1,
+			});
+			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
+
+			assert_ok!(Uniques::thaw_collection(Origin::signed(user_1), collection_id));
+
+			// freeze item
+			assert_ok!(Uniques::freeze(Origin::signed(user_1), collection_id, item_3));
+
+			let buy_item_call = mock::Call::Uniques(crate::Call::<Test>::buy_item {
+				collection: collection_id,
+				item: item_3,
+				bid_price: price_1,
+			});
+			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
+		}
 	});
 }

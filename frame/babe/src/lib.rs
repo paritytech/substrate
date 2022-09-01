@@ -336,7 +336,7 @@ pub mod pallet {
 		/// Initialization
 		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
 			Self::initialize(now);
-			0
+			Weight::zero()
 		}
 
 		/// Block finalization
@@ -1008,6 +1008,6 @@ pub mod migrations {
 
 		writes += 3;
 
-		T::DbWeight::get().writes(writes) + T::DbWeight::get().reads(reads)
+		T::DbWeight::get().reads_writes(reads, writes)
 	}
 }

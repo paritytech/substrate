@@ -28,7 +28,7 @@ use sc_consensus::{
 	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
 	ImportedAux,
 };
-use sc_network::config::{ProtocolConfig, Role};
+use sc_network::config::Role;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, Hash, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestClient, TestNetFactory,
@@ -73,6 +73,7 @@ type GrandpaBlockImport = crate::GrandpaBlockImport<
 	LongestChain<substrate_test_runtime_client::Backend, Block>,
 >;
 
+#[derive(Default)]
 struct GrandpaTestNet {
 	peers: Vec<GrandpaPeer>,
 	test_config: TestApi,
@@ -110,16 +111,6 @@ impl TestNetFactory for GrandpaTestNet {
 	type PeerData = PeerData;
 	type BlockImport = GrandpaBlockImport;
 
-	/// Create new test network with peers and given config.
-	fn from_config(_config: &ProtocolConfig) -> Self {
-		GrandpaTestNet { peers: Vec::new(), test_config: Default::default() }
-	}
-
-	fn default_config() -> ProtocolConfig {
-		// This is unused.
-		ProtocolConfig::default()
-	}
-
 	fn add_full_peer(&mut self) {
 		self.add_full_peer_with_config(FullPeerConfig {
 			notifications_protocols: vec![grandpa_protocol_name::NAME.into()],
@@ -128,12 +119,7 @@ impl TestNetFactory for GrandpaTestNet {
 		})
 	}
 
-	fn make_verifier(
-		&self,
-		_client: PeersClient,
-		_cfg: &ProtocolConfig,
-		_: &PeerData,
-	) -> Self::Verifier {
+	fn make_verifier(&self, _client: PeersClient, _: &PeerData) -> Self::Verifier {
 		PassThroughVerifier::new(false) // use non-instant finality.
 	}
 
@@ -184,7 +170,7 @@ pub(crate) struct RuntimeApi {
 impl ProvideRuntimeApi<Block> for TestApi {
 	type Api = RuntimeApi;
 
-	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
+	fn runtime_api(&self) -> ApiRef<'_, Self::Api> {
 		RuntimeApi { inner: self.clone() }.into()
 	}
 }
@@ -224,7 +210,7 @@ impl GenesisAuthoritySetProvider<Block> for TestApi {
 const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
 
 fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
-	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
+	keys.iter().map(|&key| key.public().into()).map(|id| (id, 1)).collect()
 }
 
 fn create_keystore(authority: Ed25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
@@ -547,7 +533,7 @@ fn transition_3_voters_twice_1_full_observer() {
 	{
 		let net = net.clone();
 		let client = net.lock().peers[0].client().clone();
-		let peers_c = peers_c.clone();
+		let peers_c = *peers_c;
 
 		// wait for blocks to be finalized before generating new ones
 		let block_production = client

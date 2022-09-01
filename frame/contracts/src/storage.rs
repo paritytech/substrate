@@ -28,7 +28,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	storage::child::{self, ChildInfo},
-	weights::Weight,
+	weights::{RefTimeWeight, Weight},
 };
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
@@ -227,9 +227,11 @@ where
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
 			T::WeightInfo::on_initialize_per_queue_item(0);
-		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
-			T::WeightInfo::on_initialize_per_trie_key(0);
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as Weight);
+		let weight_per_key = (T::WeightInfo::on_initialize_per_trie_key(1) -
+			T::WeightInfo::on_initialize_per_trie_key(0))
+		.ref_time();
+		let decoding_weight =
+			weight_per_queue_item.scalar_saturating_mul(queue_len as RefTimeWeight);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
@@ -237,7 +239,8 @@ where
 			.saturating_sub(base_weight)
 			.saturating_sub(decoding_weight)
 			.checked_div(weight_per_key)
-			.unwrap_or(0) as u32;
+			.unwrap_or(Weight::zero())
+			.ref_time() as u32;
 
 		(weight_per_key, key_budget)
 	}
@@ -248,7 +251,7 @@ where
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
 		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
-			return 0
+			return Weight::zero()
 		}
 
 		let (weight_per_key, mut remaining_key_budget) =
@@ -282,7 +285,10 @@ where
 		}
 
 		<DeletionQueue<T>>::put(queue);
-		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
+		let ref_time_weight = weight_limit
+			.ref_time()
+			.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as RefTimeWeight));
+		Weight::from_ref_time(ref_time_weight)
 	}
 
 	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.

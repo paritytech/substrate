@@ -40,10 +40,7 @@ use futures::{
 	prelude::*,
 };
 use libp2p::{
-	core::{
-		connection::{ConnectionId, ListenerId},
-		ConnectedPoint, Multiaddr, PeerId,
-	},
+	core::{connection::ConnectionId, transport::ListenerId, ConnectedPoint, Multiaddr, PeerId},
 	request_response::{
 		handler::RequestResponseHandler, ProtocolSupport, RequestResponse, RequestResponseCodec,
 		RequestResponseConfig, RequestResponseEvent, RequestResponseMessage, ResponseChannel,
@@ -53,7 +50,9 @@ use libp2p::{
 		NetworkBehaviourAction, PollParameters,
 	},
 };
-use sc_network_common::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
+use sc_network_common::request_responses::{
+	IfDisconnected, IncomingRequest, OutgoingResponse, ProtocolConfig, RequestFailure,
+};
 use std::{
 	borrow::Cow,
 	collections::{hash_map::Entry, HashMap},
@@ -118,26 +117,6 @@ struct ProtocolRequestId {
 impl From<(Cow<'static, str>, RequestId)> for ProtocolRequestId {
 	fn from((protocol, request_id): (Cow<'static, str>, RequestId)) -> Self {
 		Self { protocol, request_id }
-	}
-}
-
-/// When sending a request, what to do on a disconnected recipient.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum IfDisconnected {
-	/// Try to connect to the peer.
-	TryConnect,
-	/// Just fail if the destination is not yet connected.
-	ImmediateError,
-}
-
-/// Convenience functions for `IfDisconnected`.
-impl IfDisconnected {
-	/// Shall we connect to a disconnected peer?
-	pub fn should_connect(self) -> bool {
-		match self {
-			Self::TryConnect => true,
-			Self::ImmediateError => false,
-		}
 	}
 }
 
@@ -223,7 +202,9 @@ impl RequestResponsesBehaviour {
 					max_request_size: protocol.max_request_size,
 					max_response_size: protocol.max_response_size,
 				},
-				iter::once((protocol.name.as_bytes().to_vec(), protocol_support)),
+				iter::once(protocol.name.as_bytes().to_vec())
+					.chain(protocol.fallback_names.iter().map(|name| name.as_bytes().to_vec()))
+					.zip(iter::repeat(protocol_support)),
 				cfg,
 			);
 
@@ -788,23 +769,6 @@ pub enum RegisterError {
 	DuplicateProtocol(Cow<'static, str>),
 }
 
-/// Error in a request.
-#[derive(Debug, thiserror::Error)]
-#[allow(missing_docs)]
-pub enum RequestFailure {
-	#[error("We are not currently connected to the requested peer.")]
-	NotConnected,
-	#[error("Given protocol hasn't been registered.")]
-	UnknownProtocol,
-	#[error("Remote has closed the substream before answering, thereby signaling that it considers the request as valid, but refused to answer it.")]
-	Refused,
-	#[error("The remote replied, but the local node is no longer interested in the response.")]
-	Obsolete,
-	/// Problem on the network.
-	#[error("Problem on the network: {0}")]
-	Network(OutboundFailure),
-}
-
 /// Error when processing a request sent by a remote.
 #[derive(Debug, thiserror::Error)]
 pub enum ResponseFailure {
@@ -968,7 +932,7 @@ mod tests {
 		let noise_keys =
 			noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
 
-		let transport = MemoryTransport
+		let transport = MemoryTransport::new()
 			.upgrade(upgrade::Version::V1)
 			.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
 			.multiplex(libp2p::yamux::YamuxConfig::default())
@@ -1030,6 +994,7 @@ mod tests {
 
 				let protocol_config = ProtocolConfig {
 					name: From::from(protocol_name),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1130,6 +1095,7 @@ mod tests {
 
 				let protocol_config = ProtocolConfig {
 					name: From::from(protocol_name),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 8, // <-- important for the test
 					request_timeout: Duration::from_secs(30),
@@ -1226,6 +1192,7 @@ mod tests {
 			let protocol_configs = vec![
 				ProtocolConfig {
 					name: From::from(protocol_name_1),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1233,6 +1200,7 @@ mod tests {
 				},
 				ProtocolConfig {
 					name: From::from(protocol_name_2),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1250,6 +1218,7 @@ mod tests {
 			let protocol_configs = vec![
 				ProtocolConfig {
 					name: From::from(protocol_name_1),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
@@ -1257,6 +1226,7 @@ mod tests {
 				},
 				ProtocolConfig {
 					name: From::from(protocol_name_2),
+					fallback_names: Vec::new(),
 					max_request_size: 1024,
 					max_response_size: 1024 * 1024,
 					request_timeout: Duration::from_secs(30),
