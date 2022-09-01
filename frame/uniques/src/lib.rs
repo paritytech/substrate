@@ -952,7 +952,7 @@ pub mod pallet {
 			let _ = details
 				.approved
 				.try_push(delegate.clone())
-				.map_err(|_| Error::<T, I>::ReachedApprovalLimit);
+				.map_err(|_| Error::<T, I>::ReachedApprovalLimit)?;
 			Item::<T, I>::insert(&collection, &item, &details);
 
 			Self::deposit_event(Event::ApprovedTransfer {

@@ -612,6 +612,23 @@ fn approving_multiple_accounts_works() {
 }
 
 #[test]
+fn approvals_limit_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
+
+		for i in 3..13 {
+			assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, i));
+		}
+		// the limit is 10
+		assert_noop!(
+			Uniques::approve_transfer(Origin::signed(2), 0, 42, 14),
+			Error::<Test>::ReachedApprovalLimit
+		);
+	});
+}
+
+#[test]
 fn cancel_approval_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
