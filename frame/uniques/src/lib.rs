@@ -1018,6 +1018,32 @@ pub mod pallet {
 			Ok(())
 		}
 
+		#[pallet::weight(10_000)]
+		pub fn clear_all_transfer_approvals(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+		) -> DispatchResult {
+			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+
+			let collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+			let mut details =
+				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
+			if let Some(check) = maybe_check {
+				let permitted = check == collection_details.admin || check == details.owner;
+				ensure!(permitted, Error::<T, I>::NoPermission);
+			}
+
+			// clear all approvals.
+			details.approved = BoundedVec::default();
+			Item::<T, I>::insert(&collection, &item, &details);
+
+			Ok(())
+		}
+
 		/// Alter the attributes of a given item.
 		///
 		/// Origin must be `ForceOrigin`.

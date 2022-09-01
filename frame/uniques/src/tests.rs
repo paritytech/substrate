@@ -714,6 +714,26 @@ fn cancel_approval_works_with_force() {
 }
 
 #[test]
+fn clear_all_transfer_approvals_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
+
+		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
+		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 4));
+
+		assert_noop!(
+			Uniques::clear_all_transfer_approvals(Origin::signed(3), 0, 42),
+			Error::<Test>::NoPermission
+		);
+
+		assert_ok!(Uniques::clear_all_transfer_approvals(Origin::signed(2), 0, 42));
+		assert_noop!(Uniques::transfer(Origin::signed(3), 0, 42, 5), Error::<Test>::NoPermission);
+		assert_noop!(Uniques::transfer(Origin::signed(4), 0, 42, 5), Error::<Test>::NoPermission);
+	});
+}
+
+#[test]
 fn max_supply_should_work() {
 	new_test_ext().execute_with(|| {
 		let collection_id = 0;
