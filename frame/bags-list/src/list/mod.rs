@@ -28,9 +28,9 @@ use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{
-	ensure,
-	traits::{Defensive, Get, DefensiveOption},
-	DefaultNoBound, PalletError, defensive,
+	defensive, ensure,
+	traits::{Defensive, DefensiveOption, Get},
+	DefaultNoBound, PalletError,
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{Bounded, Zero};
@@ -457,9 +457,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
-		let lighter_node = Node::<T, I>::get(lighter_id).defensive_ok_or_else(|| {
-			ListError::NodeNotFound
-		})?;
+		let lighter_node =
+			Node::<T, I>::get(lighter_id).defensive_ok_or_else(|| ListError::NodeNotFound)?;
 
 		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
 		// in storage and update the node counter.
