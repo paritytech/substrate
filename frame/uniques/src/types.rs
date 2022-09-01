@@ -28,8 +28,11 @@ pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
-pub(super) type ItemDetailsFor<T, I> =
-	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+pub(super) type ItemDetailsFor<T, I> = ItemDetails<
+	<T as SystemConfig>::AccountId,
+	DepositBalanceOf<T, I>,
+	<T as Config<I>>::ApprovalsLimit,
+>;
 pub(super) type ItemPrice<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
@@ -84,11 +87,12 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 
 /// Information concerning the ownership of a single unique item.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
-pub struct ItemDetails<AccountId, DepositBalance> {
+#[scale_info(skip_type_params(ApprovalsLimit))]
+pub struct ItemDetails<AccountId, DepositBalance, ApprovalsLimit: Get<u32>> {
 	/// The owner of this item.
 	pub(super) owner: AccountId,
 	/// The approved transferrer of this item, if one is set.
-	pub(super) approved: Option<AccountId>,
+	pub(super) approved: BoundedVec<AccountId, ApprovalsLimit>,
 	/// Whether the item can be transferred or not.
 	pub(super) is_frozen: bool,
 	/// The amount held in the pallet's default account for this item. Free-hold items will have

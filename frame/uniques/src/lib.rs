@@ -150,6 +150,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ValueLimit: Get<u32>;
 
+		/// The maximum approvals an item could have.
+		#[pallet::constant]
+		type ApprovalsLimit: Get<u32>;
+
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
 		type Helper: BenchmarkHelper<Self::CollectionId, Self::ItemId>;
@@ -210,7 +214,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		ItemDetails<T::AccountId, DepositBalanceOf<T, I>>,
+		ItemDetails<T::AccountId, DepositBalanceOf<T, I>, T::ApprovalsLimit>,
 		OptionQuery,
 	>;
 
@@ -416,6 +420,8 @@ pub mod pallet {
 		NotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
+		/// The item has reached its approval limit.
+		ReachedApprovalLimit,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -631,8 +637,7 @@ pub mod pallet {
 
 			Self::do_transfer(collection, item, dest, |collection_details, details| {
 				if details.owner != origin && collection_details.admin != origin {
-					let approved = details.approved.take().map_or(false, |i| i == origin);
-					ensure!(approved, Error::<T, I>::NoPermission);
+					ensure!(details.approved.contains(&origin), Error::<T, I>::NoPermission);
 				}
 				Ok(())
 			})
@@ -940,10 +945,14 @@ pub mod pallet {
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
-			details.approved = Some(delegate);
+			ensure!(
+				details.approved.len() < T::ApprovalsLimit::get().try_into().unwrap(),
+				Error::<T, I>::ReachedApprovalLimit
+			);
+
+			let _ = details.approved.try_push(delegate.clone());
 			Item::<T, I>::insert(&collection, &item, &details);
 
-			let delegate = details.approved.expect("set as Some above; qed");
 			Self::deposit_event(Event::ApprovedTransfer {
 				collection,
 				item,
@@ -975,7 +984,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			maybe_check_delegate: Option<AccountIdLookupOf<T>>,
+			delegate: T::AccountId,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -989,18 +998,17 @@ pub mod pallet {
 				let permitted = check == collection_details.admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
-			let maybe_check_delegate = maybe_check_delegate.map(T::Lookup::lookup).transpose()?;
-			let old = details.approved.take().ok_or(Error::<T, I>::NoDelegate)?;
-			if let Some(check_delegate) = maybe_check_delegate {
-				ensure!(check_delegate == old, Error::<T, I>::WrongDelegate);
-			}
 
+			ensure!(!details.approved.is_empty(), Error::<T, I>::NoDelegate);
+			ensure!(details.approved.contains(&delegate), Error::<T, I>::WrongDelegate);
+
+			details.approved.retain(|d| *d != delegate);
 			Item::<T, I>::insert(&collection, &item, &details);
 			Self::deposit_event(Event::ApprovalCancelled {
 				collection,
 				item,
 				owner: details.owner,
-				delegate: old,
+				delegate,
 			});
 
 			Ok(())

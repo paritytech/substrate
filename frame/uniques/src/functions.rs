@@ -21,6 +21,7 @@ use super::*;
 use frame_support::{
 	ensure,
 	traits::{ExistenceRequirement, Get},
+	BoundedVec,
 };
 use sp_runtime::{DispatchError, DispatchResult};
 
@@ -47,7 +48,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Account::<T, I>::remove((&details.owner, &collection, &item));
 		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
+
 		details.owner = dest;
+		details.approved = BoundedVec::default();
+
 		Item::<T, I>::insert(&collection, &item, &details);
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 
@@ -168,7 +172,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let owner = owner.clone();
 				Account::<T, I>::insert((&owner, &collection, &item), ());
-				let details = ItemDetails { owner, approved: None, is_frozen: false, deposit };
+				let details = ItemDetails {
+					owner,
+					approved: BoundedVec::default(),
+					is_frozen: false,
+					deposit,
+				};
 				Item::<T, I>::insert(&collection, &item, details);
 				Ok(())
 			},
