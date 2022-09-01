@@ -104,6 +104,7 @@ pub use self::{
 		bounded_btree_set::BoundedBTreeSet,
 		bounded_vec::{BoundedSlice, BoundedVec},
 		migration,
+		storage_noop_guard::StorageNoopGuard,
 		weak_bounded_vec::WeakBoundedVec,
 		IterableStorageDoubleMap, IterableStorageMap, IterableStorageNMap, StorageDoubleMap,
 		StorageMap, StorageNMap, StoragePrefixedMap, StorageValue,
