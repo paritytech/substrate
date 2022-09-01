@@ -35,7 +35,7 @@ pub trait OnInitialize<BlockNumber> {
 	/// including inherent extrinsics. Hence for instance, if you runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
 	fn on_initialize(_n: BlockNumber) -> Weight {
-		Weight::new()
+		Weight::zero()
 	}
 }
 
@@ -44,7 +44,7 @@ pub trait OnInitialize<BlockNumber> {
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
 	fn on_initialize(n: BlockNumber) -> Weight {
-		let mut weight = Weight::new();
+		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
@@ -77,7 +77,7 @@ pub trait OnIdle<BlockNumber> {
 	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
 	/// in a block are applied but before `on_finalize` is executed.
 	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
-		Weight::new()
+		Weight::zero()
 	}
 }
 
@@ -88,7 +88,7 @@ impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 	fn on_idle(n: BlockNumber, remaining_weight: Weight) -> Weight {
 		let on_idle_functions: &[fn(BlockNumber, Weight) -> Weight] =
 			&[for_tuples!( #( Tuple::on_idle ),* )];
-		let mut weight = Weight::new();
+		let mut weight = Weight::zero();
 		let len = on_idle_functions.len();
 		let start_index = n % (len as u32).into();
 		let start_index = start_index.try_into().ok().expect(
@@ -130,7 +130,7 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
 	fn on_runtime_upgrade() -> Weight {
-		Weight::new()
+		Weight::zero()
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
@@ -155,7 +155,7 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
 	fn on_runtime_upgrade() -> Weight {
-		let mut weight = Weight::new();
+		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
 	}
@@ -199,14 +199,14 @@ pub trait Hooks<BlockNumber> {
 	/// Return the weight used, the hook will subtract it from current weight used
 	/// and pass the result to the next `on_idle` hook if it exists.
 	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
-		Weight::new()
+		Weight::zero()
 	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
 	fn on_initialize(_n: BlockNumber) -> Weight {
-		Weight::new()
+		Weight::zero()
 	}
 
 	/// Perform a module upgrade.
@@ -229,7 +229,7 @@ pub trait Hooks<BlockNumber> {
 	/// logic as a free-function from your pallet, and pass it to `type Executive` from the
 	/// top-level runtime.
 	fn on_runtime_upgrade() -> Weight {
-		Weight::new()
+		Weight::zero()
 	}
 
 	/// Execute the sanity checks of this pallet, per block.

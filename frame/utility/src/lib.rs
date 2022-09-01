@@ -185,7 +185,7 @@ pub mod pallet {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
-				.fold(Weight::new(), |total: Weight, weight: Weight| total.saturating_add(weight))
+				.fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
 				.saturating_add(T::WeightInfo::batch(calls.len() as u32));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
@@ -208,7 +208,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight = Weight::new();
+			let mut weight = Weight::zero();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 				// If origin is root, don't apply any dispatch filters; root can call anything.
@@ -301,7 +301,7 @@ pub mod pallet {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
-				.fold(Weight::new(), |total: Weight, weight: Weight| total.saturating_add(weight))
+				.fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
 				.saturating_add(T::WeightInfo::batch_all(calls.len() as u32));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
@@ -324,7 +324,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight = Weight::new();
+			let mut weight = Weight::zero();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 				// If origin is root, bypass any dispatch filter; root can call anything.
@@ -429,7 +429,7 @@ pub mod pallet {
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight = Weight::new();
+			let mut weight = Weight::zero();
 			// Track failed dispatch occur.
 			let mut has_error: bool = false;
 			for call in calls.into_iter() {
