@@ -204,7 +204,7 @@ pub struct BlockWeights {
 
 impl Default for BlockWeights {
 	fn default() -> Self {
-		Self::with_sensible_defaults(1 * constants::WEIGHT_PER_SECOND, DEFAULT_NORMAL_RATIO)
+		Self::with_sensible_defaults(1u32 * constants::WEIGHT_PER_SECOND, DEFAULT_NORMAL_RATIO)
 	}
 }
 
@@ -295,9 +295,9 @@ impl BlockWeights {
 	/// is not suitable for production deployments.
 	pub fn simple_max(block_weight: Weight) -> Self {
 		Self::builder()
-			.base_block(Weight::new())
+			.base_block(Weight::zero())
 			.for_class(DispatchClass::all(), |weights| {
-				weights.base_extrinsic = Weight::new();
+				weights.base_extrinsic = Weight::zero();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
 				weights.max_total = block_weight.into();

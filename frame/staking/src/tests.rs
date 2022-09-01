@@ -4250,7 +4250,7 @@ mod election_data_provider {
 	fn targets_2sec_block() {
 		let mut validators = 1000;
 		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+			2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			validators += 1;
 		}
@@ -4268,7 +4268,7 @@ mod election_data_provider {
 		let mut nominators = 1000;
 
 		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2 * frame_support::weights::constants::WEIGHT_PER_SECOND
+			2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND
 		{
 			nominators += 1;
 		}

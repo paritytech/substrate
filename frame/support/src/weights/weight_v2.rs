@@ -18,8 +18,8 @@
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_runtime::{
-	traits::{Bounded, CheckedAdd, CheckedSub, One, Zero},
-	Perquintill, RuntimeDebug,
+	traits::{Bounded, CheckedAdd, CheckedSub, Zero},
+	RuntimeDebug,
 };
 
 use super::*;
@@ -50,11 +50,6 @@ pub struct Weight {
 }
 
 impl Weight {
-	/// Create a new Weight with zero.
-	pub const fn new() -> Self {
-		Self { ref_time: 0 }
-	}
-
 	/// Set the reference time part of the weight.
 	pub const fn set_ref_time(mut self, c: RefTimeWeight) -> Self {
 		self.ref_time = c;
@@ -93,27 +88,84 @@ impl Weight {
 		}
 	}
 
-	/// Construct with reference time weight.
+	/// Construct [`Weight`] with reference time weight.
 	pub const fn from_ref_time(ref_time: RefTimeWeight) -> Self {
 		Self { ref_time }
 	}
 
-	pub fn checked_mul(self, rhs: u64) -> Option<Self> {
-		let ref_time = self.ref_time.checked_mul(rhs)?;
-		Some(Self { ref_time })
+	/// Saturating [`Weight`] addition. Computes `self + rhs`, saturating at the numeric bounds of
+	/// all fields instead of overflowing.
+	pub const fn saturating_add(self, rhs: Self) -> Self {
+		Self { ref_time: self.ref_time.saturating_add(rhs.ref_time) }
 	}
 
-	pub fn checked_div(self, rhs: u64) -> Option<Self> {
-		let ref_time = self.ref_time.checked_div(rhs)?;
-		Some(Self { ref_time })
+	/// Saturating [`Weight`] subtraction. Computes `self - rhs`, saturating at the numeric bounds
+	/// of all fields instead of overflowing.
+	pub const fn saturating_sub(self, rhs: Self) -> Self {
+		Self { ref_time: self.ref_time.saturating_sub(rhs.ref_time) }
 	}
 
-	pub const fn scalar_saturating_mul(self, rhs: u64) -> Self {
-		Self { ref_time: self.ref_time.saturating_mul(rhs) }
+	/// Saturating [`Weight`] scalar multiplication. Computes `self.field * scalar` for all fields,
+	/// saturating at the numeric bounds of all fields instead of overflowing.
+	pub const fn saturating_mul(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time.saturating_mul(scalar) }
 	}
 
-	pub const fn scalar_div(self, rhs: u64) -> Self {
-		Self { ref_time: self.ref_time / rhs }
+	/// Saturating [`Weight`] scalar division. Computes `self.field / scalar` for all fields,
+	/// saturating at the numeric bounds of all fields instead of overflowing.
+	pub const fn saturating_div(self, scalar: u64) -> Self {
+		Self { ref_time: self.ref_time.saturating_div(scalar) }
+	}
+
+	/// Saturating [`Weight`] scalar exponentiation. Computes `self.field.pow(exp)` for all fields,
+	/// saturating at the numeric bounds of all fields instead of overflowing.
+	pub const fn saturating_pow(self, exp: u32) -> Self {
+		Self { ref_time: self.ref_time.saturating_pow(exp) }
+	}
+
+	/// Increment [`Weight`] by `amount` via saturating addition.
+	pub fn saturating_accrue(&mut self, amount: Self) {
+		*self = self.saturating_add(amount);
+	}
+
+	/// Checked [`Weight`] addition. Computes `self + rhs`, returning `None` if overflow occurred.
+	pub const fn checked_add(&self, rhs: &Self) -> Option<Self> {
+		match self.ref_time.checked_add(rhs.ref_time) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
+	}
+
+	/// Checked [`Weight`] subtraction. Computes `self - rhs`, returning `None` if overflow
+	/// occurred.
+	pub const fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+		match self.ref_time.checked_sub(rhs.ref_time) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
+	}
+
+	/// Checked [`Weight`] scalar multiplication. Computes `self.field * scalar` for each field,
+	/// returning `None` if overflow occurred.
+	pub const fn checked_mul(self, scalar: u64) -> Option<Self> {
+		match self.ref_time.checked_mul(scalar) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
+	}
+
+	/// Checked [`Weight`] scalar division. Computes `self.field / scalar` for each field, returning
+	/// `None` if overflow occurred.
+	pub const fn checked_div(self, scalar: u64) -> Option<Self> {
+		match self.ref_time.checked_div(scalar) {
+			Some(ref_time) => Some(Self { ref_time }),
+			None => None,
+		}
+	}
+
+	/// Return a [`Weight`] where all fields are zero.
+	pub const fn zero() -> Self {
+		Self { ref_time: 0 }
 	}
 }
 
@@ -124,12 +176,6 @@ impl Zero for Weight {
 
 	fn is_zero(&self) -> bool {
 		self.ref_time == 0
-	}
-}
-
-impl One for Weight {
-	fn one() -> Self {
-		Self::one()
 	}
 }
 
@@ -147,13 +193,6 @@ impl Sub for Weight {
 	}
 }
 
-impl Mul for Weight {
-	type Output = Self;
-	fn mul(self, b: Self) -> Self {
-		Self { ref_time: b.ref_time * self.ref_time }
-	}
-}
-
 impl<T> Mul<T> for Weight
 where
 	T: Mul<u64, Output = u64> + Copy,
@@ -164,26 +203,39 @@ where
 	}
 }
 
-impl Mul<Weight> for Perbill {
-	type Output = Weight;
-	fn mul(self, b: Weight) -> Weight {
-		Weight { ref_time: self * b.ref_time }
+macro_rules! weight_mul_per_impl {
+	($($t:ty),* $(,)?) => {
+		$(
+			impl Mul<Weight> for $t {
+				type Output = Weight;
+				fn mul(self, b: Weight) -> Weight {
+					Weight { ref_time: self * b.ref_time }
+				}
+			}
+		)*
 	}
 }
+weight_mul_per_impl!(
+	sp_runtime::Percent,
+	sp_runtime::PerU16,
+	sp_runtime::Permill,
+	sp_runtime::Perbill,
+	sp_runtime::Perquintill,
+);
 
-impl Mul<Weight> for Perquintill {
-	type Output = Weight;
-	fn mul(self, b: Weight) -> Weight {
-		Weight { ref_time: self * b.ref_time }
+macro_rules! weight_mul_primitive_impl {
+	($($t:ty),* $(,)?) => {
+		$(
+			impl Mul<Weight> for $t {
+				type Output = Weight;
+				fn mul(self, b: Weight) -> Weight {
+					Weight { ref_time: u64::from(self) * b.ref_time }
+				}
+			}
+		)*
 	}
 }
-
-impl Mul<Weight> for u64 {
-	type Output = Weight;
-	fn mul(self, b: Weight) -> Weight {
-		Weight { ref_time: self * b.ref_time }
-	}
-}
+weight_mul_primitive_impl!(u8, u16, u32, u64);
 
 impl<T> Div<T> for Weight
 where
@@ -193,24 +245,6 @@ where
 	type Output = Self;
 	fn div(self, b: T) -> Self {
 		Self { ref_time: self.ref_time / b }
-	}
-}
-
-impl Saturating for Weight {
-	fn saturating_add(self, rhs: Self) -> Self {
-		self.saturating_add(rhs)
-	}
-
-	fn saturating_sub(self, rhs: Self) -> Self {
-		self.saturating_sub(rhs)
-	}
-
-	fn saturating_mul(self, rhs: Self) -> Self {
-		self.saturating_mul(rhs)
-	}
-
-	fn saturating_pow(self, exp: usize) -> Self {
-		self.saturating_pow(exp)
 	}
 }
 
@@ -344,53 +378,12 @@ impl sp_runtime::traits::Printable for Weight {
 	}
 }
 
-// Re-export common functions so you do not need to import trait.
-impl Weight {
-	pub const fn zero() -> Self {
-		Self { ref_time: 0 }
-	}
-
-	pub const fn one() -> Self {
-		Self { ref_time: 1 }
-	}
-
-	pub const fn saturating_add(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_add(rhs.ref_time) }
-	}
-
-	pub const fn saturating_sub(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_sub(rhs.ref_time) }
-	}
-
-	pub const fn saturating_mul(self, rhs: Self) -> Self {
-		Self { ref_time: self.ref_time.saturating_mul(rhs.ref_time) }
-	}
-
-	pub const fn saturating_pow(self, exp: usize) -> Self {
-		Self { ref_time: self.ref_time.saturating_pow(exp as u32) }
-	}
-
-	pub const fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		match self.ref_time.checked_add(rhs.ref_time) {
-			Some(ref_time) => Some(Self { ref_time }),
-			None => None,
-		}
-	}
-
-	pub const fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		match self.ref_time.checked_sub(rhs.ref_time) {
-			Some(ref_time) => Some(Self { ref_time }),
-			None => None,
-		}
-	}
-}
-
 // TODO: Eventually remove these
 
 impl From<Option<RefTimeWeight>> for PostDispatchInfo {
 	fn from(maybe_actual_computation: Option<RefTimeWeight>) -> Self {
 		let actual_weight = match maybe_actual_computation {
-			Some(actual_computation) => Some(Weight::new().set_ref_time(actual_computation)),
+			Some(actual_computation) => Some(Weight::zero().set_ref_time(actual_computation)),
 			None => None,
 		};
 		Self { actual_weight, pays_fee: Default::default() }
@@ -401,7 +394,7 @@ impl From<(Option<RefTimeWeight>, Pays)> for PostDispatchInfo {
 	fn from(post_weight_info: (Option<RefTimeWeight>, Pays)) -> Self {
 		let (maybe_actual_time, pays_fee) = post_weight_info;
 		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(Weight::new().set_ref_time(actual_time)),
+			Some(actual_time) => Some(Weight::zero().set_ref_time(actual_time)),
 			None => None,
 		};
 		Self { actual_weight, pays_fee }
@@ -410,7 +403,7 @@ impl From<(Option<RefTimeWeight>, Pays)> for PostDispatchInfo {
 
 impl<T> WeighData<T> for RefTimeWeight {
 	fn weigh_data(&self, _: T) -> Weight {
-		return Weight::new().set_ref_time(*self)
+		return Weight::zero().set_ref_time(*self)
 	}
 }
 
