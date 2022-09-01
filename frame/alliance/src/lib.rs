@@ -210,7 +210,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 
 	// Return count of all active proposals.
 	//
-	// Used to check a witness data for an extrinsic.
+	// Used to check witness data for an extrinsic.
 	fn proposals_count() -> u32;
 }
 
@@ -342,7 +342,7 @@ pub mod pallet {
 	pub enum Error<T, I = ()> {
 		/// The Alliance has not been initialized yet, therefore accounts cannot join it.
 		AllianceNotYetInitialized,
-		/// The Alliance has been initialized, therefore can not be initialized again.
+		/// The Alliance has been initialized, therefore cannot be initialized again.
 		AllianceAlreadyInitialized,
 		/// Account is already a member.
 		AlreadyMember,
@@ -653,7 +653,7 @@ pub mod pallet {
 		/// Provide witness data to disband current Alliance before initializing new.
 		/// Alliance must be empty or disband first to initialize new.
 		///
-		/// Alliance is only disband if new members set is not provided.
+		/// Alliance is only disbanded if new member set is not provided.
 		///
 		/// Must be called by the Root origin.
 		#[pallet::weight(T::WeightInfo::force_set_members(
