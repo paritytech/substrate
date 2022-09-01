@@ -15,7 +15,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::{traits::Get, weights::{RefTimeWeight, Weight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions for `{{pallet}}`.
@@ -33,22 +33,22 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 		{{~#each benchmark.components as |c| ~}}
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
-		({{underscore benchmark.base_weight}} as Weight)
+		Weight::from_ref_time({{underscore benchmark.base_weight}} as RefTimeWeight)
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
-			.saturating_add(({{underscore cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight))
+			.saturating_add(Weight::from_ref_time({{underscore cw.slope}} as RefTimeWeight).scalar_saturating_mul({{cw.name}} as RefTimeWeight))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
-			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as Weight))
+			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as RefTimeWeight))
 			{{/if}}
 			{{#each benchmark.component_reads as |cr|}}
-			.saturating_add(T::DbWeight::get().reads(({{cr.slope}} as Weight).saturating_mul({{cr.name}} as Weight)))
+			.saturating_add(T::DbWeight::get().reads(({{cr.slope}} as RefTimeWeight).saturating_mul({{cr.name}} as RefTimeWeight)))
 			{{/each}}
 			{{#if (ne benchmark.base_writes "0")}}
-			.saturating_add(T::DbWeight::get().writes({{benchmark.base_writes}} as Weight))
+			.saturating_add(T::DbWeight::get().writes({{benchmark.base_writes}} as RefTimeWeight))
 			{{/if}}
 			{{#each benchmark.component_writes as |cw|}}
-			.saturating_add(T::DbWeight::get().writes(({{cw.slope}} as Weight).saturating_mul({{cw.name}} as Weight)))
+			.saturating_add(T::DbWeight::get().writes(({{cw.slope}} as RefTimeWeight).saturating_mul({{cw.name}} as RefTimeWeight)))
 			{{/each}}
 	}
 	{{/each}}

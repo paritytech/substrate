@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_gilt.
@@ -60,70 +60,70 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	fn place_bid(l: u32, ) -> Weight {
-		(41_605_000 as Weight)
+		Weight::from_ref_time(41_605_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add((62_000 as Weight).saturating_mul(l as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(62_000 as RefTimeWeight).scalar_saturating_mul(l as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	fn place_bid_max() -> Weight {
-		(97_715_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(97_715_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	fn retract_bid(l: u32, ) -> Weight {
-		(42_061_000 as Weight)
+		Weight::from_ref_time(42_061_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add((52_000 as Weight).saturating_mul(l as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(52_000 as RefTimeWeight).scalar_saturating_mul(l as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Gilt ActiveTotal (r:1 w:1)
 	fn set_target() -> Weight {
-		(5_026_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(5_026_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Gilt Active (r:1 w:1)
 	// Storage: Gilt ActiveTotal (r:1 w:1)
 	fn thaw() -> Weight {
-		(47_753_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(47_753_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Gilt ActiveTotal (r:1 w:0)
 	fn pursue_target_noop() -> Weight {
-		(1_663_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(1_663_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
 	}
 	// Storage: Gilt ActiveTotal (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt Active (r:0 w:1)
 	fn pursue_target_per_item(b: u32, ) -> Weight {
-		(40_797_000 as Weight)
+		Weight::from_ref_time(40_797_000 as RefTimeWeight)
 			// Standard Error: 1_000
-			.saturating_add((4_122_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(b as Weight)))
+			.saturating_add(Weight::from_ref_time(4_122_000 as RefTimeWeight).scalar_saturating_mul(b as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes((1 as RefTimeWeight).saturating_mul(b as RefTimeWeight)))
 	}
 	// Storage: Gilt ActiveTotal (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt Active (r:0 w:1)
 	fn pursue_target_per_queue(q: u32, ) -> Weight {
-		(14_944_000 as Weight)
+		Weight::from_ref_time(14_944_000 as RefTimeWeight)
 			// Standard Error: 6_000
-			.saturating_add((8_135_000 as Weight).saturating_mul(q as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(q as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((2 as Weight).saturating_mul(q as Weight)))
+			.saturating_add(Weight::from_ref_time(8_135_000 as RefTimeWeight).scalar_saturating_mul(q as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads((1 as RefTimeWeight).saturating_mul(q as RefTimeWeight)))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes((2 as RefTimeWeight).saturating_mul(q as RefTimeWeight)))
 	}
 }
 
@@ -132,69 +132,69 @@ impl WeightInfo for () {
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	fn place_bid(l: u32, ) -> Weight {
-		(41_605_000 as Weight)
+		Weight::from_ref_time(41_605_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add((62_000 as Weight).saturating_mul(l as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(62_000 as RefTimeWeight).scalar_saturating_mul(l as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	fn place_bid_max() -> Weight {
-		(97_715_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(97_715_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	fn retract_bid(l: u32, ) -> Weight {
-		(42_061_000 as Weight)
+		Weight::from_ref_time(42_061_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add((52_000 as Weight).saturating_mul(l as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(52_000 as RefTimeWeight).scalar_saturating_mul(l as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Gilt ActiveTotal (r:1 w:1)
 	fn set_target() -> Weight {
-		(5_026_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(5_026_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Gilt Active (r:1 w:1)
 	// Storage: Gilt ActiveTotal (r:1 w:1)
 	fn thaw() -> Weight {
-		(47_753_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(47_753_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Gilt ActiveTotal (r:1 w:0)
 	fn pursue_target_noop() -> Weight {
-		(1_663_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(1_663_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
 	}
 	// Storage: Gilt ActiveTotal (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt Active (r:0 w:1)
 	fn pursue_target_per_item(b: u32, ) -> Weight {
-		(40_797_000 as Weight)
+		Weight::from_ref_time(40_797_000 as RefTimeWeight)
 			// Standard Error: 1_000
-			.saturating_add((4_122_000 as Weight).saturating_mul(b as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(b as Weight)))
+			.saturating_add(Weight::from_ref_time(4_122_000 as RefTimeWeight).scalar_saturating_mul(b as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes((1 as RefTimeWeight).saturating_mul(b as RefTimeWeight)))
 	}
 	// Storage: Gilt ActiveTotal (r:1 w:1)
 	// Storage: Gilt QueueTotals (r:1 w:1)
 	// Storage: Gilt Queues (r:1 w:1)
 	// Storage: Gilt Active (r:0 w:1)
 	fn pursue_target_per_queue(q: u32, ) -> Weight {
-		(14_944_000 as Weight)
+		Weight::from_ref_time(14_944_000 as RefTimeWeight)
 			// Standard Error: 6_000
-			.saturating_add((8_135_000 as Weight).saturating_mul(q as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(q as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((2 as Weight).saturating_mul(q as Weight)))
+			.saturating_add(Weight::from_ref_time(8_135_000 as RefTimeWeight).scalar_saturating_mul(q as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads((1 as RefTimeWeight).saturating_mul(q as RefTimeWeight)))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes((2 as RefTimeWeight).saturating_mul(q as RefTimeWeight)))
 	}
 }
