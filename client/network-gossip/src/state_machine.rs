@@ -22,7 +22,7 @@ use ahash::AHashSet;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::protocol::event::ObservedRole;
+use sc_network_common::protocol::{event::ObservedRole, ProtocolName};
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use std::{borrow::Cow, collections::HashMap, iter, sync::Arc, time, time::Instant};
 
@@ -99,7 +99,7 @@ impl<'g, 'p, B: BlockT> ValidatorContext<B> for NetworkContext<'g, 'p, B> {
 
 fn propagate<'a, B: BlockT, I>(
 	network: &mut dyn Network<B>,
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 	messages: I,
 	intent: MessageIntent,
 	peers: &mut HashMap<PeerId, PeerConsensus<B::Hash>>,
@@ -155,7 +155,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
 	messages: Vec<MessageEntry<B>>,
 	known_messages: LruCache<B::Hash, ()>,
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 	validator: Arc<dyn Validator<B>>,
 	next_broadcast: Instant,
 	metrics: Option<Metrics>,
@@ -165,7 +165,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 	/// Create a new instance using the given validator.
 	pub fn new(
 		validator: Arc<dyn Validator<B>>,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		metrics_registry: Option<&Registry>,
 	) -> Self {
 		let metrics = match metrics_registry.map(Metrics::register) {
@@ -599,7 +599,7 @@ mod tests {
 			self.inner.lock().unwrap().peer_reports.push((who, cost_benefit));
 		}
 
-		fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {
+		fn disconnect_peer(&self, _who: PeerId, _protocol: ProtocolName) {
 			unimplemented!();
 		}
 
@@ -621,7 +621,7 @@ mod tests {
 
 		fn set_reserved_peers(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
@@ -629,28 +629,23 @@ mod tests {
 
 		fn add_peers_to_reserved_set(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(
-			&self,
-			_protocol: Cow<'static, str>,
-			_peers: Vec<PeerId>,
-		) {
-		}
+		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
 
 		fn add_to_peers_set(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
 		}
 
-		fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 
@@ -666,19 +661,14 @@ mod tests {
 	}
 
 	impl NetworkNotification for NoOpNetwork {
-		fn write_notification(
-			&self,
-			_target: PeerId,
-			_protocol: Cow<'static, str>,
-			_message: Vec<u8>,
-		) {
+		fn write_notification(&self, _target: PeerId, _protocol: ProtocolName, _message: Vec<u8>) {
 			unimplemented!();
 		}
 
 		fn notification_sender(
 			&self,
 			_target: PeerId,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 		) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 			unimplemented!();
 		}
