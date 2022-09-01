@@ -728,7 +728,7 @@ benchmarks_instance_pallet! {
 			old_fellows.append(&mut old_allies);
 			old_fellows.sort();
 			proposals.sort();
-			assert_prev_event::<T, I>(Event::AllianceDisband {
+			assert_prev_event::<T, I>(Event::AllianceDisbanded {
 				members: old_fellows,
 				proposals: proposals,
 			}.into());

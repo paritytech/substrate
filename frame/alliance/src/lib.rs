@@ -428,8 +428,8 @@ pub mod pallet {
 		UnscrupulousItemAdded { items: Vec<UnscrupulousItemOf<T, I>> },
 		/// Accounts or websites have been removed from the list of unscrupulous items.
 		UnscrupulousItemRemoved { items: Vec<UnscrupulousItemOf<T, I>> },
-		/// Alliance disband.
-		AllianceDisband { members: Vec<T::AccountId>, proposals: Vec<T::Hash> },
+		/// Alliance disbanded.
+		AllianceDisbanded { members: Vec<T::AccountId>, proposals: Vec<T::Hash> },
 	}
 
 	#[pallet::genesis_config]
@@ -714,7 +714,7 @@ pub mod pallet {
 
 				members.sort();
 				proposals.sort();
-				Self::deposit_event(Event::AllianceDisband { members, proposals });
+				Self::deposit_event(Event::AllianceDisbanded { members, proposals });
 			}
 
 			if founders.is_empty() {

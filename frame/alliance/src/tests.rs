@@ -158,7 +158,7 @@ fn force_set_members_works() {
 
 		// assert events
 		proposals.sort();
-		assert_prev_event(mock::Event::Alliance(crate::Event::AllianceDisband {
+		assert_prev_event(mock::Event::Alliance(crate::Event::AllianceDisbanded {
 			members: vec![1, 3, 9],
 			proposals,
 		}));
