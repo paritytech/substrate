@@ -22,7 +22,7 @@ use futures::prelude::*;
 use libp2p::PeerId;
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, ProtocolId},
-	protocol::event::Event,
+	protocol::{event::Event, ProtocolName},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -32,7 +32,7 @@ use sc_network_sync::{
 };
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::{borrow::Cow, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
 type TestNetworkService = NetworkService<
@@ -164,7 +164,7 @@ fn build_test_full_node(
 	(service, event_stream)
 }
 
-const PROTOCOL_NAME: Cow<'static, str> = Cow::Borrowed("/foo");
+const PROTOCOL_NAME: ProtocolName = "/foo";
 
 /// Builds two nodes and their associated events stream.
 /// The nodes are connected together and have the `PROTOCOL_NAME` protocol registered.
@@ -490,8 +490,7 @@ fn fallback_name_working() {
 	// Node 1 supports the protocols "new" and "old". Node 2 only supports "old". Checks whether
 	// they can connect.
 
-	const NEW_PROTOCOL_NAME: Cow<'static, str> =
-		Cow::Borrowed("/new-shiny-protocol-that-isnt-PROTOCOL_NAME");
+	const NEW_PROTOCOL_NAME: ProtocolName = "/new-shiny-protocol-that-isnt-PROTOCOL_NAME";
 
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 

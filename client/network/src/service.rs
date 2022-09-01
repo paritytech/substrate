@@ -1480,7 +1480,7 @@ where
 					.network_service
 					.behaviour_mut()
 					.user_protocol_mut()
-					.disconnect_peer(&who, &protocol_name),
+					.disconnect_peer(&who, protocol_name),
 				ServiceToWorkerMsg::NewBestBlockImported(hash, number) => this
 					.network_service
 					.behaviour_mut()

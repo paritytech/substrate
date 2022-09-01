@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
+	borrow::Borrow,
 	fmt,
 	hash::{Hash, Hasher},
 	ops::Deref,
@@ -62,6 +63,12 @@ impl Deref for ProtocolName {
 			Self::Static(name) => name,
 			Self::OnHeap(name) => &name,
 		}
+	}
+}
+
+impl Borrow<str> for ProtocolName {
+	fn borrow(&self) -> &str {
+		self
 	}
 }
 

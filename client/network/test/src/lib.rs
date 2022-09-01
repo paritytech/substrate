@@ -51,8 +51,8 @@ use sc_consensus::{
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
 	config::{
-		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,
-		TransportConfig,
+		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, ProtocolName, Role,
+		SyncMode, TransportConfig,
 	},
 	Multiaddr, NetworkService, NetworkWorker,
 };
@@ -682,7 +682,7 @@ pub struct FullPeerConfig {
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
-	pub notifications_protocols: Vec<Cow<'static, str>>,
+	pub notifications_protocols: Vec<ProtocolName>,
 	/// The indices of the peers the peer should be connected to.
 	///
 	/// If `None`, it will be connected to all other peers.

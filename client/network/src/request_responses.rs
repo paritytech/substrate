@@ -498,7 +498,6 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							debug_assert!(false, "Received message on outbound-only protocol.");
 						}
 
-						let protocol = Cow::from(protocol);
 						self.pending_responses.push(Box::pin(async move {
 							// The `tx` created above can be dropped if we are not capable of
 							// processing this request, which is reflected as a
