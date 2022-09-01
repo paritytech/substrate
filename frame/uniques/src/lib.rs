@@ -949,12 +949,10 @@ pub mod pallet {
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
-			ensure!(
-				details.approved.len() < T::ApprovalsLimit::get().try_into().unwrap(),
-				Error::<T, I>::ReachedApprovalLimit
-			);
-
-			let _ = details.approved.try_push(delegate.clone());
+			let _ = details
+				.approved
+				.try_push(delegate.clone())
+				.map_err(|_| Error::<T, I>::ReachedApprovalLimit);
 			Item::<T, I>::insert(&collection, &item, &details);
 
 			Self::deposit_event(Event::ApprovedTransfer {
