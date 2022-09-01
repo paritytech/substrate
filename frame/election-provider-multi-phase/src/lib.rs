@@ -1084,8 +1084,7 @@ pub mod pallet {
 		///
 		/// The `bool` is `true` when a previous solution was ejected to make room for this one.
 		SolutionStored { compute: ElectionCompute, prev_ejected: bool },
-		/// The election has been finalized, with `Some` of the given computation and score, or
-		/// else if the election failed, `None`.
+		/// The election has been finalized with the given computation and score.
 		ElectionFinalized {
 			compute: ElectionCompute,
 			score: ElectionScore,
