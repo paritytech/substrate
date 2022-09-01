@@ -558,6 +558,44 @@ fn approval_lifecycle_works() {
 }
 
 #[test]
+fn approved_account_gets_reset_after_transfer() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, 42, 2));
+
+		assert_ok!(Uniques::approve_transfer(Origin::signed(2), 0, 42, 3));
+		assert_ok!(Uniques::transfer(Origin::signed(2), 0, 42, 5));
+
+		// this shouldn't work because we have just transfered the item to another account.
+		assert_noop!(Uniques::transfer(Origin::signed(3), 0, 42, 4), Error::<Test>::NoPermission);
+		// The new owner can transfer fine:
+		assert_ok!(Uniques::transfer(Origin::signed(5), 0, 42, 6));
+	});
+}
+
+#[test]
+fn approved_account_gets_reset_after_buy_item() {
+	new_test_ext().execute_with(|| {
+		let item = 1;
+		let price = 15;
+
+		Balances::make_free_balance_be(&2, 100);
+
+		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Uniques::mint(Origin::signed(1), 0, item, 1));
+		assert_ok!(Uniques::approve_transfer(Origin::signed(1), 0, item, 5));
+
+		assert_ok!(Uniques::set_price(Origin::signed(1), 0, item, Some(price), None));
+
+		assert_ok!(Uniques::buy_item(Origin::signed(2), 0, item, price));
+
+		// this shouldn't work because the item has been bough and the approved account should be
+		// reset.
+		assert_noop!(Uniques::transfer(Origin::signed(5), 0, item, 4), Error::<Test>::NoPermission);
+	});
+}
+
+#[test]
 fn cancel_approval_works() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Uniques::force_create(Origin::root(), 0, 1, true));

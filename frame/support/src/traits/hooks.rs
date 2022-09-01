@@ -20,6 +20,7 @@
 use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::prelude::*;
 
 /// The block initialization trait.
 ///
@@ -93,9 +94,9 @@ impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
 		let start_index = start_index.try_into().ok().expect(
 			"`start_index % len` always fits into `usize`, because `len` can be in maximum `usize::MAX`; qed"
 		);
-		for on_idle in on_idle_functions.iter().cycle().skip(start_index).take(len) {
+		for on_idle_fn in on_idle_functions.iter().cycle().skip(start_index).take(len) {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
-			weight = weight.saturating_add(on_idle(n, adjusted_remaining_weight));
+			weight = weight.saturating_add(on_idle_fn(n, adjusted_remaining_weight));
 		}
 		weight
 	}
@@ -113,47 +114,6 @@ pub trait OnGenesis {
 	/// Something that should happen at genesis.
 	fn on_genesis() {}
 }
-
-/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
-#[cfg(feature = "try-runtime")]
-pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
-
-/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
-#[cfg(feature = "try-runtime")]
-pub trait OnRuntimeUpgradeHelpersExt {
-	/// Generate a storage key unique to this runtime upgrade.
-	///
-	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
-	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
-	#[cfg(feature = "try-runtime")]
-	fn storage_key(ident: &str) -> [u8; 32] {
-		crate::storage::storage_prefix(ON_RUNTIME_UPGRADE_PREFIX, ident.as_bytes())
-	}
-
-	/// Get temporary storage data written by [`Self::set_temp_storage`].
-	///
-	/// Returns `None` if either the data is unavailable or un-decodable.
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
-	#[cfg(feature = "try-runtime")]
-	fn get_temp_storage<T: codec::Decode>(at: &str) -> Option<T> {
-		sp_io::storage::get(&Self::storage_key(at))
-			.and_then(|bytes| codec::Decode::decode(&mut &*bytes).ok())
-	}
-
-	/// Write some temporary data to a specific storage that can be read (potentially in
-	/// post-upgrade hook) via [`Self::get_temp_storage`].
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being written
-	/// to.
-	#[cfg(feature = "try-runtime")]
-	fn set_temp_storage<T: codec::Encode>(data: T, at: &str) {
-		sp_io::storage::set(&Self::storage_key(at), &data.encode());
-	}
-}
-
-#[cfg(feature = "try-runtime")]
-impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
 
 /// The runtime upgrade trait.
 ///
@@ -270,6 +230,15 @@ pub trait Hooks<BlockNumber> {
 	/// top-level runtime.
 	fn on_runtime_upgrade() -> Weight {
 		Weight::new()
+	}
+
+	/// Execute the sanity checks of this pallet, per block.
+	///
+	/// It should focus on certain checks to ensure that the state is sensible. This is never
+	/// executed in a consensus code-path, therefore it can consume as much weight as it needs.
+	#[cfg(feature = "try-runtime")]
+	fn try_state(_n: BlockNumber) -> Result<(), &'static str> {
+		Ok(())
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
