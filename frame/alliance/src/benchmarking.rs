@@ -38,7 +38,7 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
-fn assert_prev_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_prev_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	let events = frame_system::Pallet::<T>::events();
 	assert_eq!(events.get(events.len() - 2).expect("events expected").event, generic_event.into());
 }
