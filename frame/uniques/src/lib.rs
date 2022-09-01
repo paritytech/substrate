@@ -606,6 +606,8 @@ pub mod pallet {
 
 		/// Move an item from the sender account to another.
 		///
+		/// This resets the approved account of the item.
+		///
 		/// Origin must be Signed and the signing account must be either:
 		/// - the Admin of the `collection`;
 		/// - the Owner of the `item`;
@@ -913,6 +915,8 @@ pub mod pallet {
 		/// - `collection`: The collection of the item to be approved for delegated transfer.
 		/// - `item`: The item of the item to be approved for delegated transfer.
 		/// - `delegate`: The account to delegate permission to transfer the item.
+		///
+		/// Important NOTE: The `approved` account gets reset after each transfer.
 		///
 		/// Emits `ApprovedTransfer` on success.
 		///
