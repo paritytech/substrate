@@ -9,10 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated Substrate to polkadot-v0.8.28
 
-## [vNext]
+## [2.13.0]
 ### Changed
 - Updated Substrate to polkadot-v0.8.27
-Todo: Merge the changes if they go in one release
 
 ## [2.12.0]
 ### Changed
