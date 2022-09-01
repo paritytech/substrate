@@ -31,17 +31,58 @@ fn disable_fails_if_not_enabled() {
 }
 
 #[test]
-fn root_can_enable() {
+fn root_can_force_enable() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::force_enable(Origin::root()));
 		assert_eq!(SafeMode::enabled().unwrap(), System::block_number() + 1); // TODO read mock::EnableDuration instead of hard coded? Yes please
+		assert_noop!(SafeMode::force_enable(Origin::root()), Error::<Test>::IsEnabled);
 	});
 }
 
 #[test]
-fn root_can_disable() {
+fn root_can_force_extend() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::force_enable(Origin::root()));
+		assert_ok!(SafeMode::force_extend(Origin::root()));
+		assert_eq!(SafeMode::enabled().unwrap(), System::block_number() + 1 + 1); // TODO read mock::EnableDuration instead of hard coded? Yes please
+	});
+}
+
+#[test]
+fn root_can_force_disable() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(SafeMode::enabled(), None);
 		assert_err!(SafeMode::force_disable(Origin::root()), Error::<Test>::IsDisabled);
+		assert_ok!(SafeMode::force_enable(Origin::root()));
+		assert_ok!(SafeMode::force_disable(Origin::root()));
+	});
+}
+
+#[test]
+fn signed_origin_can_enable() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::enable(Origin::signed(1)));
+		assert_eq!(SafeMode::enabled().unwrap(), System::block_number() + 1); // TODO read mock::EnableDuration instead of hard coded throughout this fn
+		assert_noop!(SafeMode::enable(Origin::signed(1)), Error::<Test>::IsEnabled); // TODO check stake reserved along the way.
+	});
+}
+
+#[test]
+fn automatically_disable_after_timeout() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::force_enable(Origin::root()));
+		run_to(3);// TODO read mock::EnableDuration instead of hard coded throughout this fn
+		SafeMode::on_initialize(System::block_number());
+		assert_eq!(System::block_number(),3); 
+		assert_eq!(SafeMode::enabled(), None);
+	});
+}
+
+#[test]
+fn signed_origin_can_extend() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::enable(Origin::signed(1)));
+		assert_ok!(SafeMode::extend(Origin::signed(2)));
+		assert_eq!(SafeMode::enabled().unwrap(), System::block_number() + 1 + 1); // TODO read mock::EnableDuration instead of hard coded throughout this fn
 	});
 }

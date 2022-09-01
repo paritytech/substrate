@@ -151,11 +151,11 @@ pub fn new_bench_ext() -> sp_io::TestExternalities {
 	GenesisConfig::default().build_storage().unwrap().into()
 }
 
-fn next_block() {
+pub fn next_block() {
 	System::set_block_number(System::block_number() + 1);
 }
 
-fn run_to(n: u64) {
+pub fn run_to(n: u64) {
 	while System::block_number() < n {
 		next_block();
 	}
