@@ -41,7 +41,6 @@ use libp2p::core::{upgrade, InboundUpgrade, OutboundUpgrade, UpgradeInfo};
 use log::{error, warn};
 use sc_network_common::protocol::ProtocolName;
 use std::{
-	borrow::Cow,
 	convert::Infallible,
 	io, mem,
 	pin::Pin,

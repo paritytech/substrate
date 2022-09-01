@@ -23,7 +23,6 @@ mod block_import;
 mod sync;
 
 use std::{
-	borrow::Cow,
 	collections::HashMap,
 	marker::PhantomData,
 	pin::Pin,

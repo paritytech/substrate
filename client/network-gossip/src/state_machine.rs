@@ -24,7 +24,7 @@ use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::protocol::{event::ObservedRole, ProtocolName};
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
-use std::{borrow::Cow, collections::HashMap, iter, sync::Arc, time, time::Instant};
+use std::{collections::HashMap, iter, sync::Arc, time, time::Instant};
 
 // FIXME: Add additional spam/DoS attack protection: https://github.com/paritytech/substrate/issues/1115
 // NOTE: The current value is adjusted based on largest production network deployment (Kusama) and

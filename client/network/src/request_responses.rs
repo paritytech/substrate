@@ -57,7 +57,6 @@ use sc_network_common::{
 	},
 };
 use std::{
-	borrow::Cow,
 	collections::{hash_map::Entry, HashMap},
 	io, iter,
 	pin::Pin,
