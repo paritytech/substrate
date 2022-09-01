@@ -66,4 +66,4 @@ to update the Alliance's rule and make announcements.
 
 #### Root Calls
 
-- `init_founders` - Initialize the founding members.
+- `force_set_members` - Set the members via chain governance.
