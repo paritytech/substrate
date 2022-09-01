@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![cfg(test)] // Testing only since it can panic.
+// Feature gated since it can panic.
+#![cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 
 //! Contains the [`crate::StorageNoopGuard`] for conveniently asserting
 //! that no storage mutation has been made by a whole code block.
@@ -32,7 +33,7 @@
 /// sp_io::TestExternalities::default().execute_with(|| {
 /// 	let _guard = frame_support::StorageNoopGuard::default();
 /// 	put(b"key", b"value");
-/// 		// Panics since there are storage changes.
+/// 	// Panics since there are storage changes.
 /// });
 /// ```
 #[must_use]
