@@ -380,7 +380,7 @@ benchmarks_instance_pallet! {
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 		let origin = SystemOrigin::Signed(caller.clone()).into();
 		Uniques::<T, I>::approve_transfer(origin, collection, item, delegate_lookup.clone())?;
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(delegate_lookup))
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, delegate_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { collection, item, owner: caller, delegate }.into());
 	}
