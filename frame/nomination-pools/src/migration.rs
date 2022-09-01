@@ -433,7 +433,7 @@ pub mod v3 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
 			ensure!(
-				!check_version(
+				check_version(
 					Pallet::<T>::current_storage_version(),
 					Pallet::<T>::on_chain_storage_version()
 				),
