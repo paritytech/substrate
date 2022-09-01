@@ -37,7 +37,7 @@
 /// });
 /// ```
 #[must_use]
-pub struct StorageNoopGuard(Vec<u8>);
+pub struct StorageNoopGuard(sp_std::vec::Vec<u8>);
 
 impl Default for StorageNoopGuard {
 	fn default() -> Self {
