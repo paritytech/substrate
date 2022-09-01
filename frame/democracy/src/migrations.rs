@@ -21,10 +21,7 @@ use super::*;
 #[cfg(feature = "try-runtime")]
 use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 use frame_support::{
-	storage_alias,
-	pallet_prelude::StorageVersion,
-	traits::OnRuntimeUpgrade,
-	BoundedVec,
+	pallet_prelude::StorageVersion, storage_alias, traits::OnRuntimeUpgrade, BoundedVec,
 };
 use sp_core::H256;
 
@@ -42,10 +39,8 @@ mod v0 {
 	>;
 
 	#[storage_alias]
-	pub type NextExternal<T: Config> = StorageValue<
-		Pallet<T>,
-		(<T as frame_system::Config>::Hash, VoteThreshold),
-	>;
+	pub type NextExternal<T: Config> =
+		StorageValue<Pallet<T>, (<T as frame_system::Config>::Hash, VoteThreshold)>;
 }
 
 pub mod v1 {
@@ -54,7 +49,7 @@ pub mod v1 {
 	/// Migration for translating bare `Hash`es into `Bounded<Call>`s.
 	pub struct Migration<T>(sp_std::marker::PhantomData<T>);
 
-	impl<T: Config + frame_system::Config<Hash=H256>> OnRuntimeUpgrade for Migration<T> {
+	impl<T: Config + frame_system::Config<Hash = H256>> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0, "can only upgrade from version 0");
@@ -72,20 +67,25 @@ pub mod v1 {
 				return weight
 			}
 
-			ReferendumInfoOf::<T>::translate(|_key, old: ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>| {
-				Some(match old {
-					ReferendumInfo::Ongoing(status) => ReferendumInfo::Ongoing(ReferendumStatus {
-						end: status.end,
-						proposal: Bounded::from_legacy_hash(status.proposal),
-						threshold: status.threshold,
-						delay: status.delay,
-						tally: status.tally,
-					}),
-					ReferendumInfo::Finished { approved, end } => ReferendumInfo::Finished { approved, end },
-				})
-			});
+			ReferendumInfoOf::<T>::translate(
+				|_key, old: ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>| {
+					Some(match old {
+						ReferendumInfo::Ongoing(status) =>
+							ReferendumInfo::Ongoing(ReferendumStatus {
+								end: status.end,
+								proposal: Bounded::from_legacy_hash(status.proposal),
+								threshold: status.threshold,
+								delay: status.delay,
+								tally: status.tally,
+							}),
+						ReferendumInfo::Finished { approved, end } =>
+							ReferendumInfo::Finished { approved, end },
+					})
+				},
+			);
 
-			let props = v0::PublicProps::<T>::take().unwrap_or_default()
+			let props = v0::PublicProps::<T>::take()
+				.unwrap_or_default()
 				.into_iter()
 				.map(|(i, hash, a)| (i, Bounded::from_legacy_hash(hash), a))
 				.take(T::MaxProposals::get() as usize)
@@ -121,7 +121,6 @@ mod test {
 
 	#[test]
 	fn migration_works() {
-		new_test_ext().execute_with(|| {
-		});
+		new_test_ext().execute_with(|| {});
 	}
 }

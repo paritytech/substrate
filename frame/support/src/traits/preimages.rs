@@ -42,6 +42,16 @@ pub enum Bounded<T> {
 }
 
 impl<T> Bounded<T> {
+	/// Casts the wrapped type into something that encodes alike.
+	///
+	/// # Examples
+	/// ```
+	/// use frame_support::traits::Bounded;
+	///
+	/// // Transmute from `String` to `&str`.
+	/// let x: Bounded<String> = Bounded::Inline(Default::default());
+	/// let _: Bounded<&str> = x.transmute();
+	/// ```
 	pub fn transmute<S: Encode>(self) -> Bounded<S>
 	where
 		T: Encode + EncodeLike<S>,
@@ -54,6 +64,9 @@ impl<T> Bounded<T> {
 		}
 	}
 
+	/// Returns the hash of the preimage.
+	///
+	/// The hash is re-calculated every time if the preimage is inlined.
 	pub fn hash(&self) -> H256 {
 		use Bounded::*;
 		match self {
@@ -68,6 +81,7 @@ impl<T> Bounded<T> {
 const MAX_LEGACY_LEN: u32 = 1_000_000;
 
 impl<T> Bounded<T> {
+	/// Returns the length of the preimage or `None` if the length is unknown.
 	pub fn len(&self) -> Option<u32> {
 		match self {
 			Self::Legacy { .. } => None,
@@ -75,12 +89,16 @@ impl<T> Bounded<T> {
 			Self::Lookup { len, .. } => Some(*len),
 		}
 	}
+
+	/// Returns whether the image will require a lookup to be peeked.
 	pub fn lookup_needed(&self) -> bool {
 		match self {
 			Self::Inline(..) => false,
 			Self::Legacy { .. } | Self::Lookup { .. } => true,
 		}
 	}
+
+	/// The maximum length of the lookup that is needed to peek `Self`.
 	pub fn lookup_len(&self) -> Option<u32> {
 		match self {
 			Self::Inline(..) => None,
@@ -88,10 +106,13 @@ impl<T> Bounded<T> {
 			Self::Lookup { len, .. } => Some(*len),
 		}
 	}
+
+	/// Constructs a `Lookup` bounded item.
 	pub fn unrequested(hash: Hash, len: u32) -> Self {
 		Self::Lookup { hash, len }
 	}
 
+	/// Constructs a `Legacy` bounded item.
 	#[deprecated = "This API is only for transitioning to Scheduler v3 API"]
 	pub fn from_legacy_hash(hash: impl Into<Hash>) -> Self {
 		Self::Legacy { hash: hash.into(), dummy: sp_std::marker::PhantomData }

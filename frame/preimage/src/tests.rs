@@ -17,11 +17,17 @@
 
 //! # Scheduler tests.
 
+#![cfg(test)]
+
 use super::*;
 use crate::mock::*;
 
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{
+	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
+	traits::{Bounded, BoundedInline, Hash as PreimageHash},
+};
 use pallet_balances::Error as BalancesError;
+use sp_core::{blake2_256, H256};
 
 #[test]
 fn user_note_preimage_works() {
@@ -264,4 +270,115 @@ fn noted_preimage_use_correct_map() {
 		// All are gone
 		assert_eq!(StatusFor::<Test>::iter().count(), 0);
 	});
+}
+
+// Tests the `QueryPreimage` trait capabilities of the preimage pallet.
+
+/// The request function behaves as expected.
+#[test]
+fn query_preimage_request_works() {
+	new_test_ext().execute_with(|| {
+		let _guard = StorageNoopGuard::default();
+		let data: Vec<u8> = vec![1, 2, 3, 4, 5];
+		let hash: PreimageHash = blake2_256(&data[..]).into();
+
+		// Request the preimage.
+		<Preimage as QueryPreimage>::request(&hash);
+
+		// The preimage is requested with unknown length and cannot be fetched.
+		assert!(<Preimage as QueryPreimage>::is_requested(&hash));
+		assert!(<Preimage as QueryPreimage>::len(&hash).is_none());
+		assert_noop!(<Preimage as QueryPreimage>::fetch(&hash, None), DispatchError::Unavailable);
+		// TODO: maybe test the deposit here
+
+		// Request twice...
+		<Preimage as QueryPreimage>::request(&hash);
+		// The preimage is requested twice.
+		assert!(<Preimage as QueryPreimage>::is_requested(&hash));
+		assert!(<Preimage as QueryPreimage>::len(&hash).is_none());
+		assert_noop!(<Preimage as QueryPreimage>::fetch(&hash, None), DispatchError::Unavailable);
+		// But there is only one entry in the map.
+		assert_eq!(StatusFor::<Test>::iter().count(), 1);
+
+		// Un-request the preimage.
+		<Preimage as QueryPreimage>::unrequest(&hash);
+		// Its still requested.
+		assert!(<Preimage as QueryPreimage>::is_requested(&hash));
+		// Un-request twice.
+		<Preimage as QueryPreimage>::unrequest(&hash);
+		// Its not requested anymore.
+		assert!(!<Preimage as QueryPreimage>::is_requested(&hash));
+		// And there is no entry in the map.
+		assert_eq!(StatusFor::<Test>::iter().count(), 0);
+	});
+}
+
+/// The `QueryPreimage` functions can be used together with `Bounded` values.
+#[test]
+fn query_preimage_hold_and_drop_work() {
+	new_test_ext().execute_with(|| {
+		let _guard = StorageNoopGuard::default();
+		let (inline, lookup, legacy) = make_bounded_values();
+
+		// `hold` does nothing for `Inline` values.
+		assert_storage_noop!(<Preimage as QueryPreimage>::hold(&inline));
+		// `hold` requests `Lookup` values.
+		<Preimage as QueryPreimage>::hold(&lookup);
+		assert!(<Preimage as QueryPreimage>::is_requested(&lookup.hash()));
+		// `hold` requests for `Legacy` values.
+		<Preimage as QueryPreimage>::hold(&legacy);
+		assert!(<Preimage as QueryPreimage>::is_requested(&legacy.hash()));
+
+		// There are two values requested in total.
+		assert_eq!(StatusFor::<Test>::iter().count(), 2);
+
+		// Cleanup by dropping both.
+		<Preimage as QueryPreimage>::drop(&lookup);
+		assert!(!<Preimage as QueryPreimage>::is_requested(&lookup.hash()));
+		<Preimage as QueryPreimage>::drop(&legacy);
+		assert!(!<Preimage as QueryPreimage>::is_requested(&legacy.hash()));
+
+		// There are no values requested anymore.
+		assert_eq!(StatusFor::<Test>::iter().count(), 0);
+	});
+}
+
+fn make_bounded_values() -> (Bounded<Vec<u8>>, Bounded<Vec<u8>>, Bounded<Vec<u8>>) {
+	let data: BoundedInline = bounded_vec![1];
+	let inline = Bounded::<Vec<u8>>::Inline(data);
+
+	let data = vec![1, 2];
+	let hash: H256 = blake2_256(&data[..]).into();
+	let len = data.len() as u32;
+	let lookup = Bounded::<Vec<u8>>::unrequested(hash, len);
+
+	let data = vec![1, 2, 3];
+	let hash: H256 = blake2_256(&data[..]).into();
+	let legacy = Bounded::<Vec<u8>>::Legacy { hash, dummy: Default::default() };
+
+	(inline, lookup, legacy)
+}
+
+// TODO remove
+#[must_use]
+pub struct StorageNoopGuard(Vec<u8>);
+
+impl Default for StorageNoopGuard {
+	fn default() -> Self {
+		Self(frame_support::storage_root(frame_support::StateVersion::V1))
+	}
+}
+
+impl Drop for StorageNoopGuard {
+	fn drop(&mut self) {
+		// No need to double panic, eg. inside a test assertion failure.
+		if sp_std::thread::panicking() {
+			return
+		}
+		assert_eq!(
+			frame_support::storage_root(frame_support::StateVersion::V1),
+			self.0,
+			"StorageNoopGuard detected wrongful storage changes.",
+		);
+	}
 }

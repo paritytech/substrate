@@ -636,7 +636,7 @@ fn should_use_orign() {
 }
 
 #[test]
-fn should_check_orign() {
+fn should_check_origin() {
 	new_test_ext().execute_with(|| {
 		let call =
 			Box::new(Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(10) }));
