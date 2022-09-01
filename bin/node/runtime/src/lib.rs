@@ -1453,6 +1453,7 @@ parameter_types! {
 	pub const ItemDeposit: Balance = 1 * DOLLARS;
 	pub const KeyLimit: u32 = 32;
 	pub const ValueLimit: u32 = 256;
+	pub const ApprovalsLimit: u32 = 20;
 }
 
 impl pallet_uniques::Config for Runtime {
@@ -1469,6 +1470,7 @@ impl pallet_uniques::Config for Runtime {
 	type StringLimit = StringLimit;
 	type KeyLimit = KeyLimit;
 	type ValueLimit = ValueLimit;
+	type ApprovalsLimit = ApprovalsLimit;
 	type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
