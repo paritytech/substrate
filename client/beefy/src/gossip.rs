@@ -31,7 +31,7 @@ use parking_lot::{Mutex, RwLock};
 use wasm_timer::Instant;
 
 use beefy_primitives::{
-	crypto::{Public, Signature},
+	//crypto::{Public, Signature},
 	VoteMessage,
 };
 
@@ -120,7 +120,7 @@ BKS: BeefyKeystore,
 			topic: topic::<B>(),
 			known_votes: RwLock::new(KnownVotes::new()),
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
-			//keystore
+			keystore_type: PhantomData,
 		}
 	}
 
@@ -152,7 +152,7 @@ where
 		sender: &PeerId,
 		mut data: &[u8],
 	) -> ValidationResult<B::Hash> {
-		if let Ok(msg) = VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
+		if let Ok(msg) = VoteMessage::<NumberFor<B>, BKS::Public, BKS::Signature>::decode(&mut data) {
 			let msg_hash = twox_64(data);
 			let round = msg.commitment.block_number;
 
@@ -186,7 +186,7 @@ where
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
 		let known_votes = self.known_votes.read();
 		Box::new(move |_topic, mut data| {
-			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
+			let msg = match VoteMessage::<NumberFor<B>, BKS::Public, BKS::Signature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return true,
 			};
@@ -220,7 +220,7 @@ where
 				return do_rebroadcast
 			}
 
-			let msg = match VoteMessage::<NumberFor<B>, Public, Signature>::decode(&mut data) {
+			let msg = match VoteMessage::<NumberFor<B>, BKS::Public, BKS::Signature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return false,
 			};

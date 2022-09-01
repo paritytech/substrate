@@ -60,7 +60,7 @@ pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::Ke
 ///
 /// The current underlying crypto scheme used is ECDSA. This can be changed,
 /// without affecting code restricted against the above listed crypto types.
-pub mod crypto {
+pub mod crypto { //TODO rename → to ecdsa_crypto
 	use sp_application_crypto::{app_crypto, ecdsa};
 	app_crypto!(ecdsa, crate::KEY_TYPE);
 

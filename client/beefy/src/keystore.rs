@@ -28,14 +28,17 @@ use beefy_primitives::{
 	KEY_TYPE,
 };
 
+use codec::{Decode, Encode};
+use core::fmt::Debug;
+
 use crate::error;
 
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate)  trait BeefyKeystore : From<Option<SyncCryptoStorePtr>> {
-    type Signature;
-    type Public;
+pub(crate)  trait BeefyKeystore : From<Option<SyncCryptoStorePtr>> + Sync + Send {
+    type Signature: Encode + Decode + Debug;
+    type Public: Encode + Decode + Debug;
         fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public>;
 
 	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<(Self::Signature),  error::Error>;

@@ -153,7 +153,7 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
-        BKS: keystore::BeefyKeystore,
+        BKS: keystore::BeefyKeystore +'static,
 {
 	let BeefyParams {
 		client,
