@@ -32,6 +32,7 @@ pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 pub(super) type ItemPrice<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
+pub(super) type Tip<T, I = ()> = (<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>);
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {

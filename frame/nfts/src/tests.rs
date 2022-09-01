@@ -766,12 +766,18 @@ fn buy_item_should_work() {
 
 		// can't buy for less
 		assert_noop!(
-			Nfts::buy_item(Origin::signed(user_2), collection_id, item_1, 1),
+			Nfts::buy_item(Origin::signed(user_2), collection_id, item_1, 1, vec![]),
 			Error::<Test>::BidTooLow
 		);
 
 		// pass the higher price to validate it will still deduct correctly
-		assert_ok!(Nfts::buy_item(Origin::signed(user_2), collection_id, item_1, price_1 + 1,));
+		assert_ok!(Nfts::buy_item(
+			Origin::signed(user_2),
+			collection_id,
+			item_1,
+			price_1 + 1,
+			vec![]
+		));
 
 		// validate the new owner & balances
 		let item = Item::<Test>::get(collection_id, item_1).unwrap();
@@ -781,18 +787,18 @@ fn buy_item_should_work() {
 
 		// can't buy from yourself
 		assert_noop!(
-			Nfts::buy_item(Origin::signed(user_1), collection_id, item_2, price_2),
+			Nfts::buy_item(Origin::signed(user_1), collection_id, item_2, price_2, vec![]),
 			Error::<Test>::NoPermission
 		);
 
 		// can't buy when the item is listed for a specific buyer
 		assert_noop!(
-			Nfts::buy_item(Origin::signed(user_2), collection_id, item_2, price_2),
+			Nfts::buy_item(Origin::signed(user_2), collection_id, item_2, price_2, vec![]),
 			Error::<Test>::NoPermission
 		);
 
 		// can buy when I'm a whitelisted buyer
-		assert_ok!(Nfts::buy_item(Origin::signed(user_3), collection_id, item_2, price_2,));
+		assert_ok!(Nfts::buy_item(Origin::signed(user_3), collection_id, item_2, price_2, vec![]));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection: collection_id,
@@ -807,7 +813,7 @@ fn buy_item_should_work() {
 
 		// can't buy when item is not for sale
 		assert_noop!(
-			Nfts::buy_item(Origin::signed(user_2), collection_id, item_3, price_2),
+			Nfts::buy_item(Origin::signed(user_2), collection_id, item_3, price_2, vec![]),
 			Error::<Test>::NotForSale
 		);
 
@@ -828,6 +834,7 @@ fn buy_item_should_work() {
 				collection: collection_id,
 				item: item_3,
 				bid_price: price_1,
+				tips: vec![],
 			});
 			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
 
@@ -840,8 +847,59 @@ fn buy_item_should_work() {
 				collection: collection_id,
 				item: item_3,
 				bid_price: price_1,
+				tips: vec![],
 			});
 			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
 		}
+	});
+}
+
+#[test]
+fn buy_item_with_tips_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let user_3 = 3;
+		let collection_id = 0;
+		let item_id = 1;
+		let price = 20;
+		let tip = 2;
+		let initial_balance = 100;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&user_3, initial_balance);
+
+		assert_ok!(Nfts::force_create(Origin::root(), collection_id, user_1, true));
+		assert_ok!(Nfts::mint(Origin::signed(user_1), collection_id, item_id, user_1));
+
+		assert_ok!(Nfts::set_price(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			Some(price),
+			None,
+		));
+
+		assert_ok!(Nfts::buy_item(
+			Origin::signed(user_2),
+			collection_id,
+			item_id,
+			price,
+			vec![(user_3, tip)],
+		));
+
+		// validate balances
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + price);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - price - tip);
+		assert_eq!(Balances::total_balance(&user_3), initial_balance + tip);
+
+		assert!(events().contains(&Event::<Test>::TipSent {
+			collection: collection_id,
+			item: item_id,
+			sender: user_2,
+			receiver: user_3,
+			amount: tip,
+		}));
 	});
 }

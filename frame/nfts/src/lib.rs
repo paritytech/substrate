@@ -375,6 +375,14 @@ pub mod pallet {
 			seller: T::AccountId,
 			buyer: T::AccountId,
 		},
+		/// A tip was sent.
+		TipSent {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			sender: T::AccountId,
+			receiver: T::AccountId,
+			amount: DepositBalanceOf<T, I>,
+		},
 	}
 
 	#[pallet::error]
@@ -1489,9 +1497,10 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			bid_price: ItemPrice<T, I>,
+			tips: Vec<Tip<T, I>>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_buy_item(collection, item, origin, bid_price)
+			Self::do_buy_item(collection, item, origin, bid_price, tips)
 		}
 	}
 }

@@ -239,6 +239,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		item: T::ItemId,
 		buyer: T::AccountId,
 		bid_price: ItemPrice<T, I>,
+		tips: Vec<Tip<T, I>>,
 	) -> DispatchResult {
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
@@ -258,6 +259,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			price_info.0,
 			ExistenceRequirement::KeepAlive,
 		)?;
+
+		for tip in tips {
+			T::Currency::transfer(&buyer, &tip.0, tip.1, ExistenceRequirement::KeepAlive)?;
+			Self::deposit_event(Event::TipSent {
+				collection,
+				item,
+				sender: buyer.clone(),
+				receiver: tip.0,
+				amount: tip.1,
+			});
+		}
 
 		let old_owner = details.owner.clone();
 
