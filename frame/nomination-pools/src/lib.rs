@@ -2224,13 +2224,10 @@ impl<T: Config> Pallet<T> {
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
-		Self::remove_metadata(bonded_pool.id);
-		bonded_pool.remove();
-	}
-
-	/// Remove bonded pool metadata.
-	pub fn remove_metadata(bonded_pool_id: PoolId) {
+		// Remove bonded pool metadata.
 		Metadata::<T>::remove(bonded_pool_id);
+
+		bonded_pool.remove();
 	}
 
 	/// Create the main, bonded account of a pool with the given id.
