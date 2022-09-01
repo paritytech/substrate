@@ -23,6 +23,8 @@ use std::{
 	sync::Arc,
 };
 
+use libp2p::core::upgrade;
+
 pub mod event;
 
 /// The protocol name transmitted on the wire.
@@ -80,5 +82,11 @@ impl Hash for ProtocolName {
 impl fmt::Display for ProtocolName {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		f.write_str(self)
+	}
+}
+
+impl upgrade::ProtocolName for ProtocolName {
+	fn protocol_name(&self) -> &[u8] {
+		(self as &str).as_bytes()
 	}
 }
