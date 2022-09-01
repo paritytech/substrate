@@ -190,7 +190,7 @@ impl Config for Test {
 	type Event = Event;
 	type Currency = pallet_balances::Pallet<Self>;
 	type VoteLockingPeriod = ConstU64<3>;
-	type MaxVotes = ConstU32<3>;
+	type MaxVotes = ConstU32<10>;
 	type WeightInfo = ();
 	type MaxTurnout = frame_support::traits::TotalIssuanceOf<Balances, Self::AccountId>;
 	type Polls = TestPolls;

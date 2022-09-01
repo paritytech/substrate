@@ -32,6 +32,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
 };
 
 // Logger module to track execution.
@@ -122,7 +123,7 @@ parameter_types! {
 }
 impl system::Config for Test {
 	type BaseCallFilter = BaseFilter;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type Origin = Origin;
@@ -202,7 +203,8 @@ impl WeightInfo for TestWeightInfo {
 	}
 }
 parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Weight::from_ref_time(10_000);
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
+		BlockWeights::get().max_block;
 }
 
 impl Config for Test {
