@@ -632,7 +632,7 @@ fn cancel_approval_works() {
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(2), 0, 42, 4),
-			Error::<Test>::WrongDelegate
+			Error::<Test>::NotDelegate
 		);
 
 		assert_ok!(Uniques::cancel_approval(Origin::signed(2), 0, 42, 3));
@@ -660,7 +660,7 @@ fn cancel_approval_works_with_admin() {
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::signed(1), 0, 42, 4),
-			Error::<Test>::WrongDelegate
+			Error::<Test>::NotDelegate
 		);
 
 		assert_ok!(Uniques::cancel_approval(Origin::signed(1), 0, 42, 3));
@@ -688,7 +688,7 @@ fn cancel_approval_works_with_force() {
 		);
 		assert_noop!(
 			Uniques::cancel_approval(Origin::root(), 0, 42, 4),
-			Error::<Test>::WrongDelegate
+			Error::<Test>::NotDelegate
 		);
 
 		assert_ok!(Uniques::cancel_approval(Origin::root(), 0, 42, 3));

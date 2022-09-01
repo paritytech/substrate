@@ -398,8 +398,8 @@ pub mod pallet {
 		InUse,
 		/// The item or collection is frozen.
 		Frozen,
-		/// The delegate turned out to be different to what was expected.
-		WrongDelegate,
+		/// The provided account is not a delegate.
+		NotDelegate,
 		/// There is no delegate approved.
 		NoDelegate,
 		/// No approval exists that would allow the transfer.
@@ -995,7 +995,7 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
 			let delegate = T::Lookup::lookup(delegate)?;
-			
+
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			let mut details =
@@ -1006,7 +1006,7 @@ pub mod pallet {
 			}
 
 			ensure!(!details.approved.is_empty(), Error::<T, I>::NoDelegate);
-			ensure!(details.approved.contains(&delegate), Error::<T, I>::WrongDelegate);
+			ensure!(details.approved.contains(&delegate), Error::<T, I>::NotDelegate);
 
 			details.approved.retain(|d| *d != delegate);
 			Item::<T, I>::insert(&collection, &item, &details);
