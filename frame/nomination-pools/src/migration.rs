@@ -388,13 +388,6 @@ pub mod v2 {
 pub mod v3 {
 	use super::*;
 
-	const CURRENT: u16 = 3;
-	const ONCHAIN: u16 = 2;
-
-	fn check_version(current: StorageVersion, onchain: StorageVersion) -> bool {
-		current == CURRENT && onchain == ONCHAIN
-	}
-
 	/// This migration removes stale bonded-pool metadata.
 	pub struct MigrateToV3<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV3<T> {
@@ -409,7 +402,7 @@ pub mod v3 {
 				onchain
 			);
 
-			if check_version(current, onchain) {
+			if current > onchain {
 				let mut metadata_iterated = 0u64;
 				let mut metadata_removed = 0u64;
 				Metadata::<T>::iter_keys()
@@ -421,9 +414,12 @@ pub mod v3 {
 						metadata_removed += 1;
 						Metadata::<T>::remove(&id);
 					});
+				current.put::<Pallet<T>>();
 				// metadata iterated + bonded pools read + a storage version read
 				let total_reads = metadata_iterated * 2 + 1;
-				T::DbWeight::get().reads_writes(total_reads, metadata_removed)
+				// metadata removed + a storage version write
+				let total_writes = metadata_removed + 1;
+				T::DbWeight::get().reads_writes(total_reads, total_writes)
 			} else {
 				log!(info, "MigrateToV3 should be removed");
 				T::DbWeight::get().reads(1)
@@ -433,11 +429,8 @@ pub mod v3 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
 			ensure!(
-				check_version(
-					Pallet::<T>::current_storage_version(),
-					Pallet::<T>::on_chain_storage_version()
-				),
-				"must upgrade linearly"
+				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
+				"the on_chain version is equal or more than the current one"
 			);
 			Ok(())
 		}
@@ -450,7 +443,7 @@ pub mod v3 {
 					.count() == 0,
 				"not all of the stale metadata has been removed"
 			);
-			ensure!(Pallet::<T>::current_storage_version() == 3, "wrong storage version");
+			ensure!(Pallet::<T>::on_chain_storage_version() == 3, "wrong storage version");
 			Ok(())
 		}
 	}
