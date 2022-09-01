@@ -325,6 +325,11 @@ pub mod pallet {
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
+		AllApprovalsCancelled {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			owner: T::AccountId,
+		},
 		/// A `collection` has had its attributes changed by the `Force` origin.
 		ItemStatusChanged { collection: T::CollectionId },
 		/// New metadata has been set for a `collection`.
@@ -1040,6 +1045,11 @@ pub mod pallet {
 			// clear all approvals.
 			details.approved = BoundedVec::default();
 			Item::<T, I>::insert(&collection, &item, &details);
+			Self::deposit_event(Event::AllApprovalsCancelled {
+				collection,
+				item,
+				owner: details.owner,
+			});
 
 			Ok(())
 		}

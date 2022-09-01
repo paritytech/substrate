@@ -728,6 +728,13 @@ fn clear_all_transfer_approvals_works() {
 		);
 
 		assert_ok!(Uniques::clear_all_transfer_approvals(Origin::signed(2), 0, 42));
+
+		assert!(events().contains(&Event::<Test>::AllApprovalsCancelled {
+			collection: 0,
+			item: 42,
+			owner: 2,
+		}));
+
 		assert_noop!(Uniques::transfer(Origin::signed(3), 0, 42, 5), Error::<Test>::NoPermission);
 		assert_noop!(Uniques::transfer(Origin::signed(4), 0, 42, 5), Error::<Test>::NoPermission);
 	});
