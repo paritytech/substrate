@@ -32,6 +32,7 @@ use futures::{
 use libp2p::{core::multiaddr, identity::Keypair, PeerId};
 use prometheus_endpoint::prometheus::default_registry;
 
+use sc_client_api::HeaderBackend;
 use sc_network_common::service::{KademliaKey, Signature, SigningError};
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_keystore::{testing::KeyStore, CryptoStore};
