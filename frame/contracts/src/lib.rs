@@ -695,7 +695,12 @@ pub mod pallet {
 		/// Please keep in mind that like all events this is only emitted for successful
 		/// calls. This is because on failure all storage changes including events are
 		/// rolled back.
-		Called { caller: T::AccountId, contract: T::AccountId },
+		Called {
+			/// The account that called the `contract`.
+			caller: T::AccountId,
+			/// The contract that was called.
+			contract: T::AccountId,
+		},
 
 		/// A contract delegate called a code hash.
 		///
@@ -704,7 +709,13 @@ pub mod pallet {
 		/// Please keep in mind that like all events this is only emitted for successful
 		/// calls. This is because on failure all storage changes including events are
 		/// rolled back.
-		DelegateCalled { contract: T::AccountId, code_hash: CodeHash<T> },
+		DelegateCalled {
+			/// The contract that performed the delegate call and hence in whose context
+			/// the `code_hash` is executed.
+			contract: T::AccountId,
+			/// The code hash that was delegate called.
+			code_hash: CodeHash<T>,
+		},
 	}
 
 	#[pallet::error]
