@@ -29,7 +29,6 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	bitswap::Bitswap,
 	config::{Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
@@ -59,10 +58,9 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
-	config::parse_str_addr,
+	config::MultiaddrWithPeerId,
 	protocol::event::{DhtEvent, Event},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
@@ -75,7 +73,7 @@ use sc_network_common::{
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_blockchain::{HeaderBackend, HeaderMetadata};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	borrow::Cow,
@@ -137,13 +135,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: sp_blockchain::HeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
@@ -220,7 +212,7 @@ where
 			params.protocol_id.clone(),
 			params
 				.chain
-				.block_hash(0u32.into())
+				.hash(0u32.into())
 				.ok()
 				.flatten()
 				.expect("Genesis block exists; qed"),
@@ -374,7 +366,6 @@ where
 			};
 
 			let behaviour = {
-				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(params.chain));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -383,7 +374,7 @@ where
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
 					params.warp_sync_protocol_config,
-					bitswap,
+					params.bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
@@ -702,9 +693,8 @@ where
 		self.service.remove_reserved_peer(peer);
 	}
 
-	/// Adds a `PeerId` and its address as reserved. The string should encode the address
-	/// and peer ID of the remote node.
-	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+	/// Adds a `PeerId` and its `Multiaddr` as reserved.
+	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
 
@@ -912,17 +902,16 @@ where
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(true));
 	}
 
-	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		// Make sure the local peer ID is never added to the PSM.
-		if peer_id == self.local_peer_id {
+		if peer.peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
 
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer.peer_id, peer.multiaddr));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer.peer_id));
 		Ok(())
 	}
 
@@ -1299,13 +1288,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1338,13 +1321,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	type Output = ();
 
@@ -1377,7 +1354,6 @@ where
 				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			};
-
 			match msg {
 				ServiceToWorkerMsg::AnnounceBlock(hash, data) => this
 					.network_service
@@ -1990,13 +1966,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 }
 
@@ -2004,13 +1974,7 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -2018,13 +1982,7 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn blocks_processed(
 		&mut self,

@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_recovery.
@@ -60,71 +60,71 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Recovery Proxy (r:1 w:0)
 	fn as_recovered() -> Weight {
-		(6_579_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(6_579_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Proxy (r:0 w:1)
 	fn set_recovered() -> Weight {
-		(13_402_000 as Weight)
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(13_402_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Recoverable (r:1 w:1)
 	fn create_recovery(n: u32, ) -> Weight {
-		(28_217_000 as Weight)
+		Weight::from_ref_time(28_217_000 as RefTimeWeight)
 			// Standard Error: 13_000
-			.saturating_add((172_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(172_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Recoverable (r:1 w:0)
 	// Storage: Recovery ActiveRecoveries (r:1 w:1)
 	fn initiate_recovery() -> Weight {
-		(34_082_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(34_082_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Recoverable (r:1 w:0)
 	// Storage: Recovery ActiveRecoveries (r:1 w:1)
 	fn vouch_recovery(n: u32, ) -> Weight {
-		(22_038_000 as Weight)
+		Weight::from_ref_time(22_038_000 as RefTimeWeight)
 			// Standard Error: 19_000
-			.saturating_add((307_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(307_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Recoverable (r:1 w:0)
 	// Storage: Recovery ActiveRecoveries (r:1 w:0)
 	// Storage: Recovery Proxy (r:1 w:1)
 	fn claim_recovery(n: u32, ) -> Weight {
-		(28_621_000 as Weight)
+		Weight::from_ref_time(28_621_000 as RefTimeWeight)
 			// Standard Error: 13_000
-			.saturating_add((353_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(353_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery ActiveRecoveries (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn close_recovery(n: u32, ) -> Weight {
-		(33_287_000 as Weight)
+		Weight::from_ref_time(33_287_000 as RefTimeWeight)
 			// Standard Error: 19_000
-			.saturating_add((264_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(264_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Recovery ActiveRecoveries (r:1 w:0)
 	// Storage: Recovery Recoverable (r:1 w:1)
 	fn remove_recovery(n: u32, ) -> Weight {
-		(31_964_000 as Weight)
+		Weight::from_ref_time(31_964_000 as RefTimeWeight)
 			// Standard Error: 13_000
-			.saturating_add((222_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(222_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Proxy (r:1 w:1)
 	fn cancel_recovered() -> Weight {
-		(12_702_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(12_702_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 }
 
@@ -132,70 +132,70 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: Recovery Proxy (r:1 w:0)
 	fn as_recovered() -> Weight {
-		(6_579_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(6_579_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Proxy (r:0 w:1)
 	fn set_recovered() -> Weight {
-		(13_402_000 as Weight)
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(13_402_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Recoverable (r:1 w:1)
 	fn create_recovery(n: u32, ) -> Weight {
-		(28_217_000 as Weight)
+		Weight::from_ref_time(28_217_000 as RefTimeWeight)
 			// Standard Error: 13_000
-			.saturating_add((172_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(172_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Recoverable (r:1 w:0)
 	// Storage: Recovery ActiveRecoveries (r:1 w:1)
 	fn initiate_recovery() -> Weight {
-		(34_082_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(34_082_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Recoverable (r:1 w:0)
 	// Storage: Recovery ActiveRecoveries (r:1 w:1)
 	fn vouch_recovery(n: u32, ) -> Weight {
-		(22_038_000 as Weight)
+		Weight::from_ref_time(22_038_000 as RefTimeWeight)
 			// Standard Error: 19_000
-			.saturating_add((307_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(307_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Recoverable (r:1 w:0)
 	// Storage: Recovery ActiveRecoveries (r:1 w:0)
 	// Storage: Recovery Proxy (r:1 w:1)
 	fn claim_recovery(n: u32, ) -> Weight {
-		(28_621_000 as Weight)
+		Weight::from_ref_time(28_621_000 as RefTimeWeight)
 			// Standard Error: 13_000
-			.saturating_add((353_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(353_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery ActiveRecoveries (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn close_recovery(n: u32, ) -> Weight {
-		(33_287_000 as Weight)
+		Weight::from_ref_time(33_287_000 as RefTimeWeight)
 			// Standard Error: 19_000
-			.saturating_add((264_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(264_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Recovery ActiveRecoveries (r:1 w:0)
 	// Storage: Recovery Recoverable (r:1 w:1)
 	fn remove_recovery(n: u32, ) -> Weight {
-		(31_964_000 as Weight)
+		Weight::from_ref_time(31_964_000 as RefTimeWeight)
 			// Standard Error: 13_000
-			.saturating_add((222_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(222_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Recovery Proxy (r:1 w:1)
 	fn cancel_recovered() -> Weight {
-		(12_702_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(12_702_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 }

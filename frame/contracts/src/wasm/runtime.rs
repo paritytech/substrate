@@ -327,14 +327,14 @@ impl RuntimeCosts {
 			EcdsaRecovery => s.ecdsa_recover,
 			ChainExtension(amount) => amount,
 			#[cfg(feature = "unstable-interface")]
-			CallRuntime(weight) => weight,
+			CallRuntime(weight) => weight.ref_time(),
 			SetCodeHash => s.set_code_hash,
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 		};
 		RuntimeToken {
 			#[cfg(test)]
 			_created_from: *self,
-			weight,
+			weight: Weight::from_ref_time(weight),
 		}
 	}
 }
@@ -857,7 +857,7 @@ where
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
 				self.ext.call(
-					gas,
+					Weight::from_ref_time(gas),
 					callee,
 					value,
 					input_data,
@@ -906,6 +906,7 @@ where
 		salt_ptr: u32,
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
+		let gas = Weight::from_ref_time(gas);
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
 		if value > 0u32.into() {
@@ -1704,6 +1705,7 @@ pub mod env {
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<(), TrapReason> {
+		let gas = Weight::from_ref_time(gas);
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
 		Ok(ctx.write_sandbox_output(
 			out_ptr,

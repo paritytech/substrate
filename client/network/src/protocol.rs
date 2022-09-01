@@ -40,7 +40,7 @@ use message::{
 };
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
-use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
+use sc_client_api::HeaderBackend;
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
@@ -56,7 +56,6 @@ use sc_network_common::{
 	},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_blockchain::HeaderMetadata;
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::BlockId,
@@ -262,13 +261,7 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 impl<B, Client> Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Create a new instance.
 	pub fn new(
@@ -373,7 +366,7 @@ where
 
 		let block_announces_protocol = {
 			let genesis_hash =
-				chain.block_hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
+				chain.hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
 			if let Some(fork_id) = fork_id {
 				format!("/{}/{}/block-announces/1", hex::encode(genesis_hash), fork_id)
 			} else {
@@ -1318,13 +1311,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 impl<B, Client> NetworkBehaviour for Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;
