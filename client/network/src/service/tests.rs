@@ -146,6 +146,7 @@ fn build_test_full_node(
 		import_queue,
 		chain_sync: Box::new(chain_sync),
 		metrics_registry: None,
+		bitswap: None,
 		block_request_protocol_config,
 		state_request_protocol_config,
 		light_client_request_protocol_config,
