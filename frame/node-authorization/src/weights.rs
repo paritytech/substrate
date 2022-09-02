@@ -21,7 +21,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 pub trait WeightInfo {
@@ -37,13 +37,13 @@ pub trait WeightInfo {
 }
 
 impl WeightInfo for () {
-	fn add_well_known_node() -> Weight { 50_000_000 }
-	fn remove_well_known_node() -> Weight { 50_000_000 }
-	fn swap_well_known_node() -> Weight { 50_000_000 }
-	fn reset_well_known_nodes() -> Weight { 50_000_000 }
-	fn claim_node() -> Weight { 50_000_000 }
-	fn remove_claim() -> Weight { 50_000_000 }
-	fn transfer_node() -> Weight { 50_000_000 }
-	fn add_connections() -> Weight { 50_000_000 }
-	fn remove_connections() -> Weight { 50_000_000 }
+	fn add_well_known_node() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn remove_well_known_node() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn swap_well_known_node() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn reset_well_known_nodes() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn claim_node() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn remove_claim() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn transfer_node() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn add_connections() -> Weight { Weight::from_ref_time(50_000_000) }
+	fn remove_connections() -> Weight { Weight::from_ref_time(50_000_000) }
 }

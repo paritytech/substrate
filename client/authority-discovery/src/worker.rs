@@ -43,15 +43,16 @@ use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
-use sc_client_api::blockchain::HeaderBackend;
 use sc_network_common::{
 	protocol::event::DhtEvent,
 	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
 };
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ApiError, ProvideRuntimeApi};
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
+use sp_blockchain::HeaderBackend;
+
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -150,12 +151,35 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	phantom: PhantomData<Block>,
 }
 
+/// Wrapper for [`AuthorityDiscoveryApi`](sp_authority_discovery::AuthorityDiscoveryApi). Can be
+/// be implemented by any struct without dependency on the runtime.
+#[async_trait::async_trait]
+pub trait AuthorityDiscovery<Block: BlockT> {
+	/// Retrieve authority identifiers of the current and next authority set.
+	async fn authorities(&self, at: Block::Hash)
+		-> std::result::Result<Vec<AuthorityId>, ApiError>;
+}
+
+#[async_trait::async_trait]
+impl<Block, T> AuthorityDiscovery<Block> for T
+where
+	T: ProvideRuntimeApi<Block> + Send + Sync,
+	T::Api: AuthorityDiscoveryApi<Block>,
+	Block: BlockT,
+{
+	async fn authorities(
+		&self,
+		at: Block::Hash,
+	) -> std::result::Result<Vec<AuthorityId>, ApiError> {
+		self.runtime_api().authorities(&BlockId::Hash(at))
+	}
+}
+
 impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
-	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
+	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
@@ -354,7 +378,7 @@ where
 	}
 
 	async fn refill_pending_lookups_queue(&mut self) -> Result<()> {
-		let id = BlockId::hash(self.client.info().best_hash);
+		let best_hash = self.client.info().best_hash;
 
 		let local_keys = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store
@@ -367,8 +391,8 @@ where
 
 		let mut authorities = self
 			.client
-			.runtime_api()
-			.authorities(&id)
+			.authorities(best_hash)
+			.await
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.filter(|id| !local_keys.contains(id.as_ref()))
@@ -574,10 +598,10 @@ where
 			.into_iter()
 			.collect::<HashSet<_>>();
 
-		let id = BlockId::hash(client.info().best_hash);
+		let best_hash = client.info().best_hash;
 		let authorities = client
-			.runtime_api()
-			.authorities(&id)
+			.authorities(best_hash)
+			.await
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.map(Into::into)

@@ -201,11 +201,11 @@ impl<T: Config> ListScenario<T> {
 
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), amount, 1).unwrap();
 
-		// Sanity check that the vote weight is still the same as the original bonded
+		// check that the vote weight is still the same as the original bonded
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
 		assert_eq!(vote_to_balance::<T>(weight_of(&self.origin1)).unwrap(), original_bonded);
 
-		// Sanity check the member was added correctly
+		// check the member was added correctly
 		let member = PoolMembers::<T>::get(&joiner).unwrap();
 		assert_eq!(member.points, amount);
 		assert_eq!(member.pool_id, 1);

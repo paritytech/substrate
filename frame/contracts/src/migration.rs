@@ -33,7 +33,7 @@ pub struct Migration<T: Config>(PhantomData<T>);
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> Weight {
 		let version = StorageVersion::get::<Pallet<T>>();
-		let mut weight: Weight = 0;
+		let mut weight = Weight::zero();
 
 		if version < 4 {
 			weight = weight.saturating_add(v4::migrate::<T>());
@@ -140,7 +140,7 @@ mod v5 {
 	type DeletionQueue<T: Config> = StorageValue<Pallet<T>, Vec<DeletedContract>>;
 
 	pub fn migrate<T: Config>() -> Weight {
-		let mut weight: Weight = 0;
+		let mut weight = Weight::zero();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
@@ -229,7 +229,7 @@ mod v6 {
 	type OwnerInfoOf<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
 
 	pub fn migrate<T: Config>() -> Weight {
-		let mut weight: Weight = 0;
+		let mut weight = Weight::zero();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
@@ -306,7 +306,7 @@ mod v8 {
 	>;
 
 	pub fn migrate<T: Config>() -> Weight {
-		let mut weight: Weight = 0;
+		let mut weight = Weight::zero();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
 			// Count storage items of this contract
@@ -333,9 +333,8 @@ mod v8 {
 
 			// Reads: One read for each storage item plus the contract info itself.
 			// Writes: Only the new contract info.
-			weight = weight.saturating_add(
-				T::DbWeight::get().reads_writes(Weight::from(storage_items) + 1, 1),
-			);
+			weight = weight
+				.saturating_add(T::DbWeight::get().reads_writes(u64::from(storage_items) + 1, 1));
 
 			Some(ContractInfo {
 				trie_id: old.trie_id,
