@@ -23,11 +23,37 @@ use super::*;
 use crate::mock::*;
 
 use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
+	assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec,
 	traits::{Bounded, BoundedInline, Hash as PreimageHash},
+	StorageNoopGuard,
 };
 use pallet_balances::Error as BalancesError;
 use sp_core::{blake2_256, H256};
+
+/// Returns one `Inline`, `Lookup` and `Legacy` item each with different data and hash.
+pub fn make_bounded_values() -> (Bounded<Vec<u8>>, Bounded<Vec<u8>>, Bounded<Vec<u8>>) {
+	let data: BoundedInline = bounded_vec![1];
+	let inline = Bounded::<Vec<u8>>::Inline(data);
+
+	let data = vec![1, 2];
+	let hash: H256 = blake2_256(&data[..]).into();
+	let len = data.len() as u32;
+	let lookup = Bounded::<Vec<u8>>::unrequested(hash, len);
+
+	let data = vec![1, 2, 3];
+	let hash: H256 = blake2_256(&data[..]).into();
+	let legacy = Bounded::<Vec<u8>>::Legacy { hash, dummy: Default::default() };
+
+	(inline, lookup, legacy)
+}
+/*
+pub fn make_bounded_lookup(seed: u8) -> Bounded<Vec<u8>> {
+	let data = vec![seed; 10];
+	let hash: H256 = blake2_256(&data[..]).into();
+	let len = data.len() as u32;
+
+	Bounded::<Vec<u8>>::unrequested(hash, len)
+}*/
 
 #[test]
 fn user_note_preimage_works() {
@@ -272,7 +298,69 @@ fn noted_preimage_use_correct_map() {
 	});
 }
 
-// Tests the `QueryPreimage` trait capabilities of the preimage pallet.
+/// The `StorePreimage` and `QueryPreimage` traits work together.
+#[test]
+fn query_and_store_preimage_workflow() {
+	new_test_ext().execute_with(|| {
+		let _guard = StorageNoopGuard::default();
+		let data: Vec<u8> = vec![1; 512];
+		let encoded = data.encode();
+
+		let bound = Preimage::bound(data.clone()).unwrap();
+		let (len, hash) = (bound.len().unwrap(), bound.hash());
+		assert_eq!(hash, blake2_256(&encoded).into());
+		assert_eq!(bound.len(), Some(len));
+		assert!(bound.lookup_needed(), "Should not be Inlined");
+
+		// The value is requested and available.
+		assert!(Preimage::is_requested(&hash));
+		assert!(<Preimage as QueryPreimage>::have(&bound));
+		assert_eq!(Preimage::len(&hash), Some(len));
+
+		// It can be fetched with length.
+		assert_eq!(Preimage::fetch(&hash, Some(len)).unwrap(), encoded);
+		// ... and without length.
+		assert_eq!(Preimage::fetch(&hash, None).unwrap(), encoded);
+		// ... but not with wrong length.
+		assert_err!(Preimage::fetch(&hash, Some(0)), DispatchError::Unavailable);
+
+		// It can be peeked and decoded correctly.
+		assert_eq!(Preimage::peek::<Vec<u8>>(&bound).unwrap(), (data.clone(), Some(len)));
+		// Request it two more times.
+		assert_eq!(Preimage::pick::<Vec<u8>>(hash.clone(), len), bound);
+		Preimage::request(&hash);
+		// It is requested thrice.
+		assert!(matches!(
+			StatusFor::<Test>::get(&hash).unwrap(),
+			RequestStatus::Requested { count: 3, .. }
+		));
+
+		// It can be realized and decoded correctly.
+		assert_eq!(Preimage::realize::<Vec<u8>>(&bound).unwrap(), (data.clone(), Some(len)));
+		assert!(matches!(
+			StatusFor::<Test>::get(&hash).unwrap(),
+			RequestStatus::Requested { count: 2, .. }
+		));
+		// Dropping should unrequest.
+		Preimage::drop(&bound);
+		assert!(matches!(
+			StatusFor::<Test>::get(&hash).unwrap(),
+			RequestStatus::Requested { count: 1, .. }
+		));
+
+		// Is still available.
+		assert!(<Preimage as QueryPreimage>::have(&bound));
+		// Manually unnote it.
+		Preimage::unnote(&hash);
+		// Is not available anymore.
+		assert!(!<Preimage as QueryPreimage>::have(&bound));
+		assert_err!(Preimage::fetch(&hash, Some(len)), DispatchError::Unavailable);
+		// And not requested since the traits assume permissioned origin.
+		assert!(!Preimage::is_requested(&hash));
+
+		// No storage changes remain. Checked by `StorageNoopGuard`.
+	});
+}
 
 /// The request function behaves as expected.
 #[test]
@@ -289,11 +377,10 @@ fn query_preimage_request_works() {
 		assert!(<Preimage as QueryPreimage>::is_requested(&hash));
 		assert!(<Preimage as QueryPreimage>::len(&hash).is_none());
 		assert_noop!(<Preimage as QueryPreimage>::fetch(&hash, None), DispatchError::Unavailable);
-		// TODO: maybe test the deposit here
 
-		// Request twice...
+		// Request again.
 		<Preimage as QueryPreimage>::request(&hash);
-		// The preimage is requested twice.
+		// The preimage is still requested.
 		assert!(<Preimage as QueryPreimage>::is_requested(&hash));
 		assert!(<Preimage as QueryPreimage>::len(&hash).is_none());
 		assert_noop!(<Preimage as QueryPreimage>::fetch(&hash, None), DispatchError::Unavailable);
@@ -302,11 +389,11 @@ fn query_preimage_request_works() {
 
 		// Un-request the preimage.
 		<Preimage as QueryPreimage>::unrequest(&hash);
-		// Its still requested.
+		// It is still requested.
 		assert!(<Preimage as QueryPreimage>::is_requested(&hash));
 		// Un-request twice.
 		<Preimage as QueryPreimage>::unrequest(&hash);
-		// Its not requested anymore.
+		// It is not requested anymore.
 		assert!(!<Preimage as QueryPreimage>::is_requested(&hash));
 		// And there is no entry in the map.
 		assert_eq!(StatusFor::<Test>::iter().count(), 0);
@@ -325,7 +412,7 @@ fn query_preimage_hold_and_drop_work() {
 		// `hold` requests `Lookup` values.
 		<Preimage as QueryPreimage>::hold(&lookup);
 		assert!(<Preimage as QueryPreimage>::is_requested(&lookup.hash()));
-		// `hold` requests for `Legacy` values.
+		// `hold` requests `Legacy` values.
 		<Preimage as QueryPreimage>::hold(&legacy);
 		assert!(<Preimage as QueryPreimage>::is_requested(&legacy.hash()));
 
@@ -341,44 +428,4 @@ fn query_preimage_hold_and_drop_work() {
 		// There are no values requested anymore.
 		assert_eq!(StatusFor::<Test>::iter().count(), 0);
 	});
-}
-
-fn make_bounded_values() -> (Bounded<Vec<u8>>, Bounded<Vec<u8>>, Bounded<Vec<u8>>) {
-	let data: BoundedInline = bounded_vec![1];
-	let inline = Bounded::<Vec<u8>>::Inline(data);
-
-	let data = vec![1, 2];
-	let hash: H256 = blake2_256(&data[..]).into();
-	let len = data.len() as u32;
-	let lookup = Bounded::<Vec<u8>>::unrequested(hash, len);
-
-	let data = vec![1, 2, 3];
-	let hash: H256 = blake2_256(&data[..]).into();
-	let legacy = Bounded::<Vec<u8>>::Legacy { hash, dummy: Default::default() };
-
-	(inline, lookup, legacy)
-}
-
-// TODO remove
-#[must_use]
-pub struct StorageNoopGuard(Vec<u8>);
-
-impl Default for StorageNoopGuard {
-	fn default() -> Self {
-		Self(frame_support::storage_root(frame_support::StateVersion::V1))
-	}
-}
-
-impl Drop for StorageNoopGuard {
-	fn drop(&mut self) {
-		// No need to double panic, eg. inside a test assertion failure.
-		if sp_std::thread::panicking() {
-			return
-		}
-		assert_eq!(
-			frame_support::storage_root(frame_support::StateVersion::V1),
-			self.0,
-			"StorageNoopGuard detected wrongful storage changes.",
-		);
-	}
 }
