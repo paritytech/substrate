@@ -64,6 +64,8 @@ async fn make_request<'a, T: DeserializeOwned>(
 ///
 /// Service will connect to `uri` for the first time during the first request. Instantiation
 /// does not trigger connecting.
+///
+/// Be careful with reusing the connection in a multithreaded environment.
 pub struct RpcService {
 	uri: String,
 	client: Option<Client>,
