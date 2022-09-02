@@ -20,13 +20,8 @@
 #![cfg(test)]
 
 use super::*;
-use crate::{
-	bounded_vec, parameter_types,
-	traits::{Bounded, ConstU32},
-	BoundedVec,
-};
+use crate::{bounded_vec, parameter_types, traits::Bounded, BoundedVec};
 use sp_io::hashing::blake2_256;
-use std::collections::BTreeMap;
 
 #[test]
 fn bounded_basic_works() {
@@ -43,8 +38,7 @@ fn bounded_basic_works() {
 	}
 
 	{
-		let bound: Bounded<Vec<u8>> =
-			Bounded::Legacy { hash: hash.clone(), dummy: Default::default() };
+		let bound: Bounded<Vec<u8>> = Bounded::Legacy { hash, dummy: Default::default() };
 		assert_eq!(bound.hash(), hash);
 		assert_eq!(bound.len(), None);
 		assert!(bound.lookup_needed());

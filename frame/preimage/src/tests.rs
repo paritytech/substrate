@@ -306,11 +306,14 @@ fn query_and_store_preimage_workflow() {
 		let data: Vec<u8> = vec![1; 512];
 		let encoded = data.encode();
 
+		// Bound an unbound value.
 		let bound = Preimage::bound(data.clone()).unwrap();
 		let (len, hash) = (bound.len().unwrap(), bound.hash());
+
 		assert_eq!(hash, blake2_256(&encoded).into());
 		assert_eq!(bound.len(), Some(len));
 		assert!(bound.lookup_needed(), "Should not be Inlined");
+		assert_eq!(bound.lookup_len(), Some(len));
 
 		// The value is requested and available.
 		assert!(Preimage::is_requested(&hash));
@@ -327,7 +330,7 @@ fn query_and_store_preimage_workflow() {
 		// It can be peeked and decoded correctly.
 		assert_eq!(Preimage::peek::<Vec<u8>>(&bound).unwrap(), (data.clone(), Some(len)));
 		// Request it two more times.
-		assert_eq!(Preimage::pick::<Vec<u8>>(hash.clone(), len), bound);
+		assert_eq!(Preimage::pick::<Vec<u8>>(hash, len), bound);
 		Preimage::request(&hash);
 		// It is requested thrice.
 		assert!(matches!(
