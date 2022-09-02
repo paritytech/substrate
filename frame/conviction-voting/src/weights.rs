@@ -99,7 +99,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn delegate(r: u32, ) -> Weight {
 		Weight::from_ref_time(51_518_000 as RefTimeWeight)
 			// Standard Error: 83_000
-			.saturating_add(Weight::from_ref_time(27_235_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(27_235_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
 			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
@@ -111,7 +111,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn undelegate(r: u32, ) -> Weight {
 		Weight::from_ref_time(37_885_000 as RefTimeWeight)
 			// Standard Error: 75_000
-			.saturating_add(Weight::from_ref_time(24_395_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(24_395_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
 			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
@@ -172,7 +172,7 @@ impl WeightInfo for () {
 	fn delegate(r: u32, ) -> Weight {
 		Weight::from_ref_time(51_518_000 as RefTimeWeight)
 			// Standard Error: 83_000
-			.saturating_add(Weight::from_ref_time(27_235_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(27_235_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
 			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
@@ -184,7 +184,7 @@ impl WeightInfo for () {
 	fn undelegate(r: u32, ) -> Weight {
 		Weight::from_ref_time(37_885_000 as RefTimeWeight)
 			// Standard Error: 75_000
-			.saturating_add(Weight::from_ref_time(24_395_000 as RefTimeWeight).scalar_saturating_mul(r as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(24_395_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
 			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))

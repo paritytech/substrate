@@ -36,7 +36,7 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 		Weight::from_ref_time({{underscore benchmark.base_weight}} as RefTimeWeight)
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}
-			.saturating_add(Weight::from_ref_time({{underscore cw.slope}} as RefTimeWeight).scalar_saturating_mul({{cw.name}} as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time({{underscore cw.slope}} as RefTimeWeight).saturating_mul({{cw.name}} as RefTimeWeight))
 			{{/each}}
 			{{#if (ne benchmark.base_reads "0")}}
 			.saturating_add(T::DbWeight::get().reads({{benchmark.base_reads}} as RefTimeWeight))

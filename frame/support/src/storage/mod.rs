@@ -46,6 +46,7 @@ pub mod child;
 pub mod generator;
 pub mod hashed;
 pub mod migration;
+pub mod storage_noop_guard;
 pub mod transactional;
 pub mod types;
 pub mod unhashed;

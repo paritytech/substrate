@@ -59,7 +59,7 @@ const CALL: &<Runtime as frame_system::Config>::Call =
 	&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 thread_local! {
-	static EXTRINSIC_BASE_WEIGHT: RefCell<Weight> = RefCell::new(Weight::new());
+	static EXTRINSIC_BASE_WEIGHT: RefCell<Weight> = RefCell::new(Weight::zero());
 }
 
 pub struct BlockWeights;
