@@ -48,6 +48,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
 		details.owner = dest;
+
+		// The approved account has to be reset to None, because otherwise pre-approve attack would
+		// be possible, where the owner can approve his second account before making the transaction
+		// and then claiming the item back.
+		details.approved = None;
+
 		Item::<T, I>::insert(&collection, &item, &details);
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 
@@ -219,15 +225,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
 		if let Some(ref price) = price {
-			ItemPriceOf::<T, I>::insert(
-				&collection,
-				&item,
-				(price.clone(), whitelisted_buyer.clone()),
-			);
+			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));
 			Self::deposit_event(Event::ItemPriceSet {
 				collection,
 				item,
-				price: price.clone(),
+				price: *price,
 				whitelisted_buyer,
 			});
 		} else {

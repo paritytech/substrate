@@ -67,14 +67,14 @@ pub enum Event {
 		remote: PeerId,
 		/// The concerned protocol. Each protocol uses a different substream.
 		/// This is always equal to the value of
-		/// [`crate::config::NonDefaultSetConfig::notifications_protocol`] of one of the
+		/// `sc_network::config::NonDefaultSetConfig::notifications_protocol` of one of the
 		/// configured sets.
 		protocol: Cow<'static, str>,
 		/// If the negotiation didn't use the main name of the protocol (the one in
 		/// `notifications_protocol`), then this field contains which name has actually been
 		/// used.
 		/// Always contains a value equal to the value in
-		/// [`crate::config::NonDefaultSetConfig::fallback_names`].
+		/// `sc_network::config::NonDefaultSetConfig::fallback_names`.
 		negotiated_fallback: Option<Cow<'static, str>>,
 		/// Role of the remote.
 		role: ObservedRole,

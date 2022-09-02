@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_referenda.
@@ -80,205 +80,205 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Scheduler Agenda (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:0 w:1)
 	fn submit() -> Weight {
-		(34_640_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(34_640_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn place_decision_deposit_preparing() -> Weight {
-		(44_290_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(44_290_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:0)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	fn place_decision_deposit_queued() -> Weight {
-		(49_428_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(49_428_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:0)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	fn place_decision_deposit_not_queued() -> Weight {
-		(50_076_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(50_076_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn place_decision_deposit_passing() -> Weight {
-		(55_935_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(55_935_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn place_decision_deposit_failing() -> Weight {
-		(52_921_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(52_921_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	fn refund_decision_deposit() -> Weight {
-		(29_160_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(29_160_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn cancel() -> Weight {
-		(34_972_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(34_972_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn kill() -> Weight {
-		(60_620_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(60_620_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda TrackQueue (r:1 w:0)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	fn one_fewer_deciding_queue_empty() -> Weight {
-		(9_615_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(9_615_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn one_fewer_deciding_failing() -> Weight {
-		(113_077_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(113_077_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn one_fewer_deciding_passing() -> Weight {
-		(114_376_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(114_376_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_requeued_insertion() -> Weight {
-		(43_901_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(43_901_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_requeued_slide() -> Weight {
-		(43_279_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(43_279_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:0)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_queued() -> Weight {
-		(45_564_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(45_564_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:0)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_not_queued() -> Weight {
-		(45_061_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(45_061_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_no_deposit() -> Weight {
-		(23_757_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(23_757_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_preparing() -> Weight {
-		(24_781_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(24_781_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	fn nudge_referendum_timed_out() -> Weight {
-		(18_344_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(18_344_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_begin_deciding_failing() -> Weight {
-		(34_752_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(34_752_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_begin_deciding_passing() -> Weight {
-		(37_055_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(37_055_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_begin_confirming() -> Weight {
-		(31_442_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(31_442_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_end_confirming() -> Weight {
-		(33_201_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(33_201_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_continue_not_confirming() -> Weight {
-		(30_047_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(30_047_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_continue_confirming() -> Weight {
-		(29_195_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(29_195_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	// Storage: Scheduler Lookup (r:1 w:1)
 	// Storage: Preimage StatusFor (r:1 w:1)
 	fn nudge_referendum_approved() -> Weight {
-		(50_119_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(5 as Weight))
+		Weight::from_ref_time(50_119_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(5 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(5 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_rejected() -> Weight {
-		(32_203_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(32_203_000 as RefTimeWeight)
+			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(T::DbWeight::get().writes(2 as RefTimeWeight))
 	}
 }
 
@@ -288,204 +288,204 @@ impl WeightInfo for () {
 	// Storage: Scheduler Agenda (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:0 w:1)
 	fn submit() -> Weight {
-		(34_640_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(34_640_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn place_decision_deposit_preparing() -> Weight {
-		(44_290_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(44_290_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:0)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	fn place_decision_deposit_queued() -> Weight {
-		(49_428_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(49_428_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:0)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	fn place_decision_deposit_not_queued() -> Weight {
-		(50_076_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(50_076_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn place_decision_deposit_passing() -> Weight {
-		(55_935_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(55_935_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn place_decision_deposit_failing() -> Weight {
-		(52_921_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(52_921_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	fn refund_decision_deposit() -> Weight {
-		(29_160_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(29_160_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn cancel() -> Weight {
-		(34_972_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(34_972_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn kill() -> Weight {
-		(60_620_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(60_620_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda TrackQueue (r:1 w:0)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	fn one_fewer_deciding_queue_empty() -> Weight {
-		(9_615_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(9_615_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn one_fewer_deciding_failing() -> Weight {
-		(113_077_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(113_077_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn one_fewer_deciding_passing() -> Weight {
-		(114_376_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+		Weight::from_ref_time(114_376_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_requeued_insertion() -> Weight {
-		(43_901_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(43_901_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_requeued_slide() -> Weight {
-		(43_279_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(43_279_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:0)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_queued() -> Weight {
-		(45_564_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(45_564_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:0)
 	// Storage: Referenda TrackQueue (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_not_queued() -> Weight {
-		(45_061_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(45_061_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_no_deposit() -> Weight {
-		(23_757_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(23_757_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_preparing() -> Weight {
-		(24_781_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(24_781_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	fn nudge_referendum_timed_out() -> Weight {
-		(18_344_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(18_344_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_begin_deciding_failing() -> Weight {
-		(34_752_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(34_752_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Referenda DecidingCount (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_begin_deciding_passing() -> Weight {
-		(37_055_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(37_055_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_begin_confirming() -> Weight {
-		(31_442_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(31_442_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_end_confirming() -> Weight {
-		(33_201_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(33_201_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_continue_not_confirming() -> Weight {
-		(30_047_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(30_047_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_continue_confirming() -> Weight {
-		(29_195_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(29_195_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	// Storage: Scheduler Lookup (r:1 w:1)
 	// Storage: Preimage StatusFor (r:1 w:1)
 	fn nudge_referendum_approved() -> Weight {
-		(50_119_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+		Weight::from_ref_time(50_119_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(5 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(5 as RefTimeWeight))
 	}
 	// Storage: Referenda ReferendumInfoFor (r:1 w:1)
 	// Storage: Scheduler Agenda (r:1 w:1)
 	fn nudge_referendum_rejected() -> Weight {
-		(32_203_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(32_203_000 as RefTimeWeight)
+			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
+			.saturating_add(RocksDbWeight::get().writes(2 as RefTimeWeight))
 	}
 }

@@ -46,10 +46,10 @@ use std::{
 /// This works by either fetching the `slot_number` from the most recent header and dividing
 /// that value by `slot_duration` in order to fork chains that expect this inherent.
 ///
-/// It produces timestamp inherents that are increaed by `slot_duraation` whenever
+/// It produces timestamp inherents that are increased by `slot_duration` whenever
 /// `provide_inherent_data` is called.
 pub struct SlotTimestampProvider {
-	// holds the unix millisecnd timestamp for the most recent block
+	// holds the unix millisecond timestamp for the most recent block
 	unix_millis: atomic::AtomicU64,
 	// configured slot_duration in the runtime
 	slot_duration: SlotDuration,

@@ -23,7 +23,6 @@ wasmi = "0.9.1"
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../../primitives/maybe-compressed-blob" }
 sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
-sp-serializer = { version = "4.0.0-dev", path = "../../../primitives/serializer" }
 sp-wasm-interface = { version = "6.0.0", path = "../../../primitives/wasm-interface" }
 
 [features]
