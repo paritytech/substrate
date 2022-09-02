@@ -17,9 +17,7 @@
 
 //! Tests for the alliance pallet.
 
-use sp_runtime::traits::Hash;
-
-use frame_support::{assert_noop, assert_ok, error::BadOrigin, Hashable};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use frame_system::{EventRecord, Phase};
 
 use super::*;
@@ -28,11 +26,155 @@ use crate::mock::*;
 type AllianceMotionEvent = pallet_collective::Event<Test, pallet_collective::Instance1>;
 
 #[test]
+fn force_set_members_works() {
+	new_test_ext().execute_with(|| {
+		// ensure alliance is set
+		assert_eq!(Alliance::votable_members_sorted(), vec![1, 2, 3]);
+
+		// creating and proposing proposals
+		let (proposal, proposal_len, hash) = make_remark_proposal(42);
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(proposal), proposal_len));
+
+		let (k_proposal, k_proposal_len, k_hash) = make_kick_member_proposal(2);
+		assert_ok!(Alliance::propose(Origin::signed(1), 3, Box::new(k_proposal), k_proposal_len));
+		let mut proposals = vec![hash, k_hash];
+
+		// give a retirement notice to check later a retiring member not removed
+		assert_ok!(Alliance::give_retirement_notice(Origin::signed(2)));
+		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
+
+		// join alliance and reserve funds
+		assert_eq!(Balances::free_balance(9), 40);
+		assert_ok!(Alliance::join_alliance(Origin::signed(9)));
+		assert_eq!(Alliance::deposit_of(9), Some(25));
+		assert_eq!(Balances::free_balance(9), 15);
+		assert!(Alliance::is_member_of(&9, MemberRole::Ally));
+
+		// ensure proposal is listed as active proposal
+		assert_eq!(<Test as Config>::ProposalProvider::proposals(), proposals);
+		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 2);
+
+		// fails without root
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::signed(1),
+				vec![],
+				vec![],
+				vec![],
+				Default::default()
+			),
+			BadOrigin
+		);
+
+		// nothing to do, witness data is default, new members not provided.
+		assert_ok!(Alliance::force_set_members(
+			Origin::root(),
+			vec![],
+			vec![],
+			vec![],
+			Default::default()
+		));
+
+		// alliance must be reset first, no witness data.
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![8],
+				vec![],
+				vec![],
+				Default::default()
+			),
+			Error::<Test, ()>::AllianceAlreadyInitialized,
+		);
+
+		// wrong witness data checks
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![],
+				vec![],
+				ForceSetWitness::new(1, 3, 1)
+			),
+			Error::<Test, ()>::BadWitness,
+		);
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![],
+				vec![],
+				ForceSetWitness::new(2, 1, 1)
+			),
+			Error::<Test, ()>::BadWitness,
+		);
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![],
+				vec![],
+				ForceSetWitness::new(1, 3, 0)
+			),
+			Error::<Test, ()>::BadWitness,
+		);
+
+		// founders missing, other members given
+		assert_noop!(
+			Alliance::force_set_members(
+				Origin::root(),
+				vec![],
+				vec![4],
+				vec![2],
+				ForceSetWitness::new(2, 3, 1)
+			),
+			Error::<Test, ()>::FoundersMissing,
+		);
+
+		// success call
+		assert_ok!(Alliance::force_set_members(
+			Origin::root(),
+			vec![8, 5],
+			vec![4],
+			vec![2],
+			ForceSetWitness::new(2, 3, 1)
+		));
+
+		// assert new set of voting members
+		assert_eq!(Alliance::votable_members_sorted(), vec![4, 5, 8]);
+		// assert new ally member
+		assert!(Alliance::is_ally(&2));
+		// assert a retiring member from previous Alliance not removed
+		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
+		// assert old alliance disband.
+		assert!(!Alliance::is_member(&1));
+		assert!(!Alliance::is_member(&3));
+		assert!(!Alliance::is_member(&9));
+		// deposit unreserved
+		assert_eq!(Balances::free_balance(9), 40);
+		// all proposals are removed
+		assert_eq!(<Test as Config>::ProposalProvider::proposals(), vec![]);
+		assert_eq!(<Test as Config>::ProposalProvider::proposals_count(), 0);
+
+		// assert events
+		proposals.sort();
+		assert_prev_event(mock::Event::Alliance(crate::Event::AllianceDisbanded {
+			members: vec![1, 3, 9],
+			proposals,
+		}));
+
+		System::assert_last_event(mock::Event::Alliance(crate::Event::MembersInitialized {
+			founders: vec![5, 8],
+			fellows: vec![4],
+			allies: vec![2],
+		}));
+	})
+}
+
+#[test]
 fn propose_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_proposal(42);
-		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
-		let hash: H256 = proposal.blake2_256().into();
+		let (proposal, proposal_len, hash) = make_remark_proposal(42);
 
 		// only votable member can propose proposal, 4 is ally not have vote rights
 		assert_noop!(
@@ -67,9 +209,7 @@ fn propose_works() {
 #[test]
 fn vote_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_proposal(42);
-		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
-		let hash: H256 = proposal.blake2_256().into();
+		let (proposal, proposal_len, hash) = make_remark_proposal(42);
 		assert_ok!(Alliance::propose(
 			Origin::signed(1),
 			3,
@@ -103,9 +243,7 @@ fn vote_works() {
 #[test]
 fn veto_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_proposal(42);
-		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
-		let hash: H256 = proposal.blake2_256().into();
+		let (proposal, proposal_len, hash) = make_remark_proposal(42);
 		assert_ok!(Alliance::propose(
 			Origin::signed(1),
 			3,
@@ -119,9 +257,7 @@ fn veto_works() {
 		);
 
 		let cid = test_cid();
-		let vetoable_proposal = make_set_rule_proposal(cid);
-		let vetoable_proposal_len: u32 = vetoable_proposal.using_encoded(|p| p.len() as u32);
-		let vetoable_hash: H256 = vetoable_proposal.blake2_256().into();
+		let (vetoable_proposal, vetoable_proposal_len, vetoable_hash) = make_set_rule_proposal(cid);
 		assert_ok!(Alliance::propose(
 			Origin::signed(1),
 			3,
@@ -163,10 +299,8 @@ fn veto_works() {
 #[test]
 fn close_works() {
 	new_test_ext().execute_with(|| {
-		let proposal = make_proposal(42);
-		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let (proposal, proposal_len, hash) = make_remark_proposal(42);
 		let proposal_weight = proposal.get_dispatch_info().weight;
-		let hash = BlakeTwo256::hash_of(&proposal);
 		assert_ok!(Alliance::propose(
 			Origin::signed(1),
 			3,
@@ -452,9 +586,18 @@ fn retire_works() {
 fn assert_powerless(user: Origin) {
 	//vote / veto with a valid propsal
 	let cid = test_cid();
-	let proposal = make_proposal(42);
+	let (proposal, _, _) = make_kick_member_proposal(42);
 
-	assert_noop!(Alliance::init_members(user.clone(), vec![], vec![], vec![]), BadOrigin);
+	assert_noop!(
+		Alliance::force_set_members(
+			user.clone(),
+			vec![],
+			vec![],
+			vec![],
+			ForceSetWitness { voting_members: 3, ..Default::default() }
+		),
+		BadOrigin
+	);
 
 	assert_noop!(Alliance::set_rule(user.clone(), cid.clone()), BadOrigin);
 
