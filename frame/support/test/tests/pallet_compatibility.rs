@@ -31,7 +31,10 @@ impl SomeAssociation for u64 {
 mod pallet_old {
 	use super::SomeAssociation;
 	use frame_support::{
-		decl_error, decl_event, decl_module, decl_storage, traits::Get, weights::Weight, Parameter,
+		decl_error, decl_event, decl_module, decl_storage,
+		traits::Get,
+		weights::{RefTimeWeight, Weight},
+		Parameter,
 	};
 	use frame_system::ensure_root;
 
@@ -40,7 +43,7 @@ mod pallet_old {
 		type Balance: Parameter
 			+ codec::HasCompact
 			+ From<u32>
-			+ Into<Weight>
+			+ Into<RefTimeWeight>
 			+ Default
 			+ SomeAssociation;
 		type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
@@ -75,7 +78,7 @@ mod pallet_old {
 			fn deposit_event() = default;
 			const SomeConst: T::Balance = T::SomeConst::get();
 
-			#[weight = <T::Balance as Into<Weight>>::into(new_value.clone())]
+			#[weight = <T::Balance as Into<RefTimeWeight>>::into(new_value.clone())]
 			fn set_dummy(origin, #[compact] new_value: T::Balance) {
 				ensure_root(origin)?;
 
@@ -85,7 +88,7 @@ mod pallet_old {
 
 			fn on_initialize(_n: T::BlockNumber) -> Weight {
 				<Dummy<T>>::put(T::Balance::from(10));
-				10
+				Weight::from_ref_time(10)
 			}
 
 			fn on_finalize(_n: T::BlockNumber) {
@@ -113,7 +116,7 @@ pub mod pallet {
 		type Balance: Parameter
 			+ codec::HasCompact
 			+ From<u32>
-			+ Into<Weight>
+			+ Into<RefTimeWeight>
 			+ Default
 			+ MaybeSerializeDeserialize
 			+ SomeAssociation
@@ -131,7 +134,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			<Dummy<T>>::put(T::Balance::from(10));
-			10
+			Weight::from_ref_time(10)
 		}
 
 		fn on_finalize(_n: T::BlockNumber) {
@@ -141,7 +144,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(<T::Balance as Into<Weight>>::into(new_value.clone()))]
+		#[pallet::weight(<T::Balance as Into<RefTimeWeight>>::into(new_value.clone()))]
 		pub fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
