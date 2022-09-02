@@ -44,7 +44,6 @@ frame-support = { version = "2.0.0", default-features = false, path = "../../../
 frame-system = { version = "2.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "2.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
 frame-system-rpc-runtime-api = { version = "2.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
-pallet-assets = { version = "2.0.0", default-features = false, path = "../../../frame/assets" }
 pallet-authority-discovery = { version = "2.0.0", default-features = false, path = "../../../frame/authority-discovery" }
 pallet-authorship = { version = "2.0.0", default-features = false, path = "../../../frame/authorship" }
 pallet-babe = { version = "2.0.0", default-features = false, path = "../../../frame/babe" }
