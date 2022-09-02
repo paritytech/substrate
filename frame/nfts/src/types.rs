@@ -30,9 +30,10 @@ pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
-pub(super) type ItemPrice<T, I = ()> =
+pub(super) type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
-pub(super) type Tip<T, I = ()> = (<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>);
+pub(super) type ItemPrice<T, I = ()> = BalanceOf<T, I>;
+pub(super) type Tip<T, I = ()> = (<T as SystemConfig>::AccountId, BalanceOf<T, I>);
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
