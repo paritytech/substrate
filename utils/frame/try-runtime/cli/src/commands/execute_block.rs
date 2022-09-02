@@ -89,6 +89,8 @@ impl ExecuteBlockCmd {
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
+		let mut rpc_service = rpc_api::RpcService::new(ws_uri, false);
+
 		match (&self.block_at, &self.state) {
 			(Some(block_at), State::Snap { .. }) => hash_of::<Block>(block_at),
 			(Some(block_at), State::Live { .. }) => {
@@ -100,9 +102,7 @@ impl ExecuteBlockCmd {
 					target: LOG_TARGET,
 					"No --block-at or --at provided, using the latest finalized block instead"
 				);
-				remote_externalities::rpc_api::get_finalized_head::<Block, _>(ws_uri)
-					.await
-					.map_err(Into::into)
+				rpc_service.get_finalized_head::<Block>().await.map_err(Into::into)
 			},
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
 			_ => {
