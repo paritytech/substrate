@@ -1021,6 +1021,7 @@ pub mod env {
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
 	#[unstable]
+	#[prefixed_alias]
 	fn set_storage(
 		ctx: Runtime<E>,
 		key_ptr: u32,
@@ -1052,6 +1053,7 @@ pub mod env {
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
 	#[unstable]
+	#[prefixed_alias]
 	fn clear_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
 		ctx.clear_storage(KeyType::Variable(key_len), key_ptr)
 	}
@@ -1100,6 +1102,7 @@ pub mod env {
 	///
 	/// `ReturnCode::KeyNotFound`
 	#[unstable]
+	#[prefixed_alias]
 	fn get_storage(
 		ctx: Runtime<E>,
 		key_ptr: u32,
@@ -1142,6 +1145,7 @@ pub mod env {
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
 	#[unstable]
+	#[prefixed_alias]
 	fn contains_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
 		ctx.contains_storage(KeyType::Variable(key_len), key_ptr)
 	}
@@ -1160,6 +1164,7 @@ pub mod env {
 	///
 	/// `ReturnCode::KeyNotFound`
 	#[unstable]
+	#[prefixed_alias]
 	fn take_storage(
 		ctx: Runtime<E>,
 		key_ptr: u32,
@@ -2301,6 +2306,7 @@ pub mod env {
 	/// This function is unstable and subject to change (or removal) in the future. Do not
 	/// deploy a contract using it to a production chain.
 	#[unstable]
+	#[prefixed_alias]
 	fn call_runtime(
 		ctx: Runtime<E>,
 		call_ptr: u32,
