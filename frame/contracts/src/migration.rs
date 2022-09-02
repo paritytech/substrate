@@ -26,7 +26,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// Wrapper for all migrations of this pallet, based on `StorageVersion`.
 pub fn migrate<T: Config>() -> Weight {
 	let version = StorageVersion::get::<Pallet<T>>();
-	let mut weight = Weight::new();
+	let mut weight = Weight::zero();
 
 	if version < 4 {
 		weight = weight.saturating_add(v4::migrate::<T>());
@@ -127,7 +127,7 @@ mod v5 {
 	type DeletionQueue<T: Config> = StorageValue<Pallet<T>, Vec<DeletedContract>>;
 
 	pub fn migrate<T: Config>() -> Weight {
-		let mut weight = Weight::new();
+		let mut weight = Weight::zero();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));
@@ -216,7 +216,7 @@ mod v6 {
 	type OwnerInfoOf<T: Config> = StorageMap<Pallet<T>, Identity, CodeHash<T>, OwnerInfo<T>>;
 
 	pub fn migrate<T: Config>() -> Weight {
-		let mut weight = Weight::new();
+		let mut weight = Weight::zero();
 
 		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
 			weight = weight.saturating_add(T::DbWeight::get().reads_writes(1, 1));

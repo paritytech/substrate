@@ -25,7 +25,7 @@ pub const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 /// Wrapper for all migrations of this pallet.
 pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 	let onchain_version = Pallet::<T, I>::on_chain_storage_version();
-	let mut weight: Weight = Weight::new();
+	let mut weight: Weight = Weight::zero();
 
 	if onchain_version < 1 {
 		weight = weight.saturating_add(v0_to_v1::migrate::<T, I>());
@@ -51,22 +51,29 @@ mod v0_to_v1 {
 	use super::*;
 
 	pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
-		if migration::clear_storage_prefix(
+		log::info!(target: LOG_TARGET, "Running migration v0_to_v1.");
+
+		let res = migration::clear_storage_prefix(
 			<Pallet<T, I>>::name().as_bytes(),
 			b"UpForKicking",
 			b"",
 			None,
 			None,
-		)
-		.maybe_cursor
-		.is_some()
-		{
+		);
+
+		log::info!(
+			target: LOG_TARGET,
+			"Cleared '{}' entries from 'UpForKicking' storage prefix",
+			res.unique
+		);
+
+		if res.maybe_cursor.is_some() {
 			log::error!(
 				target: LOG_TARGET,
 				"Storage prefix 'UpForKicking' is not completely cleared."
 			);
 		}
 
-		T::DbWeight::get().writes(1)
+		T::DbWeight::get().writes(res.unique.into())
 	}
 }

@@ -48,7 +48,7 @@ impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelpe
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl PalletVersionToStorageVersionHelper for T {
 	fn migrate(db_weight: &RuntimeDbWeight) -> Weight {
-		let mut weight = Weight::new();
+		let mut weight = Weight::zero();
 
 		for_tuples!( #( weight = weight.saturating_add(T::migrate(db_weight)); )* );
 

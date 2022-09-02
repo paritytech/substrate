@@ -83,7 +83,7 @@ impl ServiceBranch {
 
 	/// Return the maximum possible weight of the `nudge` function.
 	pub fn max_weight_of_nudge<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		Weight::new()
+		Weight::zero()
 			.max(T::WeightInfo::nudge_referendum_no_deposit())
 			.max(T::WeightInfo::nudge_referendum_preparing())
 			.max(T::WeightInfo::nudge_referendum_queued())
@@ -131,7 +131,7 @@ impl ServiceBranch {
 
 	/// Return the maximum possible weight of the `place_decision_deposit` function.
 	pub fn max_weight_of_deposit<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		Weight::new()
+		Weight::zero()
 			.max(T::WeightInfo::place_decision_deposit_preparing())
 			.max(T::WeightInfo::place_decision_deposit_queued())
 			.max(T::WeightInfo::place_decision_deposit_not_queued())
@@ -172,7 +172,7 @@ impl OneFewerDecidingBranch {
 
 	/// Return the maximum possible weight of the `one_fewer_deciding` function.
 	pub fn max_weight<T: Config<I>, I: 'static>() -> frame_support::weights::Weight {
-		Weight::new()
+		Weight::zero()
 			.max(T::WeightInfo::one_fewer_deciding_queue_empty())
 			.max(T::WeightInfo::one_fewer_deciding_passing())
 			.max(T::WeightInfo::one_fewer_deciding_failing())

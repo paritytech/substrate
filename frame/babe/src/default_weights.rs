@@ -38,14 +38,14 @@ impl crate::WeightInfo for () {
 		const MAX_NOMINATORS: u64 = 200;
 
 		// checking membership proof
-		let ref_time_weight = (35 * WEIGHT_PER_MICROS)
-			.saturating_add((175 * WEIGHT_PER_NANOS).scalar_saturating_mul(validator_count))
+		let ref_time_weight = (35u64 * WEIGHT_PER_MICROS)
+			.saturating_add((175u64 * WEIGHT_PER_NANOS).saturating_mul(validator_count))
 			.saturating_add(DbWeight::get().reads(5))
 			// check equivocation proof
-			.saturating_add(110 * WEIGHT_PER_MICROS)
+			.saturating_add(110u64 * WEIGHT_PER_MICROS)
 			// report offence
-			.saturating_add(110 * WEIGHT_PER_MICROS)
-			.saturating_add(25 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
+			.saturating_add(110u64 * WEIGHT_PER_MICROS)
+			.saturating_add(25u64 * WEIGHT_PER_MICROS * MAX_NOMINATORS)
 			.saturating_add(DbWeight::get().reads(14 + 3 * MAX_NOMINATORS))
 			.saturating_add(DbWeight::get().writes(10 + 3 * MAX_NOMINATORS));
 

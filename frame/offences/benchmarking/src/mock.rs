@@ -41,7 +41,7 @@ type Balance = u64;
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(
-			2 * WEIGHT_PER_SECOND
+			2u64 * WEIGHT_PER_SECOND
 		);
 }
 
