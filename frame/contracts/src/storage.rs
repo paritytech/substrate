@@ -286,7 +286,7 @@ where
 		<DeletionQueue<T>>::put(queue);
 		let ref_time_weight = weight_limit
 			.ref_time()
-			.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget));
+			.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)));
 		Weight::from_ref_time(ref_time_weight)
 	}
 
