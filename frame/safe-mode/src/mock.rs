@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_safe_mode;
 
 use frame_support::parameter_types;
-use frame_system::{EnsureRoot, EnsureSigned};
+use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -32,8 +32,8 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
-	// type BaseCallFilter = SafeMode; // TODO use this
+	// type BaseCallFilter = frame_support::traits::Everything;
+	type BaseCallFilter = SafeMode;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -85,8 +85,8 @@ impl Contains<Call> for MockSafeModeFilter {
 }
 
 parameter_types! {
-	pub const EnableDuration: u64 = 1;
-	pub const ExtendDuration: u64 = 1;
+	pub const EnableDuration: u64 = 5;
+	pub const ExtendDuration: u64 = 30;
 	pub const EnableStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
 	pub const ExtendStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
 }
