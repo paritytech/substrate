@@ -85,9 +85,9 @@ pub use sp_consensus_sassafras::{
 	digests::{CompatibleDigestItem, ConsensusLog, NextEpochDescriptor, PreDigest},
 	inherents::SassafrasInherentData,
 	vrf::{make_slot_transcript, make_ticket_transcript},
-	AuthorityId, AuthorityPair, AuthoritySignature, SassafrasApi, SassafrasAuthorityWeight,
-	SassafrasConfiguration, SassafrasEpochConfiguration, Ticket, TicketInfo, VRFOutput, VRFProof,
-	SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
+	AuthorityId, AuthorityIndex, AuthorityPair, AuthoritySignature, SassafrasApi,
+	SassafrasAuthorityWeight, SassafrasConfiguration, SassafrasEpochConfiguration, Ticket,
+	TicketAux, VRFOutput, VRFProof, SASSAFRAS_ENGINE_ID, VRF_OUTPUT_LENGTH, VRF_PROOF_LENGTH,
 };
 
 mod authorship;
@@ -194,8 +194,8 @@ pub struct Epoch {
 	pub start_slot: Slot,
 	/// Epoch configuration
 	pub config: SassafrasConfiguration,
-	/// Tickets metadata.
-	pub tickets_info: BTreeMap<Ticket, TicketInfo>,
+	/// Tickets auxiliary data.
+	pub tickets_aux: BTreeMap<Ticket, (AuthorityIndex, TicketAux)>,
 }
 
 impl EpochT for Epoch {
@@ -214,7 +214,7 @@ impl EpochT for Epoch {
 			epoch_index: self.epoch_index + 1,
 			start_slot: self.start_slot + config.epoch_duration,
 			config,
-			tickets_info: BTreeMap::new(),
+			tickets_aux: BTreeMap::new(),
 		}
 	}
 
@@ -235,7 +235,7 @@ impl Epoch {
 			epoch_index: 0,
 			start_slot: slot,
 			config: config.clone(),
-			tickets_info: BTreeMap::new(),
+			tickets_aux: BTreeMap::new(),
 		}
 	}
 }
@@ -276,11 +276,11 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<PreDigest, Error<B>>
 		let vrf_output = VRFOutput::try_from([0; VRF_OUTPUT_LENGTH]).expect(PROOF);
 		let vrf_proof = VRFProof::try_from([0; VRF_PROOF_LENGTH]).expect(PROOF);
 		return Ok(PreDigest {
-			authority_index: 0,
+			authority_idx: 0,
 			slot: 0.into(),
 			vrf_output,
 			vrf_proof,
-			ticket_info: None,
+			ticket_aux: None,
 		})
 	}
 

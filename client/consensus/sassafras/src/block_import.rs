@@ -143,8 +143,7 @@ where
 			let epoch_descriptor = intermediate.epoch_descriptor;
 			let first_in_epoch = parent_slot < epoch_descriptor.start_slot();
 
-			let added_weight = pre_digest.ticket_info.is_some() as u32;
-			let total_weight = parent_weight + added_weight;
+			let total_weight = parent_weight + pre_digest.ticket_aux.is_some() as u32;
 
 			// Search for this all the time so we can reject unexpected announcements.
 			let next_epoch_digest = find_next_epoch_digest::<Block>(&block.header)

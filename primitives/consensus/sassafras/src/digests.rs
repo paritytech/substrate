@@ -19,7 +19,7 @@
 
 use super::{
 	AuthorityId, AuthorityIndex, AuthoritySignature, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, Slot, TicketInfo, SASSAFRAS_ENGINE_ID,
+	SassafrasEpochConfiguration, Slot, TicketAux, SASSAFRAS_ENGINE_ID,
 };
 
 use scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -32,16 +32,16 @@ use sp_std::vec::Vec;
 /// Sassafras primary slot assignment pre-digest.
 #[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct PreDigest {
-	/// Validator index.
-	pub authority_index: AuthorityIndex,
+	/// Authority index that claimed the slot.
+	pub authority_idx: AuthorityIndex,
 	/// Corresponding slot number.
 	pub slot: Slot,
 	/// Slot VRF output.
 	pub vrf_output: VRFOutput,
 	/// Slot VRF proof.
 	pub vrf_proof: VRFProof,
-	/// Ticket information.
-	pub ticket_info: Option<TicketInfo>,
+	/// Ticket auxiliary information for claim check.
+	pub ticket_aux: Option<TicketAux>,
 }
 
 /// Information about the next epoch. This is broadcast in the first block

@@ -375,7 +375,7 @@ pub mod pallet {
 				// Current slot should be less than half of epoch duration.
 				let epoch_duration = T::EpochDuration::get();
 
-				if Self::current_slot_epoch_index() >= epoch_duration / 2 {
+				if Self::current_slot_index() >= epoch_duration / 2 {
 					log::warn!(
 						target: "sassafras::runtime",
 						"🌳 Timeout to propose tickets, bailing out.",
@@ -443,14 +443,16 @@ impl<T: Config> Pallet<T> {
 		// The exception is for block 1: the genesis has slot 0, so we treat epoch 0 as having
 		// started at the slot of block 1. We want to use the same randomness and validator set as
 		// signalled in the genesis, so we don't rotate the epoch.
-		now != One::one() && Self::current_slot_epoch_index() >= T::EpochDuration::get()
+		now != One::one() && Self::current_slot_index() >= T::EpochDuration::get()
 	}
 
-	fn current_slot_epoch_index() -> u64 {
-		Self::slot_epoch_index(CurrentSlot::<T>::get())
+	/// Current slot index with respect to current epoch.
+	fn current_slot_index() -> u64 {
+		Self::slot_index(CurrentSlot::<T>::get())
 	}
 
-	fn slot_epoch_index(slot: Slot) -> u64 {
+	/// Slot index with respect to current epoch.
+	fn slot_index(slot: Slot) -> u64 {
 		if *GenesisSlot::<T>::get() == 0 {
 			return 0
 		}
@@ -638,7 +640,7 @@ impl<T: Config> Pallet<T> {
 	pub fn slot_ticket(slot: Slot) -> Option<Ticket> {
 		let epoch_idx = EpochIndex::<T>::get();
 		let duration = T::EpochDuration::get();
-		let mut slot_idx = Self::slot_epoch_index(slot);
+		let mut slot_idx = Self::slot_index(slot);
 		let mut tickets_meta = TicketsMeta::<T>::get();
 
 		let get_ticket_idx = |slot_idx| {

@@ -23,14 +23,17 @@ use super::*;
 use sp_consensus_sassafras::{
 	digests::PreDigest,
 	vrf::{make_slot_transcript_data, make_ticket_transcript_data},
-	AuthorityId, Slot, Ticket, TicketInfo,
+	AuthorityId, Slot, Ticket, TicketAux,
 };
 use sp_core::{twox_64, ByteArray};
 
 /// Get secondary authority index for the given epoch and slot.
-pub(crate) fn secondary_authority_index(slot: Slot, config: &SassafrasConfiguration) -> u64 {
-	u64::from_le_bytes((config.randomness, slot).using_encoded(twox_64)) %
-		config.authorities.len() as u64
+pub(crate) fn secondary_authority_index(
+	slot: Slot,
+	config: &SassafrasConfiguration,
+) -> AuthorityIndex {
+	u64::from_le_bytes((config.randomness, slot).using_encoded(twox_64)) as AuthorityIndex %
+		config.authorities.len() as AuthorityIndex
 }
 
 /// Try to claim an epoch slot.
@@ -42,14 +45,13 @@ fn claim_slot(
 	keystore: &SyncCryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let config = &epoch.config;
-	let (authority_index, ticket_info) = match ticket {
+	let (authority_idx, ticket_aux) = match ticket {
 		Some(ticket) => {
 			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
-			let ticket_info = epoch.tickets_info.get(&ticket)?.clone();
+			let (authority_idx, ticket_aux) = epoch.tickets_aux.get(&ticket)?.clone();
 			log::debug!(target: "sassafras", "🌳 Ticket = [ticket: {:02x?}, auth: {}, attempt: {}]",
-                &ticket.as_bytes()[0..8], ticket_info.authority_index, ticket_info.attempt);
-			let idx = ticket_info.authority_index as u64;
-			(idx, Some(ticket_info))
+                &ticket.as_bytes()[0..8], authority_idx, ticket_aux.attempt);
+			(authority_idx, Some(ticket_aux))
 		},
 		None => {
 			log::debug!(target: "sassafras", "🌳 [TRY SECONDARY]");
@@ -57,7 +59,7 @@ fn claim_slot(
 		},
 	};
 
-	let authority_id = config.authorities.get(authority_index as usize).map(|auth| &auth.0)?;
+	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
 
 	let transcript_data = make_slot_transcript_data(&config.randomness, slot, epoch.epoch_index);
 	let signature = SyncCryptoStore::sr25519_vrf_sign(
@@ -70,19 +72,19 @@ fn claim_slot(
 	.flatten()?;
 
 	let pre_digest = PreDigest {
-		authority_index: authority_index as u32,
+		authority_idx,
 		slot,
 		vrf_output: VRFOutput(signature.output),
 		vrf_proof: VRFProof(signature.proof.clone()),
-		ticket_info,
+		ticket_aux,
 	};
 
 	Some((pre_digest, authority_id.clone()))
 }
 
 /// Generate the tickets for the given epoch.
-/// Tickets additional information (i.e. `TicketInfo`) will be stored within the `Epoch`
-/// structure. The additional information will be used during epoch to claim slots.
+/// Tickets additional information will be stored within the `Epoch` structure.
+/// The additional information will be used later during session to claim slots.
 pub fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> Vec<Ticket> {
 	let config = &epoch.config;
 	let max_attempts = config.threshold_params.attempts_number;
@@ -99,7 +101,7 @@ pub fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) 
 	log::debug!(target: "sassafras", "🌳 Tickets threshold: {:032x}", threshold);
 
 	let authorities = config.authorities.iter().enumerate().map(|(index, a)| (index, &a.0));
-	for (authority_index, authority_id) in authorities {
+	for (authority_idx, authority_id) in authorities {
 		if !SyncCryptoStore::has_keys(&**keystore, &[(authority_id.to_raw_vec(), AuthorityId::ID)])
 		{
 			continue
@@ -124,19 +126,16 @@ pub fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) 
 				return None
 			}
 
-			let ticket_info = TicketInfo {
-				attempt: attempt as u32,
-				authority_index: authority_index as u32,
-				proof: VRFProof(signature.proof),
-			};
+			let ticket_aux =
+				TicketAux { attempt: attempt as u32, proof: VRFProof(signature.proof) };
 
-			Some((ticket, ticket_info))
+			Some((ticket, ticket_aux))
 		};
 
 		for attempt in 0..max_attempts {
-			if let Some((ticket, ticket_info)) = make_ticket(attempt) {
+			if let Some((ticket, ticket_aux)) = make_ticket(attempt) {
 				tickets.push(ticket);
-				epoch.tickets_info.insert(ticket, ticket_info);
+				epoch.tickets_aux.insert(ticket, (authority_idx as AuthorityIndex, ticket_aux));
 			}
 		}
 	}
@@ -420,7 +419,7 @@ async fn tickets_worker<B, C, SC>(
 			epoch_changes
 				.shared_data()
 				.epoch_mut(&epoch_identifier)
-				.map(|epoch| epoch.tickets_info.clear());
+				.map(|epoch| epoch.tickets_aux.clear());
 		}
 	}
 }

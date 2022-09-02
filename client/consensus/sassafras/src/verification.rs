@@ -38,9 +38,9 @@ pub struct VerificationParams<'a, B: 'a + BlockT> {
 }
 
 pub struct VerifiedHeaderInfo {
+	pub authority_id: AuthorityId,
 	pub pre_digest: DigestItem,
 	pub seal: DigestItem,
-	pub author: AuthorityId,
 }
 
 /// Check a header has been signed by the right key. If the slot is too far in
@@ -63,8 +63,8 @@ pub fn check_header<B: BlockT + Sized>(
 		return Ok(CheckedHeader::Deferred(header, pre_digest.slot))
 	}
 
-	let author = match config.authorities.get(pre_digest.authority_index as usize) {
-		Some(author) => author.0.clone(),
+	let authority_id = match config.authorities.get(pre_digest.authority_idx as usize) {
+		Some(authority_id) => authority_id.0.clone(),
 		None => return Err(sassafras_err(Error::SlotAuthorNotFound)),
 	};
 
@@ -80,40 +80,35 @@ pub fn check_header<B: BlockT + Sized>(
 		.ok_or_else(|| sassafras_err(Error::HeaderBadSeal(header.hash())))?;
 
 	let pre_hash = header.hash();
-	if !AuthorityPair::verify(&signature, &pre_hash, &author) {
+	if !AuthorityPair::verify(&signature, &pre_hash, &authority_id) {
 		return Err(sassafras_err(Error::BadSignature(pre_hash)))
 	}
 
 	// Check authorship method and claim
 
-	match (&ticket, &pre_digest.ticket_info) {
-		(Some(ticket), Some(ticket_info)) => {
+	match (&ticket, &pre_digest.ticket_aux) {
+		(Some(ticket), Some(ticket_aux)) => {
 			log::debug!(target: "sassafras", "🌳 checking primary");
-			if ticket_info.authority_index != pre_digest.authority_index {
-				// TODO-SASS-P2 ... we can eventually remove auth index from ticket info
-				log::error!(target: "sassafras", "🌳 Wrong primary authority index");
-			}
 			let transcript =
-				make_ticket_transcript(&config.randomness, ticket_info.attempt, epoch.epoch_index);
-			schnorrkel::PublicKey::from_bytes(author.as_slice())
-				.and_then(|p| p.vrf_verify(transcript, &ticket, &ticket_info.proof))
+				make_ticket_transcript(&config.randomness, ticket_aux.attempt, epoch.epoch_index);
+			schnorrkel::PublicKey::from_bytes(authority_id.as_slice())
+				.and_then(|p| p.vrf_verify(transcript, &ticket, &ticket_aux.proof))
 				.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 		},
 		(None, None) => {
 			log::debug!(target: "sassafras", "🌳 checking secondary");
 			let idx = authorship::secondary_authority_index(pre_digest.slot, config);
-			if idx != pre_digest.authority_index as u64 {
-				log::error!(target: "sassafras", "🌳 Wrong secondary authority index");
+			if idx != pre_digest.authority_idx {
+				log::error!(target: "sassafras", "🌳 Bad secondary authority index");
+				return Err(Error::SlotAuthorNotFound)
 			}
 		},
 		(Some(_), None) => {
 			log::warn!(target: "sassafras", "🌳 Unexpected secondary authoring mechanism");
-			// TODO-SASS-P2: maybe we can use a different error variant
 			return Err(Error::UnexpectedAuthoringMechanism)
 		},
 		(None, Some(_)) => {
 			log::warn!(target: "sassafras", "🌳 Unexpected primary authoring mechanism");
-			// TODO-SASS-P2: maybe we will use a different error variant
 			return Err(Error::UnexpectedAuthoringMechanism)
 		},
 	}
@@ -121,14 +116,14 @@ pub fn check_header<B: BlockT + Sized>(
 	// Check slot-vrf proof
 
 	let transcript = make_slot_transcript(&config.randomness, pre_digest.slot, epoch.epoch_index);
-	schnorrkel::PublicKey::from_bytes(author.as_slice())
+	schnorrkel::PublicKey::from_bytes(authority_id.as_slice())
 		.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
 		.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
 
 	let info = VerifiedHeaderInfo {
+		authority_id,
 		pre_digest: CompatibleDigestItem::sassafras_pre_digest(pre_digest),
 		seal,
-		author,
 	};
 
 	Ok(CheckedHeader::Checked(header, info))
@@ -368,7 +363,7 @@ where
 						slot_now,
 						slot,
 						&block.header,
-						&verified_info.author,
+						&verified_info.authority_id,
 						&block.origin,
 					)
 					.await

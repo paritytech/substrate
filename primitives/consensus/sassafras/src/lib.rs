@@ -113,11 +113,9 @@ pub struct SassafrasEpochConfiguration {
 /// Ticket type.
 pub type Ticket = VRFOutput;
 
-/// Ticket information.
+/// Ticket auxiliary information.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct TicketInfo {
-	/// Authority index.
-	pub authority_index: u32,
+pub struct TicketAux {
 	/// Attempt number.
 	pub attempt: u32,
 	/// Ticket proof.

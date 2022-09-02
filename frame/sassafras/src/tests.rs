@@ -123,7 +123,7 @@ fn on_first_block_after_genesis() {
 		assert_eq!(Sassafras::current_slot(), start_slot);
 		assert_eq!(Sassafras::epoch_index(), 0);
 		assert_eq!(Sassafras::current_epoch_start(), start_slot);
-		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
+		assert_eq!(Sassafras::current_slot_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 		assert_eq!(RandomnessAccumulator::<Test>::get(), [0; 32]);
@@ -138,7 +138,7 @@ fn on_first_block_after_genesis() {
 		assert_eq!(Sassafras::current_slot(), start_slot);
 		assert_eq!(Sassafras::epoch_index(), 0);
 		assert_eq!(Sassafras::current_epoch_start(), start_slot);
-		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
+		assert_eq!(Sassafras::current_slot_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 		assert_eq!(
@@ -188,7 +188,7 @@ fn on_normal_block() {
 		assert_eq!(Sassafras::current_slot(), start_slot + 1);
 		assert_eq!(Sassafras::epoch_index(), 0);
 		assert_eq!(Sassafras::current_epoch_start(), start_slot);
-		assert_eq!(Sassafras::current_slot_epoch_index(), 1);
+		assert_eq!(Sassafras::current_slot_index(), 1);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 		assert_eq!(
@@ -206,7 +206,7 @@ fn on_normal_block() {
 		assert_eq!(Sassafras::current_slot(), start_slot + 1);
 		assert_eq!(Sassafras::epoch_index(), 0);
 		assert_eq!(Sassafras::current_epoch_start(), start_slot);
-		assert_eq!(Sassafras::current_slot_epoch_index(), 1);
+		assert_eq!(Sassafras::current_slot_index(), 1);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(NextRandomness::<Test>::get(), [0; 32]);
 		assert_eq!(
@@ -244,7 +244,7 @@ fn epoch_change_block() {
 		assert_eq!(Sassafras::current_slot(), start_slot + epoch_duration);
 		assert_eq!(Sassafras::epoch_index(), 1);
 		assert_eq!(Sassafras::current_epoch_start(), start_slot + epoch_duration);
-		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
+		assert_eq!(Sassafras::current_slot_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32],);
 		assert_eq!(
 			NextRandomness::<Test>::get(),
@@ -265,7 +265,7 @@ fn epoch_change_block() {
 		assert_eq!(Sassafras::current_slot(), start_slot + epoch_duration);
 		assert_eq!(Sassafras::epoch_index(), 1);
 		assert_eq!(Sassafras::current_epoch_start(), start_slot + epoch_duration);
-		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
+		assert_eq!(Sassafras::current_slot_index(), 0);
 		assert_eq!(Sassafras::randomness(), [0; 32]);
 		assert_eq!(
 			NextRandomness::<Test>::get(),
@@ -416,7 +416,7 @@ fn block_skips_epochs() {
 		assert_eq!(Sassafras::current_slot(), start_slot + offset);
 		assert_eq!(Sassafras::epoch_index(), 3);
 		assert_eq!(Sassafras::current_epoch_start(), start_slot + offset);
-		assert_eq!(Sassafras::current_slot_epoch_index(), 0);
+		assert_eq!(Sassafras::current_slot_index(), 0);
 
 		// Tickets were discarded
 		let meta = TicketsMeta::<Test>::get();
