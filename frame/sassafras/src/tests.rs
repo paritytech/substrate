@@ -27,6 +27,7 @@ use sp_runtime::traits::Get;
 
 #[test]
 fn slot_ticket_fetch() {
+	let genesis_slot = Slot::from(100);
 	let max_tickets: u32 = <Test as crate::Config>::MaxTickets::get();
 	assert_eq!(max_tickets, 6);
 
@@ -50,36 +51,48 @@ fn slot_ticket_fetch() {
 		TicketsMeta::<Test>::set(TicketsMetadata {
 			tickets_count: [max_tickets, max_tickets - 1],
 			segments_count: 0,
-			sort_started: false,
 		});
 
-		// Test next session tickets fetch
+		// Before initializing `GenesisSlot` value (should return first element of current session)
+		// This is due to special case hardcoded value.
 		assert_eq!(Sassafras::slot_ticket(0.into()), Some(curr_tickets[1]));
-		assert_eq!(Sassafras::slot_ticket(1.into()), Some(curr_tickets[3]));
-		assert_eq!(Sassafras::slot_ticket(2.into()), Some(curr_tickets[5]));
-		assert_eq!(Sassafras::slot_ticket(3.into()), None);
-		assert_eq!(Sassafras::slot_ticket(4.into()), None);
-		assert_eq!(Sassafras::slot_ticket(5.into()), None);
-		assert_eq!(Sassafras::slot_ticket(6.into()), None);
-		assert_eq!(Sassafras::slot_ticket(7.into()), Some(curr_tickets[4]));
-		assert_eq!(Sassafras::slot_ticket(8.into()), Some(curr_tickets[2]));
-		assert_eq!(Sassafras::slot_ticket(9.into()), Some(curr_tickets[0]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 0), Some(curr_tickets[1]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 1), Some(curr_tickets[1]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 100), Some(curr_tickets[1]));
 
-		// Test next session tickets fetch
-		assert_eq!(Sassafras::slot_ticket(10.into()), Some(next_tickets[1]));
-		assert_eq!(Sassafras::slot_ticket(11.into()), Some(next_tickets[3]));
-		assert_eq!(Sassafras::slot_ticket(12.into()), None); //Some(next_tickets[5]));
-		assert_eq!(Sassafras::slot_ticket(13.into()), None);
-		assert_eq!(Sassafras::slot_ticket(14.into()), None);
-		assert_eq!(Sassafras::slot_ticket(15.into()), None);
-		assert_eq!(Sassafras::slot_ticket(16.into()), None);
-		assert_eq!(Sassafras::slot_ticket(17.into()), Some(next_tickets[4]));
-		assert_eq!(Sassafras::slot_ticket(18.into()), Some(next_tickets[2]));
-		assert_eq!(Sassafras::slot_ticket(19.into()), Some(next_tickets[0]));
+		// Initialize genesis slot value.
+		GenesisSlot::<Test>::set(genesis_slot);
 
-		// Test fetch beyend next session
-		assert_eq!(Sassafras::slot_ticket(20.into()), None);
-		assert_eq!(Sassafras::slot_ticket(42.into()), None);
+		// Before Current session.
+		assert_eq!(Sassafras::slot_ticket(0.into()), None);
+
+		// Current session tickets.
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 0), Some(curr_tickets[1]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 1), Some(curr_tickets[3]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 2), Some(curr_tickets[5]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 3), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 4), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 5), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 6), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 7), Some(curr_tickets[4]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 8), Some(curr_tickets[2]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 9), Some(curr_tickets[0]));
+
+		// Next session tickets.
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 10), Some(next_tickets[1]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 11), Some(next_tickets[3]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 12), None); //Some(next_tickets[5]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 13), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 14), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 15), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 16), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 17), Some(next_tickets[4]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 18), Some(next_tickets[2]));
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 19), Some(next_tickets[0]));
+
+		// Beyend next session.
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 20), None);
+		assert_eq!(Sassafras::slot_ticket(genesis_slot + 42), None);
 	});
 }
 

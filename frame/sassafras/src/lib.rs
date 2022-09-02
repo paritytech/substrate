@@ -78,13 +78,11 @@ pub use pallet::*;
 /// Tickets related metadata that is commonly used together.
 #[derive(Debug, Default, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy)]
 pub struct TicketsMetadata {
-	/// Number of tickets available for even and odd session indices respectivelly.
+	/// Number of tickets available for even and odd sessions, respectivelly.
 	/// I.e. the index is computed as session-index modulo 2.
 	pub tickets_count: [u32; 2],
 	/// Number of tickets segments
 	pub segments_count: u32,
-	/// Last segment has been already sorted
-	pub sort_started: bool,
 }
 
 #[frame_support::pallet]
@@ -155,7 +153,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Next epoch authorities.
+	/// Next session authorities.
 	#[pallet::storage]
 	pub type NextAuthorities<T: Config> = StorageValue<
 		_,
@@ -163,8 +161,8 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// The slot at which the first epoch actually started. This is 0
-	/// until the first block of the chain.
+	/// The slot at which the first session started.
+	/// This is `None` until the first block is imported on chain.
 	#[pallet::storage]
 	#[pallet::getter(fn genesis_slot)]
 	pub type GenesisSlot<T> = StorageValue<_, Slot, ValueQuery>;
@@ -174,21 +172,12 @@ pub mod pallet {
 	#[pallet::getter(fn current_slot)]
 	pub type CurrentSlot<T> = StorageValue<_, Slot, ValueQuery>;
 
-	/// The epoch randomness for the *current* epoch.
-	///
-	/// # Security
-	///
-	/// This MUST NOT be used for gambling, as it can be influenced by a
-	/// malicious validator in the short term. It MAY be used in many
-	/// cryptographic protocols, however, so long as one remembers that this
-	/// (like everything else on-chain) it is public. For example, it can be
-	/// used where a number is needed that cannot have been chosen by an
-	/// adversary, for purposes such as public-coin zero-knowledge proofs.
+	/// Current session randomness.
 	#[pallet::storage]
 	#[pallet::getter(fn randomness)]
 	pub type CurrentRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
-	/// Next epoch randomness.
+	/// Next session randomness.
 	#[pallet::storage]
 	pub type NextRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
@@ -213,9 +202,7 @@ pub mod pallet {
 
 	/// Pending epoch configuration change that will be set as `NextEpochConfig` when the next
 	/// epoch is enacted.
-	/// TODO-SASS-P2: better doc? Double check if next epoch tickets were computed using NextEpoch
-	/// params in the native ecode.
-	/// In other words a config change submitted during session N will be enacted on session N+2.
+	/// In other words, a config change submitted during session N will be enacted on session N+2.
 	/// This is to maintain coherence for already submitted tickets for epoch N+1 that where
 	/// computed using configuration parameters stored for session N+1.
 	#[pallet::storage]
@@ -232,12 +219,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Tickets<T> = StorageMap<_, Identity, (u8, u32), Ticket>;
 
-	// /// Next session tickets temporary accumulator length.
-	// #[pallet::storage]
-	// pub type NextTicketsSegmentsCount<T> = StorageValue<_, u32, ValueQuery>;
-
 	/// Next session tickets temporary accumulator.
-	/// Special u32::MAX key is reserved for partially sorted segment.
+	/// Special `u32::MAX` key is reserved for partially sorted segment.
 	#[pallet::storage]
 	pub type NextTicketsSegments<T: Config> =
 		StorageMap<_, Identity, u32, BoundedVec<Ticket, T::MaxTickets>, ValueQuery>;
@@ -264,8 +247,44 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Block initialization
 		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
-			Self::initialize(now);
-			0
+			// Since `initialize` can be called twice (e.g. if session pallet is used)
+			// let's ensure that we only do the initialization once per block.
+			if Self::initialized().is_some() {
+				return Weight::zero()
+			}
+
+			let pre_digest = <frame_system::Pallet<T>>::digest()
+				.logs
+				.iter()
+				.filter_map(|s| {
+					s.as_pre_runtime().and_then(|(id, mut data)| {
+						if id == SASSAFRAS_ENGINE_ID {
+							PreDigest::decode(&mut data).ok()
+						} else {
+							None
+						}
+					})
+				})
+				.next()
+				.expect("Valid Sassafras block should have a pre-digest. qed");
+
+			CurrentSlot::<T>::put(pre_digest.slot);
+
+			// On the first non-zero block (i.e. block #1) this is where the first epoch
+			// (epoch #0) actually starts. We need to adjust internal storage accordingly.
+			if *GenesisSlot::<T>::get() == 0 {
+				log::debug!(target: "sassafras", "🌳 >>> GENESIS SLOT: {:?}", pre_digest.slot);
+				Self::initialize_genesis_epoch(pre_digest.slot)
+			}
+
+			Initialized::<T>::put(pre_digest);
+
+			// TODO-SASS-P3: incremental partial ordering for Next epoch tickets.
+
+			// Enact session change, if necessary.
+			T::EpochChangeTrigger::trigger::<T>(now);
+
+			Weight::zero()
 		}
 
 		/// Block finalization
@@ -392,7 +411,7 @@ pub mod pallet {
 					// TODO-SASS-P2: if possible use a more efficient way to distinquish
 					// duplicates...
 					.and_provides(tickets)
-					// TODO-SASS-P2: this sholot_tld be set such that it is discarded after the
+					// TODO-SASS-P2: this should be set such that it is discarded after the
 					// first half
 					.longevity(3_u64)
 					.propagate(true)
@@ -424,11 +443,6 @@ impl<T: Config> Pallet<T> {
 		// The exception is for block 1: the genesis has slot 0, so we treat epoch 0 as having
 		// started at the slot of block 1. We want to use the same randomness and validator set as
 		// signalled in the genesis, so we don't rotate the epoch.
-
-		// TODO-SASS-P2
-		// Is now != One required???
-		// What if we want epochs with len = 1. In this case we doesn't change epoch correctly
-		// in slot 1.
 		now != One::one() && Self::current_slot_epoch_index() >= T::EpochDuration::get()
 	}
 
@@ -437,11 +451,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn slot_epoch_index(slot: Slot) -> u64 {
-		// TODO-SASS-P2 : is this required?
-		// if *GenesisSlot::<T>::get() == 0 {
-		// 	return 0
-		// }
-		*slot.saturating_sub(Self::current_epoch_start())
+		if *GenesisSlot::<T>::get() == 0 {
+			return 0
+		}
+		slot.checked_sub(Self::current_epoch_start().into()).unwrap_or(u64::MAX)
 	}
 
 	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_end_session`
@@ -513,7 +526,7 @@ impl<T: Config> Pallet<T> {
 		let mut tickets_metadata = TicketsMeta::<T>::get();
 		// Optionally finish sorting
 		if tickets_metadata.segments_count != 0 {
-			Self::sort_tickets(u32::MAX, epoch_key, &mut tickets_metadata);
+			Self::sort_tickets(tickets_metadata.segments_count, epoch_key, &mut tickets_metadata);
 		}
 		// Clear the prev (equal to the next) epoch tickets counter.
 		let next_epoch_key = epoch_key ^ 1;
@@ -600,46 +613,6 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_consensus(ConsensusLog::NextEpochData(next));
 	}
 
-	fn initialize(now: T::BlockNumber) {
-		// Since `initialize` can be called twice (e.g. if session module is present)
-		// let's ensure that we only do the initialization once per block.
-		// TODO-SASS-P2: why session calls initialize?
-		if Self::initialized().is_some() {
-			return
-		}
-
-		let pre_digest = <frame_system::Pallet<T>>::digest()
-			.logs
-			.iter()
-			.filter_map(|s| s.as_pre_runtime())
-			.filter_map(|(id, mut data)| {
-				if id == SASSAFRAS_ENGINE_ID {
-					PreDigest::decode(&mut data).ok()
-				} else {
-					None
-				}
-			})
-			.next();
-
-		let pre_digest = pre_digest.expect("Valid Sassafras block should have a pre-digest. qed"); // let Some(ref pre_digest) = pre_digest {
-																						   //
-		let current_slot = pre_digest.slot;
-		CurrentSlot::<T>::put(current_slot);
-
-		// On the first non-zero block (i.e. block #1) this is where the first epoch
-		// (epoch #0) actually starts. We need to adjust internal storage accordingly.
-		if *GenesisSlot::<T>::get() == 0 {
-			Self::initialize_genesis_epoch(current_slot)
-		}
-
-		Initialized::<T>::put(pre_digest);
-
-		// TODO-SASS-P2: incremental parial ordering for NextTickets
-
-		// Enact epoch change, if necessary.
-		T::EpochChangeTrigger::trigger::<T>(now);
-	}
-
 	/// Fetch expected ticket for the given slot according to an "outside-in" sorting strategy.
 	///
 	/// Given an ordered sequence of tickets [t0, t1, t2, ..., tk] to be assigned to n slots,
@@ -701,20 +674,17 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	// Sort the tickets that belong to at most `max_iter` segments starting from the last.
-	// If the `max_iter` value is equal to the number of segments then the result is truncated
-	// and saved as the tickets associated to `epoch_key`.
-	// Else the result is saved within the structure itself to be used on next iterations.
+	// Lexicographically sort the tickets who belongs to the next epoch.
+	// The tickets are fetched from at most `max_iter` segments received via the `submit_tickets`
+	// extrinsic. The resulting sorted vector is truncated and if all the segments where sorted
+	// it is saved to be as the next session tickets.
+	// Else the result is saved to be used by next calls.
 	fn sort_tickets(max_iter: u32, epoch_key: u8, metadata: &mut TicketsMetadata) {
 		let mut segments_count = metadata.segments_count;
 		let max_iter = max_iter.min(segments_count);
 		let max_tickets = T::MaxTickets::get() as usize;
 
-		let mut new_segment = if metadata.sort_started {
-			NextTicketsSegments::<T>::take(u32::MAX).into_inner()
-		} else {
-			Vec::new()
-		};
+		let mut new_segment = NextTicketsSegments::<T>::take(u32::MAX).into_inner();
 
 		let mut require_sort = max_iter != 0;
 
@@ -744,14 +714,13 @@ impl<T: Config> Pallet<T> {
 
 		if segments_count == 0 {
 			// Sort is over, write to the map.
-			// TODO-SASS-P2: is there a better way to write a map from a vector?
+			// TODO-SASS-P3: is there a better way to write a map from a vector?
 			new_segment.iter().enumerate().for_each(|(i, t)| {
 				Tickets::<T>::insert((epoch_key, i as u32), t);
 			});
 			metadata.tickets_count[epoch_key as usize] = new_segment.len() as u32;
 		} else {
 			NextTicketsSegments::<T>::insert(u32::MAX, BoundedVec::truncate_from(new_segment));
-			metadata.sort_started = true;
 		}
 
 		metadata.segments_count = segments_count;

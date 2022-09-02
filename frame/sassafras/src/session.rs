@@ -18,7 +18,7 @@
 //! Sassafras implementation of traits required by session pallet.
 
 use super::*;
-use frame_support::traits::{EstimateNextSessionRotation, OneSessionHandler};
+use frame_support::traits::{EstimateNextSessionRotation, Hooks, OneSessionHandler};
 use pallet_session::ShouldEndSession;
 use sp_runtime::{traits::SaturatedConversion, Permill};
 
@@ -28,7 +28,7 @@ impl<T: Config> ShouldEndSession<T::BlockNumber> for Pallet<T> {
 		// `should_end_session` from it's own `on_initialize` handler, in which case it's
 		// possible that Sassafras's own `on_initialize` has not run yet, so let's ensure that we
 		// have initialized the pallet and updated the current slot.
-		Self::initialize(now);
+		Self::on_initialize(now);
 		Self::should_end_session(now)
 	}
 }

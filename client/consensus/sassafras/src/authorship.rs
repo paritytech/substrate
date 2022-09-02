@@ -223,7 +223,7 @@ where
 		let block_id = BlockId::Hash(parent_header.hash());
 		let ticket = self.client.runtime_api().slot_ticket(&block_id, slot).ok()?;
 
-		// TODO-SASS-P2
+		// TODO-SASS-P2: remove me
 		debug!(target: "sassafras", "🌳 parent {}", parent_header.hash());
 
 		let claim = authorship::claim_slot(

@@ -19,10 +19,7 @@
 
 use crate::{self as pallet_sassafras, SameAuthoritiesForever};
 
-use frame_support::{
-	parameter_types,
-	traits::{ConstU32, ConstU64, GenesisBuild, OnFinalize, OnInitialize},
-};
+use frame_support::traits::{ConstU32, ConstU64, GenesisBuild, OnFinalize, OnInitialize};
 use scale_codec::Encode;
 use sp_consensus_sassafras::{
 	digests::PreDigest,
@@ -47,11 +44,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type DummyValidatorId = u64;
 
 type AccountData = u128;
-
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
-}
 
 impl frame_system::Config for Test {
 	type Event = Event;
