@@ -24,7 +24,7 @@ use nix::{
 	unistd::Pid,
 };
 use node_primitives::Block;
-use remote_externalities::{rpc_api, rpc_api::RpcService};
+use remote_externalities::rpc_api::RpcService;
 use std::{
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
