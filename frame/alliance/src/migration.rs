@@ -61,18 +61,18 @@ mod v0_to_v1 {
 			None,
 		);
 
+		log::info!(
+			target: LOG_TARGET,
+			"Cleared '{}' entries from 'UpForKicking' storage prefix",
+			res.unique
+		);
+
 		if res.maybe_cursor.is_some() {
 			log::error!(
 				target: LOG_TARGET,
 				"Storage prefix 'UpForKicking' is not completely cleared."
 			);
 		}
-
-		log::info!(
-			target: LOG_TARGET,
-			"Cleared '{}' entries from 'UpForKicking' storage prefix",
-			res.unique
-		);
 
 		T::DbWeight::get().writes(res.unique.into())
 	}
