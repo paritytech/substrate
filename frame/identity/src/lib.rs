@@ -79,7 +79,7 @@ mod types;
 pub mod weights;
 
 use frame_support::traits::{BalanceStatus, Currency, OnUnbalanced, ReservableCurrency};
-use sp_runtime::traits::{AppendZerosInput, Saturating, StaticLookup, Zero, Hash};
+use sp_runtime::traits::{AppendZerosInput, Hash, Saturating, StaticLookup, Zero};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
