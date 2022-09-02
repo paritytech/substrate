@@ -97,3 +97,50 @@ impl upgrade::ProtocolName for ProtocolName {
 		(self as &str).as_bytes()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::ProtocolName;
+	use std::{
+		borrow::Borrow,
+		collections::hash_map::DefaultHasher,
+		hash::{Hash, Hasher},
+	};
+
+	#[test]
+	fn protocol_name_keys_are_equivalent_to_str_keys() {
+		const PROTOCOL: &'static str = "/some/protocol/1";
+		let static_protocol_name = ProtocolName::from(PROTOCOL);
+		let on_heap_protocol_name = ProtocolName::from(String::from(PROTOCOL));
+
+		assert_eq!(<ProtocolName as Borrow<str>>::borrow(&static_protocol_name), PROTOCOL);
+		assert_eq!(<ProtocolName as Borrow<str>>::borrow(&on_heap_protocol_name), PROTOCOL);
+		assert_eq!(static_protocol_name, on_heap_protocol_name);
+
+		assert_eq!(hash(static_protocol_name), hash(PROTOCOL));
+		assert_eq!(hash(on_heap_protocol_name), hash(PROTOCOL));
+	}
+
+	#[test]
+	fn different_protocol_names_do_not_compare_equal() {
+		const PROTOCOL1: &'static str = "/some/protocol/1";
+		let static_protocol_name1 = ProtocolName::from(PROTOCOL1);
+		let on_heap_protocol_name1 = ProtocolName::from(String::from(PROTOCOL1));
+
+		const PROTOCOL2: &'static str = "/some/protocol/2";
+		let static_protocol_name2 = ProtocolName::from(PROTOCOL2);
+		let on_heap_protocol_name2 = ProtocolName::from(String::from(PROTOCOL2));
+
+		assert_ne!(<ProtocolName as Borrow<str>>::borrow(&static_protocol_name1), PROTOCOL2);
+		assert_ne!(<ProtocolName as Borrow<str>>::borrow(&on_heap_protocol_name1), PROTOCOL2);
+		assert_ne!(static_protocol_name1, static_protocol_name2);
+		assert_ne!(static_protocol_name1, on_heap_protocol_name2);
+		assert_ne!(on_heap_protocol_name1, on_heap_protocol_name2);
+	}
+
+	fn hash<T: Hash>(x: T) -> u64 {
+		let mut hasher = DefaultHasher::new();
+		x.hash(&mut hasher);
+		hasher.finish()
+	}
+}
