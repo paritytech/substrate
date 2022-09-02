@@ -21,6 +21,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", features = [
     "derive",
 ] }
 futures = "0.3.21"
+hex = "0.4.0"
 libp2p = "0.46.1"
 log = "0.4.16"
 prost = "0.10"

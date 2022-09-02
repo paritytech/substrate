@@ -319,6 +319,17 @@ impl<T, S> BoundedVec<T, S> {
 		self.0.sort_by(compare)
 	}
 
+	/// Exactly the same semantics as [`slice::sort_by_key`].
+	///
+	/// This is safe since sorting cannot change the number of elements in the vector.
+	pub fn sort_by_key<K, F>(&mut self, f: F)
+	where
+		F: FnMut(&T) -> K,
+		K: sp_std::cmp::Ord,
+	{
+		self.0.sort_by_key(f)
+	}
+
 	/// Exactly the same semantics as [`slice::sort`].
 	///
 	/// This is safe since sorting cannot change the number of elements in the vector.
@@ -1188,5 +1199,13 @@ pub mod test {
 		let b2: Result<BoundedVec<u32, ConstU32<1>>, _> =
 			b1.iter().map(|x| x + 1).rev().take(2).try_collect();
 		assert!(b2.is_err());
+	}
+
+	#[test]
+	fn bounded_vec_sort_by_key_works() {
+		let mut v: BoundedVec<i32, ConstU32<5>> = bounded_vec![-5, 4, 1, -3, 2];
+		// Sort by absolute value.
+		v.sort_by_key(|k| k.abs());
+		assert_eq!(v, vec![1, 2, -3, 4, -5]);
 	}
 }

@@ -23,7 +23,7 @@ use jsonrpsee::{
 	core::client::{Subscription, SubscriptionClientT},
 	ws_client::WsClientBuilder,
 };
-use parity_scale_codec::Decode;
+use parity_scale_codec::{Decode, Encode};
 use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
@@ -40,6 +40,22 @@ pub struct FollowChainCmd {
 	/// The url to connect to.
 	#[clap(short, long, parse(try_from_str = parse::url))]
 	uri: String,
+
+	/// If set, then the state root check is enabled.
+	#[clap(long)]
+	state_root_check: bool,
+
+	/// Which try-state targets to execute when running this command.
+	///
+	/// Expected values:
+	/// - `all`
+	/// - `none`
+	/// - A comma separated list of pallets, as per pallet names in `construct_runtime!()` (e.g.
+	///   `Staking, System`).
+	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
+	///   round-robin fashion.
+	#[clap(long, default_value = "none")]
+	try_state: frame_try_runtime::TryStateSelect,
 }
 
 pub(crate) async fn follow_chain<Block, ExecDispatch>(
@@ -102,11 +118,13 @@ where
 
 		// create an ext at the state of this block, whatever is the first subscription event.
 		if maybe_state_ext.is_none() {
-			let builder = Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
-				transport: command.uri.clone().into(),
-				at: Some(*header.parent_hash()),
-				..Default::default()
-			}));
+			let builder = Builder::<Block>::new()
+				.mode(Mode::Online(OnlineConfig {
+					transport: command.uri.clone().into(),
+					at: Some(*header.parent_hash()),
+					..Default::default()
+				}))
+				.state_version(shared.state_version);
 
 			let new_ext = builder
 				.inject_hashed_key_value(&[(code_key.clone(), code.clone())])
@@ -139,8 +157,8 @@ where
 			state_ext,
 			&executor,
 			execution,
-			"TryRuntime_execute_block_no_check",
-			block.encode().as_ref(),
+			"TryRuntime_execute_block",
+			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
 			full_extensions(),
 		)?;
 

@@ -293,7 +293,8 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	DeserializeOwned,
 };
-use sp_state_machine::{InMemoryProvingBackend, OverlayedChanges, StateMachine};
+use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
+use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 mod commands;
@@ -334,17 +335,18 @@ pub enum Command {
 	///     different state transition function.
 	///
 	/// To make testing slightly more dynamic, you can disable the state root  check by enabling
-	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should
-	/// manually tweak your local runtime's spec version to fix this.
+	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should manually
+	/// tweak your local runtime's spec version to fix this.
 	///
 	/// A subtle detail of execute block is that if you want to execute block 100 of a live chain
 	/// again, you need to scrape the state of block 99. This is already done automatically if you
 	/// use [`State::Live`], and the parent hash of the target block is used to scrape the state.
 	/// If [`State::Snap`] is being used, then this needs to be manually taken into consideration.
 	///
-	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
-	/// `ExecuteBlockCmd::no_check` is set, it uses a custom, try-runtime-only runtime
-	/// api called `TryRuntime_execute_block_no_check`.
+	/// This does not execute the same runtime api as normal block import do, namely
+	/// `Core_execute_block`. Instead, it uses `TryRuntime_execute_block`, which can optionally
+	/// skip state-root check (useful for trying a unreleased runtime), and can execute runtime
+	/// sanity checks as well.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.
@@ -421,6 +423,10 @@ pub struct SharedParams {
 	/// When enabled, the spec name check will not panic, and instead only show a warning.
 	#[clap(long)]
 	pub no_spec_name_check: bool,
+
+	/// State version that is used by the chain.
+	#[clap(long, default_value = "1", parse(try_from_str = parse::state_version))]
+	pub state_version: StateVersion,
 }
 
 /// Our `try-runtime` command.
@@ -651,21 +657,27 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 			if expected_spec_version == version {
 				log::info!(target: LOG_TARGET, "found matching spec version: {:?}", version);
 			} else {
-				log::warn!(
-					target: LOG_TARGET,
+				let msg = format!(
 					"spec version mismatch (local {} != remote {}). This could cause some issues.",
-					expected_spec_version,
-					version
+					expected_spec_version, version
 				);
+				if relaxed {
+					log::warn!(target: LOG_TARGET, "{}", msg);
+				} else {
+					panic!("{}", msg);
+				}
 			}
 		},
 		Err(why) => {
-			log::error!(
-				target: LOG_TARGET,
+			let msg = format!(
 				"failed to fetch runtime version from {}: {:?}. Skipping the check",
-				uri,
-				why
+				uri, why
 			);
+			if relaxed {
+				log::error!(target: LOG_TARGET, "{}", msg);
+			} else {
+				panic!("{}", msg);
+			}
 		},
 	}
 }
@@ -746,9 +758,11 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 
 	let mut changes = Default::default();
 	let backend = ext.backend.clone();
-	let proving_backend = InMemoryProvingBackend::new(&backend);
+	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
 
-	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&proving_backend);
+	let proving_backend =
+		TrieBackendBuilder::wrap(&backend).with_recorder(Default::default()).build();
+
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
 	let pre_root = *backend.root();
@@ -767,7 +781,9 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
-	let proof = proving_backend.extract_proof();
+	let proof = proving_backend
+		.extract_proof()
+		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()
@@ -792,15 +808,15 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 			)
 		}
 	};
-	log::info!(
+	log::debug!(
 		target: LOG_TARGET,
 		"proof: {} / {} nodes",
 		HexDisplay::from(&proof_nodes.iter().flatten().cloned().collect::<Vec<_>>()),
 		proof_nodes.len()
 	);
-	log::info!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
-	log::info!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
-	log::info!(
+	log::debug!(target: LOG_TARGET, "proof size: {}", humanize(proof_size));
+	log::debug!(target: LOG_TARGET, "compact proof size: {}", humanize(compact_proof_size),);
+	log::debug!(
 		target: LOG_TARGET,
 		"zstd-compressed compact proof {}",
 		humanize(compressed_proof.len()),

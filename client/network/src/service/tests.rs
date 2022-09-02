@@ -16,11 +16,15 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, Event, NetworkService, NetworkWorker};
+use crate::{config, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::PeerId;
-use sc_network_common::config::ProtocolId;
+use sc_network_common::{
+	config::{MultiaddrWithPeerId, ProtocolId},
+	protocol::event::Event,
+	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
+};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
@@ -92,21 +96,25 @@ fn build_test_full_node(
 
 	let protocol_id = ProtocolId::from("/test-protocol-name");
 
+	let fork_id = Some(String::from("test-fork-id"));
+
 	let block_request_protocol_config = {
-		let (handler, protocol_config) = BlockRequestHandler::new(&protocol_id, client.clone(), 50);
+		let (handler, protocol_config) =
+			BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
 	let state_request_protocol_config = {
-		let (handler, protocol_config) = StateRequestHandler::new(&protocol_id, client.clone(), 50);
+		let (handler, protocol_config) =
+			StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
 
 	let light_client_request_protocol_config = {
 		let (handler, protocol_config) =
-			LightClientRequestHandler::new(&protocol_id, client.clone());
+			LightClientRequestHandler::new(&protocol_id, None, client.clone());
 		async_std::task::spawn(handler.run().boxed());
 		protocol_config
 	};
@@ -134,9 +142,11 @@ fn build_test_full_node(
 		chain: client.clone(),
 		transaction_pool: Arc::new(config::EmptyTransactionPool),
 		protocol_id,
+		fork_id,
 		import_queue,
 		chain_sync: Box::new(chain_sync),
 		metrics_registry: None,
+		bitswap: None,
 		block_request_protocol_config,
 		state_request_protocol_config,
 		light_client_request_protocol_config,
@@ -185,9 +195,9 @@ fn build_nodes_one_proto() -> (
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
 			set_config: config::SetConfig {
-				reserved_nodes: vec![config::MultiaddrWithPeerId {
+				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr,
-					peer_id: node1.local_peer_id().clone(),
+					peer_id: node1.local_peer_id(),
 				}],
 				..Default::default()
 			},
@@ -209,18 +219,10 @@ fn notifications_state_consistent() {
 
 	// Write some initial notifications that shouldn't get through.
 	for _ in 0..(rand::random::<u8>() % 5) {
-		node1.write_notification(
-			node2.local_peer_id().clone(),
-			PROTOCOL_NAME,
-			b"hello world".to_vec(),
-		);
+		node1.write_notification(node2.local_peer_id(), PROTOCOL_NAME, b"hello world".to_vec());
 	}
 	for _ in 0..(rand::random::<u8>() % 5) {
-		node2.write_notification(
-			node1.local_peer_id().clone(),
-			PROTOCOL_NAME,
-			b"hello world".to_vec(),
-		);
+		node2.write_notification(node1.local_peer_id(), PROTOCOL_NAME, b"hello world".to_vec());
 	}
 
 	async_std::task::block_on(async move {
@@ -244,14 +246,14 @@ fn notifications_state_consistent() {
 			// test consists in ensuring that notifications get ignored if the stream isn't open.
 			if rand::random::<u8>() % 5 >= 3 {
 				node1.write_notification(
-					node2.local_peer_id().clone(),
+					node2.local_peer_id(),
 					PROTOCOL_NAME,
 					b"hello world".to_vec(),
 				);
 			}
 			if rand::random::<u8>() % 5 >= 3 {
 				node2.write_notification(
-					node1.local_peer_id().clone(),
+					node1.local_peer_id(),
 					PROTOCOL_NAME,
 					b"hello world".to_vec(),
 				);
@@ -259,10 +261,10 @@ fn notifications_state_consistent() {
 
 			// Also randomly disconnect the two nodes from time to time.
 			if rand::random::<u8>() % 20 == 0 {
-				node1.disconnect_peer(node2.local_peer_id().clone(), PROTOCOL_NAME);
+				node1.disconnect_peer(node2.local_peer_id(), PROTOCOL_NAME);
 			}
 			if rand::random::<u8>() % 20 == 0 {
-				node2.disconnect_peer(node1.local_peer_id().clone(), PROTOCOL_NAME);
+				node2.disconnect_peer(node1.local_peer_id(), PROTOCOL_NAME);
 			}
 
 			// Grab next event from either `events_stream1` or `events_stream2`.
@@ -290,7 +292,7 @@ fn notifications_state_consistent() {
 						something_happened = true;
 						assert!(!node1_to_node2_open);
 						node1_to_node2_open = true;
-						assert_eq!(remote, *node2.local_peer_id());
+						assert_eq!(remote, node2.local_peer_id());
 					},
 				future::Either::Right(Event::NotificationStreamOpened {
 					remote, protocol, ..
@@ -299,7 +301,7 @@ fn notifications_state_consistent() {
 						something_happened = true;
 						assert!(!node2_to_node1_open);
 						node2_to_node1_open = true;
-						assert_eq!(remote, *node1.local_peer_id());
+						assert_eq!(remote, node1.local_peer_id());
 					},
 				future::Either::Left(Event::NotificationStreamClosed {
 					remote, protocol, ..
@@ -307,7 +309,7 @@ fn notifications_state_consistent() {
 					if protocol == PROTOCOL_NAME {
 						assert!(node1_to_node2_open);
 						node1_to_node2_open = false;
-						assert_eq!(remote, *node2.local_peer_id());
+						assert_eq!(remote, node2.local_peer_id());
 					},
 				future::Either::Right(Event::NotificationStreamClosed {
 					remote, protocol, ..
@@ -315,14 +317,14 @@ fn notifications_state_consistent() {
 					if protocol == PROTOCOL_NAME {
 						assert!(node2_to_node1_open);
 						node2_to_node1_open = false;
-						assert_eq!(remote, *node1.local_peer_id());
+						assert_eq!(remote, node1.local_peer_id());
 					},
 				future::Either::Left(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node1_to_node2_open);
-					assert_eq!(remote, *node2.local_peer_id());
+					assert_eq!(remote, node2.local_peer_id());
 					if rand::random::<u8>() % 5 >= 4 {
 						node1.write_notification(
-							node2.local_peer_id().clone(),
+							node2.local_peer_id(),
 							PROTOCOL_NAME,
 							b"hello world".to_vec(),
 						);
@@ -330,10 +332,10 @@ fn notifications_state_consistent() {
 				},
 				future::Either::Right(Event::NotificationsReceived { remote, .. }) => {
 					assert!(node2_to_node1_open);
-					assert_eq!(remote, *node1.local_peer_id());
+					assert_eq!(remote, node1.local_peer_id());
 					if rand::random::<u8>() % 5 >= 4 {
 						node2.write_notification(
-							node1.local_peer_id().clone(),
+							node1.local_peer_id(),
 							PROTOCOL_NAME,
 							b"hello world".to_vec(),
 						);
@@ -368,7 +370,7 @@ fn lots_of_incoming_peers_works() {
 		..config::NetworkConfiguration::new_local()
 	});
 
-	let main_node_peer_id = *main_node.local_peer_id();
+	let main_node_peer_id = main_node.local_peer_id();
 
 	// We spawn background tasks and push them in this `Vec`. They will all be waited upon before
 	// this test ends.
@@ -382,7 +384,7 @@ fn lots_of_incoming_peers_works() {
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
-					reserved_nodes: vec![config::MultiaddrWithPeerId {
+					reserved_nodes: vec![MultiaddrWithPeerId {
 						multiaddr: listen_addr.clone(),
 						peer_id: main_node_peer_id,
 					}],
@@ -471,8 +473,13 @@ fn notifications_back_pressure() {
 
 		// Sending!
 		for num in 0..TOTAL_NOTIFS {
-			let notif = node1.notification_sender(node2_id.clone(), PROTOCOL_NAME).unwrap();
-			notif.ready().await.unwrap().send(format!("hello #{}", num)).unwrap();
+			let notif = node1.notification_sender(node2_id, PROTOCOL_NAME).unwrap();
+			notif
+				.ready()
+				.await
+				.unwrap()
+				.send(format!("hello #{}", num).into_bytes())
+				.unwrap();
 		}
 
 		receiver.await;
@@ -507,9 +514,9 @@ fn fallback_name_working() {
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
 			set_config: config::SetConfig {
-				reserved_nodes: vec![config::MultiaddrWithPeerId {
+				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr,
-					peer_id: node1.local_peer_id().clone(),
+					peer_id: node1.local_peer_id(),
 				}],
 				..Default::default()
 			},
@@ -578,7 +585,7 @@ fn ensure_listen_addresses_consistent_with_transport_not_memory() {
 #[should_panic(expected = "don't match the transport")]
 fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
-	let boot_node = config::MultiaddrWithPeerId {
+	let boot_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)],
 		peer_id: PeerId::random(),
 	};
@@ -595,7 +602,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_memory() {
 #[should_panic(expected = "don't match the transport")]
 fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
-	let boot_node = config::MultiaddrWithPeerId {
+	let boot_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Memory(rand::random::<u64>())],
 		peer_id: PeerId::random(),
 	};
@@ -611,7 +618,7 @@ fn ensure_boot_node_addresses_consistent_with_transport_not_memory() {
 #[should_panic(expected = "don't match the transport")]
 fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
-	let reserved_node = config::MultiaddrWithPeerId {
+	let reserved_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)],
 		peer_id: PeerId::random(),
 	};
@@ -631,7 +638,7 @@ fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 #[should_panic(expected = "don't match the transport")]
 fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 	let listen_addr = config::build_multiaddr![Ip4([127, 0, 0, 1]), Tcp(0_u16)];
-	let reserved_node = config::MultiaddrWithPeerId {
+	let reserved_node = MultiaddrWithPeerId {
 		multiaddr: config::build_multiaddr![Memory(rand::random::<u64>())],
 		peer_id: PeerId::random(),
 	};

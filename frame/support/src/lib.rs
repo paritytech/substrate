@@ -16,6 +16,16 @@
 // limitations under the License.
 
 //! Support code for the runtime.
+//!
+//! ## Note on Tuple Traits
+//!
+//! Many of the traits defined in [`traits`] have auto-implementations on tuples as well. Usually,
+//! the tuple is a function of number of pallets in the runtime. By default, the traits are
+//! implemented for tuples of up to 64 items.
+//
+// If you have more pallets in your runtime, or for any other reason need more, enabled `tuples-96`
+// or the `tuples-128` complication flag. Note that these features *will increase* the compilation
+// of this crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -83,6 +93,8 @@ pub mod unsigned {
 	};
 }
 
+#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+pub use self::storage::storage_noop_guard::StorageNoopGuard;
 pub use self::{
 	dispatch::{Callable, Parameter},
 	hash::{
@@ -271,79 +283,85 @@ pub use frame_support_procedural::storage_alias;
 macro_rules! parameter_types {
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$vis:vis const $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL_CONST $name , $type , $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL_CONST $name , $type , $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis $name:ident: $type:ty = $value:expr;
+		$vis:vis $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL $name, $type, $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis storage $name:ident: $type:ty = $value:expr;
+		$vis:vis storage $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	() => ();
-	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL_CONST $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the value of this parameter type.
 			pub const fn get() -> $type {
 				$value
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type> $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
 			}
 		}
 
-		impl $crate::traits::TypedGet for $name {
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
 			type Type = $type;
 			fn get() -> $type {
 				Self::get()
 			}
 		}
 	};
-	(IMPL $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the value of this parameter type.
 			pub fn get() -> $type {
 				$value
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type>, $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
 			}
 		}
 
-		impl $crate::traits::TypedGet for $name {
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
 			type Type = $type;
 			fn get() -> $type {
 				Self::get()
 			}
 		}
 	};
-	(IMPL_STORAGE $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL_STORAGE $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
@@ -369,13 +387,13 @@ macro_rules! parameter_types {
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type> $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
 			}
 		}
 
-		impl $crate::traits::TypedGet for $name {
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
 			type Type = $type;
 			fn get() -> $type {
 				Self::get()
@@ -1350,8 +1368,8 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				CountedStorageMap, Key as NMapKey, OptionQuery, StorageDoubleMap, StorageMap,
-				StorageNMap, StorageValue, ValueQuery,
+				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
+				StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
 		},
 		traits::{
@@ -1824,6 +1842,23 @@ pub mod pallet_prelude {
 ///
 /// All the `cfg` attributes are automatically copied to the items generated for the storage,
 /// i.e. the getter, storage prefix, and the metadata element etc.
+///
+/// Any type placed as the `QueryKind` parameter must implement
+/// [`frame_support::storage::types::QueryKindTrait`]. There are 3 implementations of this
+/// trait by default:
+/// 1. [`frame_support::storage::types::OptionQuery`], the default `QueryKind` used when this
+///    type parameter is omitted. Specifying this as the `QueryKind` would cause storage map
+///    APIs that return a `QueryKind` to instead return an `Option`, returning `Some` when a
+///    value does exist under a specified storage key, and `None` otherwise.
+/// 2. [`frame_support::storage::types::ValueQuery`] causes storage map APIs that return a
+///    `QueryKind` to instead return the value type. In cases where a value does not exist
+///    under a specified storage key, the `OnEmpty` type parameter on `QueryKindTrait` is used
+///    to return an appropriate value.
+/// 3. [`frame_support::storage::types::ResultQuery`] causes storage map APIs that return a
+///    `QueryKind` to instead return a `Result<T, E>`, with `T` being the value type and `E`
+///    being the pallet error type specified by the `#[pallet::error]` attribute. In cases
+///    where a value does not exist under a specified storage key, an `Err` with the specified
+///    pallet error variant is returned.
 ///
 /// NOTE: If the `QueryKind` generic parameter is still generic at this stage or is using some
 /// type alias then the generation of the getter might fail. In this case the getter can be

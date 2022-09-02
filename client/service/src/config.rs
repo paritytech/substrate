@@ -19,19 +19,18 @@
 //! Service configuration.
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
-pub use sc_client_db::{Database, DatabaseSource, KeepBlocks, PruningMode};
+pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
 pub use sc_executor::WasmExecutionMethod;
 #[cfg(feature = "wasmtime")]
 pub use sc_executor::WasmtimeInstantiationStrategy;
 pub use sc_network::{
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role,
-		SetConfig, TransportConfig,
+		NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role, SetConfig, TransportConfig,
 	},
 	Multiaddr,
 };
 pub use sc_network_common::{
-	config::ProtocolId,
+	config::{MultiaddrWithPeerId, ProtocolId},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -70,16 +69,16 @@ pub struct Configuration {
 	pub keystore_remote: Option<String>,
 	/// Configuration for the database.
 	pub database: DatabaseSource,
-	/// Size of internal state cache in Bytes
-	pub state_cache_size: usize,
-	/// Size in percent of cache size dedicated to child tries
-	pub state_cache_child_ratio: Option<usize>,
+	/// Maximum size of internal trie cache in bytes.
+	///
+	/// If `None` is given the cache is disabled.
+	pub trie_cache_maximum_size: Option<usize>,
 	/// State pruning settings.
 	pub state_pruning: Option<PruningMode>,
 	/// Number of blocks to keep in the db.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	pub keep_blocks: KeepBlocks,
+	pub blocks_pruning: BlocksPruning,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.
