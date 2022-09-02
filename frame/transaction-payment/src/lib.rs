@@ -312,12 +312,16 @@ pub mod pallet {
 	pub(super) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig;
+	pub struct GenesisConfig {
+		multiplier: Multiplier,
+	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self
+			Self {
+				multiplier: Multiplier::saturating_from_integer(1),
+			}
 		}
 	}
 
@@ -325,6 +329,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
+			NextFeeMultiplier::<T>::put(self.multiplier);
 		}
 	}
 
