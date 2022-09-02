@@ -20,7 +20,7 @@ use beefy_primitives::{BeefyApi, MmrRootHash};
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_consensus::BlockImport;
-use sc_network_common::protocol::ProtocolName;
+use sc_network::ProtocolName;
 use sc_network_gossip::Network as GossipNetwork;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -56,7 +56,7 @@ pub use beefy_protocol_name::standard_name as protocol_standard_name;
 
 pub(crate) mod beefy_protocol_name {
 	use sc_chain_spec::ChainSpec;
-	use sc_network_common::protocol::ProtocolName;
+	use sc_network::ProtocolName;
 
 	const NAME: &str = "/beefy/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
