@@ -24,7 +24,7 @@ use nix::{
 	unistd::Pid,
 };
 use node_primitives::Block;
-use remote_externalities::rpc_api;
+use remote_externalities::{rpc_api, rpc_api::RpcService};
 use std::{
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
@@ -33,7 +33,6 @@ use std::{
 	time::Duration,
 };
 use tokio::time::timeout;
-use remote_externalities::rpc_api::RpcService;
 
 /// Wait for the given `child` the given number of `secs`.
 ///
