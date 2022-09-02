@@ -90,6 +90,8 @@ where
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
+	let mut rpc_service = rpc_api::RpcService::new(&command.uri, false);
+
 	loop {
 		let header = match subscription.next().await {
 			Some(Ok(header)) => header,
@@ -106,7 +108,7 @@ where
 		let hash = header.hash();
 		let number = header.number();
 
-		let block = rpc_api::get_block::<Block, _>(&command.uri, hash).await.unwrap();
+		let block = rpc_service.get_block::<Block>(hash).await.unwrap();
 
 		log::debug!(
 			target: LOG_TARGET,

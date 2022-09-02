@@ -19,82 +19,134 @@
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
 use jsonrpsee::{
-	core::client::ClientT,
+	core::client::{Client, ClientT},
 	rpc_params,
+	types::ParamsSer,
 	ws_client::{WsClient, WsClientBuilder},
 };
+use serde::de::DeserializeOwned;
 use sp_runtime::{
 	generic::SignedBlock,
 	traits::{Block as BlockT, Header as HeaderT},
 };
 
-/// Get the header of the block identified by `at`
-pub async fn get_header<Block, S>(from: S, at: Block::Hash) -> Result<Block::Header, String>
-where
-	Block: BlockT,
-	Block::Header: serde::de::DeserializeOwned,
-	S: AsRef<str>,
-{
-	let client = build_client(from).await?;
+enum RpcCall {
+	GetHeader,
+	GetFinalizedHead,
+	GetBlock,
+	GetRuntimeVersion,
+}
 
+impl RpcCall {
+	fn as_str(&self) -> &'static str {
+		match self {
+			RpcCall::GetHeader => "chain_getHeader",
+			RpcCall::GetFinalizedHead => "chain_getFinalizedHead",
+			RpcCall::GetBlock => "chain_getBlock",
+			RpcCall::GetRuntimeVersion => "state_getRuntimeVersion",
+		}
+	}
+}
+
+/// General purpose method for making RPC calls.
+async fn make_request<'a, T: DeserializeOwned>(
+	client: &Client,
+	call: RpcCall,
+	params: Option<ParamsSer<'a>>,
+) -> Result<T, String> {
 	client
-		.request::<Block::Header>("chain_getHeader", rpc_params!(at))
+		.request::<T>(call.as_str(), params)
 		.await
-		.map_err(|e| format!("chain_getHeader request failed: {:?}", e))
+		.map_err(|e| format!("{} request failed: {:?}", call.as_str(), e))
 }
 
-/// Get the finalized head
-pub async fn get_finalized_head<Block, S>(from: S) -> Result<Block::Hash, String>
-where
-	Block: BlockT,
-	S: AsRef<str>,
-{
-	let client = build_client(from).await?;
-
-	client
-		.request::<Block::Hash>("chain_getFinalizedHead", None)
-		.await
-		.map_err(|e| format!("chain_getFinalizedHead request failed: {:?}", e))
+/// Simple RPC service that is capable of keeping the connection.
+///
+/// Service will connect to `uri` for the first time during the first request. Instantiation
+/// does not trigger connecting.
+pub struct RpcService {
+	uri: String,
+	client: Option<Client>,
+	keep_connection: bool,
 }
 
-/// Get the signed block identified by `at`.
-pub async fn get_block<Block, S>(from: S, at: Block::Hash) -> Result<Block, String>
-where
-	S: AsRef<str>,
-	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Header: HeaderT,
-{
-	let client = build_client(from).await?;
-	let signed_block = client
-		.request::<SignedBlock<Block>>("chain_getBlock", rpc_params!(at))
-		.await
-		.map_err(|e| format!("chain_getBlock request failed: {:?}", e))?;
+impl RpcService {
+	/// Creates a new RPC service.
+	///
+	/// Does not connect yet.
+	pub fn new<S: AsRef<str>>(uri: S, keep_connection: bool) -> Self {
+		Self { uri: uri.as_ref().to_string(), client: None, keep_connection }
+	}
 
-	Ok(signed_block.block)
-}
+	/// Returns the address at which requests are sent.
+	pub fn uri(&self) -> String {
+		self.uri.clone()
+	}
 
-/// Build a websocket client that connects to `from`.
-async fn build_client<S: AsRef<str>>(from: S) -> Result<WsClient, String> {
-	WsClientBuilder::default()
-		.max_request_body_size(u32::MAX)
-		.build(from.as_ref())
-		.await
-		.map_err(|e| format!("`WsClientBuilder` failed to build: {:?}", e))
-}
+	/// Whether to keep and reuse a single connection.
+	pub fn keep_connection(&self) -> bool {
+		self.keep_connection
+	}
 
-/// Get the runtime version of a given chain.
-pub async fn get_runtime_version<Block, S>(
-	from: S,
-	at: Option<Block::Hash>,
-) -> Result<sp_version::RuntimeVersion, String>
-where
-	S: AsRef<str>,
-	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Header: HeaderT,
-{
-	let client = build_client(from).await?;
-	client
-		.request::<sp_version::RuntimeVersion>("state_getRuntimeVersion", rpc_params!(at))
-		.await
-		.map_err(|e| format!("state_getRuntimeVersion request failed: {:?}", e))
+	/// Build a websocket client that connects to `self.uri`.
+	async fn build_client(&self) -> Result<WsClient, String> {
+		WsClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.build(&self.uri)
+			.await
+			.map_err(|e| format!("`WsClientBuilder` failed to build: {:?}", e))
+	}
+
+	/// Generic method for making RPC requests.
+	async fn make_request<'a, T: DeserializeOwned>(
+		&mut self,
+		call: RpcCall,
+		params: Option<ParamsSer<'a>>,
+	) -> Result<T, String> {
+		match &self.client {
+			// `self.keep_connection` must be `true.
+			Some(ref client) => make_request(client, call, params).await,
+			None => {
+				let client = self.build_client().await?;
+				let result = make_request(&client, call, params).await;
+				if self.keep_connection {
+					self.client = Some(client)
+				};
+				result
+			},
+		}
+	}
+
+	/// Get the header of the block identified by `at`.
+	pub async fn get_header<Block>(&mut self, at: Block::Hash) -> Result<Block::Header, String>
+	where
+		Block: BlockT,
+		Block::Header: DeserializeOwned,
+	{
+		self.make_request(RpcCall::GetHeader, rpc_params!(at)).await
+	}
+
+	/// Get the finalized head.
+	pub async fn get_finalized_head<Block: BlockT>(&mut self) -> Result<Block::Hash, String> {
+		self.make_request(RpcCall::GetFinalizedHead, None).await
+	}
+
+	/// Get the signed block identified by `at`.
+	pub async fn get_block<Block: BlockT + DeserializeOwned>(
+		&mut self,
+		at: Block::Hash,
+	) -> Result<Block, String> {
+		Ok(self
+			.make_request::<SignedBlock<Block>>(RpcCall::GetBlock, rpc_params!(at))
+			.await?
+			.block)
+	}
+
+	/// Get the runtime version of a given chain.
+	pub async fn get_runtime_version<Block: BlockT + DeserializeOwned>(
+		&mut self,
+		at: Option<Block::Hash>,
+	) -> Result<sp_version::RuntimeVersion, String> {
+		self.make_request(RpcCall::GetRuntimeVersion, rpc_params!(at)).await
+	}
 }

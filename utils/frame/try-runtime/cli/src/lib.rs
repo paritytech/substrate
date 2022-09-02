@@ -632,7 +632,8 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 	expected_spec_version: u32,
 	relaxed: bool,
 ) {
-	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
+	let mut rpc_service = remote_externalities::rpc_api::RpcService::new(uri.clone(), false);
+	match rpc_service.get_runtime_version::<Block>(None)
 		.await
 		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))
 		.map(|(spec_name, spec_version)| (spec_name.to_lowercase(), spec_version))

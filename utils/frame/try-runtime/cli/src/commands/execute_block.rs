@@ -148,7 +148,8 @@ where
 
 	let block_ws_uri = command.block_ws_uri::<Block>();
 	let block_at = command.block_at::<Block>(block_ws_uri.clone()).await?;
-	let block: Block = rpc_api::get_block::<Block, _>(block_ws_uri.clone(), block_at).await?;
+	let mut rpc_service = rpc_api::RpcService::new(block_ws_uri.clone(), false);
+	let block: Block = rpc_service.get_block::<Block>(block_at).await?;
 	let parent_hash = block.header().parent_hash();
 	log::info!(
 		target: LOG_TARGET,
