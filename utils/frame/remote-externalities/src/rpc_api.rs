@@ -25,10 +25,7 @@ use jsonrpsee::{
 	ws_client::{WsClient, WsClientBuilder},
 };
 use serde::de::DeserializeOwned;
-use sp_runtime::{
-	generic::SignedBlock,
-	traits::{Block as BlockT, Header as HeaderT},
-};
+use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
 
 enum RpcCall {
 	GetHeader,
