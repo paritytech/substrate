@@ -44,6 +44,7 @@ use sc_client_api::HeaderBackend;
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
+	protocol::ProtocolName,
 	request_responses::RequestFailure,
 	sync::{
 		message::{
@@ -77,8 +78,6 @@ mod notifications;
 pub mod message;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
-
-pub use sc_network_common::protocol::ProtocolName;
 
 /// Interval at which we perform time based maintenance
 const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
