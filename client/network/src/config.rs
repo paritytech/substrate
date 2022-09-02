@@ -23,7 +23,6 @@
 
 pub use sc_network_common::{
 	config::ProtocolId,
-	protocol::ProtocolName,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -42,7 +41,7 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
-use sc_network_common::{config::MultiaddrWithPeerId, sync::ChainSync};
+use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName, sync::ChainSync};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::HashMap,

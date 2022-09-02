@@ -50,13 +50,14 @@ use sc_consensus::{
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
 	config::{
-		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, ProtocolName, Role,
-		SyncMode, TransportConfig,
+		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,
+		TransportConfig,
 	},
 	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, ProtocolId},
+	protocol::ProtocolName,
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
