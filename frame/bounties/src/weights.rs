@@ -142,7 +142,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn spend_funds(b: u32, ) -> Weight {
 		Weight::from_ref_time(0 as RefTimeWeight)
 			// Standard Error: 17_000
-			.saturating_add(Weight::from_ref_time(29_233_000 as RefTimeWeight).scalar_saturating_mul(b as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(29_233_000 as RefTimeWeight).saturating_mul(b as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().reads((3 as RefTimeWeight).saturating_mul(b as RefTimeWeight)))
 			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
@@ -234,7 +234,7 @@ impl WeightInfo for () {
 	fn spend_funds(b: u32, ) -> Weight {
 		Weight::from_ref_time(0 as RefTimeWeight)
 			// Standard Error: 17_000
-			.saturating_add(Weight::from_ref_time(29_233_000 as RefTimeWeight).scalar_saturating_mul(b as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(29_233_000 as RefTimeWeight).saturating_mul(b as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().reads((3 as RefTimeWeight).saturating_mul(b as RefTimeWeight)))
 			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))

@@ -650,7 +650,7 @@ impl<T: Clone> PerDispatchClass<T> {
 impl PerDispatchClass<Weight> {
 	/// Returns the total weight consumed by all extrinsics in the block.
 	pub fn total(&self) -> Weight {
-		let mut sum = Weight::new();
+		let mut sum = Weight::zero();
 		for class in DispatchClass::all() {
 			sum = sum.saturating_add(*self.get(*class));
 		}

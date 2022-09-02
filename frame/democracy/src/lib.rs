@@ -1506,7 +1506,7 @@ impl<T: Config> Pallet<T> {
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
-		let mut weight = Weight::new();
+		let mut weight = Weight::zero();
 
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();

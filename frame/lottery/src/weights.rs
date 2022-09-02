@@ -71,7 +71,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn set_calls(n: u32, ) -> Weight {
 		Weight::from_ref_time(12_556_000 as RefTimeWeight)
 			// Standard Error: 7_000
-			.saturating_add(Weight::from_ref_time(295_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(295_000 as RefTimeWeight).saturating_mul(n as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Lottery Lottery (r:1 w:1)
@@ -129,7 +129,7 @@ impl WeightInfo for () {
 	fn set_calls(n: u32, ) -> Weight {
 		Weight::from_ref_time(12_556_000 as RefTimeWeight)
 			// Standard Error: 7_000
-			.saturating_add(Weight::from_ref_time(295_000 as RefTimeWeight).scalar_saturating_mul(n as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(295_000 as RefTimeWeight).saturating_mul(n as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
 	}
 	// Storage: Lottery Lottery (r:1 w:1)

@@ -75,20 +75,20 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn sr25519_verification(i: u32, ) -> Weight {
 		Weight::from_ref_time(319_000 as RefTimeWeight)
 			// Standard Error: 8_000
-			.saturating_add(Weight::from_ref_time(47_171_000 as RefTimeWeight).scalar_saturating_mul(i as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(47_171_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_read(i: u32, ) -> Weight {
 		Weight::from_ref_time(0 as RefTimeWeight)
 			// Standard Error: 3_000
-			.saturating_add(Weight::from_ref_time(2_110_000 as RefTimeWeight).scalar_saturating_mul(i as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_110_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().reads((1 as RefTimeWeight).saturating_mul(i as RefTimeWeight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_write(i: u32, ) -> Weight {
 		Weight::from_ref_time(0 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(372_000 as RefTimeWeight).scalar_saturating_mul(i as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(372_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().writes((1 as RefTimeWeight).saturating_mul(i as RefTimeWeight)))
 	}
 }
@@ -113,20 +113,20 @@ impl WeightInfo for () {
 	fn sr25519_verification(i: u32, ) -> Weight {
 		Weight::from_ref_time(319_000 as RefTimeWeight)
 			// Standard Error: 8_000
-			.saturating_add(Weight::from_ref_time(47_171_000 as RefTimeWeight).scalar_saturating_mul(i as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(47_171_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_read(i: u32, ) -> Weight {
 		Weight::from_ref_time(0 as RefTimeWeight)
 			// Standard Error: 3_000
-			.saturating_add(Weight::from_ref_time(2_110_000 as RefTimeWeight).scalar_saturating_mul(i as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_110_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().reads((1 as RefTimeWeight).saturating_mul(i as RefTimeWeight)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_write(i: u32, ) -> Weight {
 		Weight::from_ref_time(0 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(372_000 as RefTimeWeight).scalar_saturating_mul(i as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(372_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().writes((1 as RefTimeWeight).saturating_mul(i as RefTimeWeight)))
 	}
 }
