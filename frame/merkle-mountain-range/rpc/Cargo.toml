@@ -23,4 +23,4 @@ sp-mmr-primitives = { version = "4.0.0-dev", path = "../../../primitives/merkle-
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-serde_json = "1.0.79"
+serde_json = "1.0.85"
