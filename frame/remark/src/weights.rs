@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_remark.
@@ -52,10 +52,10 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: unknown [0x3a65787472696e7369635f696e646578] (r:1 w:0)
 	fn store(l: u32, ) -> Weight {
-		Weight::from_ref_time(13_140_000 as RefTimeWeight)
+		Weight::from_ref_time(13_140_000 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(1_000 as RefTimeWeight).saturating_mul(l as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(1_000 as u64).saturating_mul(l as u64))
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
 	}
 }
 
@@ -63,9 +63,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: unknown [0x3a65787472696e7369635f696e646578] (r:1 w:0)
 	fn store(l: u32, ) -> Weight {
-		Weight::from_ref_time(13_140_000 as RefTimeWeight)
+		Weight::from_ref_time(13_140_000 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(1_000 as RefTimeWeight).saturating_mul(l as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(1_000 as u64).saturating_mul(l as u64))
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 	}
 }
