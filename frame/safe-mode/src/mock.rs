@@ -20,7 +20,7 @@
 use super::*;
 use crate as pallet_safe_mode;
 
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::InsideBoth};
 use frame_system::EnsureRoot;
 use sp_core::H256;
 use sp_runtime::{
@@ -32,8 +32,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	// type BaseCallFilter = frame_support::traits::Everything;
-	type BaseCallFilter = SafeMode;
+	type BaseCallFilter = InsideBoth<frame_support::traits::Everything, SafeMode>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
@@ -75,11 +74,13 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+/// Filter to block balance pallet calls
 pub struct MockSafeModeFilter;
 impl Contains<Call> for MockSafeModeFilter {
 	fn contains(call: &Call) -> bool {
 		match call {
-			Call::System(_) | Call::Balances(_) | Call::SafeMode(_) => true,
+			Call::System(_) | Call::SafeMode(_) => true,
+			Call::Balances(_) => false,
 		}
 	}
 }

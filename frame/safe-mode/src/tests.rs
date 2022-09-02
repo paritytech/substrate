@@ -106,9 +106,62 @@ fn extend_fails_if_not_enabled() {
 #[test]
 fn automatically_disable_after_timeout() {
 	new_test_ext().execute_with(|| {
+		let enabled_at_block = System::block_number();
 		assert_ok!(SafeMode::force_enable(Origin::root()));
-		run_to(mock::EnableDuration::get() + 2); // Enabled at block 1, so duration +1, and +1 additional block before hook will catch
+		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
 		SafeMode::on_initialize(System::block_number());
 		assert_eq!(SafeMode::enabled(), None);
+	});
+}
+
+#[test]
+fn enabled_filters_balance_calls() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Balances::transfer(Origin::signed(1), 2, 1));
+		assert_ok!(SafeMode::enable(Origin::signed(2)));
+		// assert_err!(Balances::transfer(Origin::signed(3), 1, 1), Error::<Test>::IsEnabled); //
+		// TODO this should be filtered (and ideally throw a same mode error)
+	});
+}
+
+#[test]
+fn enabled_cannot_filter_calls_to_itself() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::enable(Origin::signed(1)));
+		// assert_err!(Balances::transfer(Origin::signed(3), 1, 1), Error::<Test>::IsEnabled); //
+		// TODO this should be filtered (and ideally throw a same mode error)
+		assert_ok!(SafeMode::extend(Origin::signed(2)));
+		assert_ok!(SafeMode::extend(Origin::signed(3)));
+		assert_ok!(SafeMode::force_disable(Origin::root()));
+	});
+}
+
+#[test]
+fn repay_stake_works() {
+	new_test_ext().execute_with(|| {
+		let enabled_at_block = System::block_number();
+		assert_ok!(SafeMode::enable(Origin::signed(1)));
+		assert_err!(
+			SafeMode::repay_stake(Origin::root(), 1, enabled_at_block),
+			Error::<Test>::IsEnabled
+		);
+		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
+		SafeMode::on_initialize(System::block_number());
+		assert_ok!(SafeMode::repay_stake(Origin::root(), 1, enabled_at_block));
+	});
+}
+
+#[test]
+fn slash_stake_works() {
+	new_test_ext().execute_with(|| {
+		let enabled_at_block = System::block_number();
+		assert_ok!(SafeMode::enable(Origin::signed(1)));
+		assert_err!(
+			SafeMode::slash_stake(Origin::root(), 1, enabled_at_block),
+			Error::<Test>::IsEnabled
+		);
+		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
+		SafeMode::on_initialize(System::block_number());
+		assert_ok!(SafeMode::slash_stake(Origin::root(), 1, enabled_at_block));
 	});
 }
