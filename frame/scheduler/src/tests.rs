@@ -523,8 +523,11 @@ fn on_initialize_weight_is_correct() {
 			None,
 			255,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 3, weight: call_weight + Weight::from_ref_time(1) })
-				.into(),
+			RuntimeCall::Logger(LoggerCall::log {
+				i: 3,
+				weight: call_weight + Weight::from_ref_time(1)
+			})
+			.into(),
 		));
 		// Anon Periodic
 		assert_ok!(Scheduler::do_schedule(
