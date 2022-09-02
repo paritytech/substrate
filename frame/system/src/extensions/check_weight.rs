@@ -322,7 +322,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			let max = DispatchInfo {
 				weight: block_weights().get(DispatchClass::Normal).max_extrinsic.unwrap() +
-					Weight::one(),
+					Weight::from_ref_time(1),
 				class: DispatchClass::Normal,
 				..Default::default()
 			};
@@ -348,7 +348,7 @@ mod tests {
 			let okay =
 				DispatchInfo { weight, class: DispatchClass::Operational, ..Default::default() };
 			let max = DispatchInfo {
-				weight: weight + Weight::one(),
+				weight: weight + Weight::from_ref_time(1),
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
@@ -532,7 +532,7 @@ mod tests {
 			let medium =
 				DispatchInfo { weight: normal_limit - base_extrinsic, ..Default::default() };
 			let big = DispatchInfo {
-				weight: normal_limit - base_extrinsic + Weight::one(),
+				weight: normal_limit - base_extrinsic + Weight::from_ref_time(1),
 				..Default::default()
 			};
 			let len = 0_usize;
@@ -551,7 +551,7 @@ mod tests {
 
 			reset_check_weight(&small, false, Weight::zero());
 			reset_check_weight(&medium, false, Weight::zero());
-			reset_check_weight(&big, true, Weight::one());
+			reset_check_weight(&big, true, Weight::from_ref_time(1));
 		})
 	}
 

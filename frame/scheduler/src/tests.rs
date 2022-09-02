@@ -496,7 +496,7 @@ fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 			root(),
 			RuntimeCall::Logger(LoggerCall::log {
 				i: 2600,
-				weight: max_weight / 2 - item_weight + Weight::one()
+				weight: max_weight / 2 - item_weight + Weight::from_ref_time(1)
 			})
 			.into(),
 		));
@@ -523,7 +523,7 @@ fn on_initialize_weight_is_correct() {
 			None,
 			255,
 			root(),
-			RuntimeCall::Logger(LoggerCall::log { i: 3, weight: call_weight + Weight::one() })
+			RuntimeCall::Logger(LoggerCall::log { i: 3, weight: call_weight + Weight::from_ref_time(1) })
 				.into(),
 		));
 		// Anon Periodic

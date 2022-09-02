@@ -99,7 +99,7 @@ fn test_whitelist_call_and_execute() {
 			Whitelist::dispatch_whitelisted_call(
 				Origin::root(),
 				call_hash,
-				call_weight - Weight::one()
+				call_weight - Weight::from_ref_time(1)
 			),
 			crate::Error::<Test>::InvalidCallWeightWitness,
 		);

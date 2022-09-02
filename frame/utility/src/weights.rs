@@ -60,7 +60,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn batch(c: u32, ) -> Weight {
 		Weight::from_ref_time(23_113_000 as RefTimeWeight)
 			// Standard Error: 2_000
-			.saturating_add(Weight::from_ref_time(2_701_000 as RefTimeWeight).scalar_saturating_mul(c as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_701_000 as RefTimeWeight).saturating_mul(c as RefTimeWeight))
 	}
 	fn as_derivative() -> Weight {
 		Weight::from_ref_time(4_182_000 as RefTimeWeight)
@@ -69,7 +69,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn batch_all(c: u32, ) -> Weight {
 		Weight::from_ref_time(18_682_000 as RefTimeWeight)
 			// Standard Error: 1_000
-			.saturating_add(Weight::from_ref_time(2_794_000 as RefTimeWeight).scalar_saturating_mul(c as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_794_000 as RefTimeWeight).saturating_mul(c as RefTimeWeight))
 	}
 	fn dispatch_as() -> Weight {
 		Weight::from_ref_time(12_049_000 as RefTimeWeight)
@@ -78,7 +78,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn force_batch(c: u32, ) -> Weight {
 		Weight::from_ref_time(19_136_000 as RefTimeWeight)
 			// Standard Error: 2_000
-			.saturating_add(Weight::from_ref_time(2_697_000 as RefTimeWeight).scalar_saturating_mul(c as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_697_000 as RefTimeWeight).saturating_mul(c as RefTimeWeight))
 	}
 }
 
@@ -88,7 +88,7 @@ impl WeightInfo for () {
 	fn batch(c: u32, ) -> Weight {
 		Weight::from_ref_time(23_113_000 as RefTimeWeight)
 			// Standard Error: 2_000
-			.saturating_add(Weight::from_ref_time(2_701_000 as RefTimeWeight).scalar_saturating_mul(c as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_701_000 as RefTimeWeight).saturating_mul(c as RefTimeWeight))
 	}
 	fn as_derivative() -> Weight {
 		Weight::from_ref_time(4_182_000 as RefTimeWeight)
@@ -97,7 +97,7 @@ impl WeightInfo for () {
 	fn batch_all(c: u32, ) -> Weight {
 		Weight::from_ref_time(18_682_000 as RefTimeWeight)
 			// Standard Error: 1_000
-			.saturating_add(Weight::from_ref_time(2_794_000 as RefTimeWeight).scalar_saturating_mul(c as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_794_000 as RefTimeWeight).saturating_mul(c as RefTimeWeight))
 	}
 	fn dispatch_as() -> Weight {
 		Weight::from_ref_time(12_049_000 as RefTimeWeight)
@@ -106,6 +106,6 @@ impl WeightInfo for () {
 	fn force_batch(c: u32, ) -> Weight {
 		Weight::from_ref_time(19_136_000 as RefTimeWeight)
 			// Standard Error: 2_000
-			.saturating_add(Weight::from_ref_time(2_697_000 as RefTimeWeight).scalar_saturating_mul(c as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_697_000 as RefTimeWeight).saturating_mul(c as RefTimeWeight))
 	}
 }

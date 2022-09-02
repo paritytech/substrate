@@ -93,6 +93,8 @@ pub mod unsigned {
 	};
 }
 
+#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+pub use self::storage::storage_noop_guard::StorageNoopGuard;
 pub use self::{
 	dispatch::{Callable, Parameter},
 	hash::{

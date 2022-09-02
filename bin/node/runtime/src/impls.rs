@@ -239,7 +239,7 @@ mod multiplier_tests {
 	#[test]
 	fn multiplier_cannot_go_below_limit() {
 		// will not go any further below even if block is empty.
-		run_with_system_weight(Weight::new(), || {
+		run_with_system_weight(Weight::zero(), || {
 			let next = runtime_multiplier_update(min_multiplier());
 			assert_eq!(next, min_multiplier());
 		})
@@ -257,7 +257,7 @@ mod multiplier_tests {
 		// 1 < 0.00001 * k * 0.1875
 		// 10^9 / 1875 < k
 		// k > 533_333 ~ 18,5 days.
-		run_with_system_weight(Weight::new(), || {
+		run_with_system_weight(Weight::zero(), || {
 			// start from 1, the default.
 			let mut fm = Multiplier::one();
 			let mut iterations: u64 = 0;
@@ -419,20 +419,20 @@ mod multiplier_tests {
 	#[test]
 	fn weight_to_fee_should_not_overflow_on_large_weights() {
 		let kb = Weight::from_ref_time(1024);
-		let mb = kb * kb;
+		let mb = 1024u64 * kb;
 		let max_fm = Multiplier::saturating_from_integer(i128::MAX);
 
 		// check that for all values it can compute, correctly.
 		vec![
 			Weight::zero(),
-			Weight::one(),
+			Weight::from_ref_time(1),
 			Weight::from_ref_time(10),
 			Weight::from_ref_time(1000),
 			kb,
-			10 * kb,
-			100 * kb,
+			10u64 * kb,
+			100u64 * kb,
 			mb,
-			10 * mb,
+			10u64 * mb,
 			Weight::from_ref_time(2147483647),
 			Weight::from_ref_time(4294967295),
 			BlockWeights::get().max_block / 2,

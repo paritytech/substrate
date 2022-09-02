@@ -64,7 +64,7 @@ fn sudo_emits_events_correctly() {
 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
 		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
-			weight: Weight::one(),
+			weight: Weight::from_ref_time(1),
 		}));
 		assert_ok!(Sudo::sudo(Origin::signed(1), call));
 		System::assert_has_event(TestEvent::Sudo(Event::Sudid { sudo_result: Ok(()) }));
@@ -101,7 +101,7 @@ fn sudo_unchecked_weight_basics() {
 		// Controls the dispatched weight.
 		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
-			weight: Weight::one(),
+			weight: Weight::from_ref_time(1),
 		}));
 		let sudo_unchecked_weight_call =
 			SudoCall::sudo_unchecked_weight { call, weight: Weight::from_ref_time(1_000) };
@@ -119,7 +119,7 @@ fn sudo_unchecked_weight_emits_events_correctly() {
 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
 		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
-			weight: Weight::one(),
+			weight: Weight::from_ref_time(1),
 		}));
 		assert_ok!(Sudo::sudo_unchecked_weight(
 			Origin::signed(1),
@@ -175,14 +175,14 @@ fn sudo_as_basics() {
 		// A non-privileged function should not work when called with a non-root `key`.
 		let call = Box::new(RuntimeCall::Logger(LoggerCall::non_privileged_log {
 			i: 42,
-			weight: Weight::one(),
+			weight: Weight::from_ref_time(1),
 		}));
 		assert_noop!(Sudo::sudo_as(Origin::signed(3), 2, call), Error::<Test>::RequireSudo);
 
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
 		let call = Box::new(RuntimeCall::Logger(LoggerCall::non_privileged_log {
 			i: 42,
-			weight: Weight::one(),
+			weight: Weight::from_ref_time(1),
 		}));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		assert_eq!(Logger::i32_log(), vec![42i32]);
@@ -200,7 +200,7 @@ fn sudo_as_emits_events_correctly() {
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
 		let call = Box::new(RuntimeCall::Logger(LoggerCall::non_privileged_log {
 			i: 42,
-			weight: Weight::one(),
+			weight: Weight::from_ref_time(1),
 		}));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		System::assert_has_event(TestEvent::Sudo(Event::SudoAsDone { sudo_result: Ok(()) }));

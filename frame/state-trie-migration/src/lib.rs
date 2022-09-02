@@ -842,7 +842,7 @@ pub mod pallet {
 			let items = items as u64;
 			<T as frame_system::Config>::DbWeight::get()
 				.reads_writes(1, 1)
-				.scalar_saturating_mul(items)
+				.saturating_mul(items)
 				// we assume that the read/write per-byte weight is the same for child and top tree.
 				.saturating_add(T::WeightInfo::process_top_key(size))
 		}
@@ -1246,7 +1246,7 @@ mod mock {
 
 	pub(crate) fn run_to_block(n: u32) -> (H256, Weight) {
 		let mut root = Default::default();
-		let mut weight_sum = Weight::new();
+		let mut weight_sum = Weight::zero();
 		log::trace!(target: LOG_TARGET, "running from {:?} to {:?}", System::block_number(), n);
 		while System::block_number() < n {
 			System::set_block_number(System::block_number() + 1);
@@ -1622,7 +1622,7 @@ pub(crate) mod remote_tests {
 		n: <Runtime as frame_system::Config>::BlockNumber,
 	) -> (H256, Weight) {
 		let mut root = Default::default();
-		let mut weight_sum = Weight::new();
+		let mut weight_sum = Weight::zero();
 		while System::<Runtime>::block_number() < n {
 			System::<Runtime>::set_block_number(System::<Runtime>::block_number() + One::one());
 			System::<Runtime>::on_initialize(System::<Runtime>::block_number());

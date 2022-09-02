@@ -54,7 +54,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn store(l: u32, ) -> Weight {
 		Weight::from_ref_time(13_140_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(1_000 as RefTimeWeight).scalar_saturating_mul(l as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(1_000 as RefTimeWeight).saturating_mul(l as RefTimeWeight))
 			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
 	}
 }
@@ -65,7 +65,7 @@ impl WeightInfo for () {
 	fn store(l: u32, ) -> Weight {
 		Weight::from_ref_time(13_140_000 as RefTimeWeight)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(1_000 as RefTimeWeight).scalar_saturating_mul(l as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(1_000 as RefTimeWeight).saturating_mul(l as RefTimeWeight))
 			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
 	}
 }
