@@ -42,6 +42,7 @@ use frame_support::{
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
+use sp_std::vec;
 
 /// Put the instrumented module in storage.
 ///
@@ -96,7 +97,7 @@ where
 			<PristineCode<T>>::insert(&code_hash, orig_code);
 			<OwnerInfoOf<T>>::insert(&code_hash, owner_info);
 			*existing = Some(module);
-			<Pallet<T>>::deposit_event(Event::CodeStored { code_hash });
+			<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeStored { code_hash });
 			Ok(())
 		},
 	})
@@ -133,7 +134,10 @@ pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), Dispa
 }
 
 /// Try to remove code together with all associated information.
-pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
+pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
 		if let Some(owner_info) = existing {
 			ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
@@ -142,7 +146,7 @@ pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> D
 			*existing = None;
 			<PristineCode<T>>::remove(&code_hash);
 			<CodeStorage<T>>::remove(&code_hash);
-			<Pallet<T>>::deposit_event(Event::CodeRemoved { code_hash });
+			<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });
 			Ok(())
 		} else {
 			Err(<Error<T>>::CodeNotFound.into())
