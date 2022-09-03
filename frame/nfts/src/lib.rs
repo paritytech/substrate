@@ -413,8 +413,6 @@ pub mod pallet {
 		NotDelegate,
 		/// The delegate turned out to be different to what was expected.
 		WrongDelegate,
-		/// There is no delegate approved.
-		NoDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
 		/// The named owner has not signed ownership of the collection is acceptable.
@@ -650,8 +648,8 @@ pub mod pallet {
 
 			Self::do_transfer(collection, item, dest, |collection_details, details| {
 				if details.owner != origin && collection_details.admin != origin {
-					let approved = details.approvals.get(&origin);
-					ensure!(approved.is_some(), Error::<T, I>::NoPermission);
+					let approved = details.approvals.contains_key(&origin);
+					ensure!(approved, Error::<T, I>::NoPermission);
 				}
 				Ok(())
 			})
@@ -959,7 +957,7 @@ pub mod pallet {
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
-			let _ = details
+			details
 				.approvals
 				.try_insert(delegate.clone(), None)
 				.map_err(|_| Error::<T, I>::ReachedApprovalLimit)?;
@@ -1013,10 +1011,9 @@ pub mod pallet {
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
-			ensure!(details.approvals.get(&delegate).is_some(), Error::<T, I>::NotDelegate);
+			ensure!(details.approvals.contains_key(&delegate), Error::<T, I>::NotDelegate);
 
 			details.approvals.remove(&delegate);
-			//details.approvals.retain(|d| *d != delegate);
 			Item::<T, I>::insert(&collection, &item, &details);
 			Self::deposit_event(Event::ApprovalCancelled {
 				collection,
@@ -1047,7 +1044,6 @@ pub mod pallet {
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
-			// clear all approvals.
 			details.approvals.clear();
 			Item::<T, I>::insert(&collection, &item, &details);
 			Self::deposit_event(Event::AllApprovalsCancelled {

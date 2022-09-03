@@ -538,7 +538,7 @@ fn approval_lifecycle_works() {
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_ok!(Nfts::transfer(Origin::signed(3), 0, 42, 4));
 		assert_noop!(Nfts::transfer(Origin::signed(3), 0, 42, 3), Error::<Test>::NoPermission);
-		assert!(Item::<Test>::get(0, 42).unwrap().approvals.is_none());
+		assert!(Item::<Test>::get(0, 42).unwrap().approvals.is_empty());
 
 		assert_ok!(Nfts::approve_transfer(Origin::signed(4), 0, 42, 2));
 		assert_ok!(Nfts::transfer(Origin::signed(2), 0, 42, 2));
@@ -553,26 +553,59 @@ fn cancel_approval_works() {
 
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(2), 1, 42, None),
+			Nfts::cancel_approval(Origin::signed(2), 1, 42, 3),
 			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(2), 0, 43, None),
+			Nfts::cancel_approval(Origin::signed(2), 0, 43, 3),
 			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(3), 0, 42, None),
+			Nfts::cancel_approval(Origin::signed(3), 0, 42, 3),
 			Error::<Test>::NoPermission
 		);
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(2), 0, 42, Some(4)),
-			Error::<Test>::WrongDelegate
+			Nfts::cancel_approval(Origin::signed(2), 0, 42, 4),
+			Error::<Test>::NotDelegate
 		);
 
-		assert_ok!(Nfts::cancel_approval(Origin::signed(2), 0, 42, Some(3)));
+		assert_ok!(Nfts::cancel_approval(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(2), 0, 42, None),
-			Error::<Test>::NoDelegate
+			Nfts::cancel_approval(Origin::signed(2), 0, 42, 3),
+			Error::<Test>::NotDelegate
+		);
+	});
+}
+
+#[test]
+fn approving_multiple_accounts_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
+
+		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3));
+		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 4));
+		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 5));
+
+		assert_ok!(Nfts::transfer(Origin::signed(4), 0, 42, 6));
+		assert_noop!(Nfts::transfer(Origin::signed(3), 0, 42, 7), Error::<Test>::NoPermission);
+		assert_noop!(Nfts::transfer(Origin::signed(5), 0, 42, 8), Error::<Test>::NoPermission);
+	});
+}
+
+#[test]
+fn approvals_limit_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
+
+		for i in 3..13 {
+			assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, i));
+		}
+		// the limit is 10
+		assert_noop!(
+			Nfts::approve_transfer(Origin::signed(2), 0, 42, 14),
+			Error::<Test>::ReachedApprovalLimit
 		);
 	});
 }
@@ -585,22 +618,22 @@ fn cancel_approval_works_with_admin() {
 
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(1), 1, 42, None),
+			Nfts::cancel_approval(Origin::signed(1), 1, 42, 1),
 			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(1), 0, 43, None),
+			Nfts::cancel_approval(Origin::signed(1), 0, 43, 1),
 			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(1), 0, 42, Some(4)),
-			Error::<Test>::WrongDelegate
+			Nfts::cancel_approval(Origin::signed(1), 0, 42, 4),
+			Error::<Test>::NotDelegate
 		);
 
-		assert_ok!(Nfts::cancel_approval(Origin::signed(1), 0, 42, Some(3)));
+		assert_ok!(Nfts::cancel_approval(Origin::signed(1), 0, 42, 3));
 		assert_noop!(
-			Nfts::cancel_approval(Origin::signed(1), 0, 42, None),
-			Error::<Test>::NoDelegate
+			Nfts::cancel_approval(Origin::signed(1), 0, 42, 1),
+			Error::<Test>::NotDelegate
 		);
 	});
 }
@@ -613,20 +646,17 @@ fn cancel_approval_works_with_force() {
 
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_noop!(
-			Nfts::cancel_approval(Origin::root(), 1, 42, None),
+			Nfts::cancel_approval(Origin::root(), 1, 42, 1),
 			Error::<Test>::UnknownCollection
 		);
 		assert_noop!(
-			Nfts::cancel_approval(Origin::root(), 0, 43, None),
+			Nfts::cancel_approval(Origin::root(), 0, 43, 1),
 			Error::<Test>::UnknownCollection
 		);
-		assert_noop!(
-			Nfts::cancel_approval(Origin::root(), 0, 42, Some(4)),
-			Error::<Test>::WrongDelegate
-		);
+		assert_noop!(Nfts::cancel_approval(Origin::root(), 0, 42, 4), Error::<Test>::NotDelegate);
 
-		assert_ok!(Nfts::cancel_approval(Origin::root(), 0, 42, Some(3)));
-		assert_noop!(Nfts::cancel_approval(Origin::root(), 0, 42, None), Error::<Test>::NoDelegate);
+		assert_ok!(Nfts::cancel_approval(Origin::root(), 0, 42, 3));
+		assert_noop!(Nfts::cancel_approval(Origin::root(), 0, 42, 1), Error::<Test>::NotDelegate);
 	});
 }
 
