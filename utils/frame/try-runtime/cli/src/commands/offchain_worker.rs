@@ -128,7 +128,7 @@ where
 	);
 
 	let ext = {
-		let builder = command.state.builder::<Block>()?;
+		let builder = command.state.builder::<Block>()?.state_version(shared.state_version);
 
 		let builder = if command.overwrite_wasm_code {
 			log::info!(

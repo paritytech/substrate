@@ -24,7 +24,7 @@ sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-serde_json = "1.0.79"
+serde_json = "1.0.85"
 sc-rpc = { version = "4.0.0-dev", features = [
 	"test-helpers",
 ], path = "../../rpc" }
