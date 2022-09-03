@@ -450,6 +450,8 @@ pub mod pallet {
 		UnknownCollection,
 		/// The item ID has already been used for an item.
 		AlreadyExists,
+		/// The approval had a deadline that expired, so the approval isn't valid anymore.
+		ApprovalExpired,
 		/// The owner turned out to be different to what was expected.
 		WrongOwner,
 		/// Invalid witness data given.
@@ -699,6 +701,13 @@ pub mod pallet {
 				if details.owner != origin && collection_details.admin != origin {
 					let approved = details.approvals.contains_key(&origin);
 					ensure!(approved, Error::<T, I>::NoPermission);
+
+					let deadline =
+						details.approvals.get(&origin).ok_or(Error::<T, I>::NoPermission)?;
+					if let Some(d) = deadline {
+						let block_number = frame_system::Pallet::<T>::block_number();
+						ensure!(*d >= block_number, Error::<T, I>::ApprovalExpired);
+					}
 				}
 				Ok(())
 			})
@@ -989,6 +998,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
+			deadline: Option<<T as frame_system::Config>::BlockNumber>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1008,7 +1018,7 @@ pub mod pallet {
 
 			details
 				.approvals
-				.try_insert(delegate.clone(), None)
+				.try_insert(delegate.clone(), deadline)
 				.map_err(|_| Error::<T, I>::ReachedApprovalLimit)?;
 			Item::<T, I>::insert(&collection, &item, &details);
 
