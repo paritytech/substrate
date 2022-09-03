@@ -18,31 +18,36 @@
 
 //! Blockchain API backend for full nodes.
 
-use super::{client_err, error::FutureResult, ChainBackend};
-use futures::FutureExt;
-use jsonrpc_pubsub::manager::SubscriptionManager;
+use super::{client_err, ChainBackend, Error};
+use crate::SubscriptionTaskExecutor;
+use std::{marker::PhantomData, sync::Arc};
+
+use futures::{
+	future::{self, FutureExt},
+	stream::{self, Stream, StreamExt},
+};
+use jsonrpsee::SubscriptionSink;
 use sc_client_api::{BlockBackend, BlockchainEvents};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::Block as BlockT,
 };
-use std::{marker::PhantomData, sync::Arc};
 
 /// Blockchain API backend for full nodes. Reads all the data from local database.
 pub struct FullChain<Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
-	/// Current subscriptions.
-	subscriptions: SubscriptionManager,
 	/// phantom member to pin the block type
 	_phantom: PhantomData<Block>,
+	/// Subscription executor.
+	executor: SubscriptionTaskExecutor,
 }
 
 impl<Block: BlockT, Client> FullChain<Block, Client> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client>, subscriptions: SubscriptionManager) -> Self {
-		Self { client, subscriptions, _phantom: PhantomData }
+	pub fn new(client: Arc<Client>, executor: SubscriptionTaskExecutor) -> Self {
+		Self { client, executor, _phantom: PhantomData }
 	}
 }
 
@@ -56,17 +61,90 @@ where
 		&self.client
 	}
 
-	fn subscriptions(&self) -> &SubscriptionManager {
-		&self.subscriptions
+	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error> {
+		self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
 	}
 
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
-		let res = self.client.header(BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err);
-		async move { res }.boxed()
+	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error> {
+		self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err)
 	}
 
-	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
-		let res = self.client.block(&BlockId::Hash(self.unwrap_or_best(hash))).map_err(client_err);
-		async move { res }.boxed()
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) {
+		subscribe_headers(
+			&self.client,
+			&self.executor,
+			sink,
+			|| self.client().info().best_hash,
+			|| {
+				self.client()
+					.import_notification_stream()
+					.map(|notification| notification.header)
+			},
+		)
 	}
+
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) {
+		subscribe_headers(
+			&self.client,
+			&self.executor,
+			sink,
+			|| self.client().info().best_hash,
+			|| {
+				self.client()
+					.import_notification_stream()
+					.filter(|notification| future::ready(notification.is_new_best))
+					.map(|notification| notification.header)
+			},
+		)
+	}
+
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) {
+		subscribe_headers(
+			&self.client,
+			&self.executor,
+			sink,
+			|| self.client().info().finalized_hash,
+			|| {
+				self.client()
+					.finality_notification_stream()
+					.map(|notification| notification.header)
+			},
+		)
+	}
+}
+
+/// Subscribe to new headers.
+fn subscribe_headers<Block, Client, F, G, S>(
+	client: &Arc<Client>,
+	executor: &SubscriptionTaskExecutor,
+	mut sink: SubscriptionSink,
+	best_block_hash: G,
+	stream: F,
+) where
+	Block: BlockT + 'static,
+	Block::Header: Unpin,
+	Client: HeaderBackend<Block> + 'static,
+	F: FnOnce() -> S,
+	G: FnOnce() -> Block::Hash,
+	S: Stream<Item = Block::Header> + Send + Unpin + 'static,
+{
+	// send current head right at the start.
+	let maybe_header = client
+		.header(BlockId::Hash(best_block_hash()))
+		.map_err(client_err)
+		.and_then(|header| header.ok_or_else(|| Error::Other("Best header missing.".into())))
+		.map_err(|e| log::warn!("Best header error {:?}", e))
+		.ok();
+
+	// NOTE: by the time we set up the stream there might be a new best block and so there is a risk
+	// that the stream has a hole in it. The alternative would be to look up the best block *after*
+	// we set up the stream and chain it to the stream. Consuming code would need to handle
+	// duplicates at the beginning of the stream though.
+	let stream = stream::iter(maybe_header).chain(stream());
+
+	let fut = async move {
+		sink.pipe_from_stream(stream).await;
+	};
+
+	executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 }

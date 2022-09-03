@@ -24,7 +24,7 @@ use futures_timer::Delay;
 use log::{debug, info, trace};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
-use sc_network::NetworkService;
+use sc_network_common::service::NetworkStatusProvider;
 use sc_transaction_pool_api::TransactionPool;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
@@ -53,12 +53,13 @@ impl Default for OutputFormat {
 }
 
 /// Builds the informant and returns a `Future` that drives the informant.
-pub async fn build<B: BlockT, C, P>(
+pub async fn build<B: BlockT, C, N, P>(
 	client: Arc<C>,
-	network: Arc<NetworkService<B, <B as BlockT>::Hash>>,
+	network: N,
 	pool: Arc<P>,
 	format: OutputFormat,
 ) where
+	N: NetworkStatusProvider<B>,
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
 	P: TransactionPool + MallocSizeOf,
@@ -116,7 +117,7 @@ where
 		if let Some((ref last_num, ref last_hash)) = last_best {
 			if n.header.parent_hash() != last_hash && n.is_new_best {
 				let maybe_ancestor =
-					sp_blockchain::lowest_common_ancestor(&*client, last_hash.clone(), n.hash);
+					sp_blockchain::lowest_common_ancestor(&*client, *last_hash, n.hash);
 
 				match maybe_ancestor {
 					Ok(ref ancestor) if ancestor.hash != *last_hash => info!(
@@ -135,13 +136,13 @@ where
 		}
 
 		if n.is_new_best {
-			last_best = Some((n.header.number().clone(), n.hash.clone()));
+			last_best = Some((*n.header.number(), n.hash));
 		}
 
 		// If we already printed a message for a given block recently,
 		// we should not print it again.
 		if !last_blocks.contains(&n.hash) {
-			last_blocks.push_back(n.hash.clone());
+			last_blocks.push_back(n.hash);
 
 			if last_blocks.len() > max_blocks_to_track {
 				last_blocks.pop_front();

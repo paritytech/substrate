@@ -21,7 +21,7 @@
 // NOTE: could replace unhashed by having only one kind of storage (top trie being the child info
 // of null length parent storage key).
 
-pub use crate::sp_io::KillStorageResult;
+pub use crate::sp_io::{KillStorageResult, MultiRemovalResults};
 use crate::sp_std::prelude::*;
 use codec::{Codec, Decode, Encode};
 pub use sp_core::storage::{ChildInfo, ChildType, StateVersion};
@@ -50,7 +50,7 @@ pub fn get<T: Decode + Sized>(child_info: &ChildInfo, key: &[u8]) -> Option<T> {
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
 pub fn get_or_default<T: Decode + Sized + Default>(child_info: &ChildInfo, key: &[u8]) -> T {
-	get(child_info, key).unwrap_or_else(Default::default)
+	get(child_info, key).unwrap_or_default()
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
@@ -90,7 +90,7 @@ pub fn take<T: Decode + Sized>(child_info: &ChildInfo, key: &[u8]) -> Option<T> 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
 pub fn take_or_default<T: Codec + Sized + Default>(child_info: &ChildInfo, key: &[u8]) -> T {
-	take(child_info, key).unwrap_or_else(Default::default)
+	take(child_info, key).unwrap_or_default()
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
@@ -136,11 +136,64 @@ pub fn exists(child_info: &ChildInfo, key: &[u8]) -> bool {
 /// not make much sense because it is not cumulative when called inside the same block.
 /// Use this function to distribute the deletion of a single child trie across multiple
 /// blocks.
+#[deprecated = "Use `clear_storage` instead"]
 pub fn kill_storage(child_info: &ChildInfo, limit: Option<u32>) -> KillStorageResult {
 	match child_info.child_type() {
 		ChildType::ParentKeyId =>
 			sp_io::default_child_storage::storage_kill(child_info.storage_key(), limit),
 	}
+}
+
+/// Partially clear the child storage of each key-value pair.
+///
+/// # Limit
+///
+/// A *limit* should always be provided through `maybe_limit`. This is one fewer than the
+/// maximum number of backend iterations which may be done by this operation and as such
+/// represents the maximum number of backend deletions which may happen. A *limit* of zero
+/// implies that no keys will be deleted, though there may be a single iteration done.
+///
+/// The limit can be used to partially delete storage items in case it is too large or costly
+/// to delete all in a single operation.
+///
+/// # Cursor
+///
+/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+/// passed once (in the initial call) for any attempt to clear storage. In general, subsequent calls
+/// operating on the same prefix should pass `Some` and this value should be equal to the
+/// previous call result's `maybe_cursor` field. The only exception to this is when you can
+/// guarantee that the subsequent call is in a new block; in this case the previous call's result
+/// cursor need not be passed in an a `None` may be passed instead. This exception may be useful
+/// then making this call solely from a block-hook such as `on_initialize`.
+///
+/// Returns [`MultiRemovalResults`](sp_io::MultiRemovalResults) to inform about the result. Once the
+/// resultant `maybe_cursor` field is `None`, then no further items remain to be deleted.
+///
+/// NOTE: After the initial call for any given child storage, it is important that no keys further
+/// keys are inserted. If so, then they may or may not be deleted by subsequent calls.
+///
+/// # Note
+///
+/// Please note that keys which are residing in the overlay for the child are deleted without
+/// counting towards the `limit`.
+pub fn clear_storage(
+	child_info: &ChildInfo,
+	maybe_limit: Option<u32>,
+	_maybe_cursor: Option<&[u8]>,
+) -> MultiRemovalResults {
+	// TODO: Once the network has upgraded to include the new host functions, this code can be
+	// enabled.
+	// sp_io::default_child_storage::storage_kill(prefix, maybe_limit, maybe_cursor)
+	let r = match child_info.child_type() {
+		ChildType::ParentKeyId =>
+			sp_io::default_child_storage::storage_kill(child_info.storage_key(), maybe_limit),
+	};
+	use sp_io::KillStorageResult::*;
+	let (maybe_cursor, backend) = match r {
+		AllRemoved(db) => (None, db),
+		SomeRemaining(db) => (Some(child_info.storage_key().to_vec()), db),
+	};
+	MultiRemovalResults { maybe_cursor, backend, unique: backend, loops: backend }
 }
 
 /// Ensure `key` has no explicit entry in storage.

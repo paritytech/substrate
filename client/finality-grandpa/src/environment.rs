@@ -451,7 +451,7 @@ impl<BE, Block: BlockT, C, N: NetworkT<Block>, SC, VR> Environment<BE, Block, C,
 		F: FnOnce(&VoterSetState<Block>) -> Result<Option<VoterSetState<Block>>, Error>,
 	{
 		self.voter_set_state.with(|voter_set_state| {
-			if let Some(set_state) = f(&voter_set_state)? {
+			if let Some(set_state) = f(voter_set_state)? {
 				*voter_set_state = set_state;
 
 				if let Some(metrics) = self.metrics.as_ref() {
@@ -987,11 +987,9 @@ where
 			let mut current_rounds = current_rounds.clone();
 			current_rounds.remove(&round);
 
-			// NOTE: this condition should always hold as GRANDPA rounds are always
+			// NOTE: this entry should always exist as GRANDPA rounds are always
 			// started in increasing order, still it's better to play it safe.
-			if !current_rounds.contains_key(&(round + 1)) {
-				current_rounds.insert(round + 1, HasVoted::No);
-			}
+			current_rounds.entry(round + 1).or_insert(HasVoted::No);
 
 			let set_state = VoterSetState::<Block>::Live { completed_rounds, current_rounds };
 
@@ -1046,7 +1044,7 @@ where
 					.votes
 					.extend(historical_votes.seen().iter().skip(n_existing_votes).cloned());
 				already_completed.state = state;
-				crate::aux_schema::write_concluded_round(&*self.client, &already_completed)?;
+				crate::aux_schema::write_concluded_round(&*self.client, already_completed)?;
 			}
 
 			let set_state = VoterSetState::<Block>::Live {

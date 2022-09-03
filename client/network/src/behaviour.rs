@@ -18,11 +18,10 @@
 
 use crate::{
 	bitswap::Bitswap,
-	config::ProtocolId,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	peer_info,
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
-	request_responses, DhtEvent, ObservedRole,
+	request_responses,
 };
 
 use bytes::Bytes;
@@ -39,11 +38,15 @@ use libp2p::{
 	NetworkBehaviour,
 };
 use log::debug;
-use prost::Message;
-use sc_client_api::{BlockBackend, ProofProvider};
+
 use sc_consensus::import_queue::{IncomingBlock, Origin};
+use sc_network_common::{
+	config::ProtocolId,
+	protocol::event::{DhtEvent, ObservedRole},
+	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
+};
 use sc_peerset::PeersetHandle;
-use sp_blockchain::{HeaderBackend, HeaderMetadata};
+use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
@@ -57,9 +60,7 @@ use std::{
 	time::Duration,
 };
 
-pub use crate::request_responses::{
-	IfDisconnected, InboundFailure, OutboundFailure, RequestFailure, RequestId, ResponseFailure,
-};
+pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, ResponseFailure};
 
 /// General behaviour of the network. Combines all protocols together.
 #[derive(NetworkBehaviour)]
@@ -67,13 +68,7 @@ pub use crate::request_responses::{
 pub struct Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// All the substrate-specific protocols.
 	substrate: Protocol<B, Client>,
@@ -83,7 +78,7 @@ where
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
 	/// Bitswap server for blockchain data.
-	bitswap: Toggle<Bitswap<B, Client>>,
+	bitswap: Toggle<Bitswap<B>>,
 	/// Generic request-response protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 
@@ -206,13 +201,7 @@ pub enum BehaviourOut<B: BlockT> {
 impl<B, Client> Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Builds a new `Behaviour`.
 	pub fn new(
@@ -220,13 +209,13 @@ where
 		user_agent: String,
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
-		block_request_protocol_config: request_responses::ProtocolConfig,
-		state_request_protocol_config: request_responses::ProtocolConfig,
-		warp_sync_protocol_config: Option<request_responses::ProtocolConfig>,
-		bitswap: Option<Bitswap<B, Client>>,
-		light_client_request_protocol_config: request_responses::ProtocolConfig,
+		block_request_protocol_config: ProtocolConfig,
+		state_request_protocol_config: ProtocolConfig,
+		warp_sync_protocol_config: Option<ProtocolConfig>,
+		bitswap: Option<Bitswap<B>>,
+		light_client_request_protocol_config: ProtocolConfig,
 		// All remaining request protocol configs.
-		mut request_response_protocols: Vec<request_responses::ProtocolConfig>,
+		mut request_response_protocols: Vec<ProtocolConfig>,
 		peerset: PeersetHandle,
 	) -> Result<Self, request_responses::RegisterError> {
 		// Extract protocol name and add to `request_response_protocols`.
@@ -350,13 +339,7 @@ fn reported_roles_to_observed_role(roles: Roles) -> ObservedRole {
 impl<B, Client> NetworkBehaviourEventProcess<void::Void> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
@@ -366,13 +349,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: CustomMessageOutcome<B>) {
 		match event {
@@ -382,42 +359,44 @@ where
 				.events
 				.push_back(BehaviourOut::JustificationImport(origin, hash, nb, justification)),
 			CustomMessageOutcome::BlockRequest { target, request, pending_response } => {
-				let mut buf = Vec::with_capacity(request.encoded_len());
-				if let Err(err) = request.encode(&mut buf) {
-					log::warn!(
-						target: "sync",
-						"Failed to encode block request {:?}: {:?}",
-						request, err
-					);
-					return
+				match self.substrate.encode_block_request(&request) {
+					Ok(data) => {
+						self.request_responses.send_request(
+							&target,
+							&self.block_request_protocol_name,
+							data,
+							pending_response,
+							IfDisconnected::ImmediateError,
+						);
+					},
+					Err(err) => {
+						log::warn!(
+							target: "sync",
+							"Failed to encode block request {:?}: {:?}",
+							request, err
+						);
+					},
 				}
-
-				self.request_responses.send_request(
-					&target,
-					&self.block_request_protocol_name,
-					buf,
-					pending_response,
-					IfDisconnected::ImmediateError,
-				);
 			},
 			CustomMessageOutcome::StateRequest { target, request, pending_response } => {
-				let mut buf = Vec::with_capacity(request.encoded_len());
-				if let Err(err) = request.encode(&mut buf) {
-					log::warn!(
-						target: "sync",
-						"Failed to encode state request {:?}: {:?}",
-						request, err
-					);
-					return
+				match self.substrate.encode_state_request(&request) {
+					Ok(data) => {
+						self.request_responses.send_request(
+							&target,
+							&self.state_request_protocol_name,
+							data,
+							pending_response,
+							IfDisconnected::ImmediateError,
+						);
+					},
+					Err(err) => {
+						log::warn!(
+							target: "sync",
+							"Failed to encode state request {:?}: {:?}",
+							request, err
+						);
+					},
 				}
-
-				self.request_responses.send_request(
-					&target,
-					&self.state_request_protocol_name,
-					buf,
-					pending_response,
-					IfDisconnected::ImmediateError,
-				);
 			},
 			CustomMessageOutcome::WarpSyncRequest { target, request, pending_response } =>
 				match &self.warp_sync_protocol_name {
@@ -434,7 +413,6 @@ where
 							"Trying to send warp sync request when no protocol is configured {:?}",
 							request,
 						);
-						return
 					},
 				},
 			CustomMessageOutcome::NotificationStreamOpened {
@@ -449,7 +427,7 @@ where
 					protocol,
 					negotiated_fallback,
 					role: reported_roles_to_observed_role(roles),
-					notifications_sink: notifications_sink.clone(),
+					notifications_sink,
 				});
 			},
 			CustomMessageOutcome::NotificationStreamReplaced {
@@ -480,13 +458,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: request_responses::Event) {
 		match event {
@@ -512,13 +484,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: peer_info::PeerInfoEvent) {
 		let peer_info::PeerInfoEvent::Identified {
@@ -545,13 +511,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
@@ -589,13 +549,7 @@ where
 impl<B, Client> Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn poll(
 		&mut self,

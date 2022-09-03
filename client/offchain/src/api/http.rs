@@ -32,7 +32,7 @@ use bytes::buf::{Buf, Reader};
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, future, prelude::*};
 use hyper::{client, Body, Client as HyperClient};
-use hyper_rustls::HttpsConnector;
+use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use once_cell::sync::Lazy;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
@@ -53,7 +53,13 @@ pub struct SharedClient(Arc<Lazy<HyperClient<HttpsConnector<client::HttpConnecto
 impl SharedClient {
 	pub fn new() -> Self {
 		Self(Arc::new(Lazy::new(|| {
-			HyperClient::builder().build(HttpsConnector::with_native_roots())
+			let connector = HttpsConnectorBuilder::new()
+				.with_native_roots()
+				.https_or_http()
+				.enable_http1()
+				.enable_http2()
+				.build();
+			HyperClient::builder().build(connector)
 		})))
 	}
 }
@@ -199,7 +205,7 @@ impl HttpApi {
 	) -> Result<(), HttpError> {
 		// Extract the request from the list.
 		// Don't forget to add it back if necessary when returning.
-		let mut request = self.requests.remove(&request_id).ok_or_else(|| HttpError::Invalid)?;
+		let mut request = self.requests.remove(&request_id).ok_or(HttpError::Invalid)?;
 
 		let mut deadline = timestamp::deadline_to_future(deadline);
 		// Closure that writes data to a sender, taking the deadline into account. Can return `Ok`

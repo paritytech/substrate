@@ -17,14 +17,14 @@
 
 //! Miscellaneous types.
 
-use codec::{Decode, Encode, FullCodec};
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
 use sp_runtime::{ArithmeticError, DispatchError, TokenError};
 use sp_std::fmt::Debug;
 
 /// One of a number of consequences of withdrawing a fungible from an account.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum WithdrawConsequence<Balance> {
 	/// Withdraw could not happen since the amount to be withdrawn is less than the total funds in
 	/// the account.
@@ -69,7 +69,7 @@ impl<Balance: Zero> WithdrawConsequence<Balance> {
 }
 
 /// One of a number of consequences of withdrawing a fungible from an account.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum DepositConsequence {
 	/// Deposit couldn't happen due to the amount being too low. This is usually because the
 	/// account doesn't yet exist and the deposit wouldn't bring it to at least the minimum needed
@@ -104,7 +104,7 @@ impl DepositConsequence {
 }
 
 /// Simple boolean for whether an account needs to be kept in existence.
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, Eq, PartialEq)]
 pub enum ExistenceRequirement {
 	/// Operation must not result in the account going out of existence.
 	///
@@ -116,7 +116,9 @@ pub enum ExistenceRequirement {
 }
 
 /// Status of funds.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
+#[derive(
+	PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -126,7 +128,7 @@ pub enum BalanceStatus {
 
 bitflags::bitflags! {
 	/// Reasons for moving funds out of an account.
-	#[derive(Encode, Decode)]
+	#[derive(Encode, Decode, MaxEncodedLen)]
 	pub struct WithdrawReasons: u8 {
 		/// In order to pay for (system) transaction costs.
 		const TRANSACTION_PAYMENT = 0b00000001;
@@ -161,16 +163,29 @@ impl WithdrawReasons {
 }
 
 /// Simple amalgamation trait to collect together properties for an AssetId under one roof.
-pub trait AssetId: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo {}
-impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo> AssetId for T {}
+pub trait AssetId:
+	FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen
+{
+}
+impl<T: FullCodec + Copy + Eq + PartialEq + Debug + scale_info::TypeInfo + MaxEncodedLen> AssetId
+	for T
+{
+}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
 pub trait Balance:
-	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo
+	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo + MaxEncodedLen
 {
 }
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo> Balance
-	for T
+impl<
+		T: AtLeast32BitUnsigned
+			+ FullCodec
+			+ Copy
+			+ Default
+			+ Debug
+			+ scale_info::TypeInfo
+			+ MaxEncodedLen,
+	> Balance for T
 {
 }
 
@@ -182,16 +197,16 @@ pub trait BalanceConversion<InBalance, AssetId, OutBalance> {
 
 /// Trait to handle asset locking mechanism to ensure interactions with the asset can be implemented
 /// downstream to extend logic of Uniques current functionality.
-pub trait Locker<ClassId, InstanceId> {
+pub trait Locker<CollectionId, ItemId> {
 	/// Check if the asset should be locked and prevent interactions with the asset from executing.
-	fn is_locked(class: ClassId, instance: InstanceId) -> bool;
+	fn is_locked(collection: CollectionId, item: ItemId) -> bool;
 }
 
-impl<ClassId, InstanceId> Locker<ClassId, InstanceId> for () {
+impl<CollectionId, ItemId> Locker<CollectionId, ItemId> for () {
 	// Default will be false if not implemented downstream.
 	// Note: The logic check in this function must be constant time and consistent for benchmarks
 	// to work.
-	fn is_locked(_class: ClassId, _instance: InstanceId) -> bool {
+	fn is_locked(_collection: CollectionId, _item: ItemId) -> bool {
 		false
 	}
 }

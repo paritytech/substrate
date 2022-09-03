@@ -566,7 +566,7 @@ where
 			ViableSessionDescriptor::UnimportedGenesis(slot) =>
 				Some(ViableSession::UnimportedGenesis(make_genesis(*slot))),
 			ViableSessionDescriptor::Signaled(identifier, _) =>
-				self.session(&identifier).map(ViableSession::Signaled),
+				self.session(identifier).map(ViableSession::Signaled),
 		}
 	}
 
@@ -599,7 +599,7 @@ where
 			ViableSessionDescriptor::UnimportedGenesis(slot) =>
 				Some(ViableSession::UnimportedGenesis(make_genesis(*slot))),
 			ViableSessionDescriptor::Signaled(identifier, _) =>
-				self.session_mut(&identifier).map(ViableSession::Signaled),
+				self.session_mut(identifier).map(ViableSession::Signaled),
 		}
 	}
 
@@ -618,7 +618,7 @@ where
 	{
 		match descriptor {
 			ViableSessionDescriptor::UnimportedGenesis(slot) => Some(make_genesis(*slot)),
-			ViableSessionDescriptor::Signaled(identifier, _) => self.session(&identifier).cloned(),
+			ViableSessionDescriptor::Signaled(identifier, _) => self.session(identifier).cloned(),
 		}
 	}
 
@@ -750,12 +750,15 @@ where
 
 		if let Some(gap) = &mut self.gap {
 			if let PersistedSession::Regular(e) = session {
-				session = match gap.import(slot, hash.clone(), number.clone(), e) {
+				session = match gap.import(slot, hash, number, e) {
 					Ok(()) => return Ok(()),
 					Err(e) => PersistedSession::Regular(e),
 				}
 			}
-		} else if session.is_genesis() && !self.sessions.values().all(|e| e.is_genesis()) {
+		} else if session.is_genesis() &&
+			!self.sessions.is_empty() &&
+			!self.sessions.values().any(|e| e.is_genesis())
+		{
 			// There's a genesis session imported when we already have an active session.
 			// This happens after the warp sync as the ancient blocks download start.
 			// We need to start tracking gap sessions here.
@@ -1060,7 +1063,7 @@ mod tests {
 			let incremented_session = session_changes
 				.viable_session(&genesis_session_a_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			session_changes
 				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_session)
@@ -1077,7 +1080,7 @@ mod tests {
 			let incremented_session = session_changes
 				.viable_session(&genesis_session_x_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			session_changes
 				.import(&is_descendent_of, *b"X", 1, *b"0", incremented_session)
@@ -1142,7 +1145,7 @@ mod tests {
 			let incremented_session = session_changes
 				.viable_session(&genesis_session_a_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			session_changes
 				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_session)
@@ -1159,7 +1162,7 @@ mod tests {
 			let incremented_session = session_changes
 				.viable_session(&genesis_session_x_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			session_changes
 				.import(&is_descendent_of, *b"X", 1, *b"0", incremented_session)
@@ -1170,15 +1173,17 @@ mod tests {
 		session_changes.clear_gap();
 
 		// Check that both sessions are available.
-		session_changes
+		let session_a = session_changes
 			.session_data_for_child_of(&is_descendent_of, b"A", 1, 101, &make_genesis)
 			.unwrap()
 			.unwrap();
 
-		session_changes
+		let session_x = session_changes
 			.session_data_for_child_of(&is_descendent_of, b"X", 1, 1001, &make_genesis)
 			.unwrap()
 			.unwrap();
+
+		assert!(session_a != session_x)
 	}
 
 	#[test]
@@ -1215,7 +1220,7 @@ mod tests {
 		let incremented_session = session_changes
 			.viable_session(&genesis_session_a_descriptor, &make_genesis)
 			.unwrap()
-			.increment(next_descriptor.clone());
+			.increment(next_descriptor);
 
 		session_changes
 			.import(&is_descendent_of, *b"1", 1, *b"0", incremented_session)
@@ -1287,5 +1292,109 @@ mod tests {
 
 		session_changes.clear_gap();
 		assert!(session_changes.gap.is_none());
+	}
+
+	/// Test that ensures that the gap is not enabled when there's still genesis
+	/// sessions imported, regardless of whether there are already other further
+	/// sessions imported descending from such genesis sessions.
+	#[test]
+	fn gap_is_not_enabled_when_at_least_one_genesis_session_is_still_imported() {
+		//     A (#1) - B (#201)
+		//   /
+		// 0 - C (#1)
+		//
+		// The session duration is 100 slots, each of these blocks represents
+		// an session change block. block B starts a new session at #201 since the
+		// genesis session spans two sessions.
+
+		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
+			match (base, block) {
+				(b"0", _) => Ok(true),
+				(b"A", b"B") => Ok(true),
+				_ => Ok(false),
+			}
+		};
+
+		let duration = 100;
+		let make_genesis = |slot| Session { start_slot: slot, duration };
+		let mut session_changes = SessionChanges::new();
+		let next_descriptor = ();
+
+		// insert genesis session for A at slot 1
+		{
+			let genesis_session_a_descriptor = session_changes
+				.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 1)
+				.unwrap()
+				.unwrap();
+
+			let incremented_session = session_changes
+				.viable_session(&genesis_session_a_descriptor, &make_genesis)
+				.unwrap()
+				.increment(next_descriptor);
+
+			session_changes
+				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_session)
+				.unwrap();
+		}
+
+		// insert regular session for B at slot 201, descending from A
+		{
+			let session_b_descriptor = session_changes
+				.session_descriptor_for_child_of(&is_descendent_of, b"A", 1, 201)
+				.unwrap()
+				.unwrap();
+
+			let incremented_session = session_changes
+				.viable_session(&session_b_descriptor, &make_genesis)
+				.unwrap()
+				.increment(next_descriptor);
+
+			session_changes
+				.import(&is_descendent_of, *b"B", 201, *b"A", incremented_session)
+				.unwrap();
+		}
+
+		// insert genesis session for C at slot 1000
+		{
+			let genesis_session_x_descriptor = session_changes
+				.session_descriptor_for_child_of(&is_descendent_of, b"0", 0, 1000)
+				.unwrap()
+				.unwrap();
+
+			let incremented_session = session_changes
+				.viable_session(&genesis_session_x_descriptor, &make_genesis)
+				.unwrap()
+				.increment(next_descriptor);
+
+			session_changes
+				.import(&is_descendent_of, *b"C", 1, *b"0", incremented_session)
+				.unwrap();
+		}
+
+		// Clearing the gap should be a no-op.
+		session_changes.clear_gap();
+
+		// Check that all three sessions are available.
+		let session_a = session_changes
+			.session_data_for_child_of(&is_descendent_of, b"A", 1, 10, &make_genesis)
+			.unwrap()
+			.unwrap();
+
+		let session_b = session_changes
+			.session_data_for_child_of(&is_descendent_of, b"B", 201, 201, &make_genesis)
+			.unwrap()
+			.unwrap();
+
+		assert!(session_a != session_b);
+
+		// the genesis session A will span slots [1, 200] with session B starting at slot 201
+		assert_eq!(session_b.start_slot(), 201);
+
+		let session_c = session_changes
+			.session_data_for_child_of(&is_descendent_of, b"C", 1, 1001, &make_genesis)
+			.unwrap()
+			.unwrap();
+
+		assert!(session_a != session_c);
 	}
 }

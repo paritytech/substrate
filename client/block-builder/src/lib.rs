@@ -264,7 +264,7 @@ where
 		let storage_changes = self
 			.api
 			.into_storage_changes(&state, parent_hash)
-			.map_err(|e| sp_blockchain::Error::StorageChanges(e))?;
+			.map_err(sp_blockchain::Error::StorageChanges)?;
 
 		Ok(BuiltBlock {
 			block: <Block as BlockT>::new(header, self.extrinsics),

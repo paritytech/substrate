@@ -508,9 +508,9 @@ pub mod pallet {
 
 				Ok(())
 			} else if exists {
-				Err(Error::<T>::DuplicatedHeartbeat)?
+				Err(Error::<T>::DuplicatedHeartbeat.into())
 			} else {
-				Err(Error::<T>::InvalidKey)?
+				Err(Error::<T>::InvalidKey.into())
 			}
 		}
 	}
@@ -573,7 +573,7 @@ pub mod pallet {
 
 				// check signature (this is expensive so we do it last).
 				let signature_valid = heartbeat.using_encoded(|encoded_heartbeat| {
-					authority_id.verify(&encoded_heartbeat, &signature)
+					authority_id.verify(&encoded_heartbeat, signature)
 				});
 
 				if !signature_valid {
@@ -900,7 +900,9 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		// Remove all received heartbeats and number of authored blocks from the
 		// current session, they have already been processed and won't be needed
 		// anymore.
+		#[allow(deprecated)]
 		ReceivedHeartbeats::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
+		#[allow(deprecated)]
 		AuthoredBlocks::<T>::remove_prefix(&T::ValidatorSet::session_index(), None);
 
 		if offenders.is_empty() {
@@ -956,12 +958,12 @@ impl<Offender: Clone> Offence<Offender> for UnresponsivenessOffence<Offender> {
 		self.session_index
 	}
 
-	fn slash_fraction(offenders: u32, validator_set_count: u32) -> Perbill {
+	fn slash_fraction(&self, offenders: u32) -> Perbill {
 		// the formula is min((3 * (k - (n / 10 + 1))) / n, 1) * 0.07
 		// basically, 10% can be offline with no slash, but after that, it linearly climbs up to 7%
 		// when 13/30 are offline (around 5% when 1/3 are offline).
-		if let Some(threshold) = offenders.checked_sub(validator_set_count / 10 + 1) {
-			let x = Perbill::from_rational(3 * threshold, validator_set_count);
+		if let Some(threshold) = offenders.checked_sub(self.validator_set_count / 10 + 1) {
+			let x = Perbill::from_rational(3 * threshold, self.validator_set_count);
 			x.saturating_mul(Perbill::from_percent(7))
 		} else {
 			Perbill::default()

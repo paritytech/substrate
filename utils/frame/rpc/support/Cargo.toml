@@ -2,8 +2,8 @@
 name = "substrate-frame-rpc-support"
 version = "3.0.0"
 authors = [
-    "Parity Technologies <admin@parity.io>",
-    "Andrew Dirksen <andrew@dirksen.com>",
+	"Parity Technologies <admin@parity.io>",
+	"Andrew Dirksen <andrew@dirksen.com>",
 ]
 edition = "2021"
 license = "Apache-2.0"
@@ -15,15 +15,16 @@ description = "Substrate RPC for FRAME's support"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-futures = "0.3.21"
-jsonrpc-client-transports = { version = "18.0.0", features = ["http"] }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
+futures = "0.3.21"
+jsonrpsee = { version = "0.15.1", features = ["jsonrpsee-types"] }
 serde = "1"
 frame-support = { version = "4.0.0-dev", path = "../../../../frame/support" }
-sp-storage = { version = "6.0.0", path = "../../../../primitives/storage" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
+sp-storage = { version = "6.0.0", path = "../../../../primitives/storage" }
 
 [dev-dependencies]
-frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
-scale-info = "2.0.1"
+scale-info = "2.1.1"
+jsonrpsee = { version = "0.15.1", features = ["ws-client", "jsonrpsee-types"] }
 tokio = "1.17.0"
+frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }

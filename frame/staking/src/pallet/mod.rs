@@ -22,12 +22,12 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
-		LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
+		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EnsureOrigin,
+		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::Weight,
 };
-use frame_system::{ensure_root, ensure_signed, offchain::SendTransactionTypes, pallet_prelude::*};
+use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
 	Perbill, Percent,
@@ -40,10 +40,10 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-	slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints, Exposure,
-	Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations, PositiveImbalanceOf, Releases,
-	RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-	ValidatorPrefs,
+	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
+	EraRewardPoints, Exposure, Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations,
+	PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakingLedger,
+	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -73,7 +73,7 @@ pub mod pallet {
 	}
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+	pub trait Config: frame_system::Config {
 		/// The staking balance.
 		type Currency: LockableCurrency<
 			Self::AccountId,
@@ -477,10 +477,6 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// The earliest era for which we have a pending, unapplied slash.
-	#[pallet::storage]
-	pub(crate) type EarliestUnappliedSlash<T> = StorageValue<_, EraIndex>;
-
 	/// The last planned session scheduled by the session pallet.
 	///
 	/// This is basically in sync with the call to [`pallet_session::SessionManager::new_session`].
@@ -580,7 +576,7 @@ pub mod pallet {
 					status
 				);
 				assert!(
-					T::Currency::free_balance(&stash) >= balance,
+					T::Currency::free_balance(stash) >= balance,
 					"Stash does not have enough balance to bond."
 				);
 				frame_support::assert_ok!(<Pallet<T>>::bond(
@@ -748,6 +744,11 @@ pub mod pallet {
 				);
 			}
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state(n)
+		}
 	}
 
 	#[pallet::call]
@@ -772,25 +773,25 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::bond())]
 		pub fn bond(
 			origin: OriginFor<T>,
-			controller: <T::Lookup as StaticLookup>::Source,
+			controller: AccountIdLookupOf<T>,
 			#[pallet::compact] value: BalanceOf<T>,
 			payee: RewardDestination<T::AccountId>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 
 			if <Bonded<T>>::contains_key(&stash) {
-				Err(Error::<T>::AlreadyBonded)?
+				return Err(Error::<T>::AlreadyBonded.into())
 			}
 
 			let controller = T::Lookup::lookup(controller)?;
 
 			if <Ledger<T>>::contains_key(&controller) {
-				Err(Error::<T>::AlreadyPaired)?
+				return Err(Error::<T>::AlreadyPaired.into())
 			}
 
 			// Reject a bond which is considered to be _dust_.
 			if value < T::Currency::minimum_balance() {
-				Err(Error::<T>::InsufficientBond)?
+				return Err(Error::<T>::InsufficientBond.into())
 			}
 
 			frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
@@ -858,11 +859,11 @@ pub mod pallet {
 				Self::update_ledger(&controller, &ledger);
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&stash) {
-					T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash));
-					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+					let _ =
+						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
 				}
 
-				Self::deposit_event(Event::<T>::Bonded(stash.clone(), extra));
+				Self::deposit_event(Event::<T>::Bonded(stash, extra));
 			}
 			Ok(())
 		}
@@ -941,7 +942,8 @@ pub mod pallet {
 
 				// update this staker in the sorted list, if they exist in it.
 				if T::VoterList::contains(&ledger.stash) {
-					T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+					let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
+						.defensive();
 				}
 
 				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
@@ -1057,7 +1059,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::nominate(targets.len() as u32))]
 		pub fn nominate(
 			origin: OriginFor<T>,
-			targets: Vec<<T::Lookup as StaticLookup>::Source>,
+			targets: Vec<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 
@@ -1177,13 +1179,13 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_controller())]
 		pub fn set_controller(
 			origin: OriginFor<T>,
-			controller: <T::Lookup as StaticLookup>::Source,
+			controller: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let stash = ensure_signed(origin)?;
 			let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
 			let controller = T::Lookup::lookup(controller)?;
 			if <Ledger<T>>::contains_key(&controller) {
-				Err(Error::<T>::AlreadyPaired)?
+				return Err(Error::<T>::AlreadyPaired.into())
 			}
 			if controller != old_controller {
 				<Bonded<T>>::insert(&stash, &controller);
@@ -1426,7 +1428,8 @@ pub mod pallet {
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
 			if T::VoterList::contains(&ledger.stash) {
-				T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash));
+				let _ = T::VoterList::on_update(&ledger.stash, Self::weight_of(&ledger.stash))
+					.defensive();
 			}
 
 			let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
@@ -1466,8 +1469,8 @@ pub mod pallet {
 			ensure_root(origin)?;
 			if let Some(current_era) = Self::current_era() {
 				HistoryDepth::<T>::mutate(|history_depth| {
-					let last_kept = current_era.checked_sub(*history_depth).unwrap_or(0);
-					let new_last_kept = current_era.checked_sub(new_history_depth).unwrap_or(0);
+					let last_kept = current_era.saturating_sub(*history_depth);
+					let new_last_kept = current_era.saturating_sub(new_history_depth);
 					for era_index in last_kept..new_last_kept {
 						Self::clear_era_information(era_index);
 					}
@@ -1522,10 +1525,7 @@ pub mod pallet {
 		/// Note: Making this call only makes sense if you first set the validator preferences to
 		/// block any further nominations.
 		#[pallet::weight(T::WeightInfo::kick(who.len() as u32))]
-		pub fn kick(
-			origin: OriginFor<T>,
-			who: Vec<<T::Lookup as StaticLookup>::Source>,
-		) -> DispatchResult {
+		pub fn kick(origin: OriginFor<T>, who: Vec<AccountIdLookupOf<T>>) -> DispatchResult {
 			let controller = ensure_signed(origin)?;
 			let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let stash = &ledger.stash;

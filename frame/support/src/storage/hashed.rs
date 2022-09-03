@@ -28,7 +28,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get(&hash(key).as_ref())
+	unhashed::get(hash(key).as_ref())
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
@@ -39,7 +39,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get_or_default(&hash(key).as_ref())
+	unhashed::get_or_default(hash(key).as_ref())
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
@@ -50,7 +50,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get_or(&hash(key).as_ref(), default_value)
+	unhashed::get_or(hash(key).as_ref(), default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
@@ -62,7 +62,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get_or_else(&hash(key).as_ref(), default_value)
+	unhashed::get_or_else(hash(key).as_ref(), default_value)
 }
 
 /// Put `value` in storage under `key`.
@@ -72,7 +72,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::put(&hash(key).as_ref(), value)
+	unhashed::put(hash(key).as_ref(), value)
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
@@ -82,7 +82,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::take(&hash(key).as_ref())
+	unhashed::take(hash(key).as_ref())
 }
 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
@@ -93,7 +93,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::take_or_default(&hash(key).as_ref())
+	unhashed::take_or_default(hash(key).as_ref())
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
@@ -104,7 +104,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::take_or(&hash(key).as_ref(), default_value)
+	unhashed::take_or(hash(key).as_ref(), default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
@@ -116,7 +116,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::take_or_else(&hash(key).as_ref(), default_value)
+	unhashed::take_or_else(hash(key).as_ref(), default_value)
 }
 
 /// Check to see if `key` has an explicit entry in storage.
@@ -125,7 +125,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::exists(&hash(key).as_ref())
+	unhashed::exists(hash(key).as_ref())
 }
 
 /// Ensure `key` has no explicit entry in storage.
@@ -134,7 +134,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::kill(&hash(key).as_ref())
+	unhashed::kill(hash(key).as_ref())
 }
 
 /// Get a Vec of bytes from storage.
@@ -143,7 +143,7 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::get_raw(&hash(key).as_ref())
+	unhashed::get_raw(hash(key).as_ref())
 }
 
 /// Put a raw byte slice into storage.
@@ -152,5 +152,5 @@ where
 	HashFn: Fn(&[u8]) -> R,
 	R: AsRef<[u8]>,
 {
-	unhashed::put_raw(&hash(key).as_ref(), value)
+	unhashed::put_raw(hash(key).as_ref(), value)
 }

@@ -15,5 +15,5 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 backtrace = "0.3.64"
-regex = "1.5.5"
 lazy_static = "1.4.0"
+regex = "1.5.5"

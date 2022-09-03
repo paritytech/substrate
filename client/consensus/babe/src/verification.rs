@@ -99,7 +99,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				primary.slot,
 			);
 
-			check_primary_header::<B>(pre_hash, primary, sig, &session, session.config.c)?;
+			check_primary_header::<B>(pre_hash, primary, sig, session, session.config.c)?;
 		},
 		PreDigest::SecondaryPlain(secondary)
 			if session.config.allowed_slots.is_secondary_plain_slots_allowed() =>
@@ -110,7 +110,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				secondary.slot,
 			);
 
-			check_secondary_plain_header::<B>(pre_hash, secondary, sig, &session)?;
+			check_secondary_plain_header::<B>(pre_hash, secondary, sig, session)?;
 		},
 		PreDigest::SecondaryVRF(secondary)
 			if session.config.allowed_slots.is_secondary_vrf_slots_allowed() =>
@@ -121,7 +121,7 @@ pub(super) fn check_header<B: BlockT + Sized>(
 				secondary.slot,
 			);
 
-			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, &session)?;
+			check_secondary_vrf_header::<B>(pre_hash, secondary, sig, session)?;
 		},
 		_ => return Err(babe_err(Error::SecondarySlotAssignmentsDisabled)),
 	}
@@ -153,7 +153,7 @@ fn check_primary_header<B: BlockT + Sized>(
 ) -> Result<(), Error<B>> {
 	let author = &session.authorities[pre_digest.authority_index as usize].0;
 
-	if AuthorityPair::verify(&signature, pre_hash, &author) {
+	if AuthorityPair::verify(&signature, pre_hash, author) {
 		let (inout, _) = {
 			let transcript = make_transcript(&session.randomness, pre_digest.slot, session.session_index);
 
@@ -191,7 +191,7 @@ fn check_secondary_plain_header<B: BlockT>(
 	// chain state.
 	let expected_author =
 		secondary_slot_author(pre_digest.slot, &session.authorities, session.randomness)
-			.ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
+			.ok_or(Error::NoSecondaryAuthorExpected)?;
 
 	let author = &session.authorities[pre_digest.authority_index as usize].0;
 
@@ -217,7 +217,7 @@ fn check_secondary_vrf_header<B: BlockT>(
 	// chain state.
 	let expected_author =
 		secondary_slot_author(pre_digest.slot, &session.authorities, session.randomness)
-			.ok_or_else(|| Error::NoSecondaryAuthorExpected)?;
+			.ok_or(Error::NoSecondaryAuthorExpected)?;
 
 	let author = &session.authorities[pre_digest.authority_index as usize].0;
 

@@ -13,14 +13,15 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+bytes = { version = "1.1.0", default-features = false }
+sp-core = { version = "6.0.0", default-features = false, path = "../../core" }
+sp-io = { version = "6.0.0", default-features = false, path = "../../io" }
 sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../std" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../io" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../core" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
 
 [features]
 default = [ "std" ]
-std = [ "sp-runtime-interface/std", "sp-std/std", "sp-core/std", "sp-io/std" ]
+std = [ "sp-core/std", "sp-io/std", "sp-runtime-interface/std", "sp-std/std" ]

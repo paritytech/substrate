@@ -46,14 +46,14 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
-use crate::{config::ProtocolId, utils::LruHashSet};
+use crate::utils::LruHashSet;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
 	core::{
-		connection::{ConnectionId, ListenerId},
-		ConnectedPoint, Multiaddr, PeerId, PublicKey,
+		connection::ConnectionId, transport::ListenerId, ConnectedPoint, Multiaddr, PeerId,
+		PublicKey,
 	},
 	kad::{
 		handler::KademliaHandlerProto,
@@ -72,6 +72,7 @@ use libp2p::{
 	},
 };
 use log::{debug, error, info, trace, warn};
+use sc_network_common::config::ProtocolId;
 use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,
@@ -287,7 +288,7 @@ impl DiscoveryBehaviour {
 			for b in k.kbuckets() {
 				for e in b.iter() {
 					if !peers.contains(e.node.key.preimage()) {
-						peers.insert(e.node.key.preimage().clone());
+						peers.insert(*e.node.key.preimage());
 					}
 				}
 			}
@@ -307,7 +308,7 @@ impl DiscoveryBehaviour {
 				k.add_address(&peer_id, addr.clone());
 			}
 
-			self.pending_events.push_back(DiscoveryOut::Discovered(peer_id.clone()));
+			self.pending_events.push_back(DiscoveryOut::Discovered(peer_id));
 			addrs_list.push(addr);
 		}
 	}
@@ -718,7 +719,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 		// Poll the stream that fires when we need to start a random Kademlia query.
 		if let Some(next_kad_random_query) = self.next_kad_random_query.as_mut() {
-			while let Poll::Ready(_) = next_kad_random_query.poll_unpin(cx) {
+			while next_kad_random_query.poll_unpin(cx).is_ready() {
 				let actually_started = if self.num_connections < self.discovery_only_if_under_num {
 					let random_peer_id = PeerId::random();
 					debug!(
@@ -815,7 +816,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 									DiscoveryOut::ValueFound(
 										results,
-										stats.duration().unwrap_or_else(Default::default),
+										stats.duration().unwrap_or_default(),
 									)
 								},
 								Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
@@ -826,7 +827,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									);
 									DiscoveryOut::ValueNotFound(
 										e.into_key(),
-										stats.duration().unwrap_or_else(Default::default),
+										stats.duration().unwrap_or_default(),
 									)
 								},
 								Err(e) => {
@@ -837,7 +838,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									);
 									DiscoveryOut::ValueNotFound(
 										e.into_key(),
-										stats.duration().unwrap_or_else(Default::default),
+										stats.duration().unwrap_or_default(),
 									)
 								},
 							};
@@ -851,7 +852,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							let ev = match res {
 								Ok(ok) => DiscoveryOut::ValuePut(
 									ok.key,
-									stats.duration().unwrap_or_else(Default::default),
+									stats.duration().unwrap_or_default(),
 								),
 								Err(e) => {
 									debug!(
@@ -861,7 +862,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 									);
 									DiscoveryOut::ValuePutFailed(
 										e.into_key(),
-										stats.duration().unwrap_or_else(Default::default),
+										stats.duration().unwrap_or_default(),
 									)
 								},
 							};
@@ -1001,7 +1002,6 @@ impl MdnsWrapper {
 #[cfg(test)]
 mod tests {
 	use super::{protocol_name_from_protocol_id, DiscoveryConfig, DiscoveryOut};
-	use crate::config::ProtocolId;
 	use futures::prelude::*;
 	use libp2p::{
 		core::{
@@ -1013,6 +1013,7 @@ mod tests {
 		swarm::{Swarm, SwarmEvent},
 		yamux, Multiaddr, PeerId,
 	};
+	use sc_network_common::config::ProtocolId;
 	use std::{collections::HashSet, task::Poll};
 
 	#[test]
@@ -1029,7 +1030,7 @@ mod tests {
 				let noise_keys =
 					noise::Keypair::<noise::X25519Spec>::new().into_authentic(&keypair).unwrap();
 
-				let transport = MemoryTransport
+				let transport = MemoryTransport::new()
 					.upgrade(upgrade::Version::V1)
 					.authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
 					.multiplex(yamux::YamuxConfig::default())
@@ -1068,7 +1069,7 @@ mod tests {
 					// Skip the first swarm as all other swarms already know it.
 					.skip(1)
 					.filter(|p| *p != n)
-					.map(|p| Swarm::local_peer_id(&swarms[p].0).clone())
+					.map(|p| *Swarm::local_peer_id(&swarms[p].0))
 					.collect::<HashSet<_>>()
 			})
 			.collect::<Vec<_>>();

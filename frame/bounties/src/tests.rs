@@ -35,7 +35,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill, Storage,
+	BuildStorage, Perbill, Storage,
 };
 
 use super::Event as BountiesEvent;
@@ -52,7 +52,9 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
+		Bounties1: pallet_bounties::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		Treasury: pallet_treasury::{Pallet, Call, Storage, Config, Event<T>},
+		Treasury1: pallet_treasury::<Instance1>::{Pallet, Call, Storage, Config, Event<T>},
 	}
 );
 
@@ -105,11 +107,11 @@ thread_local! {
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
-	pub const Burn: Permill = Permill::from_percent(50);
+	pub static Burn: Permill = Permill::from_percent(50);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
+	pub const TreasuryPalletId2: PalletId = PalletId(*b"py/trsr2");
 }
 
-// impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
 	type Currency = pallet_balances::Pallet<Test>;
@@ -126,6 +128,26 @@ impl pallet_treasury::Config for Test {
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
 	type MaxApprovals = ConstU32<100>;
+	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
+}
+
+impl pallet_treasury::Config<Instance1> for Test {
+	type PalletId = TreasuryPalletId2;
+	type Currency = pallet_balances::Pallet<Test>;
+	type ApproveOrigin = frame_system::EnsureRoot<u128>;
+	type RejectOrigin = frame_system::EnsureRoot<u128>;
+	type Event = Event;
+	type OnSlash = ();
+	type ProposalBond = ProposalBond;
+	type ProposalBondMinimum = ConstU64<1>;
+	type ProposalBondMaximum = ();
+	type SpendPeriod = ConstU64<2>;
+	type Burn = Burn;
+	type BurnDestination = (); // Just gets burned.
+	type WeightInfo = ();
+	type SpendFunds = Bounties1;
+	type MaxApprovals = ConstU32<100>;
+	type SpendOrigin = frame_support::traits::NeverEnsureOrigin<u64>;
 }
 
 parameter_types! {
@@ -151,18 +173,35 @@ impl Config for Test {
 	type ChildBountyManager = ();
 }
 
+impl Config<Instance1> for Test {
+	type Event = Event;
+	type BountyDepositBase = ConstU64<80>;
+	type BountyDepositPayoutDelay = ConstU64<3>;
+	type BountyUpdatePeriod = ConstU64<20>;
+	type CuratorDepositMultiplier = CuratorDepositMultiplier;
+	type CuratorDepositMax = CuratorDepositMax;
+	type CuratorDepositMin = CuratorDepositMin;
+	type BountyValueMinimum = ConstU64<1>;
+	type DataDepositPerByte = ConstU64<1>;
+	type MaximumReasonLength = ConstU32<16384>;
+	type WeightInfo = ();
+	type ChildBountyManager = ();
+}
+
 type TreasuryError = pallet_treasury::Error<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test> {
-		// Total issuance will be 200 with treasury account initialized at ED.
-		balances: vec![(0, 100), (1, 98), (2, 1)],
+	let mut ext: sp_io::TestExternalities = GenesisConfig {
+		system: frame_system::GenesisConfig::default(),
+		balances: pallet_balances::GenesisConfig { balances: vec![(0, 100), (1, 98), (2, 1)] },
+		treasury: Default::default(),
+		treasury_1: Default::default(),
 	}
-	.assimilate_storage(&mut t)
-	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&pallet_treasury::GenesisConfig, &mut t).unwrap();
-	t.into()
+	.build_storage()
+	.unwrap()
+	.into();
+	ext.execute_with(|| System::set_block_number(1));
+	ext
 }
 
 fn last_event() -> BountiesEvent<Test> {
@@ -276,7 +315,7 @@ fn reject_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Treasury::reject_proposal(Origin::root(), 0),
-			pallet_treasury::Error::<Test, _>::InvalidIndex
+			pallet_treasury::Error::<Test>::InvalidIndex
 		);
 	});
 }
@@ -469,7 +508,7 @@ fn close_bounty_works() {
 		assert_eq!(Balances::free_balance(0), 100 - deposit);
 
 		assert_eq!(Bounties::bounties(0), None);
-		assert!(!pallet_treasury::Proposals::<Test, _>::contains_key(0));
+		assert!(!pallet_treasury::Proposals::<Test>::contains_key(0));
 
 		assert_eq!(Bounties::bounty_descriptions(0), None);
 	});
@@ -1087,8 +1126,8 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), value, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(Origin::root(), bounty_index));
 
-		System::set_block_number(3);
-		<Treasury as OnInitialize<u64>>::on_initialize(3);
+		System::set_block_number(4);
+		<Treasury as OnInitialize<u64>>::on_initialize(4);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
@@ -1111,8 +1150,8 @@ fn accept_curator_handles_different_deposit_calculations() {
 		assert_ok!(Bounties::propose_bounty(Origin::signed(0), value, b"12345".to_vec()));
 		assert_ok!(Bounties::approve_bounty(Origin::root(), bounty_index));
 
-		System::set_block_number(3);
-		<Treasury as OnInitialize<u64>>::on_initialize(3);
+		System::set_block_number(6);
+		<Treasury as OnInitialize<u64>>::on_initialize(6);
 
 		assert_ok!(Bounties::propose_curator(Origin::root(), bounty_index, user, fee));
 		assert_ok!(Bounties::accept_curator(Origin::signed(user), bounty_index));
@@ -1120,5 +1159,31 @@ fn accept_curator_handles_different_deposit_calculations() {
 		let expected_deposit = CuratorDepositMax::get();
 		assert_eq!(Balances::free_balance(&user), starting_balance - expected_deposit);
 		assert_eq!(Balances::reserved_balance(&user), expected_deposit);
+	});
+}
+
+#[test]
+fn approve_bounty_works_second_instance() {
+	new_test_ext().execute_with(|| {
+		// Set burn to 0 to make tracking funds easier.
+		Burn::set(Permill::from_percent(0));
+
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		Balances::make_free_balance_be(&Treasury1::account_id(), 201);
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201);
+
+		assert_ok!(Bounties1::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
+		assert_ok!(Bounties1::approve_bounty(Origin::root(), 0));
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+		<Treasury1 as OnInitialize<u64>>::on_initialize(2);
+
+		// Bounties 1 is funded... but from where?
+		assert_eq!(Balances::free_balance(Bounties1::bounty_account_id(0)), 50);
+		// Treasury 1 unchanged
+		assert_eq!(Balances::free_balance(&Treasury::account_id()), 101);
+		// Treasury 2 has funds removed
+		assert_eq!(Balances::free_balance(&Treasury1::account_id()), 201 - 50);
 	});
 }

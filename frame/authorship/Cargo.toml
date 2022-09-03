@@ -16,13 +16,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 ] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
-sp-authorship = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authorship" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+impl-trait-for-tuples = "0.2.2"
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-impl-trait-for-tuples = "0.2.2"
+sp-authorship = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authorship" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
@@ -32,11 +32,11 @@ sp-io = { version = "6.0.0", path = "../../primitives/io" }
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
-	"sp-runtime/std",
-	"sp-std/std",
 	"frame-support/std",
 	"frame-system/std",
+	"scale-info/std",
 	"sp-authorship/std",
+	"sp-runtime/std",
+	"sp-std/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

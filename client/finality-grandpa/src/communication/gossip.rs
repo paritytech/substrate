@@ -89,7 +89,8 @@ use log::{debug, trace};
 use parity_scale_codec::{Decode, Encode};
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 use rand::seq::SliceRandom;
-use sc_network::{ObservedRole, PeerId, ReputationChange};
+use sc_network::{PeerId, ReputationChange};
+use sc_network_common::protocol::event::ObservedRole;
 use sc_network_gossip::{MessageIntent, ValidatorContext};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
@@ -504,13 +505,13 @@ impl<N: Ord> Peers<N> {
 	fn new_peer(&mut self, who: PeerId, role: ObservedRole) {
 		match role {
 			ObservedRole::Authority if self.first_stage_peers.len() < LUCKY_PEERS => {
-				self.first_stage_peers.insert(who.clone());
+				self.first_stage_peers.insert(who);
 			},
 			ObservedRole::Authority if self.second_stage_peers.len() < LUCKY_PEERS => {
-				self.second_stage_peers.insert(who.clone());
+				self.second_stage_peers.insert(who);
 			},
 			ObservedRole::Light if self.lucky_light_peers.len() < LUCKY_PEERS => {
-				self.lucky_light_peers.insert(who.clone());
+				self.lucky_light_peers.insert(who);
 			},
 			_ => {},
 		}
@@ -590,11 +591,8 @@ impl<N: Ord> Peers<N> {
 		// - third set: LUCKY_PEERS random light client peers
 
 		let shuffled_peers = {
-			let mut peers = self
-				.inner
-				.iter()
-				.map(|(peer_id, info)| (*peer_id, info.clone()))
-				.collect::<Vec<_>>();
+			let mut peers =
+				self.inner.iter().map(|(peer_id, info)| (*peer_id, info)).collect::<Vec<_>>();
 
 			peers.shuffle(&mut rand::thread_rng());
 			peers
@@ -731,11 +729,7 @@ type MaybeMessage<Block> = Option<(Vec<PeerId>, NeighborPacket<NumberFor<Block>>
 
 impl<Block: BlockT> Inner<Block> {
 	fn new(config: crate::Config) -> Self {
-		let catch_up_config = if config.local_role.is_light() {
-			// if we are a light client we shouldn't be issuing any catch-up requests
-			// as we don't participate in the full GRANDPA protocol
-			CatchUpConfig::disabled()
-		} else if config.observer_enabled {
+		let catch_up_config = if config.observer_enabled {
 			if config.local_role.is_authority() {
 				// since the observer protocol is enabled, we will only issue
 				// catch-up requests if we are an authority (and only to other
@@ -1103,7 +1097,7 @@ impl<Block: BlockT> Inner<Block> {
 		// won't be able to reply since they don't follow the full GRANDPA
 		// protocol and therefore might not have the vote data available.
 		if let (Some(peer), Some(local_view)) = (self.peers.peer(who), &self.local_view) {
-			if self.catch_up_config.request_allowed(&peer) &&
+			if self.catch_up_config.request_allowed(peer) &&
 				peer.view.set_id == local_view.set_id &&
 				peer.view.round.0.saturating_sub(CATCH_UP_THRESHOLD) > local_view.round.0
 			{
@@ -1195,7 +1189,7 @@ impl<Block: BlockT> Inner<Block> {
 					return (false, None)
 				} else {
 					// report peer for timeout
-					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
+					Some((*peer, cost::CATCH_UP_REQUEST_TIMEOUT))
 				}
 			},
 			PendingCatchUp::Processing { instant, .. } => {
@@ -1209,7 +1203,7 @@ impl<Block: BlockT> Inner<Block> {
 		};
 
 		self.pending_catch_up = PendingCatchUp::Requesting {
-			who: who.clone(),
+			who: *who,
 			request: catch_up_request.clone(),
 			instant: Instant::now(),
 		};
@@ -1233,10 +1227,6 @@ impl<Block: BlockT> Inner<Block> {
 			Some(ref local_view) => local_view.round_start.elapsed(),
 			None => return false,
 		};
-
-		if self.config.local_role.is_light() {
-			return false
-		}
 
 		if round_elapsed < round_duration.mul_f32(PROPAGATION_SOME) {
 			self.peers.first_stage_peers.contains(who)
@@ -1268,10 +1258,6 @@ impl<Block: BlockT> Inner<Block> {
 			Some(ref local_view) => local_view.round_start.elapsed(),
 			None => return false,
 		};
-
-		if self.config.local_role.is_light() {
-			return false
-		}
 
 		if round_elapsed < round_duration.mul_f32(PROPAGATION_ALL) {
 			self.peers.first_stage_peers.contains(who) ||
@@ -1488,7 +1474,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 	) {
 		let packet = {
 			let mut inner = self.inner.write();
-			inner.peers.new_peer(who.clone(), roles);
+			inner.peers.new_peer(*who, roles);
 
 			inner.local_view.as_ref().map(|v| NeighborPacket {
 				round: v.round,
@@ -1526,16 +1512,16 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 		match action {
 			Action::Keep(topic, cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				context.broadcast_message(topic, data.to_vec(), false);
 				sc_network_gossip::ValidationResult::ProcessAndKeep(topic)
 			},
 			Action::ProcessAndDiscard(topic, cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				sc_network_gossip::ValidationResult::ProcessAndDiscard(topic)
 			},
 			Action::Discard(cb) => {
-				self.report(who.clone(), cb);
+				self.report(*who, cb);
 				sc_network_gossip::ValidationResult::Discard
 			},
 		}
@@ -1572,7 +1558,7 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 
 			// if the topic is not something we're keeping at the moment,
 			// do not send.
-			let (maybe_round, set_id) = match inner.live_topics.topic_info(&topic) {
+			let (maybe_round, set_id) = match inner.live_topics.topic_info(topic) {
 				None => return false,
 				Some(x) => x,
 			};
@@ -1583,11 +1569,9 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 						// early return if the vote message isn't allowed at this stage.
 						return false
 					}
-				} else {
-					if !inner.global_message_allowed(who) {
-						// early return if the global message isn't allowed at this stage.
-						return false
-					}
+				} else if !inner.global_message_allowed(who) {
+					// early return if the global message isn't allowed at this stage.
+					return false
 				}
 			}
 
@@ -1745,7 +1729,7 @@ mod tests {
 		assert!(res.unwrap().is_none());
 
 		// connect & disconnect.
-		peers.new_peer(id.clone(), ObservedRole::Authority);
+		peers.new_peer(id, ObservedRole::Authority);
 		peers.peer_disconnected(&id);
 
 		let res = peers.update_peer_state(&id, update.clone());
@@ -1769,7 +1753,7 @@ mod tests {
 		let mut peers = Peers::default();
 		let id = PeerId::random();
 
-		peers.new_peer(id.clone(), ObservedRole::Authority);
+		peers.new_peer(id, ObservedRole::Authority);
 
 		let mut check_update = move |update: NeighborPacket<_>| {
 			let view = peers.update_peer_state(&id, update.clone()).unwrap().unwrap();
@@ -1789,7 +1773,7 @@ mod tests {
 		let mut peers = Peers::default();
 
 		let id = PeerId::random();
-		peers.new_peer(id.clone(), ObservedRole::Authority);
+		peers.new_peer(id, ObservedRole::Authority);
 
 		peers
 			.update_peer_state(
@@ -1980,7 +1964,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
 		let mut inner = val.inner.write();
-		inner.peers.new_peer(peer.clone(), ObservedRole::Authority);
+		inner.peers.new_peer(peer, ObservedRole::Authority);
 
 		let res = inner.handle_catch_up_request(
 			&peer,
@@ -2021,7 +2005,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), ObservedRole::Authority);
+		val.inner.write().peers.new_peer(peer, ObservedRole::Authority);
 
 		let send_request = |set_id, round| {
 			let mut inner = val.inner.write();
@@ -2076,7 +2060,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded.
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), ObservedRole::Authority);
+		val.inner.write().peers.new_peer(peer, ObservedRole::Authority);
 
 		let import_neighbor_message = |set_id, round| {
 			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
@@ -2146,7 +2130,7 @@ mod tests {
 		// add the peer making the request to the validator,
 		// otherwise it is discarded.
 		let peer = PeerId::random();
-		val.inner.write().peers.new_peer(peer.clone(), ObservedRole::Authority);
+		val.inner.write().peers.new_peer(peer, ObservedRole::Authority);
 
 		// importing a neighbor message from a peer in the same set in a later
 		// round should lead to a catch up request but since they're disabled
@@ -2174,11 +2158,8 @@ mod tests {
 		let peer_authority = PeerId::random();
 		let peer_full = PeerId::random();
 
-		val.inner
-			.write()
-			.peers
-			.new_peer(peer_authority.clone(), ObservedRole::Authority);
-		val.inner.write().peers.new_peer(peer_full.clone(), ObservedRole::Full);
+		val.inner.write().peers.new_peer(peer_authority, ObservedRole::Authority);
+		val.inner.write().peers.new_peer(peer_full, ObservedRole::Full);
 
 		let import_neighbor_message = |peer| {
 			let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
@@ -2227,7 +2208,7 @@ mod tests {
 		// add the peer making the requests to the validator, otherwise it is
 		// discarded.
 		let peer_full = PeerId::random();
-		val.inner.write().peers.new_peer(peer_full.clone(), ObservedRole::Full);
+		val.inner.write().peers.new_peer(peer_full, ObservedRole::Full);
 
 		let (_, _, catch_up_request, _) = val.inner.write().import_neighbor_message(
 			&peer_full,
@@ -2287,12 +2268,9 @@ mod tests {
 		full_nodes.resize_with(30, || PeerId::random());
 
 		for i in 0..30 {
-			val.inner
-				.write()
-				.peers
-				.new_peer(authorities[i].clone(), ObservedRole::Authority);
+			val.inner.write().peers.new_peer(authorities[i], ObservedRole::Authority);
 
-			val.inner.write().peers.new_peer(full_nodes[i].clone(), ObservedRole::Full);
+			val.inner.write().peers.new_peer(full_nodes[i], ObservedRole::Full);
 		}
 
 		let test = |rounds_elapsed, peers| {
@@ -2371,7 +2349,7 @@ mod tests {
 		// add a new light client as peer
 		let light_peer = PeerId::random();
 
-		val.inner.write().peers.new_peer(light_peer.clone(), ObservedRole::Light);
+		val.inner.write().peers.new_peer(light_peer, ObservedRole::Light);
 
 		assert!(!val.message_allowed()(
 			&light_peer,
@@ -2443,7 +2421,7 @@ mod tests {
 		// add a new peer at set id 1
 		let peer1 = PeerId::random();
 
-		val.inner.write().peers.new_peer(peer1.clone(), ObservedRole::Authority);
+		val.inner.write().peers.new_peer(peer1, ObservedRole::Authority);
 
 		val.inner
 			.write()
@@ -2456,7 +2434,7 @@ mod tests {
 
 		// peer2 will default to set id 0
 		let peer2 = PeerId::random();
-		val.inner.write().peers.new_peer(peer2.clone(), ObservedRole::Authority);
+		val.inner.write().peers.new_peer(peer2, ObservedRole::Authority);
 
 		// create a commit for round 1 of set id 1
 		// targeting a block at height 2

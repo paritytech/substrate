@@ -61,16 +61,11 @@ impl GenerateCmd {
 		};
 		let mnemonic = Mnemonic::new(words, Language::English);
 		let password = self.keystore_params.read_password()?;
-		let output = self.output_scheme.output_type.clone();
+		let output = self.output_scheme.output_type;
 
 		with_crypto_scheme!(
 			self.crypto_scheme.scheme,
-			print_from_uri(
-				mnemonic.phrase(),
-				password,
-				self.network_scheme.network.clone(),
-				output,
-			)
+			print_from_uri(mnemonic.phrase(), password, self.network_scheme.network, output)
 		);
 		Ok(())
 	}

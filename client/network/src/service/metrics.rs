@@ -280,8 +280,8 @@ impl MetricSource for BandwidthCounters {
 	type N = u64;
 
 	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
-		set(&[&"in"], self.0.total_inbound());
-		set(&[&"out"], self.0.total_outbound());
+		set(&["in"], self.0.total_inbound());
+		set(&["out"], self.0.total_outbound());
 	}
 }
 

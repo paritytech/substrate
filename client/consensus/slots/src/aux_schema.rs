@@ -63,7 +63,7 @@ where
 	P: Clone + Encode + Decode + PartialEq,
 {
 	// We don't check equivocations for old headers out of our capacity.
-	if slot_now.saturating_sub(*slot) > Slot::from(MAX_SLOT_CAPACITY) {
+	if slot_now.saturating_sub(*slot) > MAX_SLOT_CAPACITY {
 		return Ok(None)
 	}
 
@@ -89,8 +89,8 @@ where
 		// 1) signed by the same voter,
 		if prev_signer == signer {
 			// 2) with different hash
-			if header.hash() != prev_header.hash() {
-				return Ok(Some(EquivocationProof {
+			return if header.hash() != prev_header.hash() {
+				Ok(Some(EquivocationProof {
 					slot,
 					offender: signer.clone(),
 					first_header: prev_header.clone(),
@@ -100,7 +100,7 @@ where
 				// We don't need to continue in case of duplicated header,
 				// since it's already saved and a possible equivocation
 				// would have been detected before.
-				return Ok(None)
+				Ok(None)
 			}
 		}
 	}

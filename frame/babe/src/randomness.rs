@@ -22,7 +22,7 @@ use super::{
 	AuthorVrfRandomness, Config, SessionStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
 };
 use frame_support::traits::Randomness as RandomnessT;
-use sp_runtime::traits::Hash;
+use sp_runtime::traits::{Hash, One, Saturating};
 
 /// Randomness usable by consensus protocols that **depend** upon finality and take action
 /// based upon on-chain commitments made during the session before the previous session.
@@ -105,12 +105,28 @@ pub struct RandomnessFromOneSessionAgo<T>(sp_std::marker::PhantomData<T>);
 /// only constrained by adversaries' unknowable computational power.
 ///
 /// As an example use, parachains could assign block production slots based upon the
-/// `CurrentBlockRandomness` of their relay parent or relay parent's parent, provided the
+/// `ParentBlockRandomness` of their relay parent or relay parent's parent, provided the
 /// parachain registers collators but avoids censorship sensitive functionality like
 /// slashing. Any parachain with slashing could operate BABE itself or perhaps better yet
-/// a BABE-like approach that derives its `CurrentBlockRandomness`, and authorizes block
-/// production, based upon the relay parent's `CurrentBlockRandomness` or more likely the
+/// a BABE-like approach that derives its `ParentBlockRandomness`, and authorizes block
+/// production, based upon the relay parent's `ParentBlockRandomness` or more likely the
 /// relay parent's `RandomnessFromTwoSessionsAgo`.
+///
+/// NOTE: there is some nuance here regarding what is current and parent randomness. If
+/// you are using this trait from within the runtime (i.e. as part of block execution)
+/// then the randomness provided here will always be generated from the parent block. If
+/// instead you are using this randomness externally, i.e. after block execution, then
+/// this randomness will be provided by the "current" block (this stems from the fact that
+/// we process VRF outputs on block execution finalization, i.e. `on_finalize`).
+pub struct ParentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
+
+/// Randomness produced semi-freshly with each block, but inherits limitations of
+/// `RandomnessFromTwoSessionsAgo` from which it derives.
+///
+/// See [`ParentBlockRandomness`].
+#[deprecated(note = "Should not be relied upon for correctness, \
+					 will not provide fresh randomness for the current block. \
+					 Please use `ParentBlockRandomness` instead.")]
 pub struct CurrentBlockRandomness<T>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoSessionsAgo<T> {
@@ -133,7 +149,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneSessio
 	}
 }
 
-impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRandomness<T> {
+impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for ParentBlockRandomness<T> {
 	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
 		let random = AuthorVrfRandomness::<T>::get().map(|random| {
 			let mut subject = subject.to_vec();
@@ -143,6 +159,14 @@ impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRan
 			T::Hashing::hash(&subject[..])
 		});
 
+		(random, <frame_system::Pallet<T>>::block_number().saturating_sub(One::one()))
+	}
+}
+
+#[allow(deprecated)]
+impl<T: Config> RandomnessT<Option<T::Hash>, T::BlockNumber> for CurrentBlockRandomness<T> {
+	fn random(subject: &[u8]) -> (Option<T::Hash>, T::BlockNumber) {
+		let (random, _) = ParentBlockRandomness::<T>::random(subject);
 		(random, <frame_system::Pallet<T>>::block_number())
 	}
 }

@@ -89,7 +89,7 @@ where
 /// can prioritize shorter chains over longer ones, the vote may be
 /// closer to the best block than N.
 #[derive(Clone)]
-pub struct BeforeBestBlockBy<N>(N);
+pub struct BeforeBestBlockBy<N>(pub N);
 impl<Block, B> VotingRule<Block, B> for BeforeBestBlockBy<NumberFor<Block>>
 where
 	Block: BlockT,
@@ -125,7 +125,7 @@ where
 		let current_target = current_target.clone();
 
 		// find the block at the given target height
-		Box::pin(std::future::ready(find_target(&*backend, target_number.clone(), &current_target)))
+		Box::pin(std::future::ready(find_target(&*backend, target_number, &current_target)))
 	}
 }
 
@@ -419,7 +419,7 @@ mod tests {
 		}
 
 		let best = client.header(&BlockId::Hash(client.info().best_hash)).unwrap().unwrap();
-		let best_number = best.number().clone();
+		let best_number = *best.number();
 
 		for i in 0u32..5 {
 			let base = client.header(&BlockId::Number(i.into())).unwrap().unwrap();

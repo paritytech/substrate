@@ -18,57 +18,47 @@
 
 use crate::error;
 use clap::Args;
-use sc_service::{KeepBlocks, PruningMode, Role};
+use sc_service::{BlocksPruning, PruningMode};
 
 /// Parameters to define the pruning mode
 #[derive(Debug, Clone, PartialEq, Args)]
 pub struct PruningParams {
 	/// Specify the state pruning mode, a number of blocks to keep or 'archive'.
 	///
-	/// Default is to keep all block states if the node is running as a
-	/// validator (i.e. 'archive'), otherwise state is only kept for the last
-	/// 256 blocks.
-	#[clap(long, value_name = "PRUNING_MODE")]
-	pub pruning: Option<String>,
+	/// Default is to keep only the last 256 blocks,
+	/// otherwise, the state can be kept for all of the blocks (i.e 'archive'),
+	/// or for all of the canonical blocks (i.e 'archive-canonical').
+	#[clap(alias = "pruning", long, value_name = "PRUNING_MODE")]
+	pub state_pruning: Option<String>,
 	/// Specify the number of finalized blocks to keep in the database.
 	///
 	/// Default is to keep all blocks.
-	#[clap(long, value_name = "COUNT")]
-	pub keep_blocks: Option<u32>,
+	///
+	/// NOTE: only finalized blocks are subject for removal!
+	#[clap(alias = "keep-blocks", long, value_name = "COUNT")]
+	pub blocks_pruning: Option<u32>,
 }
 
 impl PruningParams {
 	/// Get the pruning value from the parameters
-	pub fn state_pruning(&self, unsafe_pruning: bool, role: &Role) -> error::Result<PruningMode> {
-		// by default we disable pruning if the node is an authority (i.e.
-		// `ArchiveAll`), otherwise we keep state for the last 256 blocks. if the
-		// node is an authority and pruning is enabled explicitly, then we error
-		// unless `unsafe_pruning` is set.
-		Ok(match &self.pruning {
-			Some(ref s) if s == "archive" => PruningMode::ArchiveAll,
-			None if role.is_authority() => PruningMode::ArchiveAll,
-			None => PruningMode::default(),
-			Some(s) => {
-				if role.is_authority() && !unsafe_pruning {
-					return Err(error::Error::Input(
-						"Validators should run with state pruning disabled (i.e. archive). \
-						You can ignore this check with `--unsafe-pruning`."
-							.to_string(),
-					))
-				}
-
-				PruningMode::keep_blocks(s.parse().map_err(|_| {
-					error::Error::Input("Invalid pruning mode specified".to_string())
-				})?)
-			},
-		})
+	pub fn state_pruning(&self) -> error::Result<Option<PruningMode>> {
+		self.state_pruning
+			.as_ref()
+			.map(|s| match s.as_str() {
+				"archive" => Ok(PruningMode::ArchiveAll),
+				bc => bc
+					.parse()
+					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))
+					.map(PruningMode::blocks_pruning),
+			})
+			.transpose()
 	}
 
 	/// Get the block pruning value from the parameters
-	pub fn keep_blocks(&self) -> error::Result<KeepBlocks> {
-		Ok(match self.keep_blocks {
-			Some(n) => KeepBlocks::Some(n),
-			None => KeepBlocks::All,
+	pub fn blocks_pruning(&self) -> error::Result<BlocksPruning> {
+		Ok(match self.blocks_pruning {
+			Some(n) => BlocksPruning::Some(n),
+			None => BlocksPruning::All,
 		})
 	}
 }

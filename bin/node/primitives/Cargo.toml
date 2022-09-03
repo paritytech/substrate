@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
 	"derive",
 ] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../../frame/system" }
 sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../../primitives/application-crypto" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
@@ -24,8 +24,8 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../../pri
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-system/std",
+	"scale-info/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-runtime/std",

@@ -101,7 +101,7 @@ impl StorageHasher for Twox64Concat {
 	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Twox64Concat;
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
-		twox_64(x).iter().chain(x.into_iter()).cloned().collect::<Vec<_>>()
+		twox_64(x).iter().chain(x.iter()).cloned().collect::<Vec<_>>()
 	}
 	fn max_len<K: MaxEncodedLen>() -> usize {
 		K::max_encoded_len().saturating_add(8)
@@ -123,7 +123,7 @@ impl StorageHasher for Blake2_128Concat {
 	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Blake2_128Concat;
 	type Output = Vec<u8>;
 	fn hash(x: &[u8]) -> Vec<u8> {
-		blake2_128(x).iter().chain(x.into_iter()).cloned().collect::<Vec<_>>()
+		blake2_128(x).iter().chain(x.iter()).cloned().collect::<Vec<_>>()
 	}
 	fn max_len<K: MaxEncodedLen>() -> usize {
 		K::max_encoded_len().saturating_add(16)

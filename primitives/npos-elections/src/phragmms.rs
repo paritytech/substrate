@@ -22,15 +22,15 @@
 //! MMS algorithm.
 
 use crate::{
-	balance, setup_inputs, CandidatePtr, ElectionResult, ExtendedBalance, IdentifierT, PerThing128,
-	VoteWeight, Voter,
+	balance, setup_inputs, BalancingConfig, CandidatePtr, ElectionResult, ExtendedBalance,
+	IdentifierT, PerThing128, VoteWeight, Voter,
 };
 use sp_arithmetic::{traits::Bounded, PerThing, Rational128};
 use sp_std::{prelude::*, rc::Rc};
 
 /// Execute the phragmms method.
 ///
-/// This can be used interchangeably with [`seq-phragmen`] and offers a similar API, namely:
+/// This can be used interchangeably with `seq-phragmen` and offers a similar API, namely:
 ///
 /// - The resulting edge weight distribution is normalized (thus, safe to use for submission).
 /// - The accuracy can be configured via the generic type `P`.
@@ -45,7 +45,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
 	candidates: Vec<AccountId>,
 	voters: Vec<(AccountId, VoteWeight, impl IntoIterator<Item = AccountId>)>,
-	balancing: Option<(usize, ExtendedBalance)>,
+	balancing: Option<BalancingConfig>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
 	let (candidates, mut voters) = setup_inputs(candidates, voters);
 
@@ -58,8 +58,8 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 			round_winner.borrow_mut().elected = true;
 			winners.push(round_winner);
 
-			if let Some((iterations, tolerance)) = balancing {
-				balance(&mut voters, iterations, tolerance);
+			if let Some(ref config) = balancing {
+				balance(&mut voters, config);
 			}
 		} else {
 			break
@@ -70,9 +70,8 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
 	let _ = assignments
 		.iter_mut()
-		.map(|a| a.try_normalize())
-		.collect::<Result<(), _>>()
-		.map_err(|e| crate::Error::ArithmeticError(e))?;
+		.try_for_each(|a| a.try_normalize())
+		.map_err(crate::Error::ArithmeticError)?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
@@ -157,16 +156,14 @@ pub(crate) fn calculate_max_score<AccountId: IdentifierT, P: PerThing>(
 			// `RationalInfinite` as the score type does not introduce significant overhead. Then we
 			// can switch the score type to `RationalInfinite` and ensure compatibility with any
 			// crazy token scale.
-			let score_n = candidate
-				.approval_stake
-				.checked_mul(one)
-				.unwrap_or_else(|| Bounded::max_value());
+			let score_n =
+				candidate.approval_stake.checked_mul(one).unwrap_or_else(Bounded::max_value);
 			candidate.score = Rational128::from(score_n, score_d);
 
 			// check if we have a new winner.
 			if !candidate.elected && candidate.score > best_score {
 				best_score = candidate.score;
-				best_candidate = Some(Rc::clone(&c_ptr));
+				best_candidate = Some(Rc::clone(c_ptr));
 			}
 		} else {
 			candidate.score = Rational128::zero();
@@ -278,7 +275,8 @@ mod tests {
 		drop(winner);
 
 		// balancing makes no difference here but anyhow.
-		balance(&mut voters, 10, 0);
+		let config = BalancingConfig { iterations: 10, tolerance: 0 };
+		balance(&mut voters, &config);
 
 		// round 2
 		let winner =
@@ -318,7 +316,7 @@ mod tests {
 		drop(winner);
 
 		// balancing will improve stuff here.
-		balance(&mut voters, 10, 0);
+		balance(&mut voters, &config);
 
 		assert_eq!(
 			voters
@@ -351,8 +349,9 @@ mod tests {
 		let candidates = vec![1, 2, 3];
 		let voters = vec![(10, 10, vec![1, 2]), (20, 20, vec![1, 3]), (30, 30, vec![2, 3])];
 
+		let config = BalancingConfig { iterations: 2, tolerance: 0 };
 		let ElectionResult::<_, Perbill> { winners, assignments } =
-			phragmms(2, candidates, voters, Some((2, 0))).unwrap();
+			phragmms(2, candidates, voters, Some(config)).unwrap();
 		assert_eq!(winners, vec![(3, 30), (2, 30)]);
 		assert_eq!(
 			assignments,
@@ -383,8 +382,9 @@ mod tests {
 			(130, 1000, vec![61, 71]),
 		];
 
+		let config = BalancingConfig { iterations: 2, tolerance: 0 };
 		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
-			phragmms(4, candidates, voters, Some((2, 0))).unwrap();
+			phragmms(4, candidates, voters, Some(config)).unwrap();
 		assert_eq!(winners, vec![(11, 3000), (31, 2000), (51, 1500), (61, 1500),]);
 	}
 
@@ -396,8 +396,9 @@ mod tests {
 		// give a bit more to 1 and 3.
 		voters.push((2, u64::MAX, vec![1, 3]));
 
+		let config = BalancingConfig { iterations: 2, tolerance: 0 };
 		let ElectionResult::<_, Perbill> { winners, assignments: _ } =
-			phragmms(2, candidates, voters, Some((2, 0))).unwrap();
+			phragmms(2, candidates, voters, Some(config)).unwrap();
 		assert_eq!(winners.into_iter().map(|(w, _)| w).collect::<Vec<_>>(), vec![1u32, 3]);
 	}
 }

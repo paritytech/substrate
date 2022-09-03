@@ -24,27 +24,39 @@ use crate::{
 	primitives::{self, Error, NodeIndex},
 	Config, HashingOf,
 };
-#[cfg(not(feature = "std"))]
-use sp_std::vec;
+use sp_std::prelude::*;
 
-/// Stateless verification of the leaf proof.
-pub fn verify_leaf_proof<H, L>(
+/// Stateless verification of the proof for a batch of leaves.
+/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
+/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the
+/// [primitives::BatchProof]
+pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
-	leaf: Node<H, L>,
-	proof: primitives::Proof<H::Output>,
+	leaves: Vec<Node<H, L>>,
+	proof: primitives::BatchProof<H::Output>,
 ) -> Result<bool, Error>
 where
 	H: sp_runtime::traits::Hash,
 	L: primitives::FullLeaf,
 {
 	let size = NodesUtils::new(proof.leaf_count).size();
-	let leaf_position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
+
+	if leaves.len() != proof.leaf_indices.len() {
+		return Err(Error::Verify.log_debug("Proof leaf_indices not same length with leaves"))
+	}
+
+	let leaves_and_position_data = proof
+		.leaf_indices
+		.into_iter()
+		.map(|index| mmr_lib::leaf_index_to_pos(index))
+		.zip(leaves.into_iter())
+		.collect();
 
 	let p = mmr_lib::MerkleProof::<Node<H, L>, Hasher<H, L>>::new(
 		size,
 		proof.items.into_iter().map(Node::Hash).collect(),
 	);
-	p.verify(Node::Hash(root), vec![(leaf_position, leaf)])
+	p.verify(Node::Hash(root), leaves_and_position_data)
 		.map_err(|e| Error::Verify.log_debug(e))
 }
 
@@ -76,19 +88,32 @@ where
 		Self { mmr: mmr_lib::MMR::new(size, Default::default()), leaves }
 	}
 
-	/// Verify proof of a single leaf.
-	pub fn verify_leaf_proof(
+	/// Verify proof for a set of leaves.
+	/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have
+	/// the same position in both the `leaves` vector and the `leaf_indices` vector contained in the
+	/// [primitives::BatchProof]
+	pub fn verify_leaves_proof(
 		&self,
-		leaf: L,
-		proof: primitives::Proof<<T as Config<I>>::Hash>,
+		leaves: Vec<L>,
+		proof: primitives::BatchProof<<T as Config<I>>::Hash>,
 	) -> Result<bool, Error> {
 		let p = mmr_lib::MerkleProof::<NodeOf<T, I, L>, Hasher<HashingOf<T, I>, L>>::new(
 			self.mmr.mmr_size(),
 			proof.items.into_iter().map(Node::Hash).collect(),
 		);
-		let position = mmr_lib::leaf_index_to_pos(proof.leaf_index);
+
+		if leaves.len() != proof.leaf_indices.len() {
+			return Err(Error::Verify.log_debug("Proof leaf_indices not same length with leaves"))
+		}
+
+		let leaves_positions_and_data = proof
+			.leaf_indices
+			.into_iter()
+			.map(|index| mmr_lib::leaf_index_to_pos(index))
+			.zip(leaves.into_iter().map(|leaf| Node::Data(leaf)))
+			.collect();
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
-		p.verify(root, vec![(position, Node::Data(leaf))])
+		p.verify(root, leaves_positions_and_data)
 			.map_err(|e| Error::Verify.log_debug(e))
 	}
 
@@ -134,29 +159,36 @@ where
 	I: 'static,
 	L: primitives::FullLeaf + codec::Decode,
 {
-	/// Generate a proof for given leaf index.
+	/// Generate a proof for given leaf indices.
 	///
 	/// Proof generation requires all the nodes (or their hashes) to be available in the storage.
 	/// (i.e. you can't run the function in the pruned storage).
-	pub fn generate_proof(
+	pub fn generate_batch_proof(
 		&self,
-		leaf_index: NodeIndex,
-	) -> Result<(L, primitives::Proof<<T as Config<I>>::Hash>), Error> {
-		let position = mmr_lib::leaf_index_to_pos(leaf_index);
+		leaf_indices: Vec<NodeIndex>,
+	) -> Result<(Vec<L>, primitives::BatchProof<<T as Config<I>>::Hash>), Error> {
+		let positions = leaf_indices
+			.iter()
+			.map(|index| mmr_lib::leaf_index_to_pos(*index))
+			.collect::<Vec<_>>();
 		let store = <Storage<OffchainStorage, T, I, L>>::default();
-		let leaf = match mmr_lib::MMRStore::get_elem(&store, position) {
-			Ok(Some(Node::Data(leaf))) => leaf,
-			e => return Err(Error::LeafNotFound.log_debug(e)),
-		};
+		let leaves = positions
+			.iter()
+			.map(|pos| match mmr_lib::MMRStore::get_elem(&store, *pos) {
+				Ok(Some(Node::Data(leaf))) => Ok(leaf),
+				e => Err(Error::LeafNotFound.log_debug(e)),
+			})
+			.collect::<Result<Vec<_>, Error>>()?;
+
 		let leaf_count = self.leaves;
 		self.mmr
-			.gen_proof(vec![position])
+			.gen_proof(positions)
 			.map_err(|e| Error::GenerateProof.log_error(e))
-			.map(|p| primitives::Proof {
-				leaf_index,
+			.map(|p| primitives::BatchProof {
+				leaf_indices,
 				leaf_count,
 				items: p.proof_items().iter().map(|x| x.hash()).collect(),
 			})
-			.map(|p| (leaf, p))
+			.map(|p| (leaves, p))
 	}
 }

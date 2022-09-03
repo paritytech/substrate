@@ -23,7 +23,7 @@ use kvdb::KeyValueDB;
 use lazy_static::lazy_static;
 use rand::Rng;
 use sp_state_machine::Backend as _;
-use sp_trie::{trie_types::TrieDBMutV1, TrieMut as _};
+use sp_trie::{trie_types::TrieDBMutBuilderV1, TrieMut as _};
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 use node_primitives::Hash;
@@ -155,7 +155,7 @@ impl core::BenchmarkDescription for TrieReadBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Trie read benchmark({} database ({} keys), db_type: {})",
+			"Trie read benchmark({:?} database ({} keys), db_type: {:?})",
 			self.database_size,
 			pretty_print(self.database_size.keys()),
 			self.database_type,
@@ -180,7 +180,7 @@ impl core::Benchmark for TrieReadBenchmark {
 		let storage: Arc<dyn sp_state_machine::Storage<sp_core::Blake2Hasher>> =
 			Arc::new(Storage(db.open(self.database_type)));
 
-		let trie_backend = sp_state_machine::TrieBackend::new(storage, self.root);
+		let trie_backend = sp_state_machine::TrieBackendBuilder::new(storage, self.root).build();
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_backend
 				.storage(&warmup_key[..])
@@ -260,7 +260,7 @@ impl core::BenchmarkDescription for TrieWriteBenchmarkDescription {
 
 	fn name(&self) -> Cow<'static, str> {
 		format!(
-			"Trie write benchmark({} database ({} keys), db_type = {})",
+			"Trie write benchmark({:?} database ({} keys), db_type = {:?})",
 			self.database_size,
 			pretty_print(self.database_size.keys()),
 			self.database_type,
@@ -282,12 +282,11 @@ impl core::Benchmark for TrieWriteBenchmark {
 		let mut db = self.database.clone();
 		let kvdb = db.open(self.database_type);
 
-		let mut new_root = self.root.clone();
+		let mut new_root = self.root;
 
 		let mut overlay = HashMap::new();
 		let mut trie = SimpleTrie { db: kvdb.clone(), overlay: &mut overlay };
-		let mut trie_db_mut = TrieDBMutV1::from_existing(&mut trie, &mut new_root)
-			.expect("Failed to create TrieDBMut");
+		let mut trie_db_mut = TrieDBMutBuilderV1::from_existing(&mut trie, &mut new_root).build();
 
 		for (warmup_key, warmup_value) in self.warmup_keys.iter() {
 			let value = trie_db_mut

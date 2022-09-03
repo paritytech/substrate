@@ -62,8 +62,8 @@ impl ErrorDef {
 			return Err(syn::Error::new(item.span(), msg))
 		}
 
-		let mut instances = vec![];
-		instances.push(helper::check_type_def_gen_no_bounds(&item.generics, item.ident.span())?);
+		let instances =
+			vec![helper::check_type_def_gen_no_bounds(&item.generics, item.ident.span())?];
 
 		if item.generics.where_clause.is_some() {
 			let msg = "Invalid pallet::error, where clause is not allowed on pallet error item";

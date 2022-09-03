@@ -79,7 +79,7 @@ pub fn derive_impl(input: DeriveInput) -> Result<TokenStream> {
 ///
 /// Returns an error if the number of variants is greater than `256`, the given `data` is not an
 /// enum or a variant is not an unit.
-fn get_enum_field_idents<'a>(data: &'a Data) -> Result<impl Iterator<Item = Result<&'a Ident>>> {
+fn get_enum_field_idents(data: &Data) -> Result<impl Iterator<Item = Result<&Ident>>> {
 	match data {
 		Data::Enum(d) =>
 			if d.variants.len() <= 256 {

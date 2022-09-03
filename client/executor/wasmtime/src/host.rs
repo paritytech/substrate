@@ -23,7 +23,7 @@ use log::trace;
 use wasmtime::{Caller, Func, Val};
 
 use codec::{Decode, Encode};
-use sc_allocator::FreeingBumpHeapAllocator;
+use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
 	error::Result,
 	sandbox::{self, SupervisorFuncIndex},
@@ -65,6 +65,10 @@ impl HostState {
 	/// Takes the error message out of the host state, leaving a `None` in its place.
 	pub fn take_panic_message(&mut self) -> Option<String> {
 		self.panic_message.take()
+	}
+
+	pub(crate) fn allocation_stats(&self) -> AllocationStats {
+		self.allocator.stats()
 	}
 }
 
@@ -145,11 +149,7 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 	}
 
 	fn register_panic_error_message(&mut self, message: &str) {
-		self.caller
-			.data_mut()
-			.host_state_mut()
-			.expect("host state is not empty when calling a function in wasm; qed")
-			.panic_message = Some(message.to_owned());
+		self.host_state_mut().panic_message = Some(message.to_owned());
 	}
 }
 
@@ -243,7 +243,7 @@ impl<'a> Sandbox for HostContext<'a> {
 				// Serialize return value and write it back into the memory.
 				sp_wasm_interface::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
-						Err("Return value buffer is too small")?;
+						return Err("Return value buffer is too small".into())
 					}
 					<HostContext as FunctionContext>::write_memory(self, return_val, val)
 						.map_err(|_| "can't write return value")?;
@@ -273,19 +273,17 @@ impl<'a> Sandbox for HostContext<'a> {
 				.caller
 				.data()
 				.table()
-				.ok_or_else(|| "Runtime doesn't have a table; sandbox is unavailable")?;
+				.ok_or("Runtime doesn't have a table; sandbox is unavailable")?;
 			let table_item = table.get(&mut self.caller, dispatch_thunk_id);
 
-			table_item
-				.ok_or_else(|| "dispatch_thunk_id is out of bounds")?
+			*table_item
+				.ok_or("dispatch_thunk_id is out of bounds")?
 				.funcref()
-				.ok_or_else(|| "dispatch_thunk_idx should be a funcref")?
-				.ok_or_else(|| "dispatch_thunk_idx should point to actual func")?
-				.clone()
+				.ok_or("dispatch_thunk_idx should be a funcref")?
+				.ok_or("dispatch_thunk_idx should point to actual func")?
 		};
 
-		let guest_env = match sandbox::GuestEnvironment::decode(&self.sandbox_store(), raw_env_def)
-		{
+		let guest_env = match sandbox::GuestEnvironment::decode(self.sandbox_store(), raw_env_def) {
 			Ok(guest_env) => guest_env,
 			Err(_) => return Ok(sandbox_env::ERR_MODULE as u32),
 		};
@@ -304,7 +302,7 @@ impl<'a> Sandbox for HostContext<'a> {
 				wasm,
 				guest_env,
 				state,
-				&mut SandboxContext { host_context: self, dispatch_thunk: dispatch_thunk.clone() },
+				&mut SandboxContext { host_context: self, dispatch_thunk },
 			)
 		}));
 
@@ -316,7 +314,7 @@ impl<'a> Sandbox for HostContext<'a> {
 		};
 
 		let instance_idx_or_err_code = match result {
-			Ok(instance) => instance.register(&mut self.sandbox_store_mut(), dispatch_thunk),
+			Ok(instance) => instance.register(self.sandbox_store_mut(), dispatch_thunk),
 			Err(sandbox::InstantiationError::StartTrapped) => sandbox_env::ERR_EXECUTION,
 			Err(_) => sandbox_env::ERR_MODULE,
 		};
@@ -366,7 +364,7 @@ impl<'a, 'b> sandbox::SandboxContext for SandboxContext<'a, 'b> {
 				if let Some(ret_val) = ret_vals[0].i64() {
 					Ok(ret_val)
 				} else {
-					return Err("Supervisor function returned unexpected result!".into())
+					Err("Supervisor function returned unexpected result!".into())
 				},
 			Err(err) => Err(err.to_string().into()),
 		}

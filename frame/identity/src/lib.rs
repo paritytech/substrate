@@ -94,6 +94,7 @@ type BalanceOf<T> =
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -282,9 +283,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_registrar(T::MaxRegistrars::get()))]
 		pub fn add_registrar(
 			origin: OriginFor<T>,
-			account: T::AccountId,
+			account: AccountIdLookupOf<T>,
 		) -> DispatchResultWithPostInfo {
 			T::RegistrarOrigin::ensure_origin(origin)?;
+			let account = T::Lookup::lookup(account)?;
 
 			let (i, registrar_count) = <Registrars<T>>::try_mutate(
 				|registrars| -> Result<(RegistrarIndex, usize), DispatchError> {
@@ -324,8 +326,8 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight( T::WeightInfo::set_identity(
-			T::MaxRegistrars::get().into(), // R
-			T::MaxAdditionalFields::get().into(), // X
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get(), // X
 		))]
 		pub fn set_identity(
 			origin: OriginFor<T>,
@@ -416,7 +418,7 @@ pub mod pallet {
 			let new_deposit = T::SubAccountDeposit::get() * <BalanceOf<T>>::from(subs.len() as u32);
 
 			let not_other_sub =
-				subs.iter().filter_map(|i| SuperOf::<T>::get(&i.0)).all(|i| &i.0 == &sender);
+				subs.iter().filter_map(|i| SuperOf::<T>::get(&i.0)).all(|i| i.0 == sender);
 			ensure!(not_other_sub, Error::<T>::AlreadyClaimed);
 
 			if old_deposit < new_deposit {
@@ -470,9 +472,9 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::clear_identity(
-			T::MaxRegistrars::get().into(), // R
-			T::MaxSubAccounts::get().into(), // S
-			T::MaxAdditionalFields::get().into(), // X
+			T::MaxRegistrars::get(), // R
+			T::MaxSubAccounts::get(), // S
+			T::MaxAdditionalFields::get(), // X
 		))]
 		pub fn clear_identity(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
@@ -484,7 +486,7 @@ pub mod pallet {
 				<SuperOf<T>>::remove(sub);
 			}
 
-			let err_amount = T::Currency::unreserve(&sender, deposit.clone());
+			let err_amount = T::Currency::unreserve(&sender, deposit);
 			debug_assert!(err_amount.is_zero());
 
 			Self::deposit_event(Event::IdentityCleared { who: sender, deposit });
@@ -521,8 +523,8 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::request_judgement(
-			T::MaxRegistrars::get().into(), // R
-			T::MaxAdditionalFields::get().into(), // X
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get(), // X
 		))]
 		pub fn request_judgement(
 			origin: OriginFor<T>,
@@ -542,7 +544,7 @@ pub mod pallet {
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(i) =>
 					if id.judgements[i].1.is_sticky() {
-						Err(Error::<T>::StickyJudgement)?
+						return Err(Error::<T>::StickyJudgement.into())
 					} else {
 						id.judgements[i] = item
 					},
@@ -583,8 +585,8 @@ pub mod pallet {
 		/// - One event
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::cancel_request(
-			T::MaxRegistrars::get().into(), // R
-			T::MaxAdditionalFields::get().into(), // X
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get(), // X
 		))]
 		pub fn cancel_request(
 			origin: OriginFor<T>,
@@ -600,7 +602,7 @@ pub mod pallet {
 			let fee = if let Judgement::FeePaid(fee) = id.judgements.remove(pos).1 {
 				fee
 			} else {
-				Err(Error::<T>::JudgementGiven)?
+				return Err(Error::<T>::JudgementGiven.into())
 			};
 
 			let err_amount = T::Currency::unreserve(&sender, fee);
@@ -672,9 +674,10 @@ pub mod pallet {
 		pub fn set_account_id(
 			origin: OriginFor<T>,
 			#[pallet::compact] index: RegistrarIndex,
-			new: T::AccountId,
+			new: AccountIdLookupOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			let new = T::Lookup::lookup(new)?;
 
 			let registrars = <Registrars<T>>::mutate(|rs| -> Result<usize, DispatchError> {
 				rs.get_mut(index as usize)
@@ -754,13 +757,13 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::provide_judgement(
-			T::MaxRegistrars::get().into(), // R
-			T::MaxAdditionalFields::get().into(), // X
+			T::MaxRegistrars::get(), // R
+			T::MaxAdditionalFields::get(), // X
 		))]
 		pub fn provide_judgement(
 			origin: OriginFor<T>,
 			#[pallet::compact] reg_index: RegistrarIndex,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 			judgement: Judgement<BalanceOf<T>>,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
@@ -821,13 +824,13 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::kill_identity(
-			T::MaxRegistrars::get().into(), // R
-			T::MaxSubAccounts::get().into(), // S
-			T::MaxAdditionalFields::get().into(), // X
+			T::MaxRegistrars::get(), // R
+			T::MaxSubAccounts::get(), // S
+			T::MaxAdditionalFields::get(), // X
 		))]
 		pub fn kill_identity(
 			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 		) -> DispatchResultWithPostInfo {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -863,7 +866,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::add_sub(T::MaxSubAccounts::get()))]
 		pub fn add_sub(
 			origin: OriginFor<T>,
-			sub: <T::Lookup as StaticLookup>::Source,
+			sub: AccountIdLookupOf<T>,
 			data: Data,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -898,7 +901,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::rename_sub(T::MaxSubAccounts::get()))]
 		pub fn rename_sub(
 			origin: OriginFor<T>,
-			sub: <T::Lookup as StaticLookup>::Source,
+			sub: AccountIdLookupOf<T>,
 			data: Data,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -917,10 +920,7 @@ pub mod pallet {
 		/// The dispatch origin for this call must be _Signed_ and the sender must have a registered
 		/// sub identity of `sub`.
 		#[pallet::weight(T::WeightInfo::remove_sub(T::MaxSubAccounts::get()))]
-		pub fn remove_sub(
-			origin: OriginFor<T>,
-			sub: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn remove_sub(origin: OriginFor<T>, sub: AccountIdLookupOf<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(IdentityOf::<T>::contains_key(&sender), Error::<T>::NoIdentity);
 			let sub = T::Lookup::lookup(sub)?;

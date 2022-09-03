@@ -138,7 +138,7 @@ where
 	C: ReservableCurrency<AccountId>,
 {
 	fn reserve(&self, source: &AccountId) -> DispatchResult {
-		C::reserve(&source, self.value)
+		C::reserve(source, self.value)
 	}
 
 	fn claim(&self, source: &AccountId, target: &AccountId) -> bool {
@@ -195,9 +195,6 @@ pub mod pallet {
 		Blake2_128Concat,
 		HashedProof,
 		PendingSwap<T>,
-		OptionQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	#[pallet::error]
@@ -246,7 +243,7 @@ pub mod pallet {
 		/// - `duration`: Locked duration of the atomic swap. For safety reasons, it is recommended
 		///   that the revealer uses a shorter duration than the counterparty, to prevent the
 		///   situation where the revealer reveals the proof too late around the end block.
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).ref_time().saturating_add(40_000_000))]
 		pub fn create_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
@@ -267,7 +264,7 @@ pub mod pallet {
 				action,
 				end_block: frame_system::Pallet::<T>::block_number() + duration,
 			};
-			PendingSwaps::<T>::insert(target.clone(), hashed_proof.clone(), swap.clone());
+			PendingSwaps::<T>::insert(target.clone(), hashed_proof, swap.clone());
 
 			Self::deposit_event(Event::NewSwap { account: target, proof: hashed_proof, swap });
 
@@ -283,9 +280,10 @@ pub mod pallet {
 		///   the operation fails. This is used for weight calculation.
 		#[pallet::weight(
 			T::DbWeight::get().reads_writes(1, 1)
-				.saturating_add(40_000_000)
-				.saturating_add((proof.len() as Weight).saturating_mul(100))
 				.saturating_add(action.weight())
+				.ref_time()
+				.saturating_add(40_000_000)
+				.saturating_add((proof.len() as u64).saturating_mul(100))
 		)]
 		pub fn claim_swap(
 			origin: OriginFor<T>,
@@ -303,7 +301,7 @@ pub mod pallet {
 
 			let succeeded = swap.action.claim(&swap.source, &target);
 
-			PendingSwaps::<T>::remove(target.clone(), hashed_proof.clone());
+			PendingSwaps::<T>::remove(target.clone(), hashed_proof);
 
 			Self::deposit_event(Event::SwapClaimed {
 				account: target,
@@ -320,7 +318,7 @@ pub mod pallet {
 		///
 		/// - `target`: Target of the original atomic swap.
 		/// - `hashed_proof`: Hashed proof of the original atomic swap.
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).ref_time().saturating_add(40_000_000))]
 		pub fn cancel_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
@@ -336,7 +334,7 @@ pub mod pallet {
 			);
 
 			swap.action.cancel(&swap.source);
-			PendingSwaps::<T>::remove(&target, hashed_proof.clone());
+			PendingSwaps::<T>::remove(&target, hashed_proof);
 
 			Self::deposit_event(Event::SwapCancelled { account: target, proof: hashed_proof });
 

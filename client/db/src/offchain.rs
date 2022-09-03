@@ -104,7 +104,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 		{
 			drop(key_lock);
 			let key_lock = locks.get_mut(&key);
-			if let Some(_) = key_lock.and_then(Arc::get_mut) {
+			if key_lock.and_then(Arc::get_mut).is_some() {
 				locks.remove(&key);
 			}
 		}
@@ -114,7 +114,7 @@ impl sp_core::offchain::OffchainStorage for LocalStorage {
 
 /// Concatenate the prefix and key to create an offchain key in the db.
 pub(crate) fn concatenate_prefix_and_key(prefix: &[u8], key: &[u8]) -> Vec<u8> {
-	prefix.iter().chain(key.into_iter()).cloned().collect()
+	prefix.iter().chain(key.iter()).cloned().collect()
 }
 
 #[cfg(test)]

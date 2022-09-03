@@ -18,8 +18,8 @@
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 
+use kitchensink_runtime::{constants::currency::*, BalancesCall};
 use node_cli::service::{create_extrinsic, FullClient};
-use node_runtime::{constants::currency::*, BalancesCall};
 use sc_block_builder::{BlockBuilderProvider, BuiltBlock, RecordProof};
 use sc_client_api::execution_extensions::ExecutionStrategies;
 use sc_consensus::{
@@ -28,8 +28,8 @@ use sc_consensus::{
 };
 use sc_service::{
 	config::{
-		DatabaseSource, KeepBlocks, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
-		PruningMode, WasmExecutionMethod,
+		BlocksPruning, DatabaseSource, KeystoreConfig, NetworkConfiguration, OffchainWorkerConfig,
+		PruningMode, WasmExecutionMethod, WasmtimeInstantiationStrategy,
 	},
 	BasePath, Configuration, Role,
 };
@@ -72,12 +72,13 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		keystore: KeystoreConfig::InMemory,
 		keystore_remote: Default::default(),
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
-		state_cache_size: 67108864,
-		state_cache_child_ratio: None,
-		state_pruning: PruningMode::ArchiveAll,
-		keep_blocks: KeepBlocks::All,
+		trie_cache_maximum_size: Some(64 * 1024 * 1024),
+		state_pruning: Some(PruningMode::ArchiveAll),
+		blocks_pruning: BlocksPruning::All,
 		chain_spec: spec,
-		wasm_method: WasmExecutionMethod::Compiled,
+		wasm_method: WasmExecutionMethod::Compiled {
+			instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+		},
 		execution_strategies: ExecutionStrategies {
 			syncing: execution_strategy,
 			importing: execution_strategy,
@@ -92,6 +93,10 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		rpc_cors: None,
 		rpc_methods: Default::default(),
 		rpc_max_payload: None,
+		rpc_max_request_size: None,
+		rpc_max_response_size: None,
+		rpc_id_provider: None,
+		rpc_max_subs_per_conn: None,
 		ws_max_out_buffer_capacity: None,
 		prometheus_config: None,
 		telemetry_endpoints: None,
@@ -115,9 +120,9 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 }
 
 fn extrinsic_set_time(now: u64) -> OpaqueExtrinsic {
-	node_runtime::UncheckedExtrinsic {
+	kitchensink_runtime::UncheckedExtrinsic {
 		signature: None,
-		function: node_runtime::Call::Timestamp(pallet_timestamp::Call::set { now }),
+		function: kitchensink_runtime::Call::Timestamp(pallet_timestamp::Call::set { now }),
 	}
 	.into()
 }

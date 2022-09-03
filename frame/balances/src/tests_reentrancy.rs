@@ -19,13 +19,11 @@
 
 #![cfg(test)]
 
-use crate::{self as pallet_balances, Config, Pallet};
+use crate::{self as pallet_balances, Config};
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim},
-	weights::IdentityFee,
+	traits::{ConstU32, ConstU64, StorageMapShim},
 };
-use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
 use sp_io;
 use sp_runtime::{testing::Header, traits::IdentityLookup};
@@ -53,7 +51,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
@@ -81,14 +79,6 @@ impl frame_system::Config for Test {
 	type SS58Prefix = ();
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
-}
-
-impl pallet_transaction_payment::Config for Test {
-	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
-	type OperationalFeeMultiplier = ConstU8<5>;
-	type WeightToFee = IdentityFee<u64>;
-	type LengthToFee = IdentityFee<u64>;
-	type FeeMultiplierUpdate = ();
 }
 
 pub struct OnDustRemoval;

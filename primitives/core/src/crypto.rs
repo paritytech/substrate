@@ -1172,7 +1172,7 @@ mod tests {
 	impl ByteArray for TestPublic {
 		const LEN: usize = 0;
 		fn from_slice(bytes: &[u8]) -> Result<Self, ()> {
-			if bytes.len() == 0 {
+			if bytes.is_empty() {
 				Ok(Self)
 			} else {
 				Err(())

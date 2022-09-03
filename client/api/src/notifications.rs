@@ -71,10 +71,9 @@ type ChildKeys = Option<HashMap<StorageKey, Option<HashSet<StorageKey>>>>;
 
 impl StorageChangeSet {
 	/// Convert the change set into iterator over storage items.
-	pub fn iter<'a>(
-		&'a self,
-	) -> impl Iterator<Item = (Option<&'a StorageKey>, &'a StorageKey, Option<&'a StorageData>)> + 'a
-	{
+	pub fn iter(
+		&self,
+	) -> impl Iterator<Item = (Option<&StorageKey>, &StorageKey, Option<&StorageData>)> + '_ {
 		let top = self
 			.changes
 			.iter()

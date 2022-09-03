@@ -32,7 +32,8 @@ use sp_runtime::{
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	ChildStorageCollection, IndexOperation, OffchainChangesCollection, StorageCollection,
+	backend::AsTrieBackend, ChildStorageCollection, IndexOperation, OffchainChangesCollection,
+	StorageCollection,
 };
 use sp_storage::{ChildInfo, StorageData, StorageKey};
 use std::collections::{HashMap, HashSet};
@@ -448,7 +449,12 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated blockchain backend type.
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>> + Send;
+	type State: StateBackend<HashFor<Block>>
+		+ Send
+		+ AsTrieBackend<
+			HashFor<Block>,
+			TrieBackendStorage = <Self::State as StateBackend<HashFor<Block>>>::TrieBackendStorage,
+		>;
 	/// Offchain workers local storage.
 	type OffchainStorage: OffchainStorage;
 
@@ -499,7 +505,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
-		self.state_at(BlockId::Hash(hash.clone())).is_ok()
+		self.state_at(BlockId::Hash(*hash)).is_ok()
 	}
 
 	/// Returns state backend with post-state of given block.
@@ -507,7 +513,8 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
 	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
-	/// inconsistent state.
+	/// inconsistent state. All blocks higher than the best block are also reverted and not counting
+	/// towards `n`.
 	///
 	/// Returns the number of blocks that were successfully reverted and the list of finalized
 	/// blocks that has been reverted.
@@ -546,6 +553,9 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// something that the import of a block would interfere with, e.g. importing
 	/// a new block or calculating the best head.
 	fn get_import_lock(&self) -> &RwLock<()>;
+
+	/// Tells whether the backend requires full-sync mode.
+	fn requires_full_sync(&self) -> bool;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

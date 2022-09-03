@@ -277,15 +277,14 @@ where
 			}
 			module
 		};
-		let limits = module
+		let limits = *module
 			.import_section()
 			.unwrap()
 			.entries()
 			.iter()
 			.find_map(|e| if let External::Memory(mem) = e.external() { Some(mem) } else { None })
 			.unwrap()
-			.limits()
-			.clone();
+			.limits();
 		let code = module.to_bytes().unwrap();
 		let hash = T::Hashing::hash(&code);
 		let memory =
@@ -512,16 +511,10 @@ pub mod body {
 				DynInstr::RandomI32(low, high) => {
 					vec![Instruction::I32Const(rng.gen_range(*low..*high))]
 				},
-				DynInstr::RandomI32Repeated(num) => (&mut rng)
-					.sample_iter(Standard)
-					.take(*num)
-					.map(|val| Instruction::I32Const(val))
-					.collect(),
-				DynInstr::RandomI64Repeated(num) => (&mut rng)
-					.sample_iter(Standard)
-					.take(*num)
-					.map(|val| Instruction::I64Const(val))
-					.collect(),
+				DynInstr::RandomI32Repeated(num) =>
+					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I32Const).collect(),
+				DynInstr::RandomI64Repeated(num) =>
+					(&mut rng).sample_iter(Standard).take(*num).map(Instruction::I64Const).collect(),
 				DynInstr::RandomGetLocal(low, high) => {
 					vec![Instruction::GetLocal(rng.gen_range(*low..*high))]
 				},

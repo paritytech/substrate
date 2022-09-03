@@ -21,7 +21,7 @@
 #![allow(dead_code)]
 
 use rand::{self, seq::SliceRandom, Rng, RngCore};
-use sp_npos_elections::{phragmms, seq_phragmen, ElectionResult, VoteWeight};
+use sp_npos_elections::{phragmms, seq_phragmen, BalancingConfig, ElectionResult, VoteWeight};
 use sp_runtime::Perbill;
 use std::collections::{BTreeMap, HashSet};
 
@@ -38,8 +38,8 @@ pub fn to_range(x: usize, a: usize, b: usize) -> usize {
 }
 
 pub enum ElectionType {
-	Phragmen(Option<(usize, u128)>),
-	Phragmms(Option<(usize, u128)>),
+	Phragmen(Option<BalancingConfig>),
+	Phragmms(Option<BalancingConfig>),
 }
 
 pub type AccountId = u64;
@@ -99,7 +99,7 @@ pub fn generate_random_npos_inputs(
 
 		let mut chosen_candidates = Vec::with_capacity(n_candidates_chosen);
 		chosen_candidates.extend(candidates.choose_multiple(&mut rng, n_candidates_chosen));
-		chosen_candidates.sort();
+		chosen_candidates.sort_unstable();
 		voters.push((id, vote_weight, chosen_candidates));
 	}
 

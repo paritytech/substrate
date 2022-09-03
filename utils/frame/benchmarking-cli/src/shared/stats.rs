@@ -73,7 +73,7 @@ impl Stats {
 		if xs.is_empty() {
 			return Err("Empty input is invalid".into())
 		}
-		let (avg, stddev) = Self::avg_and_stddev(&xs);
+		let (avg, stddev) = Self::avg_and_stddev(xs);
 
 		Ok(Self {
 			sum: xs.iter().sum(),
@@ -112,7 +112,7 @@ impl Stats {
 	/// Returns the specified percentile for the given data.
 	/// This is best effort since it ignores the interpolation case.
 	fn percentile(mut xs: Vec<u64>, p: f64) -> u64 {
-		xs.sort();
+		xs.sort_unstable();
 		let index = (xs.len() as f64 * p).ceil() as usize - 1;
 		xs[index.clamp(0, xs.len() - 1)]
 	}
@@ -120,9 +120,9 @@ impl Stats {
 
 impl fmt::Debug for Stats {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "Total: {}\n", self.sum)?;
-		write!(f, "Min: {}, Max: {}\n", self.min, self.max)?;
-		write!(f, "Average: {}, Median: {}, Stddev: {}\n", self.avg, self.median, self.stddev)?;
+		writeln!(f, "Total: {}", self.sum)?;
+		writeln!(f, "Min: {}, Max: {}", self.min, self.max)?;
+		writeln!(f, "Average: {}, Median: {}, Stddev: {}", self.avg, self.median, self.stddev)?;
 		write!(f, "Percentiles 99th, 95th, 75th: {}, {}, {}", self.p99, self.p95, self.p75)
 	}
 }

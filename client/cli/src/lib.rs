@@ -122,7 +122,7 @@ pub trait SubstrateCli: Sized {
 		let app = <Self as CommandFactory>::command();
 
 		let mut full_version = Self::impl_version();
-		full_version.push_str("\n");
+		full_version.push('\n');
 
 		let name = Self::executable_name();
 		let author = Self::author();
@@ -164,7 +164,7 @@ pub trait SubstrateCli: Sized {
 		let app = <Self as CommandFactory>::command();
 
 		let mut full_version = Self::impl_version();
-		full_version.push_str("\n");
+		full_version.push('\n');
 
 		let name = Self::executable_name();
 		let author = Self::author();

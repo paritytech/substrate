@@ -18,13 +18,17 @@
 
 //! RPC api for babe.
 
-use futures::{FutureExt, TryFutureExt};
-use jsonrpc_core::Error as RpcError;
-use jsonrpc_derive::rpc;
+use futures::TryFutureExt;
+use jsonrpsee::{
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	proc_macros::rpc,
+	types::{error::CallError, ErrorObject},
+};
+use serde::{Deserialize, Serialize};
+
 use sc_consensus_babe::{authorship, Config, Session};
 use sc_consensus_sessions::{descendent_query, Session as SessionT, SharedSessionChanges};
 use sc_rpc_api::DenyUnsafe;
-use serde::{Deserialize, Serialize};
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
@@ -33,21 +37,22 @@ use sp_consensus_babe::{digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeA
 use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as _};
+
 use std::{collections::HashMap, sync::Arc};
 
-type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, RpcError>>;
-
 /// Provides rpc methods for interacting with Babe.
-#[rpc]
+#[rpc(client, server)]
 pub trait BabeApi {
 	/// Returns data about which slots (primary or secondary) can be claimed in the current session
 	/// with the keys in the keystore.
-	#[rpc(name = "babe_sessionAuthorship")]
-	fn session_authorship(&self) -> FutureResult<HashMap<AuthorityId, SessionAuthorship>>;
+    // TODO-RENAME: the old name should be maintained? Is possible to maintain both?
+    // Prev: "babe_epochAuthorhip"
+	#[method(name = "babe_sessionAuthorship")]
+	async fn session_authorship(&self) -> RpcResult<HashMap<AuthorityId, SessionAuthorship>>;
 }
 
-/// Implements the BabeRpc trait for interacting with Babe.
-pub struct BabeRpcHandler<B: BlockT, C, SC> {
+/// Provides RPC methods for interacting with Babe.
+pub struct Babe<B: BlockT, C, SC> {
 	/// shared reference to the client.
 	client: Arc<C>,
 	/// shared reference to SessionChanges
@@ -62,8 +67,8 @@ pub struct BabeRpcHandler<B: BlockT, C, SC> {
 	deny_unsafe: DenyUnsafe,
 }
 
-impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
-	/// Creates a new instance of the BabeRpc handler.
+impl<B: BlockT, C, SC> Babe<B, C, SC> {
+	/// Creates a new instance of the Babe Rpc handler.
 	pub fn new(
 		client: Arc<C>,
 		shared_session_changes: SharedSessionChanges<B, Session>,
@@ -76,7 +81,8 @@ impl<B: BlockT, C, SC> BabeRpcHandler<B, C, SC> {
 	}
 }
 
-impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
+#[async_trait]
+impl<B: BlockT, C, SC> BabeApiServer for Babe<B, C, SC>
 where
 	B: BlockT,
 	C: ProvideRuntimeApi<B>
@@ -86,71 +92,63 @@ where
 	C::Api: BabeRuntimeApi<B>,
 	SC: SelectChain<B> + Clone + 'static,
 {
-	fn session_authorship(&self) -> FutureResult<HashMap<AuthorityId, SessionAuthorship>> {
-		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return async move { Err(err.into()) }.boxed()
-		}
+	async fn session_authorship(&self) -> RpcResult<HashMap<AuthorityId, SessionAuthorship>> {
+		self.deny_unsafe.check_if_safe()?;
+		let header = self.select_chain.best_chain().map_err(Error::Consensus).await?;
+		let session_start = self
+			.client
+			.runtime_api()
+			.current_session_start(&BlockId::Hash(header.hash()))
+			.map_err(|err| Error::StringError(format!("{:?}", err)))?;
 
-		let (babe_config, keystore, shared_session, client, select_chain) = (
-			self.babe_config.clone(),
-			self.keystore.clone(),
-			self.shared_session_changes.clone(),
-			self.client.clone(),
-			self.select_chain.clone(),
-		);
+		let session = session_data(
+			&self.shared_session_changes,
+			&self.client,
+			&self.babe_config,
+			*session_start,
+			&self.select_chain,
+		)
+		.await?;
+		let (session_start, session_end) = (session.start_slot(), session.end_slot());
+		let mut claims: HashMap<AuthorityId, SessionAuthorship> = HashMap::new();
 
-		async move {
-			let header = select_chain.best_chain().map_err(Error::Consensus).await?;
-			let session_start = client
-				.runtime_api()
-				.current_session_start(&BlockId::Hash(header.hash()))
-				.map_err(|err| Error::StringError(err.to_string()))?;
-			let session =
-				session_data(&shared_session, &client, &babe_config, *session_start, &select_chain)
-					.await?;
-			let (session_start, session_end) = (session.start_slot(), session.end_slot());
+		let keys = {
+			session
+				.authorities
+				.iter()
+				.enumerate()
+				.filter_map(|(i, a)| {
+					if SyncCryptoStore::has_keys(
+						&*self.keystore,
+						&[(a.0.to_raw_vec(), AuthorityId::ID)],
+					) {
+						Some((a.0.clone(), i))
+					} else {
+						None
+					}
+				})
+				.collect::<Vec<_>>()
+		};
 
-			let mut claims: HashMap<AuthorityId, SessionAuthorship> = HashMap::new();
-
-			let keys = {
-				session
-					.authorities
-					.iter()
-					.enumerate()
-					.filter_map(|(i, a)| {
-						if SyncCryptoStore::has_keys(
-							&*keystore,
-							&[(a.0.to_raw_vec(), AuthorityId::ID)],
-						) {
-							Some((a.0.clone(), i))
-						} else {
-							None
-						}
-					})
-					.collect::<Vec<_>>()
-			};
-
-			for slot in *session_start..*session_end {
-				if let Some((claim, key)) =
-					authorship::claim_slot_using_keys(slot.into(), &session, &keystore, &keys)
-				{
-					match claim {
-						PreDigest::Primary { .. } => {
-							claims.entry(key).or_default().primary.push(slot);
-						},
-						PreDigest::SecondaryPlain { .. } => {
-							claims.entry(key).or_default().secondary.push(slot);
-						},
-						PreDigest::SecondaryVRF { .. } => {
-							claims.entry(key).or_default().secondary_vrf.push(slot.into());
-						},
-					};
-				}
+		for slot in *session_start..*session_end {
+			if let Some((claim, key)) =
+				authorship::claim_slot_using_keys(slot.into(), &session, &self.keystore, &keys)
+			{
+				match claim {
+					PreDigest::Primary { .. } => {
+						claims.entry(key).or_default().primary.push(slot);
+					},
+					PreDigest::SecondaryPlain { .. } => {
+						claims.entry(key).or_default().secondary.push(slot);
+					},
+					PreDigest::SecondaryVRF { .. } => {
+						claims.entry(key).or_default().secondary_vrf.push(slot.into());
+					},
+				};
 			}
-
-			Ok(claims)
 		}
-		.boxed()
+
+		Ok(claims)
 	}
 }
 
@@ -176,13 +174,13 @@ pub enum Error {
 	StringError(String),
 }
 
-impl From<Error> for jsonrpc_core::Error {
+impl From<Error> for JsonRpseeError {
 	fn from(error: Error) -> Self {
-		jsonrpc_core::Error {
-			message: format!("{}", error),
-			code: jsonrpc_core::ErrorCode::ServerError(1234),
-			data: None,
-		}
+		JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+			1234,
+			error.to_string(),
+			None::<()>,
+		)))
 	}
 }
 
@@ -205,7 +203,7 @@ where
 		.session_data_for_child_of(
 			descendent_query(&**client),
 			&parent.hash(),
-			parent.number().clone(),
+			*parent.number(),
 			slot.into(),
 			|slot| Session::genesis(babe_config.genesis_config(), slot),
 		)
@@ -226,7 +224,6 @@ mod tests {
 		TestClientBuilderExt,
 	};
 
-	use jsonrpc_core::IoHandler;
 	use sc_consensus_babe::{block_import, AuthorityPair, Config};
 	use std::sync::Arc;
 
@@ -243,9 +240,9 @@ mod tests {
 		(keystore, keystore_path)
 	}
 
-	fn test_babe_rpc_handler(
+	fn test_babe_rpc_module(
 		deny_unsafe: DenyUnsafe,
-	) -> BabeRpcHandler<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
+	) -> Babe<Block, TestClient, sc_consensus::LongestChain<Backend, Block>> {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
@@ -256,40 +253,30 @@ mod tests {
 		let session_changes = link.session_changes().clone();
 		let keystore = create_temp_keystore::<AuthorityPair>(Sr25519Keyring::Alice).0;
 
-		BabeRpcHandler::new(
-			client.clone(),
-			session_changes,
-			keystore,
-			config,
-			longest_chain,
-			deny_unsafe,
-		)
+		Babe::new(client.clone(), session_changes, keystore, config, longest_chain, deny_unsafe)
 	}
 
-	#[test]
-	fn session_authorship_works() {
-		let handler = test_babe_rpc_handler(DenyUnsafe::No);
-		let mut io = IoHandler::new();
+	#[tokio::test]
+	async fn session_authorship_works() {
+		let babe_rpc = test_babe_rpc_module(DenyUnsafe::No);
+		let api = babe_rpc.into_rpc();
 
-		io.extend_with(BabeApi::to_delegate(handler));
 		let request = r#"{"jsonrpc":"2.0","method":"babe_sessionAuthorship","params": [],"id":1}"#;
-		let response = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
+		let (response, _) = api.raw_json_request(request).await.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","result":{"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY":{"primary":[0],"secondary":[1,2,4],"secondary_vrf":[]}},"id":1}"#;
 
-		assert_eq!(Some(response.into()), io.handle_request_sync(request));
+		assert_eq!(&response.result, expected);
 	}
 
-	#[test]
-	fn session_authorship_is_unsafe() {
-		let handler = test_babe_rpc_handler(DenyUnsafe::Yes);
-		let mut io = IoHandler::new();
+	#[tokio::test]
+	async fn session_authorship_is_unsafe() {
+		let babe_rpc = test_babe_rpc_module(DenyUnsafe::Yes);
+		let api = babe_rpc.into_rpc();
 
-		io.extend_with(BabeApi::to_delegate(handler));
-		let request = r#"{"jsonrpc":"2.0","method":"babe_sessionAuthorship","params": [],"id":1}"#;
+		let request = r#"{"jsonrpc":"2.0","method":"babe_sessionAuthorship","params":[],"id":1}"#;
+		let (response, _) = api.raw_json_request(request).await.unwrap();
+		let expected = r#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"RPC call is unsafe to be called externally"},"id":1}"#;
 
-		let response = io.handle_request_sync(request).unwrap();
-		let mut response: serde_json::Value = serde_json::from_str(&response).unwrap();
-		let error: RpcError = serde_json::from_value(response["error"].take()).unwrap();
-
-		assert_eq!(error, sc_rpc_api::UnsafeRpcError.into())
+		assert_eq!(&response.result, expected);
 	}
 }

@@ -110,6 +110,7 @@ use sp_std::{fmt::Debug, prelude::*};
 type BalanceOf<T, I> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type PoolT<T, I> = Vec<(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>)>;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -256,7 +257,7 @@ pub mod pallet {
 			// reserve balance for each candidate in the pool.
 			// panicking here is ok, since this just happens one time, pre-genesis.
 			pool.iter().for_each(|(who, _)| {
-				T::Currency::reserve(&who, T::CandidateDeposit::get())
+				T::Currency::reserve(who, T::CandidateDeposit::get())
 					.expect("balance too low to create candidacy");
 				<CandidateExists<T, I>>::insert(who, true);
 			});
@@ -280,7 +281,7 @@ pub mod pallet {
 				let pool = <Pool<T, I>>::get();
 				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
-			0
+			Weight::zero()
 		}
 	}
 
@@ -346,7 +347,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn kick(
 			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: AccountIdLookupOf<T>,
 			index: u32,
 		) -> DispatchResult {
 			T::KickOrigin::ensure_origin(origin)?;
@@ -370,7 +371,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn score(
 			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: AccountIdLookupOf<T>,
 			index: u32,
 			score: T::Score,
 		) -> DispatchResult {
@@ -387,7 +388,7 @@ pub mod pallet {
 			// if there is already an element with `score`, we insert
 			// right before that. if not, the search returns a location
 			// where we can insert while maintaining order.
-			let item = (who, Some(score.clone()));
+			let item = (who, Some(score));
 			let location = pool
 				.binary_search_by_key(&Reverse(score), |(_, maybe_score)| {
 					Reverse(maybe_score.unwrap_or_default())

@@ -18,7 +18,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 	"derive",
 	"max-encoded-len",
 ] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 log = { version = "0.4", default-features = false }
 wasm-instrument = { version = "0.1", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -26,6 +26,7 @@ smallvec = { version = "1", default-features = false, features = [
 	"const_generics",
 ] }
 wasmi-validation = { version = "0.4", default-features = false }
+impl-trait-for-tuples = "0.2"
 
 # Only used in benchmarking to generate random contract code
 rand = { version = "0.8", optional = true, default-features = false }

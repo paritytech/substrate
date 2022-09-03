@@ -6,12 +6,12 @@ edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "Bag threshold generation script for pallet-bag-list and node-runtime."
+description = "Bag threshold generation script for pallet-bag-list and kitchensink-runtime."
 readme = "README.md"
 
 [dependencies]
-node-runtime = { version = "3.0.0-dev", path = "../../../../bin/node/runtime" }
+kitchensink-runtime = { version = "3.0.0-dev", path = "../../../../bin/node/runtime" }
 generate-bags = { version = "4.0.0-dev", path = "../" }
 
 # third-party
-clap = { version = "3.1.6", features = ["derive"] }
+clap = { version = "3.1.18", features = ["derive"] }

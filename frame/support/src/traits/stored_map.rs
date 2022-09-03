@@ -101,7 +101,7 @@ impl<
 	}
 	fn remove(k: &K) -> Result<(), DispatchError> {
 		if S::contains_key(&k) {
-			L::killed(&k)?;
+			L::killed(k)?;
 			S::remove(k);
 		}
 		Ok(())

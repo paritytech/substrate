@@ -73,7 +73,7 @@ impl From<Signature> for wasmi::Signature {
 impl From<&wasmi::Signature> for Signature {
 	fn from(sig: &wasmi::Signature) -> Self {
 		Signature::new(
-			sig.params().into_iter().copied().map(Into::into).collect::<Vec<_>>(),
+			sig.params().iter().copied().map(Into::into).collect::<Vec<_>>(),
 			sig.return_type().map(Into::into),
 		)
 	}

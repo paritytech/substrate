@@ -257,9 +257,9 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
-					.saturating_add(dispatch_info.weight)
 					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+					.saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)
 		})]
@@ -295,8 +295,7 @@ pub mod pallet {
 						let weight_used = T::WeightInfo::as_multi_threshold_1(call_len as u32)
 							.saturating_add(actual_weight);
 						let post_info = Some(weight_used).into();
-						let error = err.error.into();
-						DispatchErrorWithPostInfo { post_info, error }
+						DispatchErrorWithPostInfo { post_info, error: err.error }
 					},
 					None => err,
 				})

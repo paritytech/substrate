@@ -6,11 +6,15 @@ edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/paritytech/substrate"
 description = "A no-std/Substrate compatible library to construct binary merkle tree."
+homepage = "https://substrate.io"
 
 [dependencies]
-hex = { version = "0.4", optional = true, default-features = false }
-log = { version = "0.4", optional = true, default-features = false }
+hex = { version = "0.4", default-features = false, optional = true }
+log = { version = "0.4", default-features = false, optional = true }
 tiny-keccak = { version = "2.0.2", features = ["keccak"], optional = true }
+
+beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/beefy" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 
 [dev-dependencies]
 env_logger = "0.9"
@@ -19,6 +23,9 @@ hex-literal = "0.3"
 
 [features]
 debug = ["hex", "hex/std", "log"]
-default = ["std", "debug", "keccak"]
+default = ["debug", "keccak", "std"]
 keccak = ["tiny-keccak"]
-std = []
+std = [
+	"beefy-primitives/std",
+	"sp-api/std"
+]

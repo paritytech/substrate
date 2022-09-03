@@ -87,7 +87,6 @@ use futures::{
 use log::{debug, info, log, trace, warn};
 use parking_lot::Mutex;
 use prometheus_endpoint::Registry;
-use retain_mut::RetainMut;
 use schnorrkel::SignatureError;
 
 use sc_client_api::{
@@ -126,7 +125,7 @@ use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvid
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header, NumberFor, One, SaturatedConversion, Saturating, Zero},
+	traits::{Block as BlockT, Header, NumberFor, SaturatedConversion, Saturating, Zero},
 	DigestItem,
 };
 
@@ -528,7 +527,7 @@ where
 	let (worker_tx, worker_rx) = channel(HANDLE_BUFFER_SIZE);
 
 	let answer_requests =
-		answer_requests(worker_rx, babe_link.config, client, babe_link.session_changes.clone());
+		answer_requests(worker_rx, babe_link.config, client, babe_link.session_changes);
 
 	let inner = future::select(Box::pin(slot_worker), Box::pin(answer_requests));
 	Ok(BabeWorker {
@@ -638,13 +637,13 @@ async fn answer_requests<B: BlockT, C>(
 							slot_number,
 						)
 						.map_err(|e| Error::<B>::ForkTree(Box::new(e)))?
-						.ok_or_else(|| Error::<B>::FetchSession(parent_hash))?;
+						.ok_or(Error::<B>::FetchSession(parent_hash))?;
 
 					let viable_session = session_changes
 						.viable_session(&session_descriptor, |slot| {
 							Session::genesis(&config.genesis_config, slot)
 						})
-						.ok_or_else(|| Error::<B>::FetchSession(parent_hash))?;
+						.ok_or(Error::<B>::FetchSession(parent_hash))?;
 
 					Ok(sp_consensus_babe::Session {
 						session_index: viable_session.as_ref().session_index,
@@ -788,7 +787,7 @@ where
 			.session_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
 			.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
@@ -798,7 +797,7 @@ where
 	fn authorities_len(&self, session_descriptor: &Self::SessionData) -> Option<usize> {
 		self.session_changes
 			.shared_data()
-			.viable_session(&session_descriptor, |slot| {
+			.viable_session(session_descriptor, |slot| {
 				Session::genesis(&self.config.genesis_config, slot)
 			})
 			.map(|session| session.as_ref().authorities.len())
@@ -815,7 +814,7 @@ where
 			slot,
 			self.session_changes
 				.shared_data()
-				.viable_session(&session_descriptor, |slot| {
+				.viable_session(session_descriptor, |slot| {
 					Session::genesis(&self.config.genesis_config, slot)
 				})?
 				.as_ref(),
@@ -835,17 +834,16 @@ where
 		slot: Slot,
 		session_descriptor: &ViableSessionDescriptor<B::Hash, NumberFor<B>, Session>,
 	) {
-		RetainMut::retain_mut(&mut *self.slot_notification_sinks.lock(), |sink| {
-			match sink.try_send((slot, session_descriptor.clone())) {
-				Ok(()) => true,
-				Err(e) =>
-					if e.is_full() {
-						warn!(target: "babe", "Trying to notify a slot but the channel is full");
-						true
-					} else {
-						false
-					},
-			}
+		let sinks = &mut self.slot_notification_sinks.lock();
+		sinks.retain_mut(|sink| match sink.try_send((slot, session_descriptor.clone())) {
+			Ok(()) => true,
+			Err(e) =>
+				if e.is_full() {
+					warn!(target: "babe", "Trying to notify a slot but the channel is full");
+					true
+				} else {
+					false
+				},
 		});
 	}
 
@@ -886,7 +884,7 @@ where
 			.clone()
 			.try_into()
 			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
+		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature);
 
 		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
 		import_block.post_digests.push(digest_item);
@@ -1245,12 +1243,12 @@ where
 					pre_digest.slot(),
 				)
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
-				.ok_or_else(|| Error::<Block>::FetchSession(parent_hash))?;
+				.ok_or(Error::<Block>::FetchSession(parent_hash))?;
 			let viable_session = session_changes
 				.viable_session(&session_descriptor, |slot| {
 					Session::genesis(&self.config.genesis_config, slot)
 				})
-				.ok_or_else(|| Error::<Block>::FetchSession(parent_hash))?;
+				.ok_or(Error::<Block>::FetchSession(parent_hash))?;
 
 			// We add one to the current slot to allow for some small drift.
 			// FIXME #1019 in the future, alter this queue to allow deferring of headers
@@ -1783,9 +1781,13 @@ where
 	// startup rather than waiting until importing the next session change block.
 	prune_finalized(client.clone(), &mut session_changes.shared_data())?;
 
-	let client_clone = client.clone();
+	let client_weak = Arc::downgrade(&client);
 	let on_finality = move |summary: &FinalityNotification<Block>| {
-		aux_storage_cleanup(client_clone.as_ref(), summary)
+		if let Some(client) = client_weak.upgrade() {
+			aux_storage_cleanup(client.as_ref(), summary)
+		} else {
+			Default::default()
+		}
 	};
 	client.register_finality_action(Box::new(on_finality));
 
@@ -1869,15 +1871,16 @@ where
 {
 	let best_number = client.info().best_number;
 	let finalized = client.info().finalized_number;
-	let revertible = blocks.min(best_number - finalized);
 
-	let number = best_number - revertible;
-	let hash = client
-		.block_hash_from_id(&BlockId::Number(number))?
-		.ok_or(ClientError::Backend(format!(
-			"Unexpected hash lookup failure for block number: {}",
-			number
-		)))?;
+	let revertible = blocks.min(best_number - finalized);
+	if revertible == Zero::zero() {
+		return Ok(())
+	}
+
+	let revert_up_to_number = best_number - revertible;
+	let revert_up_to_hash = client.hash(revert_up_to_number)?.ok_or(ClientError::Backend(
+		format!("Unexpected hash lookup failure for block number: {}", revert_up_to_number),
+	))?;
 
 	// Revert session changes tree.
 
@@ -1886,34 +1889,37 @@ where
 		aux_schema::load_session_changes::<Block, Client>(&*client, config.genesis_config())?;
 	let mut session_changes = session_changes.shared_data();
 
-	if number == Zero::zero() {
+	if revert_up_to_number == Zero::zero() {
 		// Special case, no session changes data were present on genesis.
 		*session_changes = SessionChangesFor::<Block, Session>::default();
 	} else {
-		session_changes.revert(descendent_query(&*client), hash, number);
+		session_changes.revert(descendent_query(&*client), revert_up_to_hash, revert_up_to_number);
 	}
 
 	// Remove block weights added after the revert point.
 
 	let mut weight_keys = HashSet::with_capacity(revertible.saturated_into());
+
 	let leaves = backend.blockchain().leaves()?.into_iter().filter(|&leaf| {
-		sp_blockchain::tree_route(&*client, hash, leaf)
+		sp_blockchain::tree_route(&*client, revert_up_to_hash, leaf)
 			.map(|route| route.retracted().is_empty())
 			.unwrap_or_default()
 	});
+
 	for leaf in leaves {
 		let mut hash = leaf;
-		// Insert parent after parent until we don't hit an already processed
-		// branch or we reach a direct child of the rollback point.
-		while weight_keys.insert(aux_schema::block_weight_key(hash)) {
+		loop {
 			let meta = client.header_metadata(hash)?;
-			if meta.number <= number + One::one() {
-				// We've reached a child of the revert point, stop here.
+			if meta.number <= revert_up_to_number ||
+				!weight_keys.insert(aux_schema::block_weight_key(hash))
+			{
+				// We've reached the revert point or an already processed branch, stop here.
 				break
 			}
-			hash = client.header_metadata(hash)?.parent;
+			hash = meta.parent;
 		}
 	}
+
 	let weight_keys: Vec<_> = weight_keys.iter().map(|val| val.as_slice()).collect();
 
 	// Write session changes and remove weights in one shot.

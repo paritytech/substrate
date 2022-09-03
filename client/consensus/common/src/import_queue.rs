@@ -160,6 +160,16 @@ pub enum BlockImportStatus<N: std::fmt::Debug + PartialEq> {
 	ImportedUnknown(N, ImportedAux, Option<Origin>),
 }
 
+impl<N: std::fmt::Debug + PartialEq> BlockImportStatus<N> {
+	/// Returns the imported block number.
+	pub fn number(&self) -> &N {
+		match self {
+			BlockImportStatus::ImportedKnown(n, _) |
+			BlockImportStatus::ImportedUnknown(n, _, _) => n,
+		}
+	}
+}
+
 /// Block import error.
 #[derive(Debug, thiserror::Error)]
 pub enum BlockImportError {
@@ -232,17 +242,17 @@ pub(crate) async fn import_single_block_metered<
 
 	trace!(target: "sync", "Header {} has {:?} logs", block.hash, header.digest().logs().len());
 
-	let number = header.number().clone();
+	let number = *header.number();
 	let hash = block.hash;
-	let parent_hash = header.parent_hash().clone();
+	let parent_hash = *header.parent_hash();
 
 	let import_handler = |import| match import {
 		Ok(ImportResult::AlreadyInChain) => {
 			trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
-			Ok(BlockImportStatus::ImportedKnown(number, peer.clone()))
+			Ok(BlockImportStatus::ImportedKnown(number, peer))
 		},
 		Ok(ImportResult::Imported(aux)) =>
-			Ok(BlockImportStatus::ImportedUnknown(number, aux, peer.clone())),
+			Ok(BlockImportStatus::ImportedUnknown(number, aux, peer)),
 		Ok(ImportResult::MissingState) => {
 			debug!(target: "sync", "Parent state is missing for {}: {:?}, parent: {:?}",
 					number, hash, parent_hash);
@@ -255,7 +265,7 @@ pub(crate) async fn import_single_block_metered<
 		},
 		Ok(ImportResult::KnownBad) => {
 			debug!(target: "sync", "Peer gave us a bad block {}: {:?}", number, hash);
-			Err(BlockImportError::BadBlock(peer.clone()))
+			Err(BlockImportError::BadBlock(peer))
 		},
 		Err(e) => {
 			debug!(target: "sync", "Error importing block {}: {:?}: {}", number, hash, e);
@@ -306,7 +316,7 @@ pub(crate) async fn import_single_block_metered<
 		if let Some(metrics) = metrics.as_ref() {
 			metrics.report_verification(false, started.elapsed());
 		}
-		BlockImportError::VerificationFailed(peer.clone(), msg)
+		BlockImportError::VerificationFailed(peer, msg)
 	})?;
 
 	if let Some(metrics) = metrics.as_ref() {

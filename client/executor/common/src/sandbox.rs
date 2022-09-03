@@ -264,8 +264,8 @@ fn decode_environment_definition(
 				let memory_ref = memories
 					.get(memory_idx as usize)
 					.cloned()
-					.ok_or_else(|| InstantiationError::EnvironmentDefinitionCorrupted)?
-					.ok_or_else(|| InstantiationError::EnvironmentDefinitionCorrupted)?;
+					.ok_or(InstantiationError::EnvironmentDefinitionCorrupted)?
+					.ok_or(InstantiationError::EnvironmentDefinitionCorrupted)?;
 				memories_map.insert((module, field), memory_ref);
 			},
 		}
@@ -458,7 +458,7 @@ impl<DT: Clone> Store<DT> {
 		};
 
 		let mem_idx = memories.len();
-		memories.push(Some(memory.clone()));
+		memories.push(Some(memory));
 
 		Ok(mem_idx as u32)
 	}
@@ -472,7 +472,7 @@ impl<DT: Clone> Store<DT> {
 	pub fn instance(&self, instance_idx: u32) -> Result<Rc<SandboxInstance>> {
 		self.instances
 			.get(instance_idx as usize)
-			.ok_or_else(|| "Trying to access a non-existent instance")?
+			.ok_or("Trying to access a non-existent instance")?
 			.as_ref()
 			.map(|v| v.0.clone())
 			.ok_or_else(|| "Trying to access a torndown instance".into())
@@ -488,7 +488,7 @@ impl<DT: Clone> Store<DT> {
 		self.instances
 			.get(instance_idx as usize)
 			.as_ref()
-			.ok_or_else(|| "Trying to access a non-existent instance")?
+			.ok_or("Trying to access a non-existent instance")?
 			.as_ref()
 			.map(|v| v.1.clone())
 			.ok_or_else(|| "Trying to access a torndown instance".into())
@@ -504,7 +504,7 @@ impl<DT: Clone> Store<DT> {
 		self.memories
 			.get(memory_idx as usize)
 			.cloned()
-			.ok_or_else(|| "Trying to access a non-existent sandboxed memory")?
+			.ok_or("Trying to access a non-existent sandboxed memory")?
 			.ok_or_else(|| "Trying to access a torndown sandboxed memory".into())
 	}
 
@@ -564,7 +564,7 @@ impl<DT: Clone> Store<DT> {
 
 			#[cfg(feature = "wasmer-sandbox")]
 			BackendContext::Wasmer(ref context) =>
-				wasmer_instantiate(&context, wasm, guest_env, state, sandbox_context)?,
+				wasmer_instantiate(context, wasm, guest_env, state, sandbox_context)?,
 		};
 
 		Ok(UnregisteredInstance { sandbox_instance })

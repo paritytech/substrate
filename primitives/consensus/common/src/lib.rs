@@ -33,7 +33,6 @@ use sp_state_machine::StorageProof;
 
 pub mod block_validation;
 pub mod error;
-pub mod evaluation;
 mod select_chain;
 
 pub use self::error::Error;
@@ -169,7 +168,7 @@ impl ProofRecording for EnableProofRecording {
 	const ENABLED: bool = true;
 
 	fn into_proof(proof: Option<StorageProof>) -> Result<Self::Proof, NoProofRecorded> {
-		proof.ok_or_else(|| NoProofRecorded)
+		proof.ok_or(NoProofRecorded)
 	}
 }
 
@@ -237,10 +236,10 @@ pub trait Proposer<B: BlockT> {
 pub trait SyncOracle {
 	/// Whether the synchronization service is undergoing major sync.
 	/// Returns true if so.
-	fn is_major_syncing(&mut self) -> bool;
+	fn is_major_syncing(&self) -> bool;
 	/// Whether the synchronization service is offline.
 	/// Returns true if so.
-	fn is_offline(&mut self) -> bool;
+	fn is_offline(&self) -> bool;
 }
 
 /// A synchronization oracle for when there is no network.
@@ -248,10 +247,10 @@ pub trait SyncOracle {
 pub struct NoNetwork;
 
 impl SyncOracle for NoNetwork {
-	fn is_major_syncing(&mut self) -> bool {
+	fn is_major_syncing(&self) -> bool {
 		false
 	}
-	fn is_offline(&mut self) -> bool {
+	fn is_offline(&self) -> bool {
 		false
 	}
 }
@@ -259,14 +258,14 @@ impl SyncOracle for NoNetwork {
 impl<T> SyncOracle for Arc<T>
 where
 	T: ?Sized,
-	for<'r> &'r T: SyncOracle,
+	T: SyncOracle,
 {
-	fn is_major_syncing(&mut self) -> bool {
-		<&T>::is_major_syncing(&mut &**self)
+	fn is_major_syncing(&self) -> bool {
+		T::is_major_syncing(self)
 	}
 
-	fn is_offline(&mut self) -> bool {
-		<&T>::is_offline(&mut &**self)
+	fn is_offline(&self) -> bool {
+		T::is_offline(self)
 	}
 }
 

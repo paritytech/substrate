@@ -26,7 +26,7 @@ use std::{
 };
 
 /// default sub directory for the key store
-const DEFAULT_KEYSTORE_CONFIG_PATH: &'static str = "keystore";
+const DEFAULT_KEYSTORE_CONFIG_PATH: &str = "keystore";
 
 /// Parameters of the keystore
 #[derive(Debug, Clone, Args)]
@@ -94,7 +94,7 @@ impl KeystoreParams {
 		let (password_interactive, password) = (self.password_interactive, self.password.clone());
 
 		let pass = if password_interactive {
-			let password = rpassword::read_password_from_tty(Some("Key password: "))?;
+			let password = rpassword::prompt_password("Key password: ")?;
 			Some(SecretString::new(password))
 		} else {
 			password
@@ -105,6 +105,5 @@ impl KeystoreParams {
 }
 
 fn input_keystore_password() -> Result<String> {
-	rpassword::read_password_from_tty(Some("Keystore password: "))
-		.map_err(|e| format!("{:?}", e).into())
+	rpassword::prompt_password("Keystore password: ").map_err(|e| format!("{:?}", e).into())
 }

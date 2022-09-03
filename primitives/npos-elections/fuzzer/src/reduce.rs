@@ -90,7 +90,7 @@ fn generate_random_phragmen_assignment(
 				let target =
 					targets_to_chose_from.remove(rng.gen_range(0..targets_to_chose_from.len()));
 				if winners.iter().all(|w| *w != target) {
-					winners.push(target.clone());
+					winners.push(target);
 				}
 				(target, rng.gen_range(1 * KSM..100 * KSM))
 			})
@@ -118,7 +118,7 @@ fn reduce_and_compare(assignment: &Vec<StakedAssignment<AccountId>>, winners: &V
 	let n = assignment.len() as u32;
 	let m = winners.len() as u32;
 
-	let edges_before = assignment_len(&assignment);
+	let edges_before = assignment_len(assignment);
 	let num_changed = reduce(&mut altered_assignment);
 	let edges_after = edges_before - num_changed;
 

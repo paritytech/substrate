@@ -88,10 +88,10 @@ impl RoundState {
 		voters: &HashSet<AuthorityId>,
 	) -> Result<Self, Error> {
 		let prevotes = &round_state.prevote_ids;
-		let missing_prevotes = voters.difference(&prevotes).cloned().collect();
+		let missing_prevotes = voters.difference(prevotes).cloned().collect();
 
 		let precommits = &round_state.precommit_ids;
-		let missing_precommits = voters.difference(&precommits).cloned().collect();
+		let missing_precommits = voters.difference(precommits).cloned().collect();
 
 		Ok(Self {
 			round: round.try_into()?,

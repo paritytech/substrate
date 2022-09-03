@@ -39,7 +39,7 @@ impl DataSegmentsSnapshot {
 			.map(|mut segment| {
 				// Just replace contents of the segment since the segments will be discarded later
 				// anyway.
-				let contents = mem::replace(segment.value_mut(), vec![]);
+				let contents = mem::take(segment.value_mut());
 
 				let init_expr = match segment.offset() {
 					Some(offset) => offset.code(),

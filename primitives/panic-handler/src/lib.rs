@@ -158,7 +158,7 @@ fn panic_hook(info: &PanicInfo, report_url: &str, version: &str) {
 		},
 	};
 
-	let msg = strip_control_codes(&msg);
+	let msg = strip_control_codes(msg);
 
 	let thread = thread::current();
 	let name = thread.name().unwrap_or("<unnamed>");
@@ -167,13 +167,13 @@ fn panic_hook(info: &PanicInfo, report_url: &str, version: &str) {
 
 	let mut stderr = io::stderr();
 
-	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr);
 	let _ = writeln!(stderr, "====================");
-	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr);
 	let _ = writeln!(stderr, "Version: {}", version);
-	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr);
 	let _ = writeln!(stderr, "{:?}", backtrace);
-	let _ = writeln!(stderr, "");
+	let _ = writeln!(stderr);
 	let _ = writeln!(stderr, "Thread '{}' panicked at '{}', {}:{}", name, msg, file, line);
 
 	let _ = writeln!(stderr, ABOUT_PANIC!(), report_url);

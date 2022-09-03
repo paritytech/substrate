@@ -59,7 +59,8 @@ impl RoundTracker {
 	}
 }
 
-fn threshold(authorities: usize) -> usize {
+/// Minimum size of `authorities` subset that produced valid signatures for a block to finalize.
+pub fn threshold(authorities: usize) -> usize {
 	let faulty = authorities.saturating_sub(1) / 3;
 	authorities - faulty
 }
@@ -70,10 +71,10 @@ fn threshold(authorities: usize) -> usize {
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 pub(crate) struct Rounds<Payload, B: Block> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
-	best_done: Option<NumberFor<B>>,
 	session_start: NumberFor<B>,
 	validator_set: ValidatorSet<Public>,
-	prev_validator_set: ValidatorSet<Public>,
+	mandatory_done: bool,
+	best_done: Option<NumberFor<B>>,
 }
 
 impl<P, B> Rounds<P, B>
@@ -81,52 +82,34 @@ where
 	P: Ord + Hash + Clone,
 	B: Block,
 {
-	pub(crate) fn new(
-		session_start: NumberFor<B>,
-		validator_set: ValidatorSet<Public>,
-		prev_validator_set: ValidatorSet<Public>,
-	) -> Self {
+	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
 		Rounds {
 			rounds: BTreeMap::new(),
-			best_done: None,
 			session_start,
 			validator_set,
-			prev_validator_set,
-		}
-	}
-}
-
-impl<P, B> Rounds<P, B>
-where
-	P: Ord + Hash + Clone,
-	B: Block,
-{
-	pub(crate) fn validator_set_id_for(&self, block_number: NumberFor<B>) -> ValidatorSetId {
-		if block_number > self.session_start {
-			self.validator_set.id()
-		} else {
-			self.prev_validator_set.id()
+			mandatory_done: false,
+			best_done: None,
 		}
 	}
 
-	pub(crate) fn validators_for(&self, block_number: NumberFor<B>) -> &[Public] {
-		if block_number > self.session_start {
-			self.validator_set.validators()
-		} else {
-			self.prev_validator_set.validators()
-		}
+	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
+		self.validator_set.id()
 	}
 
-	pub(crate) fn validator_set(&self) -> &ValidatorSet<Public> {
-		&self.validator_set
+	pub(crate) fn validators(&self) -> &[Public] {
+		self.validator_set.validators()
 	}
 
-	pub(crate) fn session_start(&self) -> &NumberFor<B> {
-		&self.session_start
+	pub(crate) fn session_start(&self) -> NumberFor<B> {
+		self.session_start
+	}
+
+	pub(crate) fn mandatory_done(&self) -> bool {
+		self.mandatory_done
 	}
 
 	pub(crate) fn should_self_vote(&self, round: &(P, NumberFor<B>)) -> bool {
-		Some(round.1.clone()) > self.best_done &&
+		Some(round.1) > self.best_done &&
 			self.rounds.get(round).map(|tracker| !tracker.has_self_vote()).unwrap_or(true)
 	}
 
@@ -136,14 +119,11 @@ where
 		vote: (Public, Signature),
 		self_vote: bool,
 	) -> bool {
-		if Some(round.1.clone()) <= self.best_done {
-			debug!(
-				target: "beefy",
-				"🥩 received vote for old stale round {:?}, ignoring",
-				round.1
-			);
+		let num = round.1;
+		if num < self.session_start || Some(num) <= self.best_done {
+			debug!(target: "beefy", "🥩 received vote for old stale round {:?}, ignoring", num);
 			false
-		} else if !self.validator_set.validators().iter().any(|id| vote.0 == *id) {
+		} else if !self.validators().iter().any(|id| vote.0 == *id) {
 			debug!(
 				target: "beefy",
 				"🥩 received vote {:?} from validator that is not in the validator set, ignoring",
@@ -170,12 +150,12 @@ where
 			// remove this and older (now stale) rounds
 			let signatures = self.rounds.remove(round)?.votes;
 			self.rounds.retain(|&(_, number), _| number > round.1);
-			self.best_done = self.best_done.clone().max(Some(round.1.clone()));
+			self.mandatory_done = self.mandatory_done || round.1 == self.session_start;
+			self.best_done = self.best_done.max(Some(round.1));
 			debug!(target: "beefy", "🥩 Concluded round #{}", round.1);
 
 			Some(
-				self.validator_set
-					.validators()
+				self.validators()
 					.iter()
 					.map(|authority_id| signatures.get(authority_id).cloned())
 					.collect(),
@@ -183,6 +163,11 @@ where
 		} else {
 			None
 		}
+	}
+
+	#[cfg(test)]
+	pub(crate) fn test_set_mandatory_done(&mut self, done: bool) {
+		self.mandatory_done = done;
 	}
 }
 
@@ -247,13 +232,13 @@ mod tests {
 		.unwrap();
 
 		let session_start = 1u64.into();
-		let rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
+		let rounds = Rounds::<H256, Block>::new(session_start, validators);
 
-		assert_eq!(42, rounds.validator_set_id_for(session_start));
-		assert_eq!(1, *rounds.session_start());
+		assert_eq!(42, rounds.validator_set_id());
+		assert_eq!(1, rounds.session_start());
 		assert_eq!(
 			&vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
-			rounds.validators_for(session_start)
+			rounds.validators()
 		);
 	}
 
@@ -274,7 +259,7 @@ mod tests {
 		let round = (H256::from_low_u64_le(1), 1);
 
 		let session_start = 1u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
 
 		// no self vote yet, should self vote
 		assert!(rounds.should_self_vote(&round));
@@ -332,6 +317,43 @@ mod tests {
 	}
 
 	#[test]
+	fn old_rounds_not_accepted() {
+		sp_tracing::try_init_simple();
+
+		let validators = ValidatorSet::<Public>::new(
+			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			42,
+		)
+		.unwrap();
+		let alice = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
+
+		let session_start = 10u64.into();
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+
+		let mut vote = (H256::from_low_u64_le(1), 9);
+		// add vote for previous session, should fail
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		// no votes present
+		assert!(rounds.rounds.is_empty());
+
+		// simulate 11 was concluded
+		rounds.best_done = Some(11);
+		// add votes for current session, but already concluded rounds, should fail
+		vote.1 = 10;
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		vote.1 = 11;
+		assert!(!rounds.add_vote(&vote, alice.clone(), true));
+		// no votes present
+		assert!(rounds.rounds.is_empty());
+
+		// add good vote
+		vote.1 = 12;
+		assert!(rounds.add_vote(&vote, alice, true));
+		// good vote present
+		assert_eq!(rounds.rounds.len(), 1);
+	}
+
+	#[test]
 	fn multiple_rounds() {
 		sp_tracing::try_init_simple();
 
@@ -347,7 +369,7 @@ mod tests {
 		.unwrap();
 
 		let session_start = 1u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators.clone(), validators);
+		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
 
 		// round 1
 		assert!(rounds.add_vote(

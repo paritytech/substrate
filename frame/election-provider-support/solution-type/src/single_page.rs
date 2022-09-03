@@ -33,7 +33,7 @@ pub(crate) fn generate(def: crate::SolutionDef) -> Result<TokenStream2> {
 	} = def;
 
 	if count <= 2 {
-		Err(syn_err("cannot build solution struct with capacity less than 3."))?
+		return Err(syn_err("cannot build solution struct with capacity less than 3."))
 	}
 
 	let single = {

@@ -53,7 +53,7 @@ impl RuntimePublic for Public {
 	}
 
 	fn verify<M: AsRef<[u8]>>(&self, msg: &M, signature: &Self::Signature) -> bool {
-		sp_io::crypto::ed25519_verify(&signature, msg.as_ref(), self)
+		sp_io::crypto::ed25519_verify(signature, msg.as_ref(), self)
 	}
 
 	fn to_raw_vec(&self) -> Vec<u8> {

@@ -18,17 +18,23 @@
 
 //! State API backend for full nodes.
 
-use futures::{
-	future,
-	future::{err, try_join_all},
-	stream, FutureExt, SinkExt, StreamExt,
-};
-use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
-use log::warn;
-use rpc::Result as RpcResult;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
+use super::{
+	client_err,
+	error::{Error, Result},
+	ChildStateBackend, StateBackend,
+};
+use crate::SubscriptionTaskExecutor;
+
+use futures::{future, stream, FutureExt, StreamExt};
+use jsonrpsee::{core::Error as JsonRpseeError, SubscriptionSink};
+use sc_client_api::{
+	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
+	StorageProvider,
+};
 use sc_rpc_api::state::ReadProof;
+use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
 use sp_blockchain::{
 	CachedHeaderMetadata, Error as ClientError, HeaderBackend, HeaderMetadata,
 	Result as ClientResult,
@@ -42,19 +48,6 @@ use sp_core::{
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_version::RuntimeVersion;
 
-use sp_api::{CallApiAt, Metadata, ProvideRuntimeApi};
-
-use super::{
-	client_err,
-	error::{Error, FutureResult, Result},
-	ChildStateBackend, StateBackend,
-};
-use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, ProofProvider,
-	StorageNotification, StorageProvider,
-};
-use std::marker::PhantomData;
-
 /// Ranges to query in state_queryStorage.
 struct QueryStorageRange<Block: BlockT> {
 	/// Hashes of all the blocks in the range.
@@ -64,7 +57,7 @@ struct QueryStorageRange<Block: BlockT> {
 /// State API backend for full nodes.
 pub struct FullState<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
+	executor: SubscriptionTaskExecutor,
 	_phantom: PhantomData<(BE, Block)>,
 	rpc_max_payload: Option<usize>,
 }
@@ -81,10 +74,10 @@ where
 	/// Create new state API backend for full nodes.
 	pub fn new(
 		client: Arc<Client>,
-		subscriptions: SubscriptionManager,
+		executor: SubscriptionTaskExecutor,
 		rpc_max_payload: Option<usize>,
 	) -> Self {
-		Self { client, subscriptions, _phantom: PhantomData, rpc_max_payload }
+		Self { client, executor, _phantom: PhantomData, rpc_max_payload }
 	}
 
 	/// Returns given block hash or best block hash if None is passed.
@@ -151,10 +144,8 @@ where
 		changes: &mut Vec<StorageChangeSet<Block::Hash>>,
 	) -> Result<()> {
 		for block_hash in &range.hashes {
-			let block_hash = block_hash.clone();
-			let mut block_changes =
-				StorageChangeSet { block: block_hash.clone(), changes: Vec::new() };
-			let id = BlockId::hash(block_hash);
+			let mut block_changes = StorageChangeSet { block: *block_hash, changes: Vec::new() };
+			let id = BlockId::hash(*block_hash);
 			for key in keys {
 				let (has_changed, data) = {
 					let curr_data = self.client.storage(&id, key).map_err(client_err)?;
@@ -200,47 +191,41 @@ where
 		block: Option<Block::Hash>,
 		method: String,
 		call_data: Bytes,
-	) -> FutureResult<Bytes> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Bytes, Error> {
+		self.block_or_best(block)
 			.and_then(|block| {
 				self.client
 					.executor()
 					.call(
 						&BlockId::Hash(block),
 						&method,
-						&*call_data,
+						&call_data,
 						self.client.execution_extensions().strategies().other,
 						None,
 					)
 					.map(Into::into)
 			})
-			.map_err(client_err);
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage_keys(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Vec<StorageKey>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| self.client.storage_keys(&BlockId::Hash(block), &prefix))
-			.map_err(client_err);
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage_pairs(
 		&self,
 		block: Option<Block::Hash>,
 		prefix: StorageKey,
-	) -> FutureResult<Vec<(StorageKey, StorageData)>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Vec<(StorageKey, StorageData)>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| self.client.storage_pairs(&BlockId::Hash(block), &prefix))
-			.map_err(client_err);
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage_keys_paged(
@@ -249,9 +234,8 @@ where
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
-	) -> FutureResult<Vec<StorageKey>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Vec<StorageKey>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| {
 				self.client.storage_keys_iter(
 					&BlockId::Hash(block),
@@ -260,40 +244,36 @@ where
 				)
 			})
 			.map(|iter| iter.take(count as usize).collect())
-			.map_err(client_err);
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
-	) -> FutureResult<Option<StorageData>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Option<StorageData>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| self.client.storage(&BlockId::Hash(block), &key))
-			.map_err(client_err);
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage_size(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
-	) -> FutureResult<Option<u64>> {
+	) -> std::result::Result<Option<u64>, Error> {
 		let block = match self.block_or_best(block) {
 			Ok(b) => b,
-			Err(e) => return async move { Err(client_err(e)) }.boxed(),
+			Err(e) => return Err(client_err(e)),
 		};
 
 		match self.client.storage(&BlockId::Hash(block), &key) {
-			Ok(Some(d)) => return async move { Ok(Some(d.0.len() as u64)) }.boxed(),
-			Err(e) => return async move { Err(client_err(e)) }.boxed(),
+			Ok(Some(d)) => return Ok(Some(d.0.len() as u64)),
+			Err(e) => return Err(client_err(e)),
 			Ok(None) => {},
 		}
 
-		let r = self
-			.client
+		self.client
 			.storage_pairs(&BlockId::Hash(block), &key)
 			.map(|kv| {
 				let item_sum = kv.iter().map(|(_, v)| v.0.len() as u64).sum::<u64>();
@@ -303,40 +283,38 @@ where
 					None
 				}
 			})
-			.map_err(client_err);
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage_hash(
 		&self,
 		block: Option<Block::Hash>,
 		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Option<Block::Hash>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| self.client.storage_hash(&BlockId::Hash(block), &key))
-			.map_err(client_err);
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
-	fn metadata(&self, block: Option<Block::Hash>) -> FutureResult<Bytes> {
-		let r = self.block_or_best(block).map_err(client_err).and_then(|block| {
+	fn metadata(&self, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
+		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_api()
 				.metadata(&BlockId::Hash(block))
 				.map(Into::into)
 				.map_err(|e| Error::Client(Box::new(e)))
-		});
-		async move { r }.boxed()
+		})
 	}
 
-	fn runtime_version(&self, block: Option<Block::Hash>) -> FutureResult<RuntimeVersion> {
-		let r = self.block_or_best(block).map_err(client_err).and_then(|block| {
+	fn runtime_version(
+		&self,
+		block: Option<Block::Hash>,
+	) -> std::result::Result<RuntimeVersion, Error> {
+		self.block_or_best(block).map_err(client_err).and_then(|block| {
 			self.client
 				.runtime_version_at(&BlockId::Hash(block))
 				.map_err(|e| Error::Client(Box::new(e)))
-		});
-		async move { r }.boxed()
+		})
 	}
 
 	fn query_storage(
@@ -344,7 +322,7 @@ where
 		from: Block::Hash,
 		to: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+	) -> std::result::Result<Vec<StorageChangeSet<Block::Hash>>, Error> {
 		let call_fn = move || {
 			let range = self.query_storage_range(from, to)?;
 			let mut changes = Vec::new();
@@ -352,16 +330,14 @@ where
 			self.query_storage_unfiltered(&range, &keys, &mut last_values, &mut changes)?;
 			Ok(changes)
 		};
-
-		let r = call_fn();
-		async move { r }.boxed()
+		call_fn()
 	}
 
 	fn query_storage_at(
 		&self,
 		keys: Vec<StorageKey>,
 		at: Option<Block::Hash>,
-	) -> FutureResult<Vec<StorageChangeSet<Block::Hash>>> {
+	) -> std::result::Result<Vec<StorageChangeSet<Block::Hash>>, Error> {
 		let at = at.unwrap_or_else(|| self.client.info().best_hash);
 		self.query_storage(at, Some(at), keys)
 	}
@@ -370,126 +346,104 @@ where
 		&self,
 		block: Option<Block::Hash>,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<ReadProof<Block::Hash>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<ReadProof<Block::Hash>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| {
 				self.client
 					.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref()))
 					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
-			.map_err(client_err);
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
-	fn subscribe_runtime_version(
-		&self,
-		_meta: crate::Metadata,
-		subscriber: Subscriber<RuntimeVersion>,
-	) {
-		self.subscriptions.add(subscriber, |sink| {
-			let version = self
-				.block_or_best(None)
-				.and_then(|block| {
-					self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
-				})
-				.map_err(client_err)
-				.map_err(Into::into);
+	fn subscribe_runtime_version(&self, mut sink: SubscriptionSink) {
+		let client = self.client.clone();
 
-			let client = self.client.clone();
-			let mut previous_version = version.clone();
+		let initial = match self
+			.block_or_best(None)
+			.and_then(|block| {
+				self.client.runtime_version_at(&BlockId::Hash(block)).map_err(Into::into)
+			})
+			.map_err(|e| Error::Client(Box::new(e)))
+		{
+			Ok(initial) => initial,
+			Err(e) => {
+				let _ = sink.reject(JsonRpseeError::from(e));
+				return
+			},
+		};
 
-			// A stream of all best blocks.
-			let stream =
-				client.import_notification_stream().filter(|n| future::ready(n.is_new_best));
+		let mut previous_version = initial.clone();
 
-			let stream = stream.filter_map(move |n| {
+		// A stream of new versions
+		let version_stream = client
+			.import_notification_stream()
+			.filter(|n| future::ready(n.is_new_best))
+			.filter_map(move |n| {
 				let version = client
 					.runtime_version_at(&BlockId::hash(n.hash))
-					.map_err(|e| Error::Client(Box::new(e)))
-					.map_err(Into::into);
+					.map_err(|e| Error::Client(Box::new(e)));
 
-				if previous_version != version {
-					previous_version = version.clone();
-					future::ready(Some(Ok::<_, ()>(version)))
-				} else {
-					future::ready(None)
+				match version {
+					Ok(version) if version != previous_version => {
+						previous_version = version.clone();
+						future::ready(Some(version))
+					},
+					_ => future::ready(None),
 				}
 			});
 
-			stream::iter(vec![Ok(version)])
-				.chain(stream)
-				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
-				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
-				.map(|_| ())
-		});
+		let stream = futures::stream::once(future::ready(initial)).chain(version_stream);
+
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
-	fn unsubscribe_runtime_version(
-		&self,
-		_meta: Option<crate::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.subscriptions.cancel(id))
-	}
-
-	fn subscribe_storage(
-		&self,
-		_meta: crate::Metadata,
-		subscriber: Subscriber<StorageChangeSet<Block::Hash>>,
-		keys: Option<Vec<StorageKey>>,
-	) {
-		let keys = Into::<Option<Vec<_>>>::into(keys);
+	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<StorageKey>>) {
 		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
-			Err(err) => {
-				let _ = subscriber.reject(client_err(err).into());
+			Err(blockchain_err) => {
+				let _ = sink.reject(JsonRpseeError::from(Error::Client(Box::new(blockchain_err))));
 				return
 			},
 		};
 
 		// initial values
-		let initial = stream::iter(
-			keys.map(|keys| {
-				let block = self.client.info().best_hash;
-				let changes = keys
-					.into_iter()
-					.map(|key| {
-						let v = self.client.storage(&BlockId::Hash(block), &key).ok().flatten();
-						(key, v)
-					})
-					.collect();
-				vec![Ok(Ok(StorageChangeSet { block, changes }))]
-			})
-			.unwrap_or_default(),
-		);
+		let initial = stream::iter(keys.map(|keys| {
+			let block = self.client.info().best_hash;
+			let changes = keys
+				.into_iter()
+				.map(|key| {
+					let v = self.client.storage(&BlockId::Hash(block), &key).ok().flatten();
+					(key, v)
+				})
+				.collect();
+			StorageChangeSet { block, changes }
+		}));
 
-		self.subscriptions.add(subscriber, |sink| {
-			let stream = stream.map(|StorageNotification { block, changes }| {
-				Ok(Ok::<_, rpc::Error>(StorageChangeSet {
-					block,
-					changes: changes
-						.iter()
-						.filter_map(|(o_sk, k, v)| o_sk.is_none().then(|| (k.clone(), v.cloned())))
-						.collect(),
-				}))
-			});
-
-			initial
-				.chain(stream)
-				.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
-				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
-				.map(|_| ())
+		// let storage_stream = stream.map(|(block, changes)| StorageChangeSet {
+		let storage_stream = stream.map(|storage_notif| StorageChangeSet {
+			block: storage_notif.block,
+			changes: storage_notif
+				.changes
+				.iter()
+				.filter_map(|(o_sk, k, v)| o_sk.is_none().then(|| (k.clone(), v.cloned())))
+				.collect(),
 		});
-	}
 
-	fn unsubscribe_storage(
-		&self,
-		_meta: Option<crate::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.subscriptions.cancel(id))
+		let stream = initial
+			.chain(storage_stream)
+			.filter(|storage| future::ready(!storage.changes.is_empty()));
+
+		let fut = async move {
+			sink.pipe_from_stream(stream).await;
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 	}
 
 	fn trace_block(
@@ -498,19 +452,17 @@ where
 		targets: Option<String>,
 		storage_keys: Option<String>,
 		methods: Option<String>,
-	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
-		let block_executor = sc_tracing::block::BlockExecutor::new(
+	) -> std::result::Result<sp_rpc::tracing::TraceBlockResponse, Error> {
+		sc_tracing::block::BlockExecutor::new(
 			self.client.clone(),
 			block,
 			targets,
 			storage_keys,
 			methods,
 			self.rpc_max_payload,
-		);
-		let r = block_executor
-			.trace_block()
-			.map_err(|e| invalid_block::<Block>(block, None, e.to_string()));
-		async move { r }.boxed()
+		)
+		.trace_block()
+		.map_err(|e| invalid_block::<Block>(block, None, e.to_string()))
 	}
 }
 
@@ -537,9 +489,8 @@ where
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<ReadProof<Block::Hash>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<ReadProof<Block::Hash>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
@@ -555,9 +506,7 @@ where
 					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
-			.map_err(client_err);
-
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage_keys(
@@ -565,9 +514,8 @@ where
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
 		prefix: StorageKey,
-	) -> FutureResult<Vec<StorageKey>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Vec<StorageKey>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
@@ -576,9 +524,7 @@ where
 				};
 				self.client.child_storage_keys(&BlockId::Hash(block), &child_info, &prefix)
 			})
-			.map_err(client_err);
-
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage_keys_paged(
@@ -588,9 +534,8 @@ where
 		prefix: Option<StorageKey>,
 		count: u32,
 		start_key: Option<StorageKey>,
-	) -> FutureResult<Vec<StorageKey>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Vec<StorageKey>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
@@ -605,9 +550,7 @@ where
 				)
 			})
 			.map(|iter| iter.take(count as usize).collect())
-			.map_err(client_err);
-
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage(
@@ -615,9 +558,8 @@ where
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
-	) -> FutureResult<Option<StorageData>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Option<StorageData>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
@@ -626,9 +568,7 @@ where
 				};
 				self.client.child_storage(&BlockId::Hash(block), &child_info, &key)
 			})
-			.map_err(client_err);
-
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 
 	fn storage_entries(
@@ -636,26 +576,25 @@ where
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
 		keys: Vec<StorageKey>,
-	) -> FutureResult<Vec<Option<StorageData>>> {
-		let child_info = match ChildType::from_prefixed_key(&storage_key) {
-			Some((ChildType::ParentKeyId, storage_key)) =>
-				Arc::new(ChildInfo::new_default(storage_key)),
-			None => return err(client_err(sp_blockchain::Error::InvalidChildStorageKey)).boxed(),
+	) -> std::result::Result<Vec<Option<StorageData>>, Error> {
+		let child_info = if let Some((ChildType::ParentKeyId, storage_key)) =
+			ChildType::from_prefixed_key(&storage_key)
+		{
+			Arc::new(ChildInfo::new_default(storage_key))
+		} else {
+			return Err(client_err(sp_blockchain::Error::InvalidChildStorageKey))
 		};
-		let block = match self.block_or_best(block) {
-			Ok(b) => b,
-			Err(e) => return err(client_err(e)).boxed(),
-		};
+		let block = self.block_or_best(block).map_err(client_err)?;
 		let client = self.client.clone();
-		try_join_all(keys.into_iter().map(move |key| {
-			let res = client
-				.clone()
-				.child_storage(&BlockId::Hash(block), &child_info, &key)
-				.map_err(client_err);
 
-			async move { res }
-		}))
-		.boxed()
+		keys.into_iter()
+			.map(move |key| {
+				client
+					.clone()
+					.child_storage(&BlockId::Hash(block), &child_info, &key)
+					.map_err(client_err)
+			})
+			.collect()
 	}
 
 	fn storage_hash(
@@ -663,9 +602,8 @@ where
 		block: Option<Block::Hash>,
 		storage_key: PrefixedStorageKey,
 		key: StorageKey,
-	) -> FutureResult<Option<Block::Hash>> {
-		let r = self
-			.block_or_best(block)
+	) -> std::result::Result<Option<Block::Hash>, Error> {
+		self.block_or_best(block)
 			.and_then(|block| {
 				let child_info = match ChildType::from_prefixed_key(&storage_key) {
 					Some((ChildType::ParentKeyId, storage_key)) =>
@@ -674,9 +612,7 @@ where
 				};
 				self.client.child_storage_hash(&BlockId::Hash(block), &child_info, &key)
 			})
-			.map_err(client_err);
-
-		async move { r }.boxed()
+			.map_err(client_err)
 	}
 }
 

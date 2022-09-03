@@ -316,7 +316,7 @@ impl SyncCryptoStore for KeyStore {
 	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
 		public_keys
 			.iter()
-			.all(|(k, t)| self.keys.read().get(&t).and_then(|s| s.get(k)).is_some())
+			.all(|(k, t)| self.keys.read().get(t).and_then(|s| s.get(k)).is_some())
 	}
 
 	fn supported_keys(

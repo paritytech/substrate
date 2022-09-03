@@ -123,7 +123,7 @@ where
 	type BodyFuture = Ready<error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>;
 
 	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		ready(self.client.block_body(&id).map_err(|e| error::Error::from(e)))
+		ready(self.client.block_body(id).map_err(error::Error::from))
 	}
 
 	fn validate_transaction(
@@ -134,7 +134,7 @@ where
 	) -> Self::ValidationFuture {
 		let (tx, rx) = oneshot::channel();
 		let client = self.client.clone();
-		let at = at.clone();
+		let at = *at;
 		let validation_pool = self.validation_pool.clone();
 		let metrics = self.metrics.clone();
 
@@ -212,7 +212,7 @@ where
 		let runtime_api = client.runtime_api();
 		let api_version = sp_tracing::within_span! { sp_tracing::Level::TRACE, "check_version";
 			runtime_api
-				.api_version::<dyn TaggedTransactionQueue<Block>>(&at)
+				.api_version::<dyn TaggedTransactionQueue<Block>>(at)
 				.map_err(|e| Error::RuntimeApi(e.to_string()))?
 				.ok_or_else(|| Error::RuntimeApi(
 					format!("Could not find `TaggedTransactionQueue` api for block `{:?}`.", at)
@@ -229,7 +229,7 @@ where
 			sp_tracing::Level::TRACE, "runtime::validate_transaction";
 		{
 			if api_version >= 3 {
-				runtime_api.validate_transaction(&at, source, uxt, block_hash)
+				runtime_api.validate_transaction(at, source, uxt, block_hash)
 					.map_err(|e| Error::RuntimeApi(e.to_string()))
 			} else {
 				let block_number = client.to_number(at)
@@ -249,11 +249,11 @@ where
 
 				if api_version == 2 {
 					#[allow(deprecated)] // old validate_transaction
-					runtime_api.validate_transaction_before_version_3(&at, source, uxt)
+					runtime_api.validate_transaction_before_version_3(at, source, uxt)
 						.map_err(|e| Error::RuntimeApi(e.to_string()))
 				} else {
 					#[allow(deprecated)] // old validate_transaction
-					runtime_api.validate_transaction_before_version_2(&at, uxt)
+					runtime_api.validate_transaction_before_version_2(at, uxt)
 						.map_err(|e| Error::RuntimeApi(e.to_string()))
 				}
 			}

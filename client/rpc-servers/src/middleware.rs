@@ -16,34 +16,54 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Middleware for RPC requests.
+//! RPC middlware to collect prometheus metrics on RPC calls.
 
-use std::collections::HashSet;
-
-use jsonrpc_core::{FutureOutput, FutureResponse, Metadata, Middleware as RequestMiddleware};
+use jsonrpsee::core::middleware::{Headers, HttpMiddleware, MethodKind, Params, WsMiddleware};
 use prometheus_endpoint::{
-	register, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry, U64,
+	register, Counter, CounterVec, HistogramOpts, HistogramVec, Opts, PrometheusError, Registry,
+	U64,
 };
+use std::net::SocketAddr;
 
-use futures::{future::Either, Future, FutureExt};
-use pubsub::PubSubMetadata;
+/// Histogram time buckets in microseconds.
+const HISTOGRAM_BUCKETS: [f64; 11] = [
+	5.0,
+	25.0,
+	100.0,
+	500.0,
+	1_000.0,
+	2_500.0,
+	10_000.0,
+	25_000.0,
+	100_000.0,
+	1_000_000.0,
+	10_000_000.0,
+];
 
-use crate::RpcHandler;
-
-/// Metrics for RPC middleware
+/// Metrics for RPC middleware storing information about the number of requests started/completed,
+/// calls started/completed and their timings.
 #[derive(Debug, Clone)]
 pub struct RpcMetrics {
+	/// Number of RPC requests received since the server started.
 	requests_started: CounterVec<U64>,
+	/// Number of RPC requests completed since the server started.
 	requests_finished: CounterVec<U64>,
+	/// Histogram over RPC execution times.
 	calls_time: HistogramVec,
+	/// Number of calls started.
 	calls_started: CounterVec<U64>,
+	/// Number of calls completed.
 	calls_finished: CounterVec<U64>,
+	/// Number of Websocket sessions opened (Websocket only).
+	ws_sessions_opened: Option<Counter<U64>>,
+	/// Number of Websocket sessions closed (Websocket only).
+	ws_sessions_closed: Option<Counter<U64>>,
 }
 
 impl RpcMetrics {
 	/// Create an instance of metrics
 	pub fn new(metrics_registry: Option<&Registry>) -> Result<Option<Self>, PrometheusError> {
-		if let Some(r) = metrics_registry {
+		if let Some(metrics_registry) = metrics_registry {
 			Ok(Some(Self {
 				requests_started: register(
 					CounterVec::new(
@@ -53,7 +73,7 @@ impl RpcMetrics {
 						),
 						&["protocol"],
 					)?,
-					r,
+					metrics_registry,
 				)?,
 				requests_finished: register(
 					CounterVec::new(
@@ -63,17 +83,18 @@ impl RpcMetrics {
 						),
 						&["protocol"],
 					)?,
-					r,
+					metrics_registry,
 				)?,
 				calls_time: register(
 					HistogramVec::new(
 						HistogramOpts::new(
 							"substrate_rpc_calls_time",
 							"Total time [μs] of processed RPC calls",
-						),
+						)
+						.buckets(HISTOGRAM_BUCKETS.to_vec()),
 						&["protocol", "method"],
 					)?,
-					r,
+					metrics_registry,
 				)?,
 				calls_started: register(
 					CounterVec::new(
@@ -83,7 +104,7 @@ impl RpcMetrics {
 						),
 						&["protocol", "method"],
 					)?,
-					r,
+					metrics_registry,
 				)?,
 				calls_finished: register(
 					CounterVec::new(
@@ -93,8 +114,24 @@ impl RpcMetrics {
 						),
 						&["protocol", "method", "is_error"],
 					)?,
-					r,
+					metrics_registry,
 				)?,
+				ws_sessions_opened: register(
+					Counter::new(
+						"substrate_rpc_sessions_opened",
+						"Number of persistent RPC sessions opened",
+					)?,
+					metrics_registry,
+				)?
+				.into(),
+				ws_sessions_closed: register(
+					Counter::new(
+						"substrate_rpc_sessions_closed",
+						"Number of persistent RPC sessions closed",
+					)?,
+					metrics_registry,
+				)?
+				.into(),
 			}))
 		} else {
 			Ok(None)
@@ -102,143 +139,121 @@ impl RpcMetrics {
 	}
 }
 
-/// Instantiates a dummy `IoHandler` given a builder function to extract supported method names.
-pub fn method_names<F, M, E>(gen_handler: F) -> Result<HashSet<String>, E>
-where
-	F: FnOnce(RpcMiddleware) -> Result<RpcHandler<M>, E>,
-	M: PubSubMetadata,
-{
-	let io = gen_handler(RpcMiddleware::new(None, HashSet::new(), "dummy"))?;
-	Ok(io.iter().map(|x| x.0.clone()).collect())
-}
-
+#[derive(Clone)]
 /// Middleware for RPC calls
 pub struct RpcMiddleware {
-	metrics: Option<RpcMetrics>,
-	known_rpc_method_names: HashSet<String>,
-	transport_label: String,
+	metrics: RpcMetrics,
+	transport_label: &'static str,
 }
 
 impl RpcMiddleware {
-	/// Create an instance of middleware.
-	///
-	/// - `metrics`: Will be used to report statistics.
-	/// - `transport_label`: The label that is used when reporting the statistics.
-	pub fn new(
-		metrics: Option<RpcMetrics>,
-		known_rpc_method_names: HashSet<String>,
-		transport_label: &str,
-	) -> Self {
-		RpcMiddleware { metrics, known_rpc_method_names, transport_label: transport_label.into() }
+	/// Create a new [`RpcMiddleware`] with the provided [`RpcMetrics`].
+	pub fn new(metrics: RpcMetrics, transport_label: &'static str) -> Self {
+		Self { metrics, transport_label }
+	}
+
+	/// Called when a new JSON-RPC request comes to the server.
+	fn on_request(&self) -> std::time::Instant {
+		let now = std::time::Instant::now();
+		self.metrics.requests_started.with_label_values(&[self.transport_label]).inc();
+		now
+	}
+
+	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		log::trace!(
+			target: "rpc_metrics",
+			"[{}] on_call name={} params={:?} kind={}",
+			self.transport_label,
+			name,
+			params,
+			kind,
+		);
+		self.metrics
+			.calls_started
+			.with_label_values(&[self.transport_label, name])
+			.inc();
+	}
+
+	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple
+	/// times.
+	fn on_result(&self, name: &str, success: bool, started_at: std::time::Instant) {
+		let micros = started_at.elapsed().as_micros();
+		log::debug!(
+			target: "rpc_metrics",
+			"[{}] {} call took {} μs",
+			self.transport_label,
+			name,
+			micros,
+		);
+		self.metrics
+			.calls_time
+			.with_label_values(&[self.transport_label, name])
+			.observe(micros as _);
+
+		self.metrics
+			.calls_finished
+			.with_label_values(&[
+				self.transport_label,
+				name,
+				// the label "is_error", so `success` should be regarded as false
+				// and vice-versa to be registrered correctly.
+				if success { "false" } else { "true" },
+			])
+			.inc();
+	}
+
+	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
+	fn on_response(&self, _result: &str, started_at: std::time::Instant) {
+		log::trace!(target: "rpc_metrics", "[{}] on_response started_at={:?}", self.transport_label, started_at);
+		self.metrics.requests_finished.with_label_values(&[self.transport_label]).inc();
 	}
 }
 
-impl<M: Metadata> RequestMiddleware<M> for RpcMiddleware {
-	type Future = FutureResponse;
-	type CallFuture = FutureOutput;
+impl WsMiddleware for RpcMiddleware {
+	type Instant = std::time::Instant;
 
-	fn on_request<F, X>(
-		&self,
-		request: jsonrpc_core::Request,
-		meta: M,
-		next: F,
-	) -> Either<Self::Future, X>
-	where
-		F: Fn(jsonrpc_core::Request, M) -> X + Send + Sync,
-		X: Future<Output = Option<jsonrpc_core::Response>> + Send + 'static,
-	{
-		let metrics = self.metrics.clone();
-		let transport_label = self.transport_label.clone();
-		if let Some(ref metrics) = metrics {
-			metrics.requests_started.with_label_values(&[transport_label.as_str()]).inc();
-		}
-		let r = next(request, meta);
-		Either::Left(
-			async move {
-				let r = r.await;
-				if let Some(ref metrics) = metrics {
-					metrics.requests_finished.with_label_values(&[transport_label.as_str()]).inc();
-				}
-				r
-			}
-			.boxed(),
-		)
+	fn on_connect(&self, _remote_addr: SocketAddr, _headers: &Headers) {
+		self.metrics.ws_sessions_opened.as_ref().map(|counter| counter.inc());
 	}
 
-	fn on_call<F, X>(
-		&self,
-		call: jsonrpc_core::Call,
-		meta: M,
-		next: F,
-	) -> Either<Self::CallFuture, X>
-	where
-		F: Fn(jsonrpc_core::Call, M) -> X + Send + Sync,
-		X: Future<Output = Option<jsonrpc_core::Output>> + Send + 'static,
-	{
-		let start = std::time::Instant::now();
-		let name = call_name(&call, &self.known_rpc_method_names).to_owned();
-		let metrics = self.metrics.clone();
-		let transport_label = self.transport_label.clone();
-		log::trace!(target: "rpc_metrics", "[{}] {} call: {:?}", transport_label, name, &call);
-		if let Some(ref metrics) = metrics {
-			metrics
-				.calls_started
-				.with_label_values(&[transport_label.as_str(), name.as_str()])
-				.inc();
-		}
-		let r = next(call, meta);
-		Either::Left(
-			async move {
-				let r = r.await;
-				let micros = start.elapsed().as_micros();
-				if let Some(ref metrics) = metrics {
-					metrics
-						.calls_time
-						.with_label_values(&[transport_label.as_str(), name.as_str()])
-						.observe(micros as _);
-					metrics
-						.calls_finished
-						.with_label_values(&[
-							transport_label.as_str(),
-							name.as_str(),
-							if is_success(&r) { "true" } else { "false" },
-						])
-						.inc();
-				}
-				log::debug!(
-					target: "rpc_metrics",
-					"[{}] {} call took {} μs",
-					transport_label,
-					name,
-					micros,
-				);
-				r
-			}
-			.boxed(),
-		)
+	fn on_request(&self) -> Self::Instant {
+		self.on_request()
+	}
+
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		self.on_call(name, params, kind)
+	}
+
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		self.on_result(name, success, started_at)
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		self.on_response(_result, started_at)
+	}
+
+	fn on_disconnect(&self, _remote_addr: SocketAddr) {
+		self.metrics.ws_sessions_closed.as_ref().map(|counter| counter.inc());
 	}
 }
 
-fn call_name<'a>(call: &'a jsonrpc_core::Call, known_methods: &HashSet<String>) -> &'a str {
-	// To prevent bloating metric with all invalid method names we filter them out here.
-	let only_known = |method: &'a String| {
-		if known_methods.contains(method) {
-			method.as_str()
-		} else {
-			"invalid method"
-		}
-	};
+impl HttpMiddleware for RpcMiddleware {
+	type Instant = std::time::Instant;
 
-	match call {
-		jsonrpc_core::Call::Invalid { .. } => "invalid call",
-		jsonrpc_core::Call::MethodCall(ref call) => only_known(&call.method),
-		jsonrpc_core::Call::Notification(ref notification) => only_known(&notification.method),
+	fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Self::Instant {
+		self.on_request()
 	}
-}
 
-fn is_success(output: &Option<jsonrpc_core::Output>) -> bool {
-	match output {
-		Some(jsonrpc_core::Output::Success(..)) => true,
-		_ => false,
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		self.on_call(name, params, kind)
+	}
+
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		self.on_result(name, success, started_at)
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		self.on_response(_result, started_at)
 	}
 }

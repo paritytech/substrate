@@ -42,7 +42,7 @@ fn add_locks<T: Config>(who: &T::AccountId, n: u8) {
 }
 
 fn add_vesting_schedules<T: Config>(
-	target: <T::Lookup as StaticLookup>::Source,
+	target: AccountIdLookupOf<T>,
 	n: u32,
 ) -> Result<BalanceOf<T>, &'static str> {
 	let min_transfer = T::MinVestedTransfer::get();
@@ -52,7 +52,7 @@ fn add_vesting_schedules<T: Config>(
 	let starting_block = 1u32;
 
 	let source: T::AccountId = account("source", 0, SEED);
-	let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
+	let source_lookup = T::Lookup::unlookup(source.clone());
 	T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
 
 	System::<T>::set_block_number(T::BlockNumber::zero());
@@ -72,7 +72,7 @@ fn add_vesting_schedules<T: Config>(
 		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
 	}
 
-	Ok(total_locked.into())
+	Ok(total_locked)
 }
 
 benchmarks! {
@@ -81,7 +81,7 @@ benchmarks! {
 		let s in 1 .. T::MAX_VESTING_SCHEDULES;
 
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
 
 		add_locks::<T>(&caller, l as u8);
@@ -91,7 +91,7 @@ benchmarks! {
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
-			Some(expected_balance.into()),
+			Some(expected_balance),
 			"Vesting schedule not added",
 		);
 	}: vest(RawOrigin::Signed(caller.clone()))
@@ -99,7 +99,7 @@ benchmarks! {
 		// Nothing happened since everything is still vested.
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&caller),
-			Some(expected_balance.into()),
+			Some(expected_balance),
 			"Vesting schedule was removed",
 		);
 	}
@@ -109,7 +109,7 @@ benchmarks! {
 		let s in 1 .. T::MAX_VESTING_SCHEDULES;
 
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
 
 		add_locks::<T>(&caller, l as u8);
@@ -137,7 +137,7 @@ benchmarks! {
 		let s in 1 .. T::MAX_VESTING_SCHEDULES;
 
 		let other: T::AccountId = account("other", 0, SEED);
-		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
+		let other_lookup = T::Lookup::unlookup(other.clone());
 
 		add_locks::<T>(&other, l as u8);
 		let expected_balance = add_vesting_schedules::<T>(other_lookup.clone(), s)?;
@@ -156,7 +156,7 @@ benchmarks! {
 		// Nothing happened since everything is still vested.
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&other),
-			Some(expected_balance.into()),
+			Some(expected_balance),
 			"Vesting schedule was removed",
 		);
 	}
@@ -166,7 +166,7 @@ benchmarks! {
 		let s in 1 .. T::MAX_VESTING_SCHEDULES;
 
 		let other: T::AccountId = account("other", 0, SEED);
-		let other_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(other.clone());
+		let other_lookup = T::Lookup::unlookup(other.clone());
 
 		add_locks::<T>(&other, l as u8);
 		add_vesting_schedules::<T>(other_lookup.clone(), s)?;
@@ -198,7 +198,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let target: T::AccountId = account("target", 0, SEED);
-		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
+		let target_lookup = T::Lookup::unlookup(target.clone());
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
 		// Add one vesting schedules.
@@ -232,11 +232,11 @@ benchmarks! {
 		let s in 0 .. T::MAX_VESTING_SCHEDULES - 1;
 
 		let source: T::AccountId = account("source", 0, SEED);
-		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
+		let source_lookup = T::Lookup::unlookup(source.clone());
 		T::Currency::make_free_balance_be(&source, BalanceOf::<T>::max_value());
 
 		let target: T::AccountId = account("target", 0, SEED);
-		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
+		let target_lookup = T::Lookup::unlookup(target.clone());
 		// Give target existing locks
 		add_locks::<T>(&target, l as u8);
 		// Add one less than max vesting schedules
@@ -260,7 +260,7 @@ benchmarks! {
 		);
 		assert_eq!(
 			Vesting::<T>::vesting_balance(&target),
-			Some(expected_balance.into()),
+			Some(expected_balance),
 				"Lock not correctly updated",
 			);
 		}
@@ -270,11 +270,11 @@ benchmarks! {
 		let s in 2 .. T::MAX_VESTING_SCHEDULES;
 
 		let caller: T::AccountId = account("caller", 0, SEED);
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		// Give target existing locks.
 		add_locks::<T>(&caller, l as u8);
 		// Add max vesting schedules.
-		let expected_balance = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
+		let expected_balance = add_vesting_schedules::<T>(caller_lookup, s)?;
 
 		// Schedules are not vesting at block 0.
 		assert_eq!(System::<T>::block_number(), T::BlockNumber::zero());
@@ -320,11 +320,11 @@ benchmarks! {
 		let test_dest: T::AccountId = account("test_dest", 0, SEED);
 
 		let caller: T::AccountId = account("caller", 0, SEED);
-		let caller_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(caller.clone());
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		// Give target other locks.
 		add_locks::<T>(&caller, l as u8);
 		// Add max vesting schedules.
-		let total_transferred = add_vesting_schedules::<T>(caller_lookup.clone(), s)?;
+		let total_transferred = add_vesting_schedules::<T>(caller_lookup, s)?;
 
 		// Go to about half way through all the schedules duration. (They all start at 1, and have a duration of 20 or 21).
 		System::<T>::set_block_number(11u32.into());

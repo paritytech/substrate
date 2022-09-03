@@ -452,7 +452,7 @@ impl Headers {
 		let raw = name.as_bytes();
 		for &(ref key, ref val) in &self.raw {
 			if &**key == raw {
-				return str::from_utf8(&val).ok()
+				return str::from_utf8(val).ok()
 			}
 		}
 		None

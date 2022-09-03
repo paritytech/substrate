@@ -23,15 +23,11 @@ mod chain_full;
 #[cfg(test)]
 mod tests;
 
-use futures::{future, StreamExt, TryStreamExt};
-use log::warn;
-use rpc::{
-	futures::{stream, FutureExt, SinkExt, Stream},
-	Result as RpcResult,
-};
 use std::sync::Arc;
 
-use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, SubscriptionId};
+use crate::SubscriptionTaskExecutor;
+
+use jsonrpsee::{core::RpcResult, types::SubscriptionResult, SubscriptionSink};
 use sc_client_api::BlockchainEvents;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
@@ -39,7 +35,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header, NumberFor},
 };
 
-use self::error::{Error, FutureResult, Result};
+use self::error::Error;
 
 use sc_client_api::BlockBackend;
 pub use sc_rpc_api::chain::*;
@@ -55,27 +51,24 @@ where
 	/// Get client reference.
 	fn client(&self) -> &Arc<Client>;
 
-	/// Get subscriptions reference.
-	fn subscriptions(&self) -> &SubscriptionManager;
-
 	/// Tries to unwrap passed block hash, or uses best block hash otherwise.
 	fn unwrap_or_best(&self, hash: Option<Block::Hash>) -> Block::Hash {
-		match hash.into() {
+		match hash {
 			None => self.client().info().best_hash,
 			Some(hash) => hash,
 		}
 	}
 
 	/// Get header of a relay chain block.
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>>;
+	fn header(&self, hash: Option<Block::Hash>) -> Result<Option<Block::Header>, Error>;
 
 	/// Get header and body of a relay chain block.
-	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>>;
+	fn block(&self, hash: Option<Block::Hash>) -> Result<Option<SignedBlock<Block>>, Error>;
 
 	/// Get hash of the n-th block in the canon chain.
 	///
 	/// By default returns latest block hash.
-	fn block_hash(&self, number: Option<NumberOrHex>) -> Result<Option<Block::Hash>> {
+	fn block_hash(&self, number: Option<NumberOrHex>) -> Result<Option<Block::Hash>, Error> {
 		match number {
 			None => Ok(Some(self.client().info().best_hash)),
 			Some(num_or_hex) => {
@@ -97,107 +90,31 @@ where
 	}
 
 	/// Get hash of the last finalized block in the canon chain.
-	fn finalized_head(&self) -> Result<Block::Hash> {
+	fn finalized_head(&self) -> Result<Block::Hash, Error> {
 		Ok(self.client().info().finalized_hash)
 	}
 
 	/// All new head subscription
-	fn subscribe_all_heads(
-		&self,
-		_metadata: crate::Metadata,
-		subscriber: Subscriber<Block::Header>,
-	) {
-		subscribe_headers(
-			self.client(),
-			self.subscriptions(),
-			subscriber,
-			|| self.client().info().best_hash,
-			|| {
-				self.client()
-					.import_notification_stream()
-					.map(|notification| Ok::<_, rpc::Error>(notification.header))
-			},
-		)
-	}
-
-	/// Unsubscribe from all head subscription.
-	fn unsubscribe_all_heads(
-		&self,
-		_metadata: Option<crate::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.subscriptions().cancel(id))
-	}
+	fn subscribe_all_heads(&self, sink: SubscriptionSink);
 
 	/// New best head subscription
-	fn subscribe_new_heads(
-		&self,
-		_metadata: crate::Metadata,
-		subscriber: Subscriber<Block::Header>,
-	) {
-		subscribe_headers(
-			self.client(),
-			self.subscriptions(),
-			subscriber,
-			|| self.client().info().best_hash,
-			|| {
-				self.client()
-					.import_notification_stream()
-					.filter(|notification| future::ready(notification.is_new_best))
-					.map(|notification| Ok::<_, rpc::Error>(notification.header))
-			},
-		)
-	}
-
-	/// Unsubscribe from new best head subscription.
-	fn unsubscribe_new_heads(
-		&self,
-		_metadata: Option<crate::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.subscriptions().cancel(id))
-	}
+	fn subscribe_new_heads(&self, sink: SubscriptionSink);
 
 	/// Finalized head subscription
-	fn subscribe_finalized_heads(
-		&self,
-		_metadata: crate::Metadata,
-		subscriber: Subscriber<Block::Header>,
-	) {
-		subscribe_headers(
-			self.client(),
-			self.subscriptions(),
-			subscriber,
-			|| self.client().info().finalized_hash,
-			|| {
-				self.client()
-					.finality_notification_stream()
-					.map(|notification| Ok::<_, rpc::Error>(notification.header))
-			},
-		)
-	}
-
-	/// Unsubscribe from finalized head subscription.
-	fn unsubscribe_finalized_heads(
-		&self,
-		_metadata: Option<crate::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		Ok(self.subscriptions().cancel(id))
-	}
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink);
 }
 
 /// Create new state API that works on full node.
 pub fn new_full<Block: BlockT, Client>(
 	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
+	executor: SubscriptionTaskExecutor,
 ) -> Chain<Block, Client>
 where
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	Chain { backend: Box::new(self::chain_full::FullChain::new(client, subscriptions)) }
+	Chain { backend: Box::new(self::chain_full::FullChain::new(client, executor)) }
 }
 
 /// Chain API with subscriptions support.
@@ -205,120 +122,58 @@ pub struct Chain<Block: BlockT, Client> {
 	backend: Box<dyn ChainBackend<Client, Block>>,
 }
 
-impl<Block, Client> ChainApi<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
+impl<Block, Client> ChainApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for Chain<Block, Client>
 where
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
 	Client: HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
-	type Metadata = crate::Metadata;
-
-	fn header(&self, hash: Option<Block::Hash>) -> FutureResult<Option<Block::Header>> {
-		self.backend.header(hash)
+	fn header(&self, hash: Option<Block::Hash>) -> RpcResult<Option<Block::Header>> {
+		self.backend.header(hash).map_err(Into::into)
 	}
 
-	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
-		self.backend.block(hash)
+	fn block(&self, hash: Option<Block::Hash>) -> RpcResult<Option<SignedBlock<Block>>> {
+		self.backend.block(hash).map_err(Into::into)
 	}
 
 	fn block_hash(
 		&self,
 		number: Option<ListOrValue<NumberOrHex>>,
-	) -> Result<ListOrValue<Option<Block::Hash>>> {
+	) -> RpcResult<ListOrValue<Option<Block::Hash>>> {
 		match number {
-			None => self.backend.block_hash(None).map(ListOrValue::Value),
-			Some(ListOrValue::Value(number)) =>
-				self.backend.block_hash(Some(number)).map(ListOrValue::Value),
+			None => self.backend.block_hash(None).map(ListOrValue::Value).map_err(Into::into),
+			Some(ListOrValue::Value(number)) => self
+				.backend
+				.block_hash(Some(number))
+				.map(ListOrValue::Value)
+				.map_err(Into::into),
 			Some(ListOrValue::List(list)) => Ok(ListOrValue::List(
 				list.into_iter()
 					.map(|number| self.backend.block_hash(Some(number)))
-					.collect::<Result<_>>()?,
+					.collect::<Result<_, _>>()?,
 			)),
 		}
 	}
 
-	fn finalized_head(&self) -> Result<Block::Hash> {
-		self.backend.finalized_head()
+	fn finalized_head(&self) -> RpcResult<Block::Hash> {
+		self.backend.finalized_head().map_err(Into::into)
 	}
 
-	fn subscribe_all_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
-		self.backend.subscribe_all_heads(metadata, subscriber)
+	fn subscribe_all_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
+		self.backend.subscribe_all_heads(sink);
+		Ok(())
 	}
 
-	fn unsubscribe_all_heads(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		self.backend.unsubscribe_all_heads(metadata, id)
+	fn subscribe_new_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
+		self.backend.subscribe_new_heads(sink);
+		Ok(())
 	}
 
-	fn subscribe_new_heads(&self, metadata: Self::Metadata, subscriber: Subscriber<Block::Header>) {
-		self.backend.subscribe_new_heads(metadata, subscriber)
+	fn subscribe_finalized_heads(&self, sink: SubscriptionSink) -> SubscriptionResult {
+		self.backend.subscribe_finalized_heads(sink);
+		Ok(())
 	}
-
-	fn unsubscribe_new_heads(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		self.backend.unsubscribe_new_heads(metadata, id)
-	}
-
-	fn subscribe_finalized_heads(
-		&self,
-		metadata: Self::Metadata,
-		subscriber: Subscriber<Block::Header>,
-	) {
-		self.backend.subscribe_finalized_heads(metadata, subscriber)
-	}
-
-	fn unsubscribe_finalized_heads(
-		&self,
-		metadata: Option<Self::Metadata>,
-		id: SubscriptionId,
-	) -> RpcResult<bool> {
-		self.backend.unsubscribe_finalized_heads(metadata, id)
-	}
-}
-
-/// Subscribe to new headers.
-fn subscribe_headers<Block, Client, F, G, S>(
-	client: &Arc<Client>,
-	subscriptions: &SubscriptionManager,
-	subscriber: Subscriber<Block::Header>,
-	best_block_hash: G,
-	stream: F,
-) where
-	Block: BlockT + 'static,
-	Block::Header: Unpin,
-	Client: HeaderBackend<Block> + 'static,
-	F: FnOnce() -> S,
-	G: FnOnce() -> Block::Hash,
-	S: Stream<Item = std::result::Result<Block::Header, rpc::Error>> + Send + 'static,
-{
-	subscriptions.add(subscriber, |sink| {
-		// send current head right at the start.
-		let header = client
-			.header(BlockId::Hash(best_block_hash()))
-			.map_err(client_err)
-			.and_then(|header| {
-				header.ok_or_else(|| Error::Other("Best header missing.".to_string()))
-			})
-			.map_err(Into::into);
-
-		// send further subscriptions
-		let stream = stream()
-			.inspect_err(|e| warn!("Block notification stream error: {:?}", e))
-			.map(|res| Ok(res));
-
-		stream::iter(vec![Ok(header)])
-			.chain(stream)
-			.forward(sink.sink_map_err(|e| warn!("Error sending notifications: {:?}", e)))
-			// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
-			.map(|_| ())
-	});
 }
 
 fn client_err(err: sp_blockchain::Error) -> Error {

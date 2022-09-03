@@ -77,7 +77,7 @@ pub fn initialize_block(header: &Header) {
 	// try to read something that depends on current header digest
 	// so that it'll be included in execution proof
 	if let Some(generic::DigestItem::Other(v)) = header.digest().logs().iter().next() {
-		let _: Option<u32> = storage::unhashed::get(&v);
+		let _: Option<u32> = storage::unhashed::get(v);
 	}
 }
 

@@ -215,7 +215,8 @@ impl<T: Config> Pallet<T> {
 		// previously requested. This also allows the tx to pay no fee.
 		let was_requested = match (StatusFor::<T>::get(hash), maybe_depositor) {
 			(Some(RequestStatus::Requested(..)), _) => true,
-			(Some(RequestStatus::Unrequested(..)), _) => Err(Error::<T>::AlreadyNoted)?,
+			(Some(RequestStatus::Unrequested(..)), _) =>
+				return Err(Error::<T>::AlreadyNoted.into()),
 			(None, None) => {
 				StatusFor::<T>::insert(hash, RequestStatus::Unrequested(None));
 				false
@@ -256,7 +257,7 @@ impl<T: Config> Pallet<T> {
 		});
 		StatusFor::<T>::insert(hash, RequestStatus::Requested(count));
 		if count == 1 {
-			Self::deposit_event(Event::Requested { hash: hash.clone() });
+			Self::deposit_event(Event::Requested { hash: *hash });
 		}
 	}
 
@@ -270,20 +271,17 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		match StatusFor::<T>::get(hash).ok_or(Error::<T>::NotNoted)? {
 			RequestStatus::Unrequested(Some((owner, deposit))) => {
-				ensure!(
-					maybe_check_owner.map_or(true, |c| &c == &owner),
-					Error::<T>::NotAuthorized
-				);
+				ensure!(maybe_check_owner.map_or(true, |c| c == owner), Error::<T>::NotAuthorized);
 				T::Currency::unreserve(&owner, deposit);
 			},
 			RequestStatus::Unrequested(None) => {
 				ensure!(maybe_check_owner.is_none(), Error::<T>::NotAuthorized);
 			},
-			RequestStatus::Requested(_) => Err(Error::<T>::Requested)?,
+			RequestStatus::Requested(_) => return Err(Error::<T>::Requested.into()),
 		}
 		StatusFor::<T>::remove(hash);
 		PreimageFor::<T>::remove(hash);
-		Self::deposit_event(Event::Cleared { hash: hash.clone() });
+		Self::deposit_event(Event::Cleared { hash: *hash });
 		Ok(())
 	}
 
@@ -298,9 +296,9 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(count == 1, "preimage request counter at zero?");
 				PreimageFor::<T>::remove(hash);
 				StatusFor::<T>::remove(hash);
-				Self::deposit_event(Event::Cleared { hash: hash.clone() });
+				Self::deposit_event(Event::Cleared { hash: *hash });
 			},
-			RequestStatus::Unrequested(_) => Err(Error::<T>::NotRequested)?,
+			RequestStatus::Unrequested(_) => return Err(Error::<T>::NotRequested.into()),
 		}
 		Ok(())
 	}

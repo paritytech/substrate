@@ -80,6 +80,7 @@ pub use pallet::*;
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 type BountiesError<T> = pallet_bounties::Error<T>;
 type BountyIndex = pallet_bounties::BountyIndex;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// A child bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -315,7 +316,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
 			#[pallet::compact] child_bounty_id: BountyIndex,
-			curator: <T::Lookup as StaticLookup>::Source,
+			curator: AccountIdLookupOf<T>,
 			#[pallet::compact] fee: BalanceOf<T>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -512,7 +513,7 @@ pub mod pallet {
 								Some(sender) if sender == *curator => {
 									// This is the child-bounty curator, willingly giving up their
 									// role. Give back their deposit.
-									T::Currency::unreserve(&curator, child_bounty.curator_deposit);
+									T::Currency::unreserve(curator, child_bounty.curator_deposit);
 									// Reset curator deposit.
 									child_bounty.curator_deposit = Zero::zero();
 									// Continue to change bounty status below.
@@ -574,7 +575,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
 			#[pallet::compact] child_bounty_id: BountyIndex,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;
@@ -673,13 +674,13 @@ pub mod pallet {
 						// Unreserve the curator deposit. Should not fail
 						// because the deposit is always reserved when curator is
 						// assigned.
-						let _ = T::Currency::unreserve(&curator, child_bounty.curator_deposit);
+						let _ = T::Currency::unreserve(curator, child_bounty.curator_deposit);
 
 						// Make payout to child-bounty curator.
 						// Should not fail because curator fee is always less than bounty value.
 						let fee_transfer_result = T::Currency::transfer(
 							&child_bounty_account,
-							&curator,
+							curator,
 							curator_fee,
 							AllowDeath,
 						);
@@ -786,7 +787,7 @@ impl<T: Config> Pallet<T> {
 		// This function is taken from the parent (bounties) pallet, but the
 		// prefix is changed to have different AccountId when the index of
 		// parent and child is same.
-		T::PalletId::get().into_sub_account(("cb", id))
+		T::PalletId::get().into_sub_account_truncating(("cb", id))
 	}
 
 	fn create_child_bounty(

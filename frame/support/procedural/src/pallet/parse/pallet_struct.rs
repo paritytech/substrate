@@ -155,8 +155,8 @@ impl PalletStructDef {
 			return Err(syn::Error::new(item.generics.where_clause.span(), msg))
 		}
 
-		let mut instances = vec![];
-		instances.push(helper::check_type_def_gen_no_bounds(&item.generics, item.ident.span())?);
+		let instances =
+			vec![helper::check_type_def_gen_no_bounds(&item.generics, item.ident.span())?];
 
 		Ok(Self {
 			index,

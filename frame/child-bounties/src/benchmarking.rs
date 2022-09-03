@@ -110,7 +110,7 @@ fn activate_bounty<T: Config>(
 	Bounties::<T>::propose_curator(
 		RawOrigin::Root.into(),
 		child_bounty_setup.bounty_id,
-		curator_lookup.clone(),
+		curator_lookup,
 		child_bounty_setup.fee,
 	)?;
 	Bounties::<T>::accept_curator(
@@ -141,7 +141,7 @@ fn activate_child_bounty<T: Config>(
 		RawOrigin::Signed(bounty_setup.curator.clone()).into(),
 		bounty_setup.bounty_id,
 		bounty_setup.child_bounty_id,
-		child_curator_lookup.clone(),
+		child_curator_lookup,
 		bounty_setup.child_bounty_fee,
 	)?;
 
@@ -211,7 +211,7 @@ benchmarks! {
 			RawOrigin::Signed(bounty_setup.curator.clone()).into(),
 			bounty_setup.bounty_id,
 			bounty_setup.child_bounty_id,
-			child_curator_lookup.clone(),
+			child_curator_lookup,
 			bounty_setup.child_bounty_fee,
 		)?;
 	}: _(RawOrigin::Signed(bounty_setup.child_curator), bounty_setup.bounty_id,
@@ -221,7 +221,7 @@ benchmarks! {
 	unassign_curator {
 		setup_pot_account::<T>();
 		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
-		Bounties::<T>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 		frame_system::Pallet::<T>::set_block_number(T::BountyUpdatePeriod::get() + 1u32.into());
 		let caller = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), bounty_setup.bounty_id,
@@ -246,7 +246,7 @@ benchmarks! {
 		setup_pot_account::<T>();
 		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
 		let beneficiary_account: T::AccountId = account("beneficiary", 0, SEED);
-		let beneficiary = T::Lookup::unlookup(beneficiary_account.clone());
+		let beneficiary = T::Lookup::unlookup(beneficiary_account);
 
 		ChildBounties::<T>::award_child_bounty(
 			RawOrigin::Signed(bounty_setup.child_curator.clone()).into(),
@@ -295,7 +295,7 @@ benchmarks! {
 	close_child_bounty_active {
 		setup_pot_account::<T>();
 		let bounty_setup = activate_child_bounty::<T>(0, T::MaximumReasonLength::get())?;
-		Bounties::<T>::on_initialize(T::BlockNumber::zero());
+		Treasury::<T>::on_initialize(T::BlockNumber::zero());
 	}: close_child_bounty(RawOrigin::Root, bounty_setup.bounty_id, bounty_setup.child_bounty_id)
 	verify {
 		assert_last_event::<T>(Event::Canceled {

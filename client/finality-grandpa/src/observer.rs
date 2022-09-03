@@ -63,7 +63,7 @@ where
 		base: Block::Hash,
 		block: Block::Hash,
 	) -> Result<Vec<Block::Hash>, GrandpaError> {
-		environment::ancestry(&self.client, base, block)
+		environment::ancestry(self.client, base, block)
 	}
 }
 
@@ -116,7 +116,7 @@ where
 			Err(e) => return future::err(e.into()),
 		};
 
-		if validation_result.ghost().is_some() {
+		if validation_result.is_valid() {
 			let finalized_hash = commit.target_hash;
 			let finalized_number = commit.target_number;
 
@@ -193,13 +193,13 @@ where
 	);
 
 	let observer_work = ObserverWork::new(
-		client.clone(),
+		client,
 		network,
 		persistent_data,
 		config.keystore,
 		voter_commands_rx,
 		Some(justification_sender),
-		telemetry.clone(),
+		telemetry,
 	);
 
 	let observer_work = observer_work.map_ok(|_| ()).map_err(|e| {
@@ -289,7 +289,7 @@ where
 				network.note_round(
 					crate::communication::Round(round),
 					crate::communication::SetId(set_id),
-					&*voters,
+					&voters,
 				)
 			}
 		};

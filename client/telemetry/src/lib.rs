@@ -42,7 +42,10 @@ use log::{error, warn};
 use parking_lot::Mutex;
 use serde::Serialize;
 use std::{
-	collections::HashMap,
+	collections::{
+		hash_map::Entry::{Occupied, Vacant},
+		HashMap,
+	},
 	sync::{atomic, Arc},
 };
 
@@ -147,7 +150,6 @@ pub struct TelemetryWorker {
 	register_receiver: mpsc::UnboundedReceiver<Register>,
 	register_sender: mpsc::UnboundedSender<Register>,
 	id_counter: Arc<atomic::AtomicU64>,
-	transport: WsTrans,
 }
 
 impl TelemetryWorker {
@@ -155,7 +157,11 @@ impl TelemetryWorker {
 	///
 	/// Only one is needed per process.
 	pub fn new(buffer_size: usize) -> Result<Self> {
-		let transport = initialize_transport()?;
+		// Let's try to initialize a transport to get an early return.
+		// Later transport will be initialized multiple times in
+		// `::process_register`, so it's a convenient way to get an
+		// error as early as possible.
+		let _transport = initialize_transport()?;
 		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
 		let (register_sender, register_receiver) = mpsc::unbounded();
 
@@ -165,7 +171,6 @@ impl TelemetryWorker {
 			register_receiver,
 			register_sender,
 			id_counter: Arc::new(atomic::AtomicU64::new(1)),
-			transport,
 		})
 	}
 
@@ -200,7 +205,6 @@ impl TelemetryWorker {
 					&mut node_pool,
 					&mut node_map,
 					&mut pending_connection_notifications,
-					self.transport.clone(),
 				).await,
 			}
 		}
@@ -211,7 +215,6 @@ impl TelemetryWorker {
 		node_pool: &mut HashMap<Multiaddr, Node<WsTrans>>,
 		node_map: &mut HashMap<Id, Vec<(VerbosityLevel, Multiaddr)>>,
 		pending_connection_notifications: &mut Vec<(Multiaddr, ConnectionNotifierSender)>,
-		transport: WsTrans,
 	) {
 		let input = input.expect("the stream is never closed; qed");
 
@@ -246,11 +249,26 @@ impl TelemetryWorker {
 						"Initializing telemetry for: {:?}",
 						addr,
 					);
-					node_map.entry(id.clone()).or_default().push((verbosity, addr.clone()));
+					node_map.entry(id).or_default().push((verbosity, addr.clone()));
 
-					let node = node_pool.entry(addr.clone()).or_insert_with(|| {
-						Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
-					});
+					let node = match node_pool.entry(addr.clone()) {
+						Occupied(entry) => entry.into_mut(),
+						Vacant(entry) => {
+							let transport = initialize_transport();
+							let transport = match transport {
+								Ok(t) => t,
+								Err(err) => {
+									log::error!(
+										target: "telemetry",
+										"Could not initialise transport: {}",
+										err,
+									);
+									continue
+								},
+							};
+							entry.insert(Node::new(transport, addr.clone(), Vec::new(), Vec::new()))
+						},
+					};
 
 					node.connection_messages.extend(connection_message.clone());
 
@@ -288,7 +306,7 @@ impl TelemetryWorker {
 	) {
 		let (id, verbosity, payload) = input.expect("the stream is never closed; qed");
 
-		let ts = chrono::Local::now().to_rfc3339().to_string();
+		let ts = chrono::Local::now().to_rfc3339();
 		let mut message = serde_json::Map::new();
 		message.insert("id".into(), id.into());
 		message.insert("ts".into(), ts.into());
@@ -318,7 +336,7 @@ impl TelemetryWorker {
 				continue
 			}
 
-			if let Some(node) = node_pool.get_mut(&addr) {
+			if let Some(node) = node_pool.get_mut(addr) {
 				let _ = node.send(message.clone()).await;
 			} else {
 				log::debug!(
@@ -386,7 +404,7 @@ impl Telemetry {
 	/// The `connection_message` argument is a JSON object that is sent every time the connection
 	/// (re-)establishes.
 	pub fn start_telemetry(&mut self, connection_message: ConnectionMessage) -> Result<()> {
-		let endpoints = self.endpoints.take().ok_or_else(|| Error::TelemetryAlreadyInitialized)?;
+		let endpoints = self.endpoints.take().ok_or(Error::TelemetryAlreadyInitialized)?;
 
 		self.register_sender
 			.unbounded_send(Register::Telemetry { id: self.id, endpoints, connection_message })

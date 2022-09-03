@@ -16,9 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use libp2p::core::multiaddr::{Multiaddr, Protocol};
-
-use sc_network::PeerId;
+use libp2p::{
+	core::multiaddr::{Multiaddr, Protocol},
+	PeerId,
+};
 use sp_authority_discovery::AuthorityId;
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
@@ -165,10 +166,7 @@ fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
 }
 
 fn addresses_to_peer_ids(addresses: &HashSet<Multiaddr>) -> HashSet<PeerId> {
-	addresses
-		.iter()
-		.filter_map(|a| peer_id_from_multiaddr(a))
-		.collect::<HashSet<_>>()
+	addresses.iter().filter_map(peer_id_from_multiaddr).collect::<HashSet<_>>()
 }
 
 #[cfg(test)]

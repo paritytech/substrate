@@ -62,7 +62,7 @@ benchmarks! {
 		let caller = funded_account::<T>("caller", 0);
 		whitelist_account!(caller);
 		let (preimage, hash) = sized_preimage_and_hash::<T>(s);
-		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash.clone()));
+		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
 	}: note_preimage(RawOrigin::Signed(caller), preimage)
 	verify {
 		assert!(Preimage::<T>::have_preimage(&hash));
@@ -71,7 +71,7 @@ benchmarks! {
 	note_no_deposit_preimage {
 		let s in 0 .. T::MaxSize::get();
 		let (preimage, hash) = sized_preimage_and_hash::<T>(s);
-		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash.clone()));
+		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
 	}: note_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), preimage)
 	verify {
 		assert!(Preimage::<T>::have_preimage(&hash));
@@ -83,7 +83,7 @@ benchmarks! {
 		whitelist_account!(caller);
 		let (preimage, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::note_preimage(RawOrigin::Signed(caller.clone()).into(), preimage));
-	}: _(RawOrigin::Signed(caller), hash.clone())
+	}: _(RawOrigin::Signed(caller), hash)
 	verify {
 		assert!(!Preimage::<T>::have_preimage(&hash));
 	}
@@ -91,7 +91,7 @@ benchmarks! {
 	unnote_no_deposit_preimage {
 		let (preimage, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::note_preimage(T::ManagerOrigin::successful_origin(), preimage));
-	}: unnote_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash.clone())
+	}: unnote_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		assert!(!Preimage::<T>::have_preimage(&hash));
 	}
@@ -124,7 +124,7 @@ benchmarks! {
 	// Cheap request - the preimage is already requested, so just a counter bump.
 	request_requested_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
-		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash.clone()));
+		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
 	}: request_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		assert_eq!(StatusFor::<T>::get(&hash), Some(RequestStatus::Requested(2)));
@@ -133,26 +133,26 @@ benchmarks! {
 	// Expensive unrequest - last reference and it's noted, so will destroy the preimage.
 	unrequest_preimage {
 		let (preimage, hash) = preimage_and_hash::<T>();
-		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash.clone()));
+		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
 		assert_ok!(Preimage::<T>::note_preimage(T::ManagerOrigin::successful_origin(), preimage));
-	}: _<T::Origin>(T::ManagerOrigin::successful_origin(), hash.clone())
+	}: _<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		assert_eq!(StatusFor::<T>::get(&hash), None);
 	}
 	// Cheap unrequest - last reference, but it's not noted.
 	unrequest_unnoted_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
-		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash.clone()));
-	}: unrequest_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash.clone())
+		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
+	}: unrequest_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		assert_eq!(StatusFor::<T>::get(&hash), None);
 	}
 	// Cheap unrequest - not the last reference.
 	unrequest_multi_referenced_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
-		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash.clone()));
-		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash.clone()));
-	}: unrequest_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash.clone())
+		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
+		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
+	}: unrequest_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		assert_eq!(StatusFor::<T>::get(&hash), Some(RequestStatus::Requested(1)));
 	}

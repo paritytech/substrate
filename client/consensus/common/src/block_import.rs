@@ -62,8 +62,7 @@ impl ImportResult {
 	/// `clear_justification_requests`, `needs_justification`,
 	/// `bad_justification` set to false.
 	pub fn imported(is_new_best: bool) -> ImportResult {
-		let mut aux = ImportedAux::default();
-		aux.is_new_best = is_new_best;
+		let aux = ImportedAux { is_new_best, ..Default::default() };
 
 		ImportResult::Imported(aux)
 	}
@@ -434,10 +433,10 @@ impl<B: BlockT> JustificationSyncLink<B> for () {
 
 impl<B: BlockT, L: JustificationSyncLink<B>> JustificationSyncLink<B> for Arc<L> {
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		L::request_justification(&*self, hash, number);
+		L::request_justification(self, hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		L::clear_justification_requests(&*self);
+		L::clear_justification_requests(self);
 	}
 }

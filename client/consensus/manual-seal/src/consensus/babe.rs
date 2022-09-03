@@ -31,7 +31,7 @@ use sc_consensus_sessions::{
 	descendent_query, SessionHeader, SharedSessionChanges, ViableSessionDescriptor,
 };
 use sp_keystore::SyncCryptoStorePtr;
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, marker::PhantomData, sync::Arc};
 
 use sc_consensus::{BlockImportParams, ForkChoiceStrategy, Verifier};
 use sp_api::{ProvideRuntimeApi, TransactionFor};
@@ -53,7 +53,7 @@ use sp_timestamp::TimestampInherentData;
 
 /// Provides BABE-compatible predigests and BlockImportParams.
 /// Intended for use with BABE runtimes.
-pub struct BabeConsensusDataProvider<B: BlockT, C> {
+pub struct BabeConsensusDataProvider<B: BlockT, C, P> {
 	/// shared reference to keystore
 	keystore: SyncCryptoStorePtr,
 
@@ -68,6 +68,7 @@ pub struct BabeConsensusDataProvider<B: BlockT, C> {
 
 	/// Authorities to be used for this babe chain.
 	authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	_phantom: PhantomData<P>,
 }
 
 /// Verifier to be used for babe chains
@@ -114,7 +115,7 @@ where
 			.session_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				pre_digest.slot(),
 			)
 			.map_err(|e| format!("failed to fetch session_descriptor: {}", e))?
@@ -131,7 +132,7 @@ where
 	}
 }
 
-impl<B, C> BabeConsensusDataProvider<B, C>
+impl<B, C, P> BabeConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -153,7 +154,14 @@ where
 
 		let config = Config::get(&*client)?;
 
-		Ok(Self { config, client, keystore, session_changes, authorities })
+		Ok(Self {
+			config,
+			client,
+			keystore,
+			session_changes,
+			authorities,
+			_phantom: Default::default(),
+		})
 	}
 
 	fn session(&self, parent: &B::Header, slot: Slot) -> Result<Session, Error> {
@@ -162,11 +170,11 @@ where
 			.session_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch session_descriptor: {}", e)))?
-			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 		let session = session_changes
 			.viable_session(&session_descriptor, |slot| {
@@ -181,7 +189,7 @@ where
 	}
 }
 
-impl<B, C> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C>
+impl<B, C, P> ConsensusDataProvider<B> for BabeConsensusDataProvider<B, C, P>
 where
 	B: BlockT,
 	C: AuxStore
@@ -190,8 +198,10 @@ where
 		+ UsageProvider<B>
 		+ ProvideRuntimeApi<B>,
 	C::Api: BabeApi<B>,
+	P: Send + Sync,
 {
 	type Transaction = TransactionFor<C, B>;
+	type Proof = P;
 
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error> {
 		let slot = inherents
@@ -216,19 +226,19 @@ where
 				.session_descriptor_for_child_of(
 					descendent_query(&*self.client),
 					&parent.hash(),
-					parent.number().clone(),
+					*parent.number(),
 					slot,
 				)
 				.map_err(|e| {
 					Error::StringError(format!("failed to fetch session_descriptor: {}", e))
 				})?
-				.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+				.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 			match session_descriptor {
 				ViableSessionDescriptor::Signaled(identifier, _session_header) => {
 					let session_mut = session_changes
 						.session_mut(&identifier)
-						.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+						.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 					// mutate the current session
 					session_mut.authorities = self.authorities.clone();
@@ -236,7 +246,7 @@ where
 					let next_session = ConsensusLog::NextSessionData(NextSessionDescriptor {
 						authorities: self.authorities.clone(),
 						// copy the old randomness
-						randomness: session_mut.randomness.clone(),
+						randomness: session_mut.randomness,
 					});
 
 					vec![
@@ -259,6 +269,7 @@ where
 		parent: &B::Header,
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData,
+		_proof: Self::Proof,
 	) -> Result<(), Error> {
 		let slot = inherents
 			.babe_inherent_data()?
@@ -268,11 +279,11 @@ where
 			.session_descriptor_for_child_of(
 				descendent_query(&*self.client),
 				&parent.hash(),
-				parent.number().clone(),
+				*parent.number(),
 				slot,
 			)
 			.map_err(|e| Error::StringError(format!("failed to fetch session_descriptor: {}", e)))?
-			.ok_or_else(|| sp_consensus::Error::InvalidAuthoritiesSet)?;
+			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 		// drop the lock
 		drop(session_changes);
 		// a quick check to see if we're in the authorities

@@ -45,9 +45,10 @@ impl HooksDef {
 			return Err(syn::Error::new(item.span(), msg))
 		};
 
-		let mut instances = vec![];
-		instances.push(helper::check_pallet_struct_usage(&item.self_ty)?);
-		instances.push(helper::check_impl_gen(&item.generics, item.impl_token.span())?);
+		let instances = vec![
+			helper::check_pallet_struct_usage(&item.self_ty)?,
+			helper::check_impl_gen(&item.generics, item.impl_token.span())?,
+		];
 
 		let item_trait = &item
 			.trait_

@@ -212,7 +212,7 @@ fn validate_pjr_challenge_core<AccountId: IdentifierT>(
 			None => return false,
 			Some(candidate) => candidate.clone(),
 		};
-	pre_score(candidate, &voters, threshold) >= threshold
+	pre_score(candidate, voters, threshold) >= threshold
 }
 
 /// Convert the data types that the user runtime has into ones that can be used by this module.
@@ -351,7 +351,7 @@ fn pre_score<AccountId: IdentifierT>(
 	debug_assert!(!unelected.borrow().elected);
 	voters
 		.iter()
-		.filter(|ref v| v.votes_for(&unelected.borrow().who))
+		.filter(|v| v.votes_for(&unelected.borrow().who))
 		.fold(Zero::zero(), |acc: ExtendedBalance, voter| acc.saturating_add(slack(voter, t)))
 }
 
@@ -481,7 +481,7 @@ mod tests {
 		assert_eq!(
 			candidates
 				.iter()
-				.map(|c| (c.borrow().who.clone(), c.borrow().elected, c.borrow().backed_stake))
+				.map(|c| (c.borrow().who, c.borrow().elected, c.borrow().backed_stake))
 				.collect::<Vec<_>>(),
 			vec![(10, false, 0), (20, true, 15), (30, false, 0), (40, true, 15)],
 		);

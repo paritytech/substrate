@@ -21,7 +21,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 default = ["std"]
 std = [
 	"codec/std",
-	"scale-info/std",
 	"frame-support/std",
 	"frame-system/std",
+	"scale-info/std",
 ]

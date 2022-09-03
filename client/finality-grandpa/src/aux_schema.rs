@@ -430,7 +430,7 @@ where
 		// reset.
 		let set_state = VoterSetState::<Block>::live(
 			new_set.set_id,
-			&set,
+			set,
 			(new_set.canon_hash, new_set.canon_number),
 		);
 		let encoded = set_state.encode();

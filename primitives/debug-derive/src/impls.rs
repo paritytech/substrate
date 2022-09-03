@@ -67,10 +67,9 @@ mod implementation {
 	/// Derive the inner implementation of `Debug::fmt` function.
 	pub fn derive(name_str: &str, data: &Data) -> TokenStream {
 		match *data {
-			Data::Struct(ref s) => derive_struct(&name_str, &s.fields),
-			Data::Union(ref u) =>
-				derive_fields(&name_str, Fields::new(u.fields.named.iter(), None)),
-			Data::Enum(ref e) => derive_enum(&name_str, &e),
+			Data::Struct(ref s) => derive_struct(name_str, &s.fields),
+			Data::Union(ref u) => derive_fields(name_str, Fields::new(u.fields.named.iter(), None)),
+			Data::Enum(ref e) => derive_enum(name_str, e),
 		}
 	}
 
