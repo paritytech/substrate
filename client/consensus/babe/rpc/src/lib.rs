@@ -45,9 +45,7 @@ use std::{collections::HashMap, sync::Arc};
 pub trait BabeApi {
 	/// Returns data about which slots (primary or secondary) can be claimed in the current session
 	/// with the keys in the keystore.
-	// TODO-RENAME: the old name should be maintained? Is possible to maintain both?
-	// Prev: "babe_epochAuthorhip"
-	#[method(name = "babe_sessionAuthorship")]
+	#[method(name = "babe_sessionAuthorship", aliases = ["babe_epochAuthorship"])]
 	async fn session_authorship(&self) -> RpcResult<HashMap<AuthorityId, SessionAuthorship>>;
 }
 

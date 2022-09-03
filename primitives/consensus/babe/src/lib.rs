@@ -359,7 +359,7 @@ pub struct Session {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
-	#[api_version(2)]
+	#[api_version(3)]
 	pub trait BabeApi {
 		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
 		fn configuration() -> BabeGenesisConfiguration;
@@ -368,22 +368,21 @@ sp_api::decl_runtime_apis! {
 		#[changed_in(2)]
 		fn configuration() -> BabeGenesisConfigurationV1;
 
-		/// Returns the slot that started the current epoch.
-		#[renamed("current_epoch_start", 2)]
+		/// Returns the slot that started the current session.
+		#[renamed("current_epoch_start", 3)]
 		fn current_session_start() -> Slot;
 
-		/// Returns information regarding the current epoch.
-		#[renamed("current_epoch", 2)]
+		/// Returns information regarding the current session.
+		#[renamed("current_epoch", 3)]
 		fn current_session() -> Session;
 
-		/// Returns information regarding the next epoch (which was already
-		/// previously announced).
-		#[renamed("next_epoch", 2)]
+		/// Returns information regarding the next session (which was already announced).
+		#[renamed("next_epoch", 3)]
 		fn next_session() -> Session;
 
 		/// Generates a proof of key ownership for the given authority in the
-		/// current epoch. An example usage of this module is coupled with the
-		/// epoch historical module to prove that a given authority key is
+		/// current session. An example usage of this module is coupled with the
+		/// session historical module to prove that a given authority key is
 		/// tied to a given staking identity during a specific epoch. Proofs
 		/// of key ownership are necessary for submitting equivocation reports.
 		/// NOTE: even though the API takes a `slot` as parameter the current

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Schema for BABE session(formerly known as 'BABE epoch') changes in the aux-db.
+//! Schema for BABE session changes in the aux-db.
 
 use codec::{Decode, Encode};
 use log::info;
