@@ -46,7 +46,7 @@ use frame_support::{
 	traits::{
 		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 	},
-	transactional,
+	transactional, BoundedBTreeMap,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -149,6 +149,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ValueLimit: Get<u32>;
 
+		/// The maximum approvals an item could have.
+		#[pallet::constant]
+		type ApprovalsLimit: Get<u32>;
+
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
 		type Helper: BenchmarkHelper<Self::CollectionId, Self::ItemId>;
@@ -156,6 +160,12 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
+
+	pub type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
+		<T as frame_system::Config>::AccountId,
+		Option<<T as frame_system::Config>::BlockNumber>,
+		<T as Config<I>>::ApprovalsLimit,
+	>;
 
 	#[pallet::storage]
 	#[pallet::storage_prefix = "Class"]
@@ -209,7 +219,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		ItemDetails<T::AccountId, DepositBalanceOf<T, I>>,
+		ItemDetails<T::AccountId, DepositBalanceOf<T, I>, ApprovalsOf<T, I>>,
 		OptionQuery,
 	>;
 
@@ -320,6 +330,12 @@ pub mod pallet {
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
+		// All approvals of an item got cancelled.
+		AllApprovalsCancelled {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			owner: T::AccountId,
+		},
 		/// A `collection` has had its attributes changed by the `Force` origin.
 		ItemStatusChanged { collection: T::CollectionId },
 		/// New metadata has been set for a `collection`.
@@ -393,6 +409,8 @@ pub mod pallet {
 		InUse,
 		/// The item or collection is frozen.
 		Frozen,
+		/// The provided account is not a delegate.
+		NotDelegate,
 		/// The delegate turned out to be different to what was expected.
 		WrongDelegate,
 		/// There is no delegate approved.
@@ -415,6 +433,8 @@ pub mod pallet {
 		NotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
+		/// The item has reached its approval limit.
+		ReachedApprovalLimit,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -630,8 +650,8 @@ pub mod pallet {
 
 			Self::do_transfer(collection, item, dest, |collection_details, details| {
 				if details.owner != origin && collection_details.admin != origin {
-					let approved = details.approved.take().map_or(false, |i| i == origin);
-					ensure!(approved, Error::<T, I>::NoPermission);
+					let approved = details.approvals.get(&origin);
+					ensure!(approved.is_some(), Error::<T, I>::NoPermission);
 				}
 				Ok(())
 			})
@@ -939,10 +959,12 @@ pub mod pallet {
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
-			details.approved = Some(delegate);
+			let _ = details
+				.approvals
+				.try_insert(delegate.clone(), None)
+				.map_err(|_| Error::<T, I>::ReachedApprovalLimit)?;
 			Item::<T, I>::insert(&collection, &item, &details);
 
-			let delegate = details.approved.expect("set as Some above; qed");
 			Self::deposit_event(Event::ApprovedTransfer {
 				collection,
 				item,
@@ -974,7 +996,43 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			maybe_check_delegate: Option<AccountIdLookupOf<T>>,
+			delegate: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+
+			let delegate = T::Lookup::lookup(delegate)?;
+
+			let collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+			let mut details =
+				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
+			if let Some(check) = maybe_check {
+				let permitted = check == collection_details.admin || check == details.owner;
+				ensure!(permitted, Error::<T, I>::NoPermission);
+			}
+
+			ensure!(details.approvals.get(&delegate).is_some(), Error::<T, I>::NotDelegate);
+
+			details.approvals.remove(&delegate);
+			//details.approvals.retain(|d| *d != delegate);
+			Item::<T, I>::insert(&collection, &item, &details);
+			Self::deposit_event(Event::ApprovalCancelled {
+				collection,
+				item,
+				owner: details.owner,
+				delegate,
+			});
+
+			Ok(())
+		}
+
+		#[pallet::weight(10_000)]
+		pub fn clear_all_transfer_approvals(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -988,18 +1046,14 @@ pub mod pallet {
 				let permitted = check == collection_details.admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
-			let maybe_check_delegate = maybe_check_delegate.map(T::Lookup::lookup).transpose()?;
-			let old = details.approved.take().ok_or(Error::<T, I>::NoDelegate)?;
-			if let Some(check_delegate) = maybe_check_delegate {
-				ensure!(check_delegate == old, Error::<T, I>::WrongDelegate);
-			}
 
+			// clear all approvals.
+			details.approvals = ApprovalsOf::<T, I>::default();
 			Item::<T, I>::insert(&collection, &item, &details);
-			Self::deposit_event(Event::ApprovalCancelled {
+			Self::deposit_event(Event::AllApprovalsCancelled {
 				collection,
 				item,
 				owner: details.owner,
-				delegate: old,
 			});
 
 			Ok(())

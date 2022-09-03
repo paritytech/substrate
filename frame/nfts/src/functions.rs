@@ -168,7 +168,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let owner = owner.clone();
 				Account::<T, I>::insert((&owner, &collection, &item), ());
-				let details = ItemDetails { owner, approved: None, is_frozen: false, deposit };
+				let details = ItemDetails {
+					owner,
+					approvals: ApprovalsOf::<T, I>::default(),
+					is_frozen: false,
+					deposit,
+				};
 				Item::<T, I>::insert(&collection, &item, details);
 				Ok(())
 			},
