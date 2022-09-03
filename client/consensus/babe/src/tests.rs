@@ -712,9 +712,13 @@ fn importing_block_one_sets_genesis_session() {
 
 	let session_changes = data.link.session_changes.shared_data();
 	let session_for_second_block = session_changes
-		.session_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
-			Session::genesis(data.link.config.genesis_config(), slot)
-		})
+		.session_data_for_child_of(
+			descendent_query(&*client),
+			&block_hash,
+			1,
+			1000.into(),
+			|slot| Session::genesis(data.link.config.genesis_config(), slot),
+		)
 		.unwrap()
 		.unwrap();
 
@@ -993,7 +997,8 @@ fn babe_transcript_generation_match() {
 		},
 	};
 
-	let orig_transcript = make_transcript(&session.randomness.clone(), 1.into(), session.session_index);
+	let orig_transcript =
+		make_transcript(&session.randomness.clone(), 1.into(), session.session_index);
 	let new_transcript = make_transcript_data(&session.randomness, 1.into(), session.session_index);
 
 	let test = |t: merlin::Transcript| -> [u8; 16] {

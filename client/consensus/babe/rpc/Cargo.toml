@@ -18,7 +18,7 @@ futures = "0.3.21"
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0"
 sc-consensus-babe = { version = "0.10.0-dev", path = "../" }
-sc-consensus-sessions = { version = "0.10.0-dev", path = "../../sessions" }
+sc-consensus-sessions = { version = "0.10.0-dev", path = "../../epochs" }
 sc-rpc-api = { version = "0.10.0-dev", path = "../../../rpc-api" }
 sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 sp-application-crypto = { version = "6.0.0", path = "../../../../primitives/application-crypto" }

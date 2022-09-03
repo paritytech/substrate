@@ -43,8 +43,8 @@ use sp_std::prelude::*;
 
 use sp_consensus_babe::{
 	digests::{NextConfigDescriptor, NextSessionDescriptor, PreDigest},
-	AllowedSlots, BabeAuthorityWeight, BabeSessionConfiguration, ConsensusLog, Session,
-	EquivocationProof, Slot, BABE_ENGINE_ID,
+	AllowedSlots, BabeAuthorityWeight, BabeSessionConfiguration, ConsensusLog, EquivocationProof,
+	Session, Slot, BABE_ENGINE_ID,
 };
 use sp_consensus_vrf::schnorrkel;
 
@@ -64,9 +64,7 @@ mod tests;
 pub use equivocation::{BabeEquivocationOffence, EquivocationHandler, HandleEquivocation};
 #[allow(deprecated)]
 pub use randomness::CurrentBlockRandomness;
-pub use randomness::{
-	CurrentBlockRandomness, RandomnessFromOneSessionAgo, RandomnessFromTwoSessionsAgo,
-};
+pub use randomness::{RandomnessFromOneSessionAgo, RandomnessFromTwoSessionsAgo};
 
 pub use pallet::*;
 
@@ -440,10 +438,10 @@ pub mod pallet {
 			)
 		}
 
-		/// Plan an session config change. The session config change is recorded and will be enacted on
-		/// the next call to `enact_session_change`. The config will be activated one session after.
-		/// Multiple calls to this method will replace any existing planned config change that had
-		/// not been enacted yet.
+		/// Plan an session config change. The session config change is recorded and will be enacted
+		/// on the next call to `enact_session_change`. The config will be activated one session
+		/// after. Multiple calls to this method will replace any existing planned config change
+		/// that had not been enacted yet.
 		#[pallet::weight(<T as Config>::WeightInfo::plan_config_change())]
 		pub fn plan_config_change(
 			origin: OriginFor<T>,
@@ -537,7 +535,8 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Return the _best guess_ block number, at which the next session change is predicted to happen.
+	/// Return the _best guess_ block number, at which the next session change is predicted to
+	/// happen.
 	///
 	/// Returns None if the prediction is in the past; This implies an error internally in the Babe
 	/// and should not happen under normal circumstances.
@@ -561,8 +560,9 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	/// DANGEROUS: Enact an session change. Should be done on every block where `should_session_change`
-	/// has returned `true`, and the caller is the only caller of this function.
+	/// DANGEROUS: Enact an session change. Should be done on every block where
+	/// `should_session_change` has returned `true`, and the caller is the only caller of this
+	/// function.
 	///
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set
 	/// manager logic like `pallet-session`.
@@ -639,8 +639,9 @@ impl<T: Config> Pallet<T> {
 			duration: T::SessionDuration::get(),
 			authorities: Self::authorities().to_vec(),
 			randomness: Self::randomness(),
-			config: SessionConfig::<T>::get()
-				.expect("SessionConfig is initialized in genesis; we never `take` or `kill` it; qed"),
+			config: SessionConfig::<T>::get().expect(
+				"SessionConfig is initialized in genesis; we never `take` or `kill` it; qed",
+			),
 		}
 	}
 
@@ -809,12 +810,13 @@ impl<T: Config> Pallet<T> {
 		let validator_set_count = key_owner_proof.validator_count();
 		let session_index = key_owner_proof.session();
 
-		let session_index = (*slot.saturating_sub(GenesisSlot::<T>::get()) / T::SessionDuration::get())
-			.saturated_into::<u32>();
+		let actual_session_index = (*slot.saturating_sub(GenesisSlot::<T>::get()) /
+			T::SessionDuration::get())
+		.saturated_into::<u32>();
 
 		// check that the slot number is consistent with the session index
 		// in the key ownership proof (i.e. slot is for that session)
-		if session_index != session_index {
+		if session_index != actual_session_index {
 			return Err(Error::<T>::InvalidKeyOwnershipProof.into())
 		}
 

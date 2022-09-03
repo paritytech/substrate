@@ -114,7 +114,8 @@ pub struct LightSyncState<Block: BlockT> {
 	pub finalized_block_header: <Block as BlockT>::Header,
 	/// The session changes tree for babe.
 	#[serde(serialize_with = "serialize_encoded")]
-	pub babe_session_changes: sc_consensus_sessions::SessionChangesFor<Block, sc_consensus_babe::Session>,
+	pub babe_session_changes:
+		sc_consensus_sessions::SessionChangesFor<Block, sc_consensus_babe::Session>,
 	/// The babe weight of the finalized block.
 	pub babe_finalized_block_weight: sc_consensus_babe::BabeBlockWeight,
 	/// The authority set for grandpa.

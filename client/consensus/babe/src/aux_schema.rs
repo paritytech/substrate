@@ -31,9 +31,9 @@ use sp_blockchain::{Error as ClientError, Result as ClientResult};
 use sp_consensus_babe::{BabeBlockWeight, BabeGenesisConfiguration};
 use sp_runtime::traits::Block as BlockT;
 
-const BABE_EPOCH_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
-const BABE_EPOCH_CHANGES_KEY: &[u8] = b"babe_epoch_changes";
-const BABE_EPOCH_CHANGES_CURRENT_VERSION: u32 = 3;
+const SESSION_CHANGES_VERSION: &[u8] = b"babe_epoch_changes_version";
+const SESSION_CHANGES_KEY: &[u8] = b"babe_epoch_changes";
+const SESSION_CHANGES_CURRENT_VERSION: u32 = 3;
 
 /// The aux storage key used to store the block weight of the given block hash.
 pub fn block_weight_key<H: Encode>(block_hash: H) -> Vec<u8> {
@@ -59,22 +59,22 @@ pub fn load_session_changes<Block: BlockT, B: AuxStore>(
 	backend: &B,
 	config: &BabeGenesisConfiguration,
 ) -> ClientResult<SharedSessionChanges<Block, Session>> {
-	let version = load_decode::<_, u32>(backend, BABE_EPOCH_CHANGES_VERSION)?;
+	let version = load_decode::<_, u32>(backend, SESSION_CHANGES_VERSION)?;
 
 	let maybe_session_changes = match version {
 		None =>
-			load_decode::<_, SessionChangesV0For<Block, SessionV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
+			load_decode::<_, SessionChangesV0For<Block, SessionV0>>(backend, SESSION_CHANGES_KEY)?
 				.map(|v0| v0.migrate().map(|_, _, session| session.migrate(config))),
 		Some(1) =>
-			load_decode::<_, SessionChangesV1For<Block, SessionV0>>(backend, BABE_EPOCH_CHANGES_KEY)?
+			load_decode::<_, SessionChangesV1For<Block, SessionV0>>(backend, SESSION_CHANGES_KEY)?
 				.map(|v1| v1.migrate().map(|_, _, session| session.migrate(config))),
 		Some(2) => {
 			// v2 still uses `SessionChanges` v1 format but with a different `Session` type.
-			load_decode::<_, SessionChangesV1For<Block, Session>>(backend, BABE_EPOCH_CHANGES_KEY)?
+			load_decode::<_, SessionChangesV1For<Block, Session>>(backend, SESSION_CHANGES_KEY)?
 				.map(|v2| v2.migrate())
 		},
-		Some(BABE_EPOCH_CHANGES_CURRENT_VERSION) =>
-			load_decode::<_, SessionChangesFor<Block, Session>>(backend, BABE_EPOCH_CHANGES_KEY)?,
+		Some(SESSION_CHANGES_CURRENT_VERSION) =>
+			load_decode::<_, SessionChangesFor<Block, Session>>(backend, SESSION_CHANGES_KEY)?,
 		Some(other) =>
 			return Err(ClientError::Backend(format!("Unsupported BABE DB version: {:?}", other))),
 	};
@@ -105,11 +105,11 @@ pub(crate) fn write_session_changes<Block: BlockT, F, R>(
 where
 	F: FnOnce(&[(&'static [u8], &[u8])]) -> R,
 {
-	BABE_EPOCH_CHANGES_CURRENT_VERSION.using_encoded(|version| {
+	SESSION_CHANGES_CURRENT_VERSION.using_encoded(|version| {
 		let encoded_session_changes = session_changes.encode();
 		write_aux(&[
-			(BABE_EPOCH_CHANGES_KEY, encoded_session_changes.as_slice()),
-			(BABE_EPOCH_CHANGES_VERSION, version),
+			(SESSION_CHANGES_KEY, encoded_session_changes.as_slice()),
+			(SESSION_CHANGES_VERSION, version),
 		])
 	})
 }
@@ -140,7 +140,7 @@ mod test {
 	use super::*;
 	use crate::migration::SessionV0;
 	use fork_tree::ForkTree;
-	use sc_consensus_sessions::{SessionHeader, PersistedSession, PersistedSessionHeader};
+	use sc_consensus_sessions::{PersistedSession, PersistedSessionHeader, SessionHeader};
 	use sc_network_test::Block as TestBlock;
 	use sp_consensus::Error as ConsensusError;
 	use sp_consensus_babe::{AllowedSlots, BabeGenesisConfiguration};
@@ -171,14 +171,14 @@ mod test {
 		client
 			.insert_aux(
 				&[(
-					BABE_EPOCH_CHANGES_KEY,
+					SESSION_CHANGES_KEY,
 					&SessionChangesV0For::<TestBlock, SessionV0>::from_raw(v0_tree).encode()[..],
 				)],
 				&[],
 			)
 			.unwrap();
 
-		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), None);
+		assert_eq!(load_decode::<_, u32>(&client, SESSION_CHANGES_VERSION).unwrap(), None);
 
 		let session_changes = load_session_changes::<TestBlock, _>(
 			&client,
@@ -210,6 +210,6 @@ mod test {
 			client.insert_aux(values, &[]).unwrap();
 		});
 
-		assert_eq!(load_decode::<_, u32>(&client, BABE_EPOCH_CHANGES_VERSION).unwrap(), Some(3));
+		assert_eq!(load_decode::<_, u32>(&client, SESSION_CHANGES_VERSION).unwrap(), Some(3));
 	}
 }

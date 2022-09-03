@@ -82,7 +82,10 @@ pub struct BabeVerifier<B: BlockT, C> {
 
 impl<B: BlockT, C> BabeVerifier<B, C> {
 	/// create a nrew verifier
-	pub fn new(session_changes: SharedSessionChanges<B, Session>, client: Arc<C>) -> BabeVerifier<B, C> {
+	pub fn new(
+		session_changes: SharedSessionChanges<B, Session>,
+		client: Arc<C>,
+	) -> BabeVerifier<B, C> {
 		BabeVerifier { session_changes, client }
 	}
 }

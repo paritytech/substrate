@@ -76,7 +76,7 @@ fn first_block_session_zero_start() {
 		assert!(!Babe::should_end_session(1));
 		assert_eq!(Babe::genesis_slot(), genesis_slot);
 		assert_eq!(Babe::current_slot(), genesis_slot);
- 		assert_eq!(Babe::session_index(), 0);
+		assert_eq!(Babe::session_index(), 0);
 
 		Babe::on_finalize(1);
 		let header = System::finalize();
@@ -227,8 +227,8 @@ fn can_estimate_current_session_progress() {
 	new_test_ext(1).execute_with(|| {
 		assert_eq!(<Test as Config>::SessionDuration::get(), 3);
 
-		// with BABE the genesis block is not part of any session, the first session starts at block #1,
-		// therefore its last block should be #3
+		// with BABE the genesis block is not part of any session, the first session starts at block
+		// #1, therefore its last block should be #3
 		for i in 1u64..4 {
 			progress_to_block(i);
 

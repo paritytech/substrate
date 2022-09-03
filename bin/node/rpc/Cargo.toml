@@ -20,7 +20,7 @@ sc-chain-spec = { version = "4.0.0-dev", path = "../../../client/chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../../client/consensus/babe" }
 sc-consensus-babe-rpc = { version = "0.10.0-dev", path = "../../../client/consensus/babe/rpc" }
-sc-consensus-sessions = { version = "0.10.0-dev", path = "../../../client/consensus/sessions" }
+sc-consensus-sessions = { version = "0.10.0-dev", path = "../../../client/consensus/epochs" }
 sc-finality-grandpa = { version = "0.10.0-dev", path = "../../../client/finality-grandpa" }
 sc-finality-grandpa-rpc = { version = "0.10.0-dev", path = "../../../client/finality-grandpa/rpc" }
 sc-rpc = { version = "4.0.0-dev", path = "../../../client/rpc" }

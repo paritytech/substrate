@@ -19,7 +19,7 @@
 //! randomness collected from VRF outputs.
 
 use super::{
-	AuthorVrfRandomness, Config, SessionStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
+	AuthorVrfRandomness, Config, NextRandomness, Randomness, SessionStart, VRF_OUTPUT_LENGTH,
 };
 use frame_support::traits::Randomness as RandomnessT;
 use sp_runtime::traits::{Hash, One, Saturating};

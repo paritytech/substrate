@@ -248,7 +248,8 @@ impl<'a, E: Session> From<&'a PersistedSession<E>> for PersistedSessionHeader<E>
 		match session {
 			PersistedSession::Genesis(ref session_0, ref session_1) =>
 				PersistedSessionHeader::Genesis(session_0.into(), session_1.into()),
-			PersistedSession::Regular(ref session_n) => PersistedSessionHeader::Regular(session_n.into()),
+			PersistedSession::Regular(ref session_n) =>
+				PersistedSessionHeader::Regular(session_n.into()),
 		}
 	}
 }
@@ -280,7 +281,8 @@ pub enum PersistedSessionHeader<E: Session> {
 impl<E: Session> Clone for PersistedSessionHeader<E> {
 	fn clone(&self) -> Self {
 		match self {
-			Self::Genesis(session_0, session_1) => Self::Genesis(session_0.clone(), session_1.clone()),
+			Self::Genesis(session_0, session_1) =>
+				Self::Genesis(session_0.clone(), session_1.clone()),
 			Self::Regular(session_n) => Self::Regular(session_n.clone()),
 		}
 	}
@@ -293,14 +295,22 @@ impl<E: Session> PersistedSessionHeader<E> {
 		B: Session<Slot = E::Slot>,
 	{
 		match self {
-			PersistedSessionHeader::Genesis(session_0, session_1) => PersistedSessionHeader::Genesis(
-				SessionHeader { start_slot: session_0.start_slot, end_slot: session_0.end_slot },
-				SessionHeader { start_slot: session_1.start_slot, end_slot: session_1.end_slot },
-			),
-			PersistedSessionHeader::Regular(session_n) => PersistedSessionHeader::Regular(SessionHeader {
-				start_slot: session_n.start_slot,
-				end_slot: session_n.end_slot,
-			}),
+			PersistedSessionHeader::Genesis(session_0, session_1) =>
+				PersistedSessionHeader::Genesis(
+					SessionHeader {
+						start_slot: session_0.start_slot,
+						end_slot: session_0.end_slot,
+					},
+					SessionHeader {
+						start_slot: session_1.start_slot,
+						end_slot: session_1.end_slot,
+					},
+				),
+			PersistedSessionHeader::Regular(session_n) =>
+				PersistedSessionHeader::Regular(SessionHeader {
+					start_slot: session_n.start_slot,
+					end_slot: session_n.end_slot,
+				}),
 		}
 	}
 }
@@ -372,7 +382,8 @@ where
 			_ => {},
 		};
 		match &self.next {
-			Some((h, n, session_n)) if slot >= session_n.start_slot() && slot < session_n.end_slot() =>
+			Some((h, n, session_n))
+				if slot >= session_n.start_slot() && slot < session_n.end_slot() =>
 				Some((*h, *n, session_n.into(), SessionIdentifierPosition::Regular)),
 			_ => None,
 		}
@@ -404,7 +415,9 @@ where
 	/// Import a new gap session, potentially replacing an old session.
 	fn import(&mut self, slot: E::Slot, hash: Hash, number: Number, session: E) -> Result<(), E> {
 		match (&mut self.current, &mut self.next) {
-			((_, _, PersistedSession::Genesis(_, session_1)), _) if slot == session_1.end_slot() => {
+			((_, _, PersistedSession::Genesis(_, session_1)), _)
+				if slot == session_1.end_slot() =>
+			{
 				self.next = Some((hash, number, session));
 				Ok(())
 			},
@@ -500,7 +513,9 @@ where
 			sessions: self
 				.sessions
 				.into_iter()
-				.map(|((hash, number), session)| ((hash, number), session.map(&hash, &number, &mut f)))
+				.map(|((hash, number), session)| {
+					((hash, number), session.map(&hash, &number, &mut f))
+				})
 				.collect(),
 		}
 	}
@@ -707,13 +722,12 @@ where
 							// Ok, we found our node.
 							// and here we figure out which of the internal sessions
 							// of a genesis node to use based on their start slot.
-							PersistedSessionHeader::Genesis(ref session_0, ref session_1) => {
+							PersistedSessionHeader::Genesis(ref session_0, ref session_1) =>
 								if session_1.start_slot <= slot {
 									(SessionIdentifierPosition::Genesis1, session_1.clone())
 								} else {
 									(SessionIdentifierPosition::Genesis0, session_0.clone())
-								}
-							},
+								},
 							PersistedSessionHeader::Regular(ref session_n) =>
 								(SessionIdentifierPosition::Regular, session_n.clone()),
 						},
@@ -978,14 +992,17 @@ mod tests {
 
 		assert_eq!(genesis_session, ViableSessionDescriptor::UnimportedGenesis(100));
 
-		let import_session_1 =
-			session_changes.viable_session(&genesis_session, &make_genesis).unwrap().increment(());
+		let import_session_1 = session_changes
+			.viable_session(&genesis_session, &make_genesis)
+			.unwrap()
+			.increment(());
 		let session_1 = import_session_1.as_ref().clone();
 
 		session_changes
 			.import(&is_descendent_of, *b"A", 1, *b"0", import_session_1)
 			.unwrap();
-		let genesis_session = session_changes.session_data(&genesis_session, &make_genesis).unwrap();
+		let genesis_session =
+			session_changes.session_data(&genesis_session, &make_genesis).unwrap();
 
 		assert!(is_descendent_of(b"0", b"A").unwrap());
 
@@ -1235,14 +1252,17 @@ mod tests {
 		assert_eq!(genesis_session, ViableSessionDescriptor::UnimportedGenesis(100));
 
 		// Import more sessions and check that gap advances.
-		let import_session_1 =
-			session_changes.viable_session(&genesis_session, &make_genesis).unwrap().increment(());
+		let import_session_1 = session_changes
+			.viable_session(&genesis_session, &make_genesis)
+			.unwrap()
+			.increment(());
 
 		let session_1 = import_session_1.as_ref().clone();
 		session_changes
 			.import(&is_descendent_of, *b"1", 1, *b"0", import_session_1)
 			.unwrap();
-		let genesis_session_data = session_changes.session_data(&genesis_session, &make_genesis).unwrap();
+		let genesis_session_data =
+			session_changes.session_data(&genesis_session, &make_genesis).unwrap();
 		let end_slot = genesis_session_data.end_slot();
 		let x = session_changes
 			.session_data_for_child_of(&is_descendent_of, b"1", 1, end_slot, &make_genesis)

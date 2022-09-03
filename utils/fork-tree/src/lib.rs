@@ -126,7 +126,7 @@ where
 	/// imported in order.
 	///
 	/// Returns `true` if the imported node is a root.
-	// WARNING: some users of this method (i.e. consensus epoch changes tree) currently silently
+	// WARNING: some users of this method (i.e. consensus session changes tree) currently silently
 	// rely on a **post-order DFS** traversal. If we are using instead a top-down traversal method
 	// then the `is_descendent_of` closure, when used after a warp-sync, may end up querying the
 	// backend for a block (the one corresponding to the root) that is not present and thus will

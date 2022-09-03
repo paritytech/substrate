@@ -101,7 +101,8 @@ use sc_consensus::{
 	import_queue::{BasicQueue, BoxJustificationImport, DefaultImportQueue, Verifier},
 };
 use sc_consensus_sessions::{
-	descendent_query, Session as SessionT, SessionChangesFor, SharedSessionChanges, ViableSessionDescriptor,
+	descendent_query, Session as SessionT, SessionChangesFor, SharedSessionChanges,
+	ViableSessionDescriptor,
 };
 use sc_consensus_slots::{
 	check_equivocation, BackoffAuthoringBlocksStrategy, CheckedHeader, InherentDataProviderExt,
@@ -137,7 +138,7 @@ pub use sp_consensus_babe::{
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
-	BabeSessionConfiguration, BabeGenesisConfiguration, ConsensusLog, BABE_ENGINE_ID,
+	BabeGenesisConfiguration, BabeSessionConfiguration, ConsensusLog, BABE_ENGINE_ID,
 	VRF_OUTPUT_LENGTH,
 };
 
@@ -1425,15 +1426,22 @@ where
 
 		// Read session info from the imported state.
 		let block_id = BlockId::hash(hash);
-		let current_session = self.client.runtime_api().current_session(&block_id).map_err(|e| {
-			ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
-		})?;
+		let current_session =
+			self.client.runtime_api().current_session(&block_id).map_err(|e| {
+				ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
+			})?;
 		let next_session = self.client.runtime_api().next_session(&block_id).map_err(|e| {
 			ConsensusError::ClientImport(babe_err::<Block>(Error::RuntimeApi(e)).into())
 		})?;
 
 		let mut session_changes = self.session_changes.shared_data_locked();
-		session_changes.reset(parent_hash, hash, number, current_session.into(), next_session.into());
+		session_changes.reset(
+			parent_hash,
+			hash,
+			number,
+			current_session.into(),
+			next_session.into(),
+		);
 		aux_schema::write_session_changes::<Block, _, _>(&*session_changes, |insert| {
 			self.client.insert_aux(insert, [])
 		})
@@ -1584,7 +1592,9 @@ where
 						Session::genesis(&self.config.genesis_config, slot)
 					})
 					.ok_or_else(|| {
-						ConsensusError::ClientImport(Error::<Block>::FetchSession(parent_hash).into())
+						ConsensusError::ClientImport(
+							Error::<Block>::FetchSession(parent_hash).into(),
+						)
 					})?;
 
 				let session_config = next_config_digest
@@ -1607,7 +1617,8 @@ where
 					 viable_session.as_ref().start_slot,
 				);
 
-				let next_session = viable_session.increment((next_session_descriptor, session_config));
+				let next_session =
+					viable_session.increment((next_session_descriptor, session_config));
 
 				log!(target: "babe",
 					 log_level,
@@ -1649,11 +1660,14 @@ where
 					return Err(e)
 				}
 
-				crate::aux_schema::write_session_changes::<Block, _, _>(&*session_changes, |insert| {
-					block
-						.auxiliary
-						.extend(insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
-				});
+				crate::aux_schema::write_session_changes::<Block, _, _>(
+					&*session_changes,
+					|insert| {
+						block
+							.auxiliary
+							.extend(insert.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
+					},
+				);
 			}
 
 			aux_schema::write_block_weight(hash, total_weight, |values| {

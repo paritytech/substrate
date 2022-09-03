@@ -18,7 +18,7 @@
 
 //! Migration types for session changes.
 
-use crate::{Session, SessionChanges, PersistedSession, PersistedSessionHeader};
+use crate::{PersistedSession, PersistedSessionHeader, Session, SessionChanges};
 use codec::{Decode, Encode};
 use fork_tree::ForkTree;
 use sp_runtime::traits::{Block as BlockT, NumberFor};

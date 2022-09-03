@@ -17,8 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	AuthorityId, BabeAuthorityWeight, BabeSessionConfiguration, BabeGenesisConfiguration, Session,
-	NextSessionDescriptor, VRF_OUTPUT_LENGTH,
+	AuthorityId, BabeAuthorityWeight, BabeGenesisConfiguration, BabeSessionConfiguration,
+	NextSessionDescriptor, Session, VRF_OUTPUT_LENGTH,
 };
 use codec::{Decode, Encode};
 use sc_consensus_sessions::Session as SessionT;

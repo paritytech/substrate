@@ -4709,7 +4709,7 @@ dependencies = [
  "sc-client-db",
  "sc-consensus",
  "sc-consensus-babe",
- "sc-consensus-epochs",
+ "sc-consensus-sessions",
  "sc-consensus-slots",
  "sc-consensus-uncles",
  "sc-executor",
@@ -4829,7 +4829,7 @@ dependencies = [
  "sc-client-api",
  "sc-consensus-babe",
  "sc-consensus-babe-rpc",
- "sc-consensus-epochs",
+ "sc-consensus-sessions",
  "sc-finality-grandpa",
  "sc-finality-grandpa-rpc",
  "sc-rpc",
@@ -8016,7 +8016,7 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
- "sc-consensus-epochs",
+ "sc-consensus-sessions",
  "sc-consensus-slots",
  "sc-keystore",
  "sc-network",
@@ -8054,7 +8054,7 @@ dependencies = [
  "jsonrpsee",
  "sc-consensus",
  "sc-consensus-babe",
- "sc-consensus-epochs",
+ "sc-consensus-sessions",
  "sc-keystore",
  "sc-rpc-api",
  "serde",
@@ -8075,18 +8075,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-consensus-epochs"
-version = "0.10.0-dev"
-dependencies = [
- "fork-tree",
- "parity-scale-codec",
- "sc-client-api",
- "sc-consensus",
- "sp-blockchain",
- "sp-runtime",
-]
-
-[[package]]
 name = "sc-consensus-manual-seal"
 version = "0.10.0-dev"
 dependencies = [
@@ -8101,7 +8089,7 @@ dependencies = [
  "sc-consensus",
  "sc-consensus-aura",
  "sc-consensus-babe",
- "sc-consensus-epochs",
+ "sc-consensus-sessions",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "serde",
@@ -8145,6 +8133,18 @@ dependencies = [
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "thiserror",
+]
+
+[[package]]
+name = "sc-consensus-sessions"
+version = "0.10.0-dev"
+dependencies = [
+ "fork-tree",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sc-consensus",
+ "sp-blockchain",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -8837,7 +8837,7 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-consensus-babe",
- "sc-consensus-epochs",
+ "sc-consensus-sessions",
  "sc-finality-grandpa",
  "serde",
  "serde_json",

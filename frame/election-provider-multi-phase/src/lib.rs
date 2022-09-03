@@ -1613,7 +1613,7 @@ mod feasibility_check {
 
 	use super::*;
 	use crate::mock::{
-		raw_solution, roll_to, SessionLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
+		raw_solution, roll_to, ExtBuilder, MultiPhase, Runtime, SessionLength, SignedPhase,
 		TargetIndex, UnsignedPhase, VoterIndex,
 	};
 	use frame_support::{assert_noop, assert_ok};

@@ -73,7 +73,7 @@ pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// How many blocks to wait before running the median algorithm for relative time
 /// This will not vary from chain to chain as it is not dependent on slot duration
-/// or session(formerly known as epoch) length.
+/// or session length.
 pub const MEDIAN_ALGORITHM_CARDINALITY: usize = 1200; // arbitrary suggestion by w3f-research.
 
 /// The index of an authority.
@@ -107,7 +107,11 @@ pub fn make_transcript(randomness: &Randomness, slot: Slot, session: u64) -> Tra
 
 /// Make a VRF transcript data container
 #[cfg(feature = "std")]
-pub fn make_transcript_data(randomness: &Randomness, slot: Slot, session: u64) -> VRFTranscriptData {
+pub fn make_transcript_data(
+	randomness: &Randomness,
+	slot: Slot,
+	session: u64,
+) -> VRFTranscriptData {
 	VRFTranscriptData {
 		label: &BABE_ENGINE_ID,
 		items: vec![

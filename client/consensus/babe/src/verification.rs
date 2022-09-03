@@ -19,7 +19,7 @@
 //! Verification for BABE headers.
 use super::{
 	authorship::{calculate_primary_threshold, check_primary_threshold, secondary_slot_author},
-	babe_err, find_pre_digest, BlockT, Session, Error,
+	babe_err, find_pre_digest, BlockT, Error, Session,
 };
 use log::{debug, trace};
 use sc_consensus_slots::CheckedHeader;
@@ -155,7 +155,8 @@ fn check_primary_header<B: BlockT + Sized>(
 
 	if AuthorityPair::verify(&signature, pre_hash, author) {
 		let (inout, _) = {
-			let transcript = make_transcript(&session.randomness, pre_digest.slot, session.session_index);
+			let transcript =
+				make_transcript(&session.randomness, pre_digest.slot, session.session_index);
 
 			schnorrkel::PublicKey::from_bytes(author.as_slice())
 				.and_then(|p| {
@@ -164,8 +165,11 @@ fn check_primary_header<B: BlockT + Sized>(
 				.map_err(|s| babe_err(Error::VRFVerificationFailed(s)))?
 		};
 
-		let threshold =
-			calculate_primary_threshold(c, &session.authorities, pre_digest.authority_index as usize);
+		let threshold = calculate_primary_threshold(
+			c,
+			&session.authorities,
+			pre_digest.authority_index as usize,
+		);
 
 		if !check_primary_threshold(&inout, threshold) {
 			return Err(babe_err(Error::VRFVerificationOfBlockFailed(author.clone(), threshold)))
@@ -226,7 +230,8 @@ fn check_secondary_vrf_header<B: BlockT>(
 	}
 
 	if AuthorityPair::verify(&signature, pre_hash.as_ref(), author) {
-		let transcript = make_transcript(&session.randomness, pre_digest.slot, session.session_index);
+		let transcript =
+			make_transcript(&session.randomness, pre_digest.slot, session.session_index);
 
 		schnorrkel::PublicKey::from_bytes(author.as_slice())
 			.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))

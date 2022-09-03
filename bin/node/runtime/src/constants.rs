@@ -55,14 +55,14 @@ pub mod time {
 	pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1000;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
-	//       Attempting to do so will brick block production.
+	// Attempting to do so will brick block production.
 	pub const SLOT_DURATION: Moment = MILLISECS_PER_BLOCK;
 
 	// 1 in 4 blocks (on average, not counting collisions) will be primary BABE blocks.
 	pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
-	// NOTE: Currently it is not possible to change the session duration after the chain has started.
-	//       Attempting to do so will brick block production.
+	// NOTE: Currently it is not possible to change the session duration after the chain has
+	// started. Attempting to do so will brick block production.
 	pub const SESSION_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
 	pub const SESSION_DURATION_IN_SLOTS: u64 = {
 		const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;

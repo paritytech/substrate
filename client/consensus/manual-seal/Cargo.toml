@@ -26,7 +26,7 @@ sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-consensus-aura = { version = "0.10.0-dev", path = "../../consensus/aura" }
 sc-consensus-babe = { version = "0.10.0-dev", path = "../../consensus/babe" }
-sc-consensus-sessions = { version = "0.10.0-dev", path = "../../consensus/sessions" }
+sc-consensus-sessions = { version = "0.10.0-dev", path = "../../consensus/epochs" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
