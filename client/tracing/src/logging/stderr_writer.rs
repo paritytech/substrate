@@ -89,7 +89,7 @@ fn flush_logs(mut buffer: parking_lot::lock_api::MutexGuard<parking_lot::RawMute
 
 	let stderr = std::io::stderr();
 	let mut stderr_lock = stderr.lock();
-	let _ = stderr_lock.write_all(&*spare_buffer);
+	let _ = stderr_lock.write_all(&spare_buffer);
 	std::mem::drop(stderr_lock);
 
 	spare_buffer.clear();

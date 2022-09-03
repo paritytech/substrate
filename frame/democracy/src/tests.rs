@@ -78,8 +78,8 @@ impl Contains<Call> for BaseFilter {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1_000_000);
-	pub const DemocracyId: LockIdentifier = *b"democrac";
+		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
+  pub const DemocracyId: LockIdentifier = *b"democrac";
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;

@@ -99,7 +99,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 					);
 				},
 				Request::NetworkAddReservedPeer(peer, sender) => {
-					let _ = match sc_network::config::parse_str_addr(&peer) {
+					let _ = match sc_network_common::config::parse_str_addr(&peer) {
 						Ok(_) => sender.send(Ok(())),
 						Err(s) =>
 							sender.send(Err(error::Error::MalformattedPeerArg(s.to_string()))),
@@ -123,7 +123,7 @@ fn api<T: Into<Option<Status>>>(sync: T) -> RpcModule<System<Block>> {
 					let _ = sender.send(SyncState {
 						starting_block: 1,
 						current_block: 2,
-						highest_block: Some(3),
+						highest_block: 3,
 					});
 				},
 			};
@@ -297,10 +297,7 @@ async fn system_node_roles() {
 async fn system_sync_state() {
 	let sync_state: SyncState<i32> =
 		api(None).call("system_syncState", EmptyParams::new()).await.unwrap();
-	assert_eq!(
-		sync_state,
-		SyncState { starting_block: 1, current_block: 2, highest_block: Some(3) }
-	);
+	assert_eq!(sync_state, SyncState { starting_block: 1, current_block: 2, highest_block: 3 });
 }
 
 #[tokio::test]

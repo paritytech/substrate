@@ -165,7 +165,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, Dispatchable, Hash, Saturating, Zero},
+	traits::{Bounded, Dispatchable, Hash, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -204,6 +204,7 @@ type BalanceOf<T, I> =
 type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum PreimageStatus<AccountId, Balance, BlockNumber> {
@@ -985,11 +986,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
 		pub fn delegate(
 			origin: OriginFor<T>,
-			to: T::AccountId,
+			to: AccountIdLookupOf<T>,
 			conviction: Conviction,
 			balance: BalanceOf<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			let to = T::Lookup::lookup(to)?;
 			let votes = Self::try_delegate(who, to, conviction, balance)?;
 
 			Ok(Some(T::WeightInfo::delegate(votes)).into())
@@ -1168,8 +1170,9 @@ pub mod pallet {
 			T::WeightInfo::unlock_set(T::MaxVotes::get())
 				.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))
 		)]
-		pub fn unlock(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
+		pub fn unlock(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&target);
 			Ok(())
 		}
@@ -1225,10 +1228,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
-			target: T::AccountId,
+			target: AccountIdLookupOf<T>,
 			index: ReferendumIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, scope)?;
 			Ok(())
@@ -1826,7 +1830,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
-		let mut weight = 0;
+		let mut weight = Weight::zero();
 
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();

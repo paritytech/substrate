@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 use frame_support::{
 	assert_noop, assert_ok,
 	error::BadOrigin,
+	pallet_prelude::Weight,
 	parameter_types,
 	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling},
 };
@@ -50,7 +51,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1_000_000);
+		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;
@@ -454,4 +455,21 @@ fn ensure_ranked_works() {
 		assert_eq!(Rank4::try_origin(Origin::signed(2)).unwrap_err().as_signed().unwrap(), 2);
 		assert_eq!(Rank4::try_origin(Origin::signed(3)).unwrap_err().as_signed().unwrap(), 3);
 	});
+}
+
+#[test]
+fn do_add_member_to_rank_works() {
+	new_test_ext().execute_with(|| {
+		let max_rank = 9u16;
+		assert_ok!(Club::do_add_member_to_rank(69, max_rank / 2));
+		assert_ok!(Club::do_add_member_to_rank(1337, max_rank));
+		for i in 0..=max_rank {
+			if i <= max_rank / 2 {
+				assert_eq!(member_count(i), 2);
+			} else {
+				assert_eq!(member_count(i), 1);
+			}
+		}
+		assert_eq!(member_count(max_rank + 1), 0);
+	})
 }

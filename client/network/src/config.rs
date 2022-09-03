@@ -31,17 +31,17 @@ pub use sc_network_common::{
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
-use crate::ExHashT;
+use crate::{bitswap::Bitswap, ExHashT};
 
 use core::{fmt, iter};
 use futures::future;
 use libp2p::{
 	identity::{ed25519, Keypair},
-	multiaddr, Multiaddr, PeerId,
+	multiaddr, Multiaddr,
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
-use sc_network_common::sync::ChainSync;
+use sc_network_common::{config::MultiaddrWithPeerId, sync::ChainSync};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	borrow::Cow,
@@ -54,7 +54,6 @@ use std::{
 	path::{Path, PathBuf},
 	pin::Pin,
 	str,
-	str::FromStr,
 	sync::Arc,
 };
 use zeroize::Zeroize;
@@ -81,14 +80,21 @@ where
 	/// Client that contains the blockchain.
 	pub chain: Arc<Client>,
 
+	/// Bitswap block request protocol implementation.
+	pub bitswap: Option<Bitswap<B>>,
+
 	/// Pool of transactions.
 	///
 	/// The network worker will fetch transactions from this object in order to propagate them on
 	/// the network.
 	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
 
-	/// Name of the protocol to use on the wire. Should be different for each chain.
+	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
+
+	/// Fork ID to distinguish protocols of different hard forks. Part of the standard protocol
+	/// name on the wire.
+	pub fork_id: Option<String>,
 
 	/// Import queue to use.
 	///
@@ -96,14 +102,8 @@ where
 	/// valid.
 	pub import_queue: Box<dyn ImportQueue<B>>,
 
-	/// Factory function that creates a new instance of chain sync.
-	pub create_chain_sync: Box<
-		dyn FnOnce(
-			sc_network_common::sync::SyncMode,
-			Arc<Client>,
-			Option<Arc<dyn WarpSyncProvider<B>>>,
-		) -> crate::error::Result<Box<dyn ChainSync<B>>>,
-	>,
+	/// Instance of chain sync implementation.
+	pub chain_sync: Box<dyn ChainSync<B>>,
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
@@ -138,8 +138,8 @@ where
 	/// both outgoing and incoming requests.
 	pub state_request_protocol_config: RequestResponseConfig,
 
-	/// Optional warp sync protocol support. Include protocol config and sync provider.
-	pub warp_sync: Option<(Arc<dyn WarpSyncProvider<B>>, RequestResponseConfig)>,
+	/// Optional warp sync protocol config.
+	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
 }
 
 /// Role of the local node.
@@ -147,8 +147,6 @@ where
 pub enum Role {
 	/// Regular full node.
 	Full,
-	/// Regular light node.
-	Light,
 	/// Actual authority.
 	Authority,
 }
@@ -158,18 +156,12 @@ impl Role {
 	pub fn is_authority(&self) -> bool {
 		matches!(self, Self::Authority { .. })
 	}
-
-	/// True for [`Role::Light`].
-	pub fn is_light(&self) -> bool {
-		matches!(self, Self::Light { .. })
-	}
 }
 
 impl fmt::Display for Role {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Full => write!(f, "FULL"),
-			Self::Light => write!(f, "LIGHT"),
 			Self::Authority { .. } => write!(f, "AUTHORITY"),
 		}
 	}
@@ -235,132 +227,8 @@ impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransaction
 	}
 }
 
-/// Parses a string address and splits it into Multiaddress and PeerId, if
-/// valid.
-///
-/// # Example
-///
-/// ```
-/// # use sc_network::{Multiaddr, PeerId, config::parse_str_addr};
-/// let (peer_id, addr) = parse_str_addr(
-/// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV"
-/// ).unwrap();
-/// assert_eq!(peer_id, "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse::<PeerId>().unwrap());
-/// assert_eq!(addr, "/ip4/198.51.100.19/tcp/30333".parse::<Multiaddr>().unwrap());
-/// ```
-pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), ParseErr> {
-	let addr: Multiaddr = addr_str.parse()?;
-	parse_addr(addr)
-}
-
-/// Splits a Multiaddress into a Multiaddress and PeerId.
-pub fn parse_addr(mut addr: Multiaddr) -> Result<(PeerId, Multiaddr), ParseErr> {
-	let who = match addr.pop() {
-		Some(multiaddr::Protocol::P2p(key)) =>
-			PeerId::from_multihash(key).map_err(|_| ParseErr::InvalidPeerId)?,
-		_ => return Err(ParseErr::PeerIdMissing),
-	};
-
-	Ok((who, addr))
-}
-
-/// Address of a node, including its identity.
-///
-/// This struct represents a decoded version of a multiaddress that ends with `/p2p/<peerid>`.
-///
-/// # Example
-///
-/// ```
-/// # use sc_network::{Multiaddr, PeerId, config::MultiaddrWithPeerId};
-/// let addr: MultiaddrWithPeerId =
-/// 	"/ip4/198.51.100.19/tcp/30333/p2p/QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV".parse().unwrap();
-/// assert_eq!(addr.peer_id.to_base58(), "QmSk5HQbn6LhUwDiNMseVUjuRYhEtYj4aUZ6WfWoGURpdV");
-/// assert_eq!(addr.multiaddr.to_string(), "/ip4/198.51.100.19/tcp/30333");
-/// ```
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
-#[serde(try_from = "String", into = "String")]
-pub struct MultiaddrWithPeerId {
-	/// Address of the node.
-	pub multiaddr: Multiaddr,
-	/// Its identity.
-	pub peer_id: PeerId,
-}
-
-impl MultiaddrWithPeerId {
-	/// Concatenates the multiaddress and peer ID into one multiaddress containing both.
-	pub fn concat(&self) -> Multiaddr {
-		let proto = multiaddr::Protocol::P2p(From::from(self.peer_id));
-		self.multiaddr.clone().with(proto)
-	}
-}
-
-impl fmt::Display for MultiaddrWithPeerId {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		fmt::Display::fmt(&self.concat(), f)
-	}
-}
-
-impl FromStr for MultiaddrWithPeerId {
-	type Err = ParseErr;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let (peer_id, multiaddr) = parse_str_addr(s)?;
-		Ok(Self { peer_id, multiaddr })
-	}
-}
-
-impl From<MultiaddrWithPeerId> for String {
-	fn from(ma: MultiaddrWithPeerId) -> String {
-		format!("{}", ma)
-	}
-}
-
-impl TryFrom<String> for MultiaddrWithPeerId {
-	type Error = ParseErr;
-	fn try_from(string: String) -> Result<Self, Self::Error> {
-		string.parse()
-	}
-}
-
-/// Error that can be generated by `parse_str_addr`.
-#[derive(Debug)]
-pub enum ParseErr {
-	/// Error while parsing the multiaddress.
-	MultiaddrParse(multiaddr::Error),
-	/// Multihash of the peer ID is invalid.
-	InvalidPeerId,
-	/// The peer ID is missing from the address.
-	PeerIdMissing,
-}
-
-impl fmt::Display for ParseErr {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::MultiaddrParse(err) => write!(f, "{}", err),
-			Self::InvalidPeerId => write!(f, "Peer id at the end of the address is invalid"),
-			Self::PeerIdMissing => write!(f, "Peer id is missing from the address"),
-		}
-	}
-}
-
-impl std::error::Error for ParseErr {
-	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-		match self {
-			Self::MultiaddrParse(err) => Some(err),
-			Self::InvalidPeerId => None,
-			Self::PeerIdMissing => None,
-		}
-	}
-}
-
-impl From<multiaddr::Error> for ParseErr {
-	fn from(err: multiaddr::Error) -> ParseErr {
-		Self::MultiaddrParse(err)
-	}
-}
-
 /// Sync operation mode.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SyncMode {
 	/// Full block download and verification.
 	Full,

@@ -335,7 +335,7 @@ pub mod pallet {
 			if (n % T::IntakePeriod::get()).is_zero() {
 				Self::pursue_target(T::MaxIntakeBids::get())
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}
