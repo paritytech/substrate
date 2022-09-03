@@ -132,7 +132,13 @@ pub fn run() -> Result<()> {
 						let partial = new_partial(&config)?;
 						let ext_builder = RemarkBuilder::new(partial.client.clone());
 
-						cmd.run(config, partial.client, inherent_benchmark_data()?, &ext_builder)
+						cmd.run(
+							config,
+							partial.client,
+							inherent_benchmark_data()?,
+							Vec::new(),
+							&ext_builder,
+						)
 					},
 					BenchmarkCmd::Extrinsic(cmd) => {
 						// ensure that we keep the task manager alive
@@ -147,7 +153,12 @@ pub fn run() -> Result<()> {
 							)),
 						]);
 
-						cmd.run(partial.client, inherent_benchmark_data()?, &ext_factory)
+						cmd.run(
+							partial.client,
+							inherent_benchmark_data()?,
+							Vec::new(),
+							&ext_factory,
+						)
 					},
 					BenchmarkCmd::Machine(cmd) =>
 						cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()),

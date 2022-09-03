@@ -19,7 +19,7 @@ use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
+use sp_runtime::{traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
 
 use clap::{Args, Parser};
 use log::info;
@@ -82,6 +82,7 @@ impl ExtrinsicCmd {
 		&self,
 		client: Arc<C>,
 		inherent_data: sp_inherents::InherentData,
+		digest_items: Vec<DigestItem>,
 		ext_factory: &ExtrinsicFactory,
 	) -> Result<()>
 	where
@@ -109,7 +110,7 @@ impl ExtrinsicCmd {
 				return Err("Unknown pallet or extrinsic. Use --list for a complete list.".into()),
 		};
 
-		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, digest_items);
 		let stats = bench.bench_extrinsic(ext_builder)?;
 		info!(
 			"Executing a {}::{} extrinsic takes[ns]:\n{:?}",
