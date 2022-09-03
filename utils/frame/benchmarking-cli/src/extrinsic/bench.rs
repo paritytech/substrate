@@ -28,7 +28,7 @@ use sp_blockchain::{
 use sp_runtime::{
 	traits::{Block as BlockT, Zero},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
-	OpaqueExtrinsic,
+	Digest, DigestItem, OpaqueExtrinsic,
 };
 
 use clap::Args;
@@ -65,6 +65,7 @@ pub(crate) struct Benchmark<Block, BA, C> {
 	client: Arc<C>,
 	params: BenchmarkParams,
 	inherent_data: sp_inherents::InherentData,
+	digest_items: Vec<DigestItem>,
 	_p: PhantomData<(Block, BA)>,
 }
 
@@ -80,8 +81,9 @@ where
 		client: Arc<C>,
 		params: BenchmarkParams,
 		inherent_data: sp_inherents::InherentData,
+		digest_items: Vec<DigestItem>,
 	) -> Self {
-		Self { client, params, inherent_data, _p: PhantomData }
+		Self { client, params, inherent_data, digest_items, _p: PhantomData }
 	}
 
 	/// Benchmark a block with only inherents.
@@ -125,7 +127,7 @@ where
 		&self,
 		ext_builder: Option<&dyn ExtrinsicBuilder>,
 	) -> Result<(Block, Option<u64>)> {
-		let mut builder = self.client.new_block(Default::default())?;
+		let mut builder = self.client.new_block(Digest { logs: self.digest_items.clone() })?;
 		// Create and insert the inherents.
 		let inherents = builder.create_inherents(self.inherent_data.clone())?;
 		for inherent in inherents {

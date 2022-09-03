@@ -66,8 +66,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 	traits::{EstimateCallFee, Get},
 	weights::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, RefTimeWeight,
-		Weight, WeightToFee,
+		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight, WeightToFee,
 	},
 };
 
@@ -559,7 +558,7 @@ where
 	}
 
 	fn length_to_fee(length: u32) -> BalanceOf<T> {
-		T::LengthToFee::weight_to_fee(&Weight::from_ref_time(length as RefTimeWeight))
+		T::LengthToFee::weight_to_fee(&Weight::from_ref_time(length as u64))
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {

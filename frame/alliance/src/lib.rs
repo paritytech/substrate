@@ -684,7 +684,7 @@ pub mod pallet {
 					Error::<T, I>::BadWitness
 				);
 				ensure!(
-					Self::votable_members_count() <= witness.voting_members,
+					Self::voting_members_count() <= witness.voting_members,
 					Error::<T, I>::BadWitness
 				);
 				ensure!(
@@ -697,7 +697,7 @@ pub mod pallet {
 					T::ProposalProvider::veto_proposal(*hash);
 				}
 
-				let mut members = Self::votable_members();
+				let mut members = Self::voting_members();
 				T::MembershipChanged::change_members_sorted(&[], &members, &[]);
 
 				members.append(&mut Self::members_of(MemberRole::Ally));
@@ -1052,7 +1052,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Count of all members who have voting rights.
-	fn votable_members_count() -> u32 {
+	fn voting_members_count() -> u32 {
 		Members::<T, I>::decode_len(MemberRole::Founder)
 			.unwrap_or(0)
 			.saturating_add(Members::<T, I>::decode_len(MemberRole::Fellow).unwrap_or(0)) as u32
@@ -1064,7 +1064,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Collect all members who have voting rights into one list.
-	fn votable_members() -> Vec<T::AccountId> {
+	fn voting_members() -> Vec<T::AccountId> {
 		let mut founders = Self::members_of(MemberRole::Founder);
 		let mut fellows = Self::members_of(MemberRole::Fellow);
 		founders.append(&mut fellows);
@@ -1072,8 +1072,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Collect all members who have voting rights into one sorted list.
-	fn votable_members_sorted() -> Vec<T::AccountId> {
-		let mut members = Self::votable_members();
+	fn voting_members_sorted() -> Vec<T::AccountId> {
+		let mut members = Self::voting_members();
 		members.sort();
 		members
 	}
@@ -1089,7 +1089,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		if role == MemberRole::Founder || role == MemberRole::Fellow {
-			let members = Self::votable_members_sorted();
+			let members = Self::voting_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members[..]);
 		}
 		Ok(())
@@ -1104,7 +1104,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		if matches!(role, MemberRole::Founder | MemberRole::Fellow) {
-			let members = Self::votable_members_sorted();
+			let members = Self::voting_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[], &[who.clone()], &members[..]);
 		}
 		Ok(())

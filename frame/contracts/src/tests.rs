@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use self::test_utils::hash;
 use crate::{
 	chain_extension::{
 		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
@@ -75,10 +76,11 @@ frame_support::construct_runtime!(
 
 #[macro_use]
 pub mod test_utils {
-	use super::{Balances, Test};
+	use super::{Balances, Hash, SysConfig, Test};
 	use crate::{
 		exec::AccountIdOf, storage::Storage, CodeHash, Config, ContractInfo, ContractInfoOf, Nonce,
 	};
+	use codec::Encode;
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
@@ -91,24 +93,22 @@ pub mod test_utils {
 		let contract = Storage::<Test>::new_contract(&address, trie_id, code_hash).unwrap();
 		<ContractInfoOf<Test>>::insert(address, contract);
 	}
-
 	pub fn set_balance(who: &AccountIdOf<Test>, amount: u64) {
 		let imbalance = Balances::deposit_creating(who, amount);
 		drop(imbalance);
 	}
-
 	pub fn get_balance(who: &AccountIdOf<Test>) -> u64 {
 		Balances::free_balance(who)
 	}
-
 	pub fn get_contract(addr: &AccountIdOf<Test>) -> ContractInfo<Test> {
 		get_contract_checked(addr).unwrap()
 	}
-
 	pub fn get_contract_checked(addr: &AccountIdOf<Test>) -> Option<ContractInfo<Test>> {
 		ContractInfoOf::<Test>::get(addr)
 	}
-
+	pub fn hash<S: Encode>(s: &S) -> <<Test as SysConfig>::Hashing as Hash>::Output {
+		<<Test as SysConfig>::Hashing as Hash>::hash_of(s)
+	}
 	macro_rules! assert_return_code {
 		( $x:expr , $y:expr $(,)? ) => {{
 			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
@@ -586,7 +586,7 @@ fn instantiate_and_call_and_deposit_event() {
 						deployer: ALICE,
 						contract: addr.clone()
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -872,7 +872,7 @@ fn deploy_and_call_other_contract() {
 						deployer: caller_addr.clone(),
 						contract: callee_addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&caller_addr), hash(&callee_addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -882,6 +882,22 @@ fn deploy_and_call_other_contract() {
 						amount: 32768,
 					}),
 					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: caller_addr.clone(),
+						contract: callee_addr.clone(),
+					}),
+					topics: vec![hash(&caller_addr), hash(&callee_addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: caller_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&caller_addr)],
 				},
 			]
 		);
@@ -1083,6 +1099,14 @@ fn cannot_self_destruct_by_refund_after_slash() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
 						from: addr.clone(),
 						to: ALICE,
@@ -1188,7 +1212,15 @@ fn self_destruct_works() {
 						contract: addr.clone(),
 						beneficiary: DJANGO
 					}),
-					topics: vec![],
+					topics: vec![hash(&addr), hash(&DJANGO)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2635,7 +2667,7 @@ fn upload_code_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2714,7 +2746,7 @@ fn remove_code_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2727,7 +2759,7 @@ fn remove_code_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeRemoved { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2769,7 +2801,7 @@ fn remove_code_wrong_origin() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2900,7 +2932,7 @@ fn instantiate_with_zero_balance_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -2908,7 +2940,7 @@ fn instantiate_with_zero_balance_works() {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -3000,7 +3032,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				EventRecord {
 					phase: Phase::Initialization,
 					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3008,7 +3040,7 @@ fn instantiate_with_below_existential_deposit_works() {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -3091,6 +3123,14 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
@@ -3108,6 +3148,14 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
@@ -3122,6 +3170,14 @@ fn storage_deposit_works() {
 						amount: charged1,
 					}),
 					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
@@ -3208,11 +3264,11 @@ fn set_code_extrinsic() {
 			vec![EventRecord {
 				phase: Phase::Initialization,
 				event: Event::Contracts(pallet_contracts::Event::ContractCodeUpdated {
-					contract: addr,
+					contract: addr.clone(),
 					new_code_hash,
 					old_code_hash: code_hash,
 				}),
-				topics: vec![],
+				topics: vec![hash(&addr), new_code_hash, code_hash],
 			},]
 		);
 	});
@@ -3241,7 +3297,7 @@ fn call_after_killed_account_needs_funding() {
 
 		// Destroy the account of the contract by slashing.
 		// Slashing can actually happen if the contract takes part in staking.
-		// It is a corner case and we except the destruction of the account.
+		// It is a corner case and we accept the destruction of the account.
 		let _ = <Test as Config>::Currency::slash(
 			&addr,
 			<Test as Config>::Currency::total_balance(&addr),
@@ -3301,6 +3357,14 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
 					topics: vec![],
 				},
@@ -3320,6 +3384,14 @@ fn call_after_killed_account_needs_funding() {
 						amount: min_balance
 					}),
 					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -3469,6 +3541,8 @@ fn set_code_hash() {
 		// upload new code
 		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm.clone(), None));
 
+		System::reset_events();
+
 		// First call sets new code_hash and returns 1
 		let result = Contracts::bare_call(
 			ALICE,
@@ -3492,16 +3566,34 @@ fn set_code_hash() {
 
 		// Checking for the last event only
 		assert_eq!(
-			System::events().pop().unwrap(),
-			EventRecord {
-				phase: Phase::Initialization,
-				event: Event::Contracts(crate::Event::ContractCodeUpdated {
-					contract: contract_addr.clone(),
-					new_code_hash,
-					old_code_hash: code_hash,
-				}),
-				topics: vec![],
-			},
+			&System::events(),
+			&[
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::ContractCodeUpdated {
+						contract: contract_addr.clone(),
+						new_code_hash,
+						old_code_hash: code_hash,
+					}),
+					topics: vec![hash(&contract_addr), new_code_hash, code_hash],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: contract_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&contract_addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: Event::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: contract_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&contract_addr)],
+				},
+			],
 		);
 	});
 }
