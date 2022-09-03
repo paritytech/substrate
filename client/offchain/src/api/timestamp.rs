@@ -23,23 +23,9 @@ use std::time::{Duration, SystemTime};
 
 /// Returns the current time as a `Timestamp`.
 pub fn now() -> Timestamp {
-	let now = SystemTime::now();
-	let session_duration = now.duration_since(SystemTime::UNIX_EPOCH);
-	match session_duration {
-		Err(_) => {
-			// Current time is earlier than UNIX_EPOCH.
-			Timestamp::from_unix_millis(0)
-		},
-		Ok(d) => {
-			let duration = d.as_millis();
-			// Assuming overflow won't happen for a few hundred years.
-			Timestamp::from_unix_millis(
-				duration
-					.try_into()
-					.expect("epoch milliseconds won't overflow u64 for hundreds of years; qed"),
-			)
-		},
-	}
+	const PROOF: &str = "epoch milliseconds won't overflow u64 for hundreds of years; qed";
+	let duration = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
+	Timestamp::from_unix_millis(duration.as_millis().try_into().expect(PROOF))
 }
 
 /// Returns how a `Timestamp` compares to "now".

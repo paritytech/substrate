@@ -74,8 +74,7 @@ impl PrometheusMetrics {
 
 		register_globals(registry)?;
 
-		let start_time_since_session =
-			SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
+		let uptime = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
 		register(
 			Gauge::<U64>::new(
 				"substrate_process_start_time_seconds",
@@ -83,7 +82,7 @@ impl PrometheusMetrics {
 			)?,
 			registry,
 		)?
-		.set(start_time_since_session.as_secs());
+		.set(uptime.as_secs());
 
 		Ok(Self {
 			// generic internals
