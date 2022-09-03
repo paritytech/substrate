@@ -20,8 +20,8 @@
 use super::*;
 use crate as pallet_safe_mode;
 
-use frame_support::{parameter_types, traits::InsideBoth};
-use frame_system::EnsureRoot;
+use frame_support::{parameter_types, traits::{InsideBoth, SortedMembers, EitherOfDiverse}};
+use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -90,6 +90,39 @@ parameter_types! {
 	pub const ExtendDuration: u64 = 30;
 	pub const EnableStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
 	pub const ExtendStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
+	pub const EnableOrigin: u64 = 4;
+	pub const ExtendOrigin: u64 = 4;
+	pub const DisableOrigin: u64 = 4;
+	pub const RepayOrigin: u64 = 4;
+}
+
+impl SortedMembers<u64> for EnableOrigin {
+	fn sorted_members() -> Vec<u64> {
+		vec![Self::get()]
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(_m: &u64) {}
+}
+impl SortedMembers<u64> for ExtendOrigin {
+	fn sorted_members() -> Vec<u64> {
+		vec![Self::get()]
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(_m: &u64) {}
+}
+impl SortedMembers<u64> for DisableOrigin {
+	fn sorted_members() -> Vec<u64> {
+		vec![Self::get()]
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(_m: &u64) {}
+}
+impl SortedMembers<u64> for RepayOrigin {
+	fn sorted_members() -> Vec<u64> {
+		vec![Self::get()]
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(_m: &u64) {}
 }
 
 impl Config for Test {
@@ -98,10 +131,10 @@ impl Config for Test {
 	type SafeModeFilter = MockSafeModeFilter;
 	type EnableDuration = EnableDuration;
 	type ExtendDuration = ExtendDuration;
-	type EnableOrigin = EnsureRoot<Self::AccountId>;
-	type ExtendOrigin = EnsureRoot<Self::AccountId>;
-	type DisableOrigin = EnsureRoot<Self::AccountId>;
-	type RepayOrigin = EnsureRoot<Self::AccountId>;
+	type EnableOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
+	type ExtendOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
+	type DisableOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
+	type RepayOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
 	type EnableStakeAmount = EnableStakeAmount;
 	type ExtendStakeAmount = ExtendStakeAmount;
 }
