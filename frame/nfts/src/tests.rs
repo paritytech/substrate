@@ -611,6 +611,31 @@ fn approvals_limit_works() {
 }
 
 #[test]
+fn approval_deadline_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(0);
+		assert!(System::block_number().is_zero());
+
+		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
+
+		// the approval expires after the 2nd block.
+		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3, Some(2)));
+
+		System::set_block_number(3);
+		assert_noop!(Nfts::transfer(Origin::signed(3), 0, 42, 4), Error::<Test>::ApprovalExpired);
+		System::set_block_number(1);
+		assert_ok!(Nfts::transfer(Origin::signed(3), 0, 42, 4));
+
+		// make a new approval with a deadline at the 4th block.
+		assert_ok!(Nfts::approve_transfer(Origin::signed(4), 0, 42, 6, Some(4)));
+		// this should still work.
+		System::set_block_number(4);
+		assert_ok!(Nfts::transfer(Origin::signed(6), 0, 42, 5));
+	});
+}
+
+#[test]
 fn cancel_approval_works_with_admin() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
