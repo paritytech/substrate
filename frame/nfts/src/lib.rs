@@ -281,13 +281,26 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A `collection` was created.
-		Created { collection: T::CollectionId, creator: T::AccountId, owner: T::AccountId },
+		Created {
+			collection: T::CollectionId,
+			creator: T::AccountId,
+			owner: T::AccountId,
+		},
 		/// A `collection` was force-created.
-		ForceCreated { collection: T::CollectionId, owner: T::AccountId },
+		ForceCreated {
+			collection: T::CollectionId,
+			owner: T::AccountId,
+		},
 		/// A `collection` was destroyed.
-		Destroyed { collection: T::CollectionId },
+		Destroyed {
+			collection: T::CollectionId,
+		},
 		/// An `item` was issued.
-		Issued { collection: T::CollectionId, item: T::ItemId, owner: T::AccountId },
+		Issued {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			owner: T::AccountId,
+		},
 		/// An `item` was transferred.
 		Transferred {
 			collection: T::CollectionId,
@@ -296,17 +309,34 @@ pub mod pallet {
 			to: T::AccountId,
 		},
 		/// An `item` was destroyed.
-		Burned { collection: T::CollectionId, item: T::ItemId, owner: T::AccountId },
+		Burned {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			owner: T::AccountId,
+		},
 		/// Some `item` was frozen.
-		Frozen { collection: T::CollectionId, item: T::ItemId },
+		Frozen {
+			collection: T::CollectionId,
+			item: T::ItemId,
+		},
 		/// Some `item` was thawed.
-		Thawed { collection: T::CollectionId, item: T::ItemId },
+		Thawed {
+			collection: T::CollectionId,
+			item: T::ItemId,
+		},
 		/// Some `collection` was frozen.
-		CollectionFrozen { collection: T::CollectionId },
+		CollectionFrozen {
+			collection: T::CollectionId,
+		},
 		/// Some `collection` was thawed.
-		CollectionThawed { collection: T::CollectionId },
+		CollectionThawed {
+			collection: T::CollectionId,
+		},
 		/// The owner changed.
-		OwnerChanged { collection: T::CollectionId, new_owner: T::AccountId },
+		OwnerChanged {
+			collection: T::CollectionId,
+			new_owner: T::AccountId,
+		},
 		/// The management team changed.
 		TeamChanged {
 			collection: T::CollectionId,
@@ -337,7 +367,9 @@ pub mod pallet {
 			owner: T::AccountId,
 		},
 		/// A `collection` has had its attributes changed by the `Force` origin.
-		ItemStatusChanged { collection: T::CollectionId },
+		ItemStatusChanged {
+			collection: T::CollectionId,
+		},
 		/// New metadata has been set for a `collection`.
 		CollectionMetadataSet {
 			collection: T::CollectionId,
@@ -345,7 +377,9 @@ pub mod pallet {
 			is_frozen: bool,
 		},
 		/// Metadata has been cleared for a `collection`.
-		CollectionMetadataCleared { collection: T::CollectionId },
+		CollectionMetadataCleared {
+			collection: T::CollectionId,
+		},
 		/// New metadata has been set for an item.
 		MetadataSet {
 			collection: T::CollectionId,
@@ -354,9 +388,15 @@ pub mod pallet {
 			is_frozen: bool,
 		},
 		/// Metadata has been cleared for an item.
-		MetadataCleared { collection: T::CollectionId, item: T::ItemId },
+		MetadataCleared {
+			collection: T::CollectionId,
+			item: T::ItemId,
+		},
 		/// Metadata has been cleared for an item.
-		Redeposited { collection: T::CollectionId, successful_items: Vec<T::ItemId> },
+		Redeposited {
+			collection: T::CollectionId,
+			successful_items: Vec<T::ItemId>,
+		},
 		/// New attribute metadata has been set for a `collection` or `item`.
 		AttributeSet {
 			collection: T::CollectionId,
@@ -371,9 +411,15 @@ pub mod pallet {
 			key: BoundedVec<u8, T::KeyLimit>,
 		},
 		/// Ownership acceptance has changed for an account.
-		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
+		OwnershipAcceptanceChanged {
+			who: T::AccountId,
+			maybe_collection: Option<T::CollectionId>,
+		},
 		/// Max supply has been set for a collection.
-		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
+		CollectionMaxSupplySet {
+			collection: T::CollectionId,
+			max_supply: u32,
+		},
 		/// The price was set for the instance.
 		ItemPriceSet {
 			collection: T::CollectionId,
@@ -382,7 +428,10 @@ pub mod pallet {
 			whitelisted_buyer: Option<T::AccountId>,
 		},
 		/// The price for the instance was removed.
-		ItemPriceRemoved { collection: T::CollectionId, item: T::ItemId },
+		ItemPriceRemoved {
+			collection: T::CollectionId,
+			item: T::ItemId,
+		},
 		/// An item was bought.
 		ItemBought {
 			collection: T::CollectionId,
