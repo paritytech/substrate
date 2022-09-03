@@ -188,7 +188,7 @@ impl<AssetId, AccountId, Balance> FrozenBalance<AssetId, AccountId, Balance> for
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub(super) struct TransferFlags {
+pub struct TransferFlags {
 	/// The debited account must stay alive at the end of the operation; an error is returned if
 	/// this cannot be achieved legally.
 	pub(super) keep_alive: bool,
