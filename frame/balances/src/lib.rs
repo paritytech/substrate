@@ -158,6 +158,7 @@ mod tests;
 mod benchmarking;
 mod tests_composite;
 mod tests_local;
+#[cfg(test)]
 mod tests_reentrancy;
 pub mod weights;
 
@@ -190,6 +191,8 @@ use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
 
 pub use pallet::*;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -274,7 +277,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			let transactor = ensure_signed(origin)?;
@@ -302,7 +305,7 @@ pub mod pallet {
 		)]
 		pub fn set_balance(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			#[pallet::compact] new_free: T::Balance,
 			#[pallet::compact] new_reserved: T::Balance,
 		) -> DispatchResultWithPostInfo {
@@ -352,8 +355,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
-			source: <T::Lookup as StaticLookup>::Source,
-			dest: <T::Lookup as StaticLookup>::Source,
+			source: AccountIdLookupOf<T>,
+			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			ensure_root(origin)?;
@@ -377,7 +380,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer_keep_alive())]
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			let transactor = ensure_signed(origin)?;
@@ -406,7 +409,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer_all())]
 		pub fn transfer_all(
 			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: AccountIdLookupOf<T>,
 			keep_alive: bool,
 		) -> DispatchResult {
 			use fungible::Inspect;
@@ -424,7 +427,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_unreserve())]
 		pub fn force_unreserve(
 			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			amount: T::Balance,
 		) -> DispatchResult {
 			ensure_root(origin)?;
@@ -516,15 +519,8 @@ pub mod pallet {
 	/// `Balances` pallet, which uses a `StorageMap` to store balances data only.
 	/// NOTE: This is only used in the case that this pallet is used to store balances.
 	#[pallet::storage]
-	pub type Account<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Blake2_128Concat,
-		T::AccountId,
-		AccountData<T::Balance>,
-		ValueQuery,
-		GetDefault,
-		ConstU32<300_000>,
-	>;
+	pub type Account<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, AccountData<T::Balance>, ValueQuery>;
 
 	/// Any liquidity locks on some account balances.
 	/// NOTE: Should only be accessed when setting, changing and freeing a lock.
@@ -536,8 +532,6 @@ pub mod pallet {
 		T::AccountId,
 		WeakBoundedVec<BalanceLock<T::Balance>, T::MaxLocks>,
 		ValueQuery,
-		GetDefault,
-		ConstU32<300_000>,
 	>;
 
 	/// Named reserves on some account balances.
@@ -1006,6 +1000,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Is a no-op if:
 	/// - the value to be moved is zero; or
 	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+	///
+	/// NOTE: returns actual amount of transferred value in `Ok` case.
 	fn do_transfer_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
@@ -1019,7 +1015,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if slashed == beneficiary {
 			return match status {
-				Status::Free => Ok(Self::unreserve(slashed, value)),
+				Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
 				Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
 			}
 		}
@@ -1791,6 +1787,8 @@ where
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.
 	///
 	/// Is a no-op if the value to be unreserved is zero or the account does not exist.
+	///
+	/// NOTE: returns amount value which wasn't successfully unreserved.
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() {
 			return Zero::zero()

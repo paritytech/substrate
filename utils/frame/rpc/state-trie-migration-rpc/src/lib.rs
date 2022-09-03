@@ -17,8 +17,11 @@
 
 //! Rpc for state migration.
 
-use jsonrpc_core::{Error, ErrorCode, Result};
-use jsonrpc_derive::rpc;
+use jsonrpsee::{
+	core::{Error as JsonRpseeError, RpcResult},
+	proc_macros::rpc,
+	types::error::{CallError, ErrorCode, ErrorObject},
+};
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -28,8 +31,11 @@ use sp_core::{
 	storage::{ChildInfo, ChildType, PrefixedStorageKey},
 	Hasher,
 };
-use sp_state_machine::Backend;
-use sp_trie::{trie_types::TrieDB, KeySpacedDB, Trie};
+use sp_state_machine::backend::AsTrieBackend;
+use sp_trie::{
+	trie_types::{TrieDB, TrieDBBuilder},
+	KeySpacedDB, Trie,
+};
 use trie_db::{
 	node::{NodePlan, ValuePlan},
 	TrieDBNodeIterator,
@@ -38,9 +44,9 @@ use trie_db::{
 fn count_migrate<'a, H: Hasher>(
 	storage: &'a dyn trie_db::HashDBRef<H, Vec<u8>>,
 	root: &'a H::Out,
-) -> std::result::Result<(u64, TrieDB<'a, H>), String> {
+) -> std::result::Result<(u64, TrieDB<'a, 'a, H>), String> {
 	let mut nb = 0u64;
-	let trie = TrieDB::new(storage, root).map_err(|e| format!("TrieDB creation error: {}", e))?;
+	let trie = TrieDBBuilder::new(storage, root).build();
 	let iter_node =
 		TrieDBNodeIterator::new(&trie).map_err(|e| format!("TrieDB node iterator error: {}", e))?;
 	for node in iter_node {
@@ -65,13 +71,9 @@ pub fn migration_status<H, B>(backend: &B) -> std::result::Result<(u64, u64), St
 where
 	H: Hasher,
 	H::Out: codec::Codec,
-	B: Backend<H>,
+	B: AsTrieBackend<H>,
 {
-	let trie_backend = if let Some(backend) = backend.as_trie_backend() {
-		backend
-	} else {
-		return Err("No access to trie from backend.".to_string())
-	};
+	let trie_backend = backend.as_trie_backend();
 	let essence = trie_backend.essence();
 	let (nb_to_migrate, trie) = count_migrate(essence, essence.root())?;
 
@@ -107,42 +109,40 @@ pub struct MigrationStatusResult {
 }
 
 /// Migration RPC methods.
-#[rpc]
+#[rpc(server)]
 pub trait StateMigrationApi<BlockHash> {
 	/// Check current migration state.
 	///
 	/// This call is performed locally without submitting any transactions. Thus executing this
 	/// won't change any state. Nonetheless it is a VERY costy call that should be
 	/// only exposed to trusted peers.
-	#[rpc(name = "state_trieMigrationStatus")]
-	fn call(&self, at: Option<BlockHash>) -> Result<MigrationStatusResult>;
+	#[method(name = "state_trieMigrationStatus")]
+	fn call(&self, at: Option<BlockHash>) -> RpcResult<MigrationStatusResult>;
 }
 
 /// An implementation of state migration specific RPC methods.
-pub struct MigrationRpc<C, B, BA> {
+pub struct StateMigration<C, B, BA> {
 	client: Arc<C>,
 	backend: Arc<BA>,
 	deny_unsafe: DenyUnsafe,
 	_marker: std::marker::PhantomData<(B, BA)>,
 }
 
-impl<C, B, BA> MigrationRpc<C, B, BA> {
+impl<C, B, BA> StateMigration<C, B, BA> {
 	/// Create new state migration rpc for the given reference to the client.
 	pub fn new(client: Arc<C>, backend: Arc<BA>, deny_unsafe: DenyUnsafe) -> Self {
-		MigrationRpc { client, backend, deny_unsafe, _marker: Default::default() }
+		StateMigration { client, backend, deny_unsafe, _marker: Default::default() }
 	}
 }
 
-impl<C, B, BA> StateMigrationApi<<B as BlockT>::Hash> for MigrationRpc<C, B, BA>
+impl<C, B, BA> StateMigrationApiServer<<B as BlockT>::Hash> for StateMigration<C, B, BA>
 where
 	B: BlockT,
 	C: Send + Sync + 'static + sc_client_api::HeaderBackend<B>,
 	BA: 'static + sc_client_api::backend::Backend<B>,
 {
-	fn call(&self, at: Option<<B as BlockT>::Hash>) -> Result<MigrationStatusResult> {
-		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Err(err.into())
-		}
+	fn call(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<MigrationStatusResult> {
+		self.deny_unsafe.check_if_safe()?;
 
 		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 		let state = self.backend.state_at(block_id).map_err(error_into_rpc_err)?;
@@ -155,10 +155,10 @@ where
 	}
 }
 
-fn error_into_rpc_err(err: impl std::fmt::Display) -> Error {
-	Error {
-		code: ErrorCode::InternalError,
-		message: "Error while checking migration state".into(),
-		data: Some(err.to_string().into()),
-	}
+fn error_into_rpc_err(err: impl std::fmt::Display) -> JsonRpseeError {
+	JsonRpseeError::Call(CallError::Custom(ErrorObject::owned(
+		ErrorCode::InternalError.code(),
+		"Error while checking migration state",
+		Some(err.to_string()),
+	)))
 }

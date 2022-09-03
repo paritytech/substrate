@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
-scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
 pallet-aura = { version = "4.0.0-dev", default-features = false, path = "../../../frame/aura" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
@@ -63,6 +63,7 @@ std = [
 	"frame-support/std",
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
+	"frame-try-runtime/std",
 	"pallet-aura/std",
 	"pallet-balances/std",
 	"pallet-grandpa/std",
@@ -97,9 +98,10 @@ runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
-	"frame-executive/try-runtime",
 	"frame-try-runtime",
+	"frame-executive/try-runtime",
 	"frame-system/try-runtime",
+	"frame-support/try-runtime",
 	"pallet-aura/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-grandpa/try-runtime",

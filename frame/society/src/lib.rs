@@ -281,6 +281,7 @@ type BalanceOf<T, I> =
 type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// A vote by a member on a candidate application.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -613,7 +614,7 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 
-			let mut weight = 0;
+			let mut weight = Weight::zero();
 			let weights = T::BlockWeights::get();
 
 			// Run a candidate/membership rotation
@@ -823,11 +824,12 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vouch(
 			origin: OriginFor<T>,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 			value: BalanceOf<T, I>,
 			tip: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			// Check user is not suspended.
 			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
 			ensure!(!<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
@@ -914,7 +916,7 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			candidate: <T::Lookup as StaticLookup>::Source,
+			candidate: AccountIdLookupOf<T>,
 			approve: bool,
 		) -> DispatchResult {
 			let voter = ensure_signed(origin)?;
@@ -1026,11 +1028,12 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn found(
 			origin: OriginFor<T>,
-			founder: T::AccountId,
+			founder: AccountIdLookupOf<T>,
 			max_members: u32,
 			rules: Vec<u8>,
 		) -> DispatchResult {
 			T::FounderSetOrigin::ensure_origin(origin)?;
+			let founder = T::Lookup::lookup(founder)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
 			// This should never fail in the context of this function...
@@ -1067,6 +1070,7 @@ pub mod pallet {
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
 			Candidates::<T, I>::kill();
+			#[allow(deprecated)]
 			SuspendedCandidates::<T, I>::remove_all(None);
 			Self::deposit_event(Event::<T, I>::Unfounded { founder });
 			Ok(())
@@ -1103,10 +1107,11 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_member(
 			origin: OriginFor<T>,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 			forgive: bool,
 		) -> DispatchResult {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
 
 			if forgive {
@@ -1179,10 +1184,11 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_candidate(
 			origin: OriginFor<T>,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 			judgement: Judgement,
 		) -> DispatchResult {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
 				match judgement {
 					Judgement::Approve => {
@@ -1271,9 +1277,9 @@ impl<T: Config> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
-		let founder = Founder::<T>::get().expect("society founder should exist");
-		T::Origin::from(frame_system::RawOrigin::Signed(founder))
+	fn try_successful_origin() -> Result<T::Origin, ()> {
+		let founder = Founder::<T>::get().ok_or(())?;
+		Ok(T::Origin::from(frame_system::RawOrigin::Signed(founder)))
 	}
 }
 
@@ -1511,6 +1517,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.collect::<Vec<_>>();
 
 			// Clean up all votes.
+			#[allow(deprecated)]
 			<Votes<T, I>>::remove_all(None);
 
 			// Reward one of the voters who voted the right way.
@@ -1695,6 +1702,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 
 				// Clean up all votes.
+				#[allow(deprecated)]
 				<DefenderVotes<T, I>>::remove_all(None);
 			}
 
@@ -1726,7 +1734,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::PalletId::get().into_account()
+		T::PalletId::get().into_account_truncating()
 	}
 
 	/// The account ID of the payouts pot. This is where payouts are made from.
@@ -1734,7 +1742,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn payouts() -> T::AccountId {
-		T::PalletId::get().into_sub_account(b"payouts")
+		T::PalletId::get().into_sub_account_truncating(b"payouts")
 	}
 
 	/// Return the duration of the lock, in blocks, with the given number of members.

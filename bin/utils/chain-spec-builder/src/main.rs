@@ -159,7 +159,7 @@ fn generate_chain_spec(
 		Default::default(),
 	);
 
-	chain_spec.as_json(false).map_err(|err| err)
+	chain_spec.as_json(false)
 }
 
 fn generate_authority_keys_and_store(seeds: &[String], keystore_path: &Path) -> Result<(), String> {

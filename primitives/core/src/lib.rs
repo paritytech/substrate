@@ -32,7 +32,7 @@ macro_rules! map {
 }
 
 #[doc(hidden)]
-pub use codec::{Decode, Encode};
+pub use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 pub use serde;
@@ -56,6 +56,7 @@ pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_6
 pub mod crypto;
 pub mod hexdisplay;
 
+pub mod defer;
 pub mod ecdsa;
 pub mod ed25519;
 pub mod hash;
@@ -418,7 +419,7 @@ pub fn to_substrate_wasm_fn_return_value(value: &impl Encode) -> u64 {
 
 /// The void type - it cannot exist.
 // Oh rust, you crack me up...
-#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Decode, Encode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum Void {}
 
 /// Macro for creating `Maybe*` marker traits.

@@ -17,7 +17,8 @@
 
 //! Schnorrkel-based VRF.
 
-use codec::{Decode, Encode, EncodeLike};
+use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
+use scale_info::TypeInfo;
 use schnorrkel::errors::MultiSignatureStage;
 use sp_core::U512;
 use sp_std::{
@@ -62,6 +63,20 @@ impl Decode for VRFOutput {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
 		let decoded = <[u8; VRF_OUTPUT_LENGTH]>::decode(i)?;
 		Ok(Self(schnorrkel::vrf::VRFOutput::from_bytes(&decoded).map_err(convert_error)?))
+	}
+}
+
+impl MaxEncodedLen for VRFOutput {
+	fn max_encoded_len() -> usize {
+		<[u8; VRF_OUTPUT_LENGTH]>::max_encoded_len()
+	}
+}
+
+impl TypeInfo for VRFOutput {
+	type Identity = [u8; VRF_OUTPUT_LENGTH];
+
+	fn type_info() -> scale_info::Type {
+		Self::Identity::type_info()
 	}
 }
 
@@ -114,6 +129,20 @@ impl Decode for VRFProof {
 	fn decode<R: codec::Input>(i: &mut R) -> Result<Self, codec::Error> {
 		let decoded = <[u8; VRF_PROOF_LENGTH]>::decode(i)?;
 		Ok(Self(schnorrkel::vrf::VRFProof::from_bytes(&decoded).map_err(convert_error)?))
+	}
+}
+
+impl MaxEncodedLen for VRFProof {
+	fn max_encoded_len() -> usize {
+		<[u8; VRF_PROOF_LENGTH]>::max_encoded_len()
+	}
+}
+
+impl TypeInfo for VRFProof {
+	type Identity = [u8; VRF_PROOF_LENGTH];
+
+	fn type_info() -> scale_info::Type {
+		Self::Identity::type_info()
 	}
 }
 

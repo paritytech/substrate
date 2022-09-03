@@ -100,12 +100,12 @@ And update the overall definition for weights on frame and a few related types a
 +/// by  Operational  extrinsics.
 +const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 +/// We allow for 2 seconds of compute with a 6 second average block time.
-+const MAXIMUM_BLOCK_WEIGHT: Weight = 2 * WEIGHT_PER_SECOND;
++const MAXIMUM_BLOCK_WEIGHT: Weight = 2u64 * WEIGHT_PER_SECOND;
 +
  parameter_types! {
  	pub const BlockHashCount: BlockNumber = 2400;
 -	/// We allow for 2 seconds of compute with a 6 second average block time.
--	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
+-	pub const MaximumBlockWeight: Weight = 2u64 * WEIGHT_PER_SECOND;
 -	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 -	/// Assume 10% of weight for average on_initialize calls.
 -	pub MaximumExtrinsicWeight: Weight =
@@ -290,7 +290,7 @@ Democracy brings three new settings with this release, all to allow for better i
  	type CancellationOrigin = pallet_collective::EnsureProportionAtLeast<_2, _3, AccountId, CouncilCollective>;
 +	// To cancel a proposal before it has been passed, the technical committee must be unanimous or
 +	// Root must agree.
-+	type CancelProposalOrigin = EnsureOneOf<
++	type CancelProposalOrigin = EitherOfDiverse<
 +		AccountId,
 +		EnsureRoot<AccountId>,
 +		pallet_collective::EnsureProportionAtLeast<_1, _1, AccountId, TechnicalCollective>,

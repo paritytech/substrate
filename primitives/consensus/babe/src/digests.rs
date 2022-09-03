@@ -22,13 +22,14 @@ use super::{
 	BabeEpochConfiguration, Slot, BABE_ENGINE_ID,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 use sp_runtime::{DigestItem, RuntimeDebug};
 use sp_std::vec::Vec;
 
 use sp_consensus_vrf::schnorrkel::{Randomness, VRFOutput, VRFProof};
 
 /// Raw BABE primary slot assignment pre-digest.
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct PrimaryPreDigest {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
@@ -41,7 +42,7 @@ pub struct PrimaryPreDigest {
 }
 
 /// BABE secondary slot assignment pre-digest.
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct SecondaryPlainPreDigest {
 	/// Authority index
 	///
@@ -55,7 +56,7 @@ pub struct SecondaryPlainPreDigest {
 }
 
 /// BABE secondary deterministic slot assignment with VRF outputs.
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct SecondaryVRFPreDigest {
 	/// Authority index
 	pub authority_index: super::AuthorityIndex,
@@ -70,7 +71,7 @@ pub struct SecondaryVRFPreDigest {
 /// A BABE pre-runtime digest. This contains all data required to validate a
 /// block and for the BABE runtime module. Slots can be assigned to a primary
 /// (VRF based) and to a secondary (slot number based).
-#[derive(Clone, RuntimeDebug, Encode, Decode)]
+#[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum PreDigest {
 	/// A primary VRF-based slot assignment.
 	#[codec(index = 1)]
@@ -102,6 +103,11 @@ impl PreDigest {
 		}
 	}
 
+	/// Returns true if this pre-digest is for a primary slot assignment.
+	pub fn is_primary(&self) -> bool {
+		matches!(self, PreDigest::Primary(..))
+	}
+
 	/// Returns the weight _added_ by this digest, not the cumulative weight
 	/// of the chain.
 	pub fn added_weight(&self) -> crate::BabeBlockWeight {
@@ -111,11 +117,12 @@ impl PreDigest {
 		}
 	}
 
-	/// Returns the VRF output, if it exists.
-	pub fn vrf_output(&self) -> Option<&VRFOutput> {
+	/// Returns the VRF output and proof, if they exist.
+	pub fn vrf(&self) -> Option<(&VRFOutput, &VRFProof)> {
 		match self {
-			PreDigest::Primary(primary) => Some(&primary.vrf_output),
-			PreDigest::SecondaryVRF(secondary) => Some(&secondary.vrf_output),
+			PreDigest::Primary(primary) => Some((&primary.vrf_output, &primary.vrf_proof)),
+			PreDigest::SecondaryVRF(secondary) =>
+				Some((&secondary.vrf_output, &secondary.vrf_proof)),
 			PreDigest::SecondaryPlain(_) => None,
 		}
 	}

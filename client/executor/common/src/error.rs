@@ -18,7 +18,6 @@
 
 //! Rust executor possible errors.
 
-use sp_serializer;
 use wasmi;
 
 /// Result type alias.
@@ -28,9 +27,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
-	#[error("Unserializable data encountered")]
-	InvalidData(#[from] sp_serializer::Error),
-
 	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
 
@@ -42,9 +38,6 @@ pub enum Error {
 
 	#[error("Method not found: '{0}'")]
 	MethodNotFound(String),
-
-	#[error("Invalid Code (expected single byte): '{0}'")]
-	InvalidCode(String),
 
 	#[error("On-chain runtime does not specify version")]
 	VersionInvalid,

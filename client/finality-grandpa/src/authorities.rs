@@ -229,7 +229,7 @@ where
 	where
 		F: Fn(&H, &H) -> Result<bool, E>,
 	{
-		let mut filter = |node_hash: &H, node_num: &N, _: &PendingChange<H, N>| {
+		let filter = |node_hash: &H, node_num: &N, _: &PendingChange<H, N>| {
 			if number >= *node_num &&
 				(is_descendent_of(node_hash, &hash).unwrap_or_default() || *node_hash == hash)
 			{
@@ -245,7 +245,7 @@ where
 		};
 
 		// Remove standard changes.
-		let _ = self.pending_standard_changes.drain_filter(&mut filter);
+		let _ = self.pending_standard_changes.drain_filter(&filter);
 
 		// Remove forced changes.
 		self.pending_forced_changes

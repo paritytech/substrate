@@ -39,7 +39,9 @@ use crate::crypto::{DeriveJunction, Pair as TraitPair, SecretStringError};
 #[cfg(feature = "std")]
 use bip39::{Language, Mnemonic, MnemonicType};
 #[cfg(feature = "full_crypto")]
-use ed25519_dalek::{Signer as _, Verifier as _};
+use core::convert::TryFrom;
+#[cfg(feature = "full_crypto")]
+use ed25519_zebra::{SigningKey, VerificationKey};
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sp_runtime_interface::pass_by::PassByInner;
@@ -75,17 +77,10 @@ pub struct Public(pub [u8; 32]);
 
 /// A key pair.
 #[cfg(feature = "full_crypto")]
-pub struct Pair(ed25519_dalek::Keypair);
-
-#[cfg(feature = "full_crypto")]
-impl Clone for Pair {
-	fn clone(&self) -> Self {
-		Pair(ed25519_dalek::Keypair {
-			public: self.0.public,
-			secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes())
-				.expect("key is always the correct size; qed"),
-		})
-	}
+#[derive(Copy, Clone)]
+pub struct Pair {
+	public: VerificationKey,
+	secret: SigningKey,
 }
 
 impl AsRef<[u8; 32]> for Public {
@@ -456,10 +451,10 @@ impl TraitPair for Pair {
 	///
 	/// You should never need to use this; generate(), generate_with_phrase
 	fn from_seed_slice(seed_slice: &[u8]) -> Result<Pair, SecretStringError> {
-		let secret = ed25519_dalek::SecretKey::from_bytes(seed_slice)
-			.map_err(|_| SecretStringError::InvalidSeedLength)?;
-		let public = ed25519_dalek::PublicKey::from(&secret);
-		Ok(Pair(ed25519_dalek::Keypair { secret, public }))
+		let secret =
+			SigningKey::try_from(seed_slice).map_err(|_| SecretStringError::InvalidSeedLength)?;
+		let public = VerificationKey::from(&secret);
+		Ok(Pair { secret, public })
 	}
 
 	/// Derive a child key from a series of given junctions.
@@ -468,7 +463,7 @@ impl TraitPair for Pair {
 		path: Iter,
 		_seed: Option<Seed>,
 	) -> Result<(Pair, Option<Seed>), DeriveError> {
-		let mut acc = self.0.secret.to_bytes();
+		let mut acc = self.secret.into();
 		for j in path {
 			match j {
 				DeriveJunction::Soft(_cc) => return Err(DeriveError::SoftKeyInPath),
@@ -480,16 +475,12 @@ impl TraitPair for Pair {
 
 	/// Get the public key.
 	fn public(&self) -> Public {
-		let mut r = [0u8; 32];
-		let pk = self.0.public.as_bytes();
-		r.copy_from_slice(pk);
-		Public(r)
+		Public(self.public.into())
 	}
 
 	/// Sign a message.
 	fn sign(&self, message: &[u8]) -> Signature {
-		let r = self.0.sign(message).to_bytes();
-		Signature::from_raw(r)
+		Signature::from_raw(self.secret.sign(message).into())
 	}
 
 	/// Verify a signature on a message. Returns true if the signature is good.
@@ -502,17 +493,17 @@ impl TraitPair for Pair {
 	/// This doesn't use the type system to ensure that `sig` and `pubkey` are the correct
 	/// size. Use it only if you're coming from byte buffers and need the speed.
 	fn verify_weak<P: AsRef<[u8]>, M: AsRef<[u8]>>(sig: &[u8], message: M, pubkey: P) -> bool {
-		let public_key = match ed25519_dalek::PublicKey::from_bytes(pubkey.as_ref()) {
+		let public_key = match VerificationKey::try_from(pubkey.as_ref()) {
 			Ok(pk) => pk,
 			Err(_) => return false,
 		};
 
-		let sig = match ed25519_dalek::Signature::try_from(sig) {
+		let sig = match ed25519_zebra::Signature::try_from(sig) {
 			Ok(s) => s,
 			Err(_) => return false,
 		};
 
-		public_key.verify(message.as_ref(), &sig).is_ok()
+		public_key.verify(&sig, message.as_ref()).is_ok()
 	}
 
 	/// Return a vec filled with raw data.
@@ -524,8 +515,8 @@ impl TraitPair for Pair {
 #[cfg(feature = "full_crypto")]
 impl Pair {
 	/// Get the seed for this key.
-	pub fn seed(&self) -> &Seed {
-		self.0.secret.as_bytes()
+	pub fn seed(&self) -> Seed {
+		self.secret.into()
 	}
 
 	/// Exactly as `from_string` except that if no matches are found then, the the first 32
@@ -577,12 +568,12 @@ mod test {
 	fn seed_and_derive_should_work() {
 		let seed = hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
 		let pair = Pair::from_seed(&seed);
-		assert_eq!(pair.seed(), &seed);
+		assert_eq!(pair.seed(), seed);
 		let path = vec![DeriveJunction::Hard([0u8; 32])];
 		let derived = pair.derive(path.into_iter(), None).ok().unwrap().0;
 		assert_eq!(
 			derived.seed(),
-			&hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")
+			hex!("ede3354e133f9c8e337ddd6ee5415ed4b4ffe5fc7d21e933f4930a3730e5b21c")
 		);
 	}
 

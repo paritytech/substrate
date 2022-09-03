@@ -22,15 +22,14 @@
 
 #![warn(missing_docs)]
 
-use futures::{
-	task::{FutureObj, Spawn, SpawnError},
-	FutureExt,
+pub use jsonrpsee::core::{
+	id_providers::{
+		RandomIntegerIdProvider as RandomIntegerSubscriptionId,
+		RandomStringIdProvider as RandomStringSubscriptionId,
+	},
+	traits::IdProvider as RpcSubscriptionIdProvider,
 };
-use sp_core::traits::SpawnNamed;
-use std::sync::Arc;
-
-pub use rpc::IoHandlerExtension as RpcExtension;
-pub use sc_rpc_api::{DenyUnsafe, Metadata};
+pub use sc_rpc_api::DenyUnsafe;
 
 pub mod author;
 pub mod chain;
@@ -43,24 +42,4 @@ pub mod system;
 pub mod testing;
 
 /// Task executor that is being used by RPC subscriptions.
-#[derive(Clone)]
-pub struct SubscriptionTaskExecutor(Arc<dyn SpawnNamed>);
-
-impl SubscriptionTaskExecutor {
-	/// Create a new `Self` with the given spawner.
-	pub fn new(spawn: impl SpawnNamed + 'static) -> Self {
-		Self(Arc::new(spawn))
-	}
-}
-
-impl Spawn for SubscriptionTaskExecutor {
-	fn spawn_obj(&self, future: FutureObj<'static, ()>) -> Result<(), SpawnError> {
-		self.0
-			.spawn("substrate-rpc-subscription", Some("rpc"), future.map(drop).boxed());
-		Ok(())
-	}
-
-	fn status(&self) -> Result<(), SpawnError> {
-		Ok(())
-	}
-}
+pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;

@@ -16,6 +16,16 @@
 // limitations under the License.
 
 //! Support code for the runtime.
+//!
+//! ## Note on Tuple Traits
+//!
+//! Many of the traits defined in [`traits`] have auto-implementations on tuples as well. Usually,
+//! the tuple is a function of number of pallets in the runtime. By default, the traits are
+//! implemented for tuples of up to 64 items.
+//
+// If you have more pallets in your runtime, or for any other reason need more, enabled `tuples-96`
+// or the `tuples-128` complication flag. Note that these features *will increase* the compilation
+// of this crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -45,6 +55,9 @@ pub use sp_core::Void;
 pub use sp_core_hashing_proc_macro;
 #[doc(hidden)]
 pub use sp_io::{self, storage::root as storage_root};
+#[cfg(feature = "std")]
+#[doc(hidden)]
+pub use sp_runtime::{bounded_btree_map, bounded_vec};
 #[doc(hidden)]
 pub use sp_runtime::{RuntimeDebug, StateVersion};
 #[cfg(feature = "std")]
@@ -80,6 +93,8 @@ pub mod unsigned {
 	};
 }
 
+#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+pub use self::storage::storage_noop_guard::StorageNoopGuard;
 pub use self::{
 	dispatch::{Callable, Parameter},
 	hash::{
@@ -119,46 +134,6 @@ impl TypeId for PalletId {
 	const TYPE_ID: [u8; 4] = *b"modl";
 }
 
-/// Build a bounded vec from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_vec {
-	($ ($values:expr),* $(,)?) => {
-		{
-			$crate::sp_std::vec![$($values),*].try_into().unwrap()
-		}
-	};
-	( $value:expr ; $repetition:expr ) => {
-		{
-			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
-		}
-	}
-}
-
-/// Build a bounded btree-map from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_btree_map {
-	($ ( $key:expr => $value:expr ),* $(,)?) => {
-		{
-			$crate::traits::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
-				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
-			).unwrap()
-		}
-	};
-
-}
-
 /// Generate a new type alias for [`storage::types::StorageValue`],
 /// [`storage::types::StorageMap`], [`storage::types::StorageDoubleMap`]
 /// and [`storage::types::StorageNMap`].
@@ -166,178 +141,74 @@ macro_rules! bounded_btree_map {
 /// Useful for creating a *storage-like* struct for test and migrations.
 ///
 /// ```
-/// # use frame_support::generate_storage_alias;
+/// # use frame_support::storage_alias;
 /// use frame_support::codec;
 /// use frame_support::Twox64Concat;
 /// // generate a storage value with type u32.
-/// generate_storage_alias!(Prefix, StorageName => Value<u32>);
+/// #[storage_alias]
+/// type StorageName = StorageValue<Prefix, u32>;
 ///
 /// // generate a double map from `(u32, u32)` (with hashers `Twox64Concat` for each key)
 /// // to `Vec<u8>`
-/// generate_storage_alias!(
-/// 	OtherPrefix, OtherStorageName => DoubleMap<
-/// 		(Twox64Concat, u32),
-/// 		(Twox64Concat, u32),
-/// 		Vec<u8>
-/// 	>
-/// );
+/// #[storage_alias]
+/// type OtherStorageName = StorageDoubleMap<
+/// 	OtherPrefix,
+/// 	Twox64Concat,
+/// 	u32,
+/// 	Twox64Concat,
+/// 	u32,
+/// 	Vec<u8>,
+/// >;
 ///
 /// // optionally specify the query type
 /// use frame_support::pallet_prelude::{ValueQuery, OptionQuery};
-/// generate_storage_alias!(Prefix, ValueName => Value<u32, OptionQuery>);
-/// generate_storage_alias!(
-/// 	Prefix, SomeStorageName => DoubleMap<
-/// 		(Twox64Concat, u32),
-/// 		(Twox64Concat, u32),
-/// 		Vec<u8>,
-/// 		ValueQuery
-/// 	>
-/// );
+/// #[storage_alias]
+/// type ValueName = StorageValue<Prefix, u32, OptionQuery>;
+/// #[storage_alias]
+/// type SomeStorageName = StorageMap<
+/// 	Prefix,
+/// 	Twox64Concat,
+/// 	u32,
+/// 	Vec<u8>,
+/// 	ValueQuery,
+/// >;
 ///
 /// // generate a map from `Config::AccountId` (with hasher `Twox64Concat`) to `Vec<u8>`
 /// trait Config { type AccountId: codec::FullCodec; }
-/// generate_storage_alias!(
-/// 	Prefix, GenericStorage<T: Config> => Map<(Twox64Concat, T::AccountId), Vec<u8>>
-/// );
+/// #[storage_alias]
+/// type GenericStorage<T> = StorageMap<Prefix, Twox64Concat, <T as Config>::AccountId, Vec<u8>>;
+///
+/// // It also supports NMap
+/// use frame_support::storage::types::Key as NMapKey;
+///
+/// #[storage_alias]
+/// type SomeNMap = StorageNMap<Prefix, (NMapKey<Twox64Concat, u32>, NMapKey<Twox64Concat, u64>), Vec<u8>>;
+///
+/// // Using pallet name as prefix.
+/// //
+/// // When the first generic argument is taking generic arguments it is expected to be a pallet.
+/// // The prefix will then be the pallet name as configured in the runtime through
+/// // `construct_runtime!`.
+///
+/// # struct Pallet<T: Config, I = ()>(std::marker::PhantomData<(T, I)>);
+/// # impl<T: Config, I: 'static> frame_support::traits::PalletInfoAccess for Pallet<T, I> {
+/// # 	fn index() -> usize { 0 }
+/// # 	fn name() -> &'static str { "pallet" }
+/// # 	fn module_name() -> &'static str { "module" }
+/// # 	fn crate_version() -> frame_support::traits::CrateVersion { unimplemented!() }
+/// # }
+///
+/// #[storage_alias]
+/// type SomeValue<T: Config> = StorageValue<Pallet<T>, u64>;
+///
+/// // Pallet with instance
+///
+/// #[storage_alias]
+/// type SomeValue2<T: Config, I: 'static> = StorageValue<Pallet<T, I>, u64>;
+///
 /// # fn main() {}
 /// ```
-#[macro_export]
-macro_rules! generate_storage_alias {
-	// without generic for $name.
-	($pallet:ident, $name:ident => Map<($hasher:ty, $key:ty), $value:ty $(, $querytype:ty)?>) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageMap<
-				[<$name Instance>],
-				$hasher,
-				$key,
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	(
-		$pallet:ident,
-		$name:ident
-		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageDoubleMap<
-				[<$name Instance>],
-				$hasher1,
-				$key1,
-				$hasher2,
-				$key2,
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	(
-		$pallet:ident,
-		$name:ident
-		=> NMap<Key<$(($hasher:ty, $key:ty)),+>, $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageNMap<
-				[<$name Instance>],
-				(
-					$( $crate::storage::types::Key<$hasher, $key>, )+
-				),
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	($pallet:ident, $name:ident => Value<$value:ty $(, $querytype:ty)?>) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			type $name = $crate::storage::types::StorageValue<
-				[<$name Instance>],
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	// with generic for $name.
-	(
-		$pallet:ident,
-		$name:ident<$t:ident : $bounds:tt>
-		=> Map<($hasher:ty, $key:ty), $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageMap<
-				[<$name Instance>],
-				$hasher,
-				$key,
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	(
-		$pallet:ident,
-		$name:ident<$t:ident : $bounds:tt>
-		=> DoubleMap<($hasher1:ty, $key1:ty), ($hasher2:ty, $key2:ty), $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageDoubleMap<
-				[<$name Instance>],
-				$hasher1,
-				$key1,
-				$hasher2,
-				$key2,
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	(
-		$pallet:ident,
-		$name:ident<$t:ident : $bounds:tt>
-		=> NMap<$(($hasher:ty, $key:ty),)+ $value:ty $(, $querytype:ty)?>
-	) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageNMap<
-				[<$name Instance>],
-				(
-					$( $crate::storage::types::Key<$hasher, $key>, )+
-				),
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	($pallet:ident, $name:ident<$t:ident : $bounds:tt> => Value<$value:ty $(, $querytype:ty)?>) => {
-		$crate::paste::paste! {
-			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
-			#[allow(type_alias_bounds)]
-			type $name<$t : $bounds> = $crate::storage::types::StorageValue<
-				[<$name Instance>],
-				$value,
-				$( $querytype )?
-			>;
-		}
-	};
-	// helper used in all arms.
-	(@GENERATE_INSTANCE_STRUCT $pallet:ident, $name:ident) => {
-		$crate::paste::paste! {
-			struct [<$name Instance>];
-			impl $crate::traits::StorageInstance for [<$name Instance>] {
-				fn pallet_prefix() -> &'static str { stringify!($pallet) }
-				const STORAGE_PREFIX: &'static str = stringify!($name);
-			}
-		}
-	};
-}
+pub use frame_support_procedural::storage_alias;
 
 /// Create new implementations of the [`Get`](crate::traits::Get) trait.
 ///
@@ -412,65 +283,85 @@ macro_rules! generate_storage_alias {
 macro_rules! parameter_types {
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$vis:vis const $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL_CONST $name , $type , $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL_CONST $name , $type , $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis $name:ident: $type:ty = $value:expr;
+		$vis:vis $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL $name, $type, $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	(
 		$( #[ $attr:meta ] )*
-		$vis:vis storage $name:ident: $type:ty = $value:expr;
+		$vis:vis storage $name:ident $(< $($ty_params:ident),* >)?: $type:ty = $value:expr;
 		$( $rest:tt )*
 	) => (
 		$( #[ $attr ] )*
-		$vis struct $name;
-		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value);
+		$vis struct $name $(
+			< $($ty_params),* >( $($crate::sp_std::marker::PhantomData<$ty_params>),* )
+		)?;
+		$crate::parameter_types!(IMPL_STORAGE $name, $type, $value $( $(, $ty_params)* )?);
 		$crate::parameter_types!( $( $rest )* );
 	);
 	() => ();
-	(IMPL_CONST $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL_CONST $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the value of this parameter type.
 			pub const fn get() -> $type {
 				$value
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type> $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
+			}
+		}
+
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
-	(IMPL $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the value of this parameter type.
 			pub fn get() -> $type {
 				$value
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type>, $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
+			}
+		}
+
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
-	(IMPL_STORAGE $name:ident, $type:ty, $value:expr) => {
-		impl $name {
+	(IMPL_STORAGE $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
+		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
 			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
@@ -496,9 +387,16 @@ macro_rules! parameter_types {
 			}
 		}
 
-		impl<I: From<$type>> $crate::traits::Get<I> for $name {
-			fn get() -> I {
-				I::from(Self::get())
+		impl<_I: From<$type> $(, $ty_params)*> $crate::traits::Get<_I> for $name< $($ty_params),* > {
+			fn get() -> _I {
+				_I::from(Self::get())
+			}
+		}
+
+		impl< $($ty_params),* > $crate::traits::TypedGet for $name< $($ty_params),* > {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
 			}
 		}
 	};
@@ -799,7 +697,7 @@ macro_rules! assert_noop {
 	) => {
 		let h = $crate::storage_root($crate::StateVersion::V1);
 		$crate::assert_err!($x, $y);
-		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1));
+		assert_eq!(h, $crate::storage_root($crate::StateVersion::V1), "storage has been mutated");
 	};
 }
 
@@ -845,7 +743,7 @@ macro_rules! assert_err_with_weight {
 	($call:expr, $err:expr, $weight:expr $(,)? ) => {
 		if let Err(dispatch_err_with_post) = $call {
 			$crate::assert_err!($call.map(|_| ()).map_err(|e| e.error), $err);
-			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight.into());
+			assert_eq!(dispatch_err_with_post.post_info.actual_weight, $weight);
 		} else {
 			panic!("expected Err(_), got Ok(_).")
 		}
@@ -909,7 +807,7 @@ pub mod tests {
 	};
 	use codec::{Codec, EncodeLike};
 	use frame_support::traits::CrateVersion;
-	use sp_io::TestExternalities;
+	use sp_io::{MultiRemovalResults, TestExternalities};
 	use sp_std::result;
 
 	/// A PalletInfo implementation which just panics.
@@ -946,6 +844,7 @@ pub mod tests {
 			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
 		}
 	}
+
 	use self::module::Module;
 
 	decl_storage! {
@@ -971,6 +870,7 @@ pub mod tests {
 	}
 
 	struct Test;
+
 	impl Config for Test {
 		type BlockNumber = u32;
 		type Origin = u32;
@@ -987,6 +887,7 @@ pub mod tests {
 	trait Sorted {
 		fn sorted(self) -> Self;
 	}
+
 	impl<T: Ord> Sorted for Vec<T> {
 		fn sorted(mut self) -> Self {
 			self.sort();
@@ -995,16 +896,28 @@ pub mod tests {
 	}
 
 	#[test]
-	fn generate_storage_alias_works() {
+	fn storage_alias_works() {
 		new_test_ext().execute_with(|| {
-			generate_storage_alias!(
+			#[crate::storage_alias]
+			type GenericData2<T> = StorageMap<
 				Test,
-				GenericData2<T: Config> => Map<(Blake2_128Concat, T::BlockNumber), T::BlockNumber>
-			);
+				Blake2_128Concat,
+				<T as Config>::BlockNumber,
+				<T as Config>::BlockNumber,
+			>;
 
 			assert_eq!(Module::<Test>::generic_data2(5), None);
 			GenericData2::<Test>::insert(5, 5);
 			assert_eq!(Module::<Test>::generic_data2(5), Some(5));
+
+			/// Some random docs that ensure that docs are accepted
+			#[crate::storage_alias]
+			pub type GenericData<T> = StorageMap<
+				Test2,
+				Blake2_128Concat,
+				<T as Config>::BlockNumber,
+				<T as Config>::BlockNumber,
+			>;
 		});
 	}
 
@@ -1158,15 +1071,16 @@ pub mod tests {
 	}
 
 	#[test]
-	fn double_map_basic_insert_remove_remove_prefix_should_work() {
-		new_test_ext().execute_with(|| {
-			type DoubleMap = DataDM;
+	fn double_map_basic_insert_remove_remove_prefix_with_commit_should_work() {
+		let key1 = 17u32;
+		let key2 = 18u32;
+		type DoubleMap = DataDM;
+		let mut e = new_test_ext();
+		e.execute_with(|| {
 			// initialized during genesis
 			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
 
 			// get / insert / take
-			let key1 = 17u32;
-			let key2 = 18u32;
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			DoubleMap::insert(&key1, &key2, &4u64);
 			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
@@ -1174,9 +1088,7 @@ pub mod tests {
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 
 			// mutate
-			DoubleMap::mutate(&key1, &key2, |val| {
-				*val = 15;
-			});
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
 			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
 
 			// remove
@@ -1188,9 +1100,62 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+		});
+		e.commit_all().unwrap();
+		e.execute_with(|| {
 			assert!(matches!(
-				DoubleMap::remove_prefix(&key1, None),
-				sp_io::KillStorageResult::AllRemoved(0), // all in overlay
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 2, unique: 2, loops: 2 }
+			));
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);
+			assert_eq!(DoubleMap::get(&(key1 + 1), &(key2 + 1)), 4u64);
+		});
+	}
+
+	#[test]
+	fn double_map_basic_insert_remove_remove_prefix_should_work() {
+		new_test_ext().execute_with(|| {
+			let key1 = 17u32;
+			let key2 = 18u32;
+			type DoubleMap = DataDM;
+
+			// initialized during genesis
+			assert_eq!(DoubleMap::get(&15u32, &16u32), 42u64);
+
+			// get / insert / take
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+			DoubleMap::insert(&key1, &key2, &4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::take(&key1, &key2), 4u64);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// mutate
+			DoubleMap::mutate(&key1, &key2, |val| *val = 15);
+			assert_eq!(DoubleMap::get(&key1, &key2), 15u64);
+
+			// remove
+			DoubleMap::remove(&key1, &key2);
+			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
+
+			// remove prefix
+			DoubleMap::insert(&key1, &key2, &4u64);
+			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
+			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
+			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
+			// all in overlay
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
+			));
+			// Note this is the incorrect answer (for now), since we are using v2 of
+			// `clear_prefix`.
+			// When we switch to v3, then this will become:
+			//   MultiRemovalResults:: { maybe_cursor: None, backend: 0, unique: 2, loops: 2 },
+			assert!(matches!(
+				DoubleMap::clear_prefix(&key1, u32::max_value(), None),
+				MultiRemovalResults { maybe_cursor: None, backend: 0, unique: 0, loops: 0 }
 			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
@@ -1403,13 +1368,13 @@ pub mod pallet_prelude {
 		storage::{
 			bounded_vec::BoundedVec,
 			types::{
-				CountedStorageMap, Key as NMapKey, OptionQuery, StorageDoubleMap, StorageMap,
-				StorageNMap, StorageValue, ValueQuery,
+				CountedStorageMap, Key as NMapKey, OptionQuery, ResultQuery, StorageDoubleMap,
+				StorageMap, StorageNMap, StorageValue, ValueQuery,
 			},
 		},
 		traits::{
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
-			PalletInfoAccess, StorageInfoTrait,
+			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
 		weights::{DispatchClass, Pays, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
@@ -1645,6 +1610,15 @@ pub mod pallet_prelude {
 /// used using `#[pallet::compact]`, function must return `DispatchResultWithPostInfo` or
 /// `DispatchResult`.
 ///
+/// Each dispatchable may also be annotated with the `#[pallet::call_index($idx)]` attribute,
+/// which defines and sets the codec index for the dispatchable function in the `Call` enum.
+///
+/// All call indexes start from 0, until it encounters a dispatchable function with a defined
+/// call index. The dispatchable function that lexically follows the function with a defined
+/// call index will have that call index, but incremented by 1, e.g. if there are 3
+/// dispatchable functions `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar` has
+/// a call index of 10, then `fn qux` will have an index of 11, instead of 1.
+///
 /// All arguments must implement `Debug`, `PartialEq`, `Eq`, `Decode`, `Encode`, `Clone`. For
 /// ease of use, bound the trait `Member` available in frame_support::pallet_prelude.
 ///
@@ -1658,16 +1632,18 @@ pub mod pallet_prelude {
 /// **WARNING**: modifying dispatchables, changing their order, removing some must be done with
 /// care. Indeed this will change the outer runtime call type (which is an enum with one
 /// variant per pallet), this outer runtime call can be stored on-chain (e.g. in
-/// pallet-scheduler). Thus migration might be needed.
+/// pallet-scheduler). Thus migration might be needed. To mitigate against some of this, the
+/// `#[pallet::call_index($idx)]` attribute can be used to fix the order of the dispatchable so
+/// that the `Call` enum encoding does not change after modification.
 ///
 /// ### Macro expansion
 ///
-/// The macro create an enum `Call` with one variant per dispatchable. This enum implements:
+/// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
 /// `Clone`, `Eq`, `PartialEq`, `Debug` (with stripped implementation in `not("std")`),
 /// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, `UnfilteredDispatchable`.
 ///
-/// The macro implement on `Pallet`, the `Callable` trait and a function `call_functions` which
-/// returns the dispatchable metadatas.
+/// The macro implement the `Callable` trait on `Pallet` and a function `call_functions` which
+/// returns the dispatchable metadata.
 ///
 /// # Extra constants: `#[pallet::extra_constants]` optional
 ///
@@ -1866,6 +1842,23 @@ pub mod pallet_prelude {
 ///
 /// All the `cfg` attributes are automatically copied to the items generated for the storage,
 /// i.e. the getter, storage prefix, and the metadata element etc.
+///
+/// Any type placed as the `QueryKind` parameter must implement
+/// [`frame_support::storage::types::QueryKindTrait`]. There are 3 implementations of this
+/// trait by default:
+/// 1. [`frame_support::storage::types::OptionQuery`], the default `QueryKind` used when this
+///    type parameter is omitted. Specifying this as the `QueryKind` would cause storage map
+///    APIs that return a `QueryKind` to instead return an `Option`, returning `Some` when a
+///    value does exist under a specified storage key, and `None` otherwise.
+/// 2. [`frame_support::storage::types::ValueQuery`] causes storage map APIs that return a
+///    `QueryKind` to instead return the value type. In cases where a value does not exist
+///    under a specified storage key, the `OnEmpty` type parameter on `QueryKindTrait` is used
+///    to return an appropriate value.
+/// 3. [`frame_support::storage::types::ResultQuery`] causes storage map APIs that return a
+///    `QueryKind` to instead return a `Result<T, E>`, with `T` being the value type and `E`
+///    being the pallet error type specified by the `#[pallet::error]` attribute. In cases
+///    where a value does not exist under a specified storage key, an `Err` with the specified
+///    pallet error variant is returned.
 ///
 /// NOTE: If the `QueryKind` generic parameter is still generic at this stage or is using some
 /// type alias then the generation of the getter might fail. In this case the getter can be

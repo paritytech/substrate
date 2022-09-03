@@ -639,9 +639,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.state.apply_to_keys_while(child_info, prefix, f)
+		self.state.apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -839,9 +840,10 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		&self,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
+		start_at: Option<&[u8]>,
 		f: F,
 	) {
-		self.caching_state().apply_to_keys_while(child_info, prefix, f)
+		self.caching_state().apply_to_keys_while(child_info, prefix, start_at, f)
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -1221,7 +1223,7 @@ mod tests {
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
-			Some(root_parent.clone()),
+			Some(root_parent),
 		);
 
 		let key = H256::random()[..].to_vec();
@@ -1305,14 +1307,14 @@ mod tests {
 		let mut s = CachingState::new(
 			InMemoryBackend::<BlakeTwo256>::default(),
 			shared.clone(),
-			Some(root_parent.clone()),
+			Some(root_parent),
 		);
 		s.cache.sync_cache(
 			&[],
 			&[],
 			vec![(key.clone(), Some(vec![2]))],
 			vec![],
-			Some(h0.clone()),
+			Some(h0),
 			Some(0),
 			true,
 		);

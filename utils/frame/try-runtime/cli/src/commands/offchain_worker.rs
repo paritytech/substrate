@@ -128,9 +128,14 @@ where
 	);
 
 	let ext = {
-		let builder = command.state.builder::<Block>()?;
+		let builder = command.state.builder::<Block>()?.state_version(shared.state_version);
 
 		let builder = if command.overwrite_wasm_code {
+			log::info!(
+				target: LOG_TARGET,
+				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
+				config.chain_spec.name(),
+			);
 			let (code_key, code) = extract_code(&config.chain_spec)?;
 			builder.inject_hashed_key_value(&[(code_key, code)])
 		} else {

@@ -50,7 +50,7 @@ mod error;
 pub use error::PalletError;
 
 mod filter;
-pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
+pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter};
 
 mod misc;
 pub use misc::{
@@ -59,7 +59,7 @@ pub use misc::{
 	ConstU32, ConstU64, ConstU8, DefensiveSaturating, EnsureInherentsAreFirst, EqualPrivilegeOnly,
 	EstimateCallFee, ExecuteBlock, ExtrinsicCall, Get, GetBacking, GetDefault, HandleLifetime,
 	IsSubType, IsType, Len, OffchainWorker, OnKilledAccount, OnNewAccount, PreimageProvider,
-	PreimageRecipient, PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, UnixTime,
+	PreimageRecipient, PrivilegeCmp, SameOrOther, Time, TryCollect, TryDrop, TypedGet, UnixTime,
 	WrapperKeepOpaque, WrapperOpaque,
 };
 #[doc(hidden)]
@@ -81,10 +81,9 @@ mod hooks;
 #[cfg(feature = "std")]
 pub use hooks::GenesisBuild;
 pub use hooks::{
-	Hooks, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade, OnTimestampSet,
+	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
+	OnTimestampSet,
 };
-#[cfg(feature = "try-runtime")]
-pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};
 
 pub mod schedule;
 mod storage;
@@ -93,12 +92,20 @@ pub use storage::{
 };
 
 mod dispatch;
+#[allow(deprecated)]
+pub use dispatch::EnsureOneOf;
 pub use dispatch::{
-	AsEnsureOriginWithArg, EnsureOneOf, EnsureOrigin, EnsureOriginWithArg, OriginTrait,
-	UnfilteredDispatchable,
+	AsEnsureOriginWithArg, EitherOf, EitherOfDiverse, EnsureOrigin, EnsureOriginWithArg,
+	MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess, UnfilteredDispatchable,
 };
 
 mod voting;
 pub use voting::{
-	CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote, U128CurrencyToVote, VoteTally,
+	ClassCountOf, CurrencyToVote, PollStatus, Polling, SaturatingCurrencyToVote,
+	U128CurrencyToVote, VoteTally,
 };
+
+#[cfg(feature = "try-runtime")]
+mod try_runtime;
+#[cfg(feature = "try-runtime")]
+pub use try_runtime::{OnRuntimeUpgradeHelpersExt, Select as TryStateSelect, TryState};

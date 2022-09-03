@@ -17,7 +17,7 @@
 
 #![recursion_limit = "128"]
 
-use codec::{Codec, Decode, Encode, EncodeLike};
+use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{
 	inherent::{InherentData, InherentIdentifier, MakeFatalError, ProvideInherent},
 	metadata::{
@@ -108,7 +108,9 @@ mod module1 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo)]
+	#[derive(
+		PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen,
+	)]
 	pub enum Origin<T: Config<I>, I>
 	where
 		T::BlockNumber: From<u32>,
@@ -181,7 +183,9 @@ mod module2 {
 		}
 	}
 
-	#[derive(PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo)]
+	#[derive(
+		PartialEq, Eq, Clone, sp_runtime::RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen,
+	)]
 	pub enum Origin<T: Config<I>, I = DefaultInstance> {
 		Members(u32),
 		_Phantom(std::marker::PhantomData<(T, I)>),

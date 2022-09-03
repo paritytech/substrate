@@ -17,26 +17,31 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use assert_matches::assert_matches;
-use futures::executor;
 use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use substrate_test_runtime_client::{prelude::*, runtime::Block};
 
-#[test]
-fn block_stats_work() {
+#[tokio::test]
+async fn block_stats_work() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = <Dev<Block, _>>::new(client.clone(), DenyUnsafe::No);
+	let api = <Dev<Block, _>>::new(client.clone(), DenyUnsafe::No).into_rpc();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+	client.import(BlockOrigin::Own, block).await.unwrap();
 
 	// Can't gather stats for a block without a parent.
-	assert_eq!(api.block_stats(client.genesis_hash()).unwrap(), None);
+	assert_eq!(
+		api.call::<_, Option<BlockStats>>("dev_getBlockStats", [client.genesis_hash()])
+			.await
+			.unwrap(),
+		None
+	);
 
 	assert_eq!(
-		api.block_stats(client.info().best_hash).unwrap(),
+		api.call::<_, Option<BlockStats>>("dev_getBlockStats", [client.info().best_hash])
+			.await
+			.unwrap(),
 		Some(BlockStats {
 			witness_len: 597,
 			witness_compact_len: 500,
@@ -46,13 +51,26 @@ fn block_stats_work() {
 	);
 }
 
-#[test]
-fn deny_unsafe_works() {
+#[tokio::test]
+async fn deny_unsafe_works() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
-	let api = <Dev<Block, _>>::new(client.clone(), DenyUnsafe::Yes);
+	let api = <Dev<Block, _>>::new(client.clone(), DenyUnsafe::Yes).into_rpc();
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
+	client.import(BlockOrigin::Own, block).await.unwrap();
 
-	assert_matches!(api.block_stats(client.info().best_hash), Err(Error::UnsafeRpcCalled(_)));
+	let best_hash = client.info().best_hash;
+	let best_hash_param =
+		serde_json::to_string(&best_hash).expect("To string must always succeed for block hashes");
+
+	let request = format!(
+		"{{\"jsonrpc\":\"2.0\",\"method\":\"dev_getBlockStats\",\"params\":[{}],\"id\":1}}",
+		best_hash_param
+	);
+	let (resp, _) = api.raw_json_request(&request).await.expect("Raw calls should succeed");
+
+	assert_eq!(
+		resp.result,
+		r#"{"jsonrpc":"2.0","error":{"code":-32601,"message":"RPC call is unsafe to be called externally"},"id":1}"#
+	);
 }

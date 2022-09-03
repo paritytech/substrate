@@ -1,6 +1,6 @@
 [package]
 name = "subkey"
-version = "2.0.1"
+version = "2.0.2"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
@@ -17,5 +17,5 @@ path = "src/main.rs"
 name = "subkey"
 
 [dependencies]
-clap = { version = "3.1.6", features = ["derive"] }
+clap = { version = "3.1.18", features = ["derive"] }
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }

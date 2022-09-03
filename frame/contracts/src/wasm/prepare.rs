@@ -23,10 +23,10 @@ use crate::{
 	chain_extension::ChainExtension,
 	storage::meter::Diff,
 	wasm::{env_def::ImportSatisfyCheck, OwnerInfo, PrefabWasmModule},
-	AccountIdOf, Config, Schedule,
+	AccountIdOf, CodeVec, Config, Error, Schedule,
 };
 use codec::{Encode, MaxEncodedLen};
-use sp_runtime::traits::Hash;
+use sp_runtime::{traits::Hash, DispatchError};
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{
 	self, External, Internal, MemoryType, Type, ValueType,
@@ -401,19 +401,19 @@ fn check_and_instrument<C: ImportSatisfyCheck, T: Config>(
 }
 
 fn do_preparation<C: ImportSatisfyCheck, T: Config>(
-	original_code: Vec<u8>,
+	original_code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
-) -> Result<PrefabWasmModule<T>, &'static str> {
-	let (code, (initial, maximum)) =
-		check_and_instrument::<C, T>(original_code.as_ref(), schedule)?;
+) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
+	let (code, (initial, maximum)) = check_and_instrument::<C, T>(original_code.as_ref(), schedule)
+		.map_err(|msg| (<Error<T>>::CodeRejected.into(), msg))?;
 	let original_code_len = original_code.len();
 
 	let mut module = PrefabWasmModule {
 		instruction_weights_version: schedule.instruction_weights.version,
 		initial,
 		maximum,
-		code,
+		code: code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 		code_hash: T::Hashing::hash(&original_code),
 		original_code: Some(original_code),
 		owner_info: None,
@@ -446,10 +446,10 @@ fn do_preparation<C: ImportSatisfyCheck, T: Config>(
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
 pub fn prepare_contract<T: Config>(
-	original_code: Vec<u8>,
+	original_code: CodeVec<T>,
 	schedule: &Schedule<T>,
 	owner: AccountIdOf<T>,
-) -> Result<PrefabWasmModule<T>, &'static str> {
+) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)> {
 	do_preparation::<super::runtime::Env, T>(original_code, schedule, owner)
 }
 
@@ -459,10 +459,10 @@ pub fn prepare_contract<T: Config>(
 ///
 /// Use this when an existing contract should be re-instrumented with a newer schedule version.
 pub fn reinstrument_contract<T: Config>(
-	original_code: Vec<u8>,
+	original_code: &[u8],
 	schedule: &Schedule<T>,
 ) -> Result<Vec<u8>, &'static str> {
-	Ok(check_and_instrument::<super::runtime::Env, T>(&original_code, schedule)?.0)
+	Ok(check_and_instrument::<super::runtime::Env, T>(original_code, schedule)?.0)
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking.
@@ -493,9 +493,12 @@ pub mod benchmarking {
 			instruction_weights_version: schedule.instruction_weights.version,
 			initial: memory_limits.0,
 			maximum: memory_limits.1,
-			code: contract_module.into_wasm_code()?,
 			code_hash: T::Hashing::hash(&original_code),
-			original_code: Some(original_code),
+			original_code: Some(original_code.try_into().map_err(|_| "Original code too large")?),
+			code: contract_module
+				.into_wasm_code()?
+				.try_into()
+				.map_err(|_| "Instrumented code too large")?,
 			owner_info: Some(OwnerInfo {
 				owner,
 				// this is a helper function for benchmarking which skips deposit collection
@@ -514,6 +517,7 @@ mod tests {
 		schedule::Limits,
 		tests::{Test, ALICE},
 	};
+	use pallet_contracts_proc_macro::define_env;
 	use std::fmt;
 
 	impl fmt::Debug for PrefabWasmModule<Test> {
@@ -529,24 +533,34 @@ mod tests {
 
 		// Define test environment for tests. We need ImportSatisfyCheck
 		// implementation from it. So actual implementations doesn't matter.
-		define_env!(Test, <E: Ext>,
-			[seal0] panic(_ctx) => { unreachable!(); },
+		#[define_env]
+		pub mod test_env {
+			fn panic(_ctx: crate::wasm::Runtime<E>) -> Result<(), TrapReason> {
+				Ok(())
+			}
 
 			// gas is an implementation defined function and a contract can't import it.
-			[seal0] gas(_ctx, _amount: u32) => { unreachable!(); },
+			fn gas(_ctx: crate::wasm::Runtime<E>, _amount: u32) -> Result<(), TrapReason> {
+				Ok(())
+			}
 
-			[seal0] nop(_ctx, _unused: u64) => { unreachable!(); },
+			fn nop(_ctx: crate::wasm::Runtime<E>, _unused: u64) -> Result<(), TrapReason> {
+				Ok(())
+			}
 
 			// new version of nop with other data type for argumebt
-			[seal1] nop(_ctx, _unused: i32) => { unreachable!(); },
-		);
+			#[version(1)]
+			fn nop(_ctx: crate::wasm::Runtime<E>, _unused: i32) -> Result<(), TrapReason> {
+				Ok(())
+			}
+		}
 	}
 
 	macro_rules! prepare_test {
 		($name:ident, $wat:expr, $($expected:tt)*) => {
 			#[test]
 			fn $name() {
-				let wasm = wat::parse_str($wat).unwrap();
+				let wasm = wat::parse_str($wat).unwrap().try_into().unwrap();
 				let schedule = Schedule {
 					limits: Limits {
 						globals: 3,
@@ -558,8 +572,8 @@ mod tests {
 					},
 					.. Default::default()
 				};
-				let r = do_preparation::<env::Test, Test>(wasm, &schedule, ALICE);
-				assert_matches::assert_matches!(r, $($expected)*);
+				let r = do_preparation::<env::Env, Test>(wasm, &schedule, ALICE);
+				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
 			}
 		};
 	}

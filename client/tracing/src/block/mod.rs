@@ -53,7 +53,7 @@ const AVG_SPAN: usize = 100 * 8;
 // are used for the RPC Id this may need to be adjusted. Note: The base payload
 // does not include the RPC result.
 //
-// The estimate is based on the JSONRPC response message which has the following format:
+// The estimate is based on the JSON-RPC response message which has the following format:
 // `{"jsonrpc":"2.0","result":[],"id":18446744073709551615}`.
 //
 // We care about the total size of the payload because jsonrpc-server will simply ignore

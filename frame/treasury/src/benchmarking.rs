@@ -22,7 +22,11 @@
 use super::{Pallet as Treasury, *};
 
 use frame_benchmarking::{account, benchmarks_instance_pallet};
-use frame_support::{ensure, traits::OnInitialize};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	ensure,
+	traits::{EnsureOrigin, OnInitialize},
+};
 use frame_system::RawOrigin;
 
 const SEED: u32 = 0;
@@ -30,7 +34,7 @@ const SEED: u32 = 0;
 // Create the pre-requisite information needed to create a treasury `propose_spend`.
 fn setup_proposal<T: Config<I>, I: 'static>(
 	u: u32,
-) -> (T::AccountId, BalanceOf<T, I>, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AccountId, BalanceOf<T, I>, AccountIdLookupOf<T>) {
 	let caller = account("caller", u, SEED);
 	let value: BalanceOf<T, I> = T::ProposalBondMinimum::get().saturating_mul(100u32.into());
 	let _ = T::Currency::make_free_balance_be(&caller, value);
@@ -57,7 +61,29 @@ fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
+}
+
 benchmarks_instance_pallet! {
+	// This benchmark is short-circuited if `SpendOrigin` cannot provide
+	// a successful origin, in which case `spend` is un-callable and can use weight=0.
+	spend {
+		let (_, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
+		let origin = T::SpendOrigin::try_successful_origin();
+		let beneficiary = T::Lookup::lookup(beneficiary_lookup.clone()).unwrap();
+		let call = Call::<T, I>::spend { amount: value, beneficiary: beneficiary_lookup };
+	}: {
+		if let Ok(origin) = origin.clone() {
+			call.dispatch_bypass_filter(origin)?;
+		}
+	}
+	verify {
+		if origin.is_ok() {
+			assert_last_event::<T, I>(Event::SpendApproved { proposal_index: 0, amount: value, beneficiary }.into())
+		}
+	}
+
 	propose_spend {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
 		// Whitelist caller account from further DB operations.
@@ -73,7 +99,8 @@ benchmarks_instance_pallet! {
 			beneficiary_lookup
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
-	}: _(RawOrigin::Root, proposal_id)
+		let reject_origin = T::RejectOrigin::successful_origin();
+	}: _<T::Origin>(reject_origin, proposal_id)
 
 	approve_proposal {
 		let p in 0 .. T::MaxApprovals::get() - 1;
@@ -85,7 +112,8 @@ benchmarks_instance_pallet! {
 			beneficiary_lookup
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
-	}: _(RawOrigin::Root, proposal_id)
+		let approve_origin = T::ApproveOrigin::successful_origin();
+	}: _<T::Origin>(approve_origin, proposal_id)
 
 	remove_approval {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
@@ -96,7 +124,8 @@ benchmarks_instance_pallet! {
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
-	}: _(RawOrigin::Root, proposal_id)
+		let reject_origin = T::RejectOrigin::successful_origin();
+	}: _<T::Origin>(reject_origin, proposal_id)
 
 	on_initialize_proposals {
 		let p in 0 .. T::MaxApprovals::get();

@@ -56,5 +56,5 @@ benchmarks! {
 		ensure!(!DidUpdate::<T>::exists(), "Time was not removed.");
 	}
 
-	impl_benchmark_test_suite!(Timestamp, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(Timestamp, crate::mock::new_test_ext(), crate::mock::Test);
 }
