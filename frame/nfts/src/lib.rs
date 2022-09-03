@@ -1048,7 +1048,7 @@ pub mod pallet {
 			}
 
 			// clear all approvals.
-			details.approvals = ApprovalsOf::<T, I>::default();
+			details.approvals.clear();
 			Item::<T, I>::insert(&collection, &item, &details);
 			Self::deposit_event(Event::AllApprovalsCancelled {
 				collection,

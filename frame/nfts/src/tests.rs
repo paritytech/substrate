@@ -538,7 +538,7 @@ fn approval_lifecycle_works() {
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3));
 		assert_ok!(Nfts::transfer(Origin::signed(3), 0, 42, 4));
 		assert_noop!(Nfts::transfer(Origin::signed(3), 0, 42, 3), Error::<Test>::NoPermission);
-		assert!(Item::<Test>::get(0, 42).unwrap().approved.is_none());
+		assert!(Item::<Test>::get(0, 42).unwrap().approvals.is_none());
 
 		assert_ok!(Nfts::approve_transfer(Origin::signed(4), 0, 42, 2));
 		assert_ok!(Nfts::transfer(Origin::signed(2), 0, 42, 2));
