@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for frame_benchmarking.
@@ -58,75 +58,75 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn addition(_i: u32, ) -> Weight {
-		Weight::from_ref_time(103_000 as RefTimeWeight)
+		Weight::from_ref_time(103_000 as u64)
 	}
 	fn subtraction(_i: u32, ) -> Weight {
-		Weight::from_ref_time(105_000 as RefTimeWeight)
+		Weight::from_ref_time(105_000 as u64)
 	}
 	fn multiplication(_i: u32, ) -> Weight {
-		Weight::from_ref_time(113_000 as RefTimeWeight)
+		Weight::from_ref_time(113_000 as u64)
 	}
 	fn division(_i: u32, ) -> Weight {
-		Weight::from_ref_time(102_000 as RefTimeWeight)
+		Weight::from_ref_time(102_000 as u64)
 	}
 	fn hashing(_i: u32, ) -> Weight {
-		Weight::from_ref_time(20_865_902_000 as RefTimeWeight)
+		Weight::from_ref_time(20_865_902_000 as u64)
 	}
 	fn sr25519_verification(i: u32, ) -> Weight {
-		Weight::from_ref_time(319_000 as RefTimeWeight)
+		Weight::from_ref_time(319_000 as u64)
 			// Standard Error: 8_000
-			.saturating_add(Weight::from_ref_time(47_171_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(47_171_000 as u64).saturating_mul(i as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_read(i: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 3_000
-			.saturating_add(Weight::from_ref_time(2_110_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads((1 as RefTimeWeight).saturating_mul(i as RefTimeWeight)))
+			.saturating_add(Weight::from_ref_time(2_110_000 as u64).saturating_mul(i as u64))
+			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(i as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_write(i: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(372_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes((1 as RefTimeWeight).saturating_mul(i as RefTimeWeight)))
+			.saturating_add(Weight::from_ref_time(372_000 as u64).saturating_mul(i as u64))
+			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(i as u64)))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn addition(_i: u32, ) -> Weight {
-		Weight::from_ref_time(103_000 as RefTimeWeight)
+		Weight::from_ref_time(103_000 as u64)
 	}
 	fn subtraction(_i: u32, ) -> Weight {
-		Weight::from_ref_time(105_000 as RefTimeWeight)
+		Weight::from_ref_time(105_000 as u64)
 	}
 	fn multiplication(_i: u32, ) -> Weight {
-		Weight::from_ref_time(113_000 as RefTimeWeight)
+		Weight::from_ref_time(113_000 as u64)
 	}
 	fn division(_i: u32, ) -> Weight {
-		Weight::from_ref_time(102_000 as RefTimeWeight)
+		Weight::from_ref_time(102_000 as u64)
 	}
 	fn hashing(_i: u32, ) -> Weight {
-		Weight::from_ref_time(20_865_902_000 as RefTimeWeight)
+		Weight::from_ref_time(20_865_902_000 as u64)
 	}
 	fn sr25519_verification(i: u32, ) -> Weight {
-		Weight::from_ref_time(319_000 as RefTimeWeight)
+		Weight::from_ref_time(319_000 as u64)
 			// Standard Error: 8_000
-			.saturating_add(Weight::from_ref_time(47_171_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(47_171_000 as u64).saturating_mul(i as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_read(i: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 3_000
-			.saturating_add(Weight::from_ref_time(2_110_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads((1 as RefTimeWeight).saturating_mul(i as RefTimeWeight)))
+			.saturating_add(Weight::from_ref_time(2_110_000 as u64).saturating_mul(i as u64))
+			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(i as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	fn storage_write(i: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(372_000 as RefTimeWeight).saturating_mul(i as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes((1 as RefTimeWeight).saturating_mul(i as RefTimeWeight)))
+			.saturating_add(Weight::from_ref_time(372_000 as u64).saturating_mul(i as u64))
+			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(i as u64)))
 	}
 }

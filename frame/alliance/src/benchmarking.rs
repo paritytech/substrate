@@ -685,7 +685,7 @@ benchmarks_instance_pallet! {
 				).unwrap();
 			}
 
-			assert_eq!(Alliance::<T, I>::votable_members_count(), cc);
+			assert_eq!(Alliance::<T, I>::voting_members_count(), cc);
 			assert_eq!(Alliance::<T, I>::ally_members_count(), m);
 		}
 

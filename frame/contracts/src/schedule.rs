@@ -21,7 +21,7 @@
 use crate::{weights::WeightInfo, Config};
 
 use codec::{Decode, Encode};
-use frame_support::{weights::RefTimeWeight, DefaultNoBound};
+use frame_support::DefaultNoBound;
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -255,166 +255,166 @@ pub struct InstructionWeights<T: Config> {
 #[scale_info(skip_type_params(T))]
 pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller`.
-	pub caller: RefTimeWeight,
+	pub caller: u64,
 
 	/// Weight of calling `seal_is_contract`.
-	pub is_contract: RefTimeWeight,
+	pub is_contract: u64,
 
 	/// Weight of calling `seal_code_hash`.
-	pub code_hash: RefTimeWeight,
+	pub code_hash: u64,
 
 	/// Weight of calling `seal_own_code_hash`.
-	pub own_code_hash: RefTimeWeight,
+	pub own_code_hash: u64,
 
 	/// Weight of calling `seal_caller_is_origin`.
-	pub caller_is_origin: RefTimeWeight,
+	pub caller_is_origin: u64,
 
 	/// Weight of calling `seal_address`.
-	pub address: RefTimeWeight,
+	pub address: u64,
 
 	/// Weight of calling `seal_gas_left`.
-	pub gas_left: RefTimeWeight,
+	pub gas_left: u64,
 
 	/// Weight of calling `seal_balance`.
-	pub balance: RefTimeWeight,
+	pub balance: u64,
 
 	/// Weight of calling `seal_value_transferred`.
-	pub value_transferred: RefTimeWeight,
+	pub value_transferred: u64,
 
 	/// Weight of calling `seal_minimum_balance`.
-	pub minimum_balance: RefTimeWeight,
+	pub minimum_balance: u64,
 
 	/// Weight of calling `seal_block_number`.
-	pub block_number: RefTimeWeight,
+	pub block_number: u64,
 
 	/// Weight of calling `seal_now`.
-	pub now: RefTimeWeight,
+	pub now: u64,
 
 	/// Weight of calling `seal_weight_to_fee`.
-	pub weight_to_fee: RefTimeWeight,
+	pub weight_to_fee: u64,
 
 	/// Weight of calling `gas`.
-	pub gas: RefTimeWeight,
+	pub gas: u64,
 
 	/// Weight of calling `seal_input`.
-	pub input: RefTimeWeight,
+	pub input: u64,
 
 	/// Weight per input byte copied to contract memory by `seal_input`.
-	pub input_per_byte: RefTimeWeight,
+	pub input_per_byte: u64,
 
 	/// Weight of calling `seal_return`.
-	pub r#return: RefTimeWeight,
+	pub r#return: u64,
 
 	/// Weight per byte returned through `seal_return`.
-	pub return_per_byte: RefTimeWeight,
+	pub return_per_byte: u64,
 
 	/// Weight of calling `seal_terminate`.
-	pub terminate: RefTimeWeight,
+	pub terminate: u64,
 
 	/// Weight of calling `seal_random`.
-	pub random: RefTimeWeight,
+	pub random: u64,
 
 	/// Weight of calling `seal_reposit_event`.
-	pub deposit_event: RefTimeWeight,
+	pub deposit_event: u64,
 
 	/// Weight per topic supplied to `seal_deposit_event`.
-	pub deposit_event_per_topic: RefTimeWeight,
+	pub deposit_event_per_topic: u64,
 
 	/// Weight per byte of an event deposited through `seal_deposit_event`.
-	pub deposit_event_per_byte: RefTimeWeight,
+	pub deposit_event_per_byte: u64,
 
 	/// Weight of calling `seal_debug_message`.
-	pub debug_message: RefTimeWeight,
+	pub debug_message: u64,
 
 	/// Weight of calling `seal_set_storage`.
-	pub set_storage: RefTimeWeight,
+	pub set_storage: u64,
 
 	/// Weight per written byten of an item stored with `seal_set_storage`.
-	pub set_storage_per_new_byte: RefTimeWeight,
+	pub set_storage_per_new_byte: u64,
 
 	/// Weight per overwritten byte of an item stored with `seal_set_storage`.
-	pub set_storage_per_old_byte: RefTimeWeight,
+	pub set_storage_per_old_byte: u64,
 
 	/// Weight of calling `seal_set_code_hash`.
-	pub set_code_hash: RefTimeWeight,
+	pub set_code_hash: u64,
 
 	/// Weight of calling `seal_clear_storage`.
-	pub clear_storage: RefTimeWeight,
+	pub clear_storage: u64,
 
 	/// Weight of calling `seal_clear_storage` per byte of the stored item.
-	pub clear_storage_per_byte: RefTimeWeight,
+	pub clear_storage_per_byte: u64,
 
 	/// Weight of calling `seal_contains_storage`.
-	pub contains_storage: RefTimeWeight,
+	pub contains_storage: u64,
 
 	/// Weight of calling `seal_contains_storage` per byte of the stored item.
-	pub contains_storage_per_byte: RefTimeWeight,
+	pub contains_storage_per_byte: u64,
 
 	/// Weight of calling `seal_get_storage`.
-	pub get_storage: RefTimeWeight,
+	pub get_storage: u64,
 
 	/// Weight per byte of an item received via `seal_get_storage`.
-	pub get_storage_per_byte: RefTimeWeight,
+	pub get_storage_per_byte: u64,
 
 	/// Weight of calling `seal_take_storage`.
-	pub take_storage: RefTimeWeight,
+	pub take_storage: u64,
 
 	/// Weight per byte of an item received via `seal_take_storage`.
-	pub take_storage_per_byte: RefTimeWeight,
+	pub take_storage_per_byte: u64,
 
 	/// Weight of calling `seal_transfer`.
-	pub transfer: RefTimeWeight,
+	pub transfer: u64,
 
 	/// Weight of calling `seal_call`.
-	pub call: RefTimeWeight,
+	pub call: u64,
 
 	/// Weight of calling `seal_delegate_call`.
-	pub delegate_call: RefTimeWeight,
+	pub delegate_call: u64,
 
 	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
-	pub call_transfer_surcharge: RefTimeWeight,
+	pub call_transfer_surcharge: u64,
 
 	/// Weight per byte that is cloned by supplying the `CLONE_INPUT` flag.
-	pub call_per_cloned_byte: RefTimeWeight,
+	pub call_per_cloned_byte: u64,
 
 	/// Weight of calling `seal_instantiate`.
-	pub instantiate: RefTimeWeight,
+	pub instantiate: u64,
 
 	/// Weight surcharge that is claimed if `seal_instantiate` does a balance transfer.
-	pub instantiate_transfer_surcharge: RefTimeWeight,
+	pub instantiate_transfer_surcharge: u64,
 
 	/// Weight per salt byte supplied to `seal_instantiate`.
-	pub instantiate_per_salt_byte: RefTimeWeight,
+	pub instantiate_per_salt_byte: u64,
 
 	/// Weight of calling `seal_hash_sha_256`.
-	pub hash_sha2_256: RefTimeWeight,
+	pub hash_sha2_256: u64,
 
 	/// Weight per byte hashed by `seal_hash_sha_256`.
-	pub hash_sha2_256_per_byte: RefTimeWeight,
+	pub hash_sha2_256_per_byte: u64,
 
 	/// Weight of calling `seal_hash_keccak_256`.
-	pub hash_keccak_256: RefTimeWeight,
+	pub hash_keccak_256: u64,
 
 	/// Weight per byte hashed by `seal_hash_keccak_256`.
-	pub hash_keccak_256_per_byte: RefTimeWeight,
+	pub hash_keccak_256_per_byte: u64,
 
 	/// Weight of calling `seal_hash_blake2_256`.
-	pub hash_blake2_256: RefTimeWeight,
+	pub hash_blake2_256: u64,
 
 	/// Weight per byte hashed by `seal_hash_blake2_256`.
-	pub hash_blake2_256_per_byte: RefTimeWeight,
+	pub hash_blake2_256_per_byte: u64,
 
 	/// Weight of calling `seal_hash_blake2_128`.
-	pub hash_blake2_128: RefTimeWeight,
+	pub hash_blake2_128: u64,
 
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
-	pub hash_blake2_128_per_byte: RefTimeWeight,
+	pub hash_blake2_128_per_byte: u64,
 
 	/// Weight of calling `seal_ecdsa_recover`.
-	pub ecdsa_recover: RefTimeWeight,
+	pub ecdsa_recover: u64,
 
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
-	pub ecdsa_to_eth_address: RefTimeWeight,
+	pub ecdsa_to_eth_address: u64,
 
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
@@ -441,13 +441,13 @@ macro_rules! cost_args {
 
 macro_rules! cost_batched_args {
 	($name:ident, $( $arg: expr ),+) => {
-		cost_args!($name, $( $arg ),+) / RefTimeWeight::from(API_BENCHMARK_BATCH_SIZE)
+		cost_args!($name, $( $arg ),+) / u64::from(API_BENCHMARK_BATCH_SIZE)
 	}
 }
 
 macro_rules! cost_instr_no_params_with_batch_size {
 	($name:ident, $batch_size:expr) => {
-		(cost_args!($name, 1) / RefTimeWeight::from($batch_size)) as u32
+		(cost_args!($name, 1) / u64::from($batch_size)) as u32
 	};
 }
 

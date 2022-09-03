@@ -110,7 +110,7 @@ use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
 	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
-	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, RefTimeWeight, Weight},
+	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
 	BoundedVec,
 };
 use frame_system::{limits::BlockWeights, Pallet as System};
@@ -214,7 +214,7 @@ impl<B: Get<BlockWeights>, const P: u32> Get<Weight> for DefaultContractAccessWe
 			.get(DispatchClass::Normal)
 			.max_total
 			.unwrap_or(block_weights.max_block) /
-			RefTimeWeight::from(P)
+			u64::from(P)
 	}
 }
 

@@ -24,10 +24,6 @@ use sp_runtime::{
 
 use super::*;
 
-/// The unit of measurement for computational time spent when executing runtime logic on reference
-/// hardware.
-pub type RefTimeWeight = u64;
-
 #[derive(
 	Encode,
 	Decode,
@@ -46,27 +42,27 @@ pub type RefTimeWeight = u64;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Weight {
 	/// The weight of computational time used based on some reference hardware.
-	ref_time: RefTimeWeight,
+	ref_time: u64,
 }
 
 impl Weight {
 	/// Set the reference time part of the weight.
-	pub const fn set_ref_time(mut self, c: RefTimeWeight) -> Self {
+	pub const fn set_ref_time(mut self, c: u64) -> Self {
 		self.ref_time = c;
 		self
 	}
 
 	/// Return the reference time part of the weight.
-	pub const fn ref_time(&self) -> RefTimeWeight {
+	pub const fn ref_time(&self) -> u64 {
 		self.ref_time
 	}
 
 	/// Return a mutable reference time part of the weight.
-	pub fn ref_time_mut(&mut self) -> &mut RefTimeWeight {
+	pub fn ref_time_mut(&mut self) -> &mut u64 {
 		&mut self.ref_time
 	}
 
-	pub const MAX: Self = Self { ref_time: RefTimeWeight::MAX };
+	pub const MAX: Self = Self { ref_time: u64::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.
 	pub fn min(&self, other: Self) -> Self {
@@ -89,7 +85,7 @@ impl Weight {
 	}
 
 	/// Construct [`Weight`] with reference time weight.
-	pub const fn from_ref_time(ref_time: RefTimeWeight) -> Self {
+	pub const fn from_ref_time(ref_time: u64) -> Self {
 		Self { ref_time }
 	}
 
@@ -380,8 +376,8 @@ impl sp_runtime::traits::Printable for Weight {
 
 // TODO: Eventually remove these
 
-impl From<Option<RefTimeWeight>> for PostDispatchInfo {
-	fn from(maybe_actual_computation: Option<RefTimeWeight>) -> Self {
+impl From<Option<u64>> for PostDispatchInfo {
+	fn from(maybe_actual_computation: Option<u64>) -> Self {
 		let actual_weight = match maybe_actual_computation {
 			Some(actual_computation) => Some(Weight::zero().set_ref_time(actual_computation)),
 			None => None,
@@ -390,8 +386,8 @@ impl From<Option<RefTimeWeight>> for PostDispatchInfo {
 	}
 }
 
-impl From<(Option<RefTimeWeight>, Pays)> for PostDispatchInfo {
-	fn from(post_weight_info: (Option<RefTimeWeight>, Pays)) -> Self {
+impl From<(Option<u64>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<u64>, Pays)) -> Self {
 		let (maybe_actual_time, pays_fee) = post_weight_info;
 		let actual_weight = match maybe_actual_time {
 			Some(actual_time) => Some(Weight::zero().set_ref_time(actual_time)),
@@ -401,73 +397,73 @@ impl From<(Option<RefTimeWeight>, Pays)> for PostDispatchInfo {
 	}
 }
 
-impl<T> WeighData<T> for RefTimeWeight {
+impl<T> WeighData<T> for u64 {
 	fn weigh_data(&self, _: T) -> Weight {
 		return Weight::zero().set_ref_time(*self)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for RefTimeWeight {
+impl<T> ClassifyDispatch<T> for u64 {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
 	}
 }
 
-impl<T> PaysFee<T> for RefTimeWeight {
+impl<T> PaysFee<T> for u64 {
 	fn pays_fee(&self, _: T) -> Pays {
 		Pays::Yes
 	}
 }
 
-impl<T> WeighData<T> for (RefTimeWeight, DispatchClass, Pays) {
+impl<T> WeighData<T> for (u64, DispatchClass, Pays) {
 	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (RefTimeWeight, DispatchClass, Pays) {
+impl<T> ClassifyDispatch<T> for (u64, DispatchClass, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
 	}
 }
 
-impl<T> PaysFee<T> for (RefTimeWeight, DispatchClass, Pays) {
+impl<T> PaysFee<T> for (u64, DispatchClass, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.2
 	}
 }
 
-impl<T> WeighData<T> for (RefTimeWeight, DispatchClass) {
+impl<T> WeighData<T> for (u64, DispatchClass) {
 	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (RefTimeWeight, DispatchClass) {
+impl<T> ClassifyDispatch<T> for (u64, DispatchClass) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		self.1
 	}
 }
 
-impl<T> PaysFee<T> for (RefTimeWeight, DispatchClass) {
+impl<T> PaysFee<T> for (u64, DispatchClass) {
 	fn pays_fee(&self, _: T) -> Pays {
 		Pays::Yes
 	}
 }
 
-impl<T> WeighData<T> for (RefTimeWeight, Pays) {
+impl<T> WeighData<T> for (u64, Pays) {
 	fn weigh_data(&self, args: T) -> Weight {
 		return self.0.weigh_data(args)
 	}
 }
 
-impl<T> ClassifyDispatch<T> for (RefTimeWeight, Pays) {
+impl<T> ClassifyDispatch<T> for (u64, Pays) {
 	fn classify_dispatch(&self, _: T) -> DispatchClass {
 		DispatchClass::Normal
 	}
 }
 
-impl<T> PaysFee<T> for (RefTimeWeight, Pays) {
+impl<T> PaysFee<T> for (u64, Pays) {
 	fn pays_fee(&self, _: T) -> Pays {
 		self.1
 	}
