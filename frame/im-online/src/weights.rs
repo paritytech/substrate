@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_im_online.
@@ -56,13 +56,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: ImOnline AuthoredBlocks (r:1 w:0)
 	// Storage: ImOnline Keys (r:1 w:0)
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight {
-		Weight::from_ref_time(79_225_000 as RefTimeWeight)
+		Weight::from_ref_time(79_225_000 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(41_000 as RefTimeWeight).saturating_mul(k as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(41_000 as u64).saturating_mul(k as u64))
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(293_000 as RefTimeWeight).saturating_mul(e as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(293_000 as u64).saturating_mul(e as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 }
 
@@ -74,12 +74,12 @@ impl WeightInfo for () {
 	// Storage: ImOnline AuthoredBlocks (r:1 w:0)
 	// Storage: ImOnline Keys (r:1 w:0)
 	fn validate_unsigned_and_then_heartbeat(k: u32, e: u32, ) -> Weight {
-		Weight::from_ref_time(79_225_000 as RefTimeWeight)
+		Weight::from_ref_time(79_225_000 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(41_000 as RefTimeWeight).saturating_mul(k as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(41_000 as u64).saturating_mul(k as u64))
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(293_000 as RefTimeWeight).saturating_mul(e as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(293_000 as u64).saturating_mul(e as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 }
