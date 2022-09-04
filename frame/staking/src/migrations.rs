@@ -73,7 +73,7 @@ pub mod v9 {
 	/// This is only useful for chains that started their `VoterList` just based on nominators.
 	pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
-		type PreStateDigest = ();
+		type PreStateDigest = u32;
 
 		fn on_runtime_upgrade() -> Weight {
 			if StorageVersion::<T>::get() == Releases::V8_0_0 {
@@ -106,7 +106,7 @@ pub mod v9 {
 			}
 		}
 
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<u32, &'static str> {
 			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == crate::Releases::V8_0_0,
@@ -114,15 +114,13 @@ pub mod v9 {
 			);
 
 			let prev_count = T::VoterList::count();
-			Self::set_temp_storage(prev_count, "prev");
-			Ok(())
+			Ok(prev_count)
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: ()) -> Result<(), &'static str> {
+		fn post_upgrade(prev_count: u32) -> Result<(), &'static str> {
 			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 			let post_count = T::VoterList::count();
-			let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();
 			let validators = Validators::<T>::count();
 			assert!(post_count == prev_count + validators);
 

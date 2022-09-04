@@ -126,7 +126,7 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// TODO: use the `associated_type_defaults` feature once it is stable.
 	/// TODO: add #[cfg(feature = "try-runtime")], which required changing a lot of `Cargo.toml`
-	/// files to add recorrect features dependencies
+	/// files to recorrect features dependencies
 	type PreStateDigest;
 
 	/// Perform a module upgrade.
@@ -150,7 +150,7 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	/// TODO: add #[cfg(feature = "try-runtime")], which required changing a lot of `Cargo.toml`
-	/// files to add recorrect features dependencies
+	/// files to recorrect features dependencies
 	fn pre_upgrade() -> Result<Self::PreStateDigest, &'static str>;
 
 	/// Execute some post-checks after a runtime upgrade.

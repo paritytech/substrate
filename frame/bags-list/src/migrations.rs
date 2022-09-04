@@ -79,18 +79,14 @@ mod old {
 	#[frame_support::storage_alias]
 	pub type CounterForListNodes<T: crate::Config<I>, I: 'static> =
 		StorageValue<crate::Pallet<T, I>, u32, ValueQuery>;
-
-	#[frame_support::storage_alias]
-	pub type TempStorage<T: crate::Config<I>, I: 'static> =
-		StorageValue<crate::Pallet<T, I>, u32, ValueQuery>;
 }
 
 /// A struct that migrates all bags lists to contain a score value.
 pub struct AddScore<T: crate::Config<I>, I: 'static = ()>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
-	type PreStateDigest = ();
+	type PreStateDigest = u32;
 
-	fn pre_upgrade() -> Result<(), &'static str> {
+	fn pre_upgrade() -> Result<u32, &'static str> {
 		// The list node data should be corrupt at this point, so this is zero.
 		ensure!(crate::ListNodes::<T, I>::iter().count() == 0, "list node data is not corrupt");
 		// We can use the helper `old::ListNode` to get the existing data.
@@ -98,8 +94,7 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 		let tracked_node_count: u32 = old::CounterForListNodes::<T, I>::get();
 		crate::log!(info, "number of nodes before: {:?} {:?}", iter_node_count, tracked_node_count);
 		ensure!(iter_node_count == tracked_node_count, "Node count is wrong.");
-		old::TempStorage::<T, I>::put(iter_node_count);
-		Ok(())
+		Ok(iter_node_count)
 	}
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -122,8 +117,7 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade(_: ()) -> Result<(), &'static str> {
-		let node_count_before = old::TempStorage::<T, I>::take();
+	fn post_upgrade(node_count_before: u32) -> Result<(), &'static str> {
 		// Now, the list node data is not corrupt anymore.
 		let iter_node_count_after: u32 = crate::ListNodes::<T, I>::iter().count() as u32;
 		let tracked_node_count_after: u32 = crate::ListNodes::<T, I>::count();
