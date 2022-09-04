@@ -70,9 +70,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-impl Config for Test {
-	type RuntimeCall = RuntimeCall;
-}
+impl Config for Test {}
 
 fn test_pub(n: u8) -> sp_core::sr25519::Public {
 	sp_core::sr25519::Public::from_raw([n; 32])

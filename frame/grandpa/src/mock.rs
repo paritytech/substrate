@@ -225,7 +225,6 @@ parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
 
 	type KeyOwnerProofSystem = Historical;
 

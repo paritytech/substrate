@@ -128,9 +128,6 @@ pub mod pallet {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The overarching dispatch call type.
-		type RuntimeCall: From<Call<Self>>;
-
 		// Configuration parameters
 
 		/// A grace period after we send transaction.

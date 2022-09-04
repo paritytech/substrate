@@ -91,9 +91,6 @@ pub mod pallet {
 			+ Into<<Self as frame_system::Config>::RuntimeEvent>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The function call.
-		type RuntimeCall: From<Call<Self>>;
-
 		/// The proof of key ownership, used for validating equivocation reports
 		/// The proof must include the session index and validator count of the
 		/// session at which the equivocation occurred.

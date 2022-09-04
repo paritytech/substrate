@@ -41,10 +41,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
-		/// The overarching dispatch call type.
-		type RuntimeCall: From<Call<Self>>;
-	}
+	pub trait Config: frame_system::Config {}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]

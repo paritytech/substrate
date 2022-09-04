@@ -877,7 +877,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Called {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: caller_addr.clone(),
 						contract: callee_addr.clone(),
 					}),
@@ -885,7 +885,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Called {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: ALICE,
 						contract: caller_addr.clone(),
 					}),
@@ -1209,7 +1209,7 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Called {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: ALICE,
 						contract: addr.clone(),
 					}),
@@ -3382,7 +3382,7 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Called {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
 						caller: ALICE,
 						contract: addr.clone(),
 					}),
