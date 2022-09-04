@@ -970,8 +970,13 @@ mod tests {
 
 	impl Default for ExtBuilder {
 		fn default() -> Self {
-			Self { balance_factor: 1, base_weight: Weight::zero(), byte_fee: 1, weight_to_fee: 1,
-			initial_multiplier: None }
+			Self {
+				balance_factor: 1,
+				base_weight: Weight::zero(),
+				byte_fee: 1,
+				weight_to_fee: 1,
+				initial_multiplier: None,
+			}
 		}
 	}
 
@@ -1022,9 +1027,7 @@ mod tests {
 			.unwrap();
 
 			if let Some(multiplier) = self.initial_multiplier {
-				let genesis = pallet::GenesisConfig {
-					multiplier
-				};
+				let genesis = pallet::GenesisConfig { multiplier };
 				GenesisBuild::<Runtime>::assimilate_storage(&genesis, &mut t).unwrap();
 			}
 
@@ -1757,13 +1760,8 @@ mod tests {
 
 	#[test]
 	fn genesis_default_works() {
-		ExtBuilder::default()
-			.build()
-			.execute_with(|| {
-				assert_eq!(
-					<NextFeeMultiplier<Runtime>>::get(),
-					Multiplier::saturating_from_integer(1)
-				);
-			});
+		ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(<NextFeeMultiplier<Runtime>>::get(), Multiplier::saturating_from_integer(1));
+		});
 	}
 }
