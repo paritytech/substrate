@@ -49,7 +49,8 @@ where
 	) -> Result<(), TransactionValidityError> {
 		let max = T::BlockWeights::get().get(info.class).max_extrinsic;
 		match max {
-			Some(max) if info.weight > max => Err(InvalidTransaction::ExhaustsResources.into()),
+			Some(max) if info.weight.any_gt(max) =>
+				Err(InvalidTransaction::ExhaustsResources.into()),
 			_ => Ok(()),
 		}
 	}
@@ -144,7 +145,7 @@ where
 
 	// Check if we don't exceed per-class allowance
 	match limit_per_class.max_total {
-		Some(max) if per_class > max => return Err(InvalidTransaction::ExhaustsResources.into()),
+		Some(max) if per_class.any_gt(max) => return Err(InvalidTransaction::ExhaustsResources.into()),
 		// There is no `max_total` limit (`None`),
 		// or we are below the limit.
 		_ => {},
@@ -152,10 +153,10 @@ where
 
 	// In cases total block weight is exceeded, we need to fall back
 	// to `reserved` pool if there is any.
-	if all_weight.total() > maximum_weight.max_block {
+	if all_weight.total().any_gt(maximum_weight.max_block) {
 		match limit_per_class.reserved {
 			// We are over the limit in reserved pool.
-			Some(reserved) if per_class > reserved =>
+			Some(reserved) if per_class.any_gt(reserved) =>
 				return Err(InvalidTransaction::ExhaustsResources.into()),
 			// There is either no limit in reserved pool (`None`),
 			// or we are below the limit.
@@ -238,7 +239,7 @@ where
 		}
 
 		let unspent = post_info.calc_unspent(info);
-		if unspent > Weight::zero() {
+		if unspent.any_gt(Weight::zero()) {
 			crate::BlockWeight::<T>::mutate(|current_weight| {
 				current_weight.sub(unspent, info.class);
 			})

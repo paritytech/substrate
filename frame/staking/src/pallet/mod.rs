@@ -1571,10 +1571,10 @@ pub mod pallet {
 		/// to kick people under the new limits, `chill_other` should be called.
 		// We assume the worst case for this call is either: all items are set or all items are
 		// removed.
-		#[pallet::weight(max(
-			T::WeightInfo::set_staking_configs_all_set(),
-			T::WeightInfo::set_staking_configs_all_remove()
-		))]
+		#[pallet::weight(
+			T::WeightInfo::set_staking_configs_all_set()
+				.max(T::WeightInfo::set_staking_configs_all_remove())
+		)]
 		pub fn set_staking_configs(
 			origin: OriginFor<T>,
 			min_nominator_bond: ConfigOp<BalanceOf<T>>,

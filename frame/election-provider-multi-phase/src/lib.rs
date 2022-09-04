@@ -985,7 +985,7 @@ pub mod pallet {
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
 			ensure!(
-				Self::solution_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
+				Self::solution_weight_of(&raw_solution, size).all_lt(T::SignedMaxWeight::get()),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
