@@ -41,7 +41,6 @@ pub fn migrate<T: Config<I>, I: 'static>() -> Weight {
 pub struct Migration<T, I = ()>(PhantomData<(T, I)>);
 
 impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
-	#[cfg(feature = "try-runtime")]
     type PreStateDigest = ();
 
 	fn on_runtime_upgrade() -> Weight {

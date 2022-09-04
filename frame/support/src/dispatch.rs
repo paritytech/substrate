@@ -1588,7 +1588,6 @@ macro_rules! decl_module {
 			$crate::traits::OnRuntimeUpgrade
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			#[cfg(feature = "try-runtime")]
     		type PreStateDigest = ();
 
 			fn on_runtime_upgrade() -> $return {
@@ -1632,7 +1631,6 @@ macro_rules! decl_module {
 			$crate::traits::OnRuntimeUpgrade
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-			#[cfg(feature = "try-runtime")]
     		type PreStateDigest = ();
 
 			fn on_runtime_upgrade() -> $crate::dispatch::Weight {

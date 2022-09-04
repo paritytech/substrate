@@ -125,7 +125,8 @@ pub trait OnRuntimeUpgrade {
 	/// is no such need, `()` should be used.
 	///
 	/// TODO: use the `associated_type_defaults` feature once it is stable.
-	#[cfg(feature = "try-runtime")]
+	/// TODO: add #[cfg(feature = "try-runtime")], which required changing a lot of `Cargo.toml`
+	/// file to add correct features dependencies
 	type PreStateDigest: Default;
 
 	/// Perform a module upgrade.
@@ -175,7 +176,6 @@ pub trait OnRuntimeUpgrade {
 // `Default` and rust only implemented `Default` on tuples of arity up to 12. 
 #[impl_for_tuples(2)]
 impl OnRuntimeUpgrade for Tuple {
-	#[cfg(feature = "try-runtime")]
 	type PreStateDigest = (for_tuples!( #( Tuple::PreStateDigest ),* ));
 
 	fn on_runtime_upgrade() -> Weight {
@@ -362,7 +362,6 @@ mod tests {
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
-			#[cfg(feature = "try-runtime")]
     		type PreStateDigest = ();
 			fn on_runtime_upgrade() -> Weight {
 				Weight::from_ref_time(20)
