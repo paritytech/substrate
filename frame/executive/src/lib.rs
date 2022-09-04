@@ -859,7 +859,6 @@ mod tests {
 
 	struct CustomOnRuntimeUpgrade;
 	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
-    	#[cfg(feature = "try-runtime")]
 		type PreStateDigest = ();
 
 		fn on_runtime_upgrade() -> Weight {
@@ -869,7 +868,6 @@ mod tests {
 			Weight::from_ref_time(100)
 		}
 
-		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
 			Ok(())
 		}

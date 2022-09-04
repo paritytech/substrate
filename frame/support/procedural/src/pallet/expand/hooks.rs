@@ -147,7 +147,6 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::traits::OnRuntimeUpgrade
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			#[cfg(feature = "try-runtime")]
 			type PreStateDigest = #pre_state_digest_type;
 
 			fn on_runtime_upgrade() -> #frame_support::weights::Weight {
@@ -169,6 +168,11 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 						#pre_state_digest_type
 					>
 				>::on_runtime_upgrade()
+			}
+
+			#[cfg(not(feature = "try-runtime"))]
+			fn pre_upgrade() -> Result<Self::PreStateDigest, &'static str> {
+				Ok(Self::PreStateDigest::default())
 			}
 
 			#[cfg(feature = "try-runtime")]

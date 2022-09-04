@@ -34,7 +34,6 @@ pub mod v10 {
 	/// prevent us from iterating over an arbitrary large number of keys `on_runtime_upgrade`.
 	pub struct MigrateToV10<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
-    	#[cfg(feature = "try-runtime")]
 		type PreStateDigest = ();
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -60,7 +59,6 @@ pub mod v10 {
 			}
 		}
 
-		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
 			Ok(())
 		}
@@ -75,7 +73,6 @@ pub mod v9 {
 	/// This is only useful for chains that started their `VoterList` just based on nominators.
 	pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
-    	#[cfg(feature = "try-runtime")]
 		type PreStateDigest = ();
 
 		fn on_runtime_upgrade() -> Weight {
@@ -109,7 +106,6 @@ pub mod v9 {
 			}
 		}
 
-		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
 			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 			frame_support::ensure!(

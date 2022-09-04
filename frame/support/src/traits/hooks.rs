@@ -125,7 +125,8 @@ pub trait OnRuntimeUpgrade {
 	/// is no such need, `()` should be used.
 	///
 	/// TODO: use the `associated_type_defaults` feature once it is stable.
-	#[cfg(feature = "try-runtime")]
+	/// TODO: add #[cfg(feature = "try-runtime")], which required changing a lot of `Cargo.toml`
+	/// files to add recorrect features dependencies
 	type PreStateDigest;
 
 	/// Perform a module upgrade.
@@ -148,7 +149,8 @@ pub trait OnRuntimeUpgrade {
 	/// to `()`.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
-	#[cfg(feature = "try-runtime")]
+	/// TODO: add #[cfg(feature = "try-runtime")], which required changing a lot of `Cargo.toml`
+	/// files to add recorrect features dependencies
 	fn pre_upgrade() -> Result<Self::PreStateDigest, &'static str>;
 
 	/// Execute some post-checks after a runtime upgrade.
@@ -169,7 +171,6 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
-	#[cfg(feature = "try-runtime")]
 	type PreStateDigest = (for_tuples!( #( Tuple::PreStateDigest ),* ));
 
 	fn on_runtime_upgrade() -> Weight {
@@ -178,7 +179,6 @@ impl OnRuntimeUpgrade for Tuple {
 		weight
 	}
 
-	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Self::PreStateDigest, &'static str> {
 		Ok((for_tuples!( #( Tuple::pre_upgrade()? ),* )))
 	}
@@ -356,14 +356,12 @@ mod tests {
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
-			#[cfg(feature = "try-runtime")]
     		type PreStateDigest = ();
 
 			fn on_runtime_upgrade() -> Weight {
 				Weight::from_ref_time(20)
 			}
 
-			#[cfg(feature = "try-runtime")]
 			fn pre_upgrade() -> Result<(), &'static str> {
 				Ok(())
 			}

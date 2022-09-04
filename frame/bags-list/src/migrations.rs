@@ -21,21 +21,17 @@ use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_election_provider_support::ScoreProvider;
 use frame_support::traits::OnRuntimeUpgrade;
-
-#[cfg(feature = "try-runtime")]
 use frame_support::ensure;
 
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T, I> {
-    #[cfg(feature = "try-runtime")]
 	type PreStateDigest = ();
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		frame_support::weights::Weight::zero()
 	}
 
-	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		// The old explicit storage item.
 		#[frame_support::storage_alias]
@@ -92,10 +88,8 @@ mod old {
 /// A struct that migrates all bags lists to contain a score value.
 pub struct AddScore<T: crate::Config<I>, I: 'static = ()>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
-    #[cfg(feature = "try-runtime")]
 	type PreStateDigest = ();
 
-	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		// The list node data should be corrupt at this point, so this is zero.
 		ensure!(crate::ListNodes::<T, I>::iter().count() == 0, "list node data is not corrupt");
