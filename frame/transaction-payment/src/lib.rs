@@ -241,6 +241,10 @@ impl Default for Releases {
 	}
 }
 
+/// Default value for NextFeeMultiplier. This is used in genesis and is also used in
+/// NextFeeMultiplierOnEmpty() to provide a value when none exists in storage.
+const MULTIPLIER_DEFAULT_VALUE: Multiplier = Multiplier::from_u32(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -300,7 +304,7 @@ pub mod pallet {
 
 	#[pallet::type_value]
 	pub fn NextFeeMultiplierOnEmpty() -> Multiplier {
-		Multiplier::saturating_from_integer(1)
+		MULTIPLIER_DEFAULT_VALUE
 	}
 
 	#[pallet::storage]
@@ -319,7 +323,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self { multiplier: Multiplier::saturating_from_integer(1) }
+			Self { multiplier: MULTIPLIER_DEFAULT_VALUE }
 		}
 	}
 
