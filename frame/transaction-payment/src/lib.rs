@@ -319,9 +319,7 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self {
-				multiplier: Multiplier::saturating_from_integer(1),
-			}
+			Self { multiplier: Multiplier::saturating_from_integer(1) }
 		}
 	}
 
