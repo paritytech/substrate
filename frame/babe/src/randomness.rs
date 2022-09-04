@@ -19,7 +19,7 @@
 //! randomness collected from VRF outputs.
 
 use super::{
-	AuthorVrfRandomness, Config, NextRandomness, Randomness, SessionStart, VRF_OUTPUT_LENGTH,
+	AuthorVrfRandomness, Config, EpochStart, NextRandomness, Randomness, VRF_OUTPUT_LENGTH,
 };
 use frame_support::traits::Randomness as RandomnessT;
 use sp_runtime::traits::{Hash, One, Saturating};
@@ -135,7 +135,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromTwoSessio
 		subject.reserve(VRF_OUTPUT_LENGTH);
 		subject.extend_from_slice(&Randomness::<T>::get()[..]);
 
-		(T::Hashing::hash(&subject[..]), SessionStart::<T>::get().0)
+		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().0)
 	}
 }
 
@@ -145,7 +145,7 @@ impl<T: Config> RandomnessT<T::Hash, T::BlockNumber> for RandomnessFromOneSessio
 		subject.reserve(VRF_OUTPUT_LENGTH);
 		subject.extend_from_slice(&NextRandomness::<T>::get()[..]);
 
-		(T::Hashing::hash(&subject[..]), SessionStart::<T>::get().1)
+		(T::Hashing::hash(&subject[..]), EpochStart::<T>::get().1)
 	}
 }
 

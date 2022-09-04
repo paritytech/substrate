@@ -23,9 +23,9 @@ use frame_support::{
 	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
 	weights::{GetDispatchInfo, Pays},
 };
-use mock::*;
+use mock::{Session, *};
 use pallet_session::ShouldEndSession;
-use sp_consensus_babe::{AllowedSlots, BabeSessionConfiguration, Slot};
+use sp_consensus_babe::{AllowedSlots, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::crypto::Pair;
 
@@ -283,10 +283,10 @@ fn can_enact_next_config() {
 			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
 		};
 
-		SessionConfig::<Test>::put(current_config);
-		NextSessionConfig::<Test>::put(next_config.clone());
+		EpochConfig::<Test>::put(current_config);
+		NextEpochConfig::<Test>::put(next_config.clone());
 
-		assert_eq!(NextSessionConfig::<Test>::get(), Some(next_config.clone()));
+		assert_eq!(NextEpochConfig::<Test>::get(), Some(next_config.clone()));
 
 		Babe::plan_config_change(
 			Origin::root(),
@@ -301,8 +301,8 @@ fn can_enact_next_config() {
 		Babe::on_finalize(9);
 		let header = System::finalize();
 
-		assert_eq!(SessionConfig::<Test>::get(), Some(next_config));
-		assert_eq!(NextSessionConfig::<Test>::get(), Some(next_next_config.clone()));
+		assert_eq!(EpochConfig::<Test>::get(), Some(next_config));
+		assert_eq!(NextEpochConfig::<Test>::get(), Some(next_next_config.clone()));
 
 		let consensus_log =
 			sp_consensus_babe::ConsensusLog::NextConfigData(NextConfigDescriptor::V1 {
@@ -340,7 +340,7 @@ fn only_root_can_enact_config_change() {
 #[test]
 fn can_fetch_current_and_next_session_data() {
 	new_test_ext(5).execute_with(|| {
-		SessionConfig::<Test>::put(BabeSessionConfiguration {
+		EpochConfig::<Test>::put(BabeSessionConfiguration {
 			c: (1, 4),
 			allowed_slots: sp_consensus_babe::AllowedSlots::PrimarySlots,
 		});
@@ -381,7 +381,7 @@ fn tracks_block_numbers_when_current_and_previous_session_started() {
 		// session 3 - [7, 8, 9]
 		progress_to_block(8);
 
-		let (last_session, current_session) = SessionStart::<Test>::get();
+		let (last_session, current_session) = EpochStart::<Test>::get();
 
 		assert_eq!(last_session, 4);
 		assert_eq!(current_session, 7);
@@ -389,7 +389,7 @@ fn tracks_block_numbers_when_current_and_previous_session_started() {
 		// once we reach block 10 we switch to session #4
 		progress_to_block(10);
 
-		let (last_session, current_session) = SessionStart::<Test>::get();
+		let (last_session, current_session) = EpochStart::<Test>::get();
 
 		assert_eq!(last_session, 7);
 		assert_eq!(current_session, 10);
@@ -899,11 +899,11 @@ fn add_session_configurations_migration_works() {
 		let next_config_descriptor =
 			NextConfigDescriptor::V1 { c: (3, 4), allowed_slots: AllowedSlots::PrimarySlots };
 
-		put_storage_value(b"Babe", b"NextSessionConfig", &[], Some(next_config_descriptor.clone()));
+		put_storage_value(b"Babe", b"NextEpochConfig", &[], Some(next_config_descriptor.clone()));
 
 		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
 			b"Babe",
-			b"NextSessionConfig",
+			b"NextEpochConfig",
 			&[],
 		)
 		.is_some());
@@ -917,12 +917,12 @@ fn add_session_configurations_migration_works() {
 
 		assert!(get_storage_value::<Option<NextConfigDescriptor>>(
 			b"Babe",
-			b"NextSessionConfig",
+			b"NextEpochConfig",
 			&[],
 		)
 		.is_none());
 
-		assert_eq!(SessionConfig::<Test>::get(), Some(current_session));
-		assert_eq!(PendingSessionConfigChange::<Test>::get(), Some(next_config_descriptor));
+		assert_eq!(EpochConfig::<Test>::get(), Some(current_session));
+		assert_eq!(PendingEpochConfigChange::<Test>::get(), Some(next_config_descriptor));
 	});
 }

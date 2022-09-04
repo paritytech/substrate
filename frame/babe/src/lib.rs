@@ -193,7 +193,7 @@ pub mod pallet {
 	/// Current session index.
 	#[pallet::storage]
 	#[pallet::getter(fn session_index)]
-	pub type SessionIndex<T> = StorageValue<_, u64, ValueQuery>;
+	pub type EpochIndex<T> = StorageValue<_, u64, ValueQuery>;
 
 	/// Current session authorities.
 	#[pallet::storage]
@@ -234,7 +234,7 @@ pub mod pallet {
 
 	/// Pending session configuration change that will be applied when the next session is enacted.
 	#[pallet::storage]
-	pub(super) type PendingSessionConfigChange<T> = StorageValue<_, NextConfigDescriptor>;
+	pub(super) type PendingEpochConfigChange<T> = StorageValue<_, NextConfigDescriptor>;
 
 	/// Next session randomness.
 	#[pallet::storage]
@@ -291,7 +291,7 @@ pub mod pallet {
 	/// entropy was fixed (i.e. it was known to chain observers). Since sessions are defined in
 	/// slots, which may be skipped, the block numbers may not line up with the slot numbers.
 	#[pallet::storage]
-	pub(super) type SessionStart<T: Config> =
+	pub(super) type EpochStart<T: Config> =
 		StorageValue<_, (T::BlockNumber, T::BlockNumber), ValueQuery>;
 
 	/// How late the current block is compared to its parent.
@@ -306,12 +306,12 @@ pub mod pallet {
 	/// The configuration for the current session. Should never be `None` as it is initialized in
 	/// genesis.
 	#[pallet::storage]
-	pub(super) type SessionConfig<T> = StorageValue<_, BabeSessionConfiguration>;
+	pub(super) type EpochConfig<T> = StorageValue<_, BabeSessionConfiguration>;
 
 	/// The configuration for the next session, `None` if the config will not change
-	/// (you can fallback to `SessionConfig` instead in that case).
+	/// (you can fallback to `EpochConfig` instead in that case).
 	#[pallet::storage]
-	pub(super) type NextSessionConfig<T> = StorageValue<_, BabeSessionConfiguration>;
+	pub(super) type NextEpochConfig<T> = StorageValue<_, BabeSessionConfiguration>;
 
 	#[cfg_attr(feature = "std", derive(Default))]
 	#[pallet::genesis_config]
@@ -325,7 +325,7 @@ pub mod pallet {
 		fn build(&self) {
 			SegmentIndex::<T>::put(0);
 			Pallet::<T>::initialize_genesis_authorities(&self.authorities);
-			SessionConfig::<T>::put(
+			EpochConfig::<T>::put(
 				self.session_config.clone().expect("session_config must not be None"),
 			);
 		}
@@ -368,7 +368,7 @@ pub mod pallet {
 							let transcript = sp_consensus_babe::make_transcript(
 								&Self::randomness(),
 								current_slot,
-								SessionIndex::<T>::get(),
+								EpochIndex::<T>::get(),
 							);
 
 							// NOTE: this is verified by the client when importing the block, before
@@ -458,7 +458,7 @@ pub mod pallet {
 					);
 				},
 			}
-			PendingSessionConfigChange::<T>::put(config);
+			PendingEpochConfigChange::<T>::put(config);
 			Ok(())
 		}
 	}
@@ -577,11 +577,11 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(Self::initialized().is_some());
 
 		// Update session index
-		let session_index = SessionIndex::<T>::get()
+		let session_index = EpochIndex::<T>::get()
 			.checked_add(1)
 			.expect("session indices will never reach 2^64 before the death of the universe; qed");
 
-		SessionIndex::<T>::put(session_index);
+		EpochIndex::<T>::put(session_index);
 		Authorities::<T>::put(authorities);
 
 		// Update session randomness.
@@ -598,7 +598,7 @@ impl<T: Config> Pallet<T> {
 		NextAuthorities::<T>::put(&next_authorities);
 
 		// Update the start blocks of the previous and new current session.
-		<SessionStart<T>>::mutate(|(previous_session_start_block, current_session_start_block)| {
+		<EpochStart<T>>::mutate(|(previous_session_start_block, current_session_start_block)| {
 			*previous_session_start_block = sp_std::mem::take(current_session_start_block);
 			*current_session_start_block = <frame_system::Pallet<T>>::block_number();
 		});
@@ -613,14 +613,14 @@ impl<T: Config> Pallet<T> {
 		};
 		Self::deposit_consensus(ConsensusLog::NextSessionData(next_session));
 
-		if let Some(next_config) = NextSessionConfig::<T>::get() {
-			SessionConfig::<T>::put(next_config);
+		if let Some(next_config) = NextEpochConfig::<T>::get() {
+			EpochConfig::<T>::put(next_config);
 		}
 
-		if let Some(pending_session_config_change) = PendingSessionConfigChange::<T>::take() {
+		if let Some(pending_session_config_change) = PendingEpochConfigChange::<T>::take() {
 			let next_session_config: BabeSessionConfiguration =
 				pending_session_config_change.clone().into();
-			NextSessionConfig::<T>::put(next_session_config);
+			NextEpochConfig::<T>::put(next_session_config);
 
 			Self::deposit_consensus(ConsensusLog::NextConfigData(pending_session_config_change));
 		}
@@ -630,27 +630,26 @@ impl<T: Config> Pallet<T> {
 	/// give correct results after `initialize` of the first block
 	/// in the chain (as its result is based off of `GenesisSlot`).
 	pub fn current_session_start() -> Slot {
-		Self::session_start(SessionIndex::<T>::get())
+		Self::session_start(EpochIndex::<T>::get())
 	}
 
 	/// Produces information about the current session.
 	pub fn current_session() -> Session {
 		Session {
-			session_index: SessionIndex::<T>::get(),
+			session_index: EpochIndex::<T>::get(),
 			start_slot: Self::current_session_start(),
 			duration: T::SessionDuration::get(),
 			authorities: Self::authorities().to_vec(),
 			randomness: Self::randomness(),
-			config: SessionConfig::<T>::get().expect(
-				"SessionConfig is initialized in genesis; we never `take` or `kill` it; qed",
-			),
+			config: EpochConfig::<T>::get()
+				.expect("EpochConfig is initialized in genesis; we never `take` or `kill` it; qed"),
 		}
 	}
 
 	/// Produces information about the next session (which was already previously
 	/// announced).
 	pub fn next_session() -> Session {
-		let next_session_index = SessionIndex::<T>::get().checked_add(1).expect(
+		let next_session_index = EpochIndex::<T>::get().checked_add(1).expect(
 			"session index is u64; it is always only incremented by one; \
 			 if u64 is not enough we should crash for safety; qed.",
 		);
@@ -661,9 +660,9 @@ impl<T: Config> Pallet<T> {
 			duration: T::SessionDuration::get(),
 			authorities: NextAuthorities::<T>::get().to_vec(),
 			randomness: NextRandomness::<T>::get(),
-			config: NextSessionConfig::<T>::get().unwrap_or_else(|| {
-				SessionConfig::<T>::get().expect(
-					"SessionConfig is initialized in genesis; we never `take` or `kill` it; qed",
+			config: NextEpochConfig::<T>::get().unwrap_or_else(|| {
+				EpochConfig::<T>::get().expect(
+					"EpochConfig is initialized in genesis; we never `take` or `kill` it; qed",
 				)
 			}),
 		}
@@ -978,16 +977,16 @@ pub mod migrations {
 		fn pallet_prefix() -> &'static str;
 	}
 
-	struct __OldNextSessionConfig<T>(sp_std::marker::PhantomData<T>);
-	impl<T: BabePalletPrefix> frame_support::traits::StorageInstance for __OldNextSessionConfig<T> {
+	struct __OldNextEpochConfig<T>(sp_std::marker::PhantomData<T>);
+	impl<T: BabePalletPrefix> frame_support::traits::StorageInstance for __OldNextEpochConfig<T> {
 		fn pallet_prefix() -> &'static str {
 			T::pallet_prefix()
 		}
-		const STORAGE_PREFIX: &'static str = "NextSessionConfig";
+		const STORAGE_PREFIX: &'static str = "NextEpochConfig";
 	}
 
-	type OldNextSessionConfig<T> =
-		StorageValue<__OldNextSessionConfig<T>, Option<NextConfigDescriptor>, ValueQuery>;
+	type OldNextEpochConfig<T> =
+		StorageValue<__OldNextEpochConfig<T>, Option<NextConfigDescriptor>, ValueQuery>;
 
 	/// A storage migration that adds the current session configuration for Babe
 	/// to storage.
@@ -997,18 +996,18 @@ pub mod migrations {
 		let mut writes = 0;
 		let mut reads = 0;
 
-		if let Some(pending_change) = OldNextSessionConfig::<T>::get() {
-			PendingSessionConfigChange::<T>::put(pending_change);
+		if let Some(pending_change) = OldNextEpochConfig::<T>::get() {
+			PendingEpochConfigChange::<T>::put(pending_change);
 
 			writes += 1;
 		}
 
 		reads += 1;
 
-		OldNextSessionConfig::<T>::kill();
+		OldNextEpochConfig::<T>::kill();
 
-		SessionConfig::<T>::put(session_config.clone());
-		NextSessionConfig::<T>::put(session_config);
+		EpochConfig::<T>::put(session_config.clone());
+		NextEpochConfig::<T>::put(session_config);
 
 		writes += 3;
 
