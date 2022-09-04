@@ -49,7 +49,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_example_basic.
@@ -63,39 +63,39 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn set_dummy_benchmark(b: u32, ) -> Weight {
-		Weight::from_ref_time(5_834_000 as RefTimeWeight)
-			.saturating_add(Weight::from_ref_time(24_000 as RefTimeWeight).saturating_mul(b as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(5_834_000 as u64)
+			.saturating_add(Weight::from_ref_time(24_000 as u64).saturating_mul(b as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	fn accumulate_dummy(b: u32, ) -> Weight {
-		Weight::from_ref_time(51_353_000 as RefTimeWeight)
-			.saturating_add(Weight::from_ref_time(14_000 as RefTimeWeight).saturating_mul(b as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(51_353_000 as u64)
+			.saturating_add(Weight::from_ref_time(14_000 as u64).saturating_mul(b as u64))
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	fn sort_vector(x: u32, ) -> Weight {
-		Weight::from_ref_time(2_569_000 as RefTimeWeight)
+		Weight::from_ref_time(2_569_000 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(4_000 as RefTimeWeight).saturating_mul(x as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(4_000 as u64).saturating_mul(x as u64))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn set_dummy_benchmark(b: u32, ) -> Weight {
-		Weight::from_ref_time(5_834_000 as RefTimeWeight)
-			.saturating_add(Weight::from_ref_time(24_000 as RefTimeWeight).saturating_mul(b as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(5_834_000 as u64)
+			.saturating_add(Weight::from_ref_time(24_000 as u64).saturating_mul(b as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	fn accumulate_dummy(b: u32, ) -> Weight {
-		Weight::from_ref_time(51_353_000 as RefTimeWeight)
-			.saturating_add(Weight::from_ref_time(14_000 as RefTimeWeight).saturating_mul(b as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(51_353_000 as u64)
+			.saturating_add(Weight::from_ref_time(14_000 as u64).saturating_mul(b as u64))
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	fn sort_vector(x: u32, ) -> Weight {
-		Weight::from_ref_time(2_569_000 as RefTimeWeight)
+		Weight::from_ref_time(2_569_000 as u64)
 			// Standard Error: 0
-			.saturating_add(Weight::from_ref_time(4_000 as RefTimeWeight).saturating_mul(x as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(4_000 as u64).saturating_mul(x as u64))
 	}
 }

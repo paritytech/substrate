@@ -29,7 +29,7 @@ type AllianceMotionEvent = pallet_collective::Event<Test, pallet_collective::Ins
 fn force_set_members_works() {
 	new_test_ext().execute_with(|| {
 		// ensure alliance is set
-		assert_eq!(Alliance::votable_members_sorted(), vec![1, 2, 3]);
+		assert_eq!(Alliance::voting_members_sorted(), vec![1, 2, 3]);
 
 		// creating and proposing proposals
 		let (proposal, proposal_len, hash) = make_remark_proposal(42);
@@ -141,7 +141,7 @@ fn force_set_members_works() {
 		));
 
 		// assert new set of voting members
-		assert_eq!(Alliance::votable_members_sorted(), vec![4, 5, 8]);
+		assert_eq!(Alliance::voting_members_sorted(), vec![4, 5, 8]);
 		// assert new ally member
 		assert!(Alliance::is_ally(&2));
 		// assert a retiring member from previous Alliance not removed
@@ -176,7 +176,7 @@ fn propose_works() {
 	new_test_ext().execute_with(|| {
 		let (proposal, proposal_len, hash) = make_remark_proposal(42);
 
-		// only votable member can propose proposal, 4 is ally not have vote rights
+		// only voting member can propose proposal, 4 is ally not have vote rights
 		assert_noop!(
 			Alliance::propose(Origin::signed(4), 3, Box::new(proposal.clone()), proposal_len),
 			Error::<Test, ()>::NoVotingRights
@@ -465,7 +465,7 @@ fn nominate_ally_works() {
 			Error::<Test, ()>::AlreadyMember
 		);
 
-		// only votable member(founder/fellow) have nominate right
+		// only voting member(founder/fellow) have nominate right
 		assert_noop!(
 			Alliance::nominate_ally(Origin::signed(5), 4),
 			Error::<Test, ()>::NoVotingRights

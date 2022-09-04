@@ -125,7 +125,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `SharedParams`.
 	fn base_path(&self) -> Result<Option<BasePath>> {
-		Ok(self.shared_params().base_path())
+		self.shared_params().base_path()
 	}
 
 	/// Returns `true` if the node is for development or not
