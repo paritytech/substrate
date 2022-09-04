@@ -34,6 +34,9 @@ pub mod v10 {
 	/// prevent us from iterating over an arbitrary large number of keys `on_runtime_upgrade`.
 	pub struct MigrateToV10<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
+		#[cfg(feature = "try-runtime")]
+    	type PreStateDigest = ();
+
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			if StorageVersion::<T>::get() == Releases::V9_0_0 {
 				let pending_slashes = <Pallet<T> as Store>::UnappliedSlashes::iter().take(512);
@@ -67,6 +70,9 @@ pub mod v9 {
 	/// This is only useful for chains that started their `VoterList` just based on nominators.
 	pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
+		#[cfg(feature = "try-runtime")]
+    	type PreStateDigest = ();
+
 		fn on_runtime_upgrade() -> Weight {
 			if StorageVersion::<T>::get() == Releases::V8_0_0 {
 				let prev_count = T::VoterList::count();
@@ -112,7 +118,7 @@ pub mod v9 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_: ()) -> Result<(), &'static str> {
 			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 			let post_count = T::VoterList::count();
 			let prev_count = Self::get_temp_storage::<u32>("prev").unwrap();

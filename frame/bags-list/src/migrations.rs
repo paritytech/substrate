@@ -28,6 +28,9 @@ use frame_support::ensure;
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T, I> {
+	#[cfg(feature = "try-runtime")]
+    type PreStateDigest = ();
+
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		frame_support::weights::Weight::zero()
 	}
@@ -90,6 +93,9 @@ mod old {
 pub struct AddScore<T: crate::Config<I>, I: 'static = ()>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	#[cfg(feature = "try-runtime")]
+    type PreStateDigest = ();
+
+	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<(), &'static str> {
 		// The list node data should be corrupt at this point, so this is zero.
 		ensure!(crate::ListNodes::<T, I>::iter().count() == 0, "list node data is not corrupt");
@@ -122,7 +128,7 @@ impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_: ()) -> Result<(), &'static str> {
 		let node_count_before = old::TempStorage::<T, I>::take();
 		// Now, the list node data is not corrupt anymore.
 		let iter_node_count_after: u32 = crate::ListNodes::<T, I>::iter().count() as u32;

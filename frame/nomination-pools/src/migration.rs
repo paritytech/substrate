@@ -66,6 +66,9 @@ pub mod v1 {
 	/// Note: The depositor is not optional since he can never change.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
+		#[cfg(feature = "try-runtime")]
+    	type PreStateDigest = ();
+
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -97,7 +100,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_: ()) -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
 			Ok(())
@@ -326,6 +329,9 @@ pub mod v2 {
 	}
 
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV2<T> {
+		#[cfg(feature = "try-runtime")]
+    	type PreStateDigest = ();
+
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -359,7 +365,7 @@ pub mod v2 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_: ()) -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 2);
 
