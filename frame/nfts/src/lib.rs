@@ -59,7 +59,7 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -162,8 +162,8 @@ pub mod pallet {
 	}
 
 	pub type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
-		<T as frame_system::Config>::AccountId,
-		Option<<T as frame_system::Config>::BlockNumber>,
+		<T as SystemConfig>::AccountId,
+		Option<<T as SystemConfig>::BlockNumber>,
 		<T as Config<I>>::ApprovalsLimit,
 	>;
 
@@ -351,6 +351,7 @@ pub mod pallet {
 			item: T::ItemId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
+			deadline: Option<<T as SystemConfig>::BlockNumber>,
 		},
 		/// An approval for a `delegate` account to transfer the `item` of an item
 		/// `collection` was cancelled by its `owner`.
@@ -999,7 +1000,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
-			maybe_deadline: Option<<T as frame_system::Config>::BlockNumber>,
+			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1024,7 +1025,7 @@ pub mod pallet {
 
 			details
 				.approvals
-				.try_insert(delegate.clone(), deadline)
+				.try_insert(delegate.clone(), deadline.clone())
 				.map_err(|_| Error::<T, I>::ReachedApprovalLimit)?;
 			Item::<T, I>::insert(&collection, &item, &details);
 
@@ -1033,6 +1034,7 @@ pub mod pallet {
 				item,
 				owner: details.owner,
 				delegate,
+				deadline,
 			});
 
 			Ok(())
