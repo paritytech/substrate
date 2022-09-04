@@ -627,10 +627,11 @@ fn approval_deadline_works() {
 		System::set_block_number(1);
 		assert_ok!(Nfts::transfer(Origin::signed(3), 0, 42, 4));
 
-		// make a new approval with a deadline at the 4th block.
+		assert_eq!(System::block_number(), 1);
+		// make a new approval with a deadline after 4 blocks, so it will expire after the 5th block.
 		assert_ok!(Nfts::approve_transfer(Origin::signed(4), 0, 42, 6, Some(4)));
 		// this should still work.
-		System::set_block_number(4);
+		System::set_block_number(5);
 		assert_ok!(Nfts::transfer(Origin::signed(6), 0, 42, 5));
 	});
 }

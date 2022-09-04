@@ -988,6 +988,7 @@ pub mod pallet {
 		/// - `collection`: The collection of the item to be approved for delegated transfer.
 		/// - `item`: The item of the item to be approved for delegated transfer.
 		/// - `delegate`: The account to delegate permission to transfer the item.
+		/// - `maybe_deadline`: Optional deadline for the approval.
 		///
 		/// Emits `ApprovedTransfer` on success.
 		///
@@ -998,7 +999,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
-			deadline: Option<<T as frame_system::Config>::BlockNumber>,
+			maybe_deadline: Option<<T as frame_system::Config>::BlockNumber>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1015,6 +1016,11 @@ pub mod pallet {
 				let permitted = check == collection_details.admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
+
+			let deadline = match maybe_deadline {
+				Some(d) => Some(d.saturating_add(frame_system::Pallet::<T>::block_number())),
+				None => None,
+			};
 
 			details
 				.approvals
