@@ -107,7 +107,6 @@ pub mod v9 {
 		}
 
 		fn pre_upgrade() -> Result<u32, &'static str> {
-			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == crate::Releases::V8_0_0,
 				"must upgrade linearly"
@@ -119,7 +118,6 @@ pub mod v9 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(prev_count: u32) -> Result<(), &'static str> {
-			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 			let post_count = T::VoterList::count();
 			let validators = Validators::<T>::count();
 			assert!(post_count == prev_count + validators);
