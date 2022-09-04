@@ -1588,7 +1588,8 @@ macro_rules! decl_module {
 			$crate::traits::OnRuntimeUpgrade
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-    		type PreStateDigest = ();
+    		#[cfg(feature = "try-runtime")]
+			type PreStateDigest = ();
 
 			fn on_runtime_upgrade() -> $return {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));
@@ -1631,7 +1632,8 @@ macro_rules! decl_module {
 			$crate::traits::OnRuntimeUpgrade
 			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
 		{
-    		type PreStateDigest = ();
+    		#[cfg(feature = "try-runtime")]
+			type PreStateDigest = ();
 
 			fn on_runtime_upgrade() -> $crate::dispatch::Weight {
 				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!("on_runtime_upgrade"));

@@ -125,9 +125,8 @@ pub trait OnRuntimeUpgrade {
 	/// is no such need, `()` should be used.
 	///
 	/// TODO: use the `associated_type_defaults` feature once it is stable.
-	/// TODO: add #[cfg(feature = "try-runtime")], which required changing a lot of `Cargo.toml`
-	/// file to add correct features dependencies
-	type PreStateDigest: Default;
+	#[cfg(feature = "try-runtime")]
+	type PreStateDigest;
 
 	/// Perform a module upgrade.
 	///
@@ -150,9 +149,7 @@ pub trait OnRuntimeUpgrade {
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Self::PreStateDigest, &'static str> {
-		Ok(Self::PreStateDigest::default())
-	}
+	fn pre_upgrade() -> Result<Self::PreStateDigest, &'static str>;
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
@@ -168,14 +165,11 @@ pub trait OnRuntimeUpgrade {
 	}
 }
 
-// Implement `OnRuntimeUpgrade` up to the `(T1, T2)` tuple, it is sufficient for current usage 
-// because pallets are aggregated in form of `(p1, (p2, (p3, ..)))` where the maximum number of 
-// pallets supported is limited by the `recursion_limit` attribute (default 128).
-// 
-// Note: `impl_for_tuples` is supported up to 12 here because `PreStateDigest` is bonuded by
-// `Default` and rust only implemented `Default` on tuples of arity up to 12. 
-#[impl_for_tuples(2)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
+	#[cfg(feature = "try-runtime")]
 	type PreStateDigest = (for_tuples!( #( Tuple::PreStateDigest ),* ));
 
 	fn on_runtime_upgrade() -> Weight {
@@ -362,9 +356,16 @@ mod tests {
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
+			#[cfg(feature = "try-runtime")]
     		type PreStateDigest = ();
+
 			fn on_runtime_upgrade() -> Weight {
 				Weight::from_ref_time(20)
+			}
+
+			#[cfg(feature = "try-runtime")]
+			fn pre_upgrade() -> Result<(), &'static str> {
+				Ok(())
 			}
 		}
 
