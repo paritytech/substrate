@@ -317,7 +317,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig {
-		multiplier: Multiplier,
+		pub multiplier: Multiplier,
 	}
 
 	#[cfg(feature = "std")]
@@ -823,7 +823,7 @@ mod tests {
 
 	use frame_support::{
 		assert_noop, assert_ok, parameter_types,
-		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
+		traits::{ConstU32, ConstU64, Currency, GenesisBuild, Imbalance, OnUnbalanced},
 		weights::{
 			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
 			WeightToFee as WeightToFeeT,
@@ -965,11 +965,13 @@ mod tests {
 		base_weight: Weight,
 		byte_fee: u64,
 		weight_to_fee: u64,
+		initial_multiplier: Option<Multiplier>,
 	}
 
 	impl Default for ExtBuilder {
 		fn default() -> Self {
-			Self { balance_factor: 1, base_weight: Weight::zero(), byte_fee: 1, weight_to_fee: 1 }
+			Self { balance_factor: 1, base_weight: Weight::zero(), byte_fee: 1, weight_to_fee: 1,
+			initial_multiplier: None }
 		}
 	}
 
@@ -988,6 +990,10 @@ mod tests {
 		}
 		pub fn balance_factor(mut self, factor: u64) -> Self {
 			self.balance_factor = factor;
+			self
+		}
+		pub fn with_initial_multiplier(mut self, multiplier: Multiplier) -> Self {
+			self.initial_multiplier = Some(multiplier);
 			self
 		}
 		fn set_constants(&self) {
@@ -1014,6 +1020,14 @@ mod tests {
 			}
 			.assimilate_storage(&mut t)
 			.unwrap();
+
+			if let Some(multiplier) = self.initial_multiplier {
+				let genesis = pallet::GenesisConfig {
+					multiplier
+				};
+				GenesisBuild::<Runtime>::assimilate_storage(&genesis, &mut t).unwrap();
+			}
+
 			t.into()
 		}
 	}
@@ -1725,6 +1739,31 @@ mod tests {
 				// Only 5 tip is paid
 				assert_eq!(actual_fee, 5);
 				assert_eq!(refund_based_fee, actual_fee);
+			});
+	}
+
+	#[test]
+	fn genesis_config_works() {
+		ExtBuilder::default()
+			.with_initial_multiplier(Multiplier::from_u32(100))
+			.build()
+			.execute_with(|| {
+				assert_eq!(
+					<NextFeeMultiplier<Runtime>>::get(),
+					Multiplier::saturating_from_integer(100)
+				);
+			});
+	}
+
+	#[test]
+	fn genesis_default_works() {
+		ExtBuilder::default()
+			.build()
+			.execute_with(|| {
+				assert_eq!(
+					<NextFeeMultiplier<Runtime>>::get(),
+					Multiplier::saturating_from_integer(1)
+				);
 			});
 	}
 }
