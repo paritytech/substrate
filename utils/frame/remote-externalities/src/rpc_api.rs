@@ -61,22 +61,20 @@ async fn make_request<'a, T: DeserializeOwned>(
 
 /// Simple RPC service that is capable of keeping the connection.
 ///
-/// Service will connect to `uri` for the first time during the first request. Instantiation
-/// does not trigger connecting.
+/// Service will connect to `uri` for the first time already during initialization.
 ///
 /// Be careful with reusing the connection in a multithreaded environment.
 pub struct RpcService {
 	uri: String,
-	client: Arc<Mutex<Option<Client>>>,
-	keep_connection: bool,
+	client: Arc<Option<Client>>,
 }
 
 impl RpcService {
-	/// Creates a new RPC service.
-	///
-	/// Does not connect yet.
-	pub fn new<S: AsRef<str>>(uri: S, keep_connection: bool) -> Self {
-		Self { uri: uri.as_ref().to_string(), client: Arc::new(Mutex::new(None)), keep_connection }
+	/// Creates a new RPC service. Connects to `uri` right away.
+	pub async fn new<S: AsRef<str>>(uri: S, keep_connection: bool) -> Self {
+		let maybe_client = keep_connection
+			.then_some(Self::build_client(uri).await.expect("`RpcService` failed to connect"));
+		Self { uri: uri.as_ref().to_string(), client: Arc::new(maybe_client) }
 	}
 
 	/// Returns the address at which requests are sent.
@@ -84,16 +82,11 @@ impl RpcService {
 		self.uri.clone()
 	}
 
-	/// Whether to keep and reuse a single connection.
-	pub fn keep_connection(&self) -> bool {
-		self.keep_connection
-	}
-
 	/// Build a websocket client that connects to `self.uri`.
-	async fn build_client(&self) -> Result<WsClient, String> {
+	async fn build_client<S: AsRef<str>>(uri: S) -> Result<WsClient, String> {
 		WsClientBuilder::default()
 			.max_request_body_size(u32::MAX)
-			.build(&self.uri)
+			.build(uri)
 			.await
 			.map_err(|e| format!("`WsClientBuilder` failed to build: {:?}", e))
 	}
@@ -104,17 +97,12 @@ impl RpcService {
 		call: RpcCall,
 		params: Option<ParamsSer<'a>>,
 	) -> Result<T, String> {
-		let mut maybe_client = self.client.lock().await;
-		match *maybe_client {
-			// `self.keep_connection` must be `true.
+		match self.client {
+			// `self.keep_connection` must have been `true`.
 			Some(ref client) => make_request(client, call, params).await,
 			None => {
 				let client = self.build_client().await?;
-				let result = make_request(&client, call, params).await;
-				if self.keep_connection {
-					*maybe_client = Some(client)
-				};
-				result
+				make_request(&client, call, params).await
 			},
 		}
 	}

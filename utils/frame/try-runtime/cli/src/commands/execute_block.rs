@@ -89,7 +89,7 @@ impl ExecuteBlockCmd {
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
-		let rpc_service = rpc_api::RpcService::new(ws_uri, false);
+		let rpc_service = rpc_api::RpcService::new(ws_uri, false).await;
 
 		match (&self.block_at, &self.state) {
 			(Some(block_at), State::Snap { .. }) => hash_of::<Block>(block_at),
@@ -148,7 +148,7 @@ where
 
 	let block_ws_uri = command.block_ws_uri::<Block>();
 	let block_at = command.block_at::<Block>(block_ws_uri.clone()).await?;
-	let rpc_service = rpc_api::RpcService::new(block_ws_uri.clone(), false);
+	let rpc_service = rpc_api::RpcService::new(block_ws_uri.clone(), false).await;
 	let block: Block = rpc_service.get_block::<Block>(block_at).await?;
 	let parent_hash = block.header().parent_hash();
 	log::info!(
