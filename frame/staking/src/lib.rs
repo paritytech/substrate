@@ -299,12 +299,12 @@ pub mod weights;
 
 mod pallet;
 
-use codec::{Decode, Encode, HasCompact};
+use codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use frame_support::{
 	parameter_types,
 	traits::{Currency, Defensive, Get},
 	weights::Weight,
-	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	BoundedBTreeMap, BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -368,17 +368,20 @@ pub struct ActiveEraInfo {
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct EraRewardPoints<AccountId: Ord> {
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
+#[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound))]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct EraRewardPoints<T: Config> {
 	/// Total number of points. Equals the sum of reward points for each validator.
 	pub total: RewardPoint,
 	/// The reward points earned by a given validator.
-	pub individual: BTreeMap<AccountId, RewardPoint>,
+	pub individual: BoundedBTreeMap<T::AccountId, RewardPoint, T::MaxActiveValidators>,
 }
 
-impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
+impl<T: Config> Default for EraRewardPoints<T> {
 	fn default() -> Self {
-		EraRewardPoints { total: Default::default(), individual: BTreeMap::new() }
+		EraRewardPoints { total: Default::default(), individual: BoundedBTreeMap::new() }
 	}
 }
 

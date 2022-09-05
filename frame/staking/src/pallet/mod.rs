@@ -195,6 +195,12 @@ pub mod pallet {
 		/// other pallets exist that are affected by slashing per-staker.
 		type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
 
+		/// The maximum number of validators that this pallet can have.
+		///
+		/// If more validators are provided by the election provider, they are silently dropped.
+		// TODO: once we have something like https://github.com/paritytech/substrate/pull/11499, we can have better guarantees here.
+		type MaxActiveValidators: Get<u32>;
+
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
 
@@ -219,6 +225,8 @@ pub mod pallet {
 	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
 
 	/// The ideal number of staking participants.
+	///
+	/// Invariant: This number can never be more than [`Config::MaxActiveValidators`].
 	#[pallet::storage]
 	#[pallet::getter(fn validator_count)]
 	pub type ValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
@@ -233,7 +241,8 @@ pub mod pallet {
 	/// invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
-	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+	pub type Invulnerables<T: Config> =
+		StorageValue<_, BoundedVec<T::AccountId, T::MaxActiveValidators>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
 	#[pallet::storage]
@@ -334,6 +343,9 @@ pub mod pallet {
 	///
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
+	///
+	/// Invariant: the number of keys in this map is always less than
+	/// [`Config::MaxActiveValidators`].
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers)]
 	pub type ErasStakers<T: Config> = StorageDoubleMap<
@@ -357,6 +369,9 @@ pub mod pallet {
 	///
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
+	///
+	/// Invariant: the number of keys in this map is always less than
+	/// [`Config::MaxActiveValidators`].
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers_clipped)]
 	pub type ErasStakersClipped<T: Config> = StorageDoubleMap<
@@ -374,7 +389,11 @@ pub mod pallet {
 	/// This is keyed first by the era index to allow bulk deletion and then the stash account.
 	///
 	/// Is it removed after `HISTORY_DEPTH` eras.
-	// If prefs hasn't been set or has been removed then 0 commission is returned.
+	///
+	/// If prefs hasn't been set or has been removed then 0 commission is returned.
+	///
+	/// Invariant: the number of keys in this map is always less than
+	/// [`Config::MaxActiveValidators`].
 	#[pallet::storage]
 	#[pallet::getter(fn eras_validator_prefs)]
 	pub type ErasValidatorPrefs<T: Config> = StorageDoubleMap<
@@ -390,6 +409,9 @@ pub mod pallet {
 	/// The total validator era payout for the last `HISTORY_DEPTH` eras.
 	///
 	/// Eras that haven't finished yet or has been removed doesn't have reward.
+	///
+	/// Invariant: the number of keys in this map is always less than
+	/// [`Config::MaxActiveValidators`].
 	#[pallet::storage]
 	#[pallet::getter(fn eras_validator_reward)]
 	pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, BalanceOf<T>>;
@@ -399,7 +421,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn eras_reward_points)]
 	pub type ErasRewardPoints<T: Config> =
-		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
+		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T>, ValueQuery>;
 
 	/// The total amount staked for the last `HISTORY_DEPTH` eras.
 	/// If total hasn't been set or has been removed then 0 stake is returned.
@@ -493,14 +515,14 @@ pub mod pallet {
 	/// `OffendingValidatorsThreshold` is reached. The vec is always kept sorted so that we can find
 	/// whether a given validator has previously offended using binary search. It gets cleared when
 	/// the era ends.
+	// TODO: this should also be bounded, but since it is in the slashing code, we might want to do
+	// it later.
 	#[pallet::storage]
 	#[pallet::getter(fn offending_validators)]
 	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
 	/// True if network has been upgraded to this version.
 	/// Storage version of the pallet.
-	///
-	/// This is set to v7.0.0 for new networks.
 	#[pallet::storage]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
@@ -515,7 +537,7 @@ pub mod pallet {
 		pub history_depth: u32,
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
-		pub invulnerables: Vec<T::AccountId>,
+		pub invulnerables: BoundedVec<T::AccountId, T::MaxActiveValidators>,
 		pub force_era: Forcing,
 		pub slash_reward_fraction: Perbill,
 		pub canceled_payout: BalanceOf<T>,
@@ -551,7 +573,10 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			HistoryDepth::<T>::put(self.history_depth);
+
+			assert!(self.validator_count <= T::MaxActiveValidators::get());
 			ValidatorCount::<T>::put(self.validator_count);
+
 			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
 			Invulnerables::<T>::put(&self.invulnerables);
 			ForceEra::<T>::put(self.force_era);
@@ -701,6 +726,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
+		/// Some bound is not met.
+		BoundNotMet,
 	}
 
 	#[pallet::hooks]
@@ -1206,6 +1233,7 @@ pub mod pallet {
 			#[pallet::compact] new: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			ensure!(new <= T::MaxActiveValidators::get(), Error::<T>::BoundNotMet);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
@@ -1223,8 +1251,11 @@ pub mod pallet {
 			#[pallet::compact] additional: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| *n += additional);
-			Ok(())
+			ValidatorCount::<T>::try_mutate(|n| {
+				*n += additional;
+				ensure!(*n <= T::MaxActiveValidators::get(), Error::<T>::BoundNotMet);
+				Ok(())
+			})
 		}
 
 		/// Scale up the ideal number of validators by a factor.
@@ -1237,8 +1268,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
 			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| *n += factor * *n);
-			Ok(())
+			ValidatorCount::<T>::mutate(|n| {
+				*n += factor * *n;
+				ensure!(*n <= T::MaxActiveValidators::get(), Error::<T>::BoundNotMet);
+				Ok(())
+			})
 		}
 
 		/// Force there to be no new eras indefinitely.
@@ -1295,6 +1329,8 @@ pub mod pallet {
 			invulnerables: Vec<T::AccountId>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			let invulnerables: BoundedVec<T::AccountId, T::MaxActiveValidators> =
+				invulnerables.try_into().map_err(|_| Error::<T>::BoundNotMet)?;
 			<Invulnerables<T>>::put(invulnerables);
 			Ok(())
 		}

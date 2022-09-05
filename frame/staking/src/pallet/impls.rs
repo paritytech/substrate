@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{
 	data_provider, ElectionDataProvider, ElectionProvider, ScoreProvider, SortedListProvider,
-	Supports, VoteWeight, VoterOf,
+	Support, VoteWeight, VoterOf,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -42,9 +42,9 @@ use sp_staking::{
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, EraRewardPoints,
+	Exposure, ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf,
+	RewardDestination, SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -406,7 +406,10 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
+			T::MaxActiveValidators,
+		>,
 	) -> Vec<T::AccountId> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
@@ -434,7 +437,7 @@ impl<T: Config> Pallet<T> {
 		start_session_index: SessionIndex,
 		is_genesis: bool,
 	) -> Option<Vec<T::AccountId>> {
-		let election_result = if is_genesis {
+		let election_result: BoundedVec<_, T::MaxActiveValidators> = if is_genesis {
 			T::GenesisElectionProvider::elect().map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
@@ -445,6 +448,7 @@ impl<T: Config> Pallet<T> {
 				Self::deposit_event(Event::StakingElectionFailed);
 			})
 		}
+		.and_then(|er| er.try_into().defensive())
 		.ok()?;
 
 		let exposures = Self::collect_exposures(election_result);
@@ -482,7 +486,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
+			T::MaxActiveValidators,
+		>,
 		new_planned_era: EraIndex,
 	) -> Vec<T::AccountId> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
@@ -526,12 +533,13 @@ impl<T: Config> Pallet<T> {
 	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
-		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+		supports: BoundedVec<(T::AccountId, Support<T::AccountId>), T::MaxActiveValidators>,
+	) -> BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), T::MaxActiveValidators> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
 		};
+		use sp_runtime::traits::TryCollect;
 
 		supports
 			.into_iter()
@@ -556,7 +564,8 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.try_collect()
+			.expect("`supports` is bounded, `map` does not change the length of iterator, outcome is bounded; qed.")
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -625,12 +634,25 @@ impl<T: Config> Pallet<T> {
 	/// COMPLEXITY: Complexity is `number_of_validator_to_reward x current_elected_len`.
 	pub fn reward_by_ids(validators_points: impl IntoIterator<Item = (T::AccountId, u32)>) {
 		if let Some(active_era) = Self::active_era() {
-			<ErasRewardPoints<T>>::mutate(active_era.index, |era_rewards| {
-				for (validator, points) in validators_points.into_iter() {
-					*era_rewards.individual.entry(validator).or_default() += points;
-					era_rewards.total += points;
-				}
-			});
+			<ErasRewardPoints<T>>::mutate(
+				active_era.index,
+				|era_rewards: &mut EraRewardPoints<T>| {
+					for (validator, points) in validators_points.into_iter() {
+						if let Some(i) = era_rewards.individual.get_mut(&validator) {
+							*i += points;
+							era_rewards.total += points;
+						} else {
+							let _ = era_rewards
+								.individual
+								.try_insert(validator, points)
+								.map(|_| {
+									era_rewards.total += points;
+								})
+								.defensive();
+						}
+					}
+				},
+			);
 		}
 	}
 
