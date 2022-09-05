@@ -984,9 +984,8 @@ fn test_migrate_origin() {
 	});
 }
 
-// The scheduler postpones calls without preimage forever but does not re-schedule them.
-/*#[test]
-fn postponed_named_task_can_be_rescheduled() {
+#[test]
+fn postponed_named_task_cannot_be_rescheduled() {
 	new_test_ext().execute_with(|| {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
@@ -994,14 +993,15 @@ fn postponed_named_task_can_be_rescheduled() {
 		let hashed = Preimage::pick(hash, len);
 		let name: [u8; 32] = hash.as_ref().try_into().unwrap();
 
-		assert_ok!(Scheduler::do_schedule_named(
+		let address = Scheduler::do_schedule_named(
 			name,
 			DispatchTime::At(4),
 			None,
 			127,
 			root(),
-			hashed.clone()
-		));
+			hashed.clone(),
+		)
+		.unwrap();
 		assert!(Preimage::is_requested(&hash));
 		assert!(Lookup::<Test>::contains_key(name));
 
@@ -1010,7 +1010,7 @@ fn postponed_named_task_can_be_rescheduled() {
 		// It was not executed.
 		assert!(logger::log().is_empty());
 		assert!(Preimage::is_requested(&hash));
-		// TODO Postponing removes the lookup.
+		// Postponing removes the lookup.
 		assert!(!Lookup::<Test>::contains_key(name));
 
 		// The agenda still contains the call.
@@ -1035,20 +1035,18 @@ fn postponed_named_task_can_be_rescheduled() {
 		assert!(logger::log().is_empty());
 		assert!(Preimage::is_requested(&hash));
 
-		// Manually re-schedule the call.
-		// TODO this fails since the postpone removed the Lookup.
-		assert_ok!(Scheduler::do_reschedule_named(name, DispatchTime::At(1001)));
-		run_to_block(1001);
-
-		// It executed:
-		assert_eq!(logger::log(), vec![(root(), 42)]);
-		assert!(!Preimage::is_requested(&hash));
-
-		let agenda = Agenda::<Test>::iter().collect::<Vec<_>>();
-		assert_eq!(agenda.len(), 1);
-		assert_eq!(agenda[0].1, vec![None]);
+		// Manually re-schedule the call by name does not work.
+		assert_err!(
+			Scheduler::do_reschedule_named(name, DispatchTime::At(1001)),
+			Error::<Test>::NotFound
+		);
+		// Manually re-scheduling the call by address works.
+		assert_err!(
+			Scheduler::do_reschedule(address, DispatchTime::At(1001)),
+			Error::<Test>::Named
+		);
 	});
-}*/
+}
 
 /// Using the scheduler as `v3::Anon` works.
 #[test]
@@ -1068,7 +1066,7 @@ fn scheduler_v3_anon_basic_works() {
 		.unwrap();
 
 		run_to_block(3);
-		// Did not execute until block 3.
+		// Did not execute till block 3.
 		assert!(logger::log().is_empty());
 		// Executes in block 4.
 		run_to_block(4);
@@ -1086,6 +1084,7 @@ fn scheduler_v3_anon_cancel_works() {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 
+		// Schedule a call.
 		let address = <Scheduler as Anon<_, _, _>>::schedule(
 			DispatchTime::At(4),
 			None,
@@ -1094,7 +1093,6 @@ fn scheduler_v3_anon_cancel_works() {
 			bound.clone(),
 		)
 		.unwrap();
-
 		// Cancel the call.
 		assert_ok!(<Scheduler as Anon<_, _, _>>::cancel(address));
 		// It did not get executed.
@@ -1110,18 +1108,19 @@ fn scheduler_v3_anon_reschedule_works() {
 	use frame_support::traits::schedule::v3::Anon;
 	new_test_ext().execute_with(|| {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
-		let bound = Preimage::bound(call).unwrap();
 
+		// Schedule a call.
 		let address = <Scheduler as Anon<_, _, _>>::schedule(
 			DispatchTime::At(4),
 			None,
 			127,
 			root(),
-			bound.clone(),
+			Preimage::bound(call).unwrap(),
 		)
 		.unwrap();
 
 		run_to_block(3);
+		// Did not execute till block 3.
 		assert!(logger::log().is_empty());
 
 		// Cannot re-schedule into the same block.
@@ -1137,16 +1136,84 @@ fn scheduler_v3_anon_reschedule_works() {
 		// Re-schedule to block 5.
 		assert_ok!(<Scheduler as Anon<_, _, _>>::reschedule(address, DispatchTime::At(5)));
 		// Scheduled for block 5.
-
 		run_to_block(4);
 		assert!(logger::log().is_empty());
 		run_to_block(5);
+		// Does execute in block 5.
 		assert_eq!(logger::log(), vec![(root(), 42)]);
-
+		// Cannot re-schedule executed task.
 		assert_err!(
 			<Scheduler as Anon<_, _, _>>::reschedule(address, DispatchTime::At(10)),
 			DispatchError::Unavailable
 		);
+	});
+}
+
+/// Cancelling a call and then scheduling a second call for the same
+/// block results in different addresses.
+#[test]
+fn scheduler_v3_anon_schedule_does_not_resuse_addr() {
+	use frame_support::traits::schedule::v3::Anon;
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+
+		// Schedule both calls.
+		let addr_1 = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			Preimage::bound(call.clone()).unwrap(),
+		)
+		.unwrap();
+		// Cancel the call.
+		assert_ok!(<Scheduler as Anon<_, _, _>>::cancel(addr_1));
+		let addr_2 = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			Preimage::bound(call).unwrap(),
+		)
+		.unwrap();
+
+		// Should not re-use the address.
+		assert!(addr_1 != addr_2);
+	});
+}
+
+/// Cancelling a call and then re-scheduling a second call for the same
+/// block results in different addresses.
+#[test]
+fn scheduler_v3_anon_reschedule_does_not_resuse_addr() {
+	use frame_support::traits::schedule::v3::Anon;
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+
+		// Schedule both calls.
+		let addr_1 = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			Preimage::bound(call.clone()).unwrap(),
+		)
+		.unwrap();
+		// Cancel the call.
+		assert_ok!(<Scheduler as Anon<_, _, _>>::cancel(addr_1));
+		let addr_2 = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(5),
+			None,
+			127,
+			root(),
+			Preimage::bound(call).unwrap(),
+		)
+		.unwrap();
+		// Re-schedule `call` to block 4.
+		let addr_3 = <Scheduler as Anon<_, _, _>>::reschedule(addr_2, DispatchTime::At(4)).unwrap();
+
+		// Should not re-use the address.
+		assert!(addr_1 != addr_3);
 	});
 }
 
@@ -1157,6 +1224,7 @@ fn scheduler_v3_anon_next_schedule_time_works() {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 
+		// Schedule a call.
 		let address = <Scheduler as Anon<_, _, _>>::schedule(
 			DispatchTime::At(4),
 			None,
@@ -1167,13 +1235,16 @@ fn scheduler_v3_anon_next_schedule_time_works() {
 		.unwrap();
 
 		run_to_block(3);
+		// Did not execute till block 3.
 		assert!(logger::log().is_empty());
+
 		// Scheduled for block 4.
 		assert_eq!(<Scheduler as Anon<_, _, _>>::next_dispatch_time(address), Ok(4));
 		// Block 4 executes it.
 		run_to_block(4);
 		assert_eq!(logger::log(), vec![(root(), 42)]);
-		// It's gone.
+
+		// It has no dispatch time anymore.
 		assert_err!(
 			<Scheduler as Anon<_, _, _>>::next_dispatch_time(address),
 			DispatchError::Unavailable
@@ -1189,7 +1260,8 @@ fn scheduler_v3_anon_reschedule_and_next_schedule_time_work() {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 
-		let address = <Scheduler as Anon<_, _, _>>::schedule(
+		// Schedule a call.
+		let old_address = <Scheduler as Anon<_, _, _>>::schedule(
 			DispatchTime::At(4),
 			None,
 			127,
@@ -1199,25 +1271,149 @@ fn scheduler_v3_anon_reschedule_and_next_schedule_time_work() {
 		.unwrap();
 
 		run_to_block(3);
+		// Did not execute till block 3.
 		assert!(logger::log().is_empty());
+
 		// Scheduled for block 4.
-		assert_eq!(<Scheduler as Anon<_, _, _>>::next_dispatch_time(address), Ok(4));
+		assert_eq!(<Scheduler as Anon<_, _, _>>::next_dispatch_time(old_address), Ok(4));
 		// Re-schedule to block 5.
 		let address =
-			<Scheduler as Anon<_, _, _>>::reschedule(address, DispatchTime::At(5)).unwrap();
+			<Scheduler as Anon<_, _, _>>::reschedule(old_address, DispatchTime::At(5)).unwrap();
+		assert!(address != old_address);
 		// Scheduled for block 5.
 		assert_eq!(<Scheduler as Anon<_, _, _>>::next_dispatch_time(address), Ok(5));
 
 		// Block 4 does nothing.
-		run_to_block(3);
+		run_to_block(4);
 		assert!(logger::log().is_empty());
 		// Block 5 executes it.
 		run_to_block(5);
 		assert_eq!(logger::log(), vec![(root(), 42)]);
-		// It's gone.
+	});
+}
+
+#[test]
+fn scheduler_v3_anon_schedule_agenda_overflows() {
+	use frame_support::traits::schedule::v3::Anon;
+	let max: u32 = <Test as Config>::MaxScheduledPerBlock::get();
+
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let bound = Preimage::bound(call).unwrap();
+
+		// Schedule the maximal number allowed per block.
+		for _ in 0..max {
+			<Scheduler as Anon<_, _, _>>::schedule(
+				DispatchTime::At(4),
+				None,
+				127,
+				root(),
+				bound.clone(),
+			)
+			.unwrap();
+		}
+
+		// One more time and it errors.
 		assert_err!(
-			<Scheduler as Anon<_, _, _>>::next_dispatch_time(address),
-			DispatchError::Unavailable
+			<Scheduler as Anon<_, _, _>>::schedule(DispatchTime::At(4), None, 127, root(), bound,),
+			DispatchError::Exhausted
 		);
+
+		run_to_block(4);
+		// All scheduled calls are executed.
+		assert_eq!(logger::log().len() as u32, max);
+	});
+}
+
+/// Cancelling and scheduling does not overflow the agenda but fills holes.
+#[test]
+fn scheduler_v3_anon_cancel_and_schedule_fills_holes() {
+	use frame_support::traits::schedule::v3::Anon;
+	let max: u32 = <Test as Config>::MaxScheduledPerBlock::get();
+	assert!(max > 3, "This test only makes sense for MaxScheduledPerBlock > 3");
+
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let bound = Preimage::bound(call).unwrap();
+		let mut addrs = Vec::<_>::default();
+
+		// Schedule the maximal number allowed per block.
+		for _ in 0..max {
+			addrs.push(
+				<Scheduler as Anon<_, _, _>>::schedule(
+					DispatchTime::At(4),
+					None,
+					127,
+					root(),
+					bound.clone(),
+				)
+				.unwrap(),
+			);
+		}
+		// Cancel three of them.
+		for addr in addrs.into_iter().take(3) {
+			<Scheduler as Anon<_, _, _>>::cancel(addr).unwrap();
+		}
+		// Schedule three new ones.
+		for i in 0..3 {
+			let (_block, index) = <Scheduler as Anon<_, _, _>>::schedule(
+				DispatchTime::At(4),
+				None,
+				127,
+				root(),
+				bound.clone(),
+			)
+			.unwrap();
+			assert_eq!(i, index);
+		}
+
+		run_to_block(4);
+		// Maximum number of calls are executed.
+		assert_eq!(logger::log().len() as u32, max);
+	});
+}
+
+/// Re-scheduling does not overflow the agenda but fills holes.
+#[test]
+fn scheduler_v3_anon_reschedule_fills_holes() {
+	use frame_support::traits::schedule::v3::Anon;
+	let max: u32 = <Test as Config>::MaxScheduledPerBlock::get();
+	assert!(max > 3, "pre-condition: This test only makes sense for MaxScheduledPerBlock > 3");
+
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let bound = Preimage::bound(call).unwrap();
+		let mut addrs = Vec::<_>::default();
+
+		// Schedule the maximal number allowed per block.
+		for _ in 0..max {
+			addrs.push(
+				<Scheduler as Anon<_, _, _>>::schedule(
+					DispatchTime::At(4),
+					None,
+					127,
+					root(),
+					bound.clone(),
+				)
+				.unwrap(),
+			);
+		}
+		let mut new_addrs = Vec::<_>::default();
+		// Reversed last three elements of block 4.
+		let last_three = addrs.into_iter().rev().take(3).collect::<Vec<_>>();
+		// Re-schedule three of them to block 5.
+		for addr in last_three.iter().cloned() {
+			new_addrs
+				.push(<Scheduler as Anon<_, _, _>>::reschedule(addr, DispatchTime::At(5)).unwrap());
+		}
+		// Re-schedule them back into block 3 results in the same addrs.
+		for (old, want) in new_addrs.into_iter().zip(last_three.into_iter().rev()) {
+			let new = <Scheduler as Anon<_, _, _>>::reschedule(old, DispatchTime::At(4)).unwrap();
+			assert_eq!(new, want);
+		}
+
+		run_to_block(4);
+		// Maximum number of calls are executed.
+		assert_eq!(logger::log().len() as u32, max);
 	});
 }
