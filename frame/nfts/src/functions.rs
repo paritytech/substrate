@@ -48,6 +48,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
 		details.owner = dest;
+
+		if let Some(ref seller) = details.seller.clone() {
+			details.seller = None;
+			Seller::<T, I>::remove((seller, &collection, &item));
+		}
+
 		Item::<T, I>::insert(&collection, &item, &details);
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 
@@ -168,7 +174,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let owner = owner.clone();
 				Account::<T, I>::insert((&owner, &collection, &item), ());
-				let details = ItemDetails { owner, approved: None, is_frozen: false, deposit };
+				let details =
+					ItemDetails { owner, approved: None, is_frozen: false, deposit, seller: None };
 				Item::<T, I>::insert(&collection, &item, details);
 				Ok(())
 			},

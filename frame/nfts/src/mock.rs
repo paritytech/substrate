@@ -103,6 +103,7 @@ impl Config for Test {
 	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
+	type SellerTipsLimit = ConstU32<10>;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

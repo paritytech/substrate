@@ -156,6 +156,10 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The maximum amount of seller tips records an item could have.
+		#[pallet::constant]
+		type SellerTipsLimit: Get<u32>;
 	}
 
 	#[pallet::storage]
@@ -267,6 +271,19 @@ pub mod pallet {
 	/// Keeps track of the number of items a collection might have.
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
+
+	#[pallet::storage]
+	/// Sellers and items they could sell.
+	pub(super) type Seller<T: Config<I>, I: 'static = ()> = StorageNMap<
+		_,
+		(
+			NMapKey<Blake2_128Concat, T::AccountId>, // seller
+			NMapKey<Blake2_128Concat, T::CollectionId>,
+			NMapKey<Blake2_128Concat, T::ItemId>,
+		),
+		ItemSellData<ItemPrice<T, I>, ItemTip<T, I>, T::SellerTipsLimit>,
+		OptionQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -384,6 +401,16 @@ pub mod pallet {
 			receiver: T::AccountId,
 			amount: DepositBalanceOf<T, I>,
 		},
+		/// A seller was set for an item.
+		SellerSet {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			seller: T::AccountId,
+			price: ItemPrice<T, I>,
+			tips: SellerTipsOf<T, I>,
+		},
+		/// A seller was removed from an item.
+		SellerRemoved { collection: T::CollectionId, item: T::ItemId, seller: T::AccountId },
 	}
 
 	#[pallet::error]
@@ -424,6 +451,12 @@ pub mod pallet {
 		NotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
+		/// Wrong seller provided.
+		WrongSeller,
+		/// Wrong price provided.
+		WrongPrice,
+		/// Wrong tips provided.
+		WrongTips,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1515,6 +1548,80 @@ pub mod pallet {
 		pub fn pay_tips(origin: OriginFor<T>, tips: Vec<ItemTip<T, I>>) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_pay_tips(origin, tips)
+		}
+
+		/// Allows to set the seller for an item and to set the tips those should be paid.
+		///
+		/// Origin must be Signed and must not be the owner of the `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item the owner wants to set the seller for.
+		/// - `seller`: Seller's account.
+		/// - `price`: The price for an item.
+		/// - `tips`: Tips those should be paid.
+		///
+		/// Emits `SellerSet` on success.
+		#[pallet::weight(0)]
+		pub fn set_seller(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			seller: AccountIdLookupOf<T>,
+			price: ItemPrice<T, I>,
+			tips: SellerTipsOf<T, I>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let seller = T::Lookup::lookup(seller)?;
+			Self::do_set_seller(collection, item, origin, seller, price, tips)
+		}
+
+		/// Removes the seller from an item.
+		///
+		/// Origin must be Signed and must not be the owner of the `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item the owner wants to remove the seller from.
+		/// - `seller`: Previously set seller's account.
+		///
+		/// Emits `SellerRemoved` on success.
+		#[pallet::weight(0)]
+		pub fn remove_seller(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			seller: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let seller = T::Lookup::lookup(seller)?;
+			Self::do_remove_seller(collection, item, origin, seller)
+		}
+
+		/// Allows to buy an item from the seller.
+		///
+		/// Origin must be Signed and must not be the owner of the `item`.
+		///
+		/// Note: the `price` and `tips` params need to be provided to ensure it won't be
+		/// possible to change them in the state by front-running that call.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item the sender wants to buy.
+		/// - `seller`: Previously set seller's account.
+		/// - `price`: Previously set price.
+		/// - `tips`: Previously set tips.
+		///
+		/// Emits `ItemBought` on success.
+		#[pallet::weight(0)]
+		pub fn buy_from_seller(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			seller: AccountIdLookupOf<T>,
+			price: ItemPrice<T, I>,
+			tips: SellerTipsOf<T, I>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let seller = T::Lookup::lookup(seller)?;
+			Self::do_buy_from_seller(collection, item, origin, seller, price, tips)
 		}
 	}
 }

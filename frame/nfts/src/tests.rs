@@ -879,3 +879,172 @@ fn pay_tips_should_work() {
 		}));
 	});
 }
+
+#[test]
+fn set_remove_seller_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let seller_id = 2;
+		let collection_id = 0;
+		let item_id = 1;
+		let price = 10;
+		let tips: SellerTipsOf<Test> = bvec![(collection_id, item_id, user_id, 1)];
+
+		assert_ok!(Nfts::force_create(Origin::root(), collection_id, user_id, true));
+		assert_ok!(Nfts::mint(Origin::signed(user_id), collection_id, item_id, user_id));
+
+		assert_ok!(Nfts::set_seller(
+			Origin::signed(user_id),
+			collection_id,
+			item_id,
+			seller_id,
+			price,
+			tips.clone(),
+		));
+
+		let item = Item::<Test>::get(collection_id, item_id).unwrap();
+		assert_eq!(item.seller, Some(seller_id));
+
+		let sell_data = Seller::<Test>::get((seller_id, collection_id, item_id)).unwrap();
+		assert_eq!(sell_data.price, price);
+		assert_eq!(sell_data.tips, tips);
+
+		assert!(events().contains(&Event::<Test>::SellerSet {
+			collection: collection_id,
+			item: item_id,
+			seller: seller_id,
+			price,
+			tips,
+		}));
+
+		// reset the seller by setting the seller field to `None`
+		assert_ok!(
+			Nfts::remove_seller(Origin::signed(user_id), collection_id, item_id, seller_id,)
+		);
+		let item = Item::<Test>::get(collection_id, item_id).unwrap();
+		assert_eq!(item.seller, None);
+		assert!(!Seller::<Test>::contains_key((seller_id, collection_id, item_id)));
+
+		assert!(events().contains(&Event::<Test>::SellerRemoved {
+			collection: collection_id,
+			item: item_id,
+			seller: seller_id,
+		}));
+	});
+}
+
+#[test]
+fn buy_from_seller_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let seller_id = 4;
+		let collection_id = 0;
+		let item_id = 1;
+		let price = 20;
+		let seller_tips = 10;
+		let tips: SellerTipsOf<Test> = bvec![(collection_id, item_id, seller_id, seller_tips)];
+		let initial_balance = 100;
+		let total = price + seller_tips;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&seller_id, initial_balance);
+
+		assert_ok!(Nfts::force_create(Origin::root(), collection_id, user_1, true));
+		assert_ok!(Nfts::mint(Origin::signed(user_1), collection_id, item_id, user_1));
+
+		// can't by if seller is not set
+		assert_noop!(
+			Nfts::buy_from_seller(
+				Origin::signed(user_2),
+				collection_id,
+				item_id,
+				seller_id,
+				price,
+				tips.clone(),
+			),
+			Error::<Test>::NotForSale
+		);
+
+		// set the seller
+		assert_ok!(Nfts::set_seller(
+			Origin::signed(user_1),
+			collection_id,
+			item_id,
+			seller_id,
+			price,
+			tips.clone(),
+		));
+
+		// can't buy if the price differs
+		assert_noop!(
+			Nfts::buy_from_seller(
+				Origin::signed(user_2),
+				collection_id,
+				item_id,
+				seller_id,
+				price - 1,
+				tips.clone(),
+			),
+			Error::<Test>::WrongPrice
+		);
+
+		// can't buy from yourself
+		assert_noop!(
+			Nfts::buy_from_seller(
+				Origin::signed(user_1),
+				collection_id,
+				item_id,
+				seller_id,
+				price,
+				tips.clone(),
+			),
+			Error::<Test>::NoPermission
+		);
+
+		// can't buy when the provided seller is wrong
+		assert_noop!(
+			Nfts::buy_from_seller(
+				Origin::signed(user_2),
+				collection_id,
+				item_id,
+				user_1,
+				price,
+				tips.clone(),
+			),
+			Error::<Test>::WrongSeller
+		);
+
+		// can buy with the right params
+		assert_ok!(Nfts::buy_from_seller(
+			Origin::signed(user_2),
+			collection_id,
+			item_id,
+			seller_id,
+			price,
+			tips.clone(),
+		));
+
+		// validate the new owner
+		let item = Item::<Test>::get(collection_id, item_id).unwrap();
+		assert_eq!(item.owner, user_2);
+
+		// validate balances
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + price);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - total);
+		assert_eq!(Balances::total_balance(&seller_id), initial_balance + seller_tips);
+
+		assert!(events().contains(&Event::<Test>::ItemBought {
+			collection: collection_id,
+			item: item_id,
+			price,
+			seller: user_1,
+			buyer: user_2,
+		}));
+
+		// ensure we reset the seller field
+		assert_eq!(Item::<Test>::get(collection_id, item_id).unwrap().seller, None);
+		assert!(!Seller::<Test>::contains_key((seller_id, collection_id, item_id)));
+	});
+}

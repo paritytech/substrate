@@ -39,6 +39,8 @@ pub(super) type ItemTip<T, I = ()> = (
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
 );
+pub(super) type SellerTipsOf<T, I = ()> =
+	BoundedVec<ItemTip<T, I>, <T as Config<I>>::SellerTipsLimit>;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
@@ -101,6 +103,8 @@ pub struct ItemDetails<AccountId, DepositBalance> {
 	/// The amount held in the pallet's default account for this item. Free-hold items will have
 	/// this as zero.
 	pub(super) deposit: DepositBalance,
+	/// An approved seller of this item, if one is set.
+	pub(super) seller: Option<AccountId>,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
@@ -133,4 +137,12 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the item metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, Default, MaxEncodedLen, TypeInfo)]
+#[scale_info(skip_type_params(TipsLimit))]
+#[codec(mel_bound(ItemPrice: MaxEncodedLen, Tip: MaxEncodedLen))]
+pub struct ItemSellData<ItemPrice, Tip, TipsLimit: Get<u32>> {
+	pub price: ItemPrice,
+	pub tips: BoundedVec<Tip, TipsLimit>,
 }

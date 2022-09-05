@@ -1476,6 +1476,10 @@ impl pallet_uniques::Config for Runtime {
 	type Locker = ();
 }
 
+parameter_types! {
+	pub const SellerTipsLimit: u32 = 10;
+}
+
 impl pallet_nfts::Config for Runtime {
 	type Event = Event;
 	type CollectionId = u32;
@@ -1495,6 +1499,7 @@ impl pallet_nfts::Config for Runtime {
 	type Helper = ();
 	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
 	type Locker = ();
+	type SellerTipsLimit = SellerTipsLimit;
 }
 
 impl pallet_transaction_storage::Config for Runtime {
