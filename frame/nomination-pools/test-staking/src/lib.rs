@@ -492,7 +492,7 @@ fn pool_slash_proportional() {
 			vec![
 				// This era got slashed 12.5, which rounded up to 13.
 				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 128, balance: 7 },
-				// This ear got slashed 12 instead of 12.5 because earlier chunk got 0.5 more
+				// This era got slashed 12 instead of 12.5 because an earlier chunk got 0.5 more
 				// slashed, and 12 is all the remaining slash
 				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 129, balance: 8 },
 				// Bonded pool got slashed for 25, remaining 15 in it.
