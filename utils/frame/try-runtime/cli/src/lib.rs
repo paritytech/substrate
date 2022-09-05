@@ -541,8 +541,8 @@ impl State {
 impl TryRuntimeCmd {
 	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
-		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
-		Block::Header: serde::de::DeserializeOwned,
+		Block: BlockT<Hash = H256> + DeserializeOwned,
+		Block::Header: DeserializeOwned,
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 		NumberFor<Block>: FromStr,
@@ -626,7 +626,7 @@ where
 ///
 /// If the spec names don't match, if `relaxed`, then it emits a warning, else it panics.
 /// If the spec versions don't match, it only ever emits a warning.
-pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeOwned>(
+pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,
 	expected_spec_version: u32,
