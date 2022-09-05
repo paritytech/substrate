@@ -314,7 +314,7 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			Pools::sanity_checks(CheckLevel::get()).unwrap();
+			Pools::do_try_state(CheckLevel::get()).unwrap();
 		})
 	}
 }

@@ -1130,7 +1130,7 @@ impl<T: Config> SubPools<T> {
 	}
 
 	/// The sum of all unbonding balance, regardless of whether they are actually unlocked or not.
-	#[cfg(any(test, debug_assertions))]
+	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
 	fn sum_unbonding_balance(&self) -> BalanceOf<T> {
 		self.no_era.balance.saturating_add(
 			self.with_era
@@ -2283,6 +2283,11 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state(u8::MAX)
+		}
+
 		fn integrity_test() {
 			assert!(
 				T::MaxPointsToBalance::get() > 0,
@@ -2301,16 +2306,20 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Returns the pending rewards for the specified `member_account`.
 	///
-	/// In the case of error the function returns balance of zero.
-	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
+	/// In the case of error, `None` is returned.
+	pub fn pending_rewards(member_account: T::AccountId) -> Option<BalanceOf<T>> {
 		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
-			if let Some(reward_pool) = RewardPools::<T>::get(pool_member.pool_id) {
-				return pool_member
-					.pending_rewards(reward_pool.last_recorded_reward_counter())
-					.unwrap_or_default()
+			if let Some((reward_pool, bonded_pool)) = RewardPools::<T>::get(pool_member.pool_id)
+				.zip(BondedPools::<T>::get(pool_member.pool_id))
+			{
+				let current_reward_counter = reward_pool
+					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
+					.ok()?;
+				return pool_member.pending_rewards(current_reward_counter).ok()
 			}
 		}
-		BalanceOf::<T>::default()
+
+		None
 	}
 
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
@@ -2530,9 +2539,9 @@ impl<T: Config> Pallet<T> {
 	///
 	/// To cater for tests that want to escape parts of these checks, this function is split into
 	/// multiple `level`s, where the higher the level, the more checks we performs. So,
-	/// `sanity_check(255)` is the strongest sanity check, and `0` performs no checks.
-	#[cfg(any(test, debug_assertions))]
-	pub fn sanity_checks(level: u8) -> Result<(), &'static str> {
+	/// `try_state(255)` is the strongest sanity check, and `0` performs no checks.
+	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
+	pub fn do_try_state(level: u8) -> Result<(), &'static str> {
 		if level.is_zero() {
 			return Ok(())
 		}
@@ -2542,7 +2551,8 @@ impl<T: Config> Pallet<T> {
 		let reward_pools = RewardPools::<T>::iter_keys().collect::<Vec<_>>();
 		assert_eq!(bonded_pools, reward_pools);
 
-		assert!(Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
+		// TODO: can't check this right now: https://github.com/paritytech/substrate/issues/12077
+		// assert!(Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
 		assert!(SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
 
 		assert!(MaxPools::<T>::get().map_or(true, |max| bonded_pools.len() <= (max as usize)));
