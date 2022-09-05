@@ -478,7 +478,7 @@ where
 				BlockId::Number(block_num),
 				(BEEFY_ENGINE_ID, finality_proof.clone().encode()),
 			) {
-				debug!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
+				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
 			}
 
 			self.backend.blockchain().hash(block_num).ok().flatten().map(|hash| {
@@ -736,8 +736,10 @@ where
 					let at = BlockId::hash(notif.header.hash());
 					if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
 						self.initialize_voter(&notif.header, active);
-						if let Err(err) = self.try_to_vote() {
-							debug!(target: "beefy", "🥩 {}", err);
+						if !self.sync_oracle.is_major_syncing() {
+							if let Err(err) = self.try_to_vote() {
+								debug!(target: "beefy", "🥩 {}", err);
+							}
 						}
 						// Beefy pallet available and voter initialized.
 						break
