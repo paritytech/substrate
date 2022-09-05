@@ -17,7 +17,6 @@
 
 //! Try-runtime specific traits and types.
 
-use super::*;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;

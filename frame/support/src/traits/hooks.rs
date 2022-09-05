@@ -356,7 +356,7 @@ mod tests {
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
-    		type PreStateDigest = ();
+			type PreStateDigest = ();
 
 			fn on_runtime_upgrade() -> Weight {
 				Weight::from_ref_time(20)

@@ -20,8 +20,7 @@
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_election_provider_support::ScoreProvider;
-use frame_support::traits::OnRuntimeUpgrade;
-use frame_support::ensure;
+use frame_support::{ensure, traits::OnRuntimeUpgrade};
 
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
