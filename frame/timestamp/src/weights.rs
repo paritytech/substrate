@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_timestamp.
@@ -54,12 +54,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:1)
 	// Storage: Babe CurrentSlot (r:1 w:0)
 	fn set() -> Weight {
-		Weight::from_ref_time(8_080_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(8_080_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	fn on_finalize() -> Weight {
-		Weight::from_ref_time(2_681_000 as RefTimeWeight)
+		Weight::from_ref_time(2_681_000 as u64)
 	}
 }
 
@@ -68,11 +68,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:1)
 	// Storage: Babe CurrentSlot (r:1 w:0)
 	fn set() -> Weight {
-		Weight::from_ref_time(8_080_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(8_080_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	fn on_finalize() -> Weight {
-		Weight::from_ref_time(2_681_000 as RefTimeWeight)
+		Weight::from_ref_time(2_681_000 as u64)
 	}
 }

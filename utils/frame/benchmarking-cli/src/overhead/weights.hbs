@@ -52,7 +52,7 @@ parameter_types! {
 	///   99th: {{underscore stats.p99}}
 	///   95th: {{underscore stats.p95}}
 	///   75th: {{underscore stats.p75}}
-	pub const {{long_name}}Weight: Weight = WEIGHT_PER_NANOS.scalar_saturating_mul({{underscore weight}});
+	pub const {{long_name}}Weight: Weight = WEIGHT_PER_NANOS.saturating_mul({{underscore weight}});
 }
 
 #[cfg(test)]

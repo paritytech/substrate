@@ -66,8 +66,7 @@ use frame_support::{
 	dispatch::DispatchResult,
 	traits::{EstimateCallFee, Get},
 	weights::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, RefTimeWeight,
-		Weight, WeightToFee,
+		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight, WeightToFee,
 	},
 };
 
@@ -242,6 +241,10 @@ impl Default for Releases {
 	}
 }
 
+/// Default value for NextFeeMultiplier. This is used in genesis and is also used in
+/// NextFeeMultiplierOnEmpty() to provide a value when none exists in storage.
+const MULTIPLIER_DEFAULT_VALUE: Multiplier = Multiplier::from_u32(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -301,7 +304,7 @@ pub mod pallet {
 
 	#[pallet::type_value]
 	pub fn NextFeeMultiplierOnEmpty() -> Multiplier {
-		Multiplier::saturating_from_integer(1)
+		MULTIPLIER_DEFAULT_VALUE
 	}
 
 	#[pallet::storage]
@@ -313,12 +316,14 @@ pub mod pallet {
 	pub(super) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig;
+	pub struct GenesisConfig {
+		pub multiplier: Multiplier,
+	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self
+			Self { multiplier: MULTIPLIER_DEFAULT_VALUE }
 		}
 	}
 
@@ -326,6 +331,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
+			NextFeeMultiplier::<T>::put(self.multiplier);
 		}
 	}
 
@@ -559,7 +565,7 @@ where
 	}
 
 	fn length_to_fee(length: u32) -> BalanceOf<T> {
-		T::LengthToFee::weight_to_fee(&Weight::from_ref_time(length as RefTimeWeight))
+		T::LengthToFee::weight_to_fee(&Weight::from_ref_time(length as u64))
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
@@ -817,7 +823,7 @@ mod tests {
 
 	use frame_support::{
 		assert_noop, assert_ok, parameter_types,
-		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
+		traits::{ConstU32, ConstU64, Currency, GenesisBuild, Imbalance, OnUnbalanced},
 		weights::{
 			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
 			WeightToFee as WeightToFeeT,
@@ -845,7 +851,7 @@ mod tests {
 		&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 	thread_local! {
-		static EXTRINSIC_BASE_WEIGHT: RefCell<Weight> = RefCell::new(Weight::new());
+		static EXTRINSIC_BASE_WEIGHT: RefCell<Weight> = RefCell::new(Weight::zero());
 	}
 
 	pub struct BlockWeights;
@@ -959,11 +965,18 @@ mod tests {
 		base_weight: Weight,
 		byte_fee: u64,
 		weight_to_fee: u64,
+		initial_multiplier: Option<Multiplier>,
 	}
 
 	impl Default for ExtBuilder {
 		fn default() -> Self {
-			Self { balance_factor: 1, base_weight: Weight::zero(), byte_fee: 1, weight_to_fee: 1 }
+			Self {
+				balance_factor: 1,
+				base_weight: Weight::zero(),
+				byte_fee: 1,
+				weight_to_fee: 1,
+				initial_multiplier: None,
+			}
 		}
 	}
 
@@ -982,6 +995,10 @@ mod tests {
 		}
 		pub fn balance_factor(mut self, factor: u64) -> Self {
 			self.balance_factor = factor;
+			self
+		}
+		pub fn with_initial_multiplier(mut self, multiplier: Multiplier) -> Self {
+			self.initial_multiplier = Some(multiplier);
 			self
 		}
 		fn set_constants(&self) {
@@ -1008,6 +1025,12 @@ mod tests {
 			}
 			.assimilate_storage(&mut t)
 			.unwrap();
+
+			if let Some(multiplier) = self.initial_multiplier {
+				let genesis = pallet::GenesisConfig { multiplier };
+				GenesisBuild::<Runtime>::assimilate_storage(&genesis, &mut t).unwrap();
+			}
+
 			t.into()
 		}
 	}
@@ -1720,5 +1743,25 @@ mod tests {
 				assert_eq!(actual_fee, 5);
 				assert_eq!(refund_based_fee, actual_fee);
 			});
+	}
+
+	#[test]
+	fn genesis_config_works() {
+		ExtBuilder::default()
+			.with_initial_multiplier(Multiplier::from_u32(100))
+			.build()
+			.execute_with(|| {
+				assert_eq!(
+					<NextFeeMultiplier<Runtime>>::get(),
+					Multiplier::saturating_from_integer(100)
+				);
+			});
+	}
+
+	#[test]
+	fn genesis_default_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(<NextFeeMultiplier<Runtime>>::get(), Multiplier::saturating_from_integer(1));
+		});
 	}
 }
