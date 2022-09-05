@@ -421,8 +421,8 @@ pub mod pallet {
 		UnscrupulousItemAdded { items: Vec<UnscrupulousItemOf<T, I>> },
 		/// Accounts or websites have been removed from the list of unscrupulous items.
 		UnscrupulousItemRemoved { items: Vec<UnscrupulousItemOf<T, I>> },
-		/// Alliance disbanded.
-		AllianceDisbanded { voting_members: Vec<T::AccountId>, ally_members: Vec<T::AccountId> },
+		/// Alliance disbanded. Includes number deleted members and unreserved deposits.
+		AllianceDisbanded { voting_members: u32, ally_members: u32, unreserved: u32 },
 	}
 
 	#[pallet::genesis_config]
@@ -724,10 +724,10 @@ pub mod pallet {
 			ensure!(Self::ally_members_count() <= witness.ally_members, Error::<T, I>::BadWitness);
 			ensure!(Self::is_initialized(), Error::<T, I>::AllianceNotYetInitialized);
 
-			let mut voting_members = Self::voting_members();
+			let voting_members = Self::voting_members();
 			T::MembershipChanged::change_members_sorted(&[], &voting_members, &[]);
 
-			let mut ally_members = Self::members_of(MemberRole::Ally);
+			let ally_members = Self::members_of(MemberRole::Ally);
 			let mut unreserve_count: u32 = 0;
 			for member in voting_members.iter().chain(ally_members.iter()) {
 				if let Some(deposit) = DepositOf::<T, I>::take(&member) {
@@ -741,16 +741,15 @@ pub mod pallet {
 			Members::<T, I>::remove(&MemberRole::Fellow);
 			Members::<T, I>::remove(&MemberRole::Ally);
 
-			let voting_members_count = voting_members.len() as u32;
-			let ally_members_count = ally_members.len() as u32;
-
-			voting_members.sort();
-			ally_members.sort();
-			Self::deposit_event(Event::AllianceDisbanded { voting_members, ally_members });
+			Self::deposit_event(Event::AllianceDisbanded {
+				voting_members: voting_members.len() as u32,
+				ally_members: ally_members.len() as u32,
+				unreserved: unreserve_count,
+			});
 
 			Ok(Some(T::WeightInfo::disband(
-				voting_members_count,
-				ally_members_count,
+				voting_members.len() as u32,
+				ally_members.len() as u32,
 				unreserve_count,
 			))
 			.into())

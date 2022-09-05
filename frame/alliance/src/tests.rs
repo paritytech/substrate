@@ -118,8 +118,9 @@ fn disband_works() {
 		assert_eq!(Balances::free_balance(9), 40);
 
 		System::assert_last_event(mock::Event::Alliance(crate::Event::AllianceDisbanded {
-			voting_members: vec![1, 3],
-			ally_members: vec![9],
+			voting_members: 2,
+			ally_members: 1,
+			unreserved: 1,
 		}));
 
 		// the Alliance must be set first

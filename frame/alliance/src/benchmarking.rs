@@ -19,6 +19,7 @@
 
 use sp_runtime::traits::{Bounded, Hash, StaticLookup};
 use sp_std::{
+	cmp,
 	convert::{TryFrom, TryInto},
 	mem::size_of,
 	prelude::*,
@@ -632,10 +633,10 @@ benchmarks_instance_pallet! {
 		// at least 1 founders
 		let x in 1 .. T::MaxFounders::get() + T::MaxFellows::get();
 		let y in 0 .. T::MaxAllies::get();
-		let z in 0 .. T::MaxFounders::get() + T::MaxFellows::get()+ T::MaxAllies::get();
+		let z in 0 .. T::MaxMembersCount::get() / 2;
 
-		let mut voting_members = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
-		let mut allies = (0 .. y).map(ally::<T, I>).collect::<Vec<_>>();
+		let voting_members = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let allies = (0 .. y).map(ally::<T, I>).collect::<Vec<_>>();
 		let witness = DisbandWitness{
 			voting_members: x,
 			ally_members: y,
@@ -660,11 +661,10 @@ benchmarks_instance_pallet! {
 		assert_eq!(Alliance::<T, I>::ally_members_count(), y);
 	}: _(SystemOrigin::Root, witness)
 	verify {
-		voting_members.sort();
-		allies.sort();
 		assert_last_event::<T, I>(Event::AllianceDisbanded {
-			voting_members: voting_members,
-			ally_members: allies,
+			voting_members: x,
+			ally_members: y,
+			unreserved: cmp::min(z, x + y),
 		}.into());
 
 		assert!(!Alliance::<T, I>::is_initialized());
