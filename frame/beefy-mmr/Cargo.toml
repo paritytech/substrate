@@ -33,12 +33,12 @@ sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 [features]
 default = ["std"]
 std = [
+	"array-bytes",
 	"beefy-merkle-tree/std",
 	"beefy-primitives/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
-	"array-bytes",
 	"log/std",
 	"pallet-beefy/std",
 	"pallet-mmr/std",

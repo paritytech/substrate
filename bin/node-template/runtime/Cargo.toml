@@ -86,11 +86,11 @@ std = [
 	"sp-version/std",
 ]
 runtime-benchmarks = [
+	"array-bytes",
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system-benchmarking",
 	"frame-system/runtime-benchmarks",
-	"array-bytes",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-grandpa/runtime-benchmarks",
 	"pallet-template/runtime-benchmarks",

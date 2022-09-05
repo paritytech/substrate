@@ -193,6 +193,7 @@ std = [
 	"pallet-alliance/std",
 ]
 runtime-benchmarks = [
+	"array-bytes",
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
@@ -242,7 +243,6 @@ runtime-benchmarks = [
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-whitelist/runtime-benchmarks",
 	"frame-system-benchmarking",
-	"array-bytes",
 ]
 try-runtime = [
 	"frame-try-runtime",
