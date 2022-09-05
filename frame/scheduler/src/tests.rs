@@ -1049,3 +1049,175 @@ fn postponed_named_task_can_be_rescheduled() {
 		assert_eq!(agenda[0].1, vec![None]);
 	});
 }*/
+
+/// Using the scheduler as `v3::Anon` works.
+#[test]
+fn scheduler_v3_anon_basic_works() {
+	use frame_support::traits::schedule::v3::Anon;
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+
+		// Schedule a call.
+		let _address = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			Preimage::bound(call).unwrap(),
+		)
+		.unwrap();
+
+		run_to_block(3);
+		// Did not execute until block 3.
+		assert!(logger::log().is_empty());
+		// Executes in block 4.
+		run_to_block(4);
+		assert_eq!(logger::log(), vec![(root(), 42u32)]);
+		// ... but not again.
+		run_to_block(100);
+		assert_eq!(logger::log(), vec![(root(), 42u32)]);
+	});
+}
+
+#[test]
+fn scheduler_v3_anon_cancel_works() {
+	use frame_support::traits::schedule::v3::Anon;
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let bound = Preimage::bound(call).unwrap();
+
+		let address = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			bound.clone(),
+		)
+		.unwrap();
+
+		// Cancel the call.
+		assert_ok!(<Scheduler as Anon<_, _, _>>::cancel(address));
+		// It did not get executed.
+		run_to_block(100);
+		assert!(logger::log().is_empty());
+		// Cannot cancel again.
+		assert_err!(<Scheduler as Anon<_, _, _>>::cancel(address), DispatchError::Unavailable);
+	});
+}
+
+#[test]
+fn scheduler_v3_anon_reschedule_works() {
+	use frame_support::traits::schedule::v3::Anon;
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let bound = Preimage::bound(call).unwrap();
+
+		let address = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			bound.clone(),
+		)
+		.unwrap();
+
+		run_to_block(3);
+		assert!(logger::log().is_empty());
+
+		// Cannot re-schedule into the same block.
+		assert_err!(
+			<Scheduler as Anon<_, _, _>>::reschedule(address, DispatchTime::At(4)),
+			Error::<Test>::RescheduleNoChange
+		);
+		// Cannot re-schedule into the past.
+		assert_err!(
+			<Scheduler as Anon<_, _, _>>::reschedule(address, DispatchTime::At(3)),
+			Error::<Test>::TargetBlockNumberInPast
+		);
+		// Re-schedule to block 5.
+		assert_ok!(<Scheduler as Anon<_, _, _>>::reschedule(address, DispatchTime::At(5)));
+		// Scheduled for block 5.
+
+		run_to_block(4);
+		assert!(logger::log().is_empty());
+		run_to_block(5);
+		assert_eq!(logger::log(), vec![(root(), 42)]);
+
+		assert_err!(
+			<Scheduler as Anon<_, _, _>>::reschedule(address, DispatchTime::At(10)),
+			DispatchError::Unavailable
+		);
+	});
+}
+
+#[test]
+fn scheduler_v3_anon_next_schedule_time_works() {
+	use frame_support::traits::schedule::v3::Anon;
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let bound = Preimage::bound(call).unwrap();
+
+		let address = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			bound.clone(),
+		)
+		.unwrap();
+
+		run_to_block(3);
+		assert!(logger::log().is_empty());
+		// Scheduled for block 4.
+		assert_eq!(<Scheduler as Anon<_, _, _>>::next_dispatch_time(address), Ok(4));
+		// Block 4 executes it.
+		run_to_block(4);
+		assert_eq!(logger::log(), vec![(root(), 42)]);
+		// It's gone.
+		assert_err!(
+			<Scheduler as Anon<_, _, _>>::next_dispatch_time(address),
+			DispatchError::Unavailable
+		);
+	});
+}
+
+/// Re-scheduling a task changes its next dispatch time.
+#[test]
+fn scheduler_v3_anon_reschedule_and_next_schedule_time_work() {
+	use frame_support::traits::schedule::v3::Anon;
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let bound = Preimage::bound(call).unwrap();
+
+		let address = <Scheduler as Anon<_, _, _>>::schedule(
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			bound.clone(),
+		)
+		.unwrap();
+
+		run_to_block(3);
+		assert!(logger::log().is_empty());
+		// Scheduled for block 4.
+		assert_eq!(<Scheduler as Anon<_, _, _>>::next_dispatch_time(address), Ok(4));
+		// Re-schedule to block 5.
+		let address =
+			<Scheduler as Anon<_, _, _>>::reschedule(address, DispatchTime::At(5)).unwrap();
+		// Scheduled for block 5.
+		assert_eq!(<Scheduler as Anon<_, _, _>>::next_dispatch_time(address), Ok(5));
+
+		// Block 4 does nothing.
+		run_to_block(3);
+		assert!(logger::log().is_empty());
+		// Block 5 executes it.
+		run_to_block(5);
+		assert_eq!(logger::log(), vec![(root(), 42)]);
+		// It's gone.
+		assert_err!(
+			<Scheduler as Anon<_, _, _>>::next_dispatch_time(address),
+			DispatchError::Unavailable
+		);
+	});
+}

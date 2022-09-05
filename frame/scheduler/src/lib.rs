@@ -1165,14 +1165,14 @@ impl<T: Config> schedule::v3::Anon<T::BlockNumber, <T as Config>::Call, T::Palle
 	}
 
 	fn cancel((when, index): Self::Address) -> Result<(), DispatchError> {
-		Self::do_cancel(None, (when, index))
+		Self::do_cancel(None, (when, index)).map_err(map_err_to_v3_err::<T>)
 	}
 
 	fn reschedule(
 		address: Self::Address,
 		when: DispatchTime<T::BlockNumber>,
 	) -> Result<Self::Address, DispatchError> {
-		Self::do_reschedule(address, when)
+		Self::do_reschedule(address, when).map_err(map_err_to_v3_err::<T>)
 	}
 
 	fn next_dispatch_time((when, index): Self::Address) -> Result<T::BlockNumber, DispatchError> {
@@ -1202,19 +1202,27 @@ impl<T: Config> schedule::v3::Named<T::BlockNumber, <T as Config>::Call, T::Pall
 	}
 
 	fn cancel_named(id: TaskName) -> Result<(), DispatchError> {
-		Self::do_cancel_named(None, id)
+		Self::do_cancel_named(None, id).map_err(map_err_to_v3_err::<T>)
 	}
 
 	fn reschedule_named(
 		id: TaskName,
 		when: DispatchTime<T::BlockNumber>,
 	) -> Result<Self::Address, DispatchError> {
-		Self::do_reschedule_named(id, when)
+		Self::do_reschedule_named(id, when).map_err(map_err_to_v3_err::<T>)
 	}
 
 	fn next_dispatch_time(id: TaskName) -> Result<T::BlockNumber, DispatchError> {
 		Lookup::<T>::get(id)
 			.and_then(|(when, index)| Agenda::<T>::get(when).get(index as usize).map(|_| when))
 			.ok_or(DispatchError::Unavailable)
+	}
+}
+
+fn map_err_to_v3_err<T: Config>(err: DispatchError) -> DispatchError {
+	if err == DispatchError::from(Error::<T>::NotFound) {
+		DispatchError::Unavailable
+	} else {
+		err
 	}
 }
