@@ -46,14 +46,6 @@ pub fn make_bounded_values() -> (Bounded<Vec<u8>>, Bounded<Vec<u8>>, Bounded<Vec
 
 	(inline, lookup, legacy)
 }
-/*
-pub fn make_bounded_lookup(seed: u8) -> Bounded<Vec<u8>> {
-	let data = vec![seed; 10];
-	let hash: H256 = blake2_256(&data[..]).into();
-	let len = data.len() as u32;
-
-	Bounded::<Vec<u8>>::unrequested(hash, len)
-}*/
 
 #[test]
 fn user_note_preimage_works() {
@@ -370,7 +362,7 @@ fn query_and_store_preimage_workflow() {
 fn query_preimage_request_works() {
 	new_test_ext().execute_with(|| {
 		let _guard = StorageNoopGuard::default();
-		let data: Vec<u8> = vec![1, 2, 3, 4, 5];
+		let data: Vec<u8> = vec![1; 10];
 		let hash: PreimageHash = blake2_256(&data[..]).into();
 
 		// Request the preimage.
@@ -430,5 +422,69 @@ fn query_preimage_hold_and_drop_work() {
 
 		// There are no values requested anymore.
 		assert_eq!(StatusFor::<Test>::iter().count(), 0);
+	});
+}
+
+/// The `StorePreimage` trait works as expected.
+#[test]
+fn store_preimage_basic_works() {
+	new_test_ext().execute_with(|| {
+		let _guard = StorageNoopGuard::default();
+		let data: Vec<u8> = vec![1; 512]; // Too large to inline.
+		let encoded = Cow::from(data.encode());
+
+		// Bound the data.
+		let bound = <Preimage as StorePreimage>::bound(data.clone()).unwrap();
+		// The preimage can be peeked.
+		assert_ok!(<Preimage as QueryPreimage>::peek(&bound));
+		// Un-note the preimage.
+		<Preimage as StorePreimage>::unnote(&bound.hash());
+		// The preimage cannot be peeked anymore.
+		assert_err!(<Preimage as QueryPreimage>::peek(&bound), DispatchError::Unavailable);
+		// Noting the wrong pre-image does not make it peek-able.
+		assert_ok!(<Preimage as StorePreimage>::note(Cow::Borrowed(&data)));
+		assert_err!(<Preimage as QueryPreimage>::peek(&bound), DispatchError::Unavailable);
+
+		// Manually note the preimage makes it peek-able again.
+		assert_ok!(<Preimage as StorePreimage>::note(encoded.clone()));
+		// Noting again works.
+		assert_ok!(<Preimage as StorePreimage>::note(encoded));
+		assert_ok!(<Preimage as QueryPreimage>::peek(&bound));
+
+		// Cleanup.
+		<Preimage as StorePreimage>::unnote(&bound.hash());
+		let data_hash = blake2_256(&data);
+		<Preimage as StorePreimage>::unnote(&data_hash.into());
+
+		// No storage changes remain. Checked by `StorageNoopGuard`.
+	});
+}
+
+#[test]
+fn store_preimage_note_too_large_errors() {
+	new_test_ext().execute_with(|| {
+		// Works with `MAX_LENGTH`.
+		let len = <Preimage as StorePreimage>::MAX_LENGTH;
+		let data = vec![0u8; len];
+		assert_ok!(<Preimage as StorePreimage>::note(data.into()));
+
+		// Errors with `MAX_LENGTH+1`.
+		let data = vec![0u8; len + 1];
+		assert_err!(<Preimage as StorePreimage>::note(data.into()), DispatchError::Exhausted);
+	});
+}
+
+#[test]
+fn store_preimage_bound_too_large_errors() {
+	new_test_ext().execute_with(|| {
+		// Using `MAX_LENGTH` number of bytes in a vector does not work
+		// since SCALE prepends the length.
+		let len = <Preimage as StorePreimage>::MAX_LENGTH;
+		let data: Vec<u8> = vec![0; len];
+		assert_err!(<Preimage as StorePreimage>::bound(data.clone()), DispatchError::Exhausted);
+
+		// Works with `MAX_LENGTH-4`.
+		let data: Vec<u8> = vec![0; len - 4];
+		assert_ok!(<Preimage as StorePreimage>::bound(data.clone()));
 	});
 }

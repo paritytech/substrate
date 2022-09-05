@@ -436,7 +436,13 @@ impl<T: Config<Hash = PreimageHash>> StorePreimage for Pallet<T> {
 	fn note(bytes: Cow<[u8]>) -> Result<T::Hash, DispatchError> {
 		// We don't really care if this fails, since that's only the case if someone else has
 		// already noted it.
-		Ok(Self::note_bytes(bytes, None)?.1)
+		let maybe_hash = Self::note_bytes(bytes, None).map(|(_, h)| h);
+		// Map to the correct trait error.
+		if maybe_hash == Err(DispatchError::from(Error::<T>::TooBig)) {
+			Err(DispatchError::Exhausted)
+		} else {
+			maybe_hash
+		}
 	}
 
 	fn unnote(hash: &T::Hash) {

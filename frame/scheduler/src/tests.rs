@@ -983,3 +983,69 @@ fn test_migrate_origin() {
 		);
 	});
 }
+
+/// The scheduler postpones calls without preimage forever but does not re-schedule them.
+#[test]
+fn postponed_named_task_can_be_rescheduled() {
+	new_test_ext().execute_with(|| {
+		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
+		let len = call.using_encoded(|x| x.len()) as u32;
+		let hashed = Preimage::pick(hash.clone(), len);
+		let name: [u8; 32] = hash.as_ref().try_into().unwrap();
+
+		assert_ok!(Scheduler::do_schedule_named(
+			name,
+			DispatchTime::At(4),
+			None,
+			127,
+			root(),
+			hashed.clone()
+		));
+		assert!(Preimage::is_requested(&hash));
+		assert!(Lookup::<Test>::contains_key(name));
+
+		// Run to a very large block.
+		run_to_block(10);
+		// It was not executed.
+		assert!(logger::log().is_empty());
+		assert!(Preimage::is_requested(&hash));
+		// TODO Postponing removes the lookup.
+		assert!(!Lookup::<Test>::contains_key(name));
+
+		// The agenda still contains the call.
+		let agenda = Agenda::<Test>::iter().collect::<Vec<_>>();
+		assert_eq!(agenda.len(), 1);
+		assert_eq!(
+			agenda[0].1,
+			vec![Some(Scheduled {
+				maybe_id: Some(name),
+				priority: 127,
+				call: hashed,
+				maybe_periodic: None,
+				origin: root().into(),
+				_phantom: Default::default(),
+			})]
+		);
+
+		// Finally add the preimage.
+		assert_ok!(Preimage::note(call.encode().into()));
+		run_to_block(1000);
+		// It did not execute.
+		assert!(logger::log().is_empty());
+		assert!(Preimage::is_requested(&hash));
+
+		// Manually re-schedule the call.
+		// TODO this fails since the postpone removed the Lookup.
+		assert_ok!(Scheduler::do_reschedule_named(name, DispatchTime::At(1001)));
+		run_to_block(1001);
+
+		// It executed:
+		assert_eq!(logger::log(), vec![(root(), 42)]);
+		assert!(!Preimage::is_requested(&hash));
+
+		let agenda = Agenda::<Test>::iter().collect::<Vec<_>>();
+		assert_eq!(agenda.len(), 1);
+		assert_eq!(agenda[0].1, vec![None]);
+	});
+}

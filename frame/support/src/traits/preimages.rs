@@ -213,6 +213,8 @@ pub trait QueryPreimage {
 /// uses this API should implement that on their own side.
 pub trait StorePreimage: QueryPreimage {
 	/// The maximum length of preimage we can store.
+	///
+	/// This is the maximum length of the *encoded* value that can be passed to `bound`.
 	const MAX_LENGTH: usize;
 
 	/// Request and attempt to store the bytes of a preimage on chain.
