@@ -38,6 +38,7 @@ mod tests;
 mod functions;
 mod impl_nonfungibles;
 mod types;
+mod user_features;
 
 pub mod weights;
 
@@ -1497,10 +1498,23 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			bid_price: ItemPrice<T, I>,
-			tips: Vec<Tip<T, I>>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_buy_item(collection, item, origin, bid_price, tips)
+			Self::do_buy_item(collection, item, origin, bid_price)
+		}
+
+		/// Allows to pay the tips.
+		///
+		/// Origin must be Signed.
+		///
+		/// - `tips`: Tips array.
+		///
+		/// Emits `TipSent` on every tip transfer.
+		#[pallet::weight(0)]
+		#[transactional]
+		pub fn pay_tips(origin: OriginFor<T>, tips: Vec<ItemTip<T, I>>) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_pay_tips(origin, tips)
 		}
 	}
 }
