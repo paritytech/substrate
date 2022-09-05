@@ -19,6 +19,7 @@
 
 use sp_runtime::traits::{Bounded, Hash, StaticLookup};
 use sp_std::{
+	cmp,
 	convert::{TryFrom, TryInto},
 	mem::size_of,
 	prelude::*,
@@ -36,11 +37,6 @@ const MAX_BYTES: u32 = 1_024;
 
 fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
-}
-
-fn assert_prev_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
-	let events = frame_system::Pallet::<T>::events();
-	assert_eq!(events.get(events.len() - 2).expect("events expected").event, generic_event.into());
 }
 
 fn cid(input: impl AsRef<[u8]>) -> Cid {
@@ -126,12 +122,11 @@ benchmarks_instance_pallet! {
 		let proposer = founders[0].clone();
 		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 
-		Alliance::<T, I>::force_set_members(
+		Alliance::<T, I>::init_members(
 			SystemOrigin::Root.into(),
 			founders,
 			fellows,
 			vec![],
-			Default::default(),
 		)?;
 
 		let threshold = m;
@@ -178,12 +173,11 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(
+		Alliance::<T, I>::init_members(
 			SystemOrigin::Root.into(),
 			founders,
 			fellows,
 			vec![],
-			Default::default(),
 		)?;
 
 		// Threshold is 1 less than the number of members so that one person can vote nay
@@ -247,12 +241,11 @@ benchmarks_instance_pallet! {
 		let founders = (0 .. m).map(founder::<T, I>).collect::<Vec<_>>();
 		let vetor = founders[0].clone();
 
-		Alliance::<T, I>::force_set_members(
+		Alliance::<T, I>::init_members(
 			SystemOrigin::Root.into(),
 			founders,
 			vec![],
 			vec![],
-			Default::default(),
 		)?;
 
 		// Threshold is one less than total members so that two nays will disapprove the vote
@@ -299,12 +292,11 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(
+		Alliance::<T, I>::init_members(
 			SystemOrigin::Root.into(),
 			founders,
 			fellows,
 			vec![],
-			Default::default(),
 		)?;
 
 		let proposer = members[0].clone();
@@ -385,12 +377,11 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(
+		Alliance::<T, I>::init_members(
 			SystemOrigin::Root.into(),
 			founders,
 			fellows,
 			vec![],
-			Default::default(),
 		)?;
 
 		let proposer = members[0].clone();
@@ -477,12 +468,11 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(
+		Alliance::<T, I>::init_members(
 			SystemOrigin::Root.into(),
 			founders,
 			fellows,
 			vec![],
-			Default::default(),
 		)?;
 
 		let proposer = members[0].clone();
@@ -554,12 +544,11 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::force_set_members(
+		Alliance::<T, I>::init_members(
 			SystemOrigin::Root.into(),
 			founders,
 			fellows,
 			vec![],
-			Default::default(),
 		)?;
 
 		let proposer = members[0].clone();
@@ -615,124 +604,21 @@ benchmarks_instance_pallet! {
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
 	}
 
-	force_set_members {
+	init_members {
 		// at least 1 founders
 		let x in 1 .. T::MaxFounders::get();
 		let y in 0 .. T::MaxFellows::get();
 		let z in 0 .. T::MaxAllies::get();
-		let p in 0 .. T::MaxProposals::get();
-		let c in 0 .. T::MaxFounders::get() + T::MaxFellows::get();
-		let m in 0 .. T::MaxAllies::get();
 
 		let mut founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
-		let mut proposer = founders[0].clone();
 		let mut fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 		let mut allies = (0 .. z).map(ally::<T, I>).collect::<Vec<_>>();
-		let witness = ForceSetWitness{
-			proposals: p,
-			voting_members: c,
-			ally_members: m,
-		};
-		let mut old_fellows: Vec<T::AccountId> = Vec::new();
-		let mut old_allies: Vec<T::AccountId> = Vec::new();
 
-		let mut cc = c;
-		if (m > 0 && c == 0) || (p > 0 && c == 0) {
-			// if total member count `m` greater than zero,
-			// one voting member required to set non voting members.
-			// OR
-			// if some proposals,
-			// one voting member required to create proposal.
-			cc = 1;
-		}
-
-		// setting the Alliance to disband on the benchmark call
-		if cc > 0 {
-			old_fellows = (0..cc).map(fellow::<T, I>).collect::<Vec<_>>();
-			old_allies = (0..m).map(ally::<T, I>).collect::<Vec<_>>();
-
-			// used later for proposal creation.
-			proposer = old_fellows[0].clone();
-
-			// set alliance before benchmarked call to include alliance disband.
-			Alliance::<T, I>::force_set_members(
-				SystemOrigin::Root.into(),
-				vec![old_fellows[0].clone()],
-				vec![],
-				vec![],
-				Default::default(),
-			)?;
-
-			// using `join_alliance` instead `force_set_members` to join alliance
-			// to have deposit reserved and bench the worst case scenario.
-			for fellow in old_fellows.iter().skip(1) {
-				Alliance::<T, I>::join_alliance(
-					SystemOrigin::Signed(fellow.clone()).into()
-				).unwrap();
-			}
-
-			// elevating allies to have desired voting members count.
-			for fellow in old_fellows.iter().skip(1) {
-				Alliance::<T, I>::elevate_ally(
-					T::MembershipManager::successful_origin(),
-					T::Lookup::unlookup(fellow.clone())
-				).unwrap();
-			}
-
-			for ally in old_allies.iter() {
-				Alliance::<T, I>::join_alliance(
-					SystemOrigin::Signed(ally.clone()).into()
-				).unwrap();
-			}
-
-			assert_eq!(Alliance::<T, I>::voting_members_count(), cc);
-			assert_eq!(Alliance::<T, I>::ally_members_count(), m);
-		}
-
-		// adding proposals to veto on the Alliance reset
-		for i in 0..p {
-			let threshold = cc;
-			let bytes_in_storage = i + size_of::<Cid>() as u32 + 32;
-			// proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal =
-				AllianceCall::<T, I>::set_rule { rule: rule(vec![i as u8; i as usize]) }.into();
-			Alliance::<T, I>::propose(
-				SystemOrigin::Signed(proposer.clone()).into(),
-				threshold,
-				Box::new(proposal),
-				bytes_in_storage,
-			)?;
-		}
-		let mut proposals = T::ProposalProvider::proposals();
-		if c != cc {
-			// removing a helper founder from the alliance which should not be
-			// included in the actual benchmark call.
-			Alliance::<T, I>::give_retirement_notice(
-				SystemOrigin::Signed(proposer.clone()).into()
-			)?;
-			System::<T>::set_block_number(
-				System::<T>::block_number() + T::RetirementPeriod::get()
-			);
-			Alliance::<T, I>::retire(
-				SystemOrigin::Signed(proposer.clone()).into()
-			)?;
-			// remove a helper founder from fellows list.
-			old_fellows.remove(0);
-		}
-	}: _(SystemOrigin::Root, founders.clone(), fellows.clone(), allies.clone(), witness)
+	}: _(SystemOrigin::Root, founders.clone(), fellows.clone(), allies.clone())
 	verify {
 		founders.sort();
 		fellows.sort();
 		allies.sort();
-		if !witness.is_zero() {
-			old_fellows.append(&mut old_allies);
-			old_fellows.sort();
-			proposals.sort();
-			assert_prev_event::<T, I>(Event::AllianceDisbanded {
-				members: old_fellows,
-				proposals: proposals,
-			}.into());
-		}
 		assert_last_event::<T, I>(Event::MembersInitialized {
 			founders: founders.clone(),
 			fellows: fellows.clone(),
@@ -741,6 +627,47 @@ benchmarks_instance_pallet! {
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Founder), founders);
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Fellow), fellows);
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Ally), allies);
+	}
+
+	disband {
+		// at least 1 founders
+		let x in 1 .. T::MaxFounders::get() + T::MaxFellows::get();
+		let y in 0 .. T::MaxAllies::get();
+		let z in 0 .. T::MaxMembersCount::get() / 2;
+
+		let voting_members = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let allies = (0 .. y).map(ally::<T, I>).collect::<Vec<_>>();
+		let witness = DisbandWitness{
+			voting_members: x,
+			ally_members: y,
+		};
+
+		// setting the Alliance to disband on the benchmark call
+		Alliance::<T, I>::init_members(
+			SystemOrigin::Root.into(),
+			voting_members.clone(),
+			vec![],
+			allies.clone(),
+		)?;
+
+		// reserve deposits
+		let deposit = T::AllyDeposit::get();
+		for member in voting_members.iter().chain(allies.iter()).take(z as usize) {
+			T::Currency::reserve(&member, deposit)?;
+			<DepositOf<T, I>>::insert(&member, deposit);
+		}
+
+		assert_eq!(Alliance::<T, I>::voting_members_count(), x);
+		assert_eq!(Alliance::<T, I>::ally_members_count(), y);
+	}: _(SystemOrigin::Root, witness)
+	verify {
+		assert_last_event::<T, I>(Event::AllianceDisbanded {
+			voting_members: x,
+			ally_members: y,
+			unreserved: cmp::min(z, x + y),
+		}.into());
+
+		assert!(!Alliance::<T, I>::is_initialized());
 	}
 
 	set_rule {
