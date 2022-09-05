@@ -1040,7 +1040,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Cancel the prior approval for the transfer of an item by a delegate.
+		/// Cancel one of the transfer approvals for a specific item.
 		///
 		/// Origin must be either:
 		/// - the `Force` origin;
@@ -1049,9 +1049,8 @@ pub mod pallet {
 		///
 		/// Arguments:
 		/// - `collection`: The collection of the item of whose approval will be cancelled.
-		/// - `item`: The item of the item of whose approval will be cancelled.
-		/// - `maybe_check_delegate`: If `Some` will ensure that the given account is the one to
-		///   which permission of transfer is delegated.
+		/// - `item`: The item of the collection of whose approval will be cancelled.
+		/// - `delegate`: The account that is going to loose their approval.
 		///
 		/// Emits `ApprovalCancelled` on success.
 		///
@@ -1092,6 +1091,20 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Cancel all the approvals of a specific item.
+		///
+		/// Origin must be either:
+		/// - the `Force` origin;
+		/// - `Signed` with the signer being the Admin of the `collection`;
+		/// - `Signed` with the signer being the Owner of the `item`;
+		///
+		/// Arguments:
+		/// - `collection`: The collection of the item of whose approvals will be cleared.
+		/// - `item`: The item of the collection of whose approvals will be cleared.
+		///
+		/// Emits `AllApprovalsCancelled` on success.
+		///
+		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_all_transfer_approvals())]
 		pub fn clear_all_transfer_approvals(
 			origin: OriginFor<T>,
