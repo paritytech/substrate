@@ -644,7 +644,7 @@ impl<T: MinerConfig> Miner<T> {
 					Some(voters) if voters < max_voters => Ok(voters),
 					_ => Err(()),
 				}
-			} else if current_weight.all_gt(max_weight) {
+			} else if current_weight.any_gt(max_weight) {
 				voters.checked_sub(step).ok_or(())
 			} else {
 				// If any of the constituent weights is equal to the max weight, we're at max
