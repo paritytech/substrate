@@ -650,7 +650,6 @@ impl<T: MinerConfig> Miner<T> {
 				// If any of the constituent weights is equal to the max weight, we're at max
 				Ok(voters)
 			}
-			// TODO: What to do when time weight is greater and size weight is lesser (and vice versa)?
 		};
 
 		// First binary-search the right amount of voters
