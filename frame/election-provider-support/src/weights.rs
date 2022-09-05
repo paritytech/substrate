@@ -40,7 +40,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_election_provider_support_benchmarking.
@@ -53,43 +53,43 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 667_000
-			.saturating_add(Weight::from_ref_time(32_973_000 as RefTimeWeight).saturating_mul(v as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(32_973_000 as u64).saturating_mul(v as u64))
 			// Standard Error: 1_334_000
-			.saturating_add(Weight::from_ref_time(1_334_000 as RefTimeWeight).saturating_mul(t as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(1_334_000 as u64).saturating_mul(t as u64))
 			// Standard Error: 60_644_000
-			.saturating_add(Weight::from_ref_time(2_636_364_000 as RefTimeWeight).saturating_mul(d as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_636_364_000 as u64).saturating_mul(d as u64))
 	}
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 73_000
-			.saturating_add(Weight::from_ref_time(21_073_000 as RefTimeWeight).saturating_mul(v as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(21_073_000 as u64).saturating_mul(v as u64))
 			// Standard Error: 146_000
-			.saturating_add(Weight::from_ref_time(65_000 as RefTimeWeight).saturating_mul(t as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(65_000 as u64).saturating_mul(t as u64))
 			// Standard Error: 6_649_000
-			.saturating_add(Weight::from_ref_time(1_711_424_000 as RefTimeWeight).saturating_mul(d as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(1_711_424_000 as u64).saturating_mul(d as u64))
 	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	fn phragmen(v: u32, t: u32, d: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 667_000
-			.saturating_add(Weight::from_ref_time(32_973_000 as RefTimeWeight).saturating_mul(v as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(32_973_000 as u64).saturating_mul(v as u64))
 			// Standard Error: 1_334_000
-			.saturating_add(Weight::from_ref_time(1_334_000 as RefTimeWeight).saturating_mul(t as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(1_334_000 as u64).saturating_mul(t as u64))
 			// Standard Error: 60_644_000
-			.saturating_add(Weight::from_ref_time(2_636_364_000 as RefTimeWeight).saturating_mul(d as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(2_636_364_000 as u64).saturating_mul(d as u64))
 	}
 	fn phragmms(v: u32, t: u32, d: u32, ) -> Weight {
-		Weight::from_ref_time(0 as RefTimeWeight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 73_000
-			.saturating_add(Weight::from_ref_time(21_073_000 as RefTimeWeight).saturating_mul(v as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(21_073_000 as u64).saturating_mul(v as u64))
 			// Standard Error: 146_000
-			.saturating_add(Weight::from_ref_time(65_000 as RefTimeWeight).saturating_mul(t as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(65_000 as u64).saturating_mul(t as u64))
 			// Standard Error: 6_649_000
-			.saturating_add(Weight::from_ref_time(1_711_424_000 as RefTimeWeight).saturating_mul(d as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(1_711_424_000 as u64).saturating_mul(d as u64))
 	}
 }

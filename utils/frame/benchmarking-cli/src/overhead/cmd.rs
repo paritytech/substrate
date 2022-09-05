@@ -23,7 +23,7 @@ use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
 use sc_service::Configuration;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
+use sp_runtime::{traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
 
 use clap::{Args, Parser};
 use log::info;
@@ -90,6 +90,7 @@ impl OverheadCmd {
 		cfg: Configuration,
 		client: Arc<C>,
 		inherent_data: sp_inherents::InherentData,
+		digest_items: Vec<DigestItem>,
 		ext_builder: &dyn ExtrinsicBuilder,
 	) -> Result<()>
 	where
@@ -101,7 +102,7 @@ impl OverheadCmd {
 		if ext_builder.pallet() != "system" || ext_builder.extrinsic() != "remark" {
 			return Err(format!("The extrinsic builder is required to build `System::Remark` extrinsics but builds `{}` extrinsics instead", ext_builder.name()).into());
 		}
-		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, digest_items);
 
 		// per-block execution overhead
 		{

@@ -41,10 +41,9 @@ use libp2p::{
 };
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
-use sc_network_common::{config::MultiaddrWithPeerId, sync::ChainSync};
+use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName, sync::ChainSync};
 use sp_runtime::traits::Block as BlockT;
 use std::{
-	borrow::Cow,
 	collections::HashMap,
 	error::Error,
 	fs,
@@ -431,14 +430,14 @@ pub struct NonDefaultSetConfig {
 	///
 	/// > **Note**: This field isn't present for the default set, as this is handled internally
 	/// > by the networking code.
-	pub notifications_protocol: Cow<'static, str>,
+	pub notifications_protocol: ProtocolName,
 	/// If the remote reports that it doesn't support the protocol indicated in the
 	/// `notifications_protocol` field, then each of these fallback names will be tried one by
 	/// one.
 	///
 	/// If a fallback is used, it will be reported in
 	/// [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
-	pub fallback_names: Vec<Cow<'static, str>>,
+	pub fallback_names: Vec<ProtocolName>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
 	/// Base configuration.
@@ -447,7 +446,7 @@ pub struct NonDefaultSetConfig {
 
 impl NonDefaultSetConfig {
 	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
-	pub fn new(notifications_protocol: Cow<'static, str>, max_notification_size: u64) -> Self {
+	pub fn new(notifications_protocol: ProtocolName, max_notification_size: u64) -> Self {
 		Self {
 			notifications_protocol,
 			max_notification_size,
@@ -476,7 +475,7 @@ impl NonDefaultSetConfig {
 	/// Add a list of protocol names used for backward compatibility.
 	///
 	/// See the explanations in [`NonDefaultSetConfig::fallback_names`].
-	pub fn add_fallback_names(&mut self, fallback_names: Vec<Cow<'static, str>>) {
+	pub fn add_fallback_names(&mut self, fallback_names: Vec<ProtocolName>) {
 		self.fallback_names.extend(fallback_names);
 	}
 }
