@@ -145,7 +145,8 @@ where
 
 	// Check if we don't exceed per-class allowance
 	match limit_per_class.max_total {
-		Some(max) if per_class.any_gt(max) => return Err(InvalidTransaction::ExhaustsResources.into()),
+		Some(max) if per_class.any_gt(max) =>
+			return Err(InvalidTransaction::ExhaustsResources.into()),
 		// There is no `max_total` limit (`None`),
 		// or we are below the limit.
 		_ => {},
