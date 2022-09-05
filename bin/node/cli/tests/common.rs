@@ -71,7 +71,7 @@ pub async fn wait_n_finalized_blocks(
 pub async fn wait_n_finalized_blocks_from(n: usize, url: &str) {
 	let mut built_blocks = std::collections::HashSet::new();
 	let mut interval = tokio::time::interval(Duration::from_secs(2));
-	let mut rpc_service = RpcService::new(url, false);
+	let rpc_service = RpcService::new(url, false);
 
 	loop {
 		if let Ok(block) = rpc_service.get_finalized_head::<Block>().await {
