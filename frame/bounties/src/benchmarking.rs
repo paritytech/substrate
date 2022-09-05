@@ -62,7 +62,7 @@ fn setup_bounty<T: Config<I>, I: 'static>(
 }
 
 fn create_bounty<T: Config<I>, I: 'static>(
-) -> Result<(<T::Lookup as StaticLookup>::Source, BountyIndex), &'static str> {
+) -> Result<(AccountIdLookupOf<T>, BountyIndex), &'static str> {
 	let (caller, curator, fee, value, reason) =
 		setup_bounty::<T, I>(0, T::MaximumReasonLength::get());
 	let curator_lookup = T::Lookup::unlookup(curator.clone());

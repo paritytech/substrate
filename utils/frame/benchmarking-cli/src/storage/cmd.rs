@@ -96,9 +96,11 @@ pub struct StorageParams {
 	#[clap(long, possible_values = ["0", "1"])]
 	pub state_version: u8,
 
-	/// State cache size.
-	#[clap(long, default_value = "0")]
-	pub state_cache_size: usize,
+	/// Trie cache size in bytes.
+	///
+	/// Providing `0` will disable the cache.
+	#[clap(long, default_value = "1024")]
+	pub trie_cache_size: usize,
 
 	/// Include child trees in benchmark.
 	#[clap(long)]
@@ -211,7 +213,11 @@ impl CliConfiguration for StorageCmd {
 		Some(&self.pruning_params)
 	}
 
-	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.params.state_cache_size)
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		if self.params.trie_cache_size == 0 {
+			Ok(None)
+		} else {
+			Ok(Some(self.params.trie_cache_size))
+		}
 	}
 }

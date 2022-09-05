@@ -320,6 +320,7 @@ pub mod v2 {
 				current
 			);
 			current.put::<Pallet<T>>();
+
 			T::DbWeight::get().reads_writes(members_translated + 1, reward_pools_translated + 1)
 		}
 	}
