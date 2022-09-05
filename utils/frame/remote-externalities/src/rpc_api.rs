@@ -18,7 +18,6 @@
 //! WS RPC API for one off RPC calls to a substrate node.
 // TODO: Consolidate one off RPC calls https://github.com/paritytech/substrate/issues/8988
 
-use futures::lock::Mutex;
 use jsonrpsee::{
 	core::client::{Client, ClientT},
 	rpc_params,
