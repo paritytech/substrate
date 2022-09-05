@@ -456,8 +456,8 @@ impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestX
 /// be updated all together once proof size is accounted for.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct RuntimeDbWeight {
-	pub read: RefTimeWeight,
-	pub write: RefTimeWeight,
+	pub read: u64,
+	pub write: u64,
 }
 
 impl RuntimeDbWeight {
@@ -727,7 +727,7 @@ mod tests {
 			fn f03(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = ((_a * 10 + _eb * 1) as RefTimeWeight, DispatchClass::Normal, Pays::Yes)]
+			#[weight = ((_a * 10 + _eb * 1) as u64, DispatchClass::Normal, Pays::Yes)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
