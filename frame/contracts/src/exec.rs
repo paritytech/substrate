@@ -1370,7 +1370,8 @@ mod tests {
 		storage::Storage,
 		tests::{
 			test_utils::{get_balance, hash, place_contract, set_balance},
-			RuntimeCall, RuntimeEvent as MetaEvent, ExtBuilder, Test, TestFilter, ALICE, BOB, CHARLIE, GAS_LIMIT,
+			ExtBuilder, RuntimeCall, RuntimeEvent as MetaEvent, Test, TestFilter, ALICE, BOB,
+			CHARLIE, GAS_LIMIT,
 		},
 		Error,
 	};

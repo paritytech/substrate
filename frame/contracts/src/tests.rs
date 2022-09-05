@@ -3360,7 +3360,9 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: RuntimeEvent::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {

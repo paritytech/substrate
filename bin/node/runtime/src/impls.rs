@@ -18,7 +18,8 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use crate::{
-	AccountId, AllianceMotion, Assets, Authorship, Balances, RuntimeCall, Hash, NegativeImbalance, Runtime,
+	AccountId, AllianceMotion, Assets, Authorship, Balances, Hash, NegativeImbalance, Runtime,
+	RuntimeCall,
 };
 use frame_support::{
 	pallet_prelude::*,

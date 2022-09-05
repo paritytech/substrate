@@ -355,4 +355,3 @@ pub fn make_proposal(proposal: RuntimeCall) -> (RuntimeCall, u32, H256) {
 	let hash = BlakeTwo256::hash_of(&proposal);
 	(proposal, len, hash)
 }
-
