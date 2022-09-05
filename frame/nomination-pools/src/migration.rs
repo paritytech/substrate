@@ -411,7 +411,7 @@ pub mod v3 {
 						!BondedPools::<T>::contains_key(&id)
 					})
 					.collect::<Vec<_>>()
-					.iter()
+					.into_iter()
 					.for_each(|id| {
 						metadata_removed += 1;
 						Metadata::<T>::remove(&id);
