@@ -1491,7 +1491,7 @@ pub mod pallet {
 		/// The bonded account should only be killed by the staking system when the depositor is
 		/// withdrawing
 		BondedStashKilledPrematurely,
-		/// The unlo
+		/// The actual rebond funds do not match the deducted unlocking funds
 		RebondFundsNotMatch,
 	}
 
