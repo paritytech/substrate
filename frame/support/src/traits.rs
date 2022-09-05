@@ -108,8 +108,6 @@ pub use voting::{
 };
 
 mod preimages;
-#[cfg(test)]
-pub mod test_preimages;
 pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
 
 #[cfg(feature = "try-runtime")]

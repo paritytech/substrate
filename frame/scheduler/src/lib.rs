@@ -1017,7 +1017,7 @@ impl<T: Config> Pallet<T> {
 					} else {
 						task.maybe_periodic = None;
 					}
-					let wake = now + period;
+					let wake = now.saturating_add(period);
 					match Self::place_task(wake, task) {
 						Ok(_) => {},
 						Err((_, task)) => {

@@ -266,9 +266,52 @@ impl StorePreimage for () {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{bounded_vec, BoundedVec};
 
 	#[test]
 	fn bounded_size_is_correct() {
 		assert_eq!(<Bounded<Vec<u8>> as MaxEncodedLen>::max_encoded_len(), 131);
+	}
+
+	#[test]
+	fn bounded_basic_works() {
+		let data: BoundedVec<u8, _> = bounded_vec![b'a', b'b', b'c'];
+		let len = data.len() as u32;
+		let hash = blake2_256(&data).into();
+
+		// Inline works
+		{
+			let bound: Bounded<Vec<u8>> = Bounded::Inline(data.clone());
+			assert_eq!(bound.hash(), hash);
+			assert_eq!(bound.len(), Some(len));
+			assert!(!bound.lookup_needed());
+			assert_eq!(bound.lookup_len(), None);
+		}
+		// Legacy works
+		{
+			let bound: Bounded<Vec<u8>> = Bounded::Legacy { hash, dummy: Default::default() };
+			assert_eq!(bound.hash(), hash);
+			assert_eq!(bound.len(), None);
+			assert!(bound.lookup_needed());
+			assert_eq!(bound.lookup_len(), Some(1_000_000));
+		}
+		// Lookup works
+		{
+			let bound: Bounded<Vec<u8>> = Bounded::Lookup { hash, len: data.len() as u32 };
+			assert_eq!(bound.hash(), hash);
+			assert_eq!(bound.len(), Some(len));
+			assert!(bound.lookup_needed());
+			assert_eq!(bound.lookup_len(), Some(len));
+		}
+	}
+
+	#[test]
+	fn bounded_transmuting_works() {
+		let data: BoundedVec<u8, _> = bounded_vec![b'a', b'b', b'c'];
+
+		// Transmute a `String` into a `&str`.
+		let x: Bounded<String> = Bounded::Inline(data.clone());
+		let y: Bounded<&str> = x.transmute();
+		assert_eq!(y, Bounded::Inline(data));
 	}
 }
