@@ -103,8 +103,8 @@ impl RpcService {
 		call: RpcCall,
 		params: Option<ParamsSer<'a>>,
 	) -> Result<T, String> {
-		let maybe_client = self.client.borrow_mut();
-		match maybe_client {
+		let mut maybe_client = self.client.borrow_mut();
+		match *maybe_client {
 			// `self.keep_connection` must be `true.
 			Some(ref client) => make_request(client, call, params).await,
 			None => {
