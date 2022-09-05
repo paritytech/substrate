@@ -19,6 +19,7 @@ use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
 	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
 };
+use parity_scale_codec::Encode;
 use remote_externalities::rpc_api;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::storage::well_known_keys;
@@ -26,17 +27,30 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::ExecuteBlock`].
+///
+/// This will always call into `TryRuntime_execute_block`, which can optionally skip the state-root
+/// check (useful for trying a unreleased runtime), and can execute runtime sanity checks as well.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
 	/// Overwrite the wasm code in state or not.
 	#[clap(long)]
 	overwrite_wasm_code: bool,
 
-	/// If set, then the state root check is disabled by the virtue of calling into
-	/// `TryRuntime_execute_block_no_check` instead of
-	/// `Core_execute_block`.
+	/// If set the state root check is disabled.
 	#[clap(long)]
-	no_check: bool,
+	no_state_root_check: bool,
+
+	/// Which try-state targets to execute when running this command.
+	///
+	/// Expected values:
+	/// - `all`
+	/// - `none`
+	/// - A comma separated list of pallets, as per pallet names in `construct_runtime!()` (e.g.
+	///   `Staking, System`).
+	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
+	///   round-robin fashion.
+	#[clap(long, default_value = "none")]
+	try_state: frame_try_runtime::TryStateSelect,
 
 	/// The block hash at which to fetch the block.
 	///
@@ -70,7 +84,7 @@ pub struct ExecuteBlockCmd {
 }
 
 impl ExecuteBlockCmd {
-	fn block_at<Block: BlockT>(&self) -> sc_cli::Result<Block::Hash>
+	async fn block_at<Block: BlockT>(&self, ws_uri: String) -> sc_cli::Result<Block::Hash>
 	where
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
@@ -80,6 +94,15 @@ impl ExecuteBlockCmd {
 			(Some(block_at), State::Live { .. }) => {
 				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live. the `Live::at` will be ignored");
 				hash_of::<Block>(block_at)
+			},
+			(None, State::Live { at: None, .. }) => {
+				log::warn!(
+					target: LOG_TARGET,
+					"No --block-at or --at provided, using the latest finalized block instead"
+				);
+				remote_externalities::rpc_api::get_finalized_head::<Block, _>(ws_uri)
+					.await
+					.map_err(Into::into)
 			},
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
 			_ => {
@@ -123,13 +146,14 @@ where
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
-	let block_at = command.block_at::<Block>()?;
 	let block_ws_uri = command.block_ws_uri::<Block>();
+	let block_at = command.block_at::<Block>(block_ws_uri.clone()).await?;
 	let block: Block = rpc_api::get_block::<Block, _>(block_ws_uri.clone(), block_at).await?;
 	let parent_hash = block.header().parent_hash();
 	log::info!(
 		target: LOG_TARGET,
-		"fetched block from {:?}, parent_hash to fetch the state {:?}",
+		"fetched block #{:?} from {:?}, parent_hash to fetch the state {:?}",
+		block.header().number(),
 		block_ws_uri,
 		parent_hash
 	);
@@ -162,6 +186,7 @@ where
 	let (mut header, extrinsics) = block.deconstruct();
 	header.digest_mut().pop();
 	let block = Block::new(header, extrinsics);
+	let payload = (block.clone(), !command.no_state_root_check, command.try_state).encode();
 
 	let (expected_spec_name, expected_spec_version, _) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
@@ -177,8 +202,8 @@ where
 		&ext,
 		&executor,
 		execution,
-		if command.no_check { "TryRuntime_execute_block_no_check" } else { "Core_execute_block" },
-		block.encode().as_ref(),
+		"TryRuntime_execute_block",
+		&payload,
 		full_extensions(),
 	)?;
 

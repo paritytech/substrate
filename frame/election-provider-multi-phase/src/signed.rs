@@ -514,8 +514,8 @@ impl<T: Config> Pallet<T> {
 		let feasibility_weight = Self::solution_weight_of(raw_solution, size);
 
 		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
-		let weight_deposit =
-			T::SignedDepositWeight::get().saturating_mul(feasibility_weight.saturated_into());
+		let weight_deposit = T::SignedDepositWeight::get()
+			.saturating_mul(feasibility_weight.ref_time().saturated_into());
 
 		T::SignedDepositBase::get()
 			.saturating_add(len_deposit)
@@ -957,7 +957,7 @@ mod tests {
 	#[test]
 	fn cannot_consume_too_much_future_weight() {
 		ExtBuilder::default()
-			.signed_weight(40)
+			.signed_weight(Weight::from_ref_time(40))
 			.mock_weight_info(MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to(15);
@@ -971,13 +971,13 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, 35);
+				assert_eq!(solution_weight, Weight::from_ref_time(35));
 				assert_eq!(raw.solution.voter_count(), 5);
-				assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), 40);
+				assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), Weight::from_ref_time(40));
 
 				assert_ok!(MultiPhase::submit(Origin::signed(99), Box::new(raw.clone())));
 
-				<SignedMaxWeight>::set(30);
+				<SignedMaxWeight>::set(Weight::from_ref_time(30));
 
 				// note: resubmitting the same solution is technically okay as long as the queue has
 				// space.
