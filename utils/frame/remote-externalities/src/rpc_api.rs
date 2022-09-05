@@ -48,7 +48,7 @@ impl RpcCall {
 
 /// General purpose method for making RPC calls.
 async fn make_request<'a, T: DeserializeOwned>(
-	client: &Client,
+	client: &Arc<Client>,
 	call: RpcCall,
 	params: Option<ParamsSer<'a>>,
 ) -> Result<T, String> {
@@ -58,6 +58,11 @@ async fn make_request<'a, T: DeserializeOwned>(
 		.map_err(|e| format!("{} request failed: {:?}", call.as_str(), e))
 }
 
+enum ConnectionPolicy {
+	Reuse(Arc<Client>),
+	Reconnect,
+}
+
 /// Simple RPC service that is capable of keeping the connection.
 ///
 /// Service will connect to `uri` for the first time already during initialization.
@@ -65,15 +70,18 @@ async fn make_request<'a, T: DeserializeOwned>(
 /// Be careful with reusing the connection in a multithreaded environment.
 pub struct RpcService {
 	uri: String,
-	client: Arc<Option<Client>>,
+	policy: ConnectionPolicy,
 }
 
 impl RpcService {
-	/// Creates a new RPC service. Connects to `uri` right away.
-	pub async fn new<S: AsRef<str>>(uri: S, keep_connection: bool) -> Self {
-		let maybe_client = keep_connection
-			.then_some(Self::build_client(uri).await.expect("`RpcService` failed to connect"));
-		Self { uri: uri.as_ref().to_string(), client: Arc::new(maybe_client) }
+	/// Creates a new RPC service. If `keep_connection`, then connects to `uri` right away.
+	pub async fn new<S: AsRef<str>>(uri: S, keep_connection: bool) -> Result<Self, String> {
+		let policy = if keep_connection {
+			ConnectionPolicy::Reuse(Arc::new(Self::build_client(uri.as_ref()).await?))
+		} else {
+			ConnectionPolicy::Reconnect
+		};
+		Ok(Self { uri: uri.as_ref().to_string(), policy })
 	}
 
 	/// Returns the address at which requests are sent.
@@ -96,11 +104,11 @@ impl RpcService {
 		call: RpcCall,
 		params: Option<ParamsSer<'a>>,
 	) -> Result<T, String> {
-		match self.client {
+		match self.policy {
 			// `self.keep_connection` must have been `true`.
-			Some(ref client) => make_request(client, call, params).await,
-			None => {
-				let client = self.build_client().await?;
+			ConnectionPolicy::Reuse(ref client) => make_request(client, call, params).await,
+			ConnectionPolicy::Reconnect => {
+				let client = Arc::new(Self::build_client(&self.uri).await?);
 				make_request(&client, call, params).await
 			},
 		}

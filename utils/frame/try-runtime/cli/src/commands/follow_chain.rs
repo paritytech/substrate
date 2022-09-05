@@ -229,7 +229,7 @@ where
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
-	let rpc_service = RpcService::new(&command.uri, command.keep_connection).await;
+	let rpc_service = RpcService::new(&command.uri, command.keep_connection).await?;
 
 	let mut finalized_headers: FinalizedHeaders<Block, RpcService, Subscription<Block::Header>> =
 		FinalizedHeaders::new(&rpc_service, subscription);
