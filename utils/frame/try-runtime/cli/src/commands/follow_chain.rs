@@ -235,6 +235,14 @@ where
 
 	let mut rpc_service = rpc_api::RpcService::new(&command.uri, command.keep_connection);
 
+	let header_provider: RpcHeaderProvider<Block> =
+		RpcHeaderProvider { uri: command.uri.clone(), _phantom: PhantomData {} };
+	let mut finalized_headers: FinalizedHeaders<
+		Block,
+		RpcHeaderProvider<Block>,
+		Subscription<Block::Header>,
+	> = FinalizedHeaders::new(header_provider, subscription);
+
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
 		let number = header.number();
