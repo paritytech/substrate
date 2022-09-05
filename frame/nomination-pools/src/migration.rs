@@ -388,7 +388,7 @@ pub mod v2 {
 pub mod v3 {
 	use super::*;
 
-	/// This migration removes stale bonded-pool metadata.
+	/// This migration removes stale bonded-pool metadata, if any.
 	pub struct MigrateToV3<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV3<T> {
 		fn on_runtime_upgrade() -> Weight {
