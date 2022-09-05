@@ -97,7 +97,7 @@ where
 	Block::Header: HeaderT,
 {
 	/// Awaits for the header of the block with hash `hash`.
-	async fn get_header(&mut self, hash: Block::Hash) -> Block::Header;
+	async fn get_header(&self, hash: Block::Hash) -> Block::Header;
 }
 
 #[async_trait]
@@ -105,7 +105,7 @@ impl<Block: BlockT> HeaderProvider<Block> for RpcService
 where
 	Block::Header: DeserializeOwned,
 {
-	async fn get_header(&mut self, hash: Block::Hash) -> Block::Header {
+	async fn get_header(&self, hash: Block::Hash) -> Block::Header {
 		self.get_header::<Block>(hash).await.unwrap()
 	}
 }
@@ -149,7 +149,7 @@ where
 /// them lack justification).
 struct FinalizedHeaders<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
 {
-	header_provider: &'a mut HP,
+	header_provider: &'a HP,
 	subscription: HS,
 	fetched_headers: VecDeque<Block::Header>,
 	last_returned: Option<<Block::Header as HeaderT>::Hash>,
@@ -160,7 +160,7 @@ impl<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>
 where
 	<Block as BlockT>::Header: DeserializeOwned,
 {
-	pub fn new(header_provider: &'a mut HP, subscription: HS) -> Self {
+	pub fn new(header_provider: &'a HP, subscription: HS) -> Self {
 		Self {
 			header_provider,
 			subscription,
@@ -232,7 +232,7 @@ where
 	let mut rpc_service = RpcService::new(&command.uri, command.keep_connection);
 
 	let mut finalized_headers: FinalizedHeaders<Block, RpcService, Subscription<Block::Header>> =
-		FinalizedHeaders::new(&mut rpc_service, subscription);
+		FinalizedHeaders::new(&rpc_service, subscription);
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
@@ -330,12 +330,13 @@ where
 mod tests {
 	use super::*;
 	use sp_runtime::testing::{Block as TBlock, ExtrinsicWrapper, Header};
+	use std::cell::Cell;
 
 	type Block = TBlock<ExtrinsicWrapper<()>>;
 	type BlockNumber = u64;
 	type Hash = H256;
 
-	struct MockHeaderProvider(pub VecDeque<BlockNumber>);
+	struct MockHeaderProvider(pub Cell<VecDeque<BlockNumber>>);
 
 	fn headers() -> Vec<Header> {
 		let mut headers = vec![Header::new_from_number(0)];
@@ -350,8 +351,8 @@ mod tests {
 
 	#[async_trait]
 	impl HeaderProvider<Block> for MockHeaderProvider {
-		async fn get_header(&mut self, _hash: Hash) -> Header {
-			let height = self.0.pop_front().unwrap();
+		async fn get_header(&self, _hash: Hash) -> Header {
+			let height = self.0.get().pop_front().unwrap();
 			headers()[height as usize].clone()
 		}
 	}
@@ -369,9 +370,9 @@ mod tests {
 	async fn finalized_headers_works_when_every_block_comes_from_subscription() {
 		let heights = vec![4, 5, 6, 7];
 
-		let mut provider = MockHeaderProvider(vec![].into());
+		let provider = MockHeaderProvider(Cell::new(vec![].into()));
 		let subscription = MockHeaderSubscription(heights.clone().into());
-		let mut headers = FinalizedHeaders::new(&mut provider, subscription);
+		let mut headers = FinalizedHeaders::new(&provider, subscription);
 
 		for h in heights {
 			assert_eq!(h, headers.next().await.unwrap().number);
@@ -386,9 +387,9 @@ mod tests {
 		// Consecutive headers will be requested in the reversed order.
 		let heights_not_in_subscription = vec![5, 9, 8, 7];
 
-		let mut provider = MockHeaderProvider(heights_not_in_subscription.into());
+		let provider = MockHeaderProvider(Cell::new(heights_not_in_subscription.into()));
 		let subscription = MockHeaderSubscription(heights_in_subscription.into());
-		let mut headers = FinalizedHeaders::new(&mut provider, subscription);
+		let mut headers = FinalizedHeaders::new(&provider, subscription);
 
 		for h in all_heights {
 			assert_eq!(h, headers.next().await.unwrap().number);

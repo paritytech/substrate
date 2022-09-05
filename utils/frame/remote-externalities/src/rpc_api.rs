@@ -26,6 +26,7 @@ use jsonrpsee::{
 };
 use serde::de::DeserializeOwned;
 use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
+use std::cell::Cell;
 
 enum RpcCall {
 	GetHeader,
@@ -65,7 +66,7 @@ async fn make_request<'a, T: DeserializeOwned>(
 /// Be careful with reusing the connection in a multithreaded environment.
 pub struct RpcService {
 	uri: String,
-	client: Option<Client>,
+	client: Cell<Option<Client>>,
 	keep_connection: bool,
 }
 
@@ -74,7 +75,7 @@ impl RpcService {
 	///
 	/// Does not connect yet.
 	pub fn new<S: AsRef<str>>(uri: S, keep_connection: bool) -> Self {
-		Self { uri: uri.as_ref().to_string(), client: None, keep_connection }
+		Self { uri: uri.as_ref().to_string(), client: Cell::new(None), keep_connection }
 	}
 
 	/// Returns the address at which requests are sent.
@@ -98,18 +99,18 @@ impl RpcService {
 
 	/// Generic method for making RPC requests.
 	async fn make_request<'a, T: DeserializeOwned>(
-		&mut self,
+		&self,
 		call: RpcCall,
 		params: Option<ParamsSer<'a>>,
 	) -> Result<T, String> {
-		match &self.client {
+		match &self.client.get() {
 			// `self.keep_connection` must be `true.
 			Some(ref client) => make_request(client, call, params).await,
 			None => {
 				let client = self.build_client().await?;
 				let result = make_request(&client, call, params).await;
 				if self.keep_connection {
-					self.client = Some(client)
+					self.client.set(Some(client))
 				};
 				result
 			},
@@ -117,7 +118,7 @@ impl RpcService {
 	}
 
 	/// Get the header of the block identified by `at`.
-	pub async fn get_header<Block>(&mut self, at: Block::Hash) -> Result<Block::Header, String>
+	pub async fn get_header<Block>(&self, at: Block::Hash) -> Result<Block::Header, String>
 	where
 		Block: BlockT,
 		Block::Header: DeserializeOwned,
@@ -126,13 +127,13 @@ impl RpcService {
 	}
 
 	/// Get the finalized head.
-	pub async fn get_finalized_head<Block: BlockT>(&mut self) -> Result<Block::Hash, String> {
+	pub async fn get_finalized_head<Block: BlockT>(&self) -> Result<Block::Hash, String> {
 		self.make_request(RpcCall::GetFinalizedHead, None).await
 	}
 
 	/// Get the signed block identified by `at`.
 	pub async fn get_block<Block: BlockT + DeserializeOwned>(
-		&mut self,
+		&self,
 		at: Block::Hash,
 	) -> Result<Block, String> {
 		Ok(self
@@ -143,7 +144,7 @@ impl RpcService {
 
 	/// Get the runtime version of a given chain.
 	pub async fn get_runtime_version<Block: BlockT + DeserializeOwned>(
-		&mut self,
+		&self,
 		at: Option<Block::Hash>,
 	) -> Result<sp_version::RuntimeVersion, String> {
 		self.make_request(RpcCall::GetRuntimeVersion, rpc_params!(at)).await
