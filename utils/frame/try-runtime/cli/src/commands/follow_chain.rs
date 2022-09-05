@@ -149,7 +149,7 @@ where
 /// Returned headers are guaranteed to be ordered. There are no missing headers (even if some of
 /// them lack justification).
 struct FinalizedHeaders<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>> {
-	header_provider: &'a HP,
+	header_provider: &'a mut HP,
 	subscription: HS,
 	fetched_headers: VecDeque<Block::Header>,
 	last_returned: Option<<Block::Header as HeaderT>::Hash>,
@@ -160,7 +160,7 @@ impl<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>
 where
 	<Block as BlockT>::Header: DeserializeOwned,
 {
-	pub fn new(header_provider: &'a HP, subscription: HS) -> Self {
+	pub fn new(header_provider: &'a mut HP, subscription: HS) -> Self {
 		Self {
 			header_provider,
 			subscription,
@@ -235,7 +235,7 @@ where
 		Block,
 		RpcHeaderProvider<Block>,
 		Subscription<Block::Header>,
-	> = FinalizedHeaders::new(&rpc_service, subscription);
+	> = FinalizedHeaders::new(&mut rpc_service, subscription);
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
@@ -372,9 +372,9 @@ mod tests {
 	async fn finalized_headers_works_when_every_block_comes_from_subscription() {
 		let heights = vec![4, 5, 6, 7];
 
-		let provider = MockHeaderProvider(vec![].into());
+		let mut provider = MockHeaderProvider(vec![].into());
 		let subscription = MockHeaderSubscription(heights.clone().into());
-		let mut headers = FinalizedHeaders::new(&provider, subscription);
+		let mut headers = FinalizedHeaders::new(&mut provider, subscription);
 
 		for h in heights {
 			assert_eq!(h, headers.next().await.unwrap().number);
@@ -389,9 +389,9 @@ mod tests {
 		// Consecutive headers will be requested in the reversed order.
 		let heights_not_in_subscription = vec![5, 9, 8, 7];
 
-		let provider = MockHeaderProvider(heights_not_in_subscription.into());
+		let mut provider = MockHeaderProvider(heights_not_in_subscription.into());
 		let subscription = MockHeaderSubscription(heights_in_subscription.into());
-		let mut headers = FinalizedHeaders::new(&provider, subscription);
+		let mut headers = FinalizedHeaders::new(&mut provider, subscription);
 
 		for h in all_heights {
 			assert_eq!(h, headers.next().await.unwrap().number);
