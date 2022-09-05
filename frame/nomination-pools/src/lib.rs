@@ -1416,7 +1416,8 @@ pub mod pallet {
 		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
-		/// A member has rebonded a portion of funds, which had previously scheduled to be unlocked, into a pool
+		/// A member has rebonded a portion of funds, which had previously scheduled to be
+		/// unlocked, into a pool
 		Rebonded { member: T::AccountId, pool_id: PoolId, rebonded: BalanceOf<T> },
 	}
 

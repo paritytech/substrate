@@ -295,7 +295,7 @@ frame_benchmarking::benchmarks! {
 		let origin_unlocking_funds = pool_unlocking_funds::<T>(&scenario.origin1);
 
 		// bond `extra` before unbond `extra` to keep the underlying pool account maintain the
-		// same bonded balance, then `rebond` will bond `extra` again to trigger the worst case 
+		// same bonded balance, then `rebond` will bond `extra` again to trigger the worst case
 		// list scenario.
 		CurrencyOf::<T>::make_free_balance_be(&member_id, extra + CurrencyOf::<T>::minimum_balance());
 		Pools::<T>::bond_extra(Origin::Signed(member_id.clone()).into(), BondExtra::FreeBalance(extra)).unwrap();
