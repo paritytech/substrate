@@ -1092,7 +1092,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::clear_all_transfer_approvals())]
 		pub fn clear_all_transfer_approvals(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,

@@ -68,6 +68,7 @@ pub trait WeightInfo {
 	fn clear_collection_metadata() -> Weight;
 	fn approve_transfer() -> Weight;
 	fn cancel_approval() -> Weight;
+	fn clear_all_transfer_approvals() -> Weight;
 	fn set_accept_ownership() -> Weight;
 	fn set_collection_max_supply() -> Weight;
 	fn set_price() -> Weight;
@@ -260,6 +261,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(26_098_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	}
+	// NOTE: this is hand written, need to run the benchmark!
+	fn clear_all_transfer_approvals() -> Weight {
+		10_000_000 as Weight
 	}
 	// Storage: Uniques OwnershipAcceptance (r:1 w:1)
 	fn set_accept_ownership() -> Weight {
@@ -477,6 +482,10 @@ impl WeightInfo for () {
 		(26_098_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	}
+	// NOTE: this is hand written, need to run the benchmark!
+	fn clear_all_transfer_approvals() -> Weight {
+		10_000_000 as Weight
 	}
 	// Storage: Uniques OwnershipAcceptance (r:1 w:1)
 	fn set_accept_ownership() -> Weight {
