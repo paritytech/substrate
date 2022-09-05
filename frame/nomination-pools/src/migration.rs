@@ -438,9 +438,7 @@ pub mod v3 {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
 			ensure!(
-				Metadata::<T>::iter_keys()
-					.filter(|id| !BondedPools::<T>::contains_key(&id))
-					.count() == 0,
+				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id))
 				"not all of the stale metadata has been removed"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 3, "wrong storage version");
