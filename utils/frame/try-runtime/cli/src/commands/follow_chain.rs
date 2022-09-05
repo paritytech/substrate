@@ -330,13 +330,13 @@ where
 mod tests {
 	use super::*;
 	use sp_runtime::testing::{Block as TBlock, ExtrinsicWrapper, Header};
-	use std::cell::Cell;
+	use std::cell::RefCell;
 
 	type Block = TBlock<ExtrinsicWrapper<()>>;
 	type BlockNumber = u64;
 	type Hash = H256;
 
-	struct MockHeaderProvider(pub Cell<VecDeque<BlockNumber>>);
+	struct MockHeaderProvider(pub RefCell<VecDeque<BlockNumber>>);
 
 	fn headers() -> Vec<Header> {
 		let mut headers = vec![Header::new_from_number(0)];
@@ -352,7 +352,7 @@ mod tests {
 	#[async_trait]
 	impl HeaderProvider<Block> for MockHeaderProvider {
 		async fn get_header(&self, _hash: Hash) -> Header {
-			let height = self.0.get().pop_front().unwrap();
+			let height = self.0.borrow().pop_front().unwrap();
 			headers()[height as usize].clone()
 		}
 	}
@@ -370,7 +370,7 @@ mod tests {
 	async fn finalized_headers_works_when_every_block_comes_from_subscription() {
 		let heights = vec![4, 5, 6, 7];
 
-		let provider = MockHeaderProvider(Cell::new(vec![].into()));
+		let provider = MockHeaderProvider(RefCell::new(vec![].into()));
 		let subscription = MockHeaderSubscription(heights.clone().into());
 		let mut headers = FinalizedHeaders::new(&provider, subscription);
 
@@ -387,7 +387,7 @@ mod tests {
 		// Consecutive headers will be requested in the reversed order.
 		let heights_not_in_subscription = vec![5, 9, 8, 7];
 
-		let provider = MockHeaderProvider(Cell::new(heights_not_in_subscription.into()));
+		let provider = MockHeaderProvider(RefCell::new(heights_not_in_subscription.into()));
 		let subscription = MockHeaderSubscription(heights_in_subscription.into());
 		let mut headers = FinalizedHeaders::new(&provider, subscription);
 

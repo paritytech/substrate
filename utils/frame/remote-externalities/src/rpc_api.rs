@@ -26,7 +26,8 @@ use jsonrpsee::{
 };
 use serde::de::DeserializeOwned;
 use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use futures::lock::Mutex;
 
 enum RpcCall {
 	GetHeader,
@@ -103,7 +104,7 @@ impl RpcService {
 		call: RpcCall,
 		params: Option<ParamsSer<'a>>,
 	) -> Result<T, String> {
-		let mut maybe_client = self.client.lock().unwrap();
+		let mut maybe_client = self.client.lock().await;
 		match *maybe_client {
 			// `self.keep_connection` must be `true.
 			Some(ref client) => make_request(client, call, params).await,
