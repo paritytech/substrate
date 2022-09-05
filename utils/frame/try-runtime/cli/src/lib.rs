@@ -632,7 +632,7 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 	expected_spec_version: u32,
 	relaxed: bool,
 ) {
-	let mut rpc_service = remote_externalities::rpc_api::RpcService::new(uri.clone(), false);
+	let rpc_service = remote_externalities::rpc_api::RpcService::new(uri.clone(), false);
 	match rpc_service
 		.get_runtime_version::<Block>(None)
 		.await

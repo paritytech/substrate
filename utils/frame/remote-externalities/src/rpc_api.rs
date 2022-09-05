@@ -26,7 +26,7 @@ use jsonrpsee::{
 };
 use serde::de::DeserializeOwned;
 use sp_runtime::{generic::SignedBlock, traits::Block as BlockT};
-use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
 enum RpcCall {
 	GetHeader,
@@ -66,7 +66,7 @@ async fn make_request<'a, T: DeserializeOwned>(
 /// Be careful with reusing the connection in a multithreaded environment.
 pub struct RpcService {
 	uri: String,
-	client: RefCell<Option<Client>>,
+	client: Arc<Mutex<Option<Client>>>,
 	keep_connection: bool,
 }
 
@@ -75,7 +75,7 @@ impl RpcService {
 	///
 	/// Does not connect yet.
 	pub fn new<S: AsRef<str>>(uri: S, keep_connection: bool) -> Self {
-		Self { uri: uri.as_ref().to_string(), client: RefCell::new(None), keep_connection }
+		Self { uri: uri.as_ref().to_string(), client: Arc::new(Mutex::new(None)), keep_connection }
 	}
 
 	/// Returns the address at which requests are sent.
@@ -103,7 +103,7 @@ impl RpcService {
 		call: RpcCall,
 		params: Option<ParamsSer<'a>>,
 	) -> Result<T, String> {
-		let mut maybe_client = self.client.borrow_mut();
+		let mut maybe_client = self.client.lock().unwrap();
 		match *maybe_client {
 			// `self.keep_connection` must be `true.
 			Some(ref client) => make_request(client, call, params).await,
