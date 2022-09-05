@@ -27,14 +27,13 @@ use jsonrpsee::{
 	ws_client::WsClientBuilder,
 };
 use parity_scale_codec::{Decode, Encode};
-use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
+use remote_externalities::{rpc_api::RpcService, Builder, Mode, OnlineConfig};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use std::{collections::VecDeque, fmt::Debug, marker::PhantomData, str::FromStr};
-use remote_externalities::rpc_api::RpcService;
+use std::{collections::VecDeque, fmt::Debug, str::FromStr};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
@@ -148,7 +147,8 @@ where
 ///
 /// Returned headers are guaranteed to be ordered. There are no missing headers (even if some of
 /// them lack justification).
-struct FinalizedHeaders<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>> {
+struct FinalizedHeaders<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
+{
 	header_provider: &'a mut HP,
 	subscription: HS,
 	fetched_headers: VecDeque<Block::Header>,
@@ -156,7 +156,7 @@ struct FinalizedHeaders<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: Header
 }
 
 impl<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
-	FinalizedHeaders<Block, HP, HS>
+	FinalizedHeaders<'a, Block, HP, HS>
 where
 	<Block as BlockT>::Header: DeserializeOwned,
 {
@@ -231,11 +231,8 @@ where
 
 	let mut rpc_service = RpcService::new(&command.uri, command.keep_connection);
 
-	let mut finalized_headers: FinalizedHeaders<
-		Block,
-		RpcHeaderProvider<Block>,
-		Subscription<Block::Header>,
-	> = FinalizedHeaders::new(&mut rpc_service, subscription);
+	let mut finalized_headers: FinalizedHeaders<Block, RpcService, Subscription<Block::Header>> =
+		FinalizedHeaders::new(&mut rpc_service, subscription);
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
