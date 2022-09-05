@@ -47,6 +47,7 @@ fn test_setup_works() {
 		assert_eq!(SubPoolsStorage::<Runtime>::count(), 0);
 		assert_eq!(PoolMembers::<Runtime>::count(), 1);
 		assert_eq!(StakingMock::bonding_duration(), 3);
+		assert!(Metadata::<T>::contains_key(1));
 
 		let last_pool = LastPoolId::<Runtime>::get();
 		assert_eq!(
@@ -1911,10 +1912,6 @@ mod claim_payout {
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(20), 20, 0));
 			assert_ok!(fully_unbond_permissioned(10));
 
-			// set metadata to check that it's being removed on dissolve
-			assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
-			assert!(Metadata::<T>::contains_key(1));
-
 			CurrentEra::set(6);
 			assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
@@ -3153,10 +3150,6 @@ mod withdraw_unbonded {
 				current_era += 3;
 				CurrentEra::set(current_era);
 
-				// set metadata to check that it's being removed on dissolve
-				assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
-				assert!(Metadata::<T>::contains_key(1));
-
 				// when
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 				assert_eq!(
@@ -3778,10 +3771,6 @@ mod withdraw_unbonded {
 				Error::<Runtime>::MinimumBondNotMet
 			);
 			assert_ok!(Pools::unbond(Origin::signed(10), 10, 10));
-
-			// set metadata to check that it's being removed on dissolve
-			assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
-			assert!(Metadata::<T>::contains_key(1));
 
 			// now the 7 should be free.
 			CurrentEra::set(3);
