@@ -1607,7 +1607,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 		res,
 		[
 			child_root.clone(),
-			array_bytes::hex2bytes_unchecked("3a636f6465").to_vec(),
+			array_bytes::hex2bytes_unchecked("3a636f6465"),
 			array_bytes::hex2bytes_unchecked("3a686561707061676573"),
 		]
 	);
