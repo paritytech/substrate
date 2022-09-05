@@ -197,14 +197,6 @@ impl ProposalProvider<u64, H256, RuntimeCall> for AllianceProposalProvider {
 	fn proposal_of(proposal_hash: H256) -> Option<RuntimeCall> {
 		AllianceMotion::proposal_of(proposal_hash)
 	}
-
-	fn proposals() -> Vec<H256> {
-		AllianceMotion::proposals().into_inner()
-	}
-
-	fn proposals_count() -> u32 {
-		pallet_collective::Proposals::<Test, AllianceCollective>::decode_len().unwrap_or(0) as u32
-	}
 }
 
 parameter_types! {
@@ -326,13 +318,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			Error::<Test, ()>::AllianceNotYetInitialized
 		);
 
-		assert_ok!(Alliance::force_set_members(
-			Origin::root(),
-			vec![1, 2],
-			vec![3],
-			vec![],
-			Default::default()
-		));
+		assert_ok!(Alliance::init_members(Origin::root(), vec![1, 2], vec![3], vec![]));
 
 		System::set_block_number(1);
 	});
@@ -370,7 +356,3 @@ pub fn make_proposal(proposal: RuntimeCall) -> (RuntimeCall, u32, H256) {
 	(proposal, len, hash)
 }
 
-pub fn assert_prev_event(event: RuntimeEvent) {
-	let events = System::events();
-	assert_eq!(events.get(events.len() - 2).expect("events expected").event, event);
-}

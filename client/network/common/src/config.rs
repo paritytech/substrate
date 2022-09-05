@@ -21,7 +21,9 @@
 use libp2p::{multiaddr, Multiaddr, PeerId};
 use std::{fmt, str, str::FromStr};
 
-/// Name of a protocol, transmitted on the wire. Should be unique for each chain. Always UTF-8.
+/// Protocol name prefix, transmitted on the wire for legacy protocol names.
+/// I.e., `dot` in `/dot/sync/2`. Should be unique for each chain. Always UTF-8.
+/// Deprecated in favour of genesis hash & fork ID based protocol names.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct ProtocolId(smallvec::SmallVec<[u8; 6]>);
 
