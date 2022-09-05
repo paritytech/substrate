@@ -35,11 +35,7 @@ use crate::{
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	ensure,
-	traits::Get,
-};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
@@ -134,12 +130,6 @@ where
 			schedule,
 			owner,
 		)?;
-		// When instrumenting a new code we apply a stricter limit than enforced by the
-		// `RelaxedCodeVec` in order to leave some headroom for reinstrumentation.
-		ensure!(
-			module.code.len() as u32 <= T::MaxCodeLen::get(),
-			(<Error<T>>::CodeTooLarge.into(), ""),
-		);
 		Ok(module)
 	}
 
