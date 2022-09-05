@@ -880,7 +880,7 @@ fn should_not_accept_old_signatures() {
 
 	// generated with schnorrkel 0.1.1 from `_bytes`
 	let old_singature = sp_core::sr25519::Signature::try_from(
-		&hex::decode(
+		&array_bytes::hex2bytes(
 			"c427eb672e8c441c86d31f1a81b22b43102058e9ce237cabe9897ea5099ffd426\
 		cd1c6a1f4f2869c3df57901d36bedcb295657adb3a4355add86ed234eb83108",
 		)

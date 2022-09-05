@@ -68,8 +68,9 @@ pub(crate) mod beefy_protocol_name {
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> std::borrow::Cow<'static, str> {
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-			None => format!("/{}", hex::encode(genesis_hash)),
+			Some(fork_id) =>
+				format!("/{}/{}", array_bytes::bytes2hex("", genesis_hash.as_ref()), fork_id),
+			None => format!("/{}", array_bytes::bytes2hex("", genesis_hash.as_ref())),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}
