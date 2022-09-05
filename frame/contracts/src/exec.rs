@@ -34,7 +34,7 @@ use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
-use sp_runtime::traits::Convert;
+use sp_runtime::traits::{Convert, Hash};
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -784,16 +784,19 @@ where
 	///
 	/// This can be either a call or an instantiate.
 	fn run(&mut self, executable: E, input_data: Vec<u8>) -> Result<ExecReturnValue, ExecError> {
-		let entry_point = self.top_frame().entry_point;
+		let frame = self.top_frame();
+		let entry_point = frame.entry_point;
+		let delegated_code_hash =
+			if frame.delegate_caller.is_some() { Some(*executable.code_hash()) } else { None };
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
 			if entry_point == ExportedFunction::Constructor {
-				let top_frame = top_frame_mut!(self);
-				top_frame.nested_storage.charge_instantiate(
+				let frame = top_frame_mut!(self);
+				frame.nested_storage.charge_instantiate(
 					&self.origin,
-					&top_frame.account_id,
-					top_frame.contract_info.get(&top_frame.account_id),
+					&frame.account_id,
+					frame.contract_info.get(&frame.account_id),
 				)?;
 			}
 
@@ -805,23 +808,42 @@ where
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
-			// Additional work needs to be performed in case of an instantiation.
-			if !output.did_revert() && entry_point == ExportedFunction::Constructor {
-				let frame = self.top_frame();
+			// Avoid useless work that would be reverted anyways.
+			if output.did_revert() {
+				return Ok(output)
+			}
 
-				// It is not allowed to terminate a contract inside its constructor.
-				if matches!(frame.contract_info, CachedContract::Terminated) {
-					return Err(Error::<T>::TerminatedInConstructor.into())
-				}
+			let frame = self.top_frame();
+			let account_id = &frame.account_id;
+			match (entry_point, delegated_code_hash) {
+				(ExportedFunction::Constructor, _) => {
+					// It is not allowed to terminate a contract inside its constructor.
+					if matches!(frame.contract_info, CachedContract::Terminated) {
+						return Err(Error::<T>::TerminatedInConstructor.into())
+					}
 
-				// Deposit an instantiation event.
-				deposit_event::<T>(
-					vec![],
-					Event::Instantiated {
-						deployer: self.caller().clone(),
-						contract: frame.account_id.clone(),
-					},
-				);
+					// Deposit an instantiation event.
+					Contracts::<T>::deposit_event(
+						vec![T::Hashing::hash_of(self.caller()), T::Hashing::hash_of(account_id)],
+						Event::Instantiated {
+							deployer: self.caller().clone(),
+							contract: account_id.clone(),
+						},
+					);
+				},
+				(ExportedFunction::Call, Some(code_hash)) => {
+					Contracts::<T>::deposit_event(
+						vec![T::Hashing::hash_of(account_id), T::Hashing::hash_of(&code_hash)],
+						Event::DelegateCalled { contract: account_id.clone(), code_hash },
+					);
+				},
+				(ExportedFunction::Call, None) => {
+					let caller = self.caller();
+					Contracts::<T>::deposit_event(
+						vec![T::Hashing::hash_of(caller), T::Hashing::hash_of(account_id)],
+						Event::Called { caller: caller.clone(), contract: account_id.clone() },
+					);
+				},
 			}
 
 			Ok(output)
@@ -850,6 +872,7 @@ where
 			// has changed.
 			Err(error) => (false, Err(error.into())),
 		};
+
 		self.pop_frame(success);
 		output
 	}
@@ -1134,10 +1157,13 @@ where
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
-		Contracts::<T>::deposit_event(Event::Terminated {
-			contract: frame.account_id.clone(),
-			beneficiary: beneficiary.clone(),
-		});
+		Contracts::<T>::deposit_event(
+			vec![T::Hashing::hash_of(&frame.account_id), T::Hashing::hash_of(&beneficiary)],
+			Event::Terminated {
+				contract: frame.account_id.clone(),
+				beneficiary: beneficiary.clone(),
+			},
+		);
 		Ok(())
 	}
 
@@ -1242,7 +1268,7 @@ where
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
-		deposit_event::<Self::T>(
+		Contracts::<Self::T>::deposit_event(
 			topics,
 			Event::ContractEmitted { contract: self.top_frame().account_id.clone(), data },
 		);
@@ -1304,20 +1330,16 @@ where
 		let prev_hash = top_frame.contract_info().code_hash;
 		E::remove_user(prev_hash);
 		top_frame.contract_info().code_hash = hash;
-		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
-			contract: top_frame.account_id.clone(),
-			new_code_hash: hash,
-			old_code_hash: prev_hash,
-		});
+		Contracts::<Self::T>::deposit_event(
+			vec![T::Hashing::hash_of(&top_frame.account_id), hash, prev_hash],
+			Event::ContractCodeUpdated {
+				contract: top_frame.account_id.clone(),
+				new_code_hash: hash,
+				old_code_hash: prev_hash,
+			},
+		);
 		Ok(())
 	}
-}
-
-fn deposit_event<T: Config>(topics: Vec<T::Hash>, event: Event<T>) {
-	<frame_system::Pallet<T>>::deposit_event_indexed(
-		&topics,
-		<T as Config>::Event::from(event).into(),
-	)
 }
 
 mod sealing {
@@ -1347,7 +1369,7 @@ mod tests {
 		gas::GasMeter,
 		storage::Storage,
 		tests::{
-			test_utils::{get_balance, place_contract, set_balance},
+			test_utils::{get_balance, hash, place_contract, set_balance},
 			Call, Event as MetaEvent, ExtBuilder, Test, TestFilter, ALICE, BOB, CHARLIE, GAS_LIMIT,
 		},
 		Error,
@@ -2237,7 +2259,10 @@ mod tests {
 			);
 			assert_eq!(
 				&events(),
-				&[Event::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
+				&[
+					Event::Instantiated { deployer: BOB, contract: instantiated_contract_address },
+					Event::Called { caller: ALICE, contract: BOB },
+				]
 			);
 		});
 	}
@@ -2289,7 +2314,7 @@ mod tests {
 
 			// The contract wasn't instantiated so we don't expect to see an instantiation
 			// event here.
-			assert_eq!(&events(), &[]);
+			assert_eq!(&events(), &[Event::Called { caller: ALICE, contract: BOB },]);
 		});
 	}
 
@@ -2591,14 +2616,24 @@ mod tests {
 			let remark_hash = <Test as frame_system::Config>::Hashing::hash(b"Hello World");
 			assert_eq!(
 				System::events(),
-				vec![EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::System(frame_system::Event::Remarked {
-						sender: BOB,
-						hash: remark_hash
-					}),
-					topics: vec![],
-				},]
+				vec![
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::System(frame_system::Event::Remarked {
+							sender: BOB,
+							hash: remark_hash
+						}),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::Contracts(crate::Event::Called {
+							caller: ALICE,
+							contract: BOB,
+						}),
+						topics: vec![hash(&ALICE), hash(&BOB)],
+					},
+				]
 			);
 		});
 	}
@@ -2683,6 +2718,14 @@ mod tests {
 							error: frame_system::Error::<Test>::CallFiltered.into()
 						},),
 						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::Contracts(crate::Event::Called {
+							caller: ALICE,
+							contract: BOB,
+						}),
+						topics: vec![hash(&ALICE), hash(&BOB)],
 					},
 				]
 			);

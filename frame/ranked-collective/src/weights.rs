@@ -40,7 +40,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_ranked_collective.
@@ -61,62 +61,62 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: RankedCollective IndexToId (r:0 w:1)
 	// Storage: RankedCollective IdToIndex (r:0 w:1)
 	fn add_member() -> Weight {
-		Weight::from_ref_time(11_000_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
 	}
 	// Storage: RankedCollective Members (r:1 w:1)
 	// Storage: RankedCollective MemberCount (r:1 w:1)
 	// Storage: RankedCollective IdToIndex (r:1 w:1)
 	// Storage: RankedCollective IndexToId (r:1 w:1)
 	fn remove_member(r: u32, ) -> Weight {
-		Weight::from_ref_time(16_855_000 as RefTimeWeight)
+		Weight::from_ref_time(16_855_000 as u64)
 			// Standard Error: 27_000
-			.saturating_add(Weight::from_ref_time(8_107_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
-			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
+			.saturating_add(Weight::from_ref_time(8_107_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().reads((3 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+			.saturating_add(T::DbWeight::get().writes((3 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: RankedCollective Members (r:1 w:1)
 	// Storage: RankedCollective MemberCount (r:1 w:1)
 	// Storage: RankedCollective IndexToId (r:0 w:1)
 	// Storage: RankedCollective IdToIndex (r:0 w:1)
 	fn promote_member(r: u32, ) -> Weight {
-		Weight::from_ref_time(11_936_000 as RefTimeWeight)
+		Weight::from_ref_time(11_936_000 as u64)
 			// Standard Error: 3_000
-			.saturating_add(Weight::from_ref_time(9_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads(2 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(9_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
 	}
 	// Storage: RankedCollective Members (r:1 w:1)
 	// Storage: RankedCollective MemberCount (r:1 w:1)
 	// Storage: RankedCollective IdToIndex (r:1 w:1)
 	// Storage: RankedCollective IndexToId (r:1 w:1)
 	fn demote_member(r: u32, ) -> Weight {
-		Weight::from_ref_time(17_582_000 as RefTimeWeight)
+		Weight::from_ref_time(17_582_000 as u64)
 			// Standard Error: 14_000
-			.saturating_add(Weight::from_ref_time(142_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads(4 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(142_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
 	}
 	// Storage: RankedCollective Members (r:1 w:0)
 	// Storage: RankedPolls ReferendumInfoFor (r:1 w:1)
 	// Storage: RankedCollective Voting (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote() -> Weight {
-		Weight::from_ref_time(22_000_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(5 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
+		Weight::from_ref_time(22_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
 	}
 	// Storage: RankedPolls ReferendumInfoFor (r:1 w:0)
 	// Storage: RankedCollective Voting (r:0 w:1)
 	fn cleanup_poll(n: u32, ) -> Weight {
-		Weight::from_ref_time(6_188_000 as RefTimeWeight)
+		Weight::from_ref_time(6_188_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add(Weight::from_ref_time(867_000 as RefTimeWeight).saturating_mul(n as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes((1 as RefTimeWeight).saturating_mul(n as RefTimeWeight)))
+			.saturating_add(Weight::from_ref_time(867_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(n as u64)))
 	}
 }
 
@@ -127,61 +127,61 @@ impl WeightInfo for () {
 	// Storage: RankedCollective IndexToId (r:0 w:1)
 	// Storage: RankedCollective IdToIndex (r:0 w:1)
 	fn add_member() -> Weight {
-		Weight::from_ref_time(11_000_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
+		Weight::from_ref_time(11_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
 	}
 	// Storage: RankedCollective Members (r:1 w:1)
 	// Storage: RankedCollective MemberCount (r:1 w:1)
 	// Storage: RankedCollective IdToIndex (r:1 w:1)
 	// Storage: RankedCollective IndexToId (r:1 w:1)
 	fn remove_member(r: u32, ) -> Weight {
-		Weight::from_ref_time(16_855_000 as RefTimeWeight)
+		Weight::from_ref_time(16_855_000 as u64)
 			// Standard Error: 27_000
-			.saturating_add(Weight::from_ref_time(8_107_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
-			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes((3 as RefTimeWeight).saturating_mul(r as RefTimeWeight)))
+			.saturating_add(Weight::from_ref_time(8_107_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().reads((3 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes((3 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: RankedCollective Members (r:1 w:1)
 	// Storage: RankedCollective MemberCount (r:1 w:1)
 	// Storage: RankedCollective IndexToId (r:0 w:1)
 	// Storage: RankedCollective IdToIndex (r:0 w:1)
 	fn promote_member(r: u32, ) -> Weight {
-		Weight::from_ref_time(11_936_000 as RefTimeWeight)
+		Weight::from_ref_time(11_936_000 as u64)
 			// Standard Error: 3_000
-			.saturating_add(Weight::from_ref_time(9_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads(2 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(9_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
 	}
 	// Storage: RankedCollective Members (r:1 w:1)
 	// Storage: RankedCollective MemberCount (r:1 w:1)
 	// Storage: RankedCollective IdToIndex (r:1 w:1)
 	// Storage: RankedCollective IndexToId (r:1 w:1)
 	fn demote_member(r: u32, ) -> Weight {
-		Weight::from_ref_time(17_582_000 as RefTimeWeight)
+		Weight::from_ref_time(17_582_000 as u64)
 			// Standard Error: 14_000
-			.saturating_add(Weight::from_ref_time(142_000 as RefTimeWeight).saturating_mul(r as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads(4 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(142_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
 	}
 	// Storage: RankedCollective Members (r:1 w:0)
 	// Storage: RankedPolls ReferendumInfoFor (r:1 w:1)
 	// Storage: RankedCollective Voting (r:1 w:1)
 	// Storage: Scheduler Agenda (r:2 w:2)
 	fn vote() -> Weight {
-		Weight::from_ref_time(22_000_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(5 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
+		Weight::from_ref_time(22_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
 	}
 	// Storage: RankedPolls ReferendumInfoFor (r:1 w:0)
 	// Storage: RankedCollective Voting (r:0 w:1)
 	fn cleanup_poll(n: u32, ) -> Weight {
-		Weight::from_ref_time(6_188_000 as RefTimeWeight)
+		Weight::from_ref_time(6_188_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add(Weight::from_ref_time(867_000 as RefTimeWeight).saturating_mul(n as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes((1 as RefTimeWeight).saturating_mul(n as RefTimeWeight)))
+			.saturating_add(Weight::from_ref_time(867_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(n as u64)))
 	}
 }

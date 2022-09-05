@@ -39,7 +39,7 @@
 #![allow(unused_parens)]
 #![allow(unused_imports)]
 
-use frame_support::{traits::Get, weights::{RefTimeWeight, Weight, constants::RocksDbWeight}};
+use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_lottery.
@@ -63,30 +63,30 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System Account (r:1 w:1)
 	// Storage: Lottery Tickets (r:0 w:1)
 	fn buy_ticket() -> Weight {
-		Weight::from_ref_time(44_706_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(6 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
+		Weight::from_ref_time(44_706_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(6 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
 	}
 	// Storage: Lottery CallIndices (r:0 w:1)
 	fn set_calls(n: u32, ) -> Weight {
-		Weight::from_ref_time(12_556_000 as RefTimeWeight)
+		Weight::from_ref_time(12_556_000 as u64)
 			// Standard Error: 7_000
-			.saturating_add(Weight::from_ref_time(295_000 as RefTimeWeight).saturating_mul(n as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(295_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Lottery Lottery (r:1 w:1)
 	// Storage: Lottery LotteryIndex (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn start_lottery() -> Weight {
-		Weight::from_ref_time(38_051_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(3 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(3 as RefTimeWeight))
+		Weight::from_ref_time(38_051_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	// Storage: Lottery Lottery (r:1 w:1)
 	fn stop_repeat() -> Weight {
-		Weight::from_ref_time(6_910_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(1 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(6_910_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	// Storage: Lottery Lottery (r:1 w:1)
@@ -94,9 +94,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Lottery TicketsCount (r:1 w:1)
 	// Storage: Lottery Tickets (r:1 w:0)
 	fn on_initialize_end() -> Weight {
-		Weight::from_ref_time(53_732_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(6 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(4 as RefTimeWeight))
+		Weight::from_ref_time(53_732_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(6 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
 	}
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	// Storage: Lottery Lottery (r:1 w:1)
@@ -105,9 +105,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Lottery Tickets (r:1 w:0)
 	// Storage: Lottery LotteryIndex (r:1 w:1)
 	fn on_initialize_repeat() -> Weight {
-		Weight::from_ref_time(55_868_000 as RefTimeWeight)
-			.saturating_add(T::DbWeight::get().reads(7 as RefTimeWeight))
-			.saturating_add(T::DbWeight::get().writes(5 as RefTimeWeight))
+		Weight::from_ref_time(55_868_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(7 as u64))
+			.saturating_add(T::DbWeight::get().writes(5 as u64))
 	}
 }
 
@@ -121,30 +121,30 @@ impl WeightInfo for () {
 	// Storage: System Account (r:1 w:1)
 	// Storage: Lottery Tickets (r:0 w:1)
 	fn buy_ticket() -> Weight {
-		Weight::from_ref_time(44_706_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(6 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
+		Weight::from_ref_time(44_706_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(6 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
 	}
 	// Storage: Lottery CallIndices (r:0 w:1)
 	fn set_calls(n: u32, ) -> Weight {
-		Weight::from_ref_time(12_556_000 as RefTimeWeight)
+		Weight::from_ref_time(12_556_000 as u64)
 			// Standard Error: 7_000
-			.saturating_add(Weight::from_ref_time(295_000 as RefTimeWeight).saturating_mul(n as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+			.saturating_add(Weight::from_ref_time(295_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Lottery Lottery (r:1 w:1)
 	// Storage: Lottery LotteryIndex (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
 	fn start_lottery() -> Weight {
-		Weight::from_ref_time(38_051_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(3 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(3 as RefTimeWeight))
+		Weight::from_ref_time(38_051_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	// Storage: Lottery Lottery (r:1 w:1)
 	fn stop_repeat() -> Weight {
-		Weight::from_ref_time(6_910_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(1 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(1 as RefTimeWeight))
+		Weight::from_ref_time(6_910_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	// Storage: Lottery Lottery (r:1 w:1)
@@ -152,9 +152,9 @@ impl WeightInfo for () {
 	// Storage: Lottery TicketsCount (r:1 w:1)
 	// Storage: Lottery Tickets (r:1 w:0)
 	fn on_initialize_end() -> Weight {
-		Weight::from_ref_time(53_732_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(6 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(4 as RefTimeWeight))
+		Weight::from_ref_time(53_732_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(6 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
 	}
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	// Storage: Lottery Lottery (r:1 w:1)
@@ -163,8 +163,8 @@ impl WeightInfo for () {
 	// Storage: Lottery Tickets (r:1 w:0)
 	// Storage: Lottery LotteryIndex (r:1 w:1)
 	fn on_initialize_repeat() -> Weight {
-		Weight::from_ref_time(55_868_000 as RefTimeWeight)
-			.saturating_add(RocksDbWeight::get().reads(7 as RefTimeWeight))
-			.saturating_add(RocksDbWeight::get().writes(5 as RefTimeWeight))
+		Weight::from_ref_time(55_868_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(7 as u64))
+			.saturating_add(RocksDbWeight::get().writes(5 as u64))
 	}
 }

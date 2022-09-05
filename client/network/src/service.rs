@@ -61,7 +61,10 @@ use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
-	protocol::event::{DhtEvent, Event},
+	protocol::{
+		event::{DhtEvent, Event},
+		ProtocolName,
+	},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkSigner,
@@ -76,7 +79,6 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
-	borrow::Cow,
 	cmp,
 	collections::{HashMap, HashSet},
 	fs, iter,
@@ -122,7 +124,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B, H>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
-	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, Cow<'static, str>), NotificationsSink>>>,
+	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notifications_sizes_metric: Option<HistogramVec>,
@@ -890,7 +892,7 @@ where
 		self.peerset.report_peer(who, cost_benefit);
 	}
 
-	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {
+	fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who, protocol));
 	}
 
@@ -921,7 +923,7 @@ where
 
 	fn set_reserved_peers(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		let peers_addrs = self.split_multiaddr_and_peer_id(peers)?;
@@ -952,7 +954,7 @@ where
 
 	fn add_peers_to_reserved_set(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
@@ -976,7 +978,7 @@ where
 		Ok(())
 	}
 
-	fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
 		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
@@ -986,7 +988,7 @@ where
 
 	fn add_to_peers_set(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
@@ -1010,7 +1012,7 @@ where
 		Ok(())
 	}
 
-	fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
 		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
@@ -1040,7 +1042,7 @@ where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+	fn write_notification(&self, target: PeerId, protocol: ProtocolName, message: Vec<u8>) {
 		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
 		// `peers_notifications_sinks` mutex as soon as possible.
 		let sink = {
@@ -1077,7 +1079,7 @@ where
 	fn notification_sender(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSenderT>, NotificationSenderError> {
 		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
 		// `peers_notifications_sinks` mutex as soon as possible.
@@ -1108,7 +1110,7 @@ where
 	async fn request(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		connect: IfDisconnected,
 	) -> Result<Vec<u8>, RequestFailure> {
@@ -1128,7 +1130,7 @@ where
 	fn start_request(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
@@ -1179,7 +1181,7 @@ pub struct NotificationSender {
 	sink: NotificationsSink,
 
 	/// Name of the protocol on the wire.
-	protocol_name: Cow<'static, str>,
+	protocol_name: ProtocolName,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1212,7 +1214,7 @@ pub struct NotificationSenderReady<'a> {
 	peer_id: &'a PeerId,
 
 	/// Name of the protocol on the wire.
-	protocol_name: &'a Cow<'static, str>,
+	protocol_name: &'a ProtocolName,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1256,16 +1258,16 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AddReserved(PeerId),
 	RemoveReserved(PeerId),
 	SetReserved(HashSet<PeerId>),
-	SetPeersetReserved(Cow<'static, str>, HashSet<PeerId>),
-	AddSetReserved(Cow<'static, str>, PeerId),
-	RemoveSetReserved(Cow<'static, str>, PeerId),
-	AddToPeersSet(Cow<'static, str>, PeerId),
-	RemoveFromPeersSet(Cow<'static, str>, PeerId),
+	SetPeersetReserved(ProtocolName, HashSet<PeerId>),
+	AddSetReserved(ProtocolName, PeerId),
+	RemoveSetReserved(ProtocolName, PeerId),
+	AddToPeersSet(ProtocolName, PeerId),
+	RemoveFromPeersSet(ProtocolName, PeerId),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
 	Request {
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
@@ -1276,7 +1278,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	NetworkState {
 		pending_response: oneshot::Sender<Result<NetworkState, RequestFailure>>,
 	},
-	DisconnectPeer(PeerId, Cow<'static, str>),
+	DisconnectPeer(PeerId, ProtocolName),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
 }
 
@@ -1312,7 +1314,7 @@ where
 	boot_node_ids: Arc<HashSet<PeerId>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
-	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, Cow<'static, str>), NotificationsSink>>>,
+	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
 	/// Controller for the handler of incoming and outgoing transactions.
 	tx_handler_controller: transactions::TransactionsHandlerController<H>,
 }
@@ -1456,7 +1458,7 @@ where
 					.network_service
 					.behaviour_mut()
 					.user_protocol_mut()
-					.disconnect_peer(&who, &protocol_name),
+					.disconnect_peer(&who, protocol_name),
 				ServiceToWorkerMsg::NewBestBlockImported(hash, number) => this
 					.network_service
 					.behaviour_mut()
