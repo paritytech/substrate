@@ -991,7 +991,7 @@ fn postponed_named_task_can_be_rescheduled() {
 		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
-		let hashed = Preimage::pick(hash.clone(), len);
+		let hashed = Preimage::pick(hash, len);
 		let name: [u8; 32] = hash.as_ref().try_into().unwrap();
 
 		assert_ok!(Scheduler::do_schedule_named(
