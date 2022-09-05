@@ -63,7 +63,7 @@ fn init_members_works() {
 		// assert a retiring member from previous Alliance not removed
 		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::MembersInitialized {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MembersInitialized {
 			founders: vec![5, 8],
 			fellows: vec![4],
 			allies: vec![2],
