@@ -563,7 +563,7 @@ impl<T: Config> Pallet<T> {
 
 			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
-				ensure!(call.get_dispatch_info().weight.any_lte(max_weight), Error::<T>::MaxWeightTooLow);
+				ensure!(call.get_dispatch_info().weight.all_lte(max_weight), Error::<T>::MaxWeightTooLow);
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.
