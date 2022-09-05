@@ -100,6 +100,7 @@ pub mod v1 {
 		fn post_upgrade() -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number())?;
 			Ok(())
 		}
 	}
@@ -440,7 +441,7 @@ pub mod v3 {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
 			ensure!(
-				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id))
+				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id)),
 				"not all of the stale metadata has been removed"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 3, "wrong storage version");
