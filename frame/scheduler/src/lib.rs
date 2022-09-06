@@ -283,7 +283,7 @@ pub mod pallet {
 		CallUnavailable { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
 		/// The given task was unable to be renewed since the agenda is full at that block.
 		PeriodicFailed { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
-		/// The given task was unable to be renewed since the agenda is full at that block.
+		/// The given task can never be executed since it is overweight.
 		PermanentlyOverweight { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
 	}
 
@@ -990,6 +990,7 @@ impl<T: Config> Pallet<T> {
 
 		match Self::execute_dispatch(weight, task.origin.clone(), call) {
 			Err(Unavailable) => {
+				debug_assert!(false, "Checked to exist with `peek`");
 				Self::deposit_event(Event::CallUnavailable {
 					task: (when, agenda_index),
 					id: task.maybe_id,
