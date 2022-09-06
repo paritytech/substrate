@@ -256,7 +256,6 @@ mod transport;
 pub mod bitswap;
 pub mod config;
 pub mod network_state;
-pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};

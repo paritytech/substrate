@@ -14,6 +14,13 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 futures = "0.3.21"
+hex = "0.4.0"
+libp2p = "0.46.1"
+log = "0.4.17"
+pin-project = "1.0.10"
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }
 sc-network-common = { version = "0.10.0-dev", path = "../common" }
+sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }

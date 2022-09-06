@@ -36,9 +36,6 @@ pub type Message<B> = generic::Message<
 	<B as BlockT>::Extrinsic,
 >;
 
-/// A set of transactions.
-pub type Transactions<E> = Vec<E>;
-
 /// Remote call response.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct RemoteCallResponse {
@@ -59,7 +56,7 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use super::{RemoteCallResponse, RemoteReadResponse, Transactions};
+	use super::{RemoteCallResponse, RemoteReadResponse};
 	use bitflags::bitflags;
 	use codec::{Decode, Encode, Input, Output};
 	use sc_client_api::StorageProof;
@@ -147,7 +144,7 @@ pub mod generic {
 		/// Block announce.
 		BlockAnnounce(BlockAnnounce<Header>),
 		/// Transactions.
-		Transactions(Transactions<Extrinsic>),
+		Transactions(sc_network_transactions::Transactions<Extrinsic>),
 		/// Consensus protocol message.
 		Consensus(ConsensusMessage),
 		/// Remote method call request.

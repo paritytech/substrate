@@ -21,7 +21,21 @@
 use futures::prelude::*;
 use sc_network_common::ExHashT;
 use sp_runtime::traits::Block as BlockT;
-use std::{collections::HashMap, future::Future, pin::Pin};
+use std::{collections::HashMap, future::Future, pin::Pin, time};
+
+/// Interval at which we propagate transactions;
+pub(crate) const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
+
+/// Maximum number of known transaction hashes to keep for a peer.
+///
+/// This should be approx. 2 blocks full of transactions for the network to function properly.
+pub(crate) const MAX_KNOWN_TRANSACTIONS: usize = 10240; // ~300kb per peer + overhead.
+
+/// Maximum allowed size for a transactions notification.
+pub(crate) const MAX_TRANSACTIONS_SIZE: u64 = 16 * 1024 * 1024;
+
+/// Maximum number of transaction validation request we keep at any moment.
+pub(crate) const MAX_PENDING_TRANSACTIONS: usize = 8192;
 
 /// Result of the transaction import.
 #[derive(Clone, Copy, Debug)]

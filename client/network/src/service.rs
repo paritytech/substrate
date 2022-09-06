@@ -38,7 +38,7 @@ use crate::{
 		self, message::generic::Roles, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol,
 		Ready,
 	},
-	transactions, transport, ReputationChange,
+	transport, ReputationChange,
 };
 
 use codec::Encode as _;
@@ -211,7 +211,7 @@ where
 			fs::create_dir_all(path)?;
 		}
 
-		let transactions_handler_proto = transactions::TransactionsHandlerPrototype::new(
+		let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
 			params.protocol_id.clone(),
 			params
 				.chain
@@ -1317,7 +1317,7 @@ where
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
 	/// Controller for the handler of incoming and outgoing transactions.
-	tx_handler_controller: transactions::TransactionsHandlerController<H>,
+	tx_handler_controller: sc_network_transactions::TransactionsHandlerController<H>,
 }
 
 impl<B, H, Client> Future for NetworkWorker<B, H, Client>

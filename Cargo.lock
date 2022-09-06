@@ -8575,8 +8575,15 @@ name = "sc-network-transactions"
 version = "0.10.0-dev"
 dependencies = [
  "futures",
+ "hex",
+ "libp2p",
+ "log",
+ "parity-scale-codec",
+ "pin-project",
  "sc-network-common",
+ "sc-peerset",
  "sp-runtime",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
