@@ -66,8 +66,6 @@ pub mod v1 {
 	/// Note: The depositor is not optional since he can never change.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
-		type PreUpgradeState = ();
-
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -98,12 +96,8 @@ pub mod v1 {
 			}
 		}
 
-		fn pre_upgrade() -> Result<(), &'static str> {
-			Ok(())
-		}
-
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: ()) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
 			Ok(())
@@ -332,8 +326,6 @@ pub mod v2 {
 	}
 
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV2<T> {
-		type PreUpgradeState = ();
-
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
 			let onchain = Pallet::<T>::on_chain_storage_version();
@@ -353,7 +345,8 @@ pub mod v2 {
 			}
 		}
 
-		fn pre_upgrade() -> Result<(), &'static str> {
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			// all reward accounts must have more than ED.
 			RewardPools::<T>::iter().for_each(|(id, _)| {
 				assert!(
@@ -362,11 +355,11 @@ pub mod v2 {
 				)
 			});
 
-			Ok(())
+			Ok(vec![])
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(_: ()) -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 2);
 
