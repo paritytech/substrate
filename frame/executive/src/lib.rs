@@ -865,7 +865,7 @@ mod tests {
 
 	struct CustomOnRuntimeUpgrade;
 	impl OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
-		type PreStateDigest = ();
+		type PreUpgradeState = ();
 
 		fn on_runtime_upgrade() -> Weight {
 			sp_io::storage::set(TEST_KEY, "custom_upgrade".as_bytes());

@@ -66,7 +66,7 @@ pub mod v1 {
 	/// Note: The depositor is not optional since he can never change.
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
-		type PreStateDigest = ();
+		type PreUpgradeState = ();
 
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();
@@ -332,7 +332,7 @@ pub mod v2 {
 	}
 
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV2<T> {
-		type PreStateDigest = ();
+		type PreUpgradeState = ();
 
 		fn on_runtime_upgrade() -> Weight {
 			let current = Pallet::<T>::current_storage_version();

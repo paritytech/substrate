@@ -25,7 +25,7 @@ use frame_support::{ensure, traits::OnRuntimeUpgrade};
 /// A struct that does not migration, but only checks that the counter prefix exists and is correct.
 pub struct CheckCounterPrefix<T: crate::Config<I>, I: 'static>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for CheckCounterPrefix<T, I> {
-	type PreStateDigest = ();
+	type PreUpgradeState = ();
 
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
 		frame_support::weights::Weight::zero()
@@ -83,7 +83,7 @@ mod old {
 /// A struct that migrates all bags lists to contain a score value.
 pub struct AddScore<T: crate::Config<I>, I: 'static = ()>(sp_std::marker::PhantomData<(T, I)>);
 impl<T: crate::Config<I>, I: 'static> OnRuntimeUpgrade for AddScore<T, I> {
-	type PreStateDigest = u32;
+	type PreUpgradeState = u32;
 
 	fn pre_upgrade() -> Result<u32, &'static str> {
 		// The list node data should be corrupt at this point, so this is zero.

@@ -30,8 +30,8 @@ pub struct HooksDef {
 	pub attr_span: proc_macro2::Span,
 	/// Boolean flag, set to true if the `on_runtime_upgrade` method of hooks was implemented.
 	pub has_runtime_upgrade: bool,
-	/// The `PreStateDigest` type parameter of the trait.
-	pub pre_state_digest_type: Option<syn::Type>,
+	/// The `PreUpgradeState` type parameter of the trait.
+	pub pre_upgrade_state: Option<syn::Type>,
 }
 
 impl HooksDef {
@@ -78,7 +78,7 @@ impl HooksDef {
 			);
 			syn::Error::new(item_trait.span(), msg)
 		};
-		let pre_state_digest_type = match &item_trait.segments[0].arguments {
+		let pre_upgrade_state = match &item_trait.segments[0].arguments {
 			syn::PathArguments::AngleBracketed(ab) => match ab.args.len() {
 				1 => None,
 				2 => match &ab.args[1] {
@@ -101,7 +101,7 @@ impl HooksDef {
 			instances,
 			has_runtime_upgrade,
 			where_clause: item.generics.where_clause.clone(),
-			pre_state_digest_type,
+			pre_upgrade_state,
 		})
 	}
 }

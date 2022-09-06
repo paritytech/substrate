@@ -19,20 +19,20 @@ use crate::pallet::Def;
 
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
-	let (where_clause, span, has_runtime_upgrade, pre_state_digest_type) = match def.hooks.as_ref()
+	let (where_clause, span, has_runtime_upgrade, pre_upgrade_state) = match def.hooks.as_ref()
 	{
 		Some(hooks) => {
 			let where_clause = hooks.where_clause.clone();
 			let span = hooks.attr_span;
 			let has_runtime_upgrade = hooks.has_runtime_upgrade;
-			let pre_state_digest_type = hooks.pre_state_digest_type.clone();
-			(where_clause, span, has_runtime_upgrade, pre_state_digest_type)
+			let pre_upgrade_state = hooks.pre_upgrade_state.clone();
+			(where_clause, span, has_runtime_upgrade, pre_upgrade_state)
 		},
 		None => (None, def.pallet_struct.attr_span, false, None),
 	};
-	// use `PreStateDigest`'s default type `()` if it is not set explicitly
-	let pre_state_digest_type =
-		pre_state_digest_type.map_or(quote::quote! { () }, |t| quote::quote! { #t });
+	// use `PreUpgradeState`'s default type `()` if it is not set explicitly
+	let pre_upgrade_state =
+		pre_upgrade_state.map_or(quote::quote! { () }, |t| quote::quote! { #t });
 
 	let frame_support = &def.frame_support;
 	let type_impl_gen = &def.type_impl_generics(span);
@@ -80,7 +80,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 		let frame_system = &def.frame_system;
 		quote::quote! {
 			impl<#type_impl_gen>
-				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber, #pre_state_digest_type>
+				#frame_support::traits::Hooks<<T as #frame_system::Config>::BlockNumber, #pre_upgrade_state>
 				for Pallet<#type_use_gen> {}
 		}
 	} else {
@@ -101,7 +101,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::on_finalize(n)
 			}
@@ -118,7 +118,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::on_idle(n, remaining_weight)
 			}
@@ -137,7 +137,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::on_initialize(n)
 			}
@@ -147,7 +147,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::traits::OnRuntimeUpgrade
 			for #pallet_ident<#type_use_gen> #where_clause
 		{
-			type PreStateDigest = #pre_state_digest_type;
+			type PreUpgradeState = #pre_upgrade_state;
 
 			fn on_runtime_upgrade() -> #frame_support::weights::Weight {
 				#frame_support::sp_tracing::enter_span!(
@@ -165,32 +165,32 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::on_runtime_upgrade()
 			}
 
 			#[cfg(not(feature = "try-runtime"))]
-			fn pre_upgrade() -> Result<Self::PreStateDigest, &'static str> {
-				Ok(Self::PreStateDigest::default())
+			fn pre_upgrade() -> Result<Self::PreUpgradeState, &'static str> {
+				Ok(Self::PreUpgradeState::default())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<Self::PreStateDigest, &'static str> {
+			fn pre_upgrade() -> Result<Self::PreUpgradeState, &'static str> {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::pre_upgrade()
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade(digest: Self::PreStateDigest) -> Result<(), &'static str> {
+			fn post_upgrade(digest: Self::PreUpgradeState) -> Result<(), &'static str> {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::post_upgrade(digest)
 			}
@@ -204,7 +204,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::offchain_worker(n)
 			}
@@ -218,7 +218,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::integrity_test()
 			}
@@ -237,7 +237,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				<
 					Self as #frame_support::traits::Hooks<
 						<T as #frame_system::Config>::BlockNumber,
-						#pre_state_digest_type
+						#pre_upgrade_state
 					>
 				>::try_state(n)
 			}
