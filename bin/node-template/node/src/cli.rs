@@ -1,7 +1,27 @@
 use sc_cli::RunCmd;
+use clap::Parser;
 
-#[derive(Debug, clap::Parser)]
+#[derive(Debug, Parser)]
 pub struct Cli {
+	#[clap(subcommand)]
+	pub subcommand: Subcommands,
+}
+
+#[derive(Debug, clap::Subcommand)]
+pub enum Subcommands {
+	#[clap(flatten)]
+	SubcommandA(SubcommandA),
+	SubcommandB(SubcommandB),
+}
+
+#[derive(Debug, clap::Subcommand)]
+pub enum SubcommandA {
+	#[clap(subcommand)]
+	Key(sc_cli::KeySubcommand),
+}
+
+#[derive(Debug, Parser)]
+pub struct SubcommandB {
 	#[clap(subcommand)]
 	pub subcommand: Option<Subcommand>,
 
@@ -11,10 +31,6 @@ pub struct Cli {
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Subcommand {
-	/// Key management cli utilities
-	#[clap(subcommand)]
-	Key(sc_cli::KeySubcommand),
-
 	/// Build a chain specification.
 	BuildSpec(sc_cli::BuildSpecCmd),
 
