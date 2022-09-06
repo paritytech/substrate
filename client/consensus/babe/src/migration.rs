@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	AuthorityId, BabeAuthorityWeight, BabeGenesisConfiguration, BabeSessionConfiguration,
+	AuthorityId, BabeAuthorityWeight, BabeConfiguration, BabeSessionConfiguration,
 	NextSessionDescriptor, Session, VRF_OUTPUT_LENGTH,
 };
 use codec::{Decode, Encode};

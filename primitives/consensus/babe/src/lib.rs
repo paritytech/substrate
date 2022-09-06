@@ -141,7 +141,7 @@ pub enum ConsensusLog {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeGenesisConfigurationV1 {
+pub struct BabeConfigurationV1 {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -159,8 +159,8 @@ pub struct BabeGenesisConfigurationV1 {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 
-	/// The authorities for the genesis session.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	/// The authorities for the session.
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
 	/// The randomness for the genesis session.
 	pub randomness: Randomness,
@@ -170,13 +170,13 @@ pub struct BabeGenesisConfigurationV1 {
 	pub secondary_slots: bool,
 }
 
-impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
-	fn from(v1: BabeGenesisConfigurationV1) -> Self {
+impl From<BabeConfigurationV1> for BabeConfiguration {
+	fn from(v1: BabeConfigurationV1) -> Self {
 		Self {
 			slot_duration: v1.slot_duration,
 			session_length: v1.session_length,
 			c: v1.c,
-			genesis_authorities: v1.genesis_authorities,
+			authorities: v1.authorities,
 			randomness: v1.randomness,
 			allowed_slots: if v1.secondary_slots {
 				AllowedSlots::PrimaryAndSecondaryPlainSlots
@@ -189,7 +189,7 @@ impl From<BabeGenesisConfigurationV1> for BabeGenesisConfiguration {
 
 /// Configuration data used by the BABE consensus engine.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-pub struct BabeGenesisConfiguration {
+pub struct BabeConfiguration {
 	/// The slot duration in milliseconds for BABE. Currently, only
 	/// the value provided by this type at genesis will be used.
 	///
@@ -207,14 +207,21 @@ pub struct BabeGenesisConfiguration {
 	/// of a slot being empty.
 	pub c: (u64, u64),
 
-	/// The authorities for the genesis session.
-	pub genesis_authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
+	/// The authorities
+	pub authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
 
-	/// The randomness for the genesis session.
+	/// The randomness
 	pub randomness: Randomness,
 
 	/// Type of allowed slots.
 	pub allowed_slots: AllowedSlots,
+}
+
+impl BabeConfiguration {
+	/// Convenience method to get the slot duration as a `SlotDuration` value.
+	pub fn slot_duration(&self) -> SlotDuration {
+		SlotDuration::from_millis(self.slot_duration)
+	}
 }
 
 /// Types of allowed slots.
@@ -241,7 +248,7 @@ impl AllowedSlots {
 	}
 }
 
-/// Configuration data used by the BABE consensus engine.
+/// Configuration data used by the BABE consensus engine that may change with sessions.
 #[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BabeSessionConfiguration {
@@ -361,12 +368,12 @@ sp_api::decl_runtime_apis! {
 	/// API necessary for block authorship with BABE.
 	#[api_version(3)]
 	pub trait BabeApi {
-		/// Return the genesis configuration for BABE. The configuration is only read on genesis.
-		fn configuration() -> BabeGenesisConfiguration;
+		/// Return the configuration for BABE.
+		fn configuration() -> BabeConfiguration;
 
 		/// Return the configuration for BABE. Version 1.
 		#[changed_in(2)]
-		fn configuration() -> BabeGenesisConfigurationV1;
+		fn configuration() -> BabeConfigurationV1;
 
 		/// Returns the slot that started the current session.
 		#[renamed("current_epoch_start", 3)]
@@ -383,12 +390,12 @@ sp_api::decl_runtime_apis! {
 		/// Generates a proof of key ownership for the given authority in the
 		/// current session. An example usage of this module is coupled with the
 		/// session historical module to prove that a given authority key is
-		/// tied to a given staking identity during a specific epoch. Proofs
+		/// tied to a given staking identity during a specific session. Proofs
 		/// of key ownership are necessary for submitting equivocation reports.
 		/// NOTE: even though the API takes a `slot` as parameter the current
 		/// implementations ignores this parameter and instead relies on this
 		/// method being called at the correct block height, i.e. any point at
-		/// which the epoch for the given slot is live on-chain. Future
+		/// which the session for the given slot is live on-chain. Future
 		/// implementations will instead use indexed data through an offchain
 		/// worker, not requiring older states to be available.
 		fn generate_key_ownership_proof(

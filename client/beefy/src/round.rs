@@ -147,13 +147,8 @@ where
 		trace!(target: "beefy", "🥩 Round #{} done: {}", round.1, done);
 
 		if done {
-			// remove this and older (now stale) rounds
 			let signatures = self.rounds.remove(round)?.votes;
-			self.rounds.retain(|&(_, number), _| number > round.1);
-			self.mandatory_done = self.mandatory_done || round.1 == self.session_start;
-			self.best_done = self.best_done.max(Some(round.1));
-			debug!(target: "beefy", "🥩 Concluded round #{}", round.1);
-
+			self.conclude(round.1);
 			Some(
 				self.validators()
 					.iter()
@@ -165,9 +160,12 @@ where
 		}
 	}
 
-	#[cfg(test)]
-	pub(crate) fn test_set_mandatory_done(&mut self, done: bool) {
-		self.mandatory_done = done;
+	pub(crate) fn conclude(&mut self, round_num: NumberFor<B>) {
+		// Remove this and older (now stale) rounds.
+		self.rounds.retain(|&(_, number), _| number > round_num);
+		self.mandatory_done = self.mandatory_done || round_num == self.session_start;
+		self.best_done = self.best_done.max(Some(round_num));
+		debug!(target: "beefy", "🥩 Concluded round #{}", round_num);
 	}
 }
 
@@ -178,8 +176,18 @@ mod tests {
 
 	use beefy_primitives::{crypto::Public, ValidatorSet};
 
-	use super::{threshold, RoundTracker, Rounds};
+	use super::{threshold, Block as BlockT, Hash, RoundTracker, Rounds};
 	use crate::keystore::tests::Keyring;
+
+	impl<P, B> Rounds<P, B>
+	where
+		P: Ord + Hash + Clone,
+		B: BlockT,
+	{
+		pub(crate) fn test_set_mandatory_done(&mut self, done: bool) {
+			self.mandatory_done = done;
+		}
+	}
 
 	#[test]
 	fn round_tracker() {

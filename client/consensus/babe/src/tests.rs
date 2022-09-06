@@ -36,6 +36,7 @@ use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityPair, Slot,
 };
+use sp_consensus_slots::SlotDuration;
 use sp_core::crypto::Pair;
 use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
 use sp_runtime::{
@@ -71,7 +72,7 @@ type BabeBlockImport =
 struct DummyFactory {
 	client: Arc<TestClient>,
 	session_changes: SharedSessionChanges<TestBlock, Session>,
-	config: Config,
+	config: BabeConfiguration,
 	mutator: Mutator,
 }
 
@@ -139,7 +140,7 @@ impl DummyProposer {
 				&self.parent_hash,
 				self.parent_number,
 				this_slot,
-				|slot| Session::genesis(self.factory.config.genesis_config(), slot),
+				|slot| Session::genesis(&self.factory.config, slot),
 			)
 			.expect("client has data to find session")
 			.expect("can compute session for baked block");
@@ -288,7 +289,7 @@ impl TestNetFactory for BabeTestNet {
 	) {
 		let client = client.as_client();
 
-		let config = Config::get(&*client).expect("config available");
+		let config = crate::configuration(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
 			.expect("can initialize block-import");
 
@@ -559,11 +560,11 @@ fn can_author_block() {
 		},
 	};
 
-	let mut config = crate::BabeGenesisConfiguration {
+	let mut config = BabeConfiguration {
 		slot_duration: 1000,
 		session_length: 100,
 		c: (3, 10),
-		genesis_authorities: Vec::new(),
+		authorities: Vec::new(),
 		randomness: [0; 32],
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
@@ -708,7 +709,7 @@ fn importing_block_one_sets_genesis_session() {
 		&mut block_import,
 	);
 
-	let genesis_session = Session::genesis(data.link.config.genesis_config(), 999.into());
+	let genesis_session = Session::genesis(&data.link.config, 999.into());
 
 	let session_changes = data.link.session_changes.shared_data();
 	let session_for_second_block = session_changes
@@ -717,7 +718,7 @@ fn importing_block_one_sets_genesis_session() {
 			&block_hash,
 			1,
 			1000.into(),
-			|slot| Session::genesis(data.link.config.genesis_config(), slot),
+			|slot| Session::genesis(&data.link.config, slot),
 		)
 		.unwrap()
 		.unwrap();
@@ -775,16 +776,14 @@ fn revert_prunes_session_changes_and_removes_weights() {
 
 	// Load and check session changes.
 
-	let actual_nodes = aux_schema::load_session_changes::<Block, TestClient>(
-		&*client,
-		data.link.config.genesis_config(),
-	)
-	.expect("load session changes")
-	.shared_data()
-	.tree()
-	.iter()
-	.map(|(h, _, _)| *h)
-	.collect::<Vec<_>>();
+	let actual_nodes =
+        aux_schema::load_session_changes::<Block, TestClient>(&*client,&data.link.config)
+            .expect("load session changes")
+            .shared_data()
+            .tree()
+            .iter()
+            .map(|(h, _, _)| *h)
+            .collect::<Vec<_>>();
 
 	let expected_nodes = vec![
 		canon[0], // A

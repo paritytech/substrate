@@ -33,7 +33,9 @@ use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{Error as ConsensusError, SelectChain};
-use sp_consensus_babe::{digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi};
+use sp_consensus_babe::{
+	digests::PreDigest, AuthorityId, BabeApi as BabeRuntimeApi, BabeConfiguration,
+};
 use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as _};
@@ -58,7 +60,7 @@ pub struct Babe<B: BlockT, C, SC> {
 	/// shared reference to the Keystore
 	keystore: SyncCryptoStorePtr,
 	/// config (actually holds the slot duration)
-	babe_config: Config,
+	babe_config: BabeConfiguration,
 	/// The SelectChain strategy
 	select_chain: SC,
 	/// Whether to deny unsafe calls
@@ -71,7 +73,7 @@ impl<B: BlockT, C, SC> Babe<B, C, SC> {
 		client: Arc<C>,
 		shared_session_changes: SharedSessionChanges<B, Session>,
 		keystore: SyncCryptoStorePtr,
-		babe_config: Config,
+		babe_config: BabeConfiguration,
 		select_chain: SC,
 		deny_unsafe: DenyUnsafe,
 	) -> Self {
@@ -186,7 +188,7 @@ impl From<Error> for JsonRpseeError {
 async fn session_data<B, C, SC>(
 	session_changes: &SharedSessionChanges<B, Session>,
 	client: &Arc<C>,
-	babe_config: &Config,
+	babe_config: &BabeConfiguration,
 	slot: u64,
 	select_chain: &SC,
 ) -> Result<Session, Error>
@@ -203,7 +205,7 @@ where
 			&parent.hash(),
 			*parent.number(),
 			slot.into(),
-			|slot| Session::genesis(babe_config.genesis_config(), slot),
+			|slot| Session::genesis(babe_config, slot),
 		)
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(e.to_string())))?
 		.ok_or(Error::Consensus(ConsensusError::InvalidAuthoritiesSet))
@@ -222,7 +224,7 @@ mod tests {
 		TestClientBuilderExt,
 	};
 
-	use sc_consensus_babe::{block_import, AuthorityPair, Config};
+	use sc_consensus_babe::{block_import, AuthorityPair};
 	use std::sync::Arc;
 
 	/// creates keystore backed by a temp file
@@ -244,7 +246,7 @@ mod tests {
 		let builder = TestClientBuilder::new();
 		let (client, longest_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
-		let config = Config::get(&*client).expect("config available");
+		let config = sc_consensus_babe::configuration(&*client).expect("config available");
 		let (_, link) = block_import(config.clone(), client.clone(), client.clone())
 			.expect("can initialize block-import");
 

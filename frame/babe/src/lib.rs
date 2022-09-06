@@ -306,6 +306,7 @@ pub mod pallet {
 	/// The configuration for the current session. Should never be `None` as it is initialized in
 	/// genesis.
 	#[pallet::storage]
+	#[pallet::getter(fn session_config)]
 	pub(super) type EpochConfig<T> = StorageValue<_, BabeSessionConfiguration>;
 
 	/// The configuration for the next session, `None` if the config will not change

@@ -120,7 +120,7 @@ use sp_consensus::{
 	SelectChain,
 };
 use sp_consensus_babe::inherents::BabeInherentData;
-use sp_consensus_slots::{Slot, SlotDuration};
+use sp_consensus_slots::Slot;
 use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
@@ -138,8 +138,7 @@ pub use sp_consensus_babe::{
 		PrimaryPreDigest, SecondaryPlainPreDigest,
 	},
 	AuthorityId, AuthorityPair, AuthoritySignature, BabeApi, BabeAuthorityWeight, BabeBlockWeight,
-	BabeGenesisConfiguration, BabeSessionConfiguration, ConsensusLog, BABE_ENGINE_ID,
-	VRF_OUTPUT_LENGTH,
+	BabeConfiguration, BabeSessionConfiguration, ConsensusLog, BABE_ENGINE_ID, VRF_OUTPUT_LENGTH,
 };
 
 pub use aux_schema::load_block_weight as block_weight;
@@ -212,12 +211,12 @@ impl From<sp_consensus_babe::Session> for Session {
 impl Session {
 	/// Create the genesis session (session #0). This is defined to start at the slot of
 	/// the first block, so that has to be provided.
-	pub fn genesis(genesis_config: &BabeGenesisConfiguration, slot: Slot) -> Session {
+	pub fn genesis(genesis_config: &BabeConfiguration, slot: Slot) -> Session {
 		Session {
 			session_index: 0,
 			start_slot: slot,
 			duration: genesis_config.session_length,
-			authorities: genesis_config.genesis_authorities.clone(),
+			authorities: genesis_config.authorities.clone(),
 			randomness: genesis_config.randomness,
 			config: BabeSessionConfiguration {
 				c: genesis_config.c,
@@ -339,56 +338,36 @@ pub struct BabeIntermediate<B: BlockT> {
 /// Intermediate key for Babe engine.
 pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 
-/// Configuration for BABE used for defining block verification parameters as
-/// well as authoring (e.g. the slot duration).
-#[derive(Clone)]
-pub struct Config {
-	genesis_config: BabeGenesisConfiguration,
-}
+/// Read configuration from the runtime state at current best block.
+pub fn configuration<B: BlockT, C>(client: &C) -> ClientResult<BabeConfiguration>
+where
+	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
+	C::Api: BabeApi<B>,
+{
+	let block_id = if client.usage_info().chain.finalized_state.is_some() {
+		BlockId::Hash(client.usage_info().chain.best_hash)
+	} else {
+		debug!(target: "babe", "No finalized state is available. Reading config from genesis");
+		BlockId::Hash(client.usage_info().chain.genesis_hash)
+	};
 
-impl Config {
-	/// Create a new config by reading the genesis configuration from the runtime.
-	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
-	where
-		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
-		C::Api: BabeApi<B>,
-	{
-		trace!(target: "babe", "Getting slot duration");
+	let runtime_api = client.runtime_api();
+	let version = runtime_api.api_version::<dyn BabeApi<B>>(&block_id)?;
 
-		let mut best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
-		if client.usage_info().chain.finalized_state.is_none() {
-			debug!(target: "babe", "No finalized state is available. Reading config from genesis");
-			best_block_id = BlockId::Hash(client.usage_info().chain.genesis_hash);
-		}
-		let runtime_api = client.runtime_api();
-
-		let version = runtime_api.api_version::<dyn BabeApi<B>>(&best_block_id)?;
-
-		let genesis_config = if version == Some(1) {
+	let config = match version {
+		Some(1) => {
 			#[allow(deprecated)]
 			{
-				runtime_api.configuration_before_version_2(&best_block_id)?.into()
+				runtime_api.configuration_before_version_2(&block_id)?.into()
 			}
-		} else if version == Some(2) {
-			runtime_api.configuration(&best_block_id)?
-		} else {
+		},
+		Some(2) => runtime_api.configuration(&block_id)?,
+		_ =>
 			return Err(sp_blockchain::Error::VersionInvalid(
 				"Unsupported or invalid BabeApi version".to_string(),
-			))
-		};
-
-		Ok(Config { genesis_config })
-	}
-
-	/// Get the genesis configuration.
-	pub fn genesis_config(&self) -> &BabeGenesisConfiguration {
-		&self.genesis_config
-	}
-
-	/// Get the slot duration defined in the genesis configuration.
-	pub fn slot_duration(&self) -> SlotDuration {
-		SlotDuration::from_millis(self.genesis_config.slot_duration)
-	}
+			)),
+	};
+	Ok(config)
 }
 
 /// Parameters for BABE.
@@ -612,7 +591,7 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 
 async fn answer_requests<B: BlockT, C>(
 	mut request_rx: Receiver<BabeRequest<B>>,
-	config: Config,
+	config: BabeConfiguration,
 	client: Arc<C>,
 	session_changes: SharedSessionChanges<B, Session>,
 ) where
@@ -641,9 +620,7 @@ async fn answer_requests<B: BlockT, C>(
 						.ok_or(Error::<B>::FetchSession(parent_hash))?;
 
 					let viable_session = session_changes
-						.viable_session(&session_descriptor, |slot| {
-							Session::genesis(&config.genesis_config, slot)
-						})
+						.viable_session(&session_descriptor, |slot| Session::genesis(&config, slot))
 						.ok_or(Error::<B>::FetchSession(parent_hash))?;
 
 					Ok(sp_consensus_babe::Session {
@@ -740,7 +717,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 	keystore: SyncCryptoStorePtr,
 	session_changes: SharedSessionChanges<B, Session>,
 	slot_notification_sinks: SlotNotificationSinks<B>,
-	config: Config,
+	config: BabeConfiguration,
 	block_proposal_slot_portion: SlotProportion,
 	max_block_proposal_slot_portion: Option<SlotProportion>,
 	telemetry: Option<TelemetryHandle>,
@@ -798,9 +775,7 @@ where
 	fn authorities_len(&self, session_descriptor: &Self::SessionData) -> Option<usize> {
 		self.session_changes
 			.shared_data()
-			.viable_session(session_descriptor, |slot| {
-				Session::genesis(&self.config.genesis_config, slot)
-			})
+			.viable_session(session_descriptor, |slot| Session::genesis(&self.config, slot))
 			.map(|session| session.as_ref().authorities.len())
 	}
 
@@ -815,9 +790,7 @@ where
 			slot,
 			self.session_changes
 				.shared_data()
-				.viable_session(session_descriptor, |slot| {
-					Session::genesis(&self.config.genesis_config, slot)
-				})?
+				.viable_session(session_descriptor, |slot| Session::genesis(&self.config, slot))?
 				.as_ref(),
 			&self.keystore,
 		);
@@ -1021,7 +994,7 @@ fn find_next_config_digest<B: BlockT>(
 #[derive(Clone)]
 pub struct BabeLink<Block: BlockT> {
 	session_changes: SharedSessionChanges<Block, Session>,
-	config: Config,
+	config: BabeConfiguration,
 }
 
 impl<Block: BlockT> BabeLink<Block> {
@@ -1031,7 +1004,7 @@ impl<Block: BlockT> BabeLink<Block> {
 	}
 
 	/// Get the config of this link.
-	pub fn config(&self) -> &Config {
+	pub fn config(&self) -> &BabeConfiguration {
 		&self.config
 	}
 }
@@ -1041,7 +1014,7 @@ pub struct BabeVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	create_inherent_data_providers: CIDP,
-	config: Config,
+	config: BabeConfiguration,
 	session_changes: SharedSessionChanges<Block, Session>,
 	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
@@ -1246,9 +1219,7 @@ where
 				.map_err(|e| Error::<Block>::ForkTree(Box::new(e)))?
 				.ok_or(Error::<Block>::FetchSession(parent_hash))?;
 			let viable_session = session_changes
-				.viable_session(&session_descriptor, |slot| {
-					Session::genesis(&self.config.genesis_config, slot)
-				})
+				.viable_session(&session_descriptor, |slot| Session::genesis(&self.config, slot))
 				.ok_or(Error::<Block>::FetchSession(parent_hash))?;
 
 			// We add one to the current slot to allow for some small drift.
@@ -1354,7 +1325,7 @@ pub struct BabeBlockImport<Block: BlockT, Client, I> {
 	inner: I,
 	client: Arc<Client>,
 	session_changes: SharedSessionChanges<Block, Session>,
-	config: Config,
+	config: BabeConfiguration,
 }
 
 impl<Block: BlockT, I: Clone, Client> Clone for BabeBlockImport<Block, Client, I> {
@@ -1373,7 +1344,7 @@ impl<Block: BlockT, Client, I> BabeBlockImport<Block, Client, I> {
 		client: Arc<Client>,
 		session_changes: SharedSessionChanges<Block, Session>,
 		block_import: I,
-		config: Config,
+		config: BabeConfiguration,
 	) -> Self {
 		BabeBlockImport { client, inner: block_import, session_changes, config }
 	}
@@ -1588,9 +1559,7 @@ where
 				old_session_changes = Some((*session_changes).clone());
 
 				let viable_session = session_changes
-					.viable_session(&session_descriptor, |slot| {
-						Session::genesis(&self.config.genesis_config, slot)
-					})
+					.viable_session(&session_descriptor, |slot| Session::genesis(&self.config, slot))
 					.ok_or_else(|| {
 						ConsensusError::ClientImport(
 							Error::<Block>::FetchSession(parent_hash).into(),
@@ -1775,7 +1744,7 @@ where
 /// Also returns a link object used to correctly instantiate the import queue
 /// and background worker.
 pub fn block_import<Client, Block: BlockT, I>(
-	config: Config,
+	config: BabeConfiguration,
 	wrapped_block_import: I,
 	client: Arc<Client>,
 ) -> ClientResult<(BabeBlockImport<Block, Client, I>, BabeLink<Block>)>
@@ -1786,8 +1755,7 @@ where
 		+ PreCommitActions<Block>
 		+ 'static,
 {
-	let session_changes =
-		aux_schema::load_session_changes::<Block, _>(&*client, &config.genesis_config)?;
+	let session_changes = aux_schema::load_session_changes::<Block, _>(&*client, &config)?;
 	let link = BabeLink { session_changes: session_changes.clone(), config: config.clone() };
 
 	// NOTE: this isn't entirely necessary, but since we didn't use to prune the
@@ -1898,9 +1866,9 @@ where
 
 	// Revert session changes tree.
 
-	let config = Config::get(&*client)?;
-	let session_changes =
-		aux_schema::load_session_changes::<Block, Client>(&*client, config.genesis_config())?;
+	// This config is only used on-genesis.
+	let config = configuration(&*client)?;
+	let session_changes = aux_schema::load_session_changes::<Block, Client>(&*client, config)?;
 	let mut session_changes = session_changes.shared_data();
 
 	if revert_up_to_number == Zero::zero() {

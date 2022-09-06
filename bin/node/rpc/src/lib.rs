@@ -54,7 +54,7 @@ use sp_keystore::SyncCryptoStorePtr;
 /// Extra dependencies for BABE.
 pub struct BabeDeps {
 	/// BABE protocol config.
-	pub babe_config: Config,
+	pub babe_config: BabeConfiguration,
 	/// BABE pending session changes.
 	pub shared_session_changes: SharedSessionChanges<Block, Session>,
 	/// The keystore that manages the keys of the node.

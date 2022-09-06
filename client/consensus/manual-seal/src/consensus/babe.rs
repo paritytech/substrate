@@ -24,8 +24,7 @@ use crate::Error;
 use codec::Encode;
 use sc_client_api::{AuxStore, UsageProvider};
 use sc_consensus_babe::{
-	authorship, find_pre_digest, BabeIntermediate, CompatibleDigestItem, Config, Session,
-	INTERMEDIATE_KEY,
+	authorship, find_pre_digest, BabeIntermediate, CompatibleDigestItem, Session, INTERMEDIATE_KEY,
 };
 use sc_consensus_sessions::{
 	descendent_query, SessionHeader, SharedSessionChanges, ViableSessionDescriptor,
@@ -40,7 +39,7 @@ use sp_consensus::CacheKeyId;
 use sp_consensus_babe::{
 	digests::{NextSessionDescriptor, PreDigest, SecondaryPlainPreDigest},
 	inherents::BabeInherentData,
-	AuthorityId, BabeApi, BabeAuthorityWeight, ConsensusLog, BABE_ENGINE_ID,
+	AuthorityId, BabeApi, BabeAuthorityWeight, BabeConfiguration, ConsensusLog, BABE_ENGINE_ID,
 };
 use sp_consensus_slots::Slot;
 use sp_inherents::InherentData;
@@ -64,7 +63,10 @@ pub struct BabeConsensusDataProvider<B: BlockT, C, P> {
 	session_changes: SharedSessionChanges<B, Session>,
 
 	/// BABE config, gotten from the runtime.
-	config: Config,
+	/// NOTE: This is used to fetch `slot_duration` and `epoch_length` in the
+	/// `ConsensusDataProvider` implementation. Correct as far as these values
+	/// are not changed during an epoch change.
+	config: BabeConfiguration,
 
 	/// Authorities to be used for this babe chain.
 	authorities: Vec<(AuthorityId, BabeAuthorityWeight)>,
@@ -155,7 +157,7 @@ where
 			return Err(Error::StringError("Cannot supply empty authority set!".into()))
 		}
 
-		let config = Config::get(&*client)?;
+		let config = sc_consensus_babe::configuration(&*client)?;
 
 		Ok(Self {
 			config,
@@ -180,9 +182,7 @@ where
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)?;
 
 		let session = session_changes
-			.viable_session(&session_descriptor, |slot| {
-				Session::genesis(self.config.genesis_config(), slot)
-			})
+			.viable_session(&session_descriptor, |slot| Session::genesis(self.config, slot))
 			.ok_or_else(|| {
 				log::info!(target: "babe", "create_digest: no viable_session :(");
 				sp_consensus::Error::InvalidAuthoritiesSet
@@ -309,7 +309,7 @@ where
 						identifier,
 						SessionHeader {
 							start_slot: slot,
-							end_slot: (*slot * self.config.genesis_config().session_length).into(),
+							end_slot: (*slot * self.config.session_length).into(),
 						},
 					),
 				_ => unreachable!(
