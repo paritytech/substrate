@@ -44,6 +44,7 @@ use sc_client_api::HeaderBackend;
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
+	protocol::ProtocolName,
 	request_responses::RequestFailure,
 	sync::{
 		message::{
@@ -63,7 +64,6 @@ use sp_runtime::{
 	Justifications,
 };
 use std::{
-	borrow::Cow,
 	collections::{HashMap, HashSet, VecDeque},
 	io, iter,
 	num::NonZeroUsize,
@@ -190,7 +190,7 @@ pub struct Protocol<B: BlockT, Client> {
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: Notifications,
 	/// List of notifications protocols that have been registered.
-	notification_protocols: Vec<Cow<'static, str>>,
+	notification_protocols: Vec<ProtocolName>,
 	/// If we receive a new "substream open" event that contains an invalid handshake, we ask the
 	/// inner layer to force-close the substream. Force-closing the substream will generate a
 	/// "substream closed" event. This is a problem: since we can't propagate the "substream open"
@@ -460,7 +460,7 @@ where
 	}
 
 	/// Disconnects the given peer if we are connected to it.
-	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: &str) {
+	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: ProtocolName) {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
 		{
 			self.behaviour.disconnect_peer(
@@ -1085,7 +1085,7 @@ where
 	}
 
 	/// Sets the list of reserved peers for the given protocol/peerset.
-	pub fn set_reserved_peerset_peers(&self, protocol: Cow<'static, str>, peers: HashSet<PeerId>) {
+	pub fn set_reserved_peerset_peers(&self, protocol: ProtocolName, peers: HashSet<PeerId>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle
 				.set_reserved_peers(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peers);
@@ -1099,7 +1099,7 @@ where
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
-	pub fn remove_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn remove_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle.remove_reserved_peer(
 				sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS),
@@ -1115,7 +1115,7 @@ where
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers.
-	pub fn add_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn add_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle
 				.add_reserved_peer(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
@@ -1138,7 +1138,7 @@ where
 	}
 
 	/// Add a peer to a peers set.
-	pub fn add_to_peers_set(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn add_to_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle
 				.add_to_peers_set(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
@@ -1152,7 +1152,7 @@ where
 	}
 
 	/// Remove a peer from a peers set.
-	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn remove_from_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle.remove_from_peers_set(
 				sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS),
@@ -1259,27 +1259,27 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// See [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
-		negotiated_fallback: Option<Cow<'static, str>>,
+		negotiated_fallback: Option<ProtocolName>,
 		roles: Roles,
 		notifications_sink: NotificationsSink,
 	},
 	/// The [`NotificationsSink`] of some notification protocols need an update.
 	NotificationStreamReplaced {
 		remote: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		notifications_sink: NotificationsSink,
 	},
 	/// Notification protocols have been closed with a remote.
 	NotificationStreamClosed {
 		remote: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	},
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived {
 		remote: PeerId,
-		messages: Vec<(Cow<'static, str>, Bytes)>,
+		messages: Vec<(ProtocolName, Bytes)>,
 	},
 	/// A new block request must be emitted.
 	BlockRequest {

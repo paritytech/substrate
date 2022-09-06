@@ -28,7 +28,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	storage::child::{self, ChildInfo},
-	weights::{RefTimeWeight, Weight},
+	weights::Weight,
 };
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
@@ -230,7 +230,7 @@ where
 		let weight_per_key = (T::WeightInfo::on_initialize_per_trie_key(1) -
 			T::WeightInfo::on_initialize_per_trie_key(0))
 		.ref_time();
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as RefTimeWeight);
+		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
@@ -286,7 +286,7 @@ where
 		<DeletionQueue<T>>::put(queue);
 		let ref_time_weight = weight_limit
 			.ref_time()
-			.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as RefTimeWeight));
+			.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)));
 		Weight::from_ref_time(ref_time_weight)
 	}
 
