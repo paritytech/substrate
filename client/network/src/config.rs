@@ -31,7 +31,7 @@ pub use sc_network_common::{
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
-use crate::{bitswap::Bitswap, ExHashT};
+use crate::ExHashT;
 
 use core::{fmt, iter};
 use futures::future;
@@ -79,9 +79,6 @@ where
 	/// Client that contains the blockchain.
 	pub chain: Arc<Client>,
 
-	/// Bitswap block request protocol implementation.
-	pub bitswap: Option<Bitswap<B>>,
-
 	/// Pool of transactions.
 	///
 	/// The network worker will fetch transactions from this object in order to propagate them on
@@ -106,6 +103,9 @@ where
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
+
+	/// Request response configuration for Bitswap
+	pub bitswap_protocol_config: Option<RequestResponseConfig>,
 
 	/// Request response configuration for the block request protocol.
 	///

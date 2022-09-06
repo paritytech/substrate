@@ -58,6 +58,7 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
+use sc_client_api::BlockBackend;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
@@ -137,7 +138,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: sp_blockchain::HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
@@ -376,7 +377,6 @@ where
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
 					params.warp_sync_protocol_config,
-					params.bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
@@ -1290,7 +1290,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1323,7 +1323,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	type Output = ();
 
@@ -1743,14 +1743,10 @@ where
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(
-									PingFailure::Timeout,
-								))),
+								EitherError::B(EitherError::A(PingFailure::Timeout)),
 							)))) => "ping-timeout",
 							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(
-									NotifsHandlerError::SyncNotificationsClogged,
-								)),
+								EitherError::A(NotifsHandlerError::SyncNotificationsClogged),
 							)))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(_)) => "protocol-error",
 							Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
@@ -1968,7 +1964,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 }
 
@@ -1976,7 +1972,7 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -1984,7 +1980,7 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	fn blocks_processed(
 		&mut self,

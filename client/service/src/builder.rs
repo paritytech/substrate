@@ -37,7 +37,8 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{bitswap::Bitswap, config::SyncMode, NetworkService};
+use sc_network::{config::SyncMode, NetworkService};
+use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
 	service::{NetworkStateInfo, NetworkStatusProvider, NetworkTransaction},
 	sync::warp::WarpSyncProvider,
@@ -835,6 +836,13 @@ where
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
 	)?;
+
+	let bitswap_protocol_config = config.network.ipfs_server.then(|| {
+		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
+		spawn_handle.spawn("bitswap-request-handler", Some("networking"), handler.run());
+		protocol_config
+	});
+
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -856,8 +864,8 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
-		bitswap: config.network.ipfs_server.then(|| Bitswap::from_client(client.clone())),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		bitswap_protocol_config,
 		block_request_protocol_config,
 		state_request_protocol_config,
 		warp_sync_protocol_config,

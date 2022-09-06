@@ -8394,11 +8394,11 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project",
  "prost",
- "prost-build",
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
  "sc-consensus",
+ "sc-network-bitswap",
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",
@@ -8422,6 +8422,25 @@ dependencies = [
  "unsigned-varint",
  "void",
  "zeroize",
+]
+
+[[package]]
+name = "sc-network-bitswap"
+version = "0.10.0-dev"
+dependencies = [
+ "cid",
+ "futures",
+ "libp2p",
+ "log",
+ "prost",
+ "prost-build",
+ "sc-client-api",
+ "sc-network-common",
+ "sp-blockchain",
+ "sp-runtime",
+ "thiserror",
+ "unsigned-varint",
+ "void",
 ]
 
 [[package]]
@@ -8721,6 +8740,7 @@ dependencies = [
  "sc-informant",
  "sc-keystore",
  "sc-network",
+ "sc-network-bitswap",
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",

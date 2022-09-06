@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	bitswap::Bitswap,
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	peer_info,
 	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
@@ -32,13 +31,13 @@ use libp2p::{
 	identify::IdentifyInfo,
 	kad::record,
 	swarm::{
-		behaviour::toggle::Toggle, NetworkBehaviour, NetworkBehaviourAction,
-		NetworkBehaviourEventProcess, PollParameters,
+		NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
 	},
 	NetworkBehaviour,
 };
 use log::debug;
 
+use sc_client_api::BlockBackend;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
@@ -70,7 +69,7 @@ pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, R
 pub struct Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	/// All the substrate-specific protocols.
 	substrate: Protocol<B, Client>,
@@ -79,8 +78,6 @@ where
 	peer_info: peer_info::PeerInfoBehaviour,
 	/// Discovers nodes of the network.
 	discovery: DiscoveryBehaviour,
-	/// Bitswap server for blockchain data.
-	bitswap: Toggle<Bitswap<B>>,
 	/// Generic request-response protocols.
 	request_responses: request_responses::RequestResponsesBehaviour,
 
@@ -203,7 +200,7 @@ pub enum BehaviourOut<B: BlockT> {
 impl<B, Client> Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	/// Builds a new `Behaviour`.
 	pub fn new(
@@ -214,7 +211,6 @@ where
 		block_request_protocol_config: ProtocolConfig,
 		state_request_protocol_config: ProtocolConfig,
 		warp_sync_protocol_config: Option<ProtocolConfig>,
-		bitswap: Option<Bitswap<B>>,
 		light_client_request_protocol_config: ProtocolConfig,
 		// All remaining request protocol configs.
 		mut request_response_protocols: Vec<ProtocolConfig>,
@@ -239,7 +235,6 @@ where
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
 			discovery: disco_config.finish(),
-			bitswap: bitswap.into(),
 			request_responses: request_responses::RequestResponsesBehaviour::new(
 				request_response_protocols.into_iter(),
 				peerset,
@@ -341,7 +336,7 @@ fn reported_roles_to_observed_role(roles: Roles) -> ObservedRole {
 impl<B, Client> NetworkBehaviourEventProcess<void::Void> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: void::Void) {
 		void::unreachable(event)
@@ -351,7 +346,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: CustomMessageOutcome<B>) {
 		match event {
@@ -460,7 +455,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: request_responses::Event) {
 		match event {
@@ -486,7 +481,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: peer_info::PeerInfoEvent) {
 		let peer_info::PeerInfoEvent::Identified {
@@ -513,7 +508,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
@@ -551,7 +546,7 @@ where
 impl<B, Client> Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
 {
 	fn poll(
 		&mut self,
