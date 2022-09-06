@@ -1,7 +1,7 @@
 use crate::{
 	benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder},
 	chain_spec,
-	cli::{Cli, Subcommand},
+	cli::{Cli, NodeSubcommand},
 	service,
 };
 use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
@@ -9,7 +9,6 @@ use node_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
 use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
-use crate::cli::Subcommands;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
@@ -54,9 +53,9 @@ impl SubstrateCli for Cli {
 pub fn run() -> sc_cli::Result<()> {
 	let cli = Cli::from_args();
 
-	match &cli.subcommand {
-		Subcommands::SubcommandA(suba) => println!("suba {:?}", suba),
-		Subcommands::SubcommandB(subb) => println!("subb {:?}", subb),
+	match &cli {
+		Cli::AuxiliaryCmd(suba) => println!("suba {:?}", suba),
+		Cli::NodeCmd(subb) => println!("subb {:?}", subb),
 	};
 	Ok(())
 

@@ -2,35 +2,39 @@ use sc_cli::RunCmd;
 use clap::Parser;
 
 #[derive(Debug, Parser)]
-pub struct Cli {
-	#[clap(subcommand)]
-	pub subcommand: Subcommands,
-}
-
-#[derive(Debug, clap::Subcommand)]
-pub enum Subcommands {
+pub enum Cli {
 	#[clap(flatten)]
-	SubcommandA(SubcommandA),
-	SubcommandB(SubcommandB),
+	AuxiliaryCmd(AuxiliaryCmd),
+	#[clap(name = "node")]
+	NodeCmd(NodeCmd),
 }
 
 #[derive(Debug, clap::Subcommand)]
-pub enum SubcommandA {
+pub enum AuxiliaryCmd {
 	#[clap(subcommand)]
 	Key(sc_cli::KeySubcommand),
+
+	/// Try some command against runtime state.
+	#[cfg(feature = "try-runtime")]
+	TryRuntime(try_runtime_cli::TryRuntimeCmd),
+
+	/// Try some command against runtime state. Note: `try-runtime` feature must be enabled.
+	#[cfg(not(feature = "try-runtime"))]
+	TryRuntime,
 }
 
-#[derive(Debug, Parser)]
-pub struct SubcommandB {
+/// Commands related to the node itself.
+#[derive(Debug, clap::Args)]
+pub struct NodeCmd {
 	#[clap(subcommand)]
-	pub subcommand: Option<Subcommand>,
+	pub subcommand: Option<NodeSubcommand>,
 
 	#[clap(flatten)]
 	pub run: RunCmd,
 }
 
 #[derive(Debug, clap::Subcommand)]
-pub enum Subcommand {
+pub enum NodeSubcommand {
 	/// Build a chain specification.
 	BuildSpec(sc_cli::BuildSpecCmd),
 
@@ -55,14 +59,6 @@ pub enum Subcommand {
 	/// Sub-commands concerned with benchmarking.
 	#[clap(subcommand)]
 	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
-
-	/// Try some command against runtime state.
-	#[cfg(feature = "try-runtime")]
-	TryRuntime(try_runtime_cli::TryRuntimeCmd),
-
-	/// Try some command against runtime state. Note: `try-runtime` feature must be enabled.
-	#[cfg(not(feature = "try-runtime"))]
-	TryRuntime,
 
 	/// Db meta columns information.
 	ChainInfo(sc_cli::ChainInfoCmd),
