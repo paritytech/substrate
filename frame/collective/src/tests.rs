@@ -89,7 +89,7 @@ parameter_types! {
 	pub const MotionDuration: u64 = 3;
 	pub const MaxProposals: u32 = 100;
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -270,7 +270,13 @@ fn proposal_weight_limit_works_on_approve() {
 		// With 1's prime vote, this should pass
 		System::set_block_number(4);
 		assert_noop!(
-			Collective::close(Origin::signed(4), hash, 0, proposal_weight - 100, proposal_len),
+			Collective::close(
+				Origin::signed(4),
+				hash,
+				0,
+				proposal_weight - Weight::from_ref_time(100),
+				proposal_len
+			),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);
 		assert_ok!(Collective::close(Origin::signed(4), hash, 0, proposal_weight, proposal_len));
@@ -301,7 +307,7 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 			Origin::signed(4),
 			hash,
 			0,
-			proposal_weight - 100,
+			proposal_weight - Weight::from_ref_time(100),
 			proposal_len
 		));
 	})
@@ -687,7 +693,11 @@ fn correct_validate_and_get_proposal() {
 			Error::<Test, Instance1>::WrongProposalLength
 		);
 		assert_noop!(
-			Collective::validate_and_get_proposal(&hash, length, weight - 10),
+			Collective::validate_and_get_proposal(
+				&hash,
+				length,
+				weight - Weight::from_ref_time(10)
+			),
 			Error::<Test, Instance1>::WrongProposalWeight
 		);
 		let res = Collective::validate_and_get_proposal(&hash, length, weight);
@@ -1196,18 +1206,18 @@ fn close_disapprove_does_not_care_about_weight_or_len() {
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, true));
 		// It will not close with bad weight/len information
 		assert_noop!(
-			Collective::close(Origin::signed(2), hash, 0, 0, 0),
+			Collective::close(Origin::signed(2), hash, 0, Weight::zero(), 0),
 			Error::<Test, Instance1>::WrongProposalLength,
 		);
 		assert_noop!(
-			Collective::close(Origin::signed(2), hash, 0, 0, proposal_len),
+			Collective::close(Origin::signed(2), hash, 0, Weight::zero(), proposal_len),
 			Error::<Test, Instance1>::WrongProposalWeight,
 		);
 		// Now we make the proposal fail
 		assert_ok!(Collective::vote(Origin::signed(1), hash, 0, false));
 		assert_ok!(Collective::vote(Origin::signed(2), hash, 0, false));
 		// It can close even if the weight/len information is bad
-		assert_ok!(Collective::close(Origin::signed(2), hash, 0, 0, 0));
+		assert_ok!(Collective::close(Origin::signed(2), hash, 0, Weight::zero(), 0));
 	})
 }
 

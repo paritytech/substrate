@@ -20,8 +20,9 @@
 
 use crate::config::TransportConfig;
 use libp2p::{Multiaddr, PeerId};
+use sc_network_common::protocol::ProtocolName;
 
-use std::{borrow::Cow, fmt};
+use std::fmt;
 
 /// Result type alias for the network.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -65,7 +66,7 @@ pub enum Error {
 	#[error("Request-response protocol registered multiple times: {protocol}")]
 	DuplicateRequestResponseProtocol {
 		/// Name of the protocol registered multiple times.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	},
 }
 

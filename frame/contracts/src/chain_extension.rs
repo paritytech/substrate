@@ -238,7 +238,7 @@ where
 	///
 	/// Weight is synonymous with gas in substrate.
 	pub fn charge_weight(&mut self, amount: Weight) -> Result<ChargedAmount> {
-		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount))
+		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount.ref_time()))
 	}
 
 	/// Adjust a previously charged amount down to its actual amount.
@@ -248,7 +248,7 @@ where
 	pub fn adjust_weight(&mut self, charged: ChargedAmount, actual_weight: Weight) {
 		self.inner
 			.runtime
-			.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight))
+			.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight.ref_time()))
 	}
 
 	/// Grants access to the execution environment of the current contract call.
@@ -411,7 +411,8 @@ where
 			buffer,
 			allow_skip,
 			|len| {
-				weight_per_byte.map(|w| RuntimeCosts::ChainExtension(w.saturating_mul(len.into())))
+				weight_per_byte
+					.map(|w| RuntimeCosts::ChainExtension(w.ref_time().saturating_mul(len.into())))
 			},
 		)
 	}

@@ -107,7 +107,7 @@ where
 	///
 	/// Passing `0` as amount is interpreted as "all remaining gas".
 	pub fn nested(&mut self, amount: Weight) -> Result<Self, DispatchError> {
-		let amount = if amount == 0 { self.gas_left } else { amount };
+		let amount = if amount == Weight::zero() { self.gas_left } else { amount };
 
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.
@@ -121,7 +121,7 @@ where
 
 	/// Absorb the remaining gas of a nested meter after we are done using it.
 	pub fn absorb_nested(&mut self, nested: Self) {
-		if self.gas_left == 0 {
+		if self.gas_left == Weight::zero() {
 			// All of the remaining gas was inherited by the nested gas meter. When absorbing
 			// we can therefore safely inherit the lowest gas that the nested gas meter experienced
 			// as long as it is lower than the lowest gas that was experienced by the parent.
@@ -157,7 +157,7 @@ where
 		}
 
 		let amount = token.weight();
-		let new_value = self.gas_left.checked_sub(amount);
+		let new_value = self.gas_left.checked_sub(&amount);
 
 		// We always consume the gas even if there is not enough gas.
 		self.gas_left = new_value.unwrap_or_else(Zero::zero);
@@ -227,7 +227,7 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{GasMeter, Token};
+	use super::{GasMeter, Token, Weight};
 	use crate::tests::Test;
 
 	/// A simple utility macro that helps to match against a
@@ -271,20 +271,20 @@ mod tests {
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 	struct SimpleToken(u64);
 	impl Token<Test> for SimpleToken {
-		fn weight(&self) -> u64 {
-			self.0
+		fn weight(&self) -> Weight {
+			Weight::from_ref_time(self.0)
 		}
 	}
 
 	#[test]
 	fn it_works() {
-		let gas_meter = GasMeter::<Test>::new(50000);
-		assert_eq!(gas_meter.gas_left(), 50000);
+		let gas_meter = GasMeter::<Test>::new(Weight::from_ref_time(50000));
+		assert_eq!(gas_meter.gas_left(), Weight::from_ref_time(50000));
 	}
 
 	#[test]
 	fn tracing() {
-		let mut gas_meter = GasMeter::<Test>::new(50000);
+		let mut gas_meter = GasMeter::<Test>::new(Weight::from_ref_time(50000));
 		assert!(!gas_meter.charge(SimpleToken(1)).is_err());
 
 		let mut tokens = gas_meter.tokens().iter();
@@ -294,7 +294,7 @@ mod tests {
 	// This test makes sure that nothing can be executed if there is no gas.
 	#[test]
 	fn refuse_to_execute_anything_if_zero() {
-		let mut gas_meter = GasMeter::<Test>::new(0);
+		let mut gas_meter = GasMeter::<Test>::new(Weight::zero());
 		assert!(gas_meter.charge(SimpleToken(1)).is_err());
 	}
 
@@ -305,7 +305,7 @@ mod tests {
 	// if the gas meter runs out of gas. However, this is just a nice property to have.
 	#[test]
 	fn overcharge_is_unrecoverable() {
-		let mut gas_meter = GasMeter::<Test>::new(200);
+		let mut gas_meter = GasMeter::<Test>::new(Weight::from_ref_time(200));
 
 		// The first charge is should lead to OOG.
 		assert!(gas_meter.charge(SimpleToken(300)).is_err());
@@ -318,7 +318,7 @@ mod tests {
 	// possible.
 	#[test]
 	fn charge_exact_amount() {
-		let mut gas_meter = GasMeter::<Test>::new(25);
+		let mut gas_meter = GasMeter::<Test>::new(Weight::from_ref_time(25));
 		assert!(!gas_meter.charge(SimpleToken(25)).is_err());
 	}
 }
