@@ -41,7 +41,7 @@ mod v0 {
 	pub type NextExternal<T: Config> =
 		StorageValue<Pallet<T>, (<T as frame_system::Config>::Hash, VoteThreshold)>;
 
-	#[cfg(feature = "try-runtime")] // Only needed for testing.
+	#[cfg(feature = "try-runtime")]
 	#[storage_alias]
 	pub type ReferendumInfoOf<T: Config> = StorageMap<
 		Pallet<T>,
@@ -65,18 +65,13 @@ pub mod v1 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0, "can only upgrade from version 0");
+
 			let props_count = v0::PublicProps::<T>::get().len();
 			log::info!(target: TARGET, "{} public proposals will be migrated.", props_count,);
-			if props_count > T::MaxProposals::get() as usize {
-				log::info!(
-					target: TARGET,
-					"too many public proposals. Would truncate {} to {}; Abort",
-					props_count,
-					T::MaxProposals::get(),
-				);
-			}
+			ensure!(props_count <= T::MaxProposals::get() as usize, "too many proposals");
+
 			let referenda_count = v0::ReferendumInfoOf::<T>::iter().count();
-			log::info!(target: TARGET, "{} referenda will be migrated.", referenda_count,);
+			log::info!(target: TARGET, "{} referenda will be migrated.", referenda_count);
 
 			Self::set_temp_storage(referenda_count as u32, "referenda_count");
 			Self::set_temp_storage(props_count as u32, "props_count");
@@ -122,9 +117,9 @@ pub mod v1 {
 			weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 
 			if props.len() as u32 > T::MaxProposals::get() {
-				log::warn!(
+				log::error!(
 					target: TARGET,
-					"too many public proposals. Truncated {} to {}",
+					"truncated {} public proposals to {}; continuing",
 					props.len(),
 					T::MaxProposals::get()
 				);

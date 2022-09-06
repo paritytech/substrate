@@ -55,6 +55,7 @@ mod v0 {
 		RequestStatus<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
 	>;
 
+	/// Returns the number of images or `None` if the storage is corrupted.
 	#[cfg(feature = "try-runtime")]
 	pub fn image_count<T: Config>() -> Option<u32> {
 		let images = v0::PreimageFor::<T>::iter_values().count() as u32;
@@ -71,7 +72,7 @@ mod v0 {
 pub mod v1 {
 	use super::*;
 
-	/// Migration for moving preimages from a single map into into specific buckets.
+	/// Migration for moving preimage from V0 to V1 storage.
 	///
 	/// Note: This needs to be run with the same hashing algorithm as before
 	/// since it is not re-hashing the preimages.
@@ -101,12 +102,9 @@ pub mod v1 {
 
 			let status = v0::StatusFor::<T>::drain().collect::<Vec<_>>();
 			weight.saturating_accrue(T::DbWeight::get().reads(status.len() as u64));
-			// Map should be empty.
-			debug_assert!(v0::StatusFor::<T>::iter_values().count() == 0);
+
 			let preimages = v0::PreimageFor::<T>::drain().collect::<BTreeMap<_, _>>();
 			weight.saturating_accrue(T::DbWeight::get().reads(preimages.len() as u64));
-			// Map should be empty.
-			debug_assert!(v0::PreimageFor::<T>::iter_values().count() == 0);
 
 			for (hash, status) in status.into_iter() {
 				let preimage = if let Some(preimage) = preimages.get(&hash) {
@@ -116,7 +114,15 @@ pub mod v1 {
 					continue
 				};
 				let len = preimage.len() as u32;
-				assert!(len <= MAX_SIZE, "Preimage larger than MAX_SIZE");
+				if len > MAX_SIZE {
+					log::error!(
+						target: TARGET,
+						"preimage too large for hash {:?}, len: {}",
+						&hash,
+						len
+					);
+					continue
+				}
 
 				let status = match status {
 					v0::RequestStatus::Unrequested(deposit) => match deposit {
@@ -162,11 +168,13 @@ pub mod v1 {
 		}
 	}
 
+	/// Returns the number of images or `None` if the storage is corrupted.
 	#[cfg(feature = "try-runtime")]
 	pub fn image_count<T: Config>() -> Option<u32> {
 		// Use iter_values() to ensure that the values are decodable.
 		let images = crate::PreimageFor::<T>::iter_values().count() as u32;
 		let status = crate::StatusFor::<T>::iter_values().count() as u32;
+
 		if images == status {
 			Some(images)
 		} else {
@@ -187,7 +195,7 @@ mod test {
 	fn migration_works() {
 		new_test_ext().execute_with(|| {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0);
-			// Insert some pre-images into the v0 storage:
+			// Insert some preimages into the v0 storage:
 
 			// Case 1: Unrequested without deposit
 			let (p, h) = preimage::<T>(128);
@@ -197,8 +205,7 @@ mod test {
 			let (p, h) = preimage::<T>(1024);
 			v0::PreimageFor::<T>::insert(h, p);
 			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Unrequested(Some((1, 1))));
-
-			// Case 3: Requested by 0
+			// Case 3: Requested by 0 (invalid)
 			let (p, h) = preimage::<T>(8192);
 			v0::PreimageFor::<T>::insert(h, p);
 			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Requested(0));
@@ -214,9 +221,8 @@ mod test {
 			let _w = v1::Migration::<T>::on_runtime_upgrade();
 			v1::Migration::<T>::post_upgrade().unwrap();
 
-			// TODO Why does this fail with `Some(4)`? It's like the old storage is still there.
-			//assert_eq!(v0::image_count::<T>(), Some(0));
-
+			// V0 and V1 share the same prefix, so `iter_values` still counts the same.
+			assert_eq!(v0::image_count::<T>(), Some(3));
 			assert_eq!(v1::image_count::<T>(), Some(3)); // One gets skipped therefore 3.
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
 
@@ -234,7 +240,6 @@ mod test {
 				crate::StatusFor::<T>::get(h),
 				Some(RequestStatus::Unrequested { deposit: (1, 1), len: 1024 })
 			);
-
 			// Case 3: Requested by 0 should be skipped
 			let (_, h) = preimage::<T>(8192);
 			assert_eq!(crate::PreimageFor::<T>::get(&(h, 8192)), None);
@@ -249,6 +254,7 @@ mod test {
 		});
 	}
 
+	/// Returns a preimage with a given size and its hash.
 	fn preimage<T: Config>(
 		len: usize,
 	) -> (BoundedVec<u8, ConstU32<MAX_SIZE>>, <T as frame_system::Config>::Hash) {
