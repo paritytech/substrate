@@ -392,17 +392,17 @@ where
 		let median_seen = self.median_seen();
 		let best_seen_block =
 			median_seen.and_then(|median| (median > self.best_queued_number).then_some(median));
-		let sync_state = if let Some(n) = best_seen_block.or(median_seen) {
+		let sync_state = if let Some(target) = median_seen {
 			// A chain is classified as downloading if the provided best block is
 			// more than `MAJOR_SYNC_BLOCKS` behind the best block or as importing
 			// if the same can be said about queued blocks.
 			let best_block = self.client.info().best_number;
-			if n > best_block && n - best_block > MAJOR_SYNC_BLOCKS.into() {
+			if target > best_block && target - best_block > MAJOR_SYNC_BLOCKS.into() {
 				// If target is not queued, we're downloading, otherwise importing.
-				if n > self.best_queued_number {
-					SyncState::Downloading
+				if target > self.best_queued_number {
+					SyncState::Downloading { target }
 				} else {
-					SyncState::Importing
+					SyncState::Importing { target }
 				}
 			} else {
 				SyncState::Idle
@@ -422,12 +422,9 @@ where
 			_ => None,
 		};
 
-		let is_major_syncing = !matches!(sync_state, SyncState::Idle);
-
 		SyncStatus {
 			state: sync_state,
 			best_seen_block,
-			is_major_syncing,
 			num_peers: self.peers.len() as u32,
 			queued_blocks: self.queue_blocks.len() as u32,
 			state_sync: self.state_sync.as_ref().map(|s| s.progress()),
@@ -681,7 +678,7 @@ where
 			trace!(target: "sync", "Too many blocks in the queue.");
 			return Box::new(std::iter::empty())
 		}
-		let major_sync = self.status().state == SyncState::Downloading;
+		let is_major_syncing = self.status().state.is_major_syncing();
 		let attrs = self.required_block_attributes();
 		let blocks = &mut self.blocks;
 		let fork_targets = &mut self.fork_targets;
@@ -691,7 +688,7 @@ where
 		let client = &self.client;
 		let queue = &self.queue_blocks;
 		let allowed_requests = self.allowed_requests.take();
-		let max_parallel = if major_sync { 1 } else { self.max_parallel_downloads };
+		let max_parallel = if is_major_syncing { 1 } else { self.max_parallel_downloads };
 		let gap_sync = &mut self.gap_sync;
 		let iter = self.peers.iter_mut().filter_map(move |(id, peer)| {
 			if !peer.state.is_available() || !allowed_requests.contains(id) {
@@ -1782,7 +1779,7 @@ where
 			);
 		}
 
-		let origin = if !gap && self.status().state != SyncState::Downloading {
+		let origin = if !gap && !self.status().state.is_major_syncing() {
 			BlockOrigin::NetworkBroadcast
 		} else {
 			BlockOrigin::NetworkInitialSync

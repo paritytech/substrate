@@ -1943,7 +1943,8 @@ where
 			.behaviour_mut()
 			.user_protocol_mut()
 			.sync_state()
-			.is_major_syncing;
+			.state
+			.is_major_syncing();
 
 		this.tx_handler_controller.set_gossip_enabled(!is_major_syncing);
 
