@@ -174,28 +174,16 @@ impl ToTokens for HostFn {
 }
 
 impl HostFn {
-	pub fn try_from(item: syn::Item) -> syn::Result<Self> {
+	pub fn try_from(item: syn::ItemFn) -> syn::Result<Self> {
 		let err = |span, msg| {
 			let msg = format!("Invalid host function definition. {}", msg);
 			syn::Error::new(span, msg)
 		};
 		let msg = "only #[version(<u8>)] or #[unstable] attribute is allowed.";
 		let span = item.span();
-		let mut item = match item {
-			syn::Item::Fn(i_fn) => Ok(i_fn),
-			_ => Err(err(span, msg)),
-		}?;
-
-		let attrs = &mut item.attrs;
-
-		let name = if attrs.iter().any(|a| a.path.is_ident("prefixed_alias")) {
-			"seal_".to_string() + &item.sig.ident.to_string()
-		} else {
-			item.sig.ident.to_string()
-		};
-
+		let mut attrs = item.attrs.clone();
 		attrs.retain(|a| !(a.path.is_ident("doc") || a.path.is_ident("prefixed_alias")));
-
+		let name = item.sig.ident.to_string();
 		let module = match attrs.len() {
 			0 => Ok("seal0".to_string()),
 			1 => {
@@ -336,13 +324,18 @@ impl EnvDef {
 			.filter(|i| i.attrs.iter().any(selector))
 			.map(|mut i| {
 				i.attrs.retain(|i| !selector(i));
+				i.sig.ident = syn::Ident::new(
+					&format!("seal_{}", &i.sig.ident.to_string()),
+					i.sig.ident.span(),
+				);
 				i
 			})
-			.map(|i| HostFn::try_from(syn::Item::Fn(i)));
+			.map(|i| HostFn::try_from(i));
 
 		let host_funcs = items
 			.iter()
-			.map(|i| HostFn::try_from(i.clone()))
+			.filter_map(extract_fn)
+			.map(|i| HostFn::try_from(i))
 			.chain(aliases)
 			.collect::<Result<Vec<_>, _>>()?;
 
