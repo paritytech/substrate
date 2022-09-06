@@ -100,6 +100,7 @@ pub mod v1 {
 		fn post_upgrade() -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number())?;
 			Ok(())
 		}
 	}
@@ -380,6 +381,70 @@ pub mod v2 {
 			});
 
 			log!(info, "post upgrade hook for MigrateToV2 executed.");
+			Ok(())
+		}
+	}
+}
+
+pub mod v3 {
+	use super::*;
+
+	/// This migration removes stale bonded-pool metadata, if any.
+	pub struct MigrateToV3<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV3<T> {
+		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			log!(
+				info,
+				"Running migration with current storage version {:?} / onchain {:?}",
+				current,
+				onchain
+			);
+
+			if current > onchain {
+				let mut metadata_iterated = 0u64;
+				let mut metadata_removed = 0u64;
+				Metadata::<T>::iter_keys()
+					.filter(|id| {
+						metadata_iterated += 1;
+						!BondedPools::<T>::contains_key(&id)
+					})
+					.collect::<Vec<_>>()
+					.into_iter()
+					.for_each(|id| {
+						metadata_removed += 1;
+						Metadata::<T>::remove(&id);
+					});
+				current.put::<Pallet<T>>();
+				// metadata iterated + bonded pools read + a storage version read
+				let total_reads = metadata_iterated * 2 + 1;
+				// metadata removed + a storage version write
+				let total_writes = metadata_removed + 1;
+				T::DbWeight::get().reads_writes(total_reads, total_writes)
+			} else {
+				log!(info, "MigrateToV3 should be removed");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			ensure!(
+				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
+				"the on_chain version is equal or more than the current one"
+			);
+			Ok(())
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			ensure!(
+				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id)),
+				"not all of the stale metadata has been removed"
+			);
+			ensure!(Pallet::<T>::on_chain_storage_version() == 3, "wrong storage version");
 			Ok(())
 		}
 	}

@@ -27,13 +27,13 @@ use jsonrpsee::{
 	ws_client::WsClientBuilder,
 };
 use parity_scale_codec::{Decode, Encode};
-use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
+use remote_externalities::{rpc_api::RpcService, Builder, Mode, OnlineConfig};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use std::{collections::VecDeque, fmt::Debug, marker::PhantomData, str::FromStr};
+use std::{collections::VecDeque, fmt::Debug, str::FromStr};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
@@ -60,6 +60,10 @@ pub struct FollowChainCmd {
 	///   round-robin fashion.
 	#[clap(long, default_value = "none")]
 	try_state: frame_try_runtime::TryStateSelect,
+
+	/// If present, a single connection to a node will be kept and reused for fetching blocks.
+	#[clap(long)]
+	keep_connection: bool,
 }
 
 /// Start listening for with `SUB` at `url`.
@@ -93,21 +97,16 @@ where
 	Block::Header: HeaderT,
 {
 	/// Awaits for the header of the block with hash `hash`.
-	async fn get_header(&mut self, hash: Block::Hash) -> Block::Header;
-}
-
-struct RpcHeaderProvider<Block: BlockT> {
-	uri: String,
-	_phantom: PhantomData<Block>,
+	async fn get_header(&self, hash: Block::Hash) -> Block::Header;
 }
 
 #[async_trait]
-impl<Block: BlockT> HeaderProvider<Block> for RpcHeaderProvider<Block>
+impl<Block: BlockT> HeaderProvider<Block> for RpcService
 where
 	Block::Header: DeserializeOwned,
 {
-	async fn get_header(&mut self, hash: Block::Hash) -> Block::Header {
-		rpc_api::get_header::<Block, _>(&self.uri, hash).await.unwrap()
+	async fn get_header(&self, hash: Block::Hash) -> Block::Header {
+		self.get_header::<Block>(hash).await.unwrap()
 	}
 }
 
@@ -148,19 +147,20 @@ where
 ///
 /// Returned headers are guaranteed to be ordered. There are no missing headers (even if some of
 /// them lack justification).
-struct FinalizedHeaders<Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>> {
-	header_provider: HP,
+struct FinalizedHeaders<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
+{
+	header_provider: &'a HP,
 	subscription: HS,
 	fetched_headers: VecDeque<Block::Header>,
 	last_returned: Option<<Block::Header as HeaderT>::Hash>,
 }
 
-impl<Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
-	FinalizedHeaders<Block, HP, HS>
+impl<'a, Block: BlockT, HP: HeaderProvider<Block>, HS: HeaderSubscription<Block>>
+	FinalizedHeaders<'a, Block, HP, HS>
 where
 	<Block as BlockT>::Header: DeserializeOwned,
 {
-	pub fn new(header_provider: HP, subscription: HS) -> Self {
+	pub fn new(header_provider: &'a HP, subscription: HS) -> Self {
 		Self {
 			header_provider,
 			subscription,
@@ -229,19 +229,16 @@ where
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
-	let header_provider: RpcHeaderProvider<Block> =
-		RpcHeaderProvider { uri: command.uri.clone(), _phantom: PhantomData {} };
-	let mut finalized_headers: FinalizedHeaders<
-		Block,
-		RpcHeaderProvider<Block>,
-		Subscription<Block::Header>,
-	> = FinalizedHeaders::new(header_provider, subscription);
+	let rpc_service = RpcService::new(&command.uri, command.keep_connection).await?;
+
+	let mut finalized_headers: FinalizedHeaders<Block, RpcService, Subscription<Block::Header>> =
+		FinalizedHeaders::new(&rpc_service, subscription);
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
 		let number = header.number();
 
-		let block = rpc_api::get_block::<Block, _>(&command.uri, hash).await.unwrap();
+		let block = rpc_service.get_block::<Block>(hash).await.unwrap();
 
 		log::debug!(
 			target: LOG_TARGET,
@@ -333,12 +330,14 @@ where
 mod tests {
 	use super::*;
 	use sp_runtime::testing::{Block as TBlock, ExtrinsicWrapper, Header};
+	use std::sync::Arc;
+	use tokio::sync::Mutex;
 
 	type Block = TBlock<ExtrinsicWrapper<()>>;
 	type BlockNumber = u64;
 	type Hash = H256;
 
-	struct MockHeaderProvider(pub VecDeque<BlockNumber>);
+	struct MockHeaderProvider(pub Arc<Mutex<VecDeque<BlockNumber>>>);
 
 	fn headers() -> Vec<Header> {
 		let mut headers = vec![Header::new_from_number(0)];
@@ -353,8 +352,8 @@ mod tests {
 
 	#[async_trait]
 	impl HeaderProvider<Block> for MockHeaderProvider {
-		async fn get_header(&mut self, _hash: Hash) -> Header {
-			let height = self.0.pop_front().unwrap();
+		async fn get_header(&self, _hash: Hash) -> Header {
+			let height = self.0.lock().await.pop_front().unwrap();
 			headers()[height as usize].clone()
 		}
 	}
@@ -372,9 +371,9 @@ mod tests {
 	async fn finalized_headers_works_when_every_block_comes_from_subscription() {
 		let heights = vec![4, 5, 6, 7];
 
-		let provider = MockHeaderProvider(vec![].into());
+		let provider = MockHeaderProvider(Default::default());
 		let subscription = MockHeaderSubscription(heights.clone().into());
-		let mut headers = FinalizedHeaders::new(provider, subscription);
+		let mut headers = FinalizedHeaders::new(&provider, subscription);
 
 		for h in heights {
 			assert_eq!(h, headers.next().await.unwrap().number);
@@ -389,9 +388,9 @@ mod tests {
 		// Consecutive headers will be requested in the reversed order.
 		let heights_not_in_subscription = vec![5, 9, 8, 7];
 
-		let provider = MockHeaderProvider(heights_not_in_subscription.into());
+		let provider = MockHeaderProvider(Arc::new(Mutex::new(heights_not_in_subscription.into())));
 		let subscription = MockHeaderSubscription(heights_in_subscription.into());
-		let mut headers = FinalizedHeaders::new(provider, subscription);
+		let mut headers = FinalizedHeaders::new(&provider, subscription);
 
 		for h in all_heights {
 			assert_eq!(h, headers.next().await.unwrap().number);
