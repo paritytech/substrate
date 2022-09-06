@@ -1141,7 +1141,7 @@ pub mod pallet {
 	use sp_runtime::traits::CheckedAdd;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -2191,8 +2191,8 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Remove everything related to the given bonded pool.
 	///
-	/// All sub-pools are also deleted. All accounts are dusted and the leftover of the reward
-	/// account is returned to the depositor.
+	/// Metadata and all of the sub-pools are also deleted. All accounts are dusted and the leftover
+	/// of the reward account is returned to the depositor.
 	pub fn dissolve_pool(bonded_pool: BondedPool<T>) {
 		let reward_account = bonded_pool.reward_account();
 		let bonded_account = bonded_pool.bonded_account();
@@ -2229,6 +2229,9 @@ impl<T: Config> Pallet<T> {
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
+		// Remove bonded pool metadata.
+		Metadata::<T>::remove(bonded_pool.id);
+
 		bonded_pool.remove();
 	}
 
@@ -2406,8 +2409,7 @@ impl<T: Config> Pallet<T> {
 		let reward_pools = RewardPools::<T>::iter_keys().collect::<Vec<_>>();
 		assert_eq!(bonded_pools, reward_pools);
 
-		// TODO: can't check this right now: https://github.com/paritytech/substrate/issues/12077
-		// assert!(Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
+		assert!(Metadata::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
 		assert!(SubPoolsStorage::<T>::iter_keys().all(|k| bonded_pools.contains(&k)));
 
 		assert!(MaxPools::<T>::get().map_or(true, |max| bonded_pools.len() <= (max as usize)));
