@@ -18,7 +18,7 @@
 use super::*;
 use crate::log;
 use frame_support::traits::OnRuntimeUpgrade;
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod v1 {
 	use super::*;
@@ -355,7 +355,7 @@ pub mod v2 {
 				)
 			});
 
-			Ok(vec![])
+			Ok(Vec::new())
 		}
 
 		#[cfg(feature = "try-runtime")]
