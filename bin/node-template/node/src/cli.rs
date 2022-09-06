@@ -1,5 +1,5 @@
-use sc_cli::RunCmd;
 use clap::Parser;
+use sc_cli::RunCmd;
 
 #[derive(Debug, Parser)]
 pub enum Cli {
