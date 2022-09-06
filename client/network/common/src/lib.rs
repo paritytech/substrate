@@ -24,3 +24,9 @@ pub mod protocol;
 pub mod request_responses;
 pub mod service;
 pub mod sync;
+
+/// Minimum Requirements for a Hash within Networking
+pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
+
+impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
+{}

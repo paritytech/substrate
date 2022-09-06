@@ -27,11 +27,12 @@ pub use sc_network_common::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
 	sync::warp::WarpSyncProvider,
+    ExHashT,
 };
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
-use crate::{bitswap::Bitswap, ExHashT};
+use crate::bitswap::Bitswap;
 
 use core::{fmt, iter};
 use futures::future;

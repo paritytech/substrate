@@ -148,7 +148,7 @@ async fn build_network_future<
 		+ Send
 		+ Sync
 		+ 'static,
-	H: sc_network::ExHashT,
+	H: sc_network_common::ExHashT,
 >(
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H, C>,

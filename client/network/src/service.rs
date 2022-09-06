@@ -39,7 +39,7 @@ use crate::{
 		self, message::generic::Roles, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol,
 		Ready,
 	},
-	transactions, transport, ExHashT, ReputationChange,
+	transactions, transport, ReputationChange,
 };
 
 use codec::Encode as _;
@@ -60,6 +60,7 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
+    ExHashT,
 	config::MultiaddrWithPeerId,
 	protocol::{
 		event::{DhtEvent, Event},
