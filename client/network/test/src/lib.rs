@@ -47,13 +47,14 @@ use sc_consensus::{
 	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
 	Verifier,
 };
-pub use sc_network_transactions::config::EmptyTransactionPool;
 use sc_network::{
 	config::{NetworkConfiguration, Role, SyncMode},
 	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, ProtocolId, NonDefaultSetConfig, NonReservedPeerMode, TransportConfig},
+	config::{
+		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
+	},
 	protocol::ProtocolName,
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
@@ -63,6 +64,7 @@ use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
 	warp_request_handler, ChainSync,
 };
+pub use sc_network_transactions::config::EmptyTransactionPool;
 use sc_service::client::Client;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},

@@ -22,10 +22,7 @@ use futures::{task::Poll, Future, TryFutureExt as _};
 use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
-use sc_network::{
-	config::NetworkConfiguration,
-	multiaddr,
-};
+use sc_network::{config::NetworkConfiguration, multiaddr};
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, TransportConfig},
 	service::{NetworkBlock, NetworkPeers, NetworkStateInfo},
