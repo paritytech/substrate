@@ -149,8 +149,8 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Balances: pallet_balances,
-		SafeMode: pallet_safe_mode,
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		SafeMode: pallet_safe_mode::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -186,7 +186,13 @@ pub fn new_bench_ext() -> sp_io::TestExternalities {
 }
 
 pub fn next_block() {
+	SafeMode::on_finalize(System::block_number());
+	Balances::on_finalize(System::block_number());
+	System::on_finalize(System::block_number());
 	System::set_block_number(System::block_number() + 1);
+	System::on_initialize(System::block_number());
+	Balances::on_initialize(System::block_number());
+	SafeMode::on_initialize(System::block_number());
 }
 
 pub fn run_to(n: u64) {

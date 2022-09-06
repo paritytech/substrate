@@ -18,17 +18,19 @@
 //! Test utilities for the safe mode pallet.
 
 use super::*;
-use crate::mock::*;
+use crate::mock::{Call, *};
 
 use frame_support::{assert_err, assert_noop, assert_ok};
+use frame_support::dispatch::Dispatchable;
 
 #[test]
 fn enabled_cannot_filter_calls_to_itself() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::enable(Origin::signed(1)));
-		assert_err!(Balances::transfer(Origin::signed(3), 1, 1), Error::<Test>::IsEnabled);
+		let call = Call::Balances(pallet_balances::Call::transfer{dest: 1, value: 1});
+		assert_err!(call.dispatch(Origin::signed(3)), frame_system::Error::<Test>::CallFiltered);
 		// TODO ^^^ should be filtered (and ideally throw a safe mode error,
-		// not something generic or simply a call filter)
+		// not something generic or simply a call filter). done :)
 		assert_ok!(SafeMode::extend(Origin::signed(2)));
 		assert_ok!(SafeMode::extend(Origin::signed(3)));
 		assert_ok!(SafeMode::force_disable(Origin::root()));
@@ -59,9 +61,11 @@ fn enabled_filters_balance_calls() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Balances::transfer(Origin::signed(1), 2, 1));
 		assert_ok!(SafeMode::enable(Origin::signed(2)));
-		assert_err!(Balances::transfer(Origin::signed(3), 1, 1), Error::<Test>::IsEnabled);
+		let call = Call::Balances(pallet_balances::Call::transfer{dest:3,value: 1});
+		assert_err!(call.dispatch(Origin::signed(3)), frame_system::Error::<Test>::CallFiltered);
 		// TODO ^^^ should be filtered (and ideally throw a safe mode error,
 		// not something generic or simply a call filter)
+		// Now we get a `CallFiltered` error. The trick is to `.dispatch` the calls.
 	});
 }
 
@@ -75,8 +79,10 @@ fn signed_origin_can_enable() {
 			SafeMode::enabled().unwrap(),
 			System::block_number() + mock::EnableDuration::get()
 		);
-		// TODO check stake reserved correctly here?
+		// TODO check stake reserved correctly here? yep
 		assert_noop!(SafeMode::enable(Origin::signed(1)), Error::<Test>::IsEnabled);
+		// Assert the stake.
+		assert_eq!(Stakes::<Test>::get(1, 1), Some(mock::EnableStakeAmount::get()));
 	});
 }
 
@@ -244,7 +250,6 @@ fn root_can_slash_stake() {
 			Error::<Test>::IsEnabled
 		);
 		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
-		SafeMode::on_initialize(System::block_number());
 		assert_ok!(SafeMode::slash_stake(Origin::root(), 1, enabled_at_block));
 	});
 }
