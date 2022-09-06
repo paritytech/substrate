@@ -2299,8 +2299,8 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
+		while weight_with(active)
+			.all_lte(<Runtime as frame_system::Config>::BlockWeights::get().max_block) ||
 			active == all_voters
 		{
 			active += 1;

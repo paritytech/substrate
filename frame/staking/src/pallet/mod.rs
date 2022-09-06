@@ -33,7 +33,7 @@ use sp_runtime::{
 	Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::{cmp::max, prelude::*};
+use sp_std::prelude::*;
 
 mod impls;
 
