@@ -89,7 +89,10 @@ pub mod pallet {
 		/// The safe-mode is (already) disabled.
 		IsDisabled,
 
-		CannotStake,
+		/// A value that is required for the extrinsic was not configured.
+		NotConfigured,
+
+		/// There is no balance staked.
 		NotStaked,
 	}
 
@@ -105,7 +108,10 @@ pub mod pallet {
 		/// The safe-mode was disabled for a specific \[reason\].
 		Disabled(DisableReason),
 
+		/// An account got repaid its stake. \[account, amount\]
 		StakeRepaid(T::AccountId, BalanceOf<T>),
+
+		/// An account got slashed its stake. \[account, amount\]
 		StakeSlashed(T::AccountId, BalanceOf<T>),
 	}
 
@@ -126,7 +132,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Enabled<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
 
-	// Maps (account, block number) to the amount of stake that was staked at that block.
+	/// Holds the stake that was reserved from a user at a specific block number.
 	#[pallet::storage]
 	pub type Stakes<T: Config> = StorageDoubleMap<
 		_,
@@ -140,7 +146,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Enable the safe-mode permissionlessly for [`Config::ExtendDuration`] blocks.
+		/// Enable the safe-mode permissionlessly for [`Config::EnableDuration`] blocks.
 		///
 		/// Reserves `EnableStakeAmount` from the caller's account.
 		/// Errors if the safe-mode is already enabled.
@@ -200,6 +206,9 @@ pub mod pallet {
 		}
 
 		/// Repay an honest account that put the chain into safe-mode earlier.
+		///
+		/// Errors if the safe-mode is already enabled.
+		/// Emits a [`Event::StakeRepaid`] event on success.
 		#[pallet::weight(0)]
 		pub fn repay_stake(
 			origin: OriginFor<T>,
@@ -212,6 +221,9 @@ pub mod pallet {
 		}
 
 		/// Slash a dishonest account that put the chain into safe-mode earlier.
+		///
+		/// Errors if the safe-mode is already enabled.
+		/// Emits a [`Event::StakeSlashed`] event on success.
 		#[pallet::weight(0)]
 		pub fn slash_stake(
 			origin: OriginFor<T>,
@@ -243,9 +255,10 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	pub fn do_enable(who: Option<T::AccountId>) -> DispatchResult {
+	/// Logic for the [`crate::Pallet::enable`] and [`crate::Pallet::force_enable`] calls.
+	fn do_enable(who: Option<T::AccountId>) -> DispatchResult {
 		if let Some(who) = who {
-			let stake = T::EnableStakeAmount::get().ok_or(Error::<T>::CannotStake)?;
+			let stake = T::EnableStakeAmount::get().ok_or(Error::<T>::NotConfigured)?;
 			Self::reserve(who, stake)?;
 		}
 
@@ -257,9 +270,10 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	pub fn do_extend(who: Option<T::AccountId>) -> DispatchResult {
+	/// Logic for the [`crate::Pallet::extend`] and [`crate::Pallet::force_extend`] calls.
+	fn do_extend(who: Option<T::AccountId>) -> DispatchResult {
 		if let Some(who) = who {
-			let stake = T::ExtendStakeAmount::get().ok_or(Error::<T>::CannotStake)?;
+			let stake = T::ExtendStakeAmount::get().ok_or(Error::<T>::NotConfigured)?;
 			Self::reserve(who, stake)?;
 		}
 
@@ -271,23 +285,19 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
-		T::Currency::reserve(&who, stake)?;
-		let block = <frame_system::Pallet<T>>::block_number();
-		Stakes::<T>::mutate(&who, &block, |s| s.unwrap_or_default().saturating_accrue(stake));
-		Ok(())
-	}
-
-	/// Logic of the [`crate::Pallet::force_disable`] extrinsic.
+	/// Logic for the [`crate::Pallet::force_disable`] call.
 	///
 	/// Does not check the origin. Errors if the safe-mode is already disabled.
-	pub fn do_disable(reason: DisableReason) -> DispatchResult {
+	fn do_disable(reason: DisableReason) -> DispatchResult {
 		let _limit = Enabled::<T>::take().ok_or(Error::<T>::IsDisabled)?;
 		Self::deposit_event(Event::Disabled(reason));
 		Ok(())
 	}
 
-	pub fn do_repay_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
+	/// Logic for the [`crate::Pallet::repay_stake`] call.
+	///
+	/// Does not check the origin. Errors if the safe-mode is enabled.
+	fn do_repay_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
 		ensure!(!Self::is_enabled(), Error::<T>::IsEnabled);
 		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
 
@@ -296,12 +306,23 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	pub fn do_slash_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
+	/// Logic for the [`crate::Pallet::slash_stake`] call.
+	///
+	/// Does not check the origin. Errors if the safe-mode is enabled.
+	fn do_slash_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
 		ensure!(!Self::is_enabled(), Error::<T>::IsEnabled);
 		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
 
 		T::Currency::slash_reserved(&account, stake);
 		Self::deposit_event(Event::<T>::StakeSlashed(account, stake));
+		Ok(())
+	}
+
+	/// Reserve `stake` amount from `who` and store it in `Stakes`.
+	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
+		T::Currency::reserve(&who, stake)?;
+		let block = <frame_system::Pallet<T>>::block_number();
+		Stakes::<T>::mutate(&who, &block, |s| s.unwrap_or_default().saturating_accrue(stake));
 		Ok(())
 	}
 
@@ -315,8 +336,8 @@ impl<T: Config> Pallet<T> {
 	where
 		T::Call: GetCallMetadata,
 	{
-		// The `SafeMode` pallet can always be dispatched.
 		let CallMetadata { pallet_name, .. } = call.get_call_metadata();
+		// The `SafeMode` pallet can always be dispatched.
 		if pallet_name == <Pallet<T> as PalletInfoAccess>::name() {
 			return true
 		}
