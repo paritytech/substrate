@@ -40,8 +40,8 @@ use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Regi
 use sc_client_api::HeaderBackend;
 use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
 use sc_network_common::{
-	config::{ProtocolId,NonReservedPeerMode},
-    error,
+	config::{NonReservedPeerMode, ProtocolId},
+	error,
 	protocol::ProtocolName,
 	request_responses::RequestFailure,
 	sync::{

@@ -25,12 +25,12 @@ use sc_network_common::{
 	protocol::event::Event,
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
 };
-use sc_network_transactions::config::EmptyTransactionPool;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
 	ChainSync,
 };
+use sc_network_transactions::config::EmptyTransactionPool;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{sync::Arc, time::Duration};
@@ -634,10 +634,7 @@ fn ensure_reserved_node_addresses_consistent_with_transport_memory() {
 	let _ = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
 		transport: TransportConfig::MemoryOnly,
-		default_peers_set: SetConfig {
-			reserved_nodes: vec![reserved_node],
-			..Default::default()
-		},
+		default_peers_set: SetConfig { reserved_nodes: vec![reserved_node], ..Default::default() },
 		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }
@@ -653,10 +650,7 @@ fn ensure_reserved_node_addresses_consistent_with_transport_not_memory() {
 
 	let _ = build_test_full_node(config::NetworkConfiguration {
 		listen_addresses: vec![listen_addr.clone()],
-		default_peers_set: SetConfig {
-			reserved_nodes: vec![reserved_node],
-			..Default::default()
-		},
+		default_peers_set: SetConfig { reserved_nodes: vec![reserved_node], ..Default::default() },
 		..config::NetworkConfiguration::new("test-node", "test-client", Default::default(), None)
 	});
 }

@@ -71,10 +71,7 @@ use libp2p::{
 	},
 };
 use log::{debug, error, info, trace, warn};
-use sc_network_common::{
-    config::ProtocolId,
-    utils::LruHashSet,
-};
+use sc_network_common::{config::ProtocolId, utils::LruHashSet};
 use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,

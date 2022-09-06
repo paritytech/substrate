@@ -27,7 +27,7 @@ pub use sc_network_common::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
 	sync::warp::WarpSyncProvider,
-    ExHashT,
+	ExHashT,
 };
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
@@ -42,9 +42,8 @@ use libp2p::{
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
 use sc_network_common::{
-    config::MultiaddrWithPeerId,
-    sync::ChainSync,
-    config::{SetConfig, NonDefaultSetConfig, TransportConfig}
+	config::{MultiaddrWithPeerId, NonDefaultSetConfig, SetConfig, TransportConfig},
+	sync::ChainSync,
 };
 use sc_network_transactions::config::TransactionPool;
 use sp_runtime::traits::Block as BlockT;

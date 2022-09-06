@@ -415,7 +415,8 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network_transactions::config::TransactionPool<H, B> for TransactionPoolAdapter<C, Pool>
+impl<B, H, C, Pool, E> sc_network_transactions::config::TransactionPool<H, B>
+	for TransactionPoolAdapter<C, Pool>
 where
 	C: HeaderBackend<B>
 		+ BlockBackend<B>

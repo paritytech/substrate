@@ -59,9 +59,8 @@ use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
-    ExHashT,
-	error::Error,
 	config::{MultiaddrWithPeerId, TransportConfig},
+	error::Error,
 	protocol::{
 		event::{DhtEvent, Event},
 		ProtocolName,
@@ -74,6 +73,7 @@ use sc_network_common::{
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
 	sync::{SyncState, SyncStatus},
+	ExHashT,
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
