@@ -216,7 +216,7 @@ pub struct NonDefaultSetConfig {
 	/// one.
 	///
 	/// If a fallback is used, it will be reported in
-	/// [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
+	/// `sc_network::protocol::event::Event::NotificationStreamOpened::negotiated_fallback`
 	pub fallback_names: Vec<protocol::ProtocolName>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
@@ -271,7 +271,7 @@ pub enum TransportConfig {
 
 		/// If true, allow connecting to private IPv4 addresses (as defined in
 		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
-		/// been passed in [`NetworkConfiguration::boot_nodes`].
+		/// been passed in `::sc_network::config::NetworkConfiguration::boot_nodes`.
 		allow_private_ipv4: bool,
 	},
 
