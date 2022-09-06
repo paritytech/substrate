@@ -88,7 +88,7 @@ pub use hooks::{
 pub mod schedule;
 mod storage;
 pub use storage::{
-	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
+	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance, WhitelistedStorageKeys
 };
 
 mod dispatch;
