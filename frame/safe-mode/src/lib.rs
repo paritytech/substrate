@@ -322,7 +322,8 @@ impl<T: Config> Pallet<T> {
 	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
 		T::Currency::reserve(&who, stake)?;
 		let block = <frame_system::Pallet<T>>::block_number();
-		Stakes::<T>::mutate(&who, &block, |s| s.unwrap_or_default().saturating_accrue(stake));
+		let current_stake = Stakes::<T>::get(&who, block).unwrap_or_default();
+		Stakes::<T>::insert(&who, block, current_stake.saturating_add(stake));
 		Ok(())
 	}
 
