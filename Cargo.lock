@@ -8417,6 +8417,7 @@ dependencies = [
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",
+ "sc-network-transactions",
  "sc-peerset",
  "sc-utils",
  "serde",
@@ -8552,6 +8553,7 @@ dependencies = [
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",
+ "sc-network-transactions",
  "sc-service",
  "sp-blockchain",
  "sp-consensus",
@@ -8561,6 +8563,15 @@ dependencies = [
  "sp-tracing",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
+]
+
+[[package]]
+name = "sc-network-transactions"
+version = "0.10.0-dev"
+dependencies = [
+ "futures",
+ "sc-network-common",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -8739,6 +8750,7 @@ dependencies = [
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",
+ "sc-network-transactions",
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",

@@ -47,7 +47,7 @@ use sc_consensus::{
 	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
 	Verifier,
 };
-pub use sc_network::config::EmptyTransactionPool;
+pub use sc_network_transactions::config::EmptyTransactionPool;
 use sc_network::{
 	config::{
 		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,

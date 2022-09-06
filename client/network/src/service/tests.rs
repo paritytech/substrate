@@ -25,6 +25,7 @@ use sc_network_common::{
 	protocol::event::Event,
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
 };
+use sc_network_transactions::config::EmptyTransactionPool;
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
@@ -140,7 +141,7 @@ fn build_test_full_node(
 		}),
 		network_config,
 		chain: client.clone(),
-		transaction_pool: Arc::new(config::EmptyTransactionPool),
+		transaction_pool: Arc::new(EmptyTransactionPool),
 		protocol_id,
 		fork_id,
 		import_queue,

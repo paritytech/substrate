@@ -27,7 +27,7 @@
 //! `Future` that processes transactions.
 
 use crate::{
-	config::{self, TransactionImport, TransactionImportFuture, TransactionPool},
+	config,
 	error,
 	protocol::message,
 	service::NetworkService,
@@ -48,6 +48,7 @@ use sc_network_common::{
 	},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
 };
+use sc_network_transactions::config::{TransactionImport, TransactionImportFuture, TransactionPool};
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	collections::{hash_map::Entry, HashMap},

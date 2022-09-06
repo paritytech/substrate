@@ -47,6 +47,7 @@ members = [
 	"client/network/light",
 	"client/network/sync",
 	"client/network/test",
+	"client/network/transactions",
 	"client/offchain",
 	"client/peerset",
 	"client/allocator",

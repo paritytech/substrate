@@ -35,7 +35,6 @@ pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 use crate::bitswap::Bitswap;
 
 use core::{fmt, iter};
-use futures::future;
 use libp2p::{
 	identity::{ed25519, Keypair},
 	multiaddr, Multiaddr,
@@ -43,9 +42,9 @@ use libp2p::{
 use prometheus_endpoint::Registry;
 use sc_consensus::ImportQueue;
 use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName, sync::ChainSync};
+use sc_network_transactions::config::TransactionPool;
 use sp_runtime::traits::Block as BlockT;
 use std::{
-	collections::HashMap,
 	error::Error,
 	fs,
 	future::Future,
@@ -164,66 +163,6 @@ impl fmt::Display for Role {
 			Self::Full => write!(f, "FULL"),
 			Self::Authority { .. } => write!(f, "AUTHORITY"),
 		}
-	}
-}
-
-/// Result of the transaction import.
-#[derive(Clone, Copy, Debug)]
-pub enum TransactionImport {
-	/// Transaction is good but already known by the transaction pool.
-	KnownGood,
-	/// Transaction is good and not yet known.
-	NewGood,
-	/// Transaction is invalid.
-	Bad,
-	/// Transaction import was not performed.
-	None,
-}
-
-/// Future resolving to transaction import result.
-pub type TransactionImportFuture = Pin<Box<dyn Future<Output = TransactionImport> + Send>>;
-
-/// Transaction pool interface
-pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
-	/// Get transactions from the pool that are ready to be propagated.
-	fn transactions(&self) -> Vec<(H, B::Extrinsic)>;
-	/// Get hash of transaction.
-	fn hash_of(&self, transaction: &B::Extrinsic) -> H;
-	/// Import a transaction into the pool.
-	///
-	/// This will return future.
-	fn import(&self, transaction: B::Extrinsic) -> TransactionImportFuture;
-	/// Notify the pool about transactions broadcast.
-	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
-	/// Get transaction by hash.
-	fn transaction(&self, hash: &H) -> Option<B::Extrinsic>;
-}
-
-/// Dummy implementation of the [`TransactionPool`] trait for a transaction pool that is always
-/// empty and discards all incoming transactions.
-///
-/// Requires the "hash" type to implement the `Default` trait.
-///
-/// Useful for testing purposes.
-pub struct EmptyTransactionPool;
-
-impl<H: ExHashT + Default, B: BlockT> TransactionPool<H, B> for EmptyTransactionPool {
-	fn transactions(&self) -> Vec<(H, B::Extrinsic)> {
-		Vec::new()
-	}
-
-	fn hash_of(&self, _transaction: &B::Extrinsic) -> H {
-		Default::default()
-	}
-
-	fn import(&self, _transaction: B::Extrinsic) -> TransactionImportFuture {
-		Box::pin(future::ready(TransactionImport::KnownGood))
-	}
-
-	fn on_broadcasted(&self, _: HashMap<H, Vec<String>>) {}
-
-	fn transaction(&self, _h: &H) -> Option<B::Extrinsic> {
-		None
 	}
 }
 

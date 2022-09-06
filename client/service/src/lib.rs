@@ -72,7 +72,7 @@ pub use sc_chain_spec::{
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
-pub use sc_network::config::{TransactionImport, TransactionImportFuture};
+pub use sc_network_transactions::config::{TransactionImport, TransactionImportFuture};
 pub use sc_rpc::{
 	RandomIntegerSubscriptionId, RandomStringSubscriptionId, RpcSubscriptionIdProvider,
 };
@@ -415,7 +415,7 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for TransactionPoolAdapter<C, Pool>
+impl<B, H, C, Pool, E> sc_network_transactions::config::TransactionPool<H, B> for TransactionPoolAdapter<C, Pool>
 where
 	C: HeaderBackend<B>
 		+ BlockBackend<B>
