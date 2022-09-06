@@ -595,7 +595,8 @@ pub fn benchmarking(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn benchmarking_cached(item: TokenStream) -> TokenStream {
-	let _input = syn::parse2::<Input>(item.clone().into())
+	let input = syn::parse2::<Input>(item.clone().into())
 		.expect("benchmarking(cached) can only be attached to a valid storage type declaration");
+	println!("{}", input.storage_name);
 	item
 }
