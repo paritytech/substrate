@@ -60,7 +60,7 @@ impl InsertKeyCmd {
 		let suri = utils::read_uri(self.suri.as_ref())?;
 		let base_path = self
 			.shared_params
-			.base_path()
+			.base_path()?
 			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
 		let chain_id = self.shared_params.chain_id(self.shared_params.is_dev());
 		let chain_spec = cli.load_spec(&chain_id)?;

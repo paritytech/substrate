@@ -166,37 +166,37 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts DeletionQueue (r:1 w:0)
 	fn on_process_deletion_queue_batch() -> Weight {
-		(3_076_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(1_654_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `k` is `[0, 1024]`.
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight {
-		(13_901_000 as Weight)
+		Weight::from_ref_time(8_564_000 as u64)
 			// Standard Error: 0
-			.saturating_add((891_000 as Weight).saturating_mul(k as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(k as Weight)))
+			.saturating_add(Weight::from_ref_time(868_000 as u64).saturating_mul(k as u64))
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
+			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(k as u64)))
 	}
 	// Storage: Contracts DeletionQueue (r:1 w:0)
 	/// The range of component `q` is `[0, 128]`.
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight {
-		(14_123_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((1_239_000 as Weight).saturating_mul(q as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 5_000
+			.saturating_add(Weight::from_ref_time(1_944_000 as u64).saturating_mul(q as u64))
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Contracts PristineCode (r:1 w:0)
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	/// The range of component `c` is `[0, 64226]`.
 	fn reinstrument(c: u32, ) -> Weight {
-		(23_674_000 as Weight)
+		Weight::from_ref_time(19_016_000 as u64)
 			// Standard Error: 0
-			.saturating_add((44_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(49_000 as u64).saturating_mul(c as u64))
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
@@ -204,11 +204,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: System Account (r:1 w:1)
 	/// The range of component `c` is `[0, 131072]`.
 	fn call_with_code_per_byte(c: u32, ) -> Weight {
-		(201_527_000 as Weight)
+		Weight::from_ref_time(205_194_000 as u64)
 			// Standard Error: 0
-			.saturating_add((45_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(53_000 as u64).saturating_mul(c as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
 	// Storage: Contracts Nonce (r:1 w:1)
@@ -220,13 +220,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `c` is `[0, 64226]`.
 	/// The range of component `s` is `[0, 1048576]`.
 	fn instantiate_with_code(c: u32, s: u32, ) -> Weight {
-		(301_745_000 as Weight)
+		Weight::from_ref_time(288_487_000 as u64)
 			// Standard Error: 0
-			.saturating_add((107_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add(Weight::from_ref_time(124_000 as u64).saturating_mul(c as u64))
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(6 as Weight))
+			.saturating_add(Weight::from_ref_time(2_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().writes(6 as u64))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
 	// Storage: Contracts Nonce (r:1 w:1)
@@ -236,46 +236,46 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// The range of component `s` is `[0, 1048576]`.
 	fn instantiate(s: u32, ) -> Weight {
-		(174_281_000 as Weight)
+		Weight::from_ref_time(186_136_000 as u64)
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().writes(5 as Weight))
+			.saturating_add(Weight::from_ref_time(2_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(6 as u64))
+			.saturating_add(T::DbWeight::get().writes(5 as u64))
 	}
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
 	fn call() -> Weight {
-		(151_110_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(149_232_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
 	// Storage: Contracts PristineCode (r:0 w:1)
 	// Storage: Contracts OwnerInfoOf (r:0 w:1)
 	/// The range of component `c` is `[0, 64226]`.
 	fn upload_code(c: u32, ) -> Weight {
-		(55_105_000 as Weight)
+		Weight::from_ref_time(51_721_000 as u64)
 			// Standard Error: 0
-			.saturating_add((45_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(48_000 as u64).saturating_mul(c as u64))
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	// Storage: Contracts PristineCode (r:0 w:1)
 	fn remove_code() -> Weight {
-		(34_900_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(30_016_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:2 w:2)
 	fn set_code() -> Weight {
-		(32_498_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(27_192_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -283,11 +283,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_caller(r: u32, ) -> Weight {
-		(210_187_000 as Weight)
-			// Standard Error: 53_000
-			.saturating_add((37_986_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_405_000 as u64)
+			// Standard Error: 112_000
+			.saturating_add(Weight::from_ref_time(40_987_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -295,12 +295,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_is_contract(r: u32, ) -> Weight {
-		(155_906_000 as Weight)
-			// Standard Error: 430_000
-			.saturating_add((209_300_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(106_220_000 as u64)
+			// Standard Error: 710_000
+			.saturating_add(Weight::from_ref_time(307_648_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -308,12 +308,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_code_hash(r: u32, ) -> Weight {
-		(157_828_000 as Weight)
-			// Standard Error: 422_000
-			.saturating_add((268_211_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(104_498_000 as u64)
+			// Standard Error: 633_000
+			.saturating_add(Weight::from_ref_time(368_901_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -321,11 +321,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_own_code_hash(r: u32, ) -> Weight {
-		(211_834_000 as Weight)
-			// Standard Error: 48_000
-			.saturating_add((41_266_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_696_000 as u64)
+			// Standard Error: 101_000
+			.saturating_add(Weight::from_ref_time(44_445_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -333,11 +333,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_caller_is_origin(r: u32, ) -> Weight {
-		(208_237_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((15_123_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(205_612_000 as u64)
+			// Standard Error: 68_000
+			.saturating_add(Weight::from_ref_time(17_145_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -345,11 +345,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_address(r: u32, ) -> Weight {
-		(210_201_000 as Weight)
-			// Standard Error: 49_000
-			.saturating_add((37_666_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_947_000 as u64)
+			// Standard Error: 107_000
+			.saturating_add(Weight::from_ref_time(40_789_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -357,11 +357,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_gas_left(r: u32, ) -> Weight {
-		(210_064_000 as Weight)
-			// Standard Error: 44_000
-			.saturating_add((37_257_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_692_000 as u64)
+			// Standard Error: 109_000
+			.saturating_add(Weight::from_ref_time(40_600_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -369,11 +369,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_balance(r: u32, ) -> Weight {
-		(212_973_000 as Weight)
-			// Standard Error: 94_000
-			.saturating_add((112_627_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(209_811_000 as u64)
+			// Standard Error: 208_000
+			.saturating_add(Weight::from_ref_time(116_831_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -381,11 +381,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_value_transferred(r: u32, ) -> Weight {
-		(211_412_000 as Weight)
-			// Standard Error: 40_000
-			.saturating_add((37_321_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(207_406_000 as u64)
+			// Standard Error: 117_000
+			.saturating_add(Weight::from_ref_time(40_702_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -393,11 +393,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_minimum_balance(r: u32, ) -> Weight {
-		(210_537_000 as Weight)
-			// Standard Error: 39_000
-			.saturating_add((37_101_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(209_260_000 as u64)
+			// Standard Error: 130_000
+			.saturating_add(Weight::from_ref_time(40_479_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -405,11 +405,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_block_number(r: u32, ) -> Weight {
-		(210_373_000 as Weight)
-			// Standard Error: 46_000
-			.saturating_add((36_920_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_448_000 as u64)
+			// Standard Error: 95_000
+			.saturating_add(Weight::from_ref_time(40_134_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -417,11 +417,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_now(r: u32, ) -> Weight {
-		(211_078_000 as Weight)
-			// Standard Error: 47_000
-			.saturating_add((36_990_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_969_000 as u64)
+			// Standard Error: 116_000
+			.saturating_add(Weight::from_ref_time(40_251_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -430,11 +430,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_weight_to_fee(r: u32, ) -> Weight {
-		(215_294_000 as Weight)
-			// Standard Error: 106_000
-			.saturating_add((102_103_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(211_611_000 as u64)
+			// Standard Error: 175_000
+			.saturating_add(Weight::from_ref_time(98_675_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -442,11 +442,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_gas(r: u32, ) -> Weight {
-		(137_849_000 as Weight)
-			// Standard Error: 35_000
-			.saturating_add((18_056_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(134_484_000 as u64)
+			// Standard Error: 57_000
+			.saturating_add(Weight::from_ref_time(19_329_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -454,11 +454,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_input(r: u32, ) -> Weight {
-		(211_522_000 as Weight)
-			// Standard Error: 39_000
-			.saturating_add((36_431_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_556_000 as u64)
+			// Standard Error: 125_000
+			.saturating_add(Weight::from_ref_time(40_328_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -466,23 +466,21 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_input_per_kb(n: u32, ) -> Weight {
-		(274_920_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((8_515_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(268_886_000 as u64)
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(9_627_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 1]`.
-	fn seal_return(r: u32, ) -> Weight {
-		(207_023_000 as Weight)
-			// Standard Error: 614_000
-			.saturating_add((6_881_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+	fn seal_return(_r: u32, ) -> Weight {
+		Weight::from_ref_time(203_591_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -490,11 +488,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_return_per_kb(n: u32, ) -> Weight {
-		(208_332_000 as Weight)
+		Weight::from_ref_time(204_258_000 as u64)
 			// Standard Error: 0
-			.saturating_add((182_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(183_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -504,13 +502,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// The range of component `r` is `[0, 1]`.
 	fn seal_terminate(r: u32, ) -> Weight {
-		(209_764_000 as Weight)
-			// Standard Error: 468_000
-			.saturating_add((51_695_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((4 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((5 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(206_625_000 as u64)
+			// Standard Error: 672_000
+			.saturating_add(Weight::from_ref_time(59_377_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().reads((4 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
+			.saturating_add(T::DbWeight::get().writes((5 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -519,11 +517,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_random(r: u32, ) -> Weight {
-		(220_260_000 as Weight)
-			// Standard Error: 94_000
-			.saturating_add((136_465_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_866_000 as u64)
+			// Standard Error: 164_000
+			.saturating_add(Weight::from_ref_time(133_438_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -531,11 +529,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_deposit_event(r: u32, ) -> Weight {
-		(221_413_000 as Weight)
-			// Standard Error: 112_000
-			.saturating_add((240_529_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(220_860_000 as u64)
+			// Standard Error: 209_000
+			.saturating_add(Weight::from_ref_time(239_951_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -545,15 +543,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `t` is `[0, 4]`.
 	/// The range of component `n` is `[0, 16]`.
 	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
-		(456_886_000 as Weight)
-			// Standard Error: 522_000
-			.saturating_add((179_589_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 143_000
-			.saturating_add((64_643_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(t as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((80 as Weight).saturating_mul(t as Weight)))
+		Weight::from_ref_time(439_782_000 as u64)
+			// Standard Error: 1_643_000
+			.saturating_add(Weight::from_ref_time(264_687_000 as u64).saturating_mul(t as u64))
+			// Standard Error: 323_000
+			.saturating_add(Weight::from_ref_time(67_636_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(t as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
+			.saturating_add(T::DbWeight::get().writes((80 as u64).saturating_mul(t as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -561,128 +559,128 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_debug_message(r: u32, ) -> Weight {
-		(144_217_000 as Weight)
-			// Standard Error: 31_000
-			.saturating_add((28_391_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(140_280_000 as u64)
+			// Standard Error: 82_000
+			.saturating_add(Weight::from_ref_time(32_717_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_set_storage(r: u32, ) -> Weight {
-		(171_434_000 as Weight)
-			// Standard Error: 402_000
-			.saturating_add((418_763_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(161_247_000 as u64)
+			// Standard Error: 883_000
+			.saturating_add(Weight::from_ref_time(423_997_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
+			.saturating_add(T::DbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_set_storage_per_new_kb(n: u32, ) -> Weight {
-		(506_642_000 as Weight)
-			// Standard Error: 1_281_000
-			.saturating_add((89_355_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(50 as Weight))
-			.saturating_add(T::DbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(T::DbWeight::get().writes(48 as Weight))
-			.saturating_add(T::DbWeight::get().writes((7 as Weight).saturating_mul(n as Weight)))
+		Weight::from_ref_time(529_247_000 as u64)
+			// Standard Error: 2_745_000
+			.saturating_add(Weight::from_ref_time(85_282_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(55 as u64))
+			.saturating_add(T::DbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(T::DbWeight::get().writes(53 as u64))
+			.saturating_add(T::DbWeight::get().writes((5 as u64).saturating_mul(n as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_set_storage_per_old_kb(n: u32, ) -> Weight {
-		(491_577_000 as Weight)
-			// Standard Error: 1_150_000
-			.saturating_add((67_872_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(50 as Weight))
-			.saturating_add(T::DbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(T::DbWeight::get().writes(48 as Weight))
-			.saturating_add(T::DbWeight::get().writes((7 as Weight).saturating_mul(n as Weight)))
+		Weight::from_ref_time(529_812_000 as u64)
+			// Standard Error: 2_513_000
+			.saturating_add(Weight::from_ref_time(74_554_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(55 as u64))
+			.saturating_add(T::DbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(T::DbWeight::get().writes(53 as u64))
+			.saturating_add(T::DbWeight::get().writes((5 as u64).saturating_mul(n as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_clear_storage(r: u32, ) -> Weight {
-		(182_775_000 as Weight)
-			// Standard Error: 378_000
-			.saturating_add((408_676_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(184_803_000 as u64)
+			// Standard Error: 733_000
+			.saturating_add(Weight::from_ref_time(404_933_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+			.saturating_add(T::DbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_clear_storage_per_kb(n: u32, ) -> Weight {
-		(464_674_000 as Weight)
-			// Standard Error: 1_275_000
-			.saturating_add((70_454_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(49 as Weight))
-			.saturating_add(T::DbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(T::DbWeight::get().writes(47 as Weight))
-			.saturating_add(T::DbWeight::get().writes((7 as Weight).saturating_mul(n as Weight)))
+		Weight::from_ref_time(500_958_000 as u64)
+			// Standard Error: 2_980_000
+			.saturating_add(Weight::from_ref_time(75_996_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(55 as u64))
+			.saturating_add(T::DbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(T::DbWeight::get().writes(52 as u64))
+			.saturating_add(T::DbWeight::get().writes((5 as u64).saturating_mul(n as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_get_storage(r: u32, ) -> Weight {
-		(179_701_000 as Weight)
-			// Standard Error: 399_000
-			.saturating_add((330_924_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(177_682_000 as u64)
+			// Standard Error: 743_000
+			.saturating_add(Weight::from_ref_time(338_172_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_get_storage_per_kb(n: u32, ) -> Weight {
-		(422_439_000 as Weight)
-			// Standard Error: 1_023_000
-			.saturating_add((150_901_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(49 as Weight))
-			.saturating_add(T::DbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(465_285_000 as u64)
+			// Standard Error: 2_599_000
+			.saturating_add(Weight::from_ref_time(155_106_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(55 as u64))
+			.saturating_add(T::DbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_contains_storage(r: u32, ) -> Weight {
-		(183_859_000 as Weight)
-			// Standard Error: 352_000
-			.saturating_add((310_723_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(179_118_000 as u64)
+			// Standard Error: 572_000
+			.saturating_add(Weight::from_ref_time(311_083_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_contains_storage_per_kb(n: u32, ) -> Weight {
-		(396_354_000 as Weight)
-			// Standard Error: 883_000
-			.saturating_add((63_522_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(49 as Weight))
-			.saturating_add(T::DbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(423_056_000 as u64)
+			// Standard Error: 2_037_000
+			.saturating_add(Weight::from_ref_time(69_665_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(54 as u64))
+			.saturating_add(T::DbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_take_storage(r: u32, ) -> Weight {
-		(178_233_000 as Weight)
-			// Standard Error: 422_000
-			.saturating_add((432_112_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(188_884_000 as u64)
+			// Standard Error: 761_000
+			.saturating_add(Weight::from_ref_time(432_781_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+			.saturating_add(T::DbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_take_storage_per_kb(n: u32, ) -> Weight {
-		(493_076_000 as Weight)
-			// Standard Error: 1_436_000
-			.saturating_add((158_972_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(50 as Weight))
-			.saturating_add(T::DbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(T::DbWeight::get().writes(47 as Weight))
-			.saturating_add(T::DbWeight::get().writes((7 as Weight).saturating_mul(n as Weight)))
+		Weight::from_ref_time(532_408_000 as u64)
+			// Standard Error: 3_348_000
+			.saturating_add(Weight::from_ref_time(164_943_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(55 as u64))
+			.saturating_add(T::DbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(T::DbWeight::get().writes(53 as u64))
+			.saturating_add(T::DbWeight::get().writes((5 as u64).saturating_mul(n as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -690,13 +688,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_transfer(r: u32, ) -> Weight {
-		(131_391_000 as Weight)
-			// Standard Error: 728_000
-			.saturating_add((1_359_854_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(127_181_000 as u64)
+			// Standard Error: 1_495_000
+			.saturating_add(Weight::from_ref_time(1_500_589_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+			.saturating_add(T::DbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -704,13 +702,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_call(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 2_323_000
-			.saturating_add((14_582_642_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(5 as Weight))
-			.saturating_add(T::DbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 3_803_000
+			.saturating_add(Weight::from_ref_time(14_860_909_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
+			.saturating_add(T::DbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -718,11 +716,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_delegate_call(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 2_284_000
-			.saturating_add((14_519_231_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads((79 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 6_045_000
+			.saturating_add(Weight::from_ref_time(14_797_140_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads((79 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:81 w:81)
@@ -731,15 +729,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `t` is `[0, 1]`.
 	/// The range of component `c` is `[0, 1024]`.
 	fn seal_call_per_transfer_clone_kb(t: u32, c: u32, ) -> Weight {
-		(8_736_634_000 as Weight)
-			// Standard Error: 5_864_000
-			.saturating_add((1_329_605_000 as Weight).saturating_mul(t as Weight))
+		Weight::from_ref_time(9_196_444_000 as u64)
+			// Standard Error: 20_486_000
+			.saturating_add(Weight::from_ref_time(1_458_153_000 as u64).saturating_mul(t as u64))
 			// Standard Error: 8_000
-			.saturating_add((8_616_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(T::DbWeight::get().reads(85 as Weight))
-			.saturating_add(T::DbWeight::get().reads((81 as Weight).saturating_mul(t as Weight)))
-			.saturating_add(T::DbWeight::get().writes(81 as Weight))
-			.saturating_add(T::DbWeight::get().writes((81 as Weight).saturating_mul(t as Weight)))
+			.saturating_add(Weight::from_ref_time(9_718_000 as u64).saturating_mul(c as u64))
+			.saturating_add(T::DbWeight::get().reads(85 as u64))
+			.saturating_add(T::DbWeight::get().reads((81 as u64).saturating_mul(t as u64)))
+			.saturating_add(T::DbWeight::get().writes(81 as u64))
+			.saturating_add(T::DbWeight::get().writes((81 as u64).saturating_mul(t as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -749,13 +747,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts OwnerInfoOf (r:80 w:80)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_instantiate(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 20_040_000
-			.saturating_add((20_227_471_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(6 as Weight))
-			.saturating_add(T::DbWeight::get().reads((320 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes((320 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 36_253_000
+			.saturating_add(Weight::from_ref_time(21_201_529_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(6 as u64))
+			.saturating_add(T::DbWeight::get().reads((320 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
+			.saturating_add(T::DbWeight::get().writes((320 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:81 w:81)
 	// Storage: Contracts ContractInfoOf (r:81 w:81)
@@ -766,13 +764,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `t` is `[0, 1]`.
 	/// The range of component `s` is `[0, 960]`.
 	fn seal_instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight {
-		(11_886_595_000 as Weight)
-			// Standard Error: 78_000
-			.saturating_add((125_094_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(167 as Weight))
-			.saturating_add(T::DbWeight::get().reads((1 as Weight).saturating_mul(t as Weight)))
-			.saturating_add(T::DbWeight::get().writes(165 as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(t as Weight)))
+		Weight::from_ref_time(12_282_498_000 as u64)
+			// Standard Error: 48_112_000
+			.saturating_add(Weight::from_ref_time(720_795_000 as u64).saturating_mul(t as u64))
+			// Standard Error: 22_000
+			.saturating_add(Weight::from_ref_time(124_274_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(167 as u64))
+			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(t as u64)))
+			.saturating_add(T::DbWeight::get().writes(165 as u64))
+			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(t as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -780,11 +780,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_hash_sha2_256(r: u32, ) -> Weight {
-		(213_139_000 as Weight)
-			// Standard Error: 61_000
-			.saturating_add((57_333_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(203_959_000 as u64)
+			// Standard Error: 142_000
+			.saturating_add(Weight::from_ref_time(61_311_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -792,11 +792,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 86_000
-			.saturating_add((321_084_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(349_915_000 as u64)
+			// Standard Error: 40_000
+			.saturating_add(Weight::from_ref_time(320_652_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -804,11 +804,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_hash_keccak_256(r: u32, ) -> Weight {
-		(212_330_000 as Weight)
-			// Standard Error: 67_000
-			.saturating_add((69_928_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(209_219_000 as u64)
+			// Standard Error: 157_000
+			.saturating_add(Weight::from_ref_time(73_728_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -816,11 +816,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 102_000
-			.saturating_add((246_495_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_860_000 as u64)
+			// Standard Error: 25_000
+			.saturating_add(Weight::from_ref_time(245_718_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -828,11 +828,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_hash_blake2_256(r: u32, ) -> Weight {
-		(213_462_000 as Weight)
-			// Standard Error: 55_000
-			.saturating_add((47_820_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_165_000 as u64)
+			// Standard Error: 138_000
+			.saturating_add(Weight::from_ref_time(51_644_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -840,11 +840,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 107_000
-			.saturating_add((96_100_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(255_955_000 as u64)
+			// Standard Error: 14_000
+			.saturating_add(Weight::from_ref_time(95_090_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -852,11 +852,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_hash_blake2_128(r: u32, ) -> Weight {
-		(211_920_000 as Weight)
-			// Standard Error: 56_000
-			.saturating_add((47_123_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_153_000 as u64)
+			// Standard Error: 140_000
+			.saturating_add(Weight::from_ref_time(51_264_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -864,11 +864,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 94_000
-			.saturating_add((95_925_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(278_368_000 as u64)
+			// Standard Error: 14_000
+			.saturating_add(Weight::from_ref_time(95_006_000 as u64).saturating_mul(n as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -876,11 +876,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_ecdsa_recover(r: u32, ) -> Weight {
-		(347_844_000 as Weight)
-			// Standard Error: 686_000
-			.saturating_add((2_970_990_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(331_955_000 as u64)
+			// Standard Error: 1_155_000
+			.saturating_add(Weight::from_ref_time(3_069_955_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -888,11 +888,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight {
-		(224_229_000 as Weight)
-			// Standard Error: 363_000
-			.saturating_add((2_055_182_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(207_838_000 as u64)
+			// Standard Error: 783_000
+			.saturating_add(Weight::from_ref_time(2_058_503_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -901,317 +901,317 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Contracts OwnerInfoOf (r:16 w:16)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_set_code_hash(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 950_000
-			.saturating_add((689_926_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads((79 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(T::DbWeight::get().writes((79 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 1_567_000
+			.saturating_add(Weight::from_ref_time(774_380_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads((79 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes((79 as u64).saturating_mul(r as u64)))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64const(r: u32, ) -> Weight {
-		(70_352_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((803_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_955_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(612_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64load(r: u32, ) -> Weight {
-		(70_549_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_828_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_057_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_324_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64store(r: u32, ) -> Weight {
-		(70_578_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((2_147_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_137_000 as u64)
+			// Standard Error: 5_000
+			.saturating_add(Weight::from_ref_time(1_427_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_select(r: u32, ) -> Weight {
-		(69_841_000 as Weight)
+		Weight::from_ref_time(73_844_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((2_211_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_773_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_if(r: u32, ) -> Weight {
-		(69_638_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((2_503_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_979_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_952_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_br(r: u32, ) -> Weight {
-		(69_759_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_341_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_924_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(941_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_br_if(r: u32, ) -> Weight {
-		(69_466_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_829_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_574_000 as u64)
+			// Standard Error: 5_000
+			.saturating_add(Weight::from_ref_time(1_439_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_br_table(r: u32, ) -> Weight {
-		(68_713_000 as Weight)
-			// Standard Error: 8_000
-			.saturating_add((2_145_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_343_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_603_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `e` is `[1, 256]`.
 	fn instr_br_table_per_entry(e: u32, ) -> Weight {
-		(72_809_000 as Weight)
+		Weight::from_ref_time(76_267_000 as u64)
 			// Standard Error: 0
-			.saturating_add((4_000 as Weight).saturating_mul(e as Weight))
+			.saturating_add(Weight::from_ref_time(4_000 as u64).saturating_mul(e as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_call(r: u32, ) -> Weight {
-		(71_033_000 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((6_778_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_877_000 as u64)
+			// Standard Error: 12_000
+			.saturating_add(Weight::from_ref_time(7_144_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_call_indirect(r: u32, ) -> Weight {
-		(83_039_000 as Weight)
-			// Standard Error: 10_000
-			.saturating_add((8_597_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(88_665_000 as u64)
+			// Standard Error: 20_000
+			.saturating_add(Weight::from_ref_time(9_142_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `p` is `[0, 128]`.
 	fn instr_call_indirect_per_param(p: u32, ) -> Weight {
-		(92_257_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((596_000 as Weight).saturating_mul(p as Weight))
+		Weight::from_ref_time(98_600_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(469_000 as u64).saturating_mul(p as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_local_get(r: u32, ) -> Weight {
-		(70_680_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((859_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_555_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(624_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_local_set(r: u32, ) -> Weight {
-		(70_628_000 as Weight)
+		Weight::from_ref_time(74_329_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((882_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(688_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_local_tee(r: u32, ) -> Weight {
-		(70_380_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_217_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_612_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(909_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_global_get(r: u32, ) -> Weight {
-		(73_052_000 as Weight)
+		Weight::from_ref_time(76_906_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_470_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_192_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_global_set(r: u32, ) -> Weight {
-		(72_951_000 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((1_711_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(76_979_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_361_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_memory_current(r: u32, ) -> Weight {
-		(70_382_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((832_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_370_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(661_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 1]`.
 	fn instr_memory_grow(r: u32, ) -> Weight {
-		(71_041_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((174_117_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_584_000 as u64)
+			// Standard Error: 353_000
+			.saturating_add(Weight::from_ref_time(187_114_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64clz(r: u32, ) -> Weight {
-		(69_621_000 as Weight)
-			// Standard Error: 9_000
-			.saturating_add((1_290_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_206_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(884_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64ctz(r: u32, ) -> Weight {
-		(70_964_000 as Weight)
-			// Standard Error: 7_000
-			.saturating_add((1_243_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_992_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(893_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64popcnt(r: u32, ) -> Weight {
-		(70_772_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((1_236_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_985_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(891_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64eqz(r: u32, ) -> Weight {
-		(69_704_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((1_278_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_117_000 as u64)
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(901_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64extendsi32(r: u32, ) -> Weight {
-		(70_195_000 as Weight)
+		Weight::from_ref_time(73_981_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_228_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(866_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64extendui32(r: u32, ) -> Weight {
-		(70_361_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_223_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_104_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(868_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i32wrapi64(r: u32, ) -> Weight {
-		(71_209_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((1_245_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_293_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(878_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64eq(r: u32, ) -> Weight {
-		(70_026_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_778_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_055_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_350_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64ne(r: u32, ) -> Weight {
-		(70_200_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((1_778_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_710_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_360_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64lts(r: u32, ) -> Weight {
-		(70_200_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_777_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_917_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_355_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64ltu(r: u32, ) -> Weight {
-		(70_090_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((1_777_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_048_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_360_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64gts(r: u32, ) -> Weight {
-		(69_906_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((1_795_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_029_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_349_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64gtu(r: u32, ) -> Weight {
-		(69_976_000 as Weight)
+		Weight::from_ref_time(74_267_000 as u64)
 			// Standard Error: 2_000
-			.saturating_add((1_785_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_353_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64les(r: u32, ) -> Weight {
-		(69_478_000 as Weight)
-			// Standard Error: 27_000
-			.saturating_add((1_832_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_952_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_350_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64leu(r: u32, ) -> Weight {
-		(70_330_000 as Weight)
-			// Standard Error: 8_000
-			.saturating_add((1_779_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_851_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_368_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64ges(r: u32, ) -> Weight {
-		(69_915_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_783_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_034_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_348_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64geu(r: u32, ) -> Weight {
-		(69_955_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_786_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_979_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_353_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64add(r: u32, ) -> Weight {
-		(69_979_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_768_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_000_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_328_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64sub(r: u32, ) -> Weight {
-		(69_881_000 as Weight)
+		Weight::from_ref_time(73_883_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_757_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_331_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64mul(r: u32, ) -> Weight {
-		(69_877_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_767_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_216_000 as u64)
+			// Standard Error: 5_000
+			.saturating_add(Weight::from_ref_time(1_324_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64divs(r: u32, ) -> Weight {
-		(68_193_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((2_553_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_989_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_998_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64divu(r: u32, ) -> Weight {
-		(69_589_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((2_454_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_857_000 as u64)
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(2_073_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64rems(r: u32, ) -> Weight {
-		(69_834_000 as Weight)
+		Weight::from_ref_time(73_801_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((2_470_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(2_027_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64remu(r: u32, ) -> Weight {
-		(69_944_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((2_457_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_130_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(2_064_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64and(r: u32, ) -> Weight {
-		(70_007_000 as Weight)
+		Weight::from_ref_time(74_071_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_777_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_327_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64or(r: u32, ) -> Weight {
-		(70_110_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_778_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_201_000 as u64)
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(1_330_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64xor(r: u32, ) -> Weight {
-		(70_138_000 as Weight)
+		Weight::from_ref_time(74_241_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_780_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_321_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64shl(r: u32, ) -> Weight {
-		(70_031_000 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((1_799_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_331_000 as u64)
+			// Standard Error: 6_000
+			.saturating_add(Weight::from_ref_time(1_347_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64shrs(r: u32, ) -> Weight {
-		(70_054_000 as Weight)
+		Weight::from_ref_time(73_674_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_794_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_359_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64shru(r: u32, ) -> Weight {
-		(70_064_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_793_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_807_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_358_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64rotl(r: u32, ) -> Weight {
-		(69_804_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((1_818_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_725_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_358_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64rotr(r: u32, ) -> Weight {
-		(70_027_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_787_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_755_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_360_000 as u64).saturating_mul(r as u64))
 	}
 }
 
@@ -1219,37 +1219,37 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: Contracts DeletionQueue (r:1 w:0)
 	fn on_process_deletion_queue_batch() -> Weight {
-		(3_076_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(1_654_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `k` is `[0, 1024]`.
 	fn on_initialize_per_trie_key(k: u32, ) -> Weight {
-		(13_901_000 as Weight)
+		Weight::from_ref_time(8_564_000 as u64)
 			// Standard Error: 0
-			.saturating_add((891_000 as Weight).saturating_mul(k as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(k as Weight)))
+			.saturating_add(Weight::from_ref_time(868_000 as u64).saturating_mul(k as u64))
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(k as u64)))
 	}
 	// Storage: Contracts DeletionQueue (r:1 w:0)
 	/// The range of component `q` is `[0, 128]`.
 	fn on_initialize_per_queue_item(q: u32, ) -> Weight {
-		(14_123_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((1_239_000 as Weight).saturating_mul(q as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 5_000
+			.saturating_add(Weight::from_ref_time(1_944_000 as u64).saturating_mul(q as u64))
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Contracts PristineCode (r:1 w:0)
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	/// The range of component `c` is `[0, 64226]`.
 	fn reinstrument(c: u32, ) -> Weight {
-		(23_674_000 as Weight)
+		Weight::from_ref_time(19_016_000 as u64)
 			// Standard Error: 0
-			.saturating_add((44_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(49_000 as u64).saturating_mul(c as u64))
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
@@ -1257,11 +1257,11 @@ impl WeightInfo for () {
 	// Storage: System Account (r:1 w:1)
 	/// The range of component `c` is `[0, 131072]`.
 	fn call_with_code_per_byte(c: u32, ) -> Weight {
-		(201_527_000 as Weight)
+		Weight::from_ref_time(205_194_000 as u64)
 			// Standard Error: 0
-			.saturating_add((45_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(53_000 as u64).saturating_mul(c as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
 	// Storage: Contracts Nonce (r:1 w:1)
@@ -1273,13 +1273,13 @@ impl WeightInfo for () {
 	/// The range of component `c` is `[0, 64226]`.
 	/// The range of component `s` is `[0, 1048576]`.
 	fn instantiate_with_code(c: u32, s: u32, ) -> Weight {
-		(301_745_000 as Weight)
+		Weight::from_ref_time(288_487_000 as u64)
 			// Standard Error: 0
-			.saturating_add((107_000 as Weight).saturating_mul(c as Weight))
+			.saturating_add(Weight::from_ref_time(124_000 as u64).saturating_mul(c as u64))
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(6 as Weight))
+			.saturating_add(Weight::from_ref_time(2_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().writes(6 as u64))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
 	// Storage: Contracts Nonce (r:1 w:1)
@@ -1289,46 +1289,46 @@ impl WeightInfo for () {
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// The range of component `s` is `[0, 1048576]`.
 	fn instantiate(s: u32, ) -> Weight {
-		(174_281_000 as Weight)
+		Weight::from_ref_time(186_136_000 as u64)
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(5 as Weight))
+			.saturating_add(Weight::from_ref_time(2_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(6 as u64))
+			.saturating_add(RocksDbWeight::get().writes(5 as u64))
 	}
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System Account (r:1 w:1)
 	fn call() -> Weight {
-		(151_110_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(149_232_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
 	}
 	// Storage: Contracts CodeStorage (r:1 w:1)
 	// Storage: Contracts PristineCode (r:0 w:1)
 	// Storage: Contracts OwnerInfoOf (r:0 w:1)
 	/// The range of component `c` is `[0, 64226]`.
 	fn upload_code(c: u32, ) -> Weight {
-		(55_105_000 as Weight)
+		Weight::from_ref_time(51_721_000 as u64)
 			// Standard Error: 0
-			.saturating_add((45_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(48_000 as u64).saturating_mul(c as u64))
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:0 w:1)
 	// Storage: Contracts PristineCode (r:0 w:1)
 	fn remove_code() -> Weight {
-		(34_900_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(30_016_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts OwnerInfoOf (r:2 w:2)
 	fn set_code() -> Weight {
-		(32_498_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+		Weight::from_ref_time(27_192_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1336,11 +1336,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_caller(r: u32, ) -> Weight {
-		(210_187_000 as Weight)
-			// Standard Error: 53_000
-			.saturating_add((37_986_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_405_000 as u64)
+			// Standard Error: 112_000
+			.saturating_add(Weight::from_ref_time(40_987_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1348,12 +1348,12 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_is_contract(r: u32, ) -> Weight {
-		(155_906_000 as Weight)
-			// Standard Error: 430_000
-			.saturating_add((209_300_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(106_220_000 as u64)
+			// Standard Error: 710_000
+			.saturating_add(Weight::from_ref_time(307_648_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1361,12 +1361,12 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_code_hash(r: u32, ) -> Weight {
-		(157_828_000 as Weight)
-			// Standard Error: 422_000
-			.saturating_add((268_211_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(104_498_000 as u64)
+			// Standard Error: 633_000
+			.saturating_add(Weight::from_ref_time(368_901_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1374,11 +1374,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_own_code_hash(r: u32, ) -> Weight {
-		(211_834_000 as Weight)
-			// Standard Error: 48_000
-			.saturating_add((41_266_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_696_000 as u64)
+			// Standard Error: 101_000
+			.saturating_add(Weight::from_ref_time(44_445_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1386,11 +1386,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_caller_is_origin(r: u32, ) -> Weight {
-		(208_237_000 as Weight)
-			// Standard Error: 29_000
-			.saturating_add((15_123_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(205_612_000 as u64)
+			// Standard Error: 68_000
+			.saturating_add(Weight::from_ref_time(17_145_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1398,11 +1398,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_address(r: u32, ) -> Weight {
-		(210_201_000 as Weight)
-			// Standard Error: 49_000
-			.saturating_add((37_666_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_947_000 as u64)
+			// Standard Error: 107_000
+			.saturating_add(Weight::from_ref_time(40_789_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1410,11 +1410,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_gas_left(r: u32, ) -> Weight {
-		(210_064_000 as Weight)
-			// Standard Error: 44_000
-			.saturating_add((37_257_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_692_000 as u64)
+			// Standard Error: 109_000
+			.saturating_add(Weight::from_ref_time(40_600_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1422,11 +1422,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_balance(r: u32, ) -> Weight {
-		(212_973_000 as Weight)
-			// Standard Error: 94_000
-			.saturating_add((112_627_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(209_811_000 as u64)
+			// Standard Error: 208_000
+			.saturating_add(Weight::from_ref_time(116_831_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1434,11 +1434,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_value_transferred(r: u32, ) -> Weight {
-		(211_412_000 as Weight)
-			// Standard Error: 40_000
-			.saturating_add((37_321_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(207_406_000 as u64)
+			// Standard Error: 117_000
+			.saturating_add(Weight::from_ref_time(40_702_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1446,11 +1446,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_minimum_balance(r: u32, ) -> Weight {
-		(210_537_000 as Weight)
-			// Standard Error: 39_000
-			.saturating_add((37_101_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(209_260_000 as u64)
+			// Standard Error: 130_000
+			.saturating_add(Weight::from_ref_time(40_479_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1458,11 +1458,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_block_number(r: u32, ) -> Weight {
-		(210_373_000 as Weight)
-			// Standard Error: 46_000
-			.saturating_add((36_920_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_448_000 as u64)
+			// Standard Error: 95_000
+			.saturating_add(Weight::from_ref_time(40_134_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1470,11 +1470,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_now(r: u32, ) -> Weight {
-		(211_078_000 as Weight)
-			// Standard Error: 47_000
-			.saturating_add((36_990_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_969_000 as u64)
+			// Standard Error: 116_000
+			.saturating_add(Weight::from_ref_time(40_251_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1483,11 +1483,11 @@ impl WeightInfo for () {
 	// Storage: TransactionPayment NextFeeMultiplier (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_weight_to_fee(r: u32, ) -> Weight {
-		(215_294_000 as Weight)
-			// Standard Error: 106_000
-			.saturating_add((102_103_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(211_611_000 as u64)
+			// Standard Error: 175_000
+			.saturating_add(Weight::from_ref_time(98_675_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1495,11 +1495,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_gas(r: u32, ) -> Weight {
-		(137_849_000 as Weight)
-			// Standard Error: 35_000
-			.saturating_add((18_056_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(134_484_000 as u64)
+			// Standard Error: 57_000
+			.saturating_add(Weight::from_ref_time(19_329_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1507,11 +1507,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_input(r: u32, ) -> Weight {
-		(211_522_000 as Weight)
-			// Standard Error: 39_000
-			.saturating_add((36_431_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_556_000 as u64)
+			// Standard Error: 125_000
+			.saturating_add(Weight::from_ref_time(40_328_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1519,23 +1519,21 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_input_per_kb(n: u32, ) -> Weight {
-		(274_920_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((8_515_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(268_886_000 as u64)
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(9_627_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
 	// Storage: Contracts CodeStorage (r:1 w:0)
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 1]`.
-	fn seal_return(r: u32, ) -> Weight {
-		(207_023_000 as Weight)
-			// Standard Error: 614_000
-			.saturating_add((6_881_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+	fn seal_return(_r: u32, ) -> Weight {
+		Weight::from_ref_time(203_591_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1543,11 +1541,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_return_per_kb(n: u32, ) -> Weight {
-		(208_332_000 as Weight)
+		Weight::from_ref_time(204_258_000 as u64)
 			// Standard Error: 0
-			.saturating_add((182_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(183_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1557,13 +1555,13 @@ impl WeightInfo for () {
 	// Storage: Contracts OwnerInfoOf (r:1 w:1)
 	/// The range of component `r` is `[0, 1]`.
 	fn seal_terminate(r: u32, ) -> Weight {
-		(209_764_000 as Weight)
-			// Standard Error: 468_000
-			.saturating_add((51_695_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((4 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((5 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(206_625_000 as u64)
+			// Standard Error: 672_000
+			.saturating_add(Weight::from_ref_time(59_377_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().reads((4 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((5 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1572,11 +1570,11 @@ impl WeightInfo for () {
 	// Storage: RandomnessCollectiveFlip RandomMaterial (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_random(r: u32, ) -> Weight {
-		(220_260_000 as Weight)
-			// Standard Error: 94_000
-			.saturating_add((136_465_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_866_000 as u64)
+			// Standard Error: 164_000
+			.saturating_add(Weight::from_ref_time(133_438_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1584,11 +1582,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_deposit_event(r: u32, ) -> Weight {
-		(221_413_000 as Weight)
-			// Standard Error: 112_000
-			.saturating_add((240_529_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(220_860_000 as u64)
+			// Standard Error: 209_000
+			.saturating_add(Weight::from_ref_time(239_951_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1598,15 +1596,15 @@ impl WeightInfo for () {
 	/// The range of component `t` is `[0, 4]`.
 	/// The range of component `n` is `[0, 16]`.
 	fn seal_deposit_event_per_topic_and_kb(t: u32, n: u32, ) -> Weight {
-		(456_886_000 as Weight)
-			// Standard Error: 522_000
-			.saturating_add((179_589_000 as Weight).saturating_mul(t as Weight))
-			// Standard Error: 143_000
-			.saturating_add((64_643_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(t as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((80 as Weight).saturating_mul(t as Weight)))
+		Weight::from_ref_time(439_782_000 as u64)
+			// Standard Error: 1_643_000
+			.saturating_add(Weight::from_ref_time(264_687_000 as u64).saturating_mul(t as u64))
+			// Standard Error: 323_000
+			.saturating_add(Weight::from_ref_time(67_636_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(t as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((80 as u64).saturating_mul(t as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1614,128 +1612,128 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_debug_message(r: u32, ) -> Weight {
-		(144_217_000 as Weight)
-			// Standard Error: 31_000
-			.saturating_add((28_391_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(140_280_000 as u64)
+			// Standard Error: 82_000
+			.saturating_add(Weight::from_ref_time(32_717_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_set_storage(r: u32, ) -> Weight {
-		(171_434_000 as Weight)
-			// Standard Error: 402_000
-			.saturating_add((418_763_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(161_247_000 as u64)
+			// Standard Error: 883_000
+			.saturating_add(Weight::from_ref_time(423_997_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_set_storage_per_new_kb(n: u32, ) -> Weight {
-		(506_642_000 as Weight)
-			// Standard Error: 1_281_000
-			.saturating_add((89_355_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(50 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(48 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((7 as Weight).saturating_mul(n as Weight)))
+		Weight::from_ref_time(529_247_000 as u64)
+			// Standard Error: 2_745_000
+			.saturating_add(Weight::from_ref_time(85_282_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(55 as u64))
+			.saturating_add(RocksDbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(RocksDbWeight::get().writes(53 as u64))
+			.saturating_add(RocksDbWeight::get().writes((5 as u64).saturating_mul(n as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_set_storage_per_old_kb(n: u32, ) -> Weight {
-		(491_577_000 as Weight)
-			// Standard Error: 1_150_000
-			.saturating_add((67_872_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(50 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(48 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((7 as Weight).saturating_mul(n as Weight)))
+		Weight::from_ref_time(529_812_000 as u64)
+			// Standard Error: 2_513_000
+			.saturating_add(Weight::from_ref_time(74_554_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(55 as u64))
+			.saturating_add(RocksDbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(RocksDbWeight::get().writes(53 as u64))
+			.saturating_add(RocksDbWeight::get().writes((5 as u64).saturating_mul(n as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_clear_storage(r: u32, ) -> Weight {
-		(182_775_000 as Weight)
-			// Standard Error: 378_000
-			.saturating_add((408_676_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(184_803_000 as u64)
+			// Standard Error: 733_000
+			.saturating_add(Weight::from_ref_time(404_933_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_clear_storage_per_kb(n: u32, ) -> Weight {
-		(464_674_000 as Weight)
-			// Standard Error: 1_275_000
-			.saturating_add((70_454_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(49 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(47 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((7 as Weight).saturating_mul(n as Weight)))
+		Weight::from_ref_time(500_958_000 as u64)
+			// Standard Error: 2_980_000
+			.saturating_add(Weight::from_ref_time(75_996_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(55 as u64))
+			.saturating_add(RocksDbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(RocksDbWeight::get().writes(52 as u64))
+			.saturating_add(RocksDbWeight::get().writes((5 as u64).saturating_mul(n as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_get_storage(r: u32, ) -> Weight {
-		(179_701_000 as Weight)
-			// Standard Error: 399_000
-			.saturating_add((330_924_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(177_682_000 as u64)
+			// Standard Error: 743_000
+			.saturating_add(Weight::from_ref_time(338_172_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_get_storage_per_kb(n: u32, ) -> Weight {
-		(422_439_000 as Weight)
-			// Standard Error: 1_023_000
-			.saturating_add((150_901_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(49 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(465_285_000 as u64)
+			// Standard Error: 2_599_000
+			.saturating_add(Weight::from_ref_time(155_106_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(55 as u64))
+			.saturating_add(RocksDbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_contains_storage(r: u32, ) -> Weight {
-		(183_859_000 as Weight)
-			// Standard Error: 352_000
-			.saturating_add((310_723_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(179_118_000 as u64)
+			// Standard Error: 572_000
+			.saturating_add(Weight::from_ref_time(311_083_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_contains_storage_per_kb(n: u32, ) -> Weight {
-		(396_354_000 as Weight)
-			// Standard Error: 883_000
-			.saturating_add((63_522_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(49 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(423_056_000 as u64)
+			// Standard Error: 2_037_000
+			.saturating_add(Weight::from_ref_time(69_665_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(54 as u64))
+			.saturating_add(RocksDbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `r` is `[0, 10]`.
 	fn seal_take_storage(r: u32, ) -> Weight {
-		(178_233_000 as Weight)
-			// Standard Error: 422_000
-			.saturating_add((432_112_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(188_884_000 as u64)
+			// Standard Error: 761_000
+			.saturating_add(Weight::from_ref_time(432_781_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `n` is `[0, 8]`.
 	fn seal_take_storage_per_kb(n: u32, ) -> Weight {
-		(493_076_000 as Weight)
-			// Standard Error: 1_436_000
-			.saturating_add((158_972_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(50 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((7 as Weight).saturating_mul(n as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(47 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((7 as Weight).saturating_mul(n as Weight)))
+		Weight::from_ref_time(532_408_000 as u64)
+			// Standard Error: 3_348_000
+			.saturating_add(Weight::from_ref_time(164_943_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(55 as u64))
+			.saturating_add(RocksDbWeight::get().reads((5 as u64).saturating_mul(n as u64)))
+			.saturating_add(RocksDbWeight::get().writes(53 as u64))
+			.saturating_add(RocksDbWeight::get().writes((5 as u64).saturating_mul(n as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1743,13 +1741,13 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_transfer(r: u32, ) -> Weight {
-		(131_391_000 as Weight)
-			// Standard Error: 728_000
-			.saturating_add((1_359_854_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(127_181_000 as u64)
+			// Standard Error: 1_495_000
+			.saturating_add(Weight::from_ref_time(1_500_589_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1757,13 +1755,13 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_call(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 2_323_000
-			.saturating_add((14_582_642_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(5 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((80 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((80 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 3_803_000
+			.saturating_add(Weight::from_ref_time(14_860_909_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().reads((80 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((80 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1771,11 +1769,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_delegate_call(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 2_284_000
-			.saturating_add((14_519_231_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads((79 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 6_045_000
+			.saturating_add(Weight::from_ref_time(14_797_140_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads((79 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:81 w:81)
@@ -1784,15 +1782,15 @@ impl WeightInfo for () {
 	/// The range of component `t` is `[0, 1]`.
 	/// The range of component `c` is `[0, 1024]`.
 	fn seal_call_per_transfer_clone_kb(t: u32, c: u32, ) -> Weight {
-		(8_736_634_000 as Weight)
-			// Standard Error: 5_864_000
-			.saturating_add((1_329_605_000 as Weight).saturating_mul(t as Weight))
+		Weight::from_ref_time(9_196_444_000 as u64)
+			// Standard Error: 20_486_000
+			.saturating_add(Weight::from_ref_time(1_458_153_000 as u64).saturating_mul(t as u64))
 			// Standard Error: 8_000
-			.saturating_add((8_616_000 as Weight).saturating_mul(c as Weight))
-			.saturating_add(RocksDbWeight::get().reads(85 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((81 as Weight).saturating_mul(t as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(81 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((81 as Weight).saturating_mul(t as Weight)))
+			.saturating_add(Weight::from_ref_time(9_718_000 as u64).saturating_mul(c as u64))
+			.saturating_add(RocksDbWeight::get().reads(85 as u64))
+			.saturating_add(RocksDbWeight::get().reads((81 as u64).saturating_mul(t as u64)))
+			.saturating_add(RocksDbWeight::get().writes(81 as u64))
+			.saturating_add(RocksDbWeight::get().writes((81 as u64).saturating_mul(t as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1802,13 +1800,13 @@ impl WeightInfo for () {
 	// Storage: Contracts OwnerInfoOf (r:80 w:80)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_instantiate(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 20_040_000
-			.saturating_add((20_227_471_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(6 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((320 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((320 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 36_253_000
+			.saturating_add(Weight::from_ref_time(21_201_529_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(6 as u64))
+			.saturating_add(RocksDbWeight::get().reads((320 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes((320 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:81 w:81)
 	// Storage: Contracts ContractInfoOf (r:81 w:81)
@@ -1819,13 +1817,15 @@ impl WeightInfo for () {
 	/// The range of component `t` is `[0, 1]`.
 	/// The range of component `s` is `[0, 960]`.
 	fn seal_instantiate_per_transfer_salt_kb(t: u32, s: u32, ) -> Weight {
-		(11_886_595_000 as Weight)
-			// Standard Error: 78_000
-			.saturating_add((125_094_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(167 as Weight))
-			.saturating_add(RocksDbWeight::get().reads((1 as Weight).saturating_mul(t as Weight)))
-			.saturating_add(RocksDbWeight::get().writes(165 as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(t as Weight)))
+		Weight::from_ref_time(12_282_498_000 as u64)
+			// Standard Error: 48_112_000
+			.saturating_add(Weight::from_ref_time(720_795_000 as u64).saturating_mul(t as u64))
+			// Standard Error: 22_000
+			.saturating_add(Weight::from_ref_time(124_274_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(167 as u64))
+			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(t as u64)))
+			.saturating_add(RocksDbWeight::get().writes(165 as u64))
+			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(t as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1833,11 +1833,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_hash_sha2_256(r: u32, ) -> Weight {
-		(213_139_000 as Weight)
-			// Standard Error: 61_000
-			.saturating_add((57_333_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(203_959_000 as u64)
+			// Standard Error: 142_000
+			.saturating_add(Weight::from_ref_time(61_311_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1845,11 +1845,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_hash_sha2_256_per_kb(n: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 86_000
-			.saturating_add((321_084_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(349_915_000 as u64)
+			// Standard Error: 40_000
+			.saturating_add(Weight::from_ref_time(320_652_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1857,11 +1857,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_hash_keccak_256(r: u32, ) -> Weight {
-		(212_330_000 as Weight)
-			// Standard Error: 67_000
-			.saturating_add((69_928_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(209_219_000 as u64)
+			// Standard Error: 157_000
+			.saturating_add(Weight::from_ref_time(73_728_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1869,11 +1869,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_hash_keccak_256_per_kb(n: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 102_000
-			.saturating_add((246_495_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_860_000 as u64)
+			// Standard Error: 25_000
+			.saturating_add(Weight::from_ref_time(245_718_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1881,11 +1881,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_hash_blake2_256(r: u32, ) -> Weight {
-		(213_462_000 as Weight)
-			// Standard Error: 55_000
-			.saturating_add((47_820_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(206_165_000 as u64)
+			// Standard Error: 138_000
+			.saturating_add(Weight::from_ref_time(51_644_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1893,11 +1893,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_hash_blake2_256_per_kb(n: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 107_000
-			.saturating_add((96_100_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(255_955_000 as u64)
+			// Standard Error: 14_000
+			.saturating_add(Weight::from_ref_time(95_090_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1905,11 +1905,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_hash_blake2_128(r: u32, ) -> Weight {
-		(211_920_000 as Weight)
-			// Standard Error: 56_000
-			.saturating_add((47_123_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(208_153_000 as u64)
+			// Standard Error: 140_000
+			.saturating_add(Weight::from_ref_time(51_264_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1917,11 +1917,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `n` is `[0, 1024]`.
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 94_000
-			.saturating_add((95_925_000 as Weight).saturating_mul(n as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(278_368_000 as u64)
+			// Standard Error: 14_000
+			.saturating_add(Weight::from_ref_time(95_006_000 as u64).saturating_mul(n as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1929,11 +1929,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_ecdsa_recover(r: u32, ) -> Weight {
-		(347_844_000 as Weight)
-			// Standard Error: 686_000
-			.saturating_add((2_970_990_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(331_955_000 as u64)
+			// Standard Error: 1_155_000
+			.saturating_add(Weight::from_ref_time(3_069_955_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1941,11 +1941,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight {
-		(224_229_000 as Weight)
-			// Standard Error: 363_000
-			.saturating_add((2_055_182_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(207_838_000 as u64)
+			// Standard Error: 783_000
+			.saturating_add(Weight::from_ref_time(2_058_503_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1954,316 +1954,316 @@ impl WeightInfo for () {
 	// Storage: Contracts OwnerInfoOf (r:16 w:16)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_set_code_hash(r: u32, ) -> Weight {
-		(0 as Weight)
-			// Standard Error: 950_000
-			.saturating_add((689_926_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads((79 as Weight).saturating_mul(r as Weight)))
-			.saturating_add(RocksDbWeight::get().writes((79 as Weight).saturating_mul(r as Weight)))
+		Weight::from_ref_time(0 as u64)
+			// Standard Error: 1_567_000
+			.saturating_add(Weight::from_ref_time(774_380_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads((79 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes((79 as u64).saturating_mul(r as u64)))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64const(r: u32, ) -> Weight {
-		(70_352_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((803_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_955_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(612_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64load(r: u32, ) -> Weight {
-		(70_549_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_828_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_057_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_324_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64store(r: u32, ) -> Weight {
-		(70_578_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((2_147_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_137_000 as u64)
+			// Standard Error: 5_000
+			.saturating_add(Weight::from_ref_time(1_427_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_select(r: u32, ) -> Weight {
-		(69_841_000 as Weight)
+		Weight::from_ref_time(73_844_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((2_211_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_773_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_if(r: u32, ) -> Weight {
-		(69_638_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((2_503_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_979_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_952_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_br(r: u32, ) -> Weight {
-		(69_759_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_341_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_924_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(941_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_br_if(r: u32, ) -> Weight {
-		(69_466_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_829_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_574_000 as u64)
+			// Standard Error: 5_000
+			.saturating_add(Weight::from_ref_time(1_439_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_br_table(r: u32, ) -> Weight {
-		(68_713_000 as Weight)
-			// Standard Error: 8_000
-			.saturating_add((2_145_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_343_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_603_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `e` is `[1, 256]`.
 	fn instr_br_table_per_entry(e: u32, ) -> Weight {
-		(72_809_000 as Weight)
+		Weight::from_ref_time(76_267_000 as u64)
 			// Standard Error: 0
-			.saturating_add((4_000 as Weight).saturating_mul(e as Weight))
+			.saturating_add(Weight::from_ref_time(4_000 as u64).saturating_mul(e as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_call(r: u32, ) -> Weight {
-		(71_033_000 as Weight)
-			// Standard Error: 6_000
-			.saturating_add((6_778_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_877_000 as u64)
+			// Standard Error: 12_000
+			.saturating_add(Weight::from_ref_time(7_144_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_call_indirect(r: u32, ) -> Weight {
-		(83_039_000 as Weight)
-			// Standard Error: 10_000
-			.saturating_add((8_597_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(88_665_000 as u64)
+			// Standard Error: 20_000
+			.saturating_add(Weight::from_ref_time(9_142_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `p` is `[0, 128]`.
 	fn instr_call_indirect_per_param(p: u32, ) -> Weight {
-		(92_257_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((596_000 as Weight).saturating_mul(p as Weight))
+		Weight::from_ref_time(98_600_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(469_000 as u64).saturating_mul(p as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_local_get(r: u32, ) -> Weight {
-		(70_680_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((859_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_555_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(624_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_local_set(r: u32, ) -> Weight {
-		(70_628_000 as Weight)
+		Weight::from_ref_time(74_329_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((882_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(688_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_local_tee(r: u32, ) -> Weight {
-		(70_380_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_217_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_612_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(909_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_global_get(r: u32, ) -> Weight {
-		(73_052_000 as Weight)
+		Weight::from_ref_time(76_906_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_470_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_192_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_global_set(r: u32, ) -> Weight {
-		(72_951_000 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((1_711_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(76_979_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_361_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_memory_current(r: u32, ) -> Weight {
-		(70_382_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((832_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_370_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(661_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 1]`.
 	fn instr_memory_grow(r: u32, ) -> Weight {
-		(71_041_000 as Weight)
-			// Standard Error: 25_000
-			.saturating_add((174_117_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_584_000 as u64)
+			// Standard Error: 353_000
+			.saturating_add(Weight::from_ref_time(187_114_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64clz(r: u32, ) -> Weight {
-		(69_621_000 as Weight)
-			// Standard Error: 9_000
-			.saturating_add((1_290_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_206_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(884_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64ctz(r: u32, ) -> Weight {
-		(70_964_000 as Weight)
-			// Standard Error: 7_000
-			.saturating_add((1_243_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_992_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(893_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64popcnt(r: u32, ) -> Weight {
-		(70_772_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((1_236_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_985_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(891_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64eqz(r: u32, ) -> Weight {
-		(69_704_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((1_278_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_117_000 as u64)
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(901_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64extendsi32(r: u32, ) -> Weight {
-		(70_195_000 as Weight)
+		Weight::from_ref_time(73_981_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_228_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(866_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64extendui32(r: u32, ) -> Weight {
-		(70_361_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_223_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_104_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(868_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i32wrapi64(r: u32, ) -> Weight {
-		(71_209_000 as Weight)
-			// Standard Error: 13_000
-			.saturating_add((1_245_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_293_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(878_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64eq(r: u32, ) -> Weight {
-		(70_026_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_778_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_055_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_350_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64ne(r: u32, ) -> Weight {
-		(70_200_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((1_778_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_710_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_360_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64lts(r: u32, ) -> Weight {
-		(70_200_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_777_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_917_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_355_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64ltu(r: u32, ) -> Weight {
-		(70_090_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((1_777_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_048_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_360_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64gts(r: u32, ) -> Weight {
-		(69_906_000 as Weight)
-			// Standard Error: 3_000
-			.saturating_add((1_795_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_029_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_349_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64gtu(r: u32, ) -> Weight {
-		(69_976_000 as Weight)
+		Weight::from_ref_time(74_267_000 as u64)
 			// Standard Error: 2_000
-			.saturating_add((1_785_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_353_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64les(r: u32, ) -> Weight {
-		(69_478_000 as Weight)
-			// Standard Error: 27_000
-			.saturating_add((1_832_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_952_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_350_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64leu(r: u32, ) -> Weight {
-		(70_330_000 as Weight)
-			// Standard Error: 8_000
-			.saturating_add((1_779_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_851_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_368_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64ges(r: u32, ) -> Weight {
-		(69_915_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_783_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_034_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_348_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64geu(r: u32, ) -> Weight {
-		(69_955_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_786_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_979_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_353_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64add(r: u32, ) -> Weight {
-		(69_979_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_768_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_000_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_328_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64sub(r: u32, ) -> Weight {
-		(69_881_000 as Weight)
+		Weight::from_ref_time(73_883_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_757_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_331_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64mul(r: u32, ) -> Weight {
-		(69_877_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_767_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_216_000 as u64)
+			// Standard Error: 5_000
+			.saturating_add(Weight::from_ref_time(1_324_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64divs(r: u32, ) -> Weight {
-		(68_193_000 as Weight)
-			// Standard Error: 20_000
-			.saturating_add((2_553_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_989_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_998_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64divu(r: u32, ) -> Weight {
-		(69_589_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((2_454_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_857_000 as u64)
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(2_073_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64rems(r: u32, ) -> Weight {
-		(69_834_000 as Weight)
+		Weight::from_ref_time(73_801_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((2_470_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(2_027_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64remu(r: u32, ) -> Weight {
-		(69_944_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((2_457_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_130_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(2_064_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64and(r: u32, ) -> Weight {
-		(70_007_000 as Weight)
+		Weight::from_ref_time(74_071_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_777_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_327_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64or(r: u32, ) -> Weight {
-		(70_110_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((1_778_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_201_000 as u64)
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(1_330_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64xor(r: u32, ) -> Weight {
-		(70_138_000 as Weight)
+		Weight::from_ref_time(74_241_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_780_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_321_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64shl(r: u32, ) -> Weight {
-		(70_031_000 as Weight)
-			// Standard Error: 4_000
-			.saturating_add((1_799_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(74_331_000 as u64)
+			// Standard Error: 6_000
+			.saturating_add(Weight::from_ref_time(1_347_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64shrs(r: u32, ) -> Weight {
-		(70_054_000 as Weight)
+		Weight::from_ref_time(73_674_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_794_000 as Weight).saturating_mul(r as Weight))
+			.saturating_add(Weight::from_ref_time(1_359_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64shru(r: u32, ) -> Weight {
-		(70_064_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_793_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_807_000 as u64)
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(1_358_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64rotl(r: u32, ) -> Weight {
-		(69_804_000 as Weight)
-			// Standard Error: 5_000
-			.saturating_add((1_818_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_725_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(1_358_000 as u64).saturating_mul(r as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64rotr(r: u32, ) -> Weight {
-		(70_027_000 as Weight)
-			// Standard Error: 1_000
-			.saturating_add((1_787_000 as Weight).saturating_mul(r as Weight))
+		Weight::from_ref_time(73_755_000 as u64)
+			// Standard Error: 3_000
+			.saturating_add(Weight::from_ref_time(1_360_000 as u64).saturating_mul(r as u64))
 	}
 }
