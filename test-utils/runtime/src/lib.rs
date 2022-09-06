@@ -39,7 +39,7 @@ use cfg_if::cfg_if;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
-	weights::RuntimeDbWeight,
+	weights::{RuntimeDbWeight, Weight},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
@@ -577,7 +577,7 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75));
 }
 
 impl frame_system::Config for Runtime {
@@ -849,12 +849,12 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
-					sp_consensus_babe::BabeGenesisConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-						genesis_authorities: system::authorities()
+						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
@@ -1123,12 +1123,12 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
-					sp_consensus_babe::BabeGenesisConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-						genesis_authorities: system::authorities()
+						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,

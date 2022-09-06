@@ -63,7 +63,7 @@ use sc_client_api::{
 	utils::is_descendent_of,
 	IoInfo, MemoryInfo, MemorySize, UsageInfo,
 };
-use sc_state_db::StateDb;
+use sc_state_db::{IsPruned, StateDb};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{
 	well_known_cache_keys, Backend as _, CachedHeaderMetadata, Error as ClientError, HeaderBackend,
@@ -442,9 +442,10 @@ struct PendingBlock<Block: BlockT> {
 }
 
 // wrapper that implements trait required for state_db
-struct StateMetaDb<'a>(&'a dyn Database<DbHash>);
+#[derive(Clone)]
+struct StateMetaDb(Arc<dyn Database<DbHash>>);
 
-impl<'a> sc_state_db::MetaDb for StateMetaDb<'a> {
+impl sc_state_db::MetaDb for StateMetaDb {
 	type Error = sp_database::error::DatabaseError;
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -915,7 +916,7 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 
 struct StorageDb<Block: BlockT> {
 	pub db: Arc<dyn Database<DbHash>>,
-	pub state_db: StateDb<Block::Hash, Vec<u8>>,
+	pub state_db: StateDb<Block::Hash, Vec<u8>, StateMetaDb>,
 	prefix_keys: bool,
 }
 
@@ -1104,11 +1105,11 @@ impl<Block: BlockT> Backend<Block> {
 		let mut db_init_transaction = Transaction::new();
 
 		let requested_state_pruning = config.state_pruning.clone();
-		let state_meta_db = StateMetaDb(db.as_ref());
+		let state_meta_db = StateMetaDb(db.clone());
 		let map_e = sp_blockchain::Error::from_state_db;
 
 		let (state_db_init_commit_set, state_db) = StateDb::open(
-			&state_meta_db,
+			state_meta_db,
 			requested_state_pruning,
 			!db.supports_ref_counting(),
 			should_init,
@@ -1317,10 +1318,11 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
-			let commit =
-				self.storage.state_db.canonicalize_block(&hash).map_err(
-					sp_blockchain::Error::from_state_db::<sc_state_db::Error<io::Error>>,
-				)?;
+			let commit = self.storage.state_db.canonicalize_block(&hash).map_err(
+				sp_blockchain::Error::from_state_db::<
+					sc_state_db::Error<sp_database::error::DatabaseError>,
+				>,
+			)?;
 			apply_state_commit(transaction, commit);
 		}
 		Ok(())
@@ -1471,14 +1473,16 @@ impl<Block: BlockT> Backend<Block> {
 					.storage
 					.state_db
 					.insert_block(&hash, number_u64, pending_block.header.parent_hash(), changeset)
-					.map_err(|e: sc_state_db::Error<io::Error>| {
+					.map_err(|e: sc_state_db::Error<sp_database::error::DatabaseError>| {
 						sp_blockchain::Error::from_state_db(e)
 					})?;
 				apply_state_commit(&mut transaction, commit);
 				if number <= last_finalized_num {
 					// Canonicalize in the db when re-importing existing blocks with state.
 					let commit = self.storage.state_db.canonicalize_block(&hash).map_err(
-						sp_blockchain::Error::from_state_db::<sc_state_db::Error<io::Error>>,
+						sp_blockchain::Error::from_state_db::<
+							sc_state_db::Error<sp_database::error::DatabaseError>,
+						>,
 					)?;
 					apply_state_commit(&mut transaction, commit);
 					meta_updates.push(MetaUpdate {
@@ -1679,10 +1683,11 @@ impl<Block: BlockT> Backend<Block> {
 				.map(|c| f_num.saturated_into::<u64>() > c)
 				.unwrap_or(true)
 		{
-			let commit =
-				self.storage.state_db.canonicalize_block(&f_hash).map_err(
-					sp_blockchain::Error::from_state_db::<sc_state_db::Error<io::Error>>,
-				)?;
+			let commit = self.storage.state_db.canonicalize_block(&f_hash).map_err(
+				sp_blockchain::Error::from_state_db::<
+					sc_state_db::Error<sp_database::error::DatabaseError>,
+				>,
+			)?;
 			apply_state_commit(transaction, commit);
 		}
 
@@ -2294,13 +2299,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		match self.blockchain.header_metadata(hash) {
 			Ok(ref hdr) => {
-				if !self.have_state_at(&hash, hdr.number) {
-					return Err(sp_blockchain::Error::UnknownBlock(format!(
-						"State already discarded for {:?}",
-						block
-					)))
-				}
-				if let Ok(()) = self.storage.state_db.pin(&hash) {
+				let hint = || {
+					sc_state_db::NodeDb::get(self.storage.as_ref(), hdr.state_root.as_ref())
+						.unwrap_or(None)
+						.is_some()
+				};
+				if let Ok(()) =
+					self.storage.state_db.pin(&hash, hdr.number.saturated_into::<u64>(), hint)
+				{
 					let root = hdr.state_root;
 					let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
 						.with_optional_cache(
@@ -2333,7 +2339,20 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				_ => false,
 			}
 		} else {
-			!self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>())
+			match self.storage.state_db.is_pruned(hash, number.saturated_into::<u64>()) {
+				IsPruned::Pruned => false,
+				IsPruned::NotPruned => true,
+				IsPruned::MaybePruned => match self.blockchain.header_metadata(*hash) {
+					Ok(header) => sp_state_machine::Storage::get(
+						self.storage.as_ref(),
+						&header.state_root,
+						(&[], None),
+					)
+					.unwrap_or(None)
+					.is_some(),
+					_ => false,
+				},
+			}
 		}
 	}
 

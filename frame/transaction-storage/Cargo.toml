@@ -48,3 +48,4 @@ std = [
 	"sp-std/std",
 	"sp-transaction-storage-proof/std",
 ]
+try-runtime = ["frame-support/try-runtime"]

@@ -97,7 +97,7 @@ pub use sp_arithmetic::helpers_128bit;
 pub use sp_arithmetic::{
 	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
 	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
-	UpperOf,
+	Rounding, UpperOf,
 };
 
 pub use either::Either;
