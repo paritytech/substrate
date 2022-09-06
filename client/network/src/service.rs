@@ -29,9 +29,8 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	config::{Params, TransportConfig},
+	config::Params,
 	discovery::DiscoveryConfig,
-	error::Error,
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
@@ -61,7 +60,8 @@ use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
     ExHashT,
-	config::MultiaddrWithPeerId,
+	error::Error,
+	config::{MultiaddrWithPeerId, TransportConfig},
 	protocol::{
 		event::{DhtEvent, Event},
 		ProtocolName,

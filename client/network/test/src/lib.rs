@@ -49,14 +49,11 @@ use sc_consensus::{
 };
 pub use sc_network_transactions::config::EmptyTransactionPool;
 use sc_network::{
-	config::{
-		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,
-		TransportConfig,
-	},
+	config::{NetworkConfiguration, Role, SyncMode},
 	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, ProtocolId},
+	config::{MultiaddrWithPeerId, ProtocolId, NonDefaultSetConfig, NonReservedPeerMode, TransportConfig},
 	protocol::ProtocolName,
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},

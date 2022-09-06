@@ -252,11 +252,9 @@ mod request_responses;
 mod schema;
 mod service;
 mod transport;
-mod utils;
 
 pub mod bitswap;
 pub mod config;
-pub mod error;
 pub mod network_state;
 pub mod transactions;
 

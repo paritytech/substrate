@@ -27,11 +27,8 @@
 //! `Future` that processes transactions.
 
 use crate::{
-	config,
-	error,
 	protocol::message,
 	service::NetworkService,
-	utils::{interval, LruHashSet},
 };
 
 use codec::{Decode, Encode};
@@ -41,12 +38,15 @@ use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::{
 	ExHashT,
+	error,
 	config::ProtocolId,
 	protocol::{
 		event::{Event, ObservedRole},
 		ProtocolName,
 	},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
+	config::{NonDefaultSetConfig, SetConfig, NonReservedPeerMode},
+	utils::{interval, LruHashSet},
 };
 use sc_network_transactions::config::{TransactionImport, TransactionImportFuture, TransactionPool};
 use sp_runtime::traits::Block as BlockT;
@@ -158,16 +158,16 @@ impl TransactionsHandlerPrototype {
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
-	pub fn set_config(&self) -> config::NonDefaultSetConfig {
-		config::NonDefaultSetConfig {
+	pub fn set_config(&self) -> NonDefaultSetConfig {
+		NonDefaultSetConfig {
 			notifications_protocol: self.protocol_name.clone(),
 			fallback_names: self.fallback_protocol_names.clone(),
 			max_notification_size: MAX_TRANSACTIONS_SIZE,
-			set_config: config::SetConfig {
+			set_config: SetConfig {
 				in_peers: 0,
 				out_peers: 0,
 				reserved_nodes: Vec::new(),
-				non_reserved_mode: config::NonReservedPeerMode::Deny,
+				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
 		}
 	}
