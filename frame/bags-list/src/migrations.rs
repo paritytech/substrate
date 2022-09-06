@@ -20,9 +20,10 @@
 use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_election_provider_support::ScoreProvider;
+use frame_support::traits::OnRuntimeUpgrade;
+
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
-use frame_support::traits::OnRuntimeUpgrade;
 #[cfg(feature = "try-runtime")]
 use sp_std::vec::Vec;
 
