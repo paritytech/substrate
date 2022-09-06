@@ -36,6 +36,7 @@ pub mod type_value;
 pub mod validate_unsigned;
 
 use frame_support_procedural_tools::generate_crate_access_2018;
+use quote::ToTokens;
 use syn::spanned::Spanned;
 
 /// Parsed definition of a pallet.
@@ -123,8 +124,16 @@ impl Def {
 					origin = Some(origin::OriginDef::try_from(index, item)?),
 				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
-				Some(PalletAttr::Storage(span)) =>
-					storages.push(storage::StorageDef::try_from(span, index, item)?),
+				Some(PalletAttr::Storage(span)) => {
+					let st = item.to_token_stream().to_string();
+					let storage_def = storage::StorageDef::try_from(span, index, item)?;
+					if st.contains("#[benchmarking(cached)]") {
+						println!("{} cached!", storage_def.ident.to_string());
+					} else {
+						println!("{} NOT cached!", storage_def.ident.to_string());
+					}
+					storages.push(storage_def)
+				},
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
 					let v = validate_unsigned::ValidateUnsignedDef::try_from(index, item)?;
 					validate_unsigned = Some(v);
