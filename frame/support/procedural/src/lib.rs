@@ -35,6 +35,7 @@ mod storage_alias;
 mod transactional;
 mod tt_macro;
 
+use crate::storage_alias::Input;
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
@@ -594,5 +595,7 @@ pub fn benchmarking(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn benchmarking_cached(item: TokenStream) -> TokenStream {
+	let _input = syn::parse2::<Input>(item.clone().into())
+		.expect("benchmarking(cached) can only be attached to a valid storage type declaration");
 	item
 }

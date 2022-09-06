@@ -406,7 +406,7 @@ impl Parse for StorageType {
 }
 
 /// The input expected by this macro.
-struct Input {
+pub struct Input {
 	attributes: Vec<Attribute>,
 	visibility: Visibility,
 	_type: Token![type],
