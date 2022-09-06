@@ -37,11 +37,75 @@ pub use clap;
 pub use commands::*;
 pub use config::*;
 pub use error::*;
+use log::warn;
 pub use params::*;
 pub use runner::*;
 pub use sc_service::{ChainSpec, Role};
 pub use sc_tracing::logging::LoggerBuilder;
 pub use sp_version::RuntimeVersion;
+use tokio::runtime::Handle;
+
+/// The recommended open file descriptor limit to be configured for the process.
+const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
+
+/// Simplified `CliConfiguration`.
+pub trait InitializableCommand {
+	/// Get the filters for the logging.
+	///
+	/// This should be a list of comma-separated values.
+	/// Example: `foo=trace,bar=debug,baz=info`
+	///
+	/// By default this is retrieved from `SharedParams`.
+	fn log_filters(&self) -> Result<String> {
+		Ok(Default::default())
+	}
+
+	/// Should the detailed log output be enabled.
+	fn detailed_log_output(&self) -> Result<bool> {
+		Ok(true)
+	}
+
+	/// Should the log color output be disabled?
+	fn disable_log_color(&self) -> Result<bool> {
+		Ok(false)
+	}
+
+	/// Initialize substrate. This must be done only once per process.
+	///
+	/// This method:
+	///
+	/// 1. Sets the panic handler
+	/// 2. Optionally customize logger/profiling
+	/// 2. Initializes the logger
+	/// 3. Raises the FD limit
+	///
+	/// The `logger_hook` closure is executed before the logger is constructed
+	/// and initialized. It is useful for setting up a custom profiler.
+	fn init(&self, support_url: &String, impl_version: &String) -> Result<()> {
+		sp_panic_handler::set(support_url, impl_version);
+
+		let mut logger = LoggerBuilder::new(self.log_filters()?);
+		logger.with_detailed_output(self.detailed_log_output()?);
+
+		if self.disable_log_color()? {
+			logger.with_colors(false);
+		}
+
+		logger.init()?;
+
+		if let Some(new_limit) = fdlimit::raise_fd_limit() {
+			if new_limit < RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT {
+				warn!(
+					"Low open file descriptor limit configured for the process. \
+					Current value: {:?}, recommended value: {:?}.",
+					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
+				);
+			}
+		}
+
+		Ok(())
+	}
+}
 
 /// Substrate client CLI
 ///
@@ -204,7 +268,20 @@ pub trait SubstrateCli: Sized {
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), |_, _| {}, &config)?;
-		Runner::new(config, tokio_runtime)
+		Runner::new(Some(config), tokio_runtime)
+	}
+
+	/// Create a runner for the command provided in argument. This will create a Configuration and
+	/// a tokio runtime
+	fn create_runner_without_configuration<Command: InitializableCommand>(
+		&self,
+		command: &Command,
+	) -> Result<(Runner<Self>, Handle)> {
+		let tokio_runtime = build_runtime()?;
+		let handle = tokio_runtime.handle().clone();
+		command.init(&Self::support_url(), &Self::impl_version())?;
+		let runner = Runner::new(None, tokio_runtime)?;
+		Ok((runner, handle))
 	}
 
 	/// Create a runner for the command provided in argument. The `logger_hook` can be used to setup
@@ -238,7 +315,7 @@ pub trait SubstrateCli: Sized {
 		let config = command.create_configuration(self, tokio_runtime.handle().clone())?;
 
 		command.init(&Self::support_url(), &Self::impl_version(), logger_hook, &config)?;
-		Runner::new(config, tokio_runtime)
+		Runner::new(Some(config), tokio_runtime)
 	}
 	/// Native runtime version.
 	fn native_runtime_version(chain_spec: &Box<dyn ChainSpec>) -> &'static RuntimeVersion;

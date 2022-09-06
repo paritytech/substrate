@@ -29,7 +29,6 @@ use jsonrpsee::{
 use parity_scale_codec::{Decode, Encode};
 use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
 use sc_executor::NativeExecutionDispatch;
-use sc_service::Configuration;
 use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -211,7 +210,6 @@ where
 pub(crate) async fn follow_chain<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: FollowChainCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT<Hash = H256> + DeserializeOwned,
@@ -225,8 +223,8 @@ where
 	let mut maybe_state_ext = None;
 	let (_client, subscription) = start_subscribing::<Block::Header>(&command.uri).await?;
 
-	let (code_key, code) = extract_code(&config.chain_spec)?;
-	let executor = build_executor::<ExecDispatch>(&shared, &config);
+	let (code_key, code) = extract_code(&shared)?;
+	let executor = build_executor::<ExecDispatch>(&shared);
 	let execution = shared.execution;
 
 	let header_provider: RpcHeaderProvider<Block> =

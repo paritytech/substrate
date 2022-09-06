@@ -269,20 +269,19 @@ use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
 };
-use sc_chain_spec::ChainSpec;
 use sc_cli::{
-	execution_method_from_cli, CliConfiguration, ExecutionStrategy, WasmExecutionMethod,
+	execution_method_from_cli, ExecutionStrategy, InitializableCommand, WasmExecutionMethod,
 	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 	DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::NativeElseWasmExecutor;
-use sc_service::{Configuration, NativeExecutionDispatch};
+use sc_service::NativeExecutionDispatch;
 use sp_core::{
 	offchain::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
-	storage::{well_known_keys, StorageData, StorageKey},
+	storage::{StorageData, StorageKey},
 	testing::TaskExecutor,
 	traits::TaskExecutorExt,
 	twox_128, H256,
@@ -385,11 +384,6 @@ pub enum Command {
 /// Shared parameters of the `try-runtime` commands
 #[derive(Debug, Clone, clap::Parser)]
 pub struct SharedParams {
-	/// Shared parameters of substrate cli.
-	#[allow(missing_docs)]
-	#[clap(flatten)]
-	pub shared_params: sc_cli::SharedParams,
-
 	/// The execution strategy that should be used.
 	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true, default_value = "wasm")]
 	pub execution: ExecutionStrategy,
@@ -539,7 +533,7 @@ impl State {
 }
 
 impl TryRuntimeCmd {
-	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
+	pub async fn run<Block, ExecDispatch>(&self) -> sc_cli::Result<()>
 	where
 		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
 		Block::Header: serde::de::DeserializeOwned,
@@ -554,61 +548,36 @@ impl TryRuntimeCmd {
 				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
-					config,
 				)
 				.await,
 			Command::OffchainWorker(cmd) =>
 				commands::offchain_worker::offchain_worker::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
-					config,
 				)
 				.await,
 			Command::ExecuteBlock(cmd) =>
 				commands::execute_block::execute_block::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
-					config,
 				)
 				.await,
 			Command::FollowChain(cmd) =>
 				commands::follow_chain::follow_chain::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
-					config,
 				)
 				.await,
 		}
 	}
 }
 
-impl CliConfiguration for TryRuntimeCmd {
-	fn shared_params(&self) -> &sc_cli::SharedParams {
-		&self.shared.shared_params
-	}
-
-	fn chain_id(&self, _is_dev: bool) -> sc_cli::Result<String> {
-		Ok(match self.shared.shared_params.chain {
-			Some(ref chain) => chain.clone(),
-			None => "dev".into(),
-		})
-	}
-}
+impl InitializableCommand for TryRuntimeCmd {}
 
 /// Extract `:code` from the given chain spec and return as `StorageData` along with the
 /// corresponding `StorageKey`.
-pub(crate) fn extract_code(spec: &Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
-	let genesis_storage = spec.build_storage()?;
-	let code = StorageData(
-		genesis_storage
-			.top
-			.get(well_known_keys::CODE)
-			.expect("code key must exist in genesis storage; qed")
-			.to_vec(),
-	);
-	let code_key = StorageKey(well_known_keys::CODE.to_vec());
-
-	Ok((code_key, code))
+pub(crate) fn extract_code(_spec: &SharedParams) -> sc_cli::Result<(StorageKey, StorageData)> {
+	todo!()
 }
 
 /// Get the hash type of the generic `Block` from a `hash_str`.
@@ -699,11 +668,10 @@ pub(crate) fn full_extensions() -> Extensions {
 /// Build a default execution that we typically use.
 pub(crate) fn build_executor<D: NativeExecutionDispatch + 'static>(
 	shared: &SharedParams,
-	config: &sc_service::Configuration,
 ) -> NativeElseWasmExecutor<D> {
-	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
-	let max_runtime_instances = config.max_runtime_instances;
-	let runtime_cache_size = config.runtime_cache_size;
+	let heap_pages = shared.heap_pages;
+	let max_runtime_instances = 8;
+	let runtime_cache_size = 2;
 
 	NativeElseWasmExecutor::<D>::new(
 		execution_method_from_cli(shared.wasm_method, shared.wasmtime_instantiation_strategy),

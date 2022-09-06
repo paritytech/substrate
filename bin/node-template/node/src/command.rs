@@ -58,15 +58,12 @@ pub fn run() -> sc_cli::Result<()> {
 			AuxiliaryCmd::Key(cmd) => cmd.run(&cli),
 			#[cfg(feature = "try-runtime")]
 			AuxiliaryCmd::TryRuntime(cmd) => {
-				let runner = cli.create_runner(cmd)?;
-				runner.async_run(|config| {
-					let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
+				let (runner, tokio_handle) = cli.create_runner_without_configuration(cmd)?;
+				runner.async_run_without_configuration(|| {
 					let task_manager =
-						sc_service::TaskManager::new(config.tokio_handle.clone(), registry)
-							.map_err(|e| {
-								sc_cli::Error::Service(sc_service::Error::Prometheus(e))
-							})?;
-					Ok((cmd.run::<Block, service::ExecutorDispatch>(config), task_manager))
+						sc_service::TaskManager::new(tokio_handle, None)
+							.map_err(|_| { sc_cli::Error::Input(String::from("Something is wrong")) })?;
+					Ok((cmd.run::<Block, service::ExecutorDispatch>(), task_manager))
 				})
 			},
 			#[cfg(not(feature = "try-runtime"))]

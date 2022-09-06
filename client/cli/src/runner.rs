@@ -105,14 +105,17 @@ where
 
 /// A Substrate CLI runtime that can be used to run a node or a command
 pub struct Runner<C: SubstrateCli> {
-	config: Configuration,
+	config: Option<Configuration>,
 	tokio_runtime: tokio::runtime::Runtime,
 	phantom: PhantomData<C>,
 }
 
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new(config: Configuration, tokio_runtime: tokio::runtime::Runtime) -> Result<Runner<C>> {
+	pub fn new(
+		config: Option<Configuration>,
+		tokio_runtime: tokio::runtime::Runtime,
+	) -> Result<Runner<C>> {
 		Ok(Runner { config, tokio_runtime, phantom: PhantomData })
 	}
 
@@ -145,7 +148,9 @@ impl<C: SubstrateCli> Runner<C> {
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
 		self.print_node_infos();
-		let mut task_manager = self.tokio_runtime.block_on(initialize(self.config))?;
+		let mut task_manager = self
+			.tokio_runtime
+			.block_on(initialize(self.config.expect("Configuration have not been provided")))?;
 		let res = self.tokio_runtime.block_on(main(task_manager.future().fuse()));
 		Ok(res?)
 	}
@@ -158,7 +163,7 @@ impl<C: SubstrateCli> Runner<C> {
 	where
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
 	{
-		runner(self.config)
+		runner(self.config.expect("Configuration have not been provided"))
 	}
 
 	/// A helper function that runs a future with tokio and stops if the process receives
@@ -171,18 +176,32 @@ impl<C: SubstrateCli> Runner<C> {
 		F: Future<Output = std::result::Result<(), E>>,
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError> + From<CliError>,
 	{
-		let (future, task_manager) = runner(self.config)?;
+		let (future, task_manager) =
+			runner(self.config.expect("Configuration have not been provided"))?;
+		run_until_exit::<_, E>(self.tokio_runtime, future, task_manager)
+	}
+
+	/// Similar to `async_run` but simplified.
+	pub fn async_run_without_configuration<F, E>(
+		self,
+		runner: impl FnOnce() -> std::result::Result<(F, TaskManager), E>,
+	) -> std::result::Result<(), E>
+	where
+		F: Future<Output = std::result::Result<(), E>>,
+		E: std::error::Error + Send + Sync + 'static + From<ServiceError> + From<CliError>,
+	{
+		let (future, task_manager) = runner()?;
 		run_until_exit::<_, E>(self.tokio_runtime, future, task_manager)
 	}
 
 	/// Get an immutable reference to the node Configuration
 	pub fn config(&self) -> &Configuration {
-		&self.config
+		&self.config.as_ref().expect("Configuration have not been provided")
 	}
 
 	/// Get a mutable reference to the node Configuration
 	pub fn config_mut(&mut self) -> &mut Configuration {
-		&mut self.config
+		self.config.as_mut().expect("Configuration have not been provided")
 	}
 }
 

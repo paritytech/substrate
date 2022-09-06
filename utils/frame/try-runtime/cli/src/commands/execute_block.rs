@@ -21,7 +21,7 @@ use crate::{
 };
 use parity_scale_codec::Encode;
 use remote_externalities::rpc_api;
-use sc_service::{Configuration, NativeExecutionDispatch};
+use sc_service::NativeExecutionDispatch;
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
@@ -133,7 +133,6 @@ impl ExecuteBlockCmd {
 pub(crate) async fn execute_block<Block, ExecDispatch>(
 	shared: SharedParams,
 	command: ExecuteBlockCmd,
-	config: Configuration,
 ) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
@@ -143,7 +142,7 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
-	let executor = build_executor::<ExecDispatch>(&shared, &config);
+	let executor = build_executor::<ExecDispatch>(&shared);
 	let execution = shared.execution;
 
 	let block_ws_uri = command.block_ws_uri::<Block>();
@@ -169,10 +168,9 @@ where
 		let builder = if command.overwrite_wasm_code {
 			log::info!(
 				target: LOG_TARGET,
-				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
-				config.chain_spec.name(),
+				"replacing the in-storage :code: with the local code from chain_spec (your local repo)",
 			);
-			let (code_key, code) = extract_code(&config.chain_spec)?;
+			let (code_key, code) = extract_code(&shared)?;
 			builder.inject_hashed_key_value(&[(code_key, code)])
 		} else {
 			builder.inject_hashed_key(well_known_keys::CODE)
