@@ -36,7 +36,7 @@ use pallet_staking::{CurrentEra, RewardDestination};
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable, Zero},
-	Perbill, Percent,
+	DispatchError, ModuleError, Perbill, Percent,
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -200,19 +200,85 @@ mod on_idle {
 
 	#[test]
 	fn early_exit() {
-		todo!("remaining_weight = 0 should do NOTHING");
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::<Runtime>::put(BondingDuration::get() + 1);
+			CurrentEra::<Runtime>::put(BondingDuration::get());
+
+			// set up Queue item
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1)));
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+
+			// call on_idle with no remaining weight
+			FastUnstake::on_idle(System::block_number(), 0);
+
+			// assert nothing changed in Queue and Head
+			assert_eq!(Head::<Runtime>::get(), None);
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+		});
 	}
 
 	#[test]
 	fn respects_weight() {
 		// TODO: KIAN
-		todo!("ErasToCheckPerBlock is 5, but the remaining weight is such that we can only process 2");
+		todo!(
+			"ErasToCheckPerBlock is 5, but the remaining weight is such that we can only process 2"
+		);
 	}
-
 
 	#[test]
 	fn successful_multi_queue() {
-		todo!("multiple stakers in queue, all leaving")
+		ExtBuilder::default().build_and_execute(|| {
+			let max_block_weight = BlockWeights::get().max_block;
+
+			ErasToCheckPerBlock::<Runtime>::put(BondingDuration::get() + 1);
+			CurrentEra::<Runtime>::put(BondingDuration::get());
+
+			// register multi accounts for fast unstake
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER), Some(1)));
+			assert_eq!(Queue::<Runtime>::get(STASH), Some(Some(1)));
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(CONTROLLER_2), Some(1)));
+			assert_eq!(Queue::<Runtime>::get(STASH_2), Some(Some(1)));
+
+			// assert 2 queue items are in Queue & None in Head to start with
+			assert_eq!(Queue::<Runtime>::count(), 2);
+			assert_eq!(Head::<Runtime>::get(), None);
+
+			// process on idle and check eras for next Queue item
+			FastUnstake::on_idle(System::block_number(), max_block_weight);
+			run_to_block(System::block_number() + 1);
+
+			// process on idle & let go of current Head
+			FastUnstake::on_idle(System::block_number(), max_block_weight);
+			run_to_block(System::block_number() + 1);
+
+			// confirm Head / Queue items remaining
+			assert_eq!(Head::<Runtime>::get(), None);
+			assert_eq!(Queue::<Runtime>::count(), 1);
+
+			// process on idle and check eras for next Queue item
+			FastUnstake::on_idle(System::block_number(), max_block_weight);
+			run_to_block(System::block_number() + 1);
+
+			// process on idle & let go of current Head
+			FastUnstake::on_idle(System::block_number(), max_block_weight);
+			run_to_block(System::block_number() + 1);
+
+			// Head & Queue should now be empty
+			assert_eq!(Head::<Runtime>::get(), None);
+			assert_eq!(Queue::<Runtime>::count(), 0);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![
+					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) },
+					Event::Checked { stash: 3, eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 3, maybe_pool_id: Some(1), result: Ok(()) },
+				]
+			);
+			assert_unstaked(&STASH);
+			assert_unstaked(&STASH_2);
+		});
 	}
 
 	#[test]
@@ -290,7 +356,15 @@ mod on_idle {
 				fast_unstake_events_since_last_call(),
 				vec![
 					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
-					Event::Unstaked { stash: 1, maybe_pool_id: Some(0), result: Ok(()) }
+					Event::Unstaked {
+						stash: 1,
+						maybe_pool_id: Some(0),
+						result: Err(DispatchError::Module(ModuleError {
+							index: 4,
+							error: [0, 0, 0, 0],
+							message: None
+						}))
+					}
 				]
 			);
 			assert_unstaked(&STASH);
@@ -428,7 +502,6 @@ mod on_idle {
 		});
 	}
 }
-
 
 mod signed_extension {
 	use super::*;

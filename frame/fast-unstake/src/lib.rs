@@ -320,7 +320,7 @@ pub mod pallet {
 			}
 
 			// NOTE: here we're assuming that the number of validators has only ever increased,
-			// meaning that the number of exposures to check is either this per era, or less.s
+			// meaning that the number of exposures to check is either this per era, or less.
 			let validator_count = pallet_staking::ValidatorCount::<T>::get();
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`

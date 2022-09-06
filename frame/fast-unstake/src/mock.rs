@@ -286,6 +286,8 @@ impl Default for ExtBuilder {
 
 pub(crate) const STASH: u128 = 1;
 pub(crate) const CONTROLLER: u128 = 2;
+pub(crate) const STASH_2: u128 = 3;
+pub(crate) const CONTROLLER_2: u128 = 4;
 
 impl ExtBuilder {
 	// Add members to pool 0.
@@ -347,13 +349,25 @@ impl ExtBuilder {
 			// initial staking setup with some accounts 1 and 2
 			Balances::make_free_balance_be(&STASH, 200);
 			Balances::make_free_balance_be(&CONTROLLER, 200);
+			Balances::make_free_balance_be(&STASH_2, 200);
+			Balances::make_free_balance_be(&CONTROLLER_2, 200);
+
 			assert_ok!(Staking::bond(
 				Origin::signed(STASH),
 				CONTROLLER,
 				100,
 				RewardDestination::Controller
 			));
+
+			assert_ok!(Staking::bond(
+				Origin::signed(STASH_2),
+				CONTROLLER_2,
+				100,
+				RewardDestination::Stash
+			));
+
 			assert_ok!(Staking::nominate(Origin::signed(CONTROLLER), vec![3_u128]));
+			assert_ok!(Staking::nominate(Origin::signed(CONTROLLER_2), vec![3_u128]));
 
 			// KIAN stuff
 			let validators = 32 as AccountId;
