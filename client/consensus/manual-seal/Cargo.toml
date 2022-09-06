@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }
 assert_matches = "1.3.0"
-async-trait = "0.1.50"
+async-trait = "0.1.57"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 futures = "0.3.21"
 log = "0.4.17"

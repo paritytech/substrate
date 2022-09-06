@@ -35,9 +35,11 @@ fn add_proxies<T: Config>(n: u32, maybe_who: Option<T::AccountId>) -> Result<(),
 	let caller = maybe_who.unwrap_or_else(whitelisted_caller);
 	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 	for i in 0..n {
+		let real = T::Lookup::unlookup(account("target", i, SEED));
+
 		Proxy::<T>::add_proxy(
 			RawOrigin::Signed(caller.clone()).into(),
-			account("target", i, SEED),
+			real,
 			T::ProxyType::default(),
 			T::BlockNumber::zero(),
 		)?;
@@ -180,9 +182,10 @@ benchmarks! {
 	add_proxy {
 		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
+		let real = T::Lookup::unlookup(account("target", T::MaxProxies::get(), SEED));
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		account("target", T::MaxProxies::get(), SEED),
+		real,
 		T::ProxyType::default(),
 		T::BlockNumber::zero()
 	)
@@ -194,9 +197,10 @@ benchmarks! {
 	remove_proxy {
 		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
+		let delegate = T::Lookup::unlookup(account("target", 0, SEED));
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		account("target", 0, SEED),
+		delegate,
 		T::ProxyType::default(),
 		T::BlockNumber::zero()
 	)

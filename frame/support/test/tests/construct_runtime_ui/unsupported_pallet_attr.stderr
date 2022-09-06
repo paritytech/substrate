@@ -1,0 +1,5 @@
+error: Unsupported attribute, only #[cfg] is supported on pallet declarations in `construct_runtime`
+  --> tests/construct_runtime_ui/unsupported_pallet_attr.rs:10:3
+   |
+10 |         #[attr]
+   |         ^

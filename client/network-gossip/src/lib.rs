@@ -67,12 +67,13 @@ pub use self::{
 	validator::{DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext},
 };
 
-use sc_network::{multiaddr, PeerId};
-use sc_network_common::service::{
-	NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
+use libp2p::{multiaddr, PeerId};
+use sc_network_common::{
+	protocol::ProtocolName,
+	service::{NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers},
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::{borrow::Cow, iter};
+use std::iter;
 
 mod bridge;
 mod state_machine;
@@ -82,7 +83,7 @@ mod validator;
 pub trait Network<B: BlockT>:
 	NetworkPeers + NetworkEventStream + NetworkNotification + NetworkBlock<B::Hash, NumberFor<B>>
 {
-	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
+	fn add_set_reserved(&self, who: PeerId, protocol: ProtocolName) {
 		let addr =
 			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
 		let result = self.add_peers_to_reserved_set(protocol, iter::once(addr).collect());

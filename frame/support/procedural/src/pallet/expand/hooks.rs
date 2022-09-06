@@ -17,7 +17,6 @@
 
 use crate::pallet::Def;
 
-///
 /// * implement the individual traits using the Hooks trait
 pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 	let (where_clause, span, has_runtime_upgrade) = match def.hooks.as_ref() {
@@ -57,6 +56,19 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 				pallet_name,
 			);
 		}
+	};
+
+	let log_try_state = quote::quote! {
+		let pallet_name = <
+			<T as #frame_system::Config>::PalletInfo
+			as
+			#frame_support::traits::PalletInfo
+		>::name::<Self>().expect("Every active pallet has a name in the runtime; qed");
+		#frame_support::log::debug!(
+			target: #frame_support::LOG_TARGET,
+			"🩺 try-state pallet {:?}",
+			pallet_name,
+		);
 	};
 
 	let hooks_impl = if def.hooks.is_none() {
@@ -189,6 +201,24 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 						<T as #frame_system::Config>::BlockNumber
 					>
 				>::integrity_test()
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		impl<#type_impl_gen>
+			#frame_support::traits::TryState<<T as #frame_system::Config>::BlockNumber>
+			for #pallet_ident<#type_use_gen> #where_clause
+		{
+			fn try_state(
+				n: <T as #frame_system::Config>::BlockNumber,
+				_s: #frame_support::traits::TryStateSelect
+			) -> Result<(), &'static str> {
+				#log_try_state
+				<
+					Self as #frame_support::traits::Hooks<
+						<T as #frame_system::Config>::BlockNumber
+					>
+				>::try_state(n)
 			}
 		}
 	)
