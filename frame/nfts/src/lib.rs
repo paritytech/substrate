@@ -361,7 +361,7 @@ pub mod pallet {
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
-		// All approvals of an item got cancelled.
+		/// All approvals of an item got cancelled.
 		AllApprovalsCancelled {
 			collection: T::CollectionId,
 			item: T::ItemId,
