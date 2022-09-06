@@ -1143,7 +1143,7 @@ fn postponed_named_task_cannot_be_rescheduled() {
 			Scheduler::do_reschedule_named(name, DispatchTime::At(1001)),
 			Error::<Test>::NotFound
 		);
-		// Manually re-scheduling the call by address works.
+		// Manually re-scheduling the call by address errors.
 		assert_err!(
 			Scheduler::do_reschedule(address, DispatchTime::At(1001)),
 			Error::<Test>::Named
