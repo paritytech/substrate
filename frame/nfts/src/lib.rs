@@ -965,10 +965,8 @@ pub mod pallet {
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
-			let deadline = match maybe_deadline {
-				Some(d) => Some(d.saturating_add(frame_system::Pallet::<T>::block_number())),
-				None => None,
-			};
+			let now = frame_system::Pallet::<T>::block_number();
+			let deadline = maybe_deadline.map(|d| d.saturating_add(now));
 
 			details
 				.approvals
