@@ -165,10 +165,10 @@ impl pallet_preimage::Config for Test {
 
 pub struct TestWeightInfo;
 impl WeightInfo for TestWeightInfo {
-	fn service_agendas() -> Weight {
+	fn service_agendas_base() -> Weight {
 		Weight::from_ref_time(0b0000_0001)
 	}
-	fn service_agenda(i: u32) -> Weight {
+	fn service_agenda_base(i: u32) -> Weight {
 		Weight::from_ref_time((i << 8) as u64 + 0b0000_0010)
 	}
 	fn service_task_base() -> Weight {
