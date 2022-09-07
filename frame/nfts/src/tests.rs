@@ -70,6 +70,12 @@ fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
 	s
 }
 
+fn approvals(collection_id: u32, item_id: u32) -> Vec<(u64, Option<u64>)> {
+	let item = Item::<Test>::get(collection_id, item_id).unwrap();
+	let s: Vec<_> = item.approvals.into_iter().collect();
+	s
+}
+
 fn events() -> Vec<Event<Test>> {
 	let result = System::events()
 		.into_iter()
@@ -583,9 +589,12 @@ fn approving_multiple_accounts_works() {
 		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
 		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
 
+		let current_block = 1;
+		System::set_block_number(current_block);
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3, None));
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 4, None));
-		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 5, None));
+		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 5, Some(2)));
+		assert_eq!(approvals(0, 42), vec![(3, None), (4, None), (5, Some(current_block + 2))]);
 
 		assert_ok!(Nfts::transfer(Origin::signed(4), 0, 42, 6));
 		assert_noop!(Nfts::transfer(Origin::signed(3), 0, 42, 7), Error::<Test>::NoPermission);
@@ -684,6 +693,33 @@ fn cancel_approval_works_with_force() {
 
 		assert_ok!(Nfts::cancel_approval(Origin::root(), 0, 42, 3));
 		assert_noop!(Nfts::cancel_approval(Origin::root(), 0, 42, 1), Error::<Test>::NotDelegate);
+	});
+}
+
+#[test]
+fn clear_all_transfer_approvals_works() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
+
+		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3, None));
+		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 4, None));
+
+		assert_noop!(
+			Nfts::clear_all_transfer_approvals(Origin::signed(3), 0, 42),
+			Error::<Test>::NoPermission
+		);
+
+		assert_ok!(Nfts::clear_all_transfer_approvals(Origin::signed(2), 0, 42));
+
+		assert!(events().contains(&Event::<Test>::AllApprovalsCancelled {
+			collection: 0,
+			item: 42,
+			owner: 2,
+		}));
+
+		assert_noop!(Nfts::transfer(Origin::signed(3), 0, 42, 5), Error::<Test>::NoPermission);
+		assert_noop!(Nfts::transfer(Origin::signed(4), 0, 42, 5), Error::<Test>::NoPermission);
 	});
 }
 
