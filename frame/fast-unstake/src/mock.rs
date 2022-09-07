@@ -15,13 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
 use crate::{self as fast_unstake};
 use frame_support::{
 	assert_ok,
 	pallet_prelude::*,
 	parameter_types,
 	traits::{ConstU64, ConstU8, Currency},
+	weights::constants::WEIGHT_PER_SECOND,
 	PalletId,
 };
 use sp_runtime::{
@@ -29,10 +29,9 @@ use sp_runtime::{
 	FixedU128,
 };
 
-use frame_system::{Account, RawOrigin};
-use pallet_nomination_pools::{BondedPools, LastPoolId, PoolId, PoolState};
-use pallet_staking::{Exposure, IndividualExposure, RewardDestination};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use frame_system::RawOrigin;
+use pallet_staking::{Exposure, IndividualExposure};
+use sp_std::prelude::*;
 
 pub type AccountId = u128;
 pub type AccountIndex = u32;
@@ -42,7 +41,7 @@ pub type T = Runtime;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
 }
 
 impl frame_system::Config for Runtime {
@@ -84,7 +83,7 @@ parameter_types! {
 }
 
 impl pallet_balances::Config for Runtime {
-	type MaxLocks = ();
+	type MaxLocks = ConstU32<128>;
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
@@ -109,14 +108,24 @@ pallet_staking_reward_curve::build! {
 parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 	pub static BondingDuration: u32 = 3;
-	pub static MinJoinBondConfig: Balance = 2;
 	pub static CurrentEra: u32 = 0;
-	pub storage BondedBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
-	pub storage UnbondingBalanceMap: BTreeMap<AccountId, Balance> = Default::default();
-	#[derive(Clone, PartialEq)]
-	pub static MaxUnbonding: u32 = 8;
-	pub static StakingMinBond: Balance = 10;
-	pub storage Nominations: Option<Vec<AccountId>> = None;
+	pub static Ongoing: bool = false;
+}
+
+pub struct MockElection;
+impl frame_election_provider_support::ElectionProvider for MockElection {
+	type AccountId = AccountId;
+	type BlockNumber = BlockNumber;
+	type DataProvider = Staking;
+	type Error = ();
+
+	fn ongoing() -> bool {
+		Ongoing::get()
+	}
+
+	fn elect() -> Result<frame_election_provider_support::Supports<AccountId>, Self::Error> {
+		Err(())
+	}
 }
 
 impl pallet_staking::Config for Runtime {
@@ -138,8 +147,7 @@ impl pallet_staking::Config for Runtime {
 	type NextNewSession = ();
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
-	type ElectionProvider =
-		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking)>;
+	type ElectionProvider = MockElection;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
@@ -165,7 +173,7 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 parameter_types! {
 	pub const PostUnbondingPoolsWindow: u32 = 10;
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
-	pub static MaxMetadataLen: u32 = 2;
+	pub static MaxMetadataLen: u32 = 10;
 	pub static CheckLevel: u8 = 255;
 }
 
@@ -185,25 +193,6 @@ impl pallet_nomination_pools::Config for Runtime {
 	type PalletId = PoolsPalletId;
 }
 
-pub struct FastUnstakeWeightInfo;
-impl fast_unstake::WeightInfo for FastUnstakeWeightInfo {
-	fn register_fast_unstake() -> Weight {
-		10
-	}
-	fn deregister() -> Weight {
-		5
-	}
-	fn control() -> Weight {
-		2
-	}
-	fn on_idle_unstake() -> Weight {
-		10
-	}
-	fn on_idle_check(v: u32, e: u32) -> Weight {
-		10
-	}
-}
-
 parameter_types! {
 	pub static SlashPerEra: u32 = 100;
 }
@@ -212,7 +201,7 @@ impl fast_unstake::Config for Runtime {
 	type Event = Event;
 	type SlashPerEra = SlashPerEra;
 	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
-	type WeightInfo = FastUnstakeWeightInfo;
+	type WeightInfo = ();
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -233,9 +222,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	static ObservedEventsPools: usize = 0;
-	static ObservedEventsStaking: usize = 0;
-	static ObservedEventsBalances: usize = 0;
 	static FastUnstakeEvents: u32 = 0;
 }
 
@@ -250,80 +236,36 @@ pub(crate) fn fast_unstake_events_since_last_call() -> Vec<super::Event<Runtime>
 	events.into_iter().skip(already_seen as usize).collect()
 }
 
-pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Event<Runtime>> {
-	let events = System::events()
-		.into_iter()
-		.map(|r| r.event)
-		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
-		.collect::<Vec<_>>();
-	let already_seen = ObservedEventsPools::get();
-	ObservedEventsPools::set(events.len());
-	events.into_iter().skip(already_seen).collect()
-}
-
-pub(crate) fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runtime>> {
-	let events = System::events()
-		.into_iter()
-		.map(|r| r.event)
-		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
-		.collect::<Vec<_>>();
-	let already_seen = ObservedEventsStaking::get();
-	ObservedEventsStaking::set(events.len());
-	events.into_iter().skip(already_seen).collect()
-}
-
 pub struct ExtBuilder {
-	members: Vec<(AccountId, Balance)>,
-	max_members: Option<u32>,
-	max_members_per_pool: Option<u32>,
+	stakers: Vec<(AccountId, AccountId, Balance)>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { members: Default::default(), max_members: Some(4), max_members_per_pool: Some(3) }
+		Self { stakers: vec![(1, 2, 100), (3, 4, 100), (5, 6, 100), (7, 8, 100), (9, 10, 100)] }
 	}
 }
 
-pub(crate) const STASH: u128 = 1;
-pub(crate) const CONTROLLER: u128 = 2;
-pub(crate) const STASH_2: u128 = 3;
-pub(crate) const CONTROLLER_2: u128 = 4;
+pub(crate) const VALIDATORS_PER_ERA: AccountId = 32;
+pub(crate) const NOMINATORS_PER_VALIDATOR_PER_ERA: AccountId = 4;
 
 impl ExtBuilder {
-	// Add members to pool 0.
-	pub(crate) fn add_members(mut self, members: Vec<(AccountId, Balance)>) -> Self {
-		self.members = members;
-		self
-	}
+	pub(crate) fn register_stakers_for_era(era: u32, validators: AccountId, nominators: AccountId) {
+		// validators are prefixed with 100 and nominators with 1000 to prevent conflict. Make sure
+		// all the other accounts used in tests are below 100. Also ensure here that we don't
+		// overlap.
+		assert!(100 + validators < 10000);
 
-	pub(crate) fn ed(self, ed: Balance) -> Self {
-		ExistentialDeposit::set(ed);
-		self
-	}
-
-	pub(crate) fn min_bond(self, min: Balance) -> Self {
-		StakingMinBond::set(min);
-		self
-	}
-
-	pub(crate) fn min_join_bond(self, min: Balance) -> Self {
-		MinJoinBondConfig::set(min);
-		self
-	}
-
-	pub(crate) fn with_check(self, level: u8) -> Self {
-		CheckLevel::set(level);
-		self
-	}
-
-	pub(crate) fn max_members(mut self, max: Option<u32>) -> Self {
-		self.max_members = max;
-		self
-	}
-
-	pub(crate) fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
-		self.max_members_per_pool = max;
-		self
+		(100..100 + validators)
+			.map(|v| {
+				let others = (1000..(1000 + nominators))
+					.map(|n| IndividualExposure { who: n, value: 0 as Balance })
+					.collect::<Vec<_>>();
+				(v, Exposure { total: 0, own: 0, others })
+			})
+			.for_each(|(validator, exposure)| {
+				pallet_staking::ErasStakers::<T>::insert(era, validator, exposure);
+			});
 	}
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
@@ -331,12 +273,30 @@ impl ExtBuilder {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
-			min_join_bond: MinJoinBondConfig::get(),
-			min_create_bond: 2,
-			max_pools: Some(2),
-			max_members_per_pool: self.max_members_per_pool,
-			max_members: self.max_members,
+		// create one default pool.
+		let _ = pallet_nomination_pools::GenesisConfig::<Runtime> { ..Default::default() }
+			.assimilate_storage(&mut storage);
+
+		let _ = pallet_balances::GenesisConfig::<Runtime> {
+			balances: self
+				.stakers
+				.clone()
+				.into_iter()
+				.map(|(stash, _, balance)| (stash, balance * 2))
+				.chain(
+					self.stakers.clone().into_iter().map(|(_, ctrl, balance)| (ctrl, balance * 2)),
+				)
+				.collect::<Vec<_>>(),
+		}
+		.assimilate_storage(&mut storage);
+
+		let _ = pallet_staking::GenesisConfig::<Runtime> {
+			stakers: self
+				.stakers
+				.into_iter()
+				.map(|(x, y, z)| (x, y, z, pallet_staking::StakerStatus::Nominator(vec![42])))
+				.collect::<Vec<_>>(),
+			..Default::default()
 		}
 		.assimilate_storage(&mut storage);
 
@@ -346,55 +306,21 @@ impl ExtBuilder {
 			// for events to be deposited.
 			frame_system::Pallet::<Runtime>::set_block_number(1);
 
-			// initial staking setup with some accounts 1 and 2
-			Balances::make_free_balance_be(&STASH, 200);
-			Balances::make_free_balance_be(&CONTROLLER, 200);
-			Balances::make_free_balance_be(&STASH_2, 200);
-			Balances::make_free_balance_be(&CONTROLLER_2, 200);
-
-			assert_ok!(Staking::bond(
-				Origin::signed(STASH),
-				CONTROLLER,
-				100,
-				RewardDestination::Controller
-			));
-
-			assert_ok!(Staking::bond(
-				Origin::signed(STASH_2),
-				CONTROLLER_2,
-				100,
-				RewardDestination::Stash
-			));
-
-			assert_ok!(Staking::nominate(Origin::signed(CONTROLLER), vec![3_u128]));
-			assert_ok!(Staking::nominate(Origin::signed(CONTROLLER_2), vec![3_u128]));
-
-			// KIAN stuff
-			let validators = 32 as AccountId;
-			let nominators = 4 as AccountId;
-			for era in 0..(BondingDuration::get()) {
-				(100..100 + validators)
-					.map(|v| {
-						let others = (1000..(1000 + nominators))
-							.map(|n| IndividualExposure { who: n, value: 0 as Balance })
-							.collect::<Vec<_>>();
-						(v, Exposure { total: 0, own: 0, others })
-					})
-					.for_each(|(validator, exposure)| {
-						pallet_staking::ErasStakers::<T>::insert(era, validator, exposure);
-					});
+			for era in 0..=(BondingDuration::get()) {
+				Self::register_stakers_for_era(
+					era,
+					VALIDATORS_PER_ERA,
+					NOMINATORS_PER_VALIDATOR_PER_ERA,
+				);
 			}
+
+			// because we read this value as a measure of how many validators we have.
+			pallet_staking::ValidatorCount::<Runtime>::put(VALIDATORS_PER_ERA as u32);
 
 			// make a pool
-			let amount_to_bond = MinJoinBondConfig::get();
+			let amount_to_bond = Pools::depositor_min_bond();
 			Balances::make_free_balance_be(&10, amount_to_bond * 5);
 			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
-
-			let last_pool = LastPoolId::<Runtime>::get();
-			for (account_id, bonded) in self.members {
-				Balances::make_free_balance_be(&account_id, bonded * 2);
-				assert_ok!(Pools::join(RawOrigin::Signed(account_id).into(), bonded, last_pool));
-			}
 		});
 		ext
 	}
@@ -402,12 +328,12 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			Pools::sanity_checks(CheckLevel::get()).unwrap();
+			// TODO: sanity check, if any
 		})
 	}
 }
 
-pub(crate) fn run_to_block(n: u64) {
+pub(crate) fn run_to_block(n: u64, on_idle: bool) {
 	let current_block = System::block_number();
 	assert!(n > current_block);
 	while System::block_number() < n {
@@ -422,7 +348,15 @@ pub(crate) fn run_to_block(n: u64) {
 		Staking::on_initialize(System::block_number());
 		Pools::on_initialize(System::block_number());
 		FastUnstake::on_initialize(System::block_number());
+		if on_idle {
+			FastUnstake::on_idle(System::block_number(), BlockWeights::get().max_block);
+		}
 	}
+}
+
+pub(crate) fn next_block(on_idle: bool) {
+	let current = System::block_number();
+	run_to_block(current + 1, on_idle);
 }
 
 pub fn assert_unstaked(stash: &AccountId) {

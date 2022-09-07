@@ -44,15 +44,16 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
-
 pub use pallet::*;
 
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
+// NOTE: enable benchmarking in tests as well.
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+pub mod weights;
 
 pub const LOG_TARGET: &'static str = "runtime::fast-unstake";
 
@@ -85,32 +86,7 @@ pub mod pallet {
 	};
 	use sp_staking::EraIndex;
 	use sp_std::{prelude::*, vec::Vec};
-
-	pub trait WeightInfo {
-		fn register_fast_unstake() -> Weight;
-		fn deregister() -> Weight;
-		fn control() -> Weight;
-		fn on_idle_unstake() -> Weight;
-		fn on_idle_check(v: u32, e: u32) -> Weight;
-	}
-
-	impl WeightInfo for () {
-		fn register_fast_unstake() -> Weight {
-			0
-		}
-		fn deregister() -> Weight {
-			0
-		}
-		fn control() -> Weight {
-			0
-		}
-		fn on_idle_unstake() -> Weight {
-			0
-		}
-		fn on_idle_check(_: u32, _: u32) -> Weight {
-			0
-		}
-	}
+	use weights::WeightInfo;
 
 	type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
 		<T as frame_system::Config>::AccountId,
@@ -325,18 +301,18 @@ pub mod pallet {
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
-			#[cfg(feature = "runtime-benchmarks")]
-			let final_eras_to_check = eras_to_check_per_block;
-			#[cfg(not(feature = "runtime-benchmarks"))]
 			let final_eras_to_check = {
 				let worse_weight = |v, u| {
-					<T as Config>::WeightInfo::on_idle_check(v, u)
+					<T as Config>::WeightInfo::on_idle_check(v * u)
 						.max(<T as Config>::WeightInfo::on_idle_unstake())
 				};
 				let mut try_eras_to_check = eras_to_check_per_block;
-				while worse_weight(validator_count, try_eras_to_check) > remaining_weight {
+				while dbg!(worse_weight(validator_count, try_eras_to_check)) >
+					dbg!(remaining_weight)
+				{
 					try_eras_to_check.saturating_dec();
 					if try_eras_to_check.is_zero() {
+						log!(debug, "early existing because try_eras_to_check is zero");
 						return T::DbWeight::get().reads(1)
 					}
 				}
@@ -371,7 +347,13 @@ pub mod pallet {
 				Some(head) => head,
 			};
 
-			log!(debug, "checking {:?}", stash);
+			log!(
+				debug,
+				"checking {:?}, final_eras_to_check = {:?}, remaining_weight = {:?}",
+				stash,
+				final_eras_to_check,
+				remaining_weight
+			);
 
 			// the range that we're allowed to check in this round.
 			let current_era = pallet_staking::CurrentEra::<T>::get().unwrap_or_default();
@@ -438,6 +420,13 @@ pub mod pallet {
 				};
 
 				let result = unstake_result.and(pool_stake_result);
+				log!(
+					info,
+					"unstaked {:?}, maybe_pool {:?}, outcome: {:?}",
+					stash,
+					maybe_pool_id,
+					result
+				);
 				Self::deposit_event(Event::<T>::Unstaked { stash, maybe_pool_id, result });
 
 				<T as Config>::WeightInfo::on_idle_unstake()
@@ -469,6 +458,7 @@ pub mod pallet {
 						&mut Default::default(),
 						current_era,
 					);
+					log!(info, "slashed {:?} by {:?}", stash, amount);
 					Self::deposit_event(Event::<T>::Slashed { stash, amount });
 				} else {
 					// Not exposed in these two eras.
@@ -477,7 +467,7 @@ pub mod pallet {
 					Self::deposit_event(Event::<T>::Checked { stash, eras: eras_to_check });
 				}
 
-				<T as Config>::WeightInfo::on_idle_check(validator_count, final_eras_to_check)
+				<T as Config>::WeightInfo::on_idle_check(validator_count * eras_checked)
 			}
 		}
 

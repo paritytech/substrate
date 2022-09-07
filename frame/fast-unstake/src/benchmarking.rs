@@ -68,8 +68,6 @@ fn fund_and_bond_account<T: Config>(account: &T::AccountId) {
 	));
 }
 
-/// All events of the `Balances` pallet.
-// TODO: reused this in the tests mock.
 pub(crate) fn fast_unstake_events<T: Config>() -> Vec<crate::Event<T>> {
 	frame_system::Pallet::<T>::events()
 		.into_iter()
@@ -145,7 +143,7 @@ benchmarks! {
 		on_idle_full_block::<T>();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked: vec![0], maybe_pool_id: Some(1) })
+			Some(UnstakeRequest { stash: who.clone(), checked: vec![0], maybe_pool_id: Some(pool_id) })
 		);
 	}
 	: {
@@ -198,9 +196,13 @@ benchmarks! {
 	register_fast_unstake {
 		let who = create_unexposed_nominator::<T>();
 		whitelist_account!(who);
+		assert_eq!(Queue::<T>::count(), 0);
+
 	}
 	:_(RawOrigin::Signed(who.clone()), None)
-	verify {}
+	verify {
+		assert_eq!(Queue::<T>::count(), 1);
+	}
 
 	deregister {
 		let who = create_unexposed_nominator::<T>();
@@ -208,10 +210,13 @@ benchmarks! {
 			RawOrigin::Signed(who.clone()).into(),
 			None
 		));
+		assert_eq!(Queue::<T>::count(), 1);
 		whitelist_account!(who);
 	}
 	:_(RawOrigin::Signed(who.clone()))
-	verify {}
+	verify {
+		assert_eq!(Queue::<T>::count(), 0);
+	}
 
 	control {
 		let origin = <T as Config>::ControlOrigin::successful_origin();
@@ -219,5 +224,5 @@ benchmarks! {
 	: _<T::Origin>(origin, 128)
 	verify {}
 
-	// impl_benchmark_test_suite!(Pallet, crate::tests::new_test_ext(), crate::tests::Test)
+	impl_benchmark_test_suite!(Pallet, crate::mock::ExtBuilder::default().build(), crate::mock::Runtime)
 }
