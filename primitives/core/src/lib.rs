@@ -697,7 +697,7 @@ macro_rules! bounded_vec {
 macro_rules! bounded_btree_map {
 	($ ( $key:expr => $value:expr ),* $(,)?) => {
 		{
-			$crate::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
+			$crate::TryCollect::<$crate::bounded::BoundedBTreeMap<_, _, _>>::try_collect(
 				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
 			).unwrap()
 		}
