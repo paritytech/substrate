@@ -66,7 +66,12 @@ pub(crate) struct TemplateData {
 impl TemplateData {
 	/// Returns a new [`Self`] from the given configuration.
 	pub fn new(cfg: &Configuration, params: &StorageParams) -> Result<Self> {
-		let header = params.header.map(|p| std::fs::read_to_string(p)).transpose()?.unwrap_or_default();
+		let header = params
+			.header
+			.as_ref()
+			.map(|p| std::fs::read_to_string(p))
+			.transpose()?
+			.unwrap_or_default();
 
 		Ok(TemplateData {
 			db_name: format!("{}", cfg.database),
