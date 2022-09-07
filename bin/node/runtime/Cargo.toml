@@ -81,6 +81,11 @@ pallet-utility = { version = "3.0.0", default-features = false, path = "../../..
 pallet-transaction-payment = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
 pallet-vesting = { version = "3.0.0", default-features = false, path = "../../../frame/vesting" }
+pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../../../frame/chainbridge" }
+pallet-cere-ddc = { version = "4.0.0", default-features = false, path = "../../../frame/ddc-pallet" }
+pallet-erc721 = { version = "2.0.0", default-features = false, path = "../../../frame/erc721" }
+pallet-erc20 = { version = "2.0.0", default-features = false, path = "../../../frame/erc20" }
+pallet-ddc-metrics-offchain-worker = { version = "2.0.0", default-features = false, path = "../../../frame/ddc-metrics-offchain-worker" }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builder" }
