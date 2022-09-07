@@ -903,7 +903,7 @@ pub mod pallet {
 		/// - `target`: The account to remove the lock on.
 		///
 		/// Weight: `O(R)` with R number of vote of target.
-		#[pallet::weight(T::WeightInfo::unlock_set().max(T::WeightInfo::unlock_remove()))]
+		#[pallet::weight(T::WeightInfo::unlock_set(T::MaxVotes::get()).max(T::WeightInfo::unlock_remove(T::MaxVotes::get())))]
 		pub fn unlock(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
@@ -938,7 +938,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
-		#[pallet::weight(T::WeightInfo::remove_vote())]
+		#[pallet::weight(T::WeightInfo::remove_vote(T::MaxVotes::get()))]
 		pub fn remove_vote(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			Self::try_remove_vote(&who, index, UnvoteScope::Any)
@@ -959,7 +959,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(R + log R)` where R is the number of referenda that `target` has voted on.
 		///   Weight is calculated for the maximum number of vote.
-		#[pallet::weight(T::WeightInfo::remove_other_vote())]
+		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
 			target: AccountIdLookupOf<T>,
