@@ -614,8 +614,8 @@ fn on_initialize_weight_is_correct() {
 		// Will include the named periodic only
 		assert_eq!(
 			Scheduler::on_initialize(1),
-			TestWeightInfo::service_agendas() +
-				TestWeightInfo::service_agenda(1) +
+			TestWeightInfo::service_agendas_base() +
+				TestWeightInfo::service_agenda_base(1) +
 				<TestWeightInfo as MarginalWeightInfo>::service_task(None, true, true) +
 				TestWeightInfo::execute_dispatch_unsigned() +
 				call_weight + Weight::from_ref_time(4)
@@ -626,8 +626,8 @@ fn on_initialize_weight_is_correct() {
 		// Will include anon and anon periodic
 		assert_eq!(
 			Scheduler::on_initialize(2),
-			TestWeightInfo::service_agendas() +
-				TestWeightInfo::service_agenda(2) +
+			TestWeightInfo::service_agendas_base() +
+				TestWeightInfo::service_agenda_base(2) +
 				<TestWeightInfo as MarginalWeightInfo>::service_task(None, false, true) +
 				TestWeightInfo::execute_dispatch_unsigned() +
 				call_weight + Weight::from_ref_time(3) +
@@ -641,8 +641,8 @@ fn on_initialize_weight_is_correct() {
 		// Will include named only
 		assert_eq!(
 			Scheduler::on_initialize(3),
-			TestWeightInfo::service_agendas() +
-				TestWeightInfo::service_agenda(1) +
+			TestWeightInfo::service_agendas_base() +
+				TestWeightInfo::service_agenda_base(1) +
 				<TestWeightInfo as MarginalWeightInfo>::service_task(None, true, false) +
 				TestWeightInfo::execute_dispatch_unsigned() +
 				call_weight + Weight::from_ref_time(1)
@@ -657,7 +657,7 @@ fn on_initialize_weight_is_correct() {
 		let actual_weight = Scheduler::on_initialize(4);
 		assert_eq!(
 			actual_weight,
-			TestWeightInfo::service_agendas() + TestWeightInfo::service_agenda(0)
+			TestWeightInfo::service_agendas_base() + TestWeightInfo::service_agenda_base(0)
 		);
 	});
 }

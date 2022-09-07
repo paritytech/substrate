@@ -872,7 +872,7 @@ use ServiceTaskError::*;
 impl<T: Config> Pallet<T> {
 	/// Service up to `max` agendas queue starting from earliest incompletely executed agenda.
 	fn service_agendas(weight: &mut WeightCounter, now: T::BlockNumber, max: u32) {
-		if !weight.check_accrue(T::WeightInfo::service_agendas()) {
+		if !weight.check_accrue(T::WeightInfo::service_agendas_base()) {
 			return
 		}
 
@@ -882,7 +882,7 @@ impl<T: Config> Pallet<T> {
 
 		let max_items = T::MaxScheduledPerBlock::get();
 		let mut count_down = max;
-		let service_agenda_base_weight = T::WeightInfo::service_agenda(max_items);
+		let service_agenda_base_weight = T::WeightInfo::service_agenda_base(max_items);
 		while count_down > 0 && when <= now && weight.can_accrue(service_agenda_base_weight) {
 			if !Self::service_agenda(weight, &mut executed, now, when, u32::max_value()) {
 				incomplete_since = incomplete_since.min(when);
@@ -914,7 +914,9 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect::<Vec<_>>();
 		ordered.sort_by_key(|k| k.1);
-		weight.check_accrue(T::WeightInfo::service_agenda(ordered.len() as u32));
+		let within_limit =
+			weight.check_accrue(T::WeightInfo::service_agenda_base(ordered.len() as u32));
+		debug_assert!(within_limit, "weight limit should have been checked in advance");
 
 		// Items which we know can be executed and have postponed for execution in a later block.
 		let mut postponed = (ordered.len() as u32).saturating_sub(max);
