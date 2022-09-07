@@ -238,3 +238,7 @@ pub fn run_to_block(n: u64) {
 pub fn root() -> OriginCaller {
 	system::RawOrigin::Root.into()
 }
+
+pub fn signed(i: u64) -> OriginCaller {
+	system::RawOrigin::Signed(i).into()
+}
