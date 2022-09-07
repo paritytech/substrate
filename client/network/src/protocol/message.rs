@@ -144,7 +144,7 @@ pub mod generic {
 		/// Block announce.
 		BlockAnnounce(BlockAnnounce<Header>),
 		/// Transactions.
-		Transactions(sc_network_transactions::Transactions<Extrinsic>),
+		Transactions,
 		/// Consensus protocol message.
 		Consensus(ConsensusMessage),
 		/// Remote method call request.
