@@ -93,9 +93,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	);
 
 	// execute a big block.
-	executor_call(&mut t, "Core_execute_block", &block1.0, true)
-		.0
-		.unwrap();
+	executor_call(&mut t, "Core_execute_block", &block1.0, true).0.unwrap();
 
 	// weight multiplier is increased for next block.
 	t.execute_with(|| {
@@ -106,9 +104,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	});
 
 	// execute a big block.
-	executor_call(&mut t, "Core_execute_block", &block2.0, true)
-		.0
-		.unwrap();
+	executor_call(&mut t, "Core_execute_block", &block2.0, true).0.unwrap();
 
 	// weight multiplier is increased for next block.
 	t.execute_with(|| {
@@ -153,22 +149,12 @@ fn transaction_fee_is_correct() {
 		function: Call::Balances(default_transfer_call()),
 	});
 
-	let r = executor_call(
-		&mut t,
-		"Core_initialize_block",
-		&vec![].and(&from_block_number(1u32)),
-		true,
-	)
-	.0;
+	let r =
+		executor_call(&mut t, "Core_initialize_block", &vec![].and(&from_block_number(1u32)), true)
+			.0;
 
 	assert!(r.is_ok());
-	let r = executor_call(
-		&mut t,
-		"BlockBuilder_apply_extrinsic",
-		&vec![].and(&xt.clone()),
-		true,
-	)
-	.0;
+	let r = executor_call(&mut t, "BlockBuilder_apply_extrinsic", &vec![].and(&xt.clone()), true).0;
 	assert!(r.is_ok());
 
 	t.execute_with(|| {

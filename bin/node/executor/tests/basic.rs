@@ -527,9 +527,7 @@ fn full_wasm_block_import_works() {
 
 	fees = t.execute_with(|| transfer_fee(&xt()));
 
-	executor_call(&mut t, "Core_execute_block", &block2.0, false)
-		.0
-		.unwrap();
+	executor_call(&mut t, "Core_execute_block", &block2.0, false).0.unwrap();
 
 	t.execute_with(|| {
 		assert_eq!(
@@ -681,9 +679,7 @@ fn deploying_wasm_contract_should_work() {
 
 	let mut t = new_test_ext(compact_code_unwrap());
 
-	executor_call(&mut t, "Core_execute_block", &b.0, false)
-		.0
-		.unwrap();
+	executor_call(&mut t, "Core_execute_block", &b.0, false).0.unwrap();
 
 	t.execute_with(|| {
 		// Verify that the contract does exist by querying some of its storage items
@@ -702,13 +698,8 @@ fn wasm_big_block_import_fails() {
 
 	set_heap_pages(&mut t.ext(), 4);
 
-	let result = executor_call(
-		&mut t,
-		"Core_execute_block",
-		&block_with_size(42, 0, 120_000).0,
-		false,
-	)
-	.0;
+	let result =
+		executor_call(&mut t, "Core_execute_block", &block_with_size(42, 0, 120_000).0, false).0;
 	assert!(result.is_err()); // Err(Wasmi(Trap(Trap { kind: Host(AllocatorOutOfSpace) })))
 }
 
@@ -716,14 +707,9 @@ fn wasm_big_block_import_fails() {
 fn native_big_block_import_succeeds() {
 	let mut t = new_test_ext(compact_code_unwrap());
 
-	executor_call(
-		&mut t,
-		"Core_execute_block",
-		&block_with_size(42, 0, 120_000).0,
-		true,
-	)
-	.0
-	.unwrap();
+	executor_call(&mut t, "Core_execute_block", &block_with_size(42, 0, 120_000).0, true)
+		.0
+		.unwrap();
 }
 
 #[test]
@@ -734,14 +720,11 @@ fn native_big_block_import_fails_on_fallback() {
 	// block.
 	set_heap_pages(&mut t.ext(), 8);
 
-	assert!(executor_call(
-		&mut t,
-		"Core_execute_block",
-		&block_with_size(42, 0, 120_000).0,
-		false,
-	)
-	.0
-	.is_err());
+	assert!(
+		executor_call(&mut t, "Core_execute_block", &block_with_size(42, 0, 120_000).0, false,)
+			.0
+			.is_err()
+	);
 }
 
 #[test]
@@ -766,14 +749,9 @@ fn panic_execution_gives_error() {
 	)
 	.0;
 	assert!(r.is_ok());
-	let r = executor_call(
-		&mut t,
-		"BlockBuilder_apply_extrinsic",
-		&vec![].and(&xt()),
-		false,
-	)
-	.0
-	.unwrap();
+	let r = executor_call(&mut t, "BlockBuilder_apply_extrinsic", &vec![].and(&xt()), false)
+		.0
+		.unwrap();
 	let r = ApplyExtrinsicResult::decode(&mut &r[..]).unwrap();
 	assert_eq!(r, Err(InvalidTransaction::Payment.into()));
 }
@@ -817,14 +795,9 @@ fn successful_execution_gives_ok() {
 
 	let fees = t.execute_with(|| transfer_fee(&xt()));
 
-	let r = executor_call(
-		&mut t,
-		"BlockBuilder_apply_extrinsic",
-		&vec![].and(&xt()),
-		false,
-	)
-	.0
-	.unwrap();
+	let r = executor_call(&mut t, "BlockBuilder_apply_extrinsic", &vec![].and(&xt()), false)
+		.0
+		.unwrap();
 	ApplyExtrinsicResult::decode(&mut &r[..])
 		.unwrap()
 		.expect("Extrinsic could not be applied")

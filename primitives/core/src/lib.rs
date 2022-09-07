@@ -206,7 +206,6 @@ impl OpaquePeerId {
 	}
 }
 
-
 /// Provide a simple 4 byte identifier for a type.
 pub trait TypeId {
 	/// Simple 4 byte identifier.
