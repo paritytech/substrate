@@ -547,7 +547,7 @@ pub trait TryCollect<C> {
 	fn try_collect(self) -> Result<C, Self::Error>;
 }
 
-/// Create new implementations of the [`Get`](crate::traits::Get) trait.
+/// Create new implementations of the [`Get`](crate::Get) trait.
 ///
 /// The so-called parameter type can be created in four different ways:
 ///
