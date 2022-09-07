@@ -171,6 +171,7 @@ pub struct StorageDef {
 	pub named_generics: Option<StorageGenerics>,
 	/// If the value stored in this storage is unbounded.
 	pub unbounded: bool,
+	pub benchmarking_cached: bool,
 }
 
 /// The parsed generic from the
@@ -814,6 +815,7 @@ impl StorageDef {
 			cfg_attrs,
 			named_generics,
 			unbounded,
+			benchmarking_cached: false,
 		})
 	}
 }
