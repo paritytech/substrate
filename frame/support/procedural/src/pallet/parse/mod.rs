@@ -125,13 +125,19 @@ impl Def {
 				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
 				Some(PalletAttr::Storage(span)) => {
-					let st = item.to_token_stream().to_string();
-					let storage_def = storage::StorageDef::try_from(span, index, item)?;
-					if st.contains("#[benchmarking(cached)]") {
-						println!("{} cached!", storage_def.ident.to_string());
-					} else {
-						println!("{} NOT cached!", storage_def.ident.to_string());
+					// check for #[benchmarking(cached)] calls
+					if let syn::Item::Type(typ) = item {
+						for attr in typ.attrs.as_slice() {
+							if let Some(seg) = attr.path.segments.last() {
+								if seg.to_token_stream().to_string() == "benchmarking" &&
+									attr.tokens.to_string() == "(cached)"
+								{
+									println!("cached!");
+								}
+							}
+						}
 					}
+					let storage_def = storage::StorageDef::try_from(span, index, item)?;
 					storages.push(storage_def)
 				},
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
