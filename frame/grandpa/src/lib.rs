@@ -40,11 +40,11 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
+	dispatch::{DispatchResultWithPostInfo, Pays},
 	pallet_prelude::Get,
 	storage,
 	traits::{KeyOwnerProofSystem, OneSessionHandler},
-	weights::{Pays, Weight},
+	weights::Weight,
 	WeakBoundedVec,
 };
 use scale_info::TypeInfo;

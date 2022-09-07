@@ -84,20 +84,20 @@ use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResult, DispatchResultWithPostInfo},
+	dispatch::{
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
+	},
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
-	weights::{
-		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
-		PerDispatchClass, RuntimeDbWeight, Weight,
-	},
 	Parameter,
 };
 use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
+use sp_weights::{RuntimeDbWeight, Weight};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;

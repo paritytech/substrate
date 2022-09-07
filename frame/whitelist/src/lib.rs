@@ -42,9 +42,10 @@ pub use weights::WeightInfo;
 
 use codec::{DecodeLimit, Encode, FullCodec};
 use frame_support::{
+	dispatch::{GetDispatchInfo, PostDispatchInfo},
 	ensure,
 	traits::{PreimageProvider, PreimageRecipient},
-	weights::{GetDispatchInfo, PostDispatchInfo, Weight},
+	weights::Weight,
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{Dispatchable, Hash};

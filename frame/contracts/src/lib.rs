@@ -107,10 +107,10 @@ use crate::{
 };
 use codec::{Encode, HasCompact};
 use frame_support::{
-	dispatch::Dispatchable,
+	dispatch::{DispatchClass, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
 	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
-	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	weights::Weight,
 	BoundedVec,
 };
 use frame_system::{limits::BlockWeights, Pallet as System};

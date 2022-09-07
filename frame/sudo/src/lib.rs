@@ -95,7 +95,7 @@
 use sp_runtime::{traits::StaticLookup, DispatchResult};
 use sp_std::prelude::*;
 
-use frame_support::{traits::UnfilteredDispatchable, weights::GetDispatchInfo};
+use frame_support::{dispatch::GetDispatchInfo, traits::UnfilteredDispatchable};
 
 #[cfg(test)]
 mod mock;

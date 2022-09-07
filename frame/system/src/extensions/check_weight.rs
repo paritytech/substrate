@@ -18,8 +18,8 @@
 use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Decode, Encode};
 use frame_support::{
+	dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo},
 	traits::Get,
-	weights::{DispatchClass, DispatchInfo, PostDispatchInfo, Weight},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -27,6 +27,7 @@ use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };
+use sp_weights::Weight;
 
 /// Block resource (weight) limit check.
 ///

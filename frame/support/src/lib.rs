@@ -81,7 +81,6 @@ pub mod crypto;
 pub mod instances;
 pub mod migrations;
 pub mod traits;
-pub mod weights;
 
 #[doc(hidden)]
 pub mod unsigned {
@@ -91,6 +90,45 @@ pub mod unsigned {
 	pub use crate::sp_runtime::transaction_validity::{
 		TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
 	};
+}
+
+pub mod weights {
+	pub use sp_weights::*;
+
+	#[deprecated = "Function has moved to `frame_support::dispatch`"]
+	pub fn extract_actual_pays_fee(
+		_: &crate::dispatch::DispatchResultWithPostInfo,
+		_: &crate::dispatch::DispatchInfo,
+	) {
+	}
+	#[deprecated = "Function has moved to `frame_support::dispatch`"]
+	pub fn extract_actual_weight(
+		_: &crate::dispatch::DispatchResultWithPostInfo,
+		_: &crate::dispatch::DispatchInfo,
+	) {
+	}
+	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
+	pub trait ClassifyDispatch<T> {}
+	#[deprecated = "Enum has moved to `frame_support::dispatch`"]
+	pub enum DispatchClass {}
+	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
+	pub struct DispatchInfo;
+	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
+	pub trait GetDispatchInfo {}
+	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
+	pub trait OneOrMany {}
+	#[deprecated = "Enum has moved to `frame_support::dispatch`"]
+	pub enum Pays {}
+	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
+	pub trait PaysFee<T> {}
+	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
+	pub struct PerDispatchClass;
+	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
+	pub struct PostDispatchInfo;
+	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
+	pub trait WeighData {}
+	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
+	pub trait WithPostDispatchInfo {}
 }
 
 #[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
@@ -1361,7 +1399,10 @@ pub mod pallet_prelude {
 	#[cfg(feature = "std")]
 	pub use crate::traits::GenesisBuild;
 	pub use crate::{
-		dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter},
+		dispatch::{
+			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
+			Pays,
+		},
 		ensure,
 		inherent::{InherentData, InherentIdentifier, ProvideInherent},
 		storage,
@@ -1376,7 +1417,6 @@ pub mod pallet_prelude {
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
 			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
-		weights::{DispatchClass, Pays, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
@@ -1392,6 +1432,7 @@ pub mod pallet_prelude {
 		MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
+	pub use sp_weights::Weight;
 }
 
 /// `pallet` attribute macro allows to define a pallet to be used in `construct_runtime!`.

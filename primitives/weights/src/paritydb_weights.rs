@@ -16,24 +16,22 @@
 // limitations under the License.
 
 pub mod constants {
-	use frame_support::{
-		parameter_types,
-		weights::{constants, RuntimeDbWeight},
-	};
+	use sp_core::parameter_types;
+	use sp_weights::{constants, RuntimeDbWeight};
 
 	parameter_types! {
-		/// By default, Substrate uses RocksDB, so this will be the weight used throughout
-		/// the runtime.
-		pub const RocksDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 25_000 * constants::WEIGHT_PER_NANOS.ref_time(),
-			write: 100_000 * constants::WEIGHT_PER_NANOS.ref_time(),
+		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
+		/// are available for brave runtime engineers who may want to try this out as default.
+		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 8_000 * constants::WEIGHT_PER_NANOS.ref_time(),
+			write: 50_000 * constants::WEIGHT_PER_NANOS.ref_time(),
 		};
 	}
 
 	#[cfg(test)]
 	mod test_db_weights {
-		use super::constants::RocksDbWeight as W;
-		use frame_support::weights::constants;
+		use super::constants::ParityDbWeight as W;
+		use sp_weights::constants;
 
 		/// Checks that all weights exist and have sane values.
 		// NOTE: If this test fails but you are sure that the generated values are fine,
