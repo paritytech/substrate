@@ -25,6 +25,7 @@ sp-consensus-babe = { version = "0.9.0", default-features = false, path = "../..
 sp-block-builder = { path = "../../../primitives/block-builder", default-features = false, version = "3.0.0"}
 sp-inherents = { version = "3.0.0", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
+sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 sp-offchain = { version = "3.0.0", default-features = false, path = "../../../primitives/offchain" }
 sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
@@ -89,9 +90,6 @@ pallet-ddc-metrics-offchain-worker = { version = "2.0.0", default-features = fal
 
 [build-dependencies]
 substrate-wasm-builder = { version = "4.0.0", path = "../../../utils/wasm-builder" }
-
-[dev-dependencies]
-sp-io = { version = "3.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
