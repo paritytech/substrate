@@ -103,6 +103,32 @@ pub mod pallet {
 	pub type PausedCalls<T: Config> =
 		StorageMap<_, Blake2_128Concat, (PalletNameOf<T>, ExtrinsicNameOf<T>), (), OptionQuery>;
 
+	/// Configure the initial state of this pallet in the genesis block.
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		/// The initially paused calls.
+		pub paused: Vec<(PalletNameOf<T>, ExtrinsicNameOf<T>)>,
+		pub _phantom: PhantomData<T>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		// NOTE: `derive(Default)` does not work together with `#[pallet::genesis_config]`.
+		// We therefore need to add a trivial default impl.
+		fn default() -> Self {
+			Self { paused: Default::default(), _phantom: PhantomData }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			for (pallet, extrinsic) in &self.paused {
+				PausedCalls::<T>::insert((pallet, extrinsic), ());
+			}
+		}
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Pause a call.
