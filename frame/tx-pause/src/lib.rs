@@ -31,7 +31,7 @@ mod tests;
 pub use pallet::*;
 
 pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
-pub type ExtrinsicNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
+pub type FunctionNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -57,14 +57,14 @@ pub mod pallet {
 		/// The tx-pause pallet is always assumed to be safe itself.
 		type UnpausablePallets: Contains<PalletNameOf<Self>>;
 
-		/// Maximum length for pallet- and extrinsic-names.
+		/// Maximum length for pallet- and function-names.
 		///
 		/// Too long names will not be truncated but handled like
 		/// [`Self::PauseTooLongNames`] specifies.
 		#[pallet::constant]
 		type MaxNameLen: Get<u32>;
 
-		/// Specifies if extrinsics and pallets with too long names should be treated as paused.
+		/// Specifies if functions and pallets with too long names should be treated as paused.
 		///
 		/// Setting this to `true` ensures that all calls that
 		/// are callable, are also pause-able.
@@ -79,10 +79,10 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The call is (already) paused.
+		/// The call is (already or still) paused.
 		IsPaused,
 
-		/// The call is (already) unpaused.
+		/// The call is (already or still) unpaused.
 		IsUnpaused,
 
 		/// The call is listed as safe and cannot be paused.
@@ -93,21 +93,21 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// This call got paused.
-		CallPaused(PalletNameOf<T>, ExtrinsicNameOf<T>),
+		CallPaused(PalletNameOf<T>, FunctionNameOf<T>),
 		/// This call got un-paused.
-		CallUnpaused(PalletNameOf<T>, ExtrinsicNameOf<T>),
+		CallUnpaused(PalletNameOf<T>, FunctionNameOf<T>),
 	}
 
 	/// The set of calls that are explicitly paused.
 	#[pallet::storage]
 	pub type PausedCalls<T: Config> =
-		StorageMap<_, Blake2_128Concat, (PalletNameOf<T>, ExtrinsicNameOf<T>), (), OptionQuery>;
+		StorageMap<_, Blake2_128Concat, (PalletNameOf<T>, FunctionNameOf<T>), (), OptionQuery>;
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		/// The initially paused calls.
-		pub paused: Vec<(PalletNameOf<T>, ExtrinsicNameOf<T>)>,
+		pub paused: Vec<(PalletNameOf<T>, FunctionNameOf<T>)>,
 		pub _phantom: PhantomData<T>,
 	}
 
@@ -123,8 +123,8 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			for (pallet, extrinsic) in &self.paused {
-				PausedCalls::<T>::insert((pallet, extrinsic), ());
+			for (pallet, function) in &self.paused {
+				PausedCalls::<T>::insert((pallet, function), ());
 			}
 		}
 	}
@@ -139,13 +139,13 @@ pub mod pallet {
 		pub fn pause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
-			extrinsic: ExtrinsicNameOf<T>,
+			function: FunctionNameOf<T>,
 		) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_pause(&pallet, &extrinsic)?;
-			PausedCalls::<T>::insert((&pallet, &extrinsic), ());
-			Self::deposit_event(Event::CallPaused(pallet, extrinsic));
+			Self::ensure_can_pause(&pallet, &function)?;
+			PausedCalls::<T>::insert((&pallet, &function), ());
+			Self::deposit_event(Event::CallPaused(pallet, function));
 
 			Ok(())
 		}
@@ -158,13 +158,13 @@ pub mod pallet {
 		pub fn unpause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
-			extrinsic: ExtrinsicNameOf<T>,
+			function: FunctionNameOf<T>,
 		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_unpause(&pallet, &extrinsic)?;
-			PausedCalls::<T>::remove((&pallet, &extrinsic));
-			Self::deposit_event(Event::CallUnpaused(pallet, extrinsic));
+			Self::ensure_can_unpause(&pallet, &function)?;
+			PausedCalls::<T>::remove((&pallet, &function));
+			Self::deposit_event(Event::CallUnpaused(pallet, function));
 
 			Ok(())
 		}
@@ -173,25 +173,25 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Return whether this call is paused.
-	pub fn is_paused_unbound(pallet: Vec<u8>, extrinsic: Vec<u8>) -> bool {
+	pub fn is_paused_unbound(pallet: Vec<u8>, function: Vec<u8>) -> bool {
 		let pallet = PalletNameOf::<T>::try_from(pallet);
-		let extrinsic = ExtrinsicNameOf::<T>::try_from(extrinsic);
+		let function = FunctionNameOf::<T>::try_from(function);
 
-		match (pallet, extrinsic) {
-			(Ok(pallet), Ok(extrinsic)) => Self::is_paused(&pallet, &extrinsic),
+		match (pallet, function) {
+			(Ok(pallet), Ok(function)) => Self::is_paused(&pallet, &function),
 			_ => T::PauseTooLongNames::get(),
 		}
 	}
 
 	/// Return whether this call is paused.
-	pub fn is_paused(pallet: &PalletNameOf<T>, extrinsic: &ExtrinsicNameOf<T>) -> bool {
-		<PausedCalls<T>>::contains_key((pallet, extrinsic))
+	pub fn is_paused(pallet: &PalletNameOf<T>, function: &FunctionNameOf<T>) -> bool {
+		<PausedCalls<T>>::contains_key((pallet, function))
 	}
 
 	/// Ensure that this call can be paused.
 	pub fn ensure_can_pause(
 		pallet: &PalletNameOf<T>,
-		extrinsic: &ExtrinsicNameOf<T>,
+		function: &FunctionNameOf<T>,
 	) -> Result<(), Error<T>> {
 		// The `TxPause` pallet can never be paused.
 		if pallet.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
@@ -200,7 +200,7 @@ impl<T: Config> Pallet<T> {
 		if T::UnpausablePallets::contains(&pallet) {
 			return Err(Error::<T>::IsUnpausable)
 		}
-		if Self::is_paused(pallet, extrinsic) {
+		if Self::is_paused(pallet, function) {
 			return Err(Error::<T>::IsPaused)
 		}
 		Ok(())
@@ -209,9 +209,9 @@ impl<T: Config> Pallet<T> {
 	/// Ensure that this call can be un-paused.
 	pub fn ensure_can_unpause(
 		pallet: &PalletNameOf<T>,
-		extrinsic: &ExtrinsicNameOf<T>,
+		function: &FunctionNameOf<T>,
 	) -> Result<(), Error<T>> {
-		if Self::is_paused(pallet, extrinsic) {
+		if Self::is_paused(pallet, function) {
 			// SAFETY: Everything that is paused, can be un-paused.
 			Ok(())
 		} else {
