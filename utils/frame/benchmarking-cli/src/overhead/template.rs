@@ -72,11 +72,7 @@ impl TemplateData {
 		stats: &Stats,
 	) -> Result<Self> {
 		let weight = params.weight.calc_weight(stats)?;
-		let header = if let Some(ref path) = params.header {
-			std::fs::read_to_string(path)?
-		} else {
-			String::new()
-		};
+		let header = params.header.map(|p| std::fs::read_to_string(p)).transpose()?.unwrap_or_default();
 
 		Ok(TemplateData {
 			short_name: t.short_name().into(),
