@@ -421,4 +421,65 @@ mod tests {
 			ON_IDLE_INVOCATION_ORDER.clear();
 		}
 	}
+
+	#[cfg(feature = "try-runtime")]
+	#[test]
+	fn on_runtime_upgrade_tuple() {
+		struct Test1;
+		struct Test2;
+		struct Test3;
+
+		impl OnRuntimeUpgrade for Test1 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok("Test1".encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: String = Decode::decode(&mut state.as_slice()).unwrap();
+				assert_eq!(s, "Test1");
+				Ok(())
+			}
+		}
+		impl OnRuntimeUpgrade for Test2 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok(100u32.encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: u32 = Decode::decode(&mut state.as_slice()).unwrap();
+				assert_eq!(s, 100);
+				Ok(())
+			}
+		}
+		impl OnRuntimeUpgrade for Test3 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok(true.encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: bool = Decode::decode(&mut state.as_slice()).unwrap();
+				assert_eq!(s, true);
+				Ok(())
+			}
+		}
+
+		type Test123 = (Test1, Test2, Test3);
+		let state = <Test123 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let helper: TupleCodecHelper = Decode::decode(&mut state.as_slice()).unwrap();
+		assert_eq!(
+			<String as Decode>::decode(&mut helper.0[0].as_slice()).unwrap(),
+			"Test1".to_owned()
+		);
+		assert_eq!(<u32 as Decode>::decode(&mut helper.0[1].as_slice()).unwrap(), 100u32);
+		assert_eq!(<bool as Decode>::decode(&mut helper.0[2].as_slice()).unwrap(), true);
+		<Test123 as OnRuntimeUpgrade>::post_upgrade(state).unwrap();
+
+		type Test321 = (Test3, Test2, Test1);
+		let state = <Test321 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let helper: TupleCodecHelper = Decode::decode(&mut state.as_slice()).unwrap();
+		assert_eq!(<bool as Decode>::decode(&mut helper.0[0].as_slice()).unwrap(), true);
+		assert_eq!(<u32 as Decode>::decode(&mut helper.0[1].as_slice()).unwrap(), 100u32);
+		assert_eq!(
+			<String as Decode>::decode(&mut helper.0[2].as_slice()).unwrap(),
+			"Test1".to_owned()
+		);
+		<Test321 as OnRuntimeUpgrade>::post_upgrade(state).unwrap();
+	}
 }
