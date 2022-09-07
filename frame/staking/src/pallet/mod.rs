@@ -58,7 +58,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Possible operations on the configuration values of this pallet.
@@ -261,6 +260,7 @@ pub mod pallet {
 	/// invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
+	#[pallet::unbounded]
 	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
@@ -285,17 +285,20 @@ pub mod pallet {
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
+	#[pallet::unbounded]
 	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
 
 	/// Where the reward payment should be made. Keyed by stash.
 	#[pallet::storage]
 	#[pallet::getter(fn payee)]
+	#[pallet::unbounded]
 	pub type Payee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardDestination<T::AccountId>, ValueQuery>;
 
 	/// The map from (wannabe) validator stash key to the preferences of that validator.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
+	#[pallet::unbounded]
 	pub type Validators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, ValidatorPrefs, ValueQuery>;
 
@@ -323,6 +326,7 @@ pub mod pallet {
 	/// [`Call::chill_other`] dispatchable by anyone.
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
+	#[pallet::unbounded]
 	pub type Nominators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
 
@@ -346,6 +350,7 @@ pub mod pallet {
 	/// equal to [`SessionInterface::validators`].
 	#[pallet::storage]
 	#[pallet::getter(fn active_era)]
+	#[pallet::unbounded]
 	pub type ActiveEra<T> = StorageValue<_, ActiveEraInfo>;
 
 	/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
@@ -364,6 +369,7 @@ pub mod pallet {
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers)]
+	#[pallet::unbounded]
 	pub type ErasStakers<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
@@ -386,6 +392,7 @@ pub mod pallet {
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn eras_stakers_clipped)]
 	pub type ErasStakersClipped<T: Config> = StorageDoubleMap<
 		_,
@@ -404,6 +411,7 @@ pub mod pallet {
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	// If prefs hasn't been set or has been removed then 0 commission is returned.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn eras_validator_prefs)]
 	pub type ErasValidatorPrefs<T: Config> = StorageDoubleMap<
 		_,
@@ -426,6 +434,7 @@ pub mod pallet {
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_reward_points)]
+	#[pallet::unbounded]
 	pub type ErasRewardPoints<T: Config> =
 		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
 
@@ -438,6 +447,7 @@ pub mod pallet {
 
 	/// Mode of era forcing.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn force_era)]
 	pub type ForceEra<T> = StorageValue<_, Forcing, ValueQuery>;
 
@@ -456,6 +466,7 @@ pub mod pallet {
 
 	/// All unapplied slashes that are queued for later.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub type UnappliedSlashes<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -469,6 +480,7 @@ pub mod pallet {
 	/// Must contains information for eras for the range:
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(crate) type BondedEras<T: Config> =
 		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
 
@@ -491,12 +503,14 @@ pub mod pallet {
 
 	/// Slashing spans for stash accounts.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(crate) type SlashingSpans<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
 
 	/// Records information about the maximum slash of a stash within a slashing span,
 	/// as well as how much reward has been paid out.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(crate) type SpanSlash<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -522,6 +536,7 @@ pub mod pallet {
 	/// whether a given validator has previously offended using binary search. It gets cleared when
 	/// the era ends.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn offending_validators)]
 	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
@@ -530,6 +545,7 @@ pub mod pallet {
 	///
 	/// This is set to v7.0.0 for new networks.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	/// The threshold for when users can start calling `chill_other` for other validators /
