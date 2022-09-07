@@ -1317,6 +1317,15 @@ where
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
 	/// Controller for the handler of incoming and outgoing transactions.
 	tx_handler_controller: transactions::TransactionsHandlerController<H>,
+	/// Protocol name used to send out block requests via
+	/// [`request_responses::RequestResponsesBehaviour`].
+	block_request_protocol_name: ProtocolName,
+	/// Protocol name used to send out state requests via
+	/// [`request_responses::RequestResponsesBehaviour`].
+	state_request_protocol_name: ProtocolName,
+	/// Protocol name used to send out warp sync requests via
+	/// [`request_responses::RequestResponsesBehaviour`].
+	warp_sync_protocol_name: Option<ProtocolName>,
 }
 
 impl<B, H, Client> Future for NetworkWorker<B, H, Client>
@@ -1500,6 +1509,86 @@ where
 						metrics.import_queue_justifications_submitted.inc();
 					}
 					this.import_queue.import_justifications(origin, hash, nb, justifications);
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockRequest {
+					target,
+					request,
+					pending_response,
+				})) => {
+					match self
+						.network_service
+						.behaviour()
+						.user_protocol()
+						.encode_block_request(&request)
+					{
+						Ok(data) => {
+							self.network_service.behaviour().send_request(
+								&target,
+								&self.block_request_protocol_name,
+								data,
+								pending_response,
+								IfDisconnected::ImmediateError,
+							);
+						},
+						Err(err) => {
+							log::warn!(
+								target: "sync",
+								"Failed to encode block request {:?}: {:?}",
+								request, err
+							);
+						},
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::StateRequest {
+					target,
+					request,
+					pending_response,
+				})) => {
+					match self
+						.network_service
+						.behaviour()
+						.user_protocol()
+						.encode_state_request(&request)
+					{
+						Ok(data) => {
+							self.network_service.behaviour().send_request(
+								&target,
+								&self.state_request_protocol_name,
+								data,
+								pending_response,
+								IfDisconnected::ImmediateError,
+							);
+						},
+						Err(err) => {
+							log::warn!(
+								target: "sync",
+								"Failed to encode state request {:?}: {:?}",
+								request, err
+							);
+						},
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::WarpSyncRequest {
+					target,
+					request,
+					pending_response,
+				})) => {
+					match self.warp_sync_protocol_name {
+						Some(name) => self.network_service.behaviour().send_request(
+							&target,
+							&name,
+							request.encode(),
+							pending_response,
+							IfDisconnected::ImmediateError,
+						),
+						None => {
+							log::warn!(
+								target: "sync",
+								"Trying to send warp sync request when no protocol is configured {:?}",
+								request,
+							);
+						},
+					}
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,
@@ -1703,6 +1792,9 @@ where
 					}
 
 					this.event_streams.send(Event::Dht(event));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::None)) => {
+					// Ignored event from lower layers.
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished {
 					peer_id,
