@@ -26,6 +26,7 @@ use frame_support::{
 		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
 	},
 	weights::Weight,
+	BoundedVec,
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use sp_runtime::{
@@ -291,14 +292,12 @@ pub mod pallet {
 	/// Where the reward payment should be made. Keyed by stash.
 	#[pallet::storage]
 	#[pallet::getter(fn payee)]
-	#[pallet::unbounded]
 	pub type Payee<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, RewardDestination<T::AccountId>, ValueQuery>;
 
 	/// The map from (wannabe) validator stash key to the preferences of that validator.
 	#[pallet::storage]
 	#[pallet::getter(fn validators)]
-	#[pallet::unbounded]
 	pub type Validators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, ValidatorPrefs, ValueQuery>;
 
@@ -326,7 +325,6 @@ pub mod pallet {
 	/// [`Call::chill_other`] dispatchable by anyone.
 	#[pallet::storage]
 	#[pallet::getter(fn nominators)]
-	#[pallet::unbounded]
 	pub type Nominators<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, Nominations<T>>;
 
@@ -350,7 +348,6 @@ pub mod pallet {
 	/// equal to [`SessionInterface::validators`].
 	#[pallet::storage]
 	#[pallet::getter(fn active_era)]
-	#[pallet::unbounded]
 	pub type ActiveEra<T> = StorageValue<_, ActiveEraInfo>;
 
 	/// The session index at which the era start for the last `HISTORY_DEPTH` eras.
@@ -411,7 +408,6 @@ pub mod pallet {
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	// If prefs hasn't been set or has been removed then 0 commission is returned.
 	#[pallet::storage]
-	#[pallet::unbounded]
 	#[pallet::getter(fn eras_validator_prefs)]
 	pub type ErasValidatorPrefs<T: Config> = StorageDoubleMap<
 		_,
@@ -433,8 +429,8 @@ pub mod pallet {
 	/// Rewards for the last `HISTORY_DEPTH` eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
-	#[pallet::getter(fn eras_reward_points)]
 	#[pallet::unbounded]
+	#[pallet::getter(fn eras_reward_points)]
 	pub type ErasRewardPoints<T: Config> =
 		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
 
@@ -447,7 +443,6 @@ pub mod pallet {
 
 	/// Mode of era forcing.
 	#[pallet::storage]
-	#[pallet::unbounded]
 	#[pallet::getter(fn force_era)]
 	pub type ForceEra<T> = StorageValue<_, Forcing, ValueQuery>;
 
@@ -510,7 +505,6 @@ pub mod pallet {
 	/// Records information about the maximum slash of a stash within a slashing span,
 	/// as well as how much reward has been paid out.
 	#[pallet::storage]
-	#[pallet::unbounded]
 	pub(crate) type SpanSlash<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -545,7 +539,6 @@ pub mod pallet {
 	///
 	/// This is set to v7.0.0 for new networks.
 	#[pallet::storage]
-	#[pallet::unbounded]
 	pub(crate) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	/// The threshold for when users can start calling `chill_other` for other validators /
