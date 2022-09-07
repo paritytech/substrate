@@ -19,12 +19,12 @@
 
 #![cfg(test)]
 
+use crate as pallet_bounties;
 use super::*;
 use std::cell::RefCell;
 
 use frame_support::{
-	assert_noop, assert_ok, impl_outer_origin, parameter_types, weights::Weight,
-	impl_outer_event, traits::{OnInitialize}
+	assert_noop, assert_ok, parameter_types, weights::Weight, traits::OnInitialize
 };
 
 use sp_core::H256;
@@ -34,32 +34,29 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup, BadOrigin},
 };
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-mod bounties {
-	// Re-export needed for `impl_outer_event!`.
-	pub use crate::*;
-}
-
-impl_outer_event! {
-	pub enum Event for Test {
-		system<T>,
-		pallet_balances<T>,
-		pallet_treasury<T>,
-		bounties<T>,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Bounties: pallet_bounties::{Module, Call, Storage, Event<T>},
+		Treasury: pallet_treasury::{Module, Call, Storage, Config, Event<T>},
 	}
-}
+);
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: Weight = 1024;
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
+
 impl frame_system::Config for Test {
 	type BaseCallFilter = ();
 	type BlockWeights = ();
@@ -68,7 +65,7 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = ();
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
@@ -77,7 +74,7 @@ impl frame_system::Config for Test {
 	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -142,10 +139,8 @@ impl Config for Test {
 	type MaximumReasonLength = MaximumReasonLength;
 	type WeightInfo = ();
 }
-type System = frame_system::Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type Treasury = pallet_treasury::Module<Test>;
-type Bounties = Module<Test>;
+
+type TreasuryError = pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -160,7 +155,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 fn last_event() -> RawEvent<u64, u128> {
 	System::events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
-			if let Event::bounties(inner) = e { Some(inner) } else { None }
+			if let Event::pallet_bounties(inner) = e { Some(inner) } else { None }
 		})
 		.last()
 		.unwrap()
@@ -206,7 +201,7 @@ fn spend_proposal_fails_when_proposer_poor() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Treasury::propose_spend(Origin::signed(2), 100, 3),
-			Error::<Test>::InsufficientProposersBalance,
+			TreasuryError::InsufficientProposersBalance,
 		);
 	});
 }
@@ -259,21 +254,22 @@ fn reject_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), TreasuryError::InvalidIndex);
 	});
 }
 
 #[test]
 fn reject_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::reject_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
+		assert_noop!(Treasury::reject_proposal(Origin::root(), 0),
+		pallet_treasury::Error::<Test, pallet_treasury::DefaultInstance>::InvalidIndex);
 	});
 }
 
 #[test]
 fn accept_non_existent_spend_proposal_fails() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), TreasuryError::InvalidIndex);
 	});
 }
 
@@ -284,7 +280,7 @@ fn accept_already_rejected_spend_proposal_fails() {
 
 		assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 		assert_ok!(Treasury::reject_proposal(Origin::root(), 0));
-		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), Error::<Test>::InvalidIndex);
+		assert_noop!(Treasury::approve_proposal(Origin::root(), 0), TreasuryError::InvalidIndex);
 	});
 }
 

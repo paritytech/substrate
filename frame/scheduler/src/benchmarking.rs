@@ -23,7 +23,7 @@ use super::*;
 use sp_std::{vec, prelude::*};
 use frame_system::RawOrigin;
 use frame_support::{ensure, traits::OnInitialize};
-use frame_benchmarking::benchmarks;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
 
 use crate::Module as Scheduler;
 use frame_system::Module as System;
@@ -141,20 +141,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_schedule::<Test>());
-			assert_ok!(test_benchmark_cancel::<Test>());
-			assert_ok!(test_benchmark_schedule_named::<Test>());
-			assert_ok!(test_benchmark_cancel_named::<Test>());
-			assert_ok!(test_benchmark_on_initialize::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Scheduler,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

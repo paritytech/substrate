@@ -215,7 +215,7 @@ impl CallExecutor<Block> for DummyCallExecutor {
 			Result<NativeOrEncoded<R>, Self::Error>
 		) -> Result<NativeOrEncoded<R>, Self::Error>,
 		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> Result<R, String> + UnwindSafe,
+		NC: FnOnce() -> Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
 		_initialize_block_fn: IB,

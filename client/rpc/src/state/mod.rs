@@ -178,9 +178,8 @@ pub fn new_full<BE, Block: BlockT, Client>(
 		BE: Backend<Block> + 'static,
 		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
-			+ CallApiAt<Block, Error = sp_blockchain::Error>
-			+ ProvideRuntimeApi<Block> + Send + Sync + 'static,
-		Client::Api: Metadata<Block, Error = sp_blockchain::Error>,
+			+ CallApiAt<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
+		Client::Api: Metadata<Block>,
 {
 	let child_backend = Box::new(
 		self::state_full::FullState::new(client.clone(), subscriptions.clone())

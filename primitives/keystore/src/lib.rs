@@ -34,9 +34,6 @@ pub enum Error {
 	/// Public key type is not supported
 	#[display(fmt="Key not supported: {:?}", _0)]
 	KeyNotSupported(KeyTypeId),
-	/// Pair not found for public key and KeyTypeId
-	#[display(fmt="Pair was not found: {}", _0)]
-	PairNotFound(String),
 	/// Validation error
 	#[display(fmt="Validation error: {}", _0)]
 	ValidationError(String),
@@ -125,37 +122,39 @@ pub trait CryptoStore: Send + Sync {
 	/// Signs a message with the private key that matches
 	/// the public key passed.
 	///
-	/// Returns the SCALE encoded signature if key is found & supported,
-	/// an error otherwise.
+	/// Returns the SCALE encoded signature if key is found and supported, `None` if the key doesn't
+	/// exist or an error when something failed.
 	async fn sign_with(
 		&self,
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> Result<Vec<u8>, Error>;
+	) -> Result<Option<Vec<u8>>, Error>;
 
 	/// Sign with any key
 	///
 	/// Given a list of public keys, find the first supported key and
 	/// sign the provided message with that key.
 	///
-	/// Returns a tuple of the used key and the SCALE encoded signature.
+	/// Returns a tuple of the used key and the SCALE encoded signature or `None` if no key could
+	/// be found to sign.
 	async fn sign_with_any(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
-	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
+	) -> Result<Option<(CryptoTypePublicPair, Vec<u8>)>, Error> {
 		if keys.len() == 1 {
-			return self.sign_with(id, &keys[0], msg).await.map(|s| (keys[0].clone(), s));
+			return Ok(self.sign_with(id, &keys[0], msg).await?.map(|s| (keys[0].clone(), s)));
 		} else {
 			for k in self.supported_keys(id, keys).await? {
-				if let Ok(sign) = self.sign_with(id, &k, msg).await {
-					return Ok((k, sign));
+				if let Ok(Some(sign)) = self.sign_with(id, &k, msg).await {
+					return Ok(Some((k, sign)));
 				}
 			}
 		}
-		Err(Error::KeyNotSupported(id))
+
+		Ok(None)
 	}
 
 	/// Sign with all keys
@@ -164,13 +163,13 @@ pub trait CryptoStore: Send + Sync {
 	/// each key given that the key is supported.
 	///
 	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key or a Error for non-supported keys.
+	/// signature of each key, `None` if the key doesn't exist or a error when something failed.
 	async fn sign_with_all(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
+	) -> Result<Vec<Result<Option<Vec<u8>>, Error>>, ()> {
 		let futs = keys.iter()
 			.map(|k| self.sign_with(id, k, msg));
 
@@ -187,16 +186,14 @@ pub trait CryptoStore: Send + Sync {
 	/// Namely, VRFOutput and VRFProof which are returned
 	/// inside the `VRFSignature` container struct.
 	///
-	/// This function will return an error in the cases where
-	/// the public key and key type provided do not match a private
-	/// key in the keystore. Or, in the context of remote signing
-	/// an error could be a network one.
+	/// This function will return `None` if the given `key_type` and `public` combination
+	/// doesn't exist in the keystore or an `Err` when something failed.
 	async fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
-	) -> Result<VRFSignature, Error>;
+	) -> Result<Option<VRFSignature>, Error>;
 }
 
 /// Sync version of the CryptoStore
@@ -285,37 +282,41 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Signs a message with the private key that matches
 	/// the public key passed.
 	///
-	/// Returns the SCALE encoded signature if key is found & supported,
-	/// an error otherwise.
+	/// Returns the SCALE encoded signature if key is found and supported, `None` if the key doesn't
+	/// exist or an error when something failed.
 	fn sign_with(
 		&self,
 		id: KeyTypeId,
 		key: &CryptoTypePublicPair,
 		msg: &[u8],
-	) -> Result<Vec<u8>, Error>;
+	) -> Result<Option<Vec<u8>>, Error>;
 
 	/// Sign with any key
 	///
 	/// Given a list of public keys, find the first supported key and
 	/// sign the provided message with that key.
 	///
-	/// Returns a tuple of the used key and the SCALE encoded signature.
+	/// Returns a tuple of the used key and the SCALE encoded signature or `None` if no key could
+	/// be found to sign.
 	fn sign_with_any(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8]
-	) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
+	) -> Result<Option<(CryptoTypePublicPair, Vec<u8>)>, Error> {
 		if keys.len() == 1 {
-			return SyncCryptoStore::sign_with(self, id, &keys[0], msg).map(|s| (keys[0].clone(), s));
+			return Ok(
+				SyncCryptoStore::sign_with(self, id, &keys[0], msg)?.map(|s| (keys[0].clone(), s)),
+			)
 		} else {
 			for k in SyncCryptoStore::supported_keys(self, id, keys)? {
-				if let Ok(sign) = SyncCryptoStore::sign_with(self, id, &k, msg) {
-					return Ok((k, sign));
+				if let Ok(Some(sign)) = SyncCryptoStore::sign_with(self, id, &k, msg) {
+					return Ok(Some((k, sign)));
 				}
 			}
 		}
-		Err(Error::KeyNotSupported(id))
+
+		Ok(None)
 	}
 
 	/// Sign with all keys
@@ -324,13 +325,13 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// each key given that the key is supported.
 	///
 	/// Returns a list of `Result`s each representing the SCALE encoded
-	/// signature of each key or a Error for non-supported keys.
+	/// signature of each key, `None` if the key doesn't exist or an error when something failed.
 	fn sign_with_all(
 		&self,
 		id: KeyTypeId,
 		keys: Vec<CryptoTypePublicPair>,
 		msg: &[u8],
-	) -> Result<Vec<Result<Vec<u8>, Error>>, ()>{
+	) -> Result<Vec<Result<Option<Vec<u8>>, Error>>, ()> {
 		Ok(keys.iter().map(|k| SyncCryptoStore::sign_with(self, id, k, msg)).collect())
 	}
 
@@ -344,16 +345,14 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 	/// Namely, VRFOutput and VRFProof which are returned
 	/// inside the `VRFSignature` container struct.
 	///
-	/// This function will return an error in the cases where
-	/// the public key and key type provided do not match a private
-	/// key in the keystore. Or, in the context of remote signing
-	/// an error could be a network one.
+	/// This function will return `None` if the given `key_type` and `public` combination
+	/// doesn't exist in the keystore or an `Err` when something failed.
 	fn sr25519_vrf_sign(
 		&self,
 		key_type: KeyTypeId,
 		public: &sr25519::Public,
 		transcript_data: VRFTranscriptData,
-	) -> Result<VRFSignature, Error>;
+	) -> Result<Option<VRFSignature>, Error>;
 }
 
 /// A pointer to a keystore.

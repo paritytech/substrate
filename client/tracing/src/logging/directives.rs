@@ -114,7 +114,7 @@ pub(crate) fn set_reload_handle(handle: Handle<EnvFilter, SCSubscriber>) {
 	let _ = FILTER_RELOAD_HANDLE.set(handle);
 }
 
-// The layered Subscriber as built up in `init_logger()`.
+// The layered Subscriber as built up in `LoggerBuilder::init()`.
 // Used in the reload `Handle`.
 type SCSubscriber<
 	N = tracing_fmt::format::DefaultFields,

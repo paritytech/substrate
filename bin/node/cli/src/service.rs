@@ -58,10 +58,9 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 			sc_consensus_babe::BabeLink<Block>,
 		),
 		grandpa::SharedVoterState,
-		Option<TelemetrySpan>,
 	)
 >, ServiceError> {
-	let (client, backend, keystore_container, task_manager, telemetry_span) =
+	let (client, backend, keystore_container, task_manager) =
 		sc_service::new_full_parts::<Block, RuntimeApi, Executor>(&config)?;
 	let client = Arc::new(client);
 
@@ -95,7 +94,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		client.clone(),
 		select_chain.clone(),
 		inherent_data_providers.clone(),
-		&task_manager.spawn_handle(),
+		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
 		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
 	)?;
@@ -160,7 +159,7 @@ pub fn new_partial(config: &Configuration) -> Result<sc_service::PartialComponen
 		import_queue,
 		transaction_pool,
 		inherent_data_providers,
-		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry_span),
+		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	})
 }
 
@@ -190,7 +189,7 @@ pub fn new_full_base(
 		select_chain,
 		transaction_pool,
 		inherent_data_providers,
-		other: (rpc_extensions_builder, import_setup, rpc_setup, telemetry_span),
+		other: (rpc_extensions_builder, import_setup, rpc_setup),
 	} = new_partial(&config)?;
 
 	let shared_voter_state = rpc_setup;
@@ -227,6 +226,9 @@ pub fn new_full_base(
 	let enable_grandpa = !config.disable_grandpa;
 	let prometheus_registry = config.prometheus_registry().cloned();
 
+	let telemetry_span = TelemetrySpan::new();
+	let _telemetry_span_entered = telemetry_span.enter();
+
 	let (_rpc_handlers, telemetry_connection_notifier) = sc_service::spawn_tasks(
 		sc_service::SpawnTasksParams {
 			config,
@@ -241,7 +243,7 @@ pub fn new_full_base(
 			remote_blockchain: None,
 			network_status_sinks: network_status_sinks.clone(),
 			system_rpc_tx,
-			telemetry_span,
+			telemetry_span: Some(telemetry_span.clone()),
 		},
 	)?;
 
@@ -314,7 +316,7 @@ pub fn new_full_base(
 		name: Some(name),
 		observer_enabled: false,
 		keystore,
-		is_authority: role.is_network_authority(),
+		is_authority: role.is_authority(),
 	};
 
 	if enable_grandpa {
@@ -366,7 +368,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 	Arc<NetworkService<Block, <Block as BlockT>::Hash>>,
 	Arc<sc_transaction_pool::LightPool<Block, LightClient, sc_network::config::OnDemand<Block>>>
 ), ServiceError> {
-	let (client, backend, keystore_container, mut task_manager, on_demand, telemetry_span) =
+	let (client, backend, keystore_container, mut task_manager, on_demand) =
 		sc_service::new_light_parts::<Block, RuntimeApi, Executor>(&config)?;
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
@@ -403,7 +405,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 		client.clone(),
 		select_chain.clone(),
 		inherent_data_providers.clone(),
-		&task_manager.spawn_handle(),
+		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
 		sp_consensus::NeverCanAuthor,
 	)?;
@@ -435,6 +437,9 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 
 	let rpc_extensions = node_rpc::create_light(light_deps);
 
+	let telemetry_span = TelemetrySpan::new();
+	let _telemetry_span_entered = telemetry_span.enter();
+
 	let (rpc_handlers, telemetry_connection_notifier) =
 		sc_service::spawn_tasks(sc_service::SpawnTasksParams {
 			on_demand: Some(on_demand),
@@ -446,7 +451,7 @@ pub fn new_light_base(mut config: Configuration) -> Result<(
 			config, backend, network_status_sinks, system_rpc_tx,
 			network: network.clone(),
 			task_manager: &mut task_manager,
-			telemetry_span,
+			telemetry_span: Some(telemetry_span.clone()),
 		})?;
 
 	Ok((
@@ -515,7 +520,7 @@ mod tests {
 		let chain_spec = crate::chain_spec::tests::integration_test_config_with_single_authority();
 
 		// For the block factory
-		let mut slot_num = 1u64;
+		let mut slot = 1u64;
 
 		// For the extrinsics factory
 		let bob = Arc::new(AccountKeyring::Bob.pair());
@@ -576,7 +581,7 @@ mod tests {
 					descendent_query(&*service.client()),
 					&parent_hash,
 					parent_number,
-					slot_num,
+					slot.into(),
 				).unwrap().unwrap();
 
 				let mut digest = Digest::<H256>::default();
@@ -584,9 +589,9 @@ mod tests {
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
 				let babe_pre_digest = loop {
-					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot_num * SLOT_DURATION));
+					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot * SLOT_DURATION));
 					if let Some(babe_pre_digest) = sc_consensus_babe::test_helpers::claim_slot(
-						slot_num,
+						slot.into(),
 						&parent_header,
 						&*service.client(),
 						keystore.clone(),
@@ -595,7 +600,7 @@ mod tests {
 						break babe_pre_digest;
 					}
 
-					slot_num += 1;
+					slot += 1;
 				};
 
 				digest.push(<DigestItem as CompatibleDigestItem>::babe_pre_digest(babe_pre_digest));
@@ -620,13 +625,11 @@ mod tests {
 					sp_consensus_babe::AuthorityId::ID,
 					&alice.to_public_crypto_pair(),
 					&to_sign,
-				).unwrap()
-				 .try_into()
-				 .unwrap();
+				).unwrap().unwrap().try_into().unwrap();
 				let item = <DigestItem as CompatibleDigestItem>::babe_seal(
 					signature,
 				);
-				slot_num += 1;
+				slot += 1;
 
 				let mut params = BlockImportParams::new(BlockOrigin::File, new_header);
 				params.post_digests.push(item);

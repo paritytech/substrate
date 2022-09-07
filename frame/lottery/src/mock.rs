@@ -18,9 +18,10 @@
 //! Test utilities
 
 use super::*;
+use crate as pallet_lottery;
 
 use frame_support::{
-	impl_outer_origin, impl_outer_dispatch, parameter_types,
+	parameter_types,
 	traits::{OnInitialize, OnFinalize, TestRandomness},
 };
 use sp_core::H256;
@@ -31,19 +32,21 @@ use sp_runtime::{
 };
 use frame_system::EnsureRoot;
 
-impl_outer_origin! {
-	pub enum Origin for Test {}
-}
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
-impl_outer_dispatch! {
-	pub enum Call for Test where origin: Origin {
-		frame_system::System,
-		pallet_balances::Balances,
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Module, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+		Lottery: pallet_lottery::{Module, Call, Storage, Event<T>},
 	}
-}
+);
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 	pub const MaximumBlockWeight: u32 = 1024;
@@ -65,10 +68,10 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = ();
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -83,7 +86,7 @@ parameter_types! {
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type Balance = u64;
-	type Event = ();
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -101,17 +104,13 @@ impl Config for Test {
 	type Call = Call;
 	type Currency = Balances;
 	type Randomness = TestRandomness;
-	type Event = ();
+	type Event = Event;
 	type ManagerOrigin = EnsureRoot<u64>;
 	type MaxCalls = MaxCalls;
 	type ValidateCall = Lottery;
 	type MaxGenerateRandom = MaxGenerateRandom;
 	type WeightInfo = ();
 }
-
-pub type Lottery = Module<Test>;
-pub type System = frame_system::Module<Test>;
-pub type Balances = pallet_balances::Module<Test>;
 
 pub type SystemCall = frame_system::Call<Test>;
 pub type BalancesCall = pallet_balances::Call<Test>;

@@ -27,7 +27,7 @@ use crate::params::TransactionPoolParams;
 use crate::CliConfiguration;
 use regex::Regex;
 use sc_service::{
-	config::{BasePath, MultiaddrWithPeerId, PrometheusConfig, TransactionPoolOptions},
+	config::{BasePath, PrometheusConfig, TransactionPoolOptions},
 	ChainSpec, Role,
 };
 use sc_telemetry::TelemetryEndpoints;
@@ -43,33 +43,16 @@ pub struct RunCmd {
 	/// participate in any consensus task that it can (e.g. depending on
 	/// availability of local keys).
 	#[structopt(
-		long = "validator",
-		conflicts_with_all = &[ "sentry" ]
+		long = "validator"
 	)]
 	pub validator: bool,
-
-	/// Enable sentry mode.
-	///
-	/// The node will be started with the authority role and participate in
-	/// consensus tasks as an "observer", it will never actively participate
-	/// regardless of whether it could (e.g. keys are available locally). This
-	/// mode is useful as a secure proxy for validators (which would run
-	/// detached from the network), since we want this node to participate in
-	/// the full consensus protocols in order to have all needed consensus data
-	/// available to relay to private nodes.
-	#[structopt(
-		long = "sentry",
-		conflicts_with_all = &[ "validator", "light" ],
-		parse(try_from_str)
-	)]
-	pub sentry: Vec<MultiaddrWithPeerId>,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA observer.
 	#[structopt(long)]
 	pub no_grandpa: bool,
 
 	/// Experimental: Run in light client mode.
-	#[structopt(long = "light", conflicts_with = "sentry")]
+	#[structopt(long = "light")]
 	pub light: bool,
 
 	/// Listen to all RPC interfaces.
@@ -245,17 +228,6 @@ pub struct RunCmd {
 	#[structopt(long)]
 	pub max_runtime_instances: Option<usize>,
 
-	/// Specify a list of sentry node public addresses.
-	///
-	/// Can't be used with --public-addr as the sentry node would take precedence over the public address
-	/// specified there.
-	#[structopt(
-		long = "sentry-nodes",
-		value_name = "ADDR",
-		conflicts_with_all = &[ "sentry", "public-addr" ]
-	)]
-	pub sentry_nodes: Vec<MultiaddrWithPeerId>,
-
 	/// Run a temporary node.
 	///
 	/// A temporary directory will be created to store the configuration and will be deleted
@@ -366,13 +338,7 @@ impl CliConfiguration for RunCmd {
 		Ok(if is_light {
 			sc_service::Role::Light
 		} else if is_authority {
-			sc_service::Role::Authority {
-				sentry_nodes: self.sentry_nodes.clone(),
-			}
-		} else if !self.sentry.is_empty() {
-			sc_service::Role::Sentry {
-				validators: self.sentry.clone(),
-			}
+			sc_service::Role::Authority
 		} else {
 			sc_service::Role::Full
 		})

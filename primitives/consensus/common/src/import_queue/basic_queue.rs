@@ -62,7 +62,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 		verifier: V,
 		block_import: BoxBlockImport<B, Transaction>,
 		justification_import: Option<BoxJustificationImport<B>>,
-		spawner: &impl sp_core::traits::SpawnNamed,
+		spawner: &impl sp_core::traits::SpawnEssentialNamed,
 		prometheus_registry: Option<&Registry>,
 	) -> Self {
 		let (result_sender, result_port) = buffered_link::buffered_link();
@@ -83,7 +83,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 			metrics,
 		);
 
-		spawner.spawn_blocking("basic-block-import-worker", future.boxed());
+		spawner.spawn_essential_blocking("basic-block-import-worker", future.boxed());
 
 		Self {
 			justification_sender,
@@ -164,7 +164,13 @@ async fn block_import_process<B: BlockT, Transaction: Send>(
 	loop {
 		let worker_messages::ImportBlocks(origin, blocks) = match block_import_receiver.next().await {
 			Some(blocks) => blocks,
-			None => return,
+			None => {
+				log::debug!(
+					target: "block-import",
+					"Stopping block import because the import channel was closed!",
+				);
+				return
+			},
 		};
 
 		let res = import_many_blocks(
@@ -236,6 +242,10 @@ impl<B: BlockT> BlockImportWorker<B> {
 				// If the results sender is closed, that means that the import queue is shutting
 				// down and we should end this future.
 				if worker.result_sender.is_closed() {
+					log::debug!(
+						target: "block-import",
+						"Stopping block import because result channel was closed!",
+					);
 					return;
 				}
 
@@ -244,7 +254,13 @@ impl<B: BlockT> BlockImportWorker<B> {
 					match justification {
 						Some(ImportJustification(who, hash, number, justification)) =>
 							worker.import_justification(who, hash, number, justification),
-						None => return,
+						None => {
+							log::debug!(
+								target: "block-import",
+								"Stopping block import because justification channel was closed!",
+							);
+							return
+						},
 					}
 				}
 

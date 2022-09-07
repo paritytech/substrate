@@ -124,7 +124,13 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 				.map_err(|err| {
 					Error::StringError(format!("{:?}", err))
 				})?;
-			let epoch = epoch_data(&shared_epoch, &client, &babe_config, epoch_start, &select_chain)?;
+			let epoch = epoch_data(
+				&shared_epoch,
+				&client,
+				&babe_config,
+				*epoch_start,
+				&select_chain,
+			)?;
 			let (epoch_start, epoch_end) = (epoch.start_slot(), epoch.end_slot());
 
 			let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
@@ -142,19 +148,19 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 					.collect::<Vec<_>>()
 			};
 
-			for slot_number in epoch_start..epoch_end {
+			for slot in *epoch_start..*epoch_end {
 				if let Some((claim, key)) =
-					authorship::claim_slot_using_keys(slot_number, &epoch, &keystore, &keys)
+					authorship::claim_slot_using_keys(slot.into(), &epoch, &keystore, &keys)
 				{
 					match claim {
 						PreDigest::Primary { .. } => {
-							claims.entry(key).or_default().primary.push(slot_number);
+							claims.entry(key).or_default().primary.push(slot);
 						}
 						PreDigest::SecondaryPlain { .. } => {
-							claims.entry(key).or_default().secondary.push(slot_number);
+							claims.entry(key).or_default().secondary.push(slot);
 						}
 						PreDigest::SecondaryVRF { .. } => {
-							claims.entry(key).or_default().secondary_vrf.push(slot_number);
+							claims.entry(key).or_default().secondary_vrf.push(slot.into());
 						},
 					};
 				}
@@ -167,7 +173,7 @@ impl<B, C, SC> BabeApi for BabeRpcHandler<B, C, SC>
 	}
 }
 
-/// Holds information about the `slot_number`'s that can be claimed by a given key.
+/// Holds information about the `slot`'s that can be claimed by a given key.
 #[derive(Default, Debug, Deserialize, Serialize)]
 pub struct EpochAuthorship {
 	/// the array of primary slots that can be claimed
@@ -197,12 +203,12 @@ impl From<Error> for jsonrpc_core::Error {
 	}
 }
 
-/// fetches the epoch data for a given slot_number.
+/// fetches the epoch data for a given slot.
 fn epoch_data<B, C, SC>(
 	epoch_changes: &SharedEpochChanges<B, Epoch>,
 	client: &Arc<C>,
 	babe_config: &Config,
-	slot_number: u64,
+	slot: u64,
 	select_chain: &SC,
 ) -> Result<Epoch, Error>
 	where
@@ -215,7 +221,7 @@ fn epoch_data<B, C, SC>(
 		descendent_query(&**client),
 		&parent.hash(),
 		parent.number().clone(),
-		slot_number,
+		slot.into(),
 		|slot| Epoch::genesis(&babe_config, slot),
 	)
 		.map_err(|e| Error::Consensus(ConsensusError::ChainLookup(format!("{:?}", e))))?

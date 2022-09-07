@@ -25,7 +25,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 /// The URL string can be either a URL or a multiaddress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TelemetryEndpoints(
-	#[serde(deserialize_with = "url_or_multiaddr_deser")] pub(crate) Vec<(Multiaddr, u8)>,
+	#[serde(deserialize_with = "url_or_multiaddr_deser")]
+	pub(crate) Vec<(Multiaddr, u8)>,
 );
 
 /// Custom deserializer for TelemetryEndpoints, used to convert urls or multiaddr to multiaddr.

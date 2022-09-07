@@ -21,7 +21,7 @@
 
 use super::*;
 use crate::mock::{
-	Offences, System, Offence, TestEvent, KIND, new_test_ext, with_on_offence_fractions,
+	Offences, System, Offence, Event, KIND, new_test_ext, with_on_offence_fractions,
 	offence_reports, set_can_report, set_offence_weight,
 };
 use sp_runtime::Perbill;
@@ -132,7 +132,7 @@ fn should_deposit_event() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
+				event: Event::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
 				topics: vec![],
 			}]
 		);
@@ -167,7 +167,7 @@ fn doesnt_deposit_event_for_dups() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: TestEvent::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
+				event: Event::offences(crate::Event::Offence(KIND, time_slot.encode(), true)),
 				topics: vec![],
 			}]
 		);
@@ -304,7 +304,7 @@ fn should_queue_and_resubmit_rejected_offence() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: TestEvent::offences(crate::Event::Offence(KIND, 42u128.encode(), false)),
+				event: Event::offences(crate::Event::Offence(KIND, 42u128.encode(), false)),
 				topics: vec![],
 			}]
 		);

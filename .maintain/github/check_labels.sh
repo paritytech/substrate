@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 
-#shellcheck source=lib.sh
-source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/lib.sh"
+#shellcheck source=../common/lib.sh
+source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../common/lib.sh"
+
+repo="$GITHUB_REPOSITORY"
+pr="$GITHUB_PR"
 
 ensure_labels() {
   for label in "$@"; do
-    if has_label 'paritytech/substrate' "$CI_COMMIT_BRANCH" "$label"; then
+    if has_label "$repo" "$pr" "$label"; then
       return 0
     fi
   done
@@ -27,7 +30,7 @@ criticality_labels=(
   'C9-critical'
 )
 
-echo "[+] Checking release notes (B) labels for $CI_COMMIT_BRANCH"
+echo "[+] Checking release notes (B) labels"
 if ensure_labels "${releasenotes_labels[@]}";  then
   echo "[+] Release notes label detected. All is well."
 else
@@ -35,7 +38,7 @@ else
   exit 1
 fi
 
-echo "[+] Checking release criticality (C) labels for $CI_COMMIT_BRANCH"
+echo "[+] Checking release criticality (C) labels"
 if ensure_labels "${criticality_labels[@]}";  then
   echo "[+] Release criticality label detected. All is well."
 else

@@ -143,7 +143,7 @@ pub(crate) fn load_decode<B: AuxStore, T: Decode>(
 	match backend.get_aux(key)? {
 		None => Ok(None),
 		Some(t) => T::decode(&mut &t[..])
-			.map_err(|e| ClientError::Backend(format!("GRANDPA DB is corrupted: {}", e.what())))
+			.map_err(|e| ClientError::Backend(format!("GRANDPA DB is corrupted: {}", e)))
 			.map(Some)
 	}
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# shellcheck source=lib.sh
-source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/lib.sh"
+# shellcheck source=../common/lib.sh
+source "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/../common/lib.sh"
 
 version="$CI_COMMIT_TAG"
 

@@ -113,7 +113,7 @@ pub fn generate_initial_session_keys<Block, T>(
 	client: std::sync::Arc<T>,
 	at: &BlockId<Block>,
 	seeds: Vec<String>,
-) -> Result<(), sp_api::ApiErrorFor<T, Block>>
+) -> Result<(), sp_api::ApiError>
 where
 	Block: BlockT,
 	T: ProvideRuntimeApi<Block>,

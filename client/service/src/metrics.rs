@@ -135,7 +135,6 @@ impl MetricsService {
 		let role_bits = match config.role {
 			Role::Full => 1u64,
 			Role::Light => 2u64,
-			Role::Sentry { .. } => 3u64,
 			Role::Authority { .. } => 4u64,
 		};
 

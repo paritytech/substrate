@@ -239,7 +239,7 @@ impl<C: SubstrateCli> Runner<C> {
 
 	/// Get a new [`TelemetryHandle`].
 	///
-	/// This is used when you want to register a new telemetry for a Substrate node.
+	/// This is used when you want to register with the [`TelemetryWorker`].
 	pub fn telemetry_handle(&self) -> TelemetryHandle {
 		self.telemetry_worker.handle()
 	}

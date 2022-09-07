@@ -303,7 +303,6 @@ mod tests {
 	use crate::{ValidationResult, ValidatorContext};
 	use futures::{channel::mpsc::{unbounded, UnboundedSender}, executor::{block_on, block_on_stream}, future::poll_fn};
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
-	use rand::Rng;
 	use sc_network::ObservedRole;
 	use sp_runtime::{testing::H256, traits::{Block as BlockT}};
 	use std::borrow::Cow;
@@ -469,12 +468,14 @@ mod tests {
 		}
 
 		impl Arbitrary for ChannelLengthAndTopic {
-			fn arbitrary<G: Gen>(g: &mut G) -> Self {
+			fn arbitrary(g: &mut Gen) -> Self {
+				let possible_length = (0..100).collect::<Vec<usize>>();
+				let possible_topics = (0..10).collect::<Vec<u64>>();
 				Self {
-					length: g.gen_range(0, 100),
+					length: *g.choose(&possible_length).unwrap(),
 					// Make sure channel topics and message topics overlap by choosing a small
 					// range.
-					topic: H256::from_low_u64_ne(g.gen_range(0, 10)),
+					topic: H256::from_low_u64_ne(*g.choose(&possible_topics).unwrap()),
 				}
 			}
 		}
@@ -485,11 +486,12 @@ mod tests {
 		}
 
 		impl Arbitrary for Message{
-			fn arbitrary<G: Gen>(g: &mut G) -> Self {
+			fn arbitrary(g: &mut Gen) -> Self {
+				let possible_topics = (0..10).collect::<Vec<u64>>();
 				Self {
 					// Make sure channel topics and message topics overlap by choosing a small
 					// range.
-					topic: H256::from_low_u64_ne(g.gen_range(0, 10)),
+					topic: H256::from_low_u64_ne(*g.choose(&possible_topics).unwrap()),
 				}
 			}
 		}

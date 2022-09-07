@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_system::{RawOrigin, EventRecord};
-use frame_benchmarking::{benchmarks, account, whitelisted_caller};
+use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 use crate::Module as Proxy;
 
@@ -251,25 +251,8 @@ benchmarks! {
 	}
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::tests::{new_test_ext, Test};
-	use frame_support::assert_ok;
-
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext().execute_with(|| {
-			assert_ok!(test_benchmark_proxy::<Test>());
-			assert_ok!(test_benchmark_proxy_announced::<Test>());
-			assert_ok!(test_benchmark_remove_announcement::<Test>());
-			assert_ok!(test_benchmark_reject_announcement::<Test>());
-			assert_ok!(test_benchmark_announce::<Test>());
-			assert_ok!(test_benchmark_add_proxy::<Test>());
-			assert_ok!(test_benchmark_remove_proxy::<Test>());
-			assert_ok!(test_benchmark_remove_proxies::<Test>());
-			assert_ok!(test_benchmark_anonymous::<Test>());
-			assert_ok!(test_benchmark_kill_anonymous::<Test>());
-		});
-	}
-}
+impl_benchmark_test_suite!(
+	Proxy,
+	crate::tests::new_test_ext(),
+	crate::tests::Test,
+);

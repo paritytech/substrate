@@ -113,7 +113,7 @@ impl EntryPoint {
 				])
 			},
 		})
-			.map(|results| 
+			.map(|results|
 				// the signature is checked to have i64 return type
 				results[0].unwrap_i64() as u64
 			)
@@ -124,27 +124,28 @@ impl EntryPoint {
 	}
 
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
-		match (func.ty().params(), func.ty().results()) {
-			(&[wasmtime::ValType::I32, wasmtime::ValType::I32], &[wasmtime::ValType::I64]) => {
-				Ok(Self { func, call_type: EntryPointType::Direct })
-			}
-			_ => {
-				Err("Invalid signature for direct entry point")
-			}
+		use wasmtime::ValType;
+		let entry_point = wasmtime::FuncType::new(
+			[ValType::I32, ValType::I32].iter().cloned(),
+			[ValType::I64].iter().cloned(),
+		);
+		if func.ty() == entry_point {
+			Ok(Self { func, call_type: EntryPointType::Direct })
+		} else {
+			Err("Invalid signature for direct entry point")
 		}
 	}
 
 	pub fn wrapped(dispatcher: wasmtime::Func, func: u32) -> std::result::Result<Self, &'static str> {
-		match (dispatcher.ty().params(), dispatcher.ty().results()) {
-			(
-				&[wasmtime::ValType::I32, wasmtime::ValType::I32, wasmtime::ValType::I32],
-				&[wasmtime::ValType::I64],
-			) => {
-				Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
-			},
-			_ => {
-				Err("Invalid signature for wrapped entry point")
-			}
+		use wasmtime::ValType;
+		let entry_point = wasmtime::FuncType::new(
+			[ValType::I32, ValType::I32, ValType::I32].iter().cloned(),
+			[ValType::I64].iter().cloned(),
+		);
+		if dispatcher.ty() == entry_point {
+			Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
+		} else {
+			Err("Invalid signature for wrapped entry point")
 		}
 	}
 }

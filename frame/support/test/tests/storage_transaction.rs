@@ -53,7 +53,7 @@ struct Runtime;
 impl frame_support_test::Config for Runtime {
 	type Origin = u32;
 	type BlockNumber = u32;
-	type PalletInfo = ();
+	type PalletInfo = frame_support_test::PanicPalletInfo;
 	type DbWeight = ();
 }
 

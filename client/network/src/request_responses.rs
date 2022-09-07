@@ -196,6 +196,25 @@ impl From<(Cow<'static, str>, RequestId)> for ProtocolRequestId {
 	}
 }
 
+/// When sending a request, what to do on a disconnected recipient.
+pub enum IfDisconnected {
+	/// Try to connect to the peer.
+	TryConnect,
+	/// Just fail if the destination is not yet connected.
+	ImmediateError,
+}
+
+/// Convenience functions for `IfDisconnected`.
+impl IfDisconnected {
+	/// Shall we connect to a disconnected peer?
+	pub fn should_connect(self) -> bool {
+		match self {
+			Self::TryConnect => true,
+			Self::ImmediateError => false,
+		}
+	}
+}
+
 /// Implementation of `NetworkBehaviour` that provides support for request-response protocols.
 pub struct RequestResponsesBehaviour {
 	/// The multiple sub-protocols, by name.
@@ -269,22 +288,25 @@ impl RequestResponsesBehaviour {
 
 	/// Initiates sending a request.
 	///
-	/// An error is returned if we are not connected to the target peer or if the protocol doesn't
-	/// match one that has been registered.
+	/// If there is no established connection to the target peer, the behavior is determined by the choice of `connect`.
+	///
+	/// An error is returned if the protocol doesn't match one that has been registered.
 	pub fn send_request(
 		&mut self,
 		target: &PeerId,
 		protocol_name: &str,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
+		connect: IfDisconnected,
 	) {
 		if let Some((protocol, _)) = self.protocols.get_mut(protocol_name) {
-			if protocol.is_connected(target) {
+			if protocol.is_connected(target) || connect.should_connect() {
 				let request_id = protocol.send_request(target, request);
-				self.pending_requests.insert(
+				let prev_req_id = self.pending_requests.insert(
 					(protocol_name.to_string().into(), request_id).into(),
 					(Instant::now(), pending_response),
 				);
+				debug_assert!(prev_req_id.is_none(), "Expect request id to be unique.");
 			} else {
 				if pending_response.send(Err(RequestFailure::NotConnected)).is_err() {
 					log::debug!(
@@ -488,7 +510,6 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							return Poll::Ready(NetworkBehaviourAction::DialAddress { address })
 						}
 						NetworkBehaviourAction::DialPeer { peer_id, condition } => {
-							log::error!("The request-response isn't supposed to start dialing peers");
 							return Poll::Ready(NetworkBehaviourAction::DialPeer {
 								peer_id,
 								condition,
@@ -948,6 +969,7 @@ mod tests {
 							protocol_name,
 							b"this is a request".to_vec(),
 							sender,
+							IfDisconnected::ImmediateError,
 						);
 						assert!(response_receiver.is_none());
 						response_receiver = Some(receiver);
@@ -1036,6 +1058,7 @@ mod tests {
 							protocol_name,
 							b"this is a request".to_vec(),
 							sender,
+							IfDisconnected::ImmediateError,
 						);
 						assert!(response_receiver.is_none());
 						response_receiver = Some(receiver);
@@ -1178,12 +1201,14 @@ mod tests {
 								protocol_name_1,
 								b"this is a request".to_vec(),
 								sender_1,
+								IfDisconnected::ImmediateError,
 							);
 							swarm_1.send_request(
 								&peer_id,
 								protocol_name_2,
 								b"this is a request".to_vec(),
 								sender_2,
+								IfDisconnected::ImmediateError,
 							);
 							assert!(response_receivers.is_none());
 							response_receivers = Some((receiver_1, receiver_2));

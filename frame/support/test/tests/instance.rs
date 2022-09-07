@@ -253,7 +253,7 @@ impl system::Config for Runtime {
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type Event = Event;
-	type PalletInfo = ();
+	type PalletInfo = PalletInfo;
 	type Call = Call;
 	type DbWeight = ();
 }

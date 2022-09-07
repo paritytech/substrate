@@ -1,6 +1,6 @@
 #[frame_support::pallet]
 mod pallet {
-	use frame_support::pallet_prelude::{Hooks, PhantomData};
+	use frame_support::pallet_prelude::Hooks;
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	#[pallet::config]
@@ -9,7 +9,7 @@ mod pallet {
 	{}
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>

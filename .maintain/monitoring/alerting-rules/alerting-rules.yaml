@@ -108,6 +108,13 @@ groups:
     annotations:
       message: 'The node {{ $labels.instance }} has less than 3 peers for more
       than 15 minutes'
+  - alert: NoIncomingConnection
+    expr: increase(polkadot_sub_libp2p_incoming_connections_total[20m]) == 0
+    labels:
+      severity: warning
+    annotations:
+      message: 'The node {{ $labels.instance }} has not received any new incoming
+      TCP connection in the past 20 minutes. Is it connected to the Internet?'
 
   ##############################################################################
   # System

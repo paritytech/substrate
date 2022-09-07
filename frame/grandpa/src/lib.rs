@@ -41,7 +41,7 @@ use fg_primitives::{
 };
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResultWithPostInfo,
-	storage, traits::KeyOwnerProofSystem, weights::{Pays, Weight}, Parameter,
+	storage, traits::{OneSessionHandler, KeyOwnerProofSystem}, weights::{Pays, Weight}, Parameter,
 };
 use frame_system::{ensure_none, ensure_root, ensure_signed};
 use sp_runtime::{
@@ -587,7 +587,7 @@ impl<T: Config> sp_runtime::BoundToRuntimeAppPublic for Module<T> {
 	type Public = AuthorityId;
 }
 
-impl<T: Config> pallet_session::OneSessionHandler<T::AccountId> for Module<T>
+impl<T: Config> OneSessionHandler<T::AccountId> for Module<T>
 	where T: pallet_session::Config
 {
 	type Key = AuthorityId;

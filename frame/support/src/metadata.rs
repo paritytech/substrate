@@ -43,10 +43,14 @@ pub use frame_metadata::{
 ///# }
 ///# use module0 as module1;
 ///# use module0 as module2;
+///# impl frame_support::traits::PalletInfo for Runtime {
+///#     fn index<P: 'static>() -> Option<usize> { unimplemented!() }
+///#     fn name<P: 'static>() -> Option<&'static str> { unimplemented!() }
+///# }
 ///# impl module0::Config for Runtime {
 ///#     type Origin = u32;
 ///#     type BlockNumber = u32;
-///#     type PalletInfo = ();
+///#     type PalletInfo = Self;
 ///#     type DbWeight = ();
 ///# }
 ///#
@@ -414,6 +418,37 @@ mod tests {
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 	pub struct TestRuntime;
 
+	impl crate::traits::PalletInfo for TestRuntime {
+		fn index<P: 'static>() -> Option<usize> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<system::Module<TestRuntime>>() {
+				return Some(0)
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule>() {
+				return Some(1)
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule2>() {
+				return Some(2)
+			}
+
+			None
+		}
+		fn name<P: 'static>() -> Option<&'static str> {
+			let type_id = sp_std::any::TypeId::of::<P>();
+			if type_id == sp_std::any::TypeId::of::<system::Module<TestRuntime>>() {
+				return Some("System")
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule>() {
+				return Some("EventModule")
+			}
+			if type_id == sp_std::any::TypeId::of::<EventModule2>() {
+				return Some("EventModule2")
+			}
+
+			None
+		}
+	}
+
 	impl_outer_event! {
 		pub enum TestEvent for TestRuntime {
 			system,
@@ -451,7 +486,7 @@ mod tests {
 		type AccountId = u32;
 		type BlockNumber = u32;
 		type SomeValue = SystemValue;
-		type PalletInfo = ();
+		type PalletInfo = Self;
 		type DbWeight = ();
 		type Call = Call;
 	}

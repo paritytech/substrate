@@ -213,7 +213,7 @@ impl<Block: traits::Block> offchain::TransactionPool for TransactionPoolAdapter<
 		let xt = match Block::Extrinsic::decode(&mut &*data) {
 			Ok(xt) => xt,
 			Err(e) => {
-				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e.what());
+				log::warn!("Unable to decode extrinsic: {:?}: {}", data, e);
 				return Err(());
 			},
 		};
