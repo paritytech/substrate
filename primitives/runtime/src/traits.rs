@@ -38,13 +38,12 @@ pub use sp_arithmetic::traits::{
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
 #[doc(hidden)]
-pub use sp_std::marker::PhantomData;
-#[doc(hidden)]
 pub use sp_core::{
-	parameter_types,
-	ConstBool, ConstU8, ConstU16, ConstU32, ConstU64, ConstU128, ConstI8, ConstI16, ConstI32,
-	ConstI64, ConstI128, Get, GetDefault, TryCollect, TypedGet,
+	parameter_types, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128,
+	ConstU16, ConstU32, ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
 };
+#[doc(hidden)]
+pub use sp_std::marker::PhantomData;
 use sp_std::{self, fmt::Debug, prelude::*};
 #[cfg(feature = "std")]
 use std::fmt::Display;
