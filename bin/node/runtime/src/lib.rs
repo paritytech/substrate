@@ -200,7 +200,7 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
-pub struct UnpausablePallets();
+pub struct UnpausablePallets;
 impl Contains<pallet_tx_pause::PalletNameOf<Runtime>> for UnpausablePallets {
 	fn contains(pallet: &pallet_tx_pause::PalletNameOf<Runtime>) -> bool {
 		pallet.as_ref() ==

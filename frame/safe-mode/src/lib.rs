@@ -144,6 +144,32 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Configure the initial state of this pallet in the genesis block.
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		/// The blocknumber up to which inclusively the safe-mode will be enabled.
+		pub enabled: Option<T::BlockNumber>,
+		pub _phantom: PhantomData<T>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		// NOTE: `derive(Default)` does not work together with `#[pallet::genesis_config]`.
+		// We therefore need to add a trivial default impl.
+		fn default() -> Self {
+			Self { enabled: None, _phantom: PhantomData }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			if let Some(block) = self.enabled {
+				Enabled::<T>::put(block);
+			}
+		}
+	}
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Enable the safe-mode permissionlessly for [`Config::EnableDuration`] blocks.
