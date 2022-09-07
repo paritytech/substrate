@@ -485,6 +485,7 @@ impl<T: Config> Pallet<T> {
 	/// Process the output of the election.
 	///
 	/// Store staking information for the new planned era
+	// TODO: Test case needed
 	pub fn store_stakers_info(
 		exposures: BoundedVec<
 			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
