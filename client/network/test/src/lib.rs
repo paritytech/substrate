@@ -23,7 +23,6 @@ mod block_import;
 mod sync;
 
 use std::{
-	borrow::Cow,
 	collections::HashMap,
 	marker::PhantomData,
 	pin::Pin,
@@ -45,19 +44,22 @@ use sc_client_api::{
 };
 use sc_consensus::{
 	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxJustificationImport,
-	ForkChoiceStrategy, ImportResult, JustificationImport, LongestChain, Verifier,
+	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
+	Verifier,
 };
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role,
-		SyncMode, TransportConfig,
+		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,
+		TransportConfig,
 	},
 	Multiaddr, NetworkService, NetworkWorker,
 };
-pub use sc_network_common::config::ProtocolId;
-use sc_network_common::sync::warp::{
-	AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider,
+use sc_network_common::{
+	config::{MultiaddrWithPeerId, ProtocolId},
+	protocol::ProtocolName,
+	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
+	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -71,7 +73,7 @@ use sp_blockchain::{
 };
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
-	BlockOrigin, Error as ConsensusError,
+	BlockOrigin, Error as ConsensusError, SyncOracle,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -243,7 +245,7 @@ where
 {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
-		*self.network.service().local_peer_id()
+		self.network.service().local_peer_id()
 	}
 
 	/// Returns true if we're major syncing.
@@ -680,7 +682,7 @@ pub struct FullPeerConfig {
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
-	pub notifications_protocols: Vec<Cow<'static, str>>,
+	pub notifications_protocols: Vec<ProtocolName>,
 	/// The indices of the peers the peer should be connected to.
 	///
 	/// If `None`, it will be connected to all other peers.
@@ -797,7 +799,7 @@ where
 			let addrs = connect_to
 				.iter()
 				.map(|v| {
-					let peer_id = *self.peer(*v).network_service().local_peer_id();
+					let peer_id = self.peer(*v).network_service().local_peer_id();
 					let multiaddr = self.peer(*v).listen_addr.clone();
 					MultiaddrWithPeerId { peer_id, multiaddr }
 				})
@@ -881,6 +883,7 @@ where
 			import_queue,
 			chain_sync: Box::new(chain_sync),
 			metrics_registry: None,
+			bitswap: None,
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
@@ -893,7 +896,7 @@ where
 		self.mut_peers(move |peers| {
 			for peer in peers.iter_mut() {
 				peer.network
-					.add_known_address(*network.service().local_peer_id(), listen_addr.clone());
+					.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());

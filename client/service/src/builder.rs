@@ -37,8 +37,11 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{config::SyncMode, NetworkService};
-use sc_network_common::sync::warp::WarpSyncProvider;
+use sc_network::{bitswap::Bitswap, config::SyncMode, NetworkService};
+use sc_network_common::{
+	service::{NetworkStateInfo, NetworkStatusProvider, NetworkTransaction},
+	sync::warp::WarpSyncProvider,
+};
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
@@ -203,8 +206,7 @@ where
 
 	let (client, backend) = {
 		let db_config = sc_client_db::DatabaseSettings {
-			state_cache_size: config.state_cache_size,
-			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
+			trie_cache_maximum_size: config.trie_cache_maximum_size,
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			blocks_pruning: config.blocks_pruning,
@@ -319,6 +321,31 @@ where
 	)
 }
 
+/// Shared network instance implementing a set of mandatory traits.
+pub trait SpawnTaskNetwork<Block: BlockT>:
+	sc_offchain::NetworkProvider
+	+ NetworkStateInfo
+	+ NetworkTransaction<Block::Hash>
+	+ NetworkStatusProvider<Block>
+	+ Send
+	+ Sync
+	+ 'static
+{
+}
+
+impl<T, Block> SpawnTaskNetwork<Block> for T
+where
+	Block: BlockT,
+	T: sc_offchain::NetworkProvider
+		+ NetworkStateInfo
+		+ NetworkTransaction<Block::Hash>
+		+ NetworkStatusProvider<Block>
+		+ Send
+		+ Sync
+		+ 'static,
+{
+}
+
 /// Parameters to pass into `build`.
 pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// The service configuration.
@@ -337,7 +364,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub rpc_builder:
 		Box<dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>>,
 	/// A shared network instance.
-	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	pub network: Arc<dyn SpawnTaskNetwork<TBl>>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	/// Telemetry instance for this node.
@@ -349,7 +376,7 @@ pub fn build_offchain_workers<TBl, TCl>(
 	config: &Configuration,
 	spawn_handle: SpawnTaskHandle,
 	client: Arc<TCl>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+	network: Arc<dyn sc_offchain::NetworkProvider + Send + Sync>,
 ) -> Option<Arc<sc_offchain::OffchainWorkers<TCl, TBl>>>
 where
 	TBl: BlockT,
@@ -516,13 +543,14 @@ where
 	Ok(rpc_handlers)
 }
 
-async fn transaction_notifications<TBl, TExPool>(
-	transaction_pool: Arc<TExPool>,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
+async fn transaction_notifications<Block, ExPool, Network>(
+	transaction_pool: Arc<ExPool>,
+	network: Network,
 	telemetry: Option<TelemetryHandle>,
 ) where
-	TBl: BlockT,
-	TExPool: MaintainedTransactionPool<Block = TBl, Hash = <TBl as BlockT>::Hash>,
+	Block: BlockT,
+	ExPool: MaintainedTransactionPool<Block = Block, Hash = <Block as BlockT>::Hash>,
+	Network: NetworkTransaction<<Block as BlockT>::Hash> + Send + Sync,
 {
 	// transaction notifications
 	transaction_pool
@@ -542,13 +570,18 @@ async fn transaction_notifications<TBl, TExPool>(
 		.await;
 }
 
-fn init_telemetry<TBl: BlockT, TCl: BlockBackend<TBl>>(
+fn init_telemetry<Block, Client, Network>(
 	config: &mut Configuration,
-	network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
-	client: Arc<TCl>,
+	network: Network,
+	client: Arc<Client>,
 	telemetry: &mut Telemetry,
 	sysinfo: Option<sc_telemetry::SysInfo>,
-) -> sc_telemetry::Result<TelemetryHandle> {
+) -> sc_telemetry::Result<TelemetryHandle>
+where
+	Block: BlockT,
+	Client: BlockBackend<Block>,
+	Network: NetworkStateInfo,
+{
 	let genesis_hash = client.block_hash(Zero::zero()).ok().flatten().unwrap_or_default();
 	let connection_message = ConnectionMessage {
 		name: config.network.node_name.to_owned(),
@@ -678,7 +711,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// An optional warp sync provider.
 	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 }
-
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>,
@@ -824,6 +856,7 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
+		bitswap: config.network.ipfs_server.then(|| Bitswap::from_client(client.clone())),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,
@@ -890,6 +923,11 @@ where
 pub struct NetworkStarter(oneshot::Sender<()>);
 
 impl NetworkStarter {
+	/// Create a new NetworkStarter
+	pub fn new(sender: oneshot::Sender<()>) -> Self {
+		NetworkStarter(sender)
+	}
+
 	/// Start the network. Call this after all sub-components have been initialized.
 	///
 	/// > **Note**: If you don't call this function, the networking will not work.
