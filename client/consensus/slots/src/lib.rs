@@ -319,7 +319,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
-		let timestamp = sp_timestamp::current_timestamp().as_secs();
+		let timestamp = sp_timestamp::current_timestamp().as_millis();
 
 		debug!(
 			target: logging_target,
