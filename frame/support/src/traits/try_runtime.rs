@@ -32,7 +32,7 @@ pub enum Select {
 	RoundRobin(u32),
 	/// Run only pallets who's name matches the given list.
 	///
-	/// Pallet names are obtained from [`PalletInfoAccess`].
+	/// Pallet names are obtained from [`super::PalletInfoAccess`].
 	Only(Vec<Vec<u8>>),
 }
 
