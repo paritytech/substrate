@@ -49,7 +49,7 @@ use libp2p::{
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
-	protocol::IdentifyInfo,
+	identify::IdentifyInfo,
 	swarm::{
 		AddressScore, ConnectionError, ConnectionLimits, DialError, NetworkBehaviour,
 		PendingConnectionError, Swarm, SwarmBuilder, SwarmEvent,
@@ -482,6 +482,9 @@ where
 			tx_handler_controller,
 			metrics,
 			boot_node_ids,
+			block_request_protocol_name: params.block_request_protocol_config.name,
+			state_request_protocol_name: params.state_request_protocol_config.name,
+			warp_sync_protocol_name: params.warp_sync_protocol_config.map(|c| c.name),
 		})
 	}
 
@@ -1702,14 +1705,22 @@ where
 						.user_protocol()
 						.add_default_set_discovered_nodes(iter::once(peer_id));
 				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id))) => {
+					self.network_service
+						.behaviour()
+						.user_protocol()
+						.add_default_set_discovered_nodes(iter::once(peer_id));
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
-					protocol,
+					protocols,
 				))) =>
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics
-							.kademlia_random_queries_total
-							.with_label_values(&[protocol.as_ref()])
-							.inc();
+						for protocol in protocols {
+							metrics
+								.kademlia_random_queries_total
+								.with_label_values(&[protocol.as_ref()])
+								.inc();
+						}
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 					remote,
