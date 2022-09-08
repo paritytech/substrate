@@ -467,7 +467,7 @@ where
 		let max_weight = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
-		if remaining_weight > Weight::zero() {
+		if remaining_weight.all_gt(Weight::zero()) {
 			let used_weight = <AllPalletsWithSystem as OnIdle<System::BlockNumber>>::on_idle(
 				block_number,
 				remaining_weight,
@@ -840,12 +840,12 @@ mod tests {
 	pub struct RuntimeVersion;
 	impl frame_support::traits::Get<sp_version::RuntimeVersion> for RuntimeVersion {
 		fn get() -> sp_version::RuntimeVersion {
-			RUNTIME_VERSION.with(|v| v.borrow().clone())
+			RuntimeVersionTestValues::get().clone()
 		}
 	}
 
-	thread_local! {
-		pub static RUNTIME_VERSION: std::cell::RefCell<sp_version::RuntimeVersion> =
+	parameter_types! {
+		pub static RuntimeVersionTestValues: sp_version::RuntimeVersion =
 			Default::default();
 	}
 
@@ -1244,14 +1244,13 @@ mod tests {
 	#[test]
 	fn runtime_upgraded_should_work() {
 		new_test_ext(1).execute_with(|| {
-			RUNTIME_VERSION.with(|v| *v.borrow_mut() = Default::default());
+			RuntimeVersionTestValues::mutate(|v| *v = Default::default());
 			// It should be added at genesis
 			assert!(frame_system::LastRuntimeUpgrade::<Runtime>::exists());
 			assert!(!Executive::runtime_upgraded());
 
-			RUNTIME_VERSION.with(|v| {
-				*v.borrow_mut() =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+			RuntimeVersionTestValues::mutate(|v| {
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 			assert!(Executive::runtime_upgraded());
 			assert_eq!(
@@ -1259,8 +1258,8 @@ mod tests {
 				frame_system::LastRuntimeUpgrade::<Runtime>::get(),
 			);
 
-			RUNTIME_VERSION.with(|v| {
-				*v.borrow_mut() = sp_version::RuntimeVersion {
+			RuntimeVersionTestValues::mutate(|v| {
+				*v = sp_version::RuntimeVersion {
 					spec_version: 1,
 					spec_name: "test".into(),
 					..Default::default()
@@ -1272,8 +1271,8 @@ mod tests {
 				frame_system::LastRuntimeUpgrade::<Runtime>::get(),
 			);
 
-			RUNTIME_VERSION.with(|v| {
-				*v.borrow_mut() = sp_version::RuntimeVersion {
+			RuntimeVersionTestValues::mutate(|v| {
+				*v = sp_version::RuntimeVersion {
 					spec_version: 1,
 					spec_name: "test".into(),
 					impl_version: 2,
@@ -1321,9 +1320,8 @@ mod tests {
 	fn custom_runtime_upgrade_is_called_before_modules() {
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
-			RUNTIME_VERSION.with(|v| {
-				*v.borrow_mut() =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+			RuntimeVersionTestValues::mutate(|v| {
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			Executive::initialize_block(&Header::new(
@@ -1343,9 +1341,8 @@ mod tests {
 	fn event_from_runtime_upgrade_is_included() {
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
-			RUNTIME_VERSION.with(|v| {
-				*v.borrow_mut() =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+			RuntimeVersionTestValues::mutate(|v| {
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			// set block number to non zero so events are not excluded
@@ -1374,9 +1371,8 @@ mod tests {
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
-			RUNTIME_VERSION.with(|v| {
-				*v.borrow_mut() =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+			RuntimeVersionTestValues::mutate(|v| {
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			// Let's build some fake block.
@@ -1394,15 +1390,14 @@ mod tests {
 		});
 
 		// Reset to get the correct new genesis below.
-		RUNTIME_VERSION.with(|v| {
-			*v.borrow_mut() = sp_version::RuntimeVersion { spec_version: 0, ..Default::default() }
+		RuntimeVersionTestValues::mutate(|v| {
+			*v = sp_version::RuntimeVersion { spec_version: 0, ..Default::default() }
 		});
 
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called.
-			RUNTIME_VERSION.with(|v| {
-				*v.borrow_mut() =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+			RuntimeVersionTestValues::mutate(|v| {
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			<Executive as ExecuteBlock<Block<TestXt>>>::execute_block(Block::new(header, vec![xt]));
@@ -1416,9 +1411,8 @@ mod tests {
 	fn all_weights_are_recorded_correctly() {
 		new_test_ext(1).execute_with(|| {
 			// Make sure `on_runtime_upgrade` is called for maximum complexity
-			RUNTIME_VERSION.with(|v| {
-				*v.borrow_mut() =
-					sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
+			RuntimeVersionTestValues::mutate(|v| {
+				*v = sp_version::RuntimeVersion { spec_version: 1, ..Default::default() }
 			});
 
 			let block_number = 1;

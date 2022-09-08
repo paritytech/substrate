@@ -267,7 +267,8 @@
 
 use parity_scale_codec::Decode;
 use remote_externalities::{
-	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
+	rpc_api::RpcService, Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig,
+	TestExternalities,
 };
 use sc_chain_spec::ChainSpec;
 use sc_cli::{
@@ -541,8 +542,8 @@ impl State {
 impl TryRuntimeCmd {
 	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
-		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
-		Block::Header: serde::de::DeserializeOwned,
+		Block: BlockT<Hash = H256> + DeserializeOwned,
+		Block::Header: DeserializeOwned,
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 		NumberFor<Block>: FromStr,
@@ -626,13 +627,15 @@ where
 ///
 /// If the spec names don't match, if `relaxed`, then it emits a warning, else it panics.
 /// If the spec versions don't match, it only ever emits a warning.
-pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeOwned>(
+pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,
 	expected_spec_version: u32,
 	relaxed: bool,
 ) {
-	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
+	let rpc_service = RpcService::new(uri.clone(), false).await.unwrap();
+	match rpc_service
+		.get_runtime_version::<Block>(None)
 		.await
 		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))
 		.map(|(spec_name, spec_version)| (spec_name.to_lowercase(), spec_version))

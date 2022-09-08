@@ -22,7 +22,7 @@ use crate as pallet_session;
 #[cfg(feature = "historical")]
 use crate::historical as pallet_session_historical;
 
-use std::{cell::RefCell, collections::BTreeMap};
+use std::collections::BTreeMap;
 
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
@@ -103,29 +103,29 @@ frame_support::construct_runtime!(
 	}
 );
 
-thread_local! {
-	pub static VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
-	pub static NEXT_VALIDATORS: RefCell<Vec<u64>> = RefCell::new(vec![1, 2, 3]);
-	pub static AUTHORITIES: RefCell<Vec<UintAuthorityId>> =
-		RefCell::new(vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
-	pub static FORCE_SESSION_END: RefCell<bool> = RefCell::new(false);
-	pub static SESSION_LENGTH: RefCell<u64> = RefCell::new(2);
-	pub static SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
-	pub static TEST_SESSION_CHANGED: RefCell<bool> = RefCell::new(false);
-	pub static DISABLED: RefCell<bool> = RefCell::new(false);
+parameter_types! {
+	pub static Validators: Vec<u64> = vec![1, 2, 3];
+	pub static NextValidators: Vec<u64> = vec![1, 2, 3];
+	pub static Authorities: Vec<UintAuthorityId> =
+		vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)];
+	pub static ForceSessionEnd: bool = false;
+	pub static SessionLength: u64 = 2;
+	pub static SessionChanged: bool = false;
+	pub static TestSessionChanged: bool = false;
+	pub static Disabled: bool = false;
 	// Stores if `on_before_session_end` was called
-	pub static BEFORE_SESSION_END_CALLED: RefCell<bool> = RefCell::new(false);
-	pub static VALIDATOR_ACCOUNTS: RefCell<BTreeMap<u64, u64>> = RefCell::new(BTreeMap::new());
+	pub static BeforeSessionEndCalled: bool = false;
+	pub static ValidatorAccounts: BTreeMap<u64, u64> = BTreeMap::new();
 }
 
 pub struct TestShouldEndSession;
 impl ShouldEndSession<u64> for TestShouldEndSession {
 	fn should_end_session(now: u64) -> bool {
-		let l = SESSION_LENGTH.with(|l| *l.borrow());
+		let l = SessionLength::get();
 		now % l == 0 ||
-			FORCE_SESSION_END.with(|l| {
-				let r = *l.borrow();
-				*l.borrow_mut() = false;
+			ForceSessionEnd::mutate(|l| {
+				let r = *l;
+				*l = false;
 				r
 			})
 	}
@@ -140,19 +140,19 @@ impl SessionHandler<u64> for TestSessionHandler {
 		validators: &[(u64, T)],
 		_queued_validators: &[(u64, T)],
 	) {
-		SESSION_CHANGED.with(|l| *l.borrow_mut() = changed);
-		AUTHORITIES.with(|l| {
-			*l.borrow_mut() = validators
+		SessionChanged::mutate(|l| *l = changed);
+		Authorities::mutate(|l| {
+			*l = validators
 				.iter()
 				.map(|(_, id)| id.get::<UintAuthorityId>(DUMMY).unwrap_or_default())
 				.collect()
 		});
 	}
 	fn on_disabled(_validator_index: u32) {
-		DISABLED.with(|l| *l.borrow_mut() = true)
+		Disabled::mutate(|l| *l = true)
 	}
 	fn on_before_session_ending() {
-		BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = true);
+		BeforeSessionEndCalled::mutate(|b| *b = true);
 	}
 }
 
@@ -161,16 +161,15 @@ impl SessionManager<u64> for TestSessionManager {
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
 	fn new_session(_: SessionIndex) -> Option<Vec<u64>> {
-		if !TEST_SESSION_CHANGED.with(|l| *l.borrow()) {
-			VALIDATORS.with(|v| {
-				let mut v = v.borrow_mut();
-				*v = NEXT_VALIDATORS.with(|l| l.borrow().clone());
+		if !TestSessionChanged::get() {
+			Validators::mutate(|v| {
+				*v = NextValidators::get().clone();
 				Some(v.clone())
 			})
-		} else if DISABLED.with(|l| std::mem::replace(&mut *l.borrow_mut(), false)) {
+		} else if Disabled::mutate(|l| std::mem::replace(&mut *l, false)) {
 			// If there was a disabled validator, underlying conditions have changed
 			// so we return `Some`.
-			Some(VALIDATORS.with(|v| v.borrow().clone()))
+			Some(Validators::get().clone())
 		} else {
 			None
 		}
@@ -188,37 +187,40 @@ impl crate::historical::SessionManager<u64, u64> for TestSessionManager {
 }
 
 pub fn authorities() -> Vec<UintAuthorityId> {
-	AUTHORITIES.with(|l| l.borrow().to_vec())
+	Authorities::get().to_vec()
 }
 
 pub fn force_new_session() {
-	FORCE_SESSION_END.with(|l| *l.borrow_mut() = true)
+	ForceSessionEnd::mutate(|l| *l = true)
 }
 
 pub fn set_session_length(x: u64) {
-	SESSION_LENGTH.with(|l| *l.borrow_mut() = x)
+	SessionLength::mutate(|l| *l = x)
 }
 
 pub fn session_changed() -> bool {
-	SESSION_CHANGED.with(|l| *l.borrow())
+	SessionChanged::get()
 }
 
 pub fn set_next_validators(next: Vec<u64>) {
-	NEXT_VALIDATORS.with(|v| *v.borrow_mut() = next);
+	NextValidators::mutate(|v| *v = next);
 }
 
 pub fn before_session_end_called() -> bool {
-	BEFORE_SESSION_END_CALLED.with(|b| *b.borrow())
+	BeforeSessionEndCalled::get()
 }
 
 pub fn reset_before_session_end_called() {
-	BEFORE_SESSION_END_CALLED.with(|b| *b.borrow_mut() = false);
+	BeforeSessionEndCalled::mutate(|b| *b = false);
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	let keys: Vec<_> = NEXT_VALIDATORS
-		.with(|l| l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect());
+	let keys: Vec<_> = NextValidators::get()
+		.iter()
+		.cloned()
+		.map(|i| (i, i, UintAuthorityId(i).into()))
+		.collect();
 	BasicExternalities::execute_with_storage(&mut t, || {
 		for (ref k, ..) in &keys {
 			frame_system::Pallet::<Test>::inc_providers(k);
@@ -230,10 +232,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_session::GenesisConfig::<Test> { keys }
 		.assimilate_storage(&mut t)
 		.unwrap();
-	NEXT_VALIDATORS.with(|l| {
-		let v = l.borrow().iter().map(|&i| (i, i)).collect();
-		VALIDATOR_ACCOUNTS.with(|m| *m.borrow_mut() = v);
-	});
+
+	let v = NextValidators::get().iter().map(|&i| (i, i)).collect();
+	ValidatorAccounts::mutate(|m| *m = v);
 	sp_io::TestExternalities::new(t)
 }
 
@@ -279,12 +280,12 @@ impl pallet_timestamp::Config for Test {
 pub struct TestValidatorIdOf;
 impl TestValidatorIdOf {
 	pub fn set(v: BTreeMap<u64, u64>) {
-		VALIDATOR_ACCOUNTS.with(|m| *m.borrow_mut() = v);
+		ValidatorAccounts::mutate(|m| *m = v);
 	}
 }
 impl Convert<u64, Option<u64>> for TestValidatorIdOf {
 	fn convert(x: u64) -> Option<u64> {
-		VALIDATOR_ACCOUNTS.with(|m| m.borrow().get(&x).cloned())
+		ValidatorAccounts::get().get(&x).cloned()
 	}
 }
 
