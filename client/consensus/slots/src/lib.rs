@@ -323,7 +323,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		debug!(
 			target: logging_target,
-			"Starting authorship at slot {}, timestamp: {}", slot, timestamp,
+			"Starting authorship at slot: {slot}, timestamp: {timestamp}"
 		);
 
 		telemetry!(
@@ -337,7 +337,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let proposer = match self.proposer(&slot_info.chain_head).await {
 			Ok(p) => p,
 			Err(err) => {
-				warn!(target: logging_target, "Unable to author block in slot {:?}: {}", slot, err,);
+				warn!(target: logging_target, "Unable to author block in slot {slot:?}: {err}");
 
 				telemetry!(
 					telemetry;
