@@ -53,7 +53,7 @@ parameter_types! {
 	///   99th: 5_489_273
 	///   95th: 5_433_314
 	///   75th: 5_354_812
-	pub const BlockExecutionWeight: Weight = 5_346_284 * WEIGHT_PER_NANOS;
+	pub const BlockExecutionWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(5_346_284);
 }
 
 #[cfg(test)]
@@ -68,8 +68,14 @@ mod test_weights {
 		let w = super::BlockExecutionWeight::get();
 
 		// At least 100 µs.
-		assert!(w >= 100 * constants::WEIGHT_PER_MICROS, "Weight should be at least 100 µs.");
+		assert!(
+			w.ref_time() >= 100u64 * constants::WEIGHT_PER_MICROS.ref_time(),
+			"Weight should be at least 100 µs."
+		);
 		// At most 50 ms.
-		assert!(w <= 50 * constants::WEIGHT_PER_MILLIS, "Weight should be at most 50 ms.");
+		assert!(
+			w.ref_time() <= 50u64 * constants::WEIGHT_PER_MILLIS.ref_time(),
+			"Weight should be at most 50 ms."
+		);
 	}
 }
