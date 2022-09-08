@@ -42,6 +42,16 @@ pub enum Bounded<T> {
 }
 
 impl<T> Bounded<T> {
+	/// Casts the wrapped type into something that encodes alike.
+	///
+	/// # Examples
+	/// ```
+	/// use frame_support::traits::Bounded;
+	///
+	/// // Transmute from `String` to `&str`.
+	/// let x: Bounded<String> = Bounded::Inline(Default::default());
+	/// let _: Bounded<&str> = x.transmute();
+	/// ```
 	pub fn transmute<S: Encode>(self) -> Bounded<S>
 	where
 		T: Encode + EncodeLike<S>,
@@ -54,12 +64,15 @@ impl<T> Bounded<T> {
 		}
 	}
 
+	/// Returns the hash of the preimage.
+	///
+	/// The hash is re-calculated every time if the preimage is inlined.
 	pub fn hash(&self) -> H256 {
 		use Bounded::*;
 		match self {
-			Legacy { hash, .. } => hash.clone(),
+			Legacy { hash, .. } => *hash,
 			Inline(x) => blake2_256(x.as_ref()).into(),
-			Lookup { hash, .. } => hash.clone(),
+			Lookup { hash, .. } => *hash,
 		}
 	}
 }
@@ -68,6 +81,7 @@ impl<T> Bounded<T> {
 const MAX_LEGACY_LEN: u32 = 1_000_000;
 
 impl<T> Bounded<T> {
+	/// Returns the length of the preimage or `None` if the length is unknown.
 	pub fn len(&self) -> Option<u32> {
 		match self {
 			Self::Legacy { .. } => None,
@@ -75,12 +89,16 @@ impl<T> Bounded<T> {
 			Self::Lookup { len, .. } => Some(*len),
 		}
 	}
+
+	/// Returns whether the image will require a lookup to be peeked.
 	pub fn lookup_needed(&self) -> bool {
 		match self {
 			Self::Inline(..) => false,
 			Self::Legacy { .. } | Self::Lookup { .. } => true,
 		}
 	}
+
+	/// The maximum length of the lookup that is needed to peek `Self`.
 	pub fn lookup_len(&self) -> Option<u32> {
 		match self {
 			Self::Inline(..) => None,
@@ -88,10 +106,13 @@ impl<T> Bounded<T> {
 			Self::Lookup { len, .. } => Some(*len),
 		}
 	}
+
+	/// Constructs a `Lookup` bounded item.
 	pub fn unrequested(hash: Hash, len: u32) -> Self {
 		Self::Lookup { hash, len }
 	}
 
+	/// Constructs a `Legacy` bounded item.
 	#[deprecated = "This API is only for transitioning to Scheduler v3 API"]
 	pub fn from_legacy_hash(hash: impl Into<Hash>) -> Self {
 		Self::Legacy { hash: hash.into(), dummy: sp_std::marker::PhantomData }
@@ -192,6 +213,8 @@ pub trait QueryPreimage {
 /// uses this API should implement that on their own side.
 pub trait StorePreimage: QueryPreimage {
 	/// The maximum length of preimage we can store.
+	///
+	/// This is the maximum length of the *encoded* value that can be passed to `bound`.
 	const MAX_LENGTH: usize;
 
 	/// Request and attempt to store the bytes of a preimage on chain.
@@ -243,9 +266,52 @@ impl StorePreimage for () {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{bounded_vec, BoundedVec};
 
 	#[test]
 	fn bounded_size_is_correct() {
 		assert_eq!(<Bounded<Vec<u8>> as MaxEncodedLen>::max_encoded_len(), 131);
+	}
+
+	#[test]
+	fn bounded_basic_works() {
+		let data: BoundedVec<u8, _> = bounded_vec![b'a', b'b', b'c'];
+		let len = data.len() as u32;
+		let hash = blake2_256(&data).into();
+
+		// Inline works
+		{
+			let bound: Bounded<Vec<u8>> = Bounded::Inline(data.clone());
+			assert_eq!(bound.hash(), hash);
+			assert_eq!(bound.len(), Some(len));
+			assert!(!bound.lookup_needed());
+			assert_eq!(bound.lookup_len(), None);
+		}
+		// Legacy works
+		{
+			let bound: Bounded<Vec<u8>> = Bounded::Legacy { hash, dummy: Default::default() };
+			assert_eq!(bound.hash(), hash);
+			assert_eq!(bound.len(), None);
+			assert!(bound.lookup_needed());
+			assert_eq!(bound.lookup_len(), Some(1_000_000));
+		}
+		// Lookup works
+		{
+			let bound: Bounded<Vec<u8>> = Bounded::Lookup { hash, len: data.len() as u32 };
+			assert_eq!(bound.hash(), hash);
+			assert_eq!(bound.len(), Some(len));
+			assert!(bound.lookup_needed());
+			assert_eq!(bound.lookup_len(), Some(len));
+		}
+	}
+
+	#[test]
+	fn bounded_transmuting_works() {
+		let data: BoundedVec<u8, _> = bounded_vec![b'a', b'b', b'c'];
+
+		// Transmute a `String` into a `&str`.
+		let x: Bounded<String> = Bounded::Inline(data.clone());
+		let y: Bounded<&str> = x.transmute();
+		assert_eq!(y, Bounded::Inline(data));
 	}
 }

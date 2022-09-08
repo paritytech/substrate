@@ -33,14 +33,18 @@ pub trait ConsensusDataProvider<B: BlockT>: Send + Sync {
 	/// Block import transaction type
 	type Transaction;
 
+	/// The proof type.
+	type Proof;
+
 	/// Attempt to create a consensus digest.
 	fn create_digest(&self, parent: &B::Header, inherents: &InherentData) -> Result<Digest, Error>;
 
-	/// set up the neccessary import params.
+	/// Set up the necessary import params.
 	fn append_block_import(
 		&self,
 		parent: &B::Header,
 		params: &mut BlockImportParams<B, Self::Transaction>,
 		inherents: &InherentData,
+		proof: Self::Proof,
 	) -> Result<(), Error>;
 }

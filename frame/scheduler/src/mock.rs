@@ -32,6 +32,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
+	Perbill,
 };
 
 // Logger module to track execution.
@@ -118,11 +119,11 @@ impl Contains<Call> for BaseFilter {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2_000_000_000_000);
+		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(2_000_000_000_000));
 }
 impl system::Config for Test {
 	type BaseCallFilter = BaseFilter;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type Origin = Origin;
@@ -164,42 +165,46 @@ impl pallet_preimage::Config for Test {
 
 pub struct TestWeightInfo;
 impl WeightInfo for TestWeightInfo {
-	fn service_agendas() -> Weight {
-		0b0000_0001
+	fn service_agendas_base() -> Weight {
+		Weight::from_ref_time(0b0000_0001)
 	}
-	fn service_agenda(i: u32) -> Weight {
-		(i << 8) as Weight + 0b0000_0010
+	fn service_agenda_base(i: u32) -> Weight {
+		Weight::from_ref_time((i << 8) as u64 + 0b0000_0010)
 	}
 	fn service_task_base() -> Weight {
-		0b0000_0100
+		Weight::from_ref_time(0b0000_0100)
 	}
 	fn service_task_periodic() -> Weight {
-		0b0000_1100
+		Weight::from_ref_time(0b0000_1100)
 	}
 	fn service_task_named() -> Weight {
-		0b0001_0100
+		Weight::from_ref_time(0b0001_0100)
 	}
 	fn service_task_fetched(s: u32) -> Weight {
-		(s << 8) as Weight + 0b0010_0100
+		Weight::from_ref_time((s << 8) as u64 + 0b0010_0100)
 	}
 	fn execute_dispatch_signed() -> Weight {
-		0b0100_0000
+		Weight::from_ref_time(0b0100_0000)
 	}
 	fn execute_dispatch_unsigned() -> Weight {
-		0b1000_0000
+		Weight::from_ref_time(0b1000_0000)
 	}
 	fn schedule(_s: u32) -> Weight {
-		50
+		Weight::from_ref_time(50)
 	}
 	fn cancel(_s: u32) -> Weight {
-		50
+		Weight::from_ref_time(50)
 	}
 	fn schedule_named(_s: u32) -> Weight {
-		50
+		Weight::from_ref_time(50)
 	}
 	fn cancel_named(_s: u32) -> Weight {
-		50
+		Weight::from_ref_time(50)
 	}
+}
+parameter_types! {
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
+		BlockWeights::get().max_block;
 }
 
 impl Config for Test {
@@ -207,7 +212,7 @@ impl Config for Test {
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
-	type MaximumWeight = ConstU64<10_000>;
+	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;
 	type WeightInfo = TestWeightInfo;
@@ -232,4 +237,8 @@ pub fn run_to_block(n: u64) {
 
 pub fn root() -> OriginCaller {
 	system::RawOrigin::Root.into()
+}
+
+pub fn signed(i: u64) -> OriginCaller {
+	system::RawOrigin::Signed(i).into()
 }

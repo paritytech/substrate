@@ -67,7 +67,7 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
 }
 
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
-	ON_OFFENCE_PERBILL.with(|fractions| f(&mut *fractions.borrow_mut()))
+	ON_OFFENCE_PERBILL.with(|fractions| f(&mut fractions.borrow_mut()))
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;
@@ -86,7 +86,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
 }
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -168,8 +168,8 @@ impl<T: Clone> offence::Offence<T> for Offence<T> {
 		1
 	}
 
-	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill {
-		Perbill::from_percent(5 + offenders_count * 100 / validator_set_count)
+	fn slash_fraction(&self, offenders_count: u32) -> Perbill {
+		Perbill::from_percent(5 + offenders_count * 100 / self.validator_set_count)
 	}
 }
 

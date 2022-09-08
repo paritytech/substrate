@@ -150,7 +150,7 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
 #[derive(Clone, Encode, Decode, Eq, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo)]
-#[codec(mel_bound(Balance: MaxEncodedLen, AccountId: MaxEncodedLen, BlockNumber: MaxEncodedLen))]
+#[codec(mel_bound(skip_type_params(MaxVotes)))]
 #[scale_info(skip_type_params(MaxVotes))]
 pub enum Voting<Balance, AccountId, BlockNumber, MaxVotes: Get<u32>> {
 	/// The account is voting directly. `delegations` is the total amount of post-conviction voting

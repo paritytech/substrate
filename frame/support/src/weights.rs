@@ -91,27 +91,19 @@
 //! # fn main() {}
 //! ```
 //!
-//! ### 2. Define weights as a function of input arguments using `FunctionOf` tuple struct.
+//! ### 2. Define weights as a function of input arguments.
 //!
-//! This struct works in a similar manner as above. 3 items must be provided and each can be either
-//! a fixed value or a function/closure with the same parameters list as the dispatchable function
-//! itself, wrapper in a tuple.
-//!
-//! Using this only makes sense if you want to use a function for at least one of the elements. If
-//! all 3 are static values, providing a raw tuple is easier.
+//! The arguments of the dispatch are available in the weight expressions as a borrowed value.
 //!
 //! ```
 //! # use frame_system::Config;
-//! # use frame_support::weights::{DispatchClass, FunctionOf, Pays};
+//! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
 //!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
-//!         #[weight = FunctionOf(
-//! 			// weight, function.
-//! 			|args: (&u32, &u64)| *args.0 as u64 + args.1,
-//! 			// class, fixed.
+//!         #[weight = (
+//! 			*a as u64 + *b,
 //! 			DispatchClass::Operational,
-//! 			// pays fee, function.
-//! 			|args: (&u32, &u64)| if *args.0 > 1000 { Pays::Yes } else { Pays::No },
+//! 			if *a > 1000 { Pays::Yes } else { Pays::No }
 //! 		)]
 //!         fn dispatching(origin, a: u32, b: u64) { unimplemented!() }
 //!     }
@@ -131,12 +123,13 @@ mod block_weights;
 mod extrinsic_weights;
 mod paritydb_weights;
 mod rocksdb_weights;
+mod weight_v2;
 
 use crate::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo},
 	traits::Get,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -154,18 +147,17 @@ use sp_runtime::{
 /// Re-export priority as type
 pub use sp_runtime::transaction_validity::TransactionPriority;
 
-/// Numeric range of a transaction weight.
-pub type Weight = u64;
+pub use weight_v2::*;
 
 /// These constants are specific to FRAME, and the current implementation of its various components.
 /// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
 	use super::Weight;
 
-	pub const WEIGHT_PER_SECOND: Weight = 1_000_000_000_000;
-	pub const WEIGHT_PER_MILLIS: Weight = WEIGHT_PER_SECOND / 1000; // 1_000_000_000
-	pub const WEIGHT_PER_MICROS: Weight = WEIGHT_PER_MILLIS / 1000; // 1_000_000
-	pub const WEIGHT_PER_NANOS: Weight = WEIGHT_PER_MICROS / 1000; // 1_000
+	pub const WEIGHT_PER_SECOND: Weight = Weight::from_ref_time(1_000_000_000_000);
+	pub const WEIGHT_PER_MILLIS: Weight = Weight::from_ref_time(1_000_000_000);
+	pub const WEIGHT_PER_MICROS: Weight = Weight::from_ref_time(1_000_000);
+	pub const WEIGHT_PER_NANOS: Weight = Weight::from_ref_time(1_000);
 
 	// Expose the Block and Extrinsic base weights.
 	pub use super::{block_weights::BlockExecutionWeight, extrinsic_weights::ExtrinsicBaseWeight};
@@ -209,6 +201,12 @@ pub enum Pays {
 impl Default for Pays {
 	fn default() -> Self {
 		Self::Yes
+	}
+}
+
+impl From<Pays> for PostDispatchInfo {
+	fn from(pays_fee: Pays) -> Self {
+		Self { actual_weight: None, pays_fee }
 	}
 }
 
@@ -358,23 +356,13 @@ pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &Dispatc
 	.calc_actual_weight(info)
 }
 
-impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
-	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
-		let (actual_weight, pays_fee) = post_weight_info;
-		Self { actual_weight, pays_fee }
+/// Extract the actual pays_fee from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_pays_fee(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Pays {
+	match result {
+		Ok(post_info) => post_info,
+		Err(err) => &err.post_info,
 	}
-}
-
-impl From<Pays> for PostDispatchInfo {
-	fn from(pays_fee: Pays) -> Self {
-		Self { actual_weight: None, pays_fee }
-	}
-}
-
-impl From<Option<Weight>> for PostDispatchInfo {
-	fn from(actual_weight: Option<Weight>) -> Self {
-		Self { actual_weight, pays_fee: Default::default() }
-	}
+	.pays_fee(info)
 }
 
 impl From<()> for PostDispatchInfo {
@@ -406,7 +394,7 @@ pub trait WithPostDispatchInfo {
 	/// # Example
 	///
 	/// ```ignore
-	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(100))?;
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100)))?;
 	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
 	/// ```
 	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
@@ -424,147 +412,6 @@ where
 			},
 			error: self.into(),
 		}
-	}
-}
-
-impl<T> WeighData<T> for Weight {
-	fn weigh_data(&self, _: T) -> Weight {
-		*self
-	}
-}
-
-impl<T> ClassifyDispatch<T> for Weight {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::Normal
-	}
-}
-
-impl<T> PaysFee<T> for Weight {
-	fn pays_fee(&self, _: T) -> Pays {
-		Pays::Yes
-	}
-}
-
-impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
-	fn weigh_data(&self, _: T) -> Weight {
-		self.0
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		self.1
-	}
-}
-
-impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
-	fn pays_fee(&self, _: T) -> Pays {
-		self.2
-	}
-}
-
-impl<T> WeighData<T> for (Weight, DispatchClass) {
-	fn weigh_data(&self, _: T) -> Weight {
-		self.0
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (Weight, DispatchClass) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		self.1
-	}
-}
-
-impl<T> PaysFee<T> for (Weight, DispatchClass) {
-	fn pays_fee(&self, _: T) -> Pays {
-		Pays::Yes
-	}
-}
-
-impl<T> WeighData<T> for (Weight, Pays) {
-	fn weigh_data(&self, _: T) -> Weight {
-		self.0
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (Weight, Pays) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::Normal
-	}
-}
-
-impl<T> PaysFee<T> for (Weight, Pays) {
-	fn pays_fee(&self, _: T) -> Pays {
-		self.1
-	}
-}
-
-/// A struct to represent a weight which is a function of the input arguments. The given items have
-/// the following types:
-///
-/// - `WD`: a raw `Weight` value or a closure that returns a `Weight` with the same argument list as
-///   the dispatched, wrapped in a tuple.
-/// - `CD`: a raw `DispatchClass` value or a closure that returns a `DispatchClass` with the same
-///   argument list as the dispatched, wrapped in a tuple.
-/// - `PF`: a `Pays` variant for whether this dispatch pays fee or not or a closure that returns a
-///   `Pays` variant with the same argument list as the dispatched, wrapped in a tuple.
-#[deprecated = "Function arguments are available directly inside the annotation now."]
-pub struct FunctionOf<WD, CD, PF>(pub WD, pub CD, pub PF);
-
-// `WeighData` as a raw value
-#[allow(deprecated)]
-impl<Args, CD, PF> WeighData<Args> for FunctionOf<Weight, CD, PF> {
-	fn weigh_data(&self, _: Args) -> Weight {
-		self.0
-	}
-}
-
-// `WeighData` as a closure
-#[allow(deprecated)]
-impl<Args, WD, CD, PF> WeighData<Args> for FunctionOf<WD, CD, PF>
-where
-	WD: Fn(Args) -> Weight,
-{
-	fn weigh_data(&self, args: Args) -> Weight {
-		(self.0)(args)
-	}
-}
-
-// `ClassifyDispatch` as a raw value
-#[allow(deprecated)]
-impl<Args, WD, PF> ClassifyDispatch<Args> for FunctionOf<WD, DispatchClass, PF> {
-	fn classify_dispatch(&self, _: Args) -> DispatchClass {
-		self.1
-	}
-}
-
-// `ClassifyDispatch` as a raw value
-#[allow(deprecated)]
-impl<Args, WD, CD, PF> ClassifyDispatch<Args> for FunctionOf<WD, CD, PF>
-where
-	CD: Fn(Args) -> DispatchClass,
-{
-	fn classify_dispatch(&self, args: Args) -> DispatchClass {
-		(self.1)(args)
-	}
-}
-
-// `PaysFee` as a raw value
-#[allow(deprecated)]
-impl<Args, WD, CD> PaysFee<Args> for FunctionOf<WD, CD, Pays> {
-	fn pays_fee(&self, _: Args) -> Pays {
-		self.2
-	}
-}
-
-// `PaysFee` as a closure
-#[allow(deprecated)]
-impl<Args, WD, CD, PF> PaysFee<Args> for FunctionOf<WD, CD, PF>
-where
-	PF: Fn(Args) -> Pays,
-{
-	fn pays_fee(&self, args: Args) -> Pays {
-		(self.2)(args)
 	}
 }
 
@@ -595,30 +442,37 @@ where
 impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
-		DispatchInfo { weight: self.encode().len() as _, pays_fee: Pays::Yes, ..Default::default() }
+		DispatchInfo {
+			weight: Weight::from_ref_time(self.encode().len() as _),
+			pays_fee: Pays::Yes,
+			..Default::default()
+		}
 	}
 }
 
 /// The weight of database operations that the runtime can invoke.
+///
+/// NOTE: This is currently only measured in computational time, and will probably
+/// be updated all together once proof size is accounted for.
 #[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
 pub struct RuntimeDbWeight {
-	pub read: Weight,
-	pub write: Weight,
+	pub read: u64,
+	pub write: u64,
 }
 
 impl RuntimeDbWeight {
-	pub fn reads(self, r: Weight) -> Weight {
-		self.read.saturating_mul(r)
+	pub fn reads(self, r: u64) -> Weight {
+		Weight::from_ref_time(self.read.saturating_mul(r))
 	}
 
-	pub fn writes(self, w: Weight) -> Weight {
-		self.write.saturating_mul(w)
+	pub fn writes(self, w: u64) -> Weight {
+		Weight::from_ref_time(self.write.saturating_mul(w))
 	}
 
-	pub fn reads_writes(self, r: Weight, w: Weight) -> Weight {
+	pub fn reads_writes(self, r: u64, w: u64) -> Weight {
 		let read_weight = self.read.saturating_mul(r);
 		let write_weight = self.write.saturating_mul(w);
-		read_weight.saturating_add(write_weight)
+		Weight::from_ref_time(read_weight.saturating_add(write_weight))
 	}
 }
 
@@ -686,7 +540,8 @@ where
 		Self::polynomial()
 			.iter()
 			.fold(Self::Balance::saturated_from(0u32), |mut acc, args| {
-				let w = Self::Balance::saturated_from(*weight).saturating_pow(args.degree.into());
+				let w = Self::Balance::saturated_from(weight.ref_time())
+					.saturating_pow(args.degree.into());
 
 				// The sum could get negative. Therefore we only sum with the accumulator.
 				// The Perbill Mul implementation is non overflowing.
@@ -716,7 +571,7 @@ where
 	type Balance = T;
 
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
-		Self::Balance::saturated_from(*weight)
+		Self::Balance::saturated_from(weight.ref_time())
 	}
 }
 
@@ -739,12 +594,12 @@ where
 	type Balance = T;
 
 	fn weight_to_fee(weight: &Weight) -> Self::Balance {
-		Self::Balance::saturated_from(*weight).saturating_mul(M::get())
+		Self::Balance::saturated_from(weight.ref_time()).saturating_mul(M::get())
 	}
 }
 
 /// A struct holding value for each `DispatchClass`.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct PerDispatchClass<T> {
 	/// Value for `Normal` extrinsics.
 	normal: T,
@@ -795,7 +650,7 @@ impl<T: Clone> PerDispatchClass<T> {
 impl PerDispatchClass<Weight> {
 	/// Returns the total weight consumed by all extrinsics in the block.
 	pub fn total(&self) -> Weight {
-		let mut sum = 0;
+		let mut sum = Weight::zero();
 		for class in DispatchClass::all() {
 			sum = sum.saturating_add(*self.get(*class));
 		}
@@ -812,7 +667,7 @@ impl PerDispatchClass<Weight> {
 	/// occur.
 	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
 		let value = self.get_mut(class);
-		*value = value.checked_add(weight).ok_or(())?;
+		*value = value.checked_add(&weight).ok_or(())?;
 		Ok(())
 	}
 
@@ -872,16 +727,16 @@ mod tests {
 			fn f03(_origin) { unimplemented!(); }
 
 			// weight = a x 10 + b
-			#[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
+			#[weight = ((_a * 10 + _eb * 1) as u64, DispatchClass::Normal, Pays::Yes)]
 			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
 			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
 			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
 
-			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
+			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_ref_time(10_000)]
 			fn f20(_origin) { unimplemented!(); }
 
-			#[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+			#[weight = T::DbWeight::get().reads_writes(6, 5) + Weight::from_ref_time(40_000)]
 			fn f21(_origin) { unimplemented!(); }
 
 		}
@@ -891,69 +746,119 @@ mod tests {
 	fn weights_are_correct() {
 		// #[weight = 1000]
 		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
-		assert_eq!(info.weight, 1000);
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, DispatchClass::Mandatory)]
 		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
-		assert_eq!(info.weight, 1000);
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
 		assert_eq!(info.class, DispatchClass::Mandatory);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (1000, Pays::No)]
 		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
-		assert_eq!(info.weight, 1000);
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
 		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
-		assert_eq!(info.weight, 1000);
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::No);
 
 		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
 		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, 150); // 13*10 + 20
+		assert_eq!(info.weight, Weight::from_ref_time(150)); // 13*10 + 20
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
 		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
-		assert_eq!(info.weight, 0);
+		assert_eq!(info.weight, Weight::from_ref_time(0));
 		assert_eq!(info.class, DispatchClass::Operational);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
 		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
-		assert_eq!(info.weight, 12300); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.weight, Weight::from_ref_time(12300)); // 100*3 + 1000*2 + 10_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
 		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
-		assert_eq!(info.weight, 45600); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.weight, Weight::from_ref_time(45600)); // 100*6 + 1000*5 + 40_1000
 		assert_eq!(info.class, DispatchClass::Normal);
 		assert_eq!(info.pays_fee, Pays::Yes);
 	}
 
 	#[test]
 	fn extract_actual_weight_works() {
-		let pre = DispatchInfo { weight: 1000, ..Default::default() };
-		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), 7);
-		assert_eq!(extract_actual_weight(&Ok(Some(1000).into()), &pre), 1000);
-		assert_eq!(extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(9)), &pre), 9);
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::from_ref_time(7));
+		assert_eq!(
+			extract_actual_weight(&Ok(Some(1000).into()), &pre),
+			Weight::from_ref_time(1000)
+		);
+		assert_eq!(
+			extract_actual_weight(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&pre
+			),
+			Weight::from_ref_time(9)
+		);
 	}
 
 	#[test]
 	fn extract_actual_weight_caps_at_pre_weight() {
-		let pre = DispatchInfo { weight: 1000, ..Default::default() };
-		assert_eq!(extract_actual_weight(&Ok(Some(1250).into()), &pre), 1000);
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
 		assert_eq!(
-			extract_actual_weight(&Err(DispatchError::BadOrigin.with_weight(1300)), &pre),
-			1000
+			extract_actual_weight(&Ok(Some(1250).into()), &pre),
+			Weight::from_ref_time(1000)
 		);
+		assert_eq!(
+			extract_actual_weight(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(1300))),
+				&pre
+			),
+			Weight::from_ref_time(1000),
+		);
+	}
+
+	#[test]
+	fn extract_actual_pays_fee_works() {
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::No).into()), &pre), Pays::No);
+		assert_eq!(
+			extract_actual_pays_fee(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&pre
+			),
+			Pays::Yes
+		);
+		assert_eq!(
+			extract_actual_pays_fee(
+				&Err(DispatchErrorWithPostInfo {
+					post_info: PostDispatchInfo { actual_weight: None, pays_fee: Pays::No },
+					error: DispatchError::BadOrigin,
+				}),
+				&pre
+			),
+			Pays::No
+		);
+
+		let pre = DispatchInfo {
+			weight: Weight::from_ref_time(1000),
+			pays_fee: Pays::No,
+			..Default::default()
+		};
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::No);
 	}
 
 	type Balance = u64;
@@ -996,40 +901,52 @@ mod tests {
 	#[test]
 	fn polynomial_works() {
 		// 100^3/2=500000 100^2*(2+1/3)=23333 700 -10000
-		assert_eq!(Poly::weight_to_fee(&100), 514033);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(100)), 514033);
 		// 10123^3/2=518677865433 10123^2*(2+1/3)=239108634 70861 -10000
-		assert_eq!(Poly::weight_to_fee(&10_123), 518917034928);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(10_123)), 518917034928);
 	}
 
 	#[test]
 	fn polynomial_does_not_underflow() {
-		assert_eq!(Poly::weight_to_fee(&0), 0);
-		assert_eq!(Poly::weight_to_fee(&10), 0);
+		assert_eq!(Poly::weight_to_fee(&Weight::zero()), 0);
+		assert_eq!(Poly::weight_to_fee(&Weight::from_ref_time(10)), 0);
 	}
 
 	#[test]
 	fn polynomial_does_not_overflow() {
-		assert_eq!(Poly::weight_to_fee(&Weight::max_value()), Balance::max_value() - 10_000);
+		assert_eq!(Poly::weight_to_fee(&Weight::MAX), Balance::max_value() - 10_000);
 	}
 
 	#[test]
 	fn identity_fee_works() {
-		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&0), 0);
-		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&50), 50);
-		assert_eq!(
-			IdentityFee::<Balance>::weight_to_fee(&Weight::max_value()),
-			Balance::max_value()
-		);
+		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::zero()), 0);
+		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::from_ref_time(50)), 50);
+		assert_eq!(IdentityFee::<Balance>::weight_to_fee(&Weight::MAX), Balance::max_value());
 	}
 
 	#[test]
 	fn constant_fee_works() {
 		use crate::traits::ConstU128;
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<100u128>>::weight_to_fee(&0), 0);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<10u128>>::weight_to_fee(&50), 500);
-		assert_eq!(ConstantMultiplier::<u128, ConstU128<1024u128>>::weight_to_fee(&16), 16384);
 		assert_eq!(
-			ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::weight_to_fee(&2),
+			ConstantMultiplier::<u128, ConstU128<100u128>>::weight_to_fee(&Weight::zero()),
+			0
+		);
+		assert_eq!(
+			ConstantMultiplier::<u128, ConstU128<10u128>>::weight_to_fee(&Weight::from_ref_time(
+				50
+			)),
+			500
+		);
+		assert_eq!(
+			ConstantMultiplier::<u128, ConstU128<1024u128>>::weight_to_fee(&Weight::from_ref_time(
+				16
+			)),
+			16384
+		);
+		assert_eq!(
+			ConstantMultiplier::<u128, ConstU128<{ u128::MAX }>>::weight_to_fee(
+				&Weight::from_ref_time(2)
+			),
 			u128::MAX
 		);
 	}

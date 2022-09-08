@@ -50,7 +50,7 @@ mod error;
 pub use error::PalletError;
 
 mod filter;
-pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter, IntegrityTest};
+pub use filter::{ClearFilterGuard, FilterStack, FilterStackGuard, InstanceFilter};
 
 mod misc;
 pub use misc::{
@@ -82,10 +82,9 @@ mod hooks;
 #[cfg(feature = "std")]
 pub use hooks::GenesisBuild;
 pub use hooks::{
-	Hooks, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade, OnTimestampSet,
+	Hooks, IntegrityTest, OnFinalize, OnGenesis, OnIdle, OnInitialize, OnRuntimeUpgrade,
+	OnTimestampSet,
 };
-#[cfg(feature = "try-runtime")]
-pub use hooks::{OnRuntimeUpgradeHelpersExt, ON_RUNTIME_UPGRADE_PREFIX};
 
 pub mod schedule;
 mod storage;
@@ -97,8 +96,8 @@ mod dispatch;
 #[allow(deprecated)]
 pub use dispatch::EnsureOneOf;
 pub use dispatch::{
-	AsEnsureOriginWithArg, CallerTrait, DispatchableWithStorageLayer, EitherOf, EitherOfDiverse,
-	EnsureOrigin, EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess,
+	AsEnsureOriginWithArg, CallerTrait, EitherOf, EitherOfDiverse, EnsureOrigin,
+	EnsureOriginWithArg, MapSuccess, NeverEnsureOrigin, OriginTrait, TryMapSuccess,
 	UnfilteredDispatchable,
 };
 
@@ -110,3 +109,8 @@ pub use voting::{
 
 mod preimages;
 pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
+
+#[cfg(feature = "try-runtime")]
+mod try_runtime;
+#[cfg(feature = "try-runtime")]
+pub use try_runtime::{OnRuntimeUpgradeHelpersExt, Select as TryStateSelect, TryState};

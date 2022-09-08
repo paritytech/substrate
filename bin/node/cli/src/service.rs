@@ -23,13 +23,14 @@
 use codec::Encode;
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::prelude::*;
+use kitchensink_runtime::RuntimeApi;
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
-use node_runtime::RuntimeApi;
 use sc_client_api::{BlockBackend, ExecutorProvider};
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
-use sc_network::{Event, NetworkService};
+use sc_network::NetworkService;
+use sc_network_common::{protocol::event::Event, service::NetworkEventStream};
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
@@ -68,41 +69,43 @@ pub fn fetch_nonce(client: &FullClient, account: sp_core::sr25519::Pair) -> u32 
 pub fn create_extrinsic(
 	client: &FullClient,
 	sender: sp_core::sr25519::Pair,
-	function: impl Into<node_runtime::Call>,
+	function: impl Into<kitchensink_runtime::Call>,
 	nonce: Option<u32>,
-) -> node_runtime::UncheckedExtrinsic {
+) -> kitchensink_runtime::UncheckedExtrinsic {
 	let function = function.into();
 	let genesis_hash = client.block_hash(0).ok().flatten().expect("Genesis block exists; qed");
 	let best_hash = client.chain_info().best_hash;
 	let best_block = client.chain_info().best_number;
 	let nonce = nonce.unwrap_or_else(|| fetch_nonce(client, sender.clone()));
 
-	let period = node_runtime::BlockHashCount::get()
+	let period = kitchensink_runtime::BlockHashCount::get()
 		.checked_next_power_of_two()
 		.map(|c| c / 2)
 		.unwrap_or(2) as u64;
 	let tip = 0;
-	let extra: node_runtime::SignedExtra = (
-		frame_system::CheckNonZeroSender::<node_runtime::Runtime>::new(),
-		frame_system::CheckSpecVersion::<node_runtime::Runtime>::new(),
-		frame_system::CheckTxVersion::<node_runtime::Runtime>::new(),
-		frame_system::CheckGenesis::<node_runtime::Runtime>::new(),
-		frame_system::CheckEra::<node_runtime::Runtime>::from(generic::Era::mortal(
+	let extra: kitchensink_runtime::SignedExtra = (
+		frame_system::CheckNonZeroSender::<kitchensink_runtime::Runtime>::new(),
+		frame_system::CheckSpecVersion::<kitchensink_runtime::Runtime>::new(),
+		frame_system::CheckTxVersion::<kitchensink_runtime::Runtime>::new(),
+		frame_system::CheckGenesis::<kitchensink_runtime::Runtime>::new(),
+		frame_system::CheckEra::<kitchensink_runtime::Runtime>::from(generic::Era::mortal(
 			period,
 			best_block.saturated_into(),
 		)),
-		frame_system::CheckNonce::<node_runtime::Runtime>::from(nonce),
-		frame_system::CheckWeight::<node_runtime::Runtime>::new(),
-		pallet_asset_tx_payment::ChargeAssetTxPayment::<node_runtime::Runtime>::from(tip, None),
+		frame_system::CheckNonce::<kitchensink_runtime::Runtime>::from(nonce),
+		frame_system::CheckWeight::<kitchensink_runtime::Runtime>::new(),
+		pallet_asset_tx_payment::ChargeAssetTxPayment::<kitchensink_runtime::Runtime>::from(
+			tip, None,
+		),
 	);
 
-	let raw_payload = node_runtime::SignedPayload::from_raw(
+	let raw_payload = kitchensink_runtime::SignedPayload::from_raw(
 		function.clone(),
 		extra.clone(),
 		(
 			(),
-			node_runtime::VERSION.spec_version,
-			node_runtime::VERSION.transaction_version,
+			kitchensink_runtime::VERSION.spec_version,
+			kitchensink_runtime::VERSION.transaction_version,
 			genesis_hash,
 			best_hash,
 			(),
@@ -112,10 +115,10 @@ pub fn create_extrinsic(
 	);
 	let signature = raw_payload.using_encoded(|e| sender.sign(e));
 
-	node_runtime::UncheckedExtrinsic::new_signed(
+	kitchensink_runtime::UncheckedExtrinsic::new_signed(
 		function,
 		sp_runtime::AccountId32::from(sender.public()).into(),
-		node_runtime::Signature::Sr25519(signature),
+		kitchensink_runtime::Signature::Sr25519(signature),
 		extra,
 	)
 }
@@ -196,7 +199,7 @@ pub fn new_partial(
 	let justification_import = grandpa_block_import.clone();
 
 	let (block_import, babe_link) = sc_consensus_babe::block_import(
-		sc_consensus_babe::Config::get(&*client)?,
+		sc_consensus_babe::configuration(&*client)?,
 		grandpa_block_import,
 		client.clone(),
 	)?;
@@ -565,11 +568,11 @@ pub fn new_full(
 mod tests {
 	use crate::service::{new_full_base, NewFullBase};
 	use codec::Encode;
-	use node_primitives::{Block, DigestItem, Signature};
-	use node_runtime::{
+	use kitchensink_runtime::{
 		constants::{currency::CENTS, time::SLOT_DURATION},
 		Address, BalancesCall, Call, UncheckedExtrinsic,
 	};
+	use node_primitives::{Block, DigestItem, Signature};
 	use sc_client_api::BlockBackend;
 	use sc_consensus::{BlockImport, BlockImportParams, ForkChoiceStrategy};
 	use sc_consensus_babe::{BabeIntermediate, CompatibleDigestItem, INTERMEDIATE_KEY};
@@ -679,10 +682,7 @@ mod tests {
 						.epoch_changes()
 						.shared_data()
 						.epoch_data(&epoch_descriptor, |slot| {
-							sc_consensus_babe::Epoch::genesis(
-								babe_link.config().genesis_config(),
-								slot,
-							)
+							sc_consensus_babe::Epoch::genesis(babe_link.config(), slot)
 						})
 						.unwrap();
 

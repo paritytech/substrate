@@ -318,7 +318,7 @@ const MILLICENTS: u32 = 1_000_000_000;
 // - assigns a dispatch class `operational` if the argument of the call is more than 1000.
 //
 // More information can be read at:
-//   - https://docs.substrate.io/v3/runtime/weights-and-fees
+//   - https://docs.substrate.io/main-docs/build/tx-weights-fees/
 //
 // Manually configuring weight is an advanced operation and what you really need may well be
 //   fulfilled by running the benchmarking toolchain. Refer to `benchmarking.rs` file.
@@ -329,7 +329,7 @@ impl<T: pallet_balances::Config> WeighData<(&BalanceOf<T>,)> for WeightForSetDum
 		let multiplier = self.0;
 		// *target.0 is the amount passed into the extrinsic
 		let cents = *target.0 / <BalanceOf<T>>::from(MILLICENTS);
-		(cents * multiplier).saturated_into::<Weight>()
+		Weight::from_ref_time((cents * multiplier).saturated_into::<u64>())
 	}
 }
 
@@ -392,7 +392,7 @@ pub mod pallet {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// Anything that needs to be done at the start of the block.
 			// We don't do anything here.
-			0
+			Weight::zero()
 		}
 
 		// `on_finalize` is executed at the end of block after all extrinsic are dispatched.

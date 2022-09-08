@@ -402,7 +402,7 @@ pub mod v3 {
 		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
 		/// also.
 		///
-		/// Will return an error if the `address` is invalid.
+		/// Will return an `Unavailable` error if the `address` is invalid.
 		///
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
@@ -416,7 +416,7 @@ pub mod v3 {
 		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
 		/// others, use `reschedule_named`.
 		///
-		/// Will return an error if the `address` is invalid.
+		/// Will return an `Unavailable` error if the `address` is invalid.
 		fn reschedule(
 			address: Self::Address,
 			when: DispatchTime<BlockNumber>,
@@ -424,7 +424,7 @@ pub mod v3 {
 
 		/// Return the next dispatch time for a given task.
 		///
-		/// Will return an error if the `address` is invalid.
+		/// Will return an `Unavailable` error if the `address` is invalid.
 		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, DispatchError>;
 	}
 
@@ -450,7 +450,7 @@ pub mod v3 {
 		/// Cancel a scheduled, named task. If periodic, then it will cancel all further instances
 		/// of that, also.
 		///
-		/// Will return an error if the `id` is invalid.
+		/// Will return an `Unavailable` error if the `id` is invalid.
 		///
 		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
 		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
@@ -458,6 +458,8 @@ pub mod v3 {
 
 		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
 		/// only if it is executed *before* the currently scheduled block.
+		///
+		/// Will return an `Unavailable` error if the `id` is invalid.
 		fn reschedule_named(
 			id: TaskName,
 			when: DispatchTime<BlockNumber>,
@@ -465,7 +467,7 @@ pub mod v3 {
 
 		/// Return the next dispatch time for a given task.
 		///
-		/// Will return an error if the `id` is invalid.
+		/// Will return an `Unavailable` error if the `id` is invalid.
 		fn next_dispatch_time(id: TaskName) -> Result<BlockNumber, DispatchError>;
 	}
 }

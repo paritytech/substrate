@@ -55,7 +55,6 @@ use sp_std::prelude::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-pub mod bounded;
 pub mod curve;
 pub mod generic;
 pub mod legacy;
@@ -70,9 +69,6 @@ pub mod transaction_validity;
 
 pub use crate::runtime_string::*;
 
-// Re-export bounded types
-pub use bounded::{BoundedBTreeMap, BoundedBTreeSet, BoundedSlice, BoundedVec, WeakBoundedVec};
-
 // Re-export Multiaddress
 pub use multiaddress::MultiAddress;
 
@@ -82,9 +78,13 @@ pub use generic::{Digest, DigestItem};
 pub use sp_application_crypto::{BoundToRuntimeAppPublic, RuntimeAppPublic};
 /// Re-export this since it's part of the API of this crate.
 pub use sp_core::{
+	bounded::{BoundedBTreeMap, BoundedBTreeSet, BoundedSlice, BoundedVec, WeakBoundedVec},
 	crypto::{key_types, AccountId32, CryptoType, CryptoTypeId, KeyTypeId},
 	TypeId,
 };
+/// Re-export bounded_vec and bounded_btree_map macros only when std is enabled.
+#[cfg(feature = "std")]
+pub use sp_core::{bounded_btree_map, bounded_vec};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
@@ -97,7 +97,7 @@ pub use sp_arithmetic::helpers_128bit;
 pub use sp_arithmetic::{
 	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
 	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
-	UpperOf,
+	Rounding, UpperOf,
 };
 
 pub use either::Either;
@@ -149,6 +149,11 @@ impl Justifications {
 	/// exists.
 	pub fn get(&self, engine_id: ConsensusEngineId) -> Option<&EncodedJustification> {
 		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
+	}
+
+	/// Remove the encoded justification for the given consensus engine, if it exists.
+	pub fn remove(&mut self, engine_id: ConsensusEngineId) {
+		self.0.retain(|j| j.0 != engine_id)
 	}
 
 	/// Return a copy of the encoded justification for the given consensus
@@ -842,45 +847,6 @@ macro_rules! assert_eq_error_rate {
 	};
 }
 
-/// Build a bounded vec from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_vec {
-	($ ($values:expr),* $(,)?) => {
-		{
-			$crate::sp_std::vec![$($values),*].try_into().unwrap()
-		}
-	};
-	( $value:expr ; $repetition:expr ) => {
-		{
-			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
-		}
-	}
-}
-
-/// Build a bounded btree-map from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_btree_map {
-	($ ( $key:expr => $value:expr ),* $(,)?) => {
-		{
-			$crate::traits::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
-				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
-			).unwrap()
-		}
-	};
-}
-
 /// Simple blob to hold an extrinsic without committing to its format and ensure it is serialized
 /// correctly.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode, TypeInfo)]
@@ -1126,7 +1092,7 @@ mod tests {
 		ext.insert(b"c".to_vec(), vec![3u8; 33]);
 		ext.insert(b"d".to_vec(), vec![4u8; 33]);
 
-		let pre_root = ext.backend.root().clone();
+		let pre_root = *ext.backend.root();
 		let (_, proof) = ext.execute_and_prove(|| {
 			sp_io::storage::get(b"a");
 			sp_io::storage::get(b"b");

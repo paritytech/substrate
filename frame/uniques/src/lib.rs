@@ -24,6 +24,7 @@
 //! * [`System`](../frame_system/index.html)
 //! * [`Support`](../frame_support/index.html)
 
+#![recursion_limit = "256"]
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -42,8 +43,11 @@ pub mod migration;
 pub mod weights;
 
 use codec::{Decode, Encode};
-use frame_support::traits::{
-	tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+use frame_support::{
+	traits::{
+		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+	},
+	transactional,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -55,6 +59,8 @@ use sp_std::prelude::*;
 pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -246,6 +252,18 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
+	/// Price of an asset instance.
+	pub(super) type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		Blake2_128Concat,
+		T::ItemId,
+		(ItemPrice<T, I>, Option<T::AccountId>),
+		OptionQuery,
+	>;
+
+	#[pallet::storage]
 	/// Keeps track of the number of items a collection might have.
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
@@ -341,6 +359,23 @@ pub mod pallet {
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
+		/// The price was set for the instance.
+		ItemPriceSet {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			price: ItemPrice<T, I>,
+			whitelisted_buyer: Option<T::AccountId>,
+		},
+		/// The price for the instance was removed.
+		ItemPriceRemoved { collection: T::CollectionId, item: T::ItemId },
+		/// An item was bought.
+		ItemBought {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			price: ItemPrice<T, I>,
+			seller: T::AccountId,
+			buyer: T::AccountId,
+		},
 	}
 
 	#[pallet::error]
@@ -375,6 +410,12 @@ pub mod pallet {
 		MaxSupplyAlreadySet,
 		/// The provided max supply is less to the amount of items a collection already has.
 		MaxSupplyTooSmall,
+		/// The given item ID is unknown.
+		UnknownItem,
+		/// Item is not for sale.
+		NotForSale,
+		/// The provided bid is too low.
+		BidTooLow,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -411,7 +452,7 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			admin: <T::Lookup as StaticLookup>::Source,
+			admin: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -447,7 +488,7 @@ pub mod pallet {
 		pub fn force_create(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 			free_holding: bool,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -518,7 +559,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
@@ -547,7 +588,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			check_owner: Option<<T::Lookup as StaticLookup>::Source>,
+			check_owner: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let check_owner = check_owner.map(T::Lookup::lookup).transpose()?;
@@ -564,6 +605,8 @@ pub mod pallet {
 		}
 
 		/// Move an item from the sender account to another.
+		///
+		/// This resets the approved account of the item.
 		///
 		/// Origin must be Signed and the signing account must be either:
 		/// - the Admin of the `collection`;
@@ -583,7 +626,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
@@ -795,7 +838,7 @@ pub mod pallet {
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
@@ -843,9 +886,9 @@ pub mod pallet {
 		pub fn set_team(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			issuer: AccountIdLookupOf<T>,
+			admin: AccountIdLookupOf<T>,
+			freezer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let issuer = T::Lookup::lookup(issuer)?;
@@ -867,11 +910,14 @@ pub mod pallet {
 
 		/// Approve an item to be transferred by a delegated third-party account.
 		///
-		/// Origin must be Signed and must be the owner of the `item`.
+		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be
+		/// either the owner of the `item` or the admin of the collection.
 		///
 		/// - `collection`: The collection of the item to be approved for delegated transfer.
 		/// - `item`: The item of the item to be approved for delegated transfer.
 		/// - `delegate`: The account to delegate permission to transfer the item.
+		///
+		/// Important NOTE: The `approved` account gets reset after each transfer.
 		///
 		/// Emits `ApprovedTransfer` on success.
 		///
@@ -881,7 +927,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -934,7 +980,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
+			maybe_check_delegate: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -985,10 +1031,10 @@ pub mod pallet {
 		pub fn force_item_status(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
+			issuer: AccountIdLookupOf<T>,
+			admin: AccountIdLookupOf<T>,
+			freezer: AccountIdLookupOf<T>,
 			free_holding: bool,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -1407,6 +1453,51 @@ pub mod pallet {
 			CollectionMaxSupply::<T, I>::insert(&collection, max_supply);
 			Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
 			Ok(())
+		}
+
+		/// Set (or reset) the price for an item.
+		///
+		/// Origin must be Signed and must be the owner of the asset `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item to set the price for.
+		/// - `price`: The price for the item. Pass `None`, to reset the price.
+		/// - `buyer`: Restricts the buy operation to a specific account.
+		///
+		/// Emits `ItemPriceSet` on success if the price is not `None`.
+		/// Emits `ItemPriceRemoved` on success if the price is `None`.
+		#[pallet::weight(T::WeightInfo::set_price())]
+		pub fn set_price(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			price: Option<ItemPrice<T, I>>,
+			whitelisted_buyer: Option<AccountIdLookupOf<T>>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			let whitelisted_buyer = whitelisted_buyer.map(T::Lookup::lookup).transpose()?;
+			Self::do_set_price(collection, item, origin, price, whitelisted_buyer)
+		}
+
+		/// Allows to buy an item if it's up for sale.
+		///
+		/// Origin must be Signed and must not be the owner of the `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item the sender wants to buy.
+		/// - `bid_price`: The price the sender is willing to pay.
+		///
+		/// Emits `ItemBought` on success.
+		#[pallet::weight(T::WeightInfo::buy_item())]
+		#[transactional]
+		pub fn buy_item(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			bid_price: ItemPrice<T, I>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_buy_item(collection, item, origin, bid_price)
 		}
 	}
 }

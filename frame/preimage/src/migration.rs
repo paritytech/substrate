@@ -24,6 +24,7 @@ use frame_support::{
 	storage_alias,
 	traits::{ConstU32, OnRuntimeUpgrade},
 };
+use sp_std::collections::btree_map::BTreeMap;
 
 /// The log target.
 const TARGET: &'static str = "runtime::preimage::migration::v1";
@@ -54,14 +55,13 @@ mod v0 {
 		RequestStatus<<T as frame_system::Config>::AccountId, BalanceOf<T>>,
 	>;
 
+	/// Returns the number of images or `None` if the storage is corrupted.
 	#[cfg(feature = "try-runtime")]
 	pub fn image_count<T: Config>() -> Option<u32> {
-		// Use iter_values since otherwise it would indicate that a value cannot be decoded,
-		// possibly due to `MAX_SIZE` being too small.
 		let images = v0::PreimageFor::<T>::iter_values().count() as u32;
-		let status = v0::StatusFor::<T>::iter().count() as u32;
+		let status = v0::StatusFor::<T>::iter_values().count() as u32;
 
-		if images == status && images > 0 {
+		if images == status {
 			Some(images)
 		} else {
 			None
@@ -72,7 +72,7 @@ mod v0 {
 pub mod v1 {
 	use super::*;
 
-	/// Migration for moving preimages from a single map into into specific buckets.
+	/// Migration for moving preimage from V0 to V1 storage.
 	///
 	/// Note: This needs to be run with the same hashing algorithm as before
 	/// since it is not re-hashing the preimages.
@@ -101,11 +101,28 @@ pub mod v1 {
 			}
 
 			let status = v0::StatusFor::<T>::drain().collect::<Vec<_>>();
+			weight.saturating_accrue(T::DbWeight::get().reads(status.len() as u64));
+
+			let preimages = v0::PreimageFor::<T>::drain().collect::<BTreeMap<_, _>>();
+			weight.saturating_accrue(T::DbWeight::get().reads(preimages.len() as u64));
+
 			for (hash, status) in status.into_iter() {
-				let preimage =
-					v0::PreimageFor::<T>::take(hash).expect("storage corrupt: no image for status");
+				let preimage = if let Some(preimage) = preimages.get(&hash) {
+					preimage
+				} else {
+					log::error!(target: TARGET, "preimage not found for hash {:?}", &hash);
+					continue
+				};
 				let len = preimage.len() as u32;
-				assert!(len <= MAX_SIZE, "Preimage larger than MAX_SIZE");
+				if len > MAX_SIZE {
+					log::error!(
+						target: TARGET,
+						"preimage too large for hash {:?}, len: {}",
+						&hash,
+						len
+					);
+					continue
+				}
 
 				let status = match status {
 					v0::RequestStatus::Unrequested(deposit) => match deposit {
@@ -114,46 +131,55 @@ pub mod v1 {
 						None =>
 							RequestStatus::Requested { deposit: None, count: 1, len: Some(len) },
 					},
+					v0::RequestStatus::Requested(count) if count == 0 => {
+						log::error!(target: TARGET, "preimage has counter of zero: {:?}", hash);
+						continue
+					},
 					v0::RequestStatus::Requested(count) =>
 						RequestStatus::Requested { deposit: None, count, len: Some(len) },
 				};
 				log::trace!(target: TARGET, "Moving preimage {:?} with len {}", hash, len);
 
-				Pallet::<T>::insert(&hash, preimage.into_inner().into())
-					.expect("Must insert preimage");
-				StatusFor::<T>::insert(hash, status);
+				crate::StatusFor::<T>::insert(hash, status);
+				crate::PreimageFor::<T>::insert(&(hash, len), preimage);
 
-				weight = weight.saturating_add(T::DbWeight::get().reads_writes(3, 2));
+				weight.saturating_accrue(T::DbWeight::get().writes(2));
 			}
-			// Note: No `v0::StatusFor::<T>::clear(…)` hereu32::MAX, None
-			// since v0 and v1 use the same key-space.
-			let rem = v0::PreimageFor::<T>::clear(u32::MAX, None);
-			assert!(rem.maybe_cursor.is_none());
-
 			StorageVersion::new(1).put::<Pallet<T>>();
 
-			weight = weight.saturating_add(T::DbWeight::get().reads_writes(0, 2));
-			weight
+			weight.saturating_add(T::DbWeight::get().writes(1))
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade() -> Result<(), &'static str> {
 			let old_images = Self::get_temp_storage::<u32>("old_images").unwrap();
-			let new_images = image_count::<T>();
+			let new_images = image_count::<T>().expect("V1 storage corrupted");
 
-			assert!(new_images == old_images);
+			if new_images != old_images {
+				log::error!(
+					target: TARGET,
+					"migrated {} images, expected {}",
+					new_images,
+					old_images
+				);
+			}
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1, "must upgrade");
 			Ok(())
 		}
 	}
 
+	/// Returns the number of images or `None` if the storage is corrupted.
 	#[cfg(feature = "try-runtime")]
-	pub fn image_count<T: Config>() -> u32 {
+	pub fn image_count<T: Config>() -> Option<u32> {
 		// Use iter_values() to ensure that the values are decodable.
 		let images = crate::PreimageFor::<T>::iter_values().count() as u32;
 		let status = crate::StatusFor::<T>::iter_values().count() as u32;
-		assert_eq!(images, status, "V1 storage corrupt: {} images vs {} status", images, status);
-		images
+
+		if images == status {
+			Some(images)
+		} else {
+			None
+		}
 	}
 }
 
@@ -179,8 +205,7 @@ mod test {
 			let (p, h) = preimage::<T>(1024);
 			v0::PreimageFor::<T>::insert(h, p);
 			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Unrequested(Some((1, 1))));
-
-			// Case 3: Requested by 0
+			// Case 3: Requested by 0 (invalid)
 			let (p, h) = preimage::<T>(8192);
 			v0::PreimageFor::<T>::insert(h, p);
 			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Requested(0));
@@ -190,18 +215,46 @@ mod test {
 			v0::StatusFor::<T>::insert(h, v0::RequestStatus::Requested(10));
 
 			assert_eq!(v0::image_count::<T>(), Some(4));
-			assert_eq!(v1::image_count::<T>(), 0);
+			assert_eq!(v1::image_count::<T>(), None, "V1 storage should be corrupted");
 
 			v1::Migration::<T>::pre_upgrade().unwrap();
 			let _w = v1::Migration::<T>::on_runtime_upgrade();
 			v1::Migration::<T>::post_upgrade().unwrap();
 
-			assert_eq!(v0::image_count::<T>(), None, "v0 storage should be corrupted now");
-			assert_eq!(v1::image_count::<T>(), 4);
+			// V0 and V1 share the same prefix, so `iter_values` still counts the same.
+			assert_eq!(v0::image_count::<T>(), Some(3));
+			assert_eq!(v1::image_count::<T>(), Some(3)); // One gets skipped therefore 3.
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1);
+
+			// Case 1: Unrequested without deposit becomes system-requested
+			let (p, h) = preimage::<T>(128);
+			assert_eq!(crate::PreimageFor::<T>::get(&(h, 128)), Some(p));
+			assert_eq!(
+				crate::StatusFor::<T>::get(h),
+				Some(RequestStatus::Requested { deposit: None, count: 1, len: Some(128) })
+			);
+			// Case 2: Unrequested with deposit becomes unrequested
+			let (p, h) = preimage::<T>(1024);
+			assert_eq!(crate::PreimageFor::<T>::get(&(h, 1024)), Some(p));
+			assert_eq!(
+				crate::StatusFor::<T>::get(h),
+				Some(RequestStatus::Unrequested { deposit: (1, 1), len: 1024 })
+			);
+			// Case 3: Requested by 0 should be skipped
+			let (_, h) = preimage::<T>(8192);
+			assert_eq!(crate::PreimageFor::<T>::get(&(h, 8192)), None);
+			assert_eq!(crate::StatusFor::<T>::get(h), None);
+			// Case 4: Requested by 10 becomes requested by 10
+			let (p, h) = preimage::<T>(65536);
+			assert_eq!(crate::PreimageFor::<T>::get(&(h, 65536)), Some(p));
+			assert_eq!(
+				crate::StatusFor::<T>::get(h),
+				Some(RequestStatus::Requested { deposit: None, count: 10, len: Some(65536) })
+			);
 		});
 	}
 
+	/// Returns a preimage with a given size and its hash.
 	fn preimage<T: Config>(
 		len: usize,
 	) -> (BoundedVec<u8, ConstU32<MAX_SIZE>>, <T as frame_system::Config>::Hash) {

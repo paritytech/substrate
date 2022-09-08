@@ -199,7 +199,9 @@ pub mod pallet {
 			+ IsType<<Self as system::Config>::Origin>;
 
 		/// The caller origin, overarching type of all pallets origins.
-		type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + CallerTrait<Self::AccountId>;
+		type PalletsOrigin: From<system::RawOrigin<Self::AccountId>>
+			+ CallerTrait<Self::AccountId>
+			+ MaxEncodedLen;
 
 		/// The aggregated call type.
 		type Call: Parameter
@@ -281,7 +283,7 @@ pub mod pallet {
 		CallUnavailable { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
 		/// The given task was unable to be renewed since the agenda is full at that block.
 		PeriodicFailed { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
-		/// The given task was unable to be renewed since the agenda is full at that block.
+		/// The given task can never be executed since it is overweight.
 		PermanentlyOverweight { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
 	}
 
@@ -303,7 +305,8 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute the scheduled calls
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let mut weight_counter = WeightCounter { used: 0, limit: T::MaximumWeight::get() };
+			let mut weight_counter =
+				WeightCounter { used: Weight::zero(), limit: T::MaximumWeight::get() };
 			Self::service_agendas(&mut weight_counter, now, u32::max_value());
 			weight_counter.used
 		}
@@ -669,7 +672,7 @@ impl<T: Config> Pallet<T> {
 		when: T::BlockNumber,
 		what: ScheduledOf<T>,
 	) -> Result<TaskAddress<T::BlockNumber>, (DispatchError, ScheduledOf<T>)> {
-		let maybe_name = what.maybe_id.clone();
+		let maybe_name = what.maybe_id;
 		let index = Self::push_to_agenda(when, what)?;
 		let address = (when, index);
 		if let Some(name) = maybe_name {
@@ -869,7 +872,7 @@ use ServiceTaskError::*;
 impl<T: Config> Pallet<T> {
 	/// Service up to `max` agendas queue starting from earliest incompletely executed agenda.
 	fn service_agendas(weight: &mut WeightCounter, now: T::BlockNumber, max: u32) {
-		if !weight.check_accrue(T::WeightInfo::service_agendas()) {
+		if !weight.check_accrue(T::WeightInfo::service_agendas_base()) {
 			return
 		}
 
@@ -879,7 +882,7 @@ impl<T: Config> Pallet<T> {
 
 		let max_items = T::MaxScheduledPerBlock::get();
 		let mut count_down = max;
-		let service_agenda_base_weight = T::WeightInfo::service_agenda(max_items);
+		let service_agenda_base_weight = T::WeightInfo::service_agenda_base(max_items);
 		while count_down > 0 && when <= now && weight.can_accrue(service_agenda_base_weight) {
 			if !Self::service_agenda(weight, &mut executed, now, when, u32::max_value()) {
 				incomplete_since = incomplete_since.min(when);
@@ -911,7 +914,9 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect::<Vec<_>>();
 		ordered.sort_by_key(|k| k.1);
-		weight.check_accrue(T::WeightInfo::service_agenda(ordered.len() as u32));
+		let within_limit =
+			weight.check_accrue(T::WeightInfo::service_agenda_base(ordered.len() as u32));
+		debug_assert!(within_limit, "weight limit should have been checked in advance");
 
 		// Items which we know can be executed and have postponed for execution in a later block.
 		let mut postponed = (ordered.len() as u32).saturating_sub(max);
@@ -987,9 +992,10 @@ impl<T: Config> Pallet<T> {
 
 		match Self::execute_dispatch(weight, task.origin.clone(), call) {
 			Err(Unavailable) => {
+				debug_assert!(false, "Checked to exist with `peek`");
 				Self::deposit_event(Event::CallUnavailable {
 					task: (when, agenda_index),
-					id: task.maybe_id.clone(),
+					id: task.maybe_id,
 				});
 				Err((Unavailable, Some(task)))
 			},
@@ -997,7 +1003,7 @@ impl<T: Config> Pallet<T> {
 				T::Preimages::drop(&task.call);
 				Self::deposit_event(Event::PermanentlyOverweight {
 					task: (when, agenda_index),
-					id: task.maybe_id.clone(),
+					id: task.maybe_id,
 				});
 				Err((Unavailable, Some(task)))
 			},
@@ -1005,7 +1011,7 @@ impl<T: Config> Pallet<T> {
 			Ok(result) => {
 				Self::deposit_event(Event::Dispatched {
 					task: (when, agenda_index),
-					id: task.maybe_id.clone(),
+					id: task.maybe_id,
 					result,
 				});
 				if let &Some((period, count)) = &task.maybe_periodic {
@@ -1014,7 +1020,7 @@ impl<T: Config> Pallet<T> {
 					} else {
 						task.maybe_periodic = None;
 					}
-					let wake = now + period;
+					let wake = now.saturating_add(period);
 					match Self::place_task(wake, task) {
 						Ok(_) => {},
 						Err((_, task)) => {
@@ -1023,7 +1029,7 @@ impl<T: Config> Pallet<T> {
 							T::Preimages::drop(&task.call);
 							Self::deposit_event(Event::PeriodicFailed {
 								task: (when, agenda_index),
-								id: task.maybe_id.clone(),
+								id: task.maybe_id,
 							});
 						},
 					}
@@ -1162,14 +1168,14 @@ impl<T: Config> schedule::v3::Anon<T::BlockNumber, <T as Config>::Call, T::Palle
 	}
 
 	fn cancel((when, index): Self::Address) -> Result<(), DispatchError> {
-		Self::do_cancel(None, (when, index))
+		Self::do_cancel(None, (when, index)).map_err(map_err_to_v3_err::<T>)
 	}
 
 	fn reschedule(
 		address: Self::Address,
 		when: DispatchTime<T::BlockNumber>,
 	) -> Result<Self::Address, DispatchError> {
-		Self::do_reschedule(address, when)
+		Self::do_reschedule(address, when).map_err(map_err_to_v3_err::<T>)
 	}
 
 	fn next_dispatch_time((when, index): Self::Address) -> Result<T::BlockNumber, DispatchError> {
@@ -1199,19 +1205,27 @@ impl<T: Config> schedule::v3::Named<T::BlockNumber, <T as Config>::Call, T::Pall
 	}
 
 	fn cancel_named(id: TaskName) -> Result<(), DispatchError> {
-		Self::do_cancel_named(None, id)
+		Self::do_cancel_named(None, id).map_err(map_err_to_v3_err::<T>)
 	}
 
 	fn reschedule_named(
 		id: TaskName,
 		when: DispatchTime<T::BlockNumber>,
 	) -> Result<Self::Address, DispatchError> {
-		Self::do_reschedule_named(id, when)
+		Self::do_reschedule_named(id, when).map_err(map_err_to_v3_err::<T>)
 	}
 
 	fn next_dispatch_time(id: TaskName) -> Result<T::BlockNumber, DispatchError> {
 		Lookup::<T>::get(id)
 			.and_then(|(when, index)| Agenda::<T>::get(when).get(index as usize).map(|_| when))
 			.ok_or(DispatchError::Unavailable)
+	}
+}
+
+fn map_err_to_v3_err<T: Config>(err: DispatchError) -> DispatchError {
+	if err == DispatchError::from(Error::<T>::NotFound) {
+		DispatchError::Unavailable
+	} else {
+		err
 	}
 }
