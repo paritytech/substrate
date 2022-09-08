@@ -169,8 +169,8 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let whitelisted_storage_keys_impl = quote::quote![
 		impl<T> frame_support::traits::WhitelistedStorageKeys for Pallet<T> {
 			fn whitelisted_storage_keys(
-			) -> frame_support::inherent::Vec<frame_support::traits::TrackedStorageKey> {
-				frame_support::inherent::Vec::new()
+			) -> frame_support::sp_std::vec::Vec<frame_support::traits::TrackedStorageKey> {
+				frame_support::sp_std::vec::Vec::new()
 			}
 		}
 	];
