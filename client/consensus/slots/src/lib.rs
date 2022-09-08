@@ -255,7 +255,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	where
 		Self: Sync,
 	{
-		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
+		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
 
@@ -319,17 +319,19 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
+		let timestamp = sp_timestamp::current_timestamp().as_secs();
+
 		debug!(
 			target: logging_target,
-			"Starting authorship at slot {}; timestamp = {}", slot, *timestamp,
+			"Starting authorship at slot {}, timestamp: {}", slot, timestamp,
 		);
 
 		telemetry!(
 			telemetry;
 			CONSENSUS_DEBUG;
 			"slots.starting_authorship";
-			"slot_num" => *slot,
-			"timestamp" => *timestamp,
+			"slot_num" => slot,
+			"timestamp" => timestamp,
 		);
 
 		let proposer = match self.proposer(&slot_info.chain_head).await {
