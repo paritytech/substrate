@@ -455,7 +455,7 @@ macro_rules! parameter_types_impl_thread_local {
 						result
 					}
 
-					/// Get current value and replace with original set value ($value).
+					/// Get current value and replace with initial value of the parameter type.
 					pub fn take() -> $type {
 						let current = Self::get();
 						Self::set($value);
