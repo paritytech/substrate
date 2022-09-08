@@ -45,7 +45,6 @@ use sc_network_common::{
 	config::{MultiaddrWithPeerId, NonDefaultSetConfig, SetConfig, TransportConfig},
 	sync::ChainSync,
 };
-use sc_network_transactions::config::TransactionPool;
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	error::Error,
@@ -60,10 +59,9 @@ use std::{
 use zeroize::Zeroize;
 
 /// Network initialization parameters.
-pub struct Params<B, H, Client>
+pub struct Params<B, Client>
 where
 	B: BlockT + 'static,
-	H: ExHashT,
 {
 	/// Assigned role for our node (full, light, ...).
 	pub role: Role,
@@ -71,9 +69,6 @@ where
 	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
 	/// default.
 	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
-
-	/// How to spawn the background task dedicated to the transactions handler.
-	pub transactions_handler_executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
@@ -83,12 +78,6 @@ where
 
 	/// Bitswap block request protocol implementation.
 	pub bitswap: Option<Bitswap<B>>,
-
-	/// Pool of transactions.
-	///
-	/// The network worker will fetch transactions from this object in order to propagate them on
-	/// the network.
-	pub transaction_pool: Arc<dyn TransactionPool<H, B>>,
 
 	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,

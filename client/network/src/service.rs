@@ -145,7 +145,7 @@ where
 	/// Returns a `NetworkWorker` that implements `Future` and must be regularly polled in order
 	/// for the network processing to advance. From it, you can extract a `NetworkService` using
 	/// `worker.service()`. The `NetworkService` can be shared through the codebase.
-	pub fn new(mut params: Params<B, H, Client>) -> Result<Self, Error> {
+	pub fn new(mut params: Params<B, Client>) -> Result<Self, Error> {
 		// Private and public keys configuration.
 		let local_identity = params.network_config.node_key.clone().into_keypair()?;
 		let local_public = local_identity.public();
@@ -211,21 +211,6 @@ where
 			fs::create_dir_all(path)?;
 		}
 
-		let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
-			params.protocol_id.clone(),
-			params
-				.chain
-				.hash(0u32.into())
-				.ok()
-				.flatten()
-				.expect("Genesis block exists; qed"),
-			params.fork_id.clone(),
-		);
-		params
-			.network_config
-			.extra_sets
-			.insert(0, transactions_handler_proto.set_config());
-
 		info!(
 			target: "sub-libp2p",
 			"🏷  Local node identity is: {}",
@@ -242,7 +227,7 @@ where
 			&params.network_config,
 			iter::once(Vec::new())
 				.chain(
-					(0..params.network_config.extra_sets.len() - 1)
+					(0..params.network_config.extra_sets.len().saturating_sub(1))
 						.map(|_| default_notif_handshake_message.clone()),
 				)
 				.collect(),
@@ -462,13 +447,6 @@ where
 			_marker: PhantomData,
 		});
 
-		let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(
-			service.clone(),
-			params.transaction_pool,
-			params.metrics_registry.as_ref(),
-		)?;
-		(params.transactions_handler_executor)(tx_handler.run().boxed());
-
 		Ok(NetworkWorker {
 			external_addresses,
 			num_connected,
@@ -479,9 +457,9 @@ where
 			from_service,
 			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			peers_notifications_sinks,
-			tx_handler_controller,
 			metrics,
 			boot_node_ids,
+			_marker: Default::default(),
 		})
 	}
 
@@ -1316,8 +1294,9 @@ where
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
-	/// Controller for the handler of incoming and outgoing transactions.
-	tx_handler_controller: sc_network_transactions::TransactionsHandlerController<H>,
+	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
+	/// compatibility.
+	_marker: PhantomData<H>,
 }
 
 impl<B, H, Client> Future for NetworkWorker<B, H, Client>
@@ -1373,10 +1352,8 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.clear_justification_requests(),
-				ServiceToWorkerMsg::PropagateTransaction(hash) =>
-					this.tx_handler_controller.propagate_transaction(hash),
-				ServiceToWorkerMsg::PropagateTransactions =>
-					this.tx_handler_controller.propagate_transactions(),
+				ServiceToWorkerMsg::PropagateTransaction(_) => {},
+				ServiceToWorkerMsg::PropagateTransactions => {},
 				ServiceToWorkerMsg::GetValue(key) =>
 					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
@@ -1922,8 +1899,6 @@ where
 				SyncState::Idle => false,
 				SyncState::Downloading => true,
 			};
-
-		this.tx_handler_controller.set_gossip_enabled(!is_major_syncing);
 
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 

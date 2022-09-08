@@ -871,12 +871,8 @@ where
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
-			transactions_handler_executor: Box::new(|task| {
-				async_std::task::spawn(task);
-			}),
 			network_config,
 			chain: client.clone(),
-			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
 			fork_id,
 			import_queue,

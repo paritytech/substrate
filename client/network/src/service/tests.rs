@@ -30,7 +30,6 @@ use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
 	ChainSync,
 };
-use sc_network_transactions::config::EmptyTransactionPool;
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_runtime::traits::{Block as BlockT, Header as _};
 use std::{sync::Arc, time::Duration};
@@ -136,12 +135,8 @@ fn build_test_full_node(
 	let worker = NetworkWorker::new(config::Params {
 		role: config::Role::Full,
 		executor: None,
-		transactions_handler_executor: Box::new(|task| {
-			async_std::task::spawn(task);
-		}),
 		network_config,
 		chain: client.clone(),
-		transaction_pool: Arc::new(EmptyTransactionPool),
 		protocol_id,
 		fork_id,
 		import_queue,

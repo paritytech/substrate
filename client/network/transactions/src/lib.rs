@@ -126,7 +126,7 @@ impl TransactionsHandlerPrototype {
 	pub fn new<Hash: AsRef<[u8]>>(
 		protocol_id: ProtocolId,
 		genesis_hash: Hash,
-		fork_id: Option<String>,
+		fork_id: Option<&str>,
 	) -> Self {
 		let protocol_name = if let Some(fork_id) = fork_id {
 			format!("/{}/{}/transactions/1", hex::encode(genesis_hash), fork_id)
