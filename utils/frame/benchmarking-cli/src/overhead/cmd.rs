@@ -28,7 +28,7 @@ use sp_runtime::{traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
 use clap::{Args, Parser};
 use log::info;
 use serde::Serialize;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use crate::{
 	extrinsic::{
@@ -69,6 +69,12 @@ pub struct OverheadParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub hostinfo: HostInfoParams,
+
+	/// Add a header to the generated weight output file.
+	///
+	/// Good for adding LICENSE headers.
+	#[clap(long, value_name = "PATH")]
+	pub header: Option<PathBuf>,
 }
 
 /// Type of a benchmark.
