@@ -13,8 +13,8 @@
 //   {{arg}}
 {{/each}}
 
-use sp_weights::{constants::WEIGHT_PER_NANOS, Weight};
 use sp_core::parameter_types;
+use sp_weights::{constants::WEIGHT_PER_NANOS, Weight};
 
 parameter_types! {
 	{{#if (eq short_name "block")}}
