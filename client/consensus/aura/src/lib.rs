@@ -887,7 +887,6 @@ mod tests {
 
 		let res = executor::block_on(worker.on_slot(SlotInfo {
 			slot: 0.into(),
-			timestamp: 0.into(),
 			ends_at: Instant::now() + Duration::from_secs(100),
 			inherent_data: InherentData::new(),
 			duration: Duration::from_millis(1000),
