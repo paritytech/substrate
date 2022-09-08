@@ -729,6 +729,7 @@ fn clear_all_transfer_approvals_works() {
 			item: 42,
 			owner: 2,
 		}));
+		assert_eq!(approvals(0, 42), vec![]);
 
 		assert_noop!(Nfts::transfer(Origin::signed(3), 0, 42, 5), Error::<Test>::NoPermission);
 		assert_noop!(Nfts::transfer(Origin::signed(4), 0, 42, 5), Error::<Test>::NoPermission);
