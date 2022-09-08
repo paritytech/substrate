@@ -197,14 +197,6 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 	fn proposal_of(proposal_hash: H256) -> Option<Call> {
 		AllianceMotion::proposal_of(proposal_hash)
 	}
-
-	fn proposals() -> Vec<H256> {
-		AllianceMotion::proposals().into_inner()
-	}
-
-	fn proposals_count() -> u32 {
-		pallet_collective::Proposals::<Test, AllianceCollective>::decode_len().unwrap_or(0) as u32
-	}
 }
 
 parameter_types! {
@@ -305,20 +297,62 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			twitter: Data::default(),
 		};
 		assert_ok!(Identity::set_identity(Origin::signed(1), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 1, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			1,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(2), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 2, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			2,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(3), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 3, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			3,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(4), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 4, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			4,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(5), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 5, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			5,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
 		assert_ok!(Identity::set_identity(Origin::signed(8), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 8, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			8,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(9), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 9, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			9,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 
 		// Joining before init should fail.
 		assert_noop!(
@@ -326,13 +360,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			Error::<Test, ()>::AllianceNotYetInitialized
 		);
 
-		assert_ok!(Alliance::force_set_members(
-			Origin::root(),
-			vec![1, 2],
-			vec![3],
-			vec![],
-			Default::default()
-		));
+		assert_ok!(Alliance::init_members(Origin::root(), vec![1, 2], vec![3], vec![]));
 
 		System::set_block_number(1);
 	});
@@ -368,9 +396,4 @@ pub fn make_proposal(proposal: Call) -> (Call, u32, H256) {
 	let len: u32 = proposal.using_encoded(|p| p.len() as u32);
 	let hash = BlakeTwo256::hash_of(&proposal);
 	(proposal, len, hash)
-}
-
-pub fn assert_prev_event(event: Event) {
-	let events = System::events();
-	assert_eq!(events.get(events.len() - 2).expect("events expected").event, event);
 }

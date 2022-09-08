@@ -110,6 +110,8 @@ node-bench-regression-guard:
     - job:                         cargo-check-benches
       artifacts:                   true
     # polls artifact from master to compare with current result
+    # need to specify both parallel jobs from master because of the bug
+    # https://gitlab.com/gitlab-org/gitlab/-/issues/39063
     - project:                     $CI_PROJECT_PATH
       job:                         "cargo-check-benches 1/2"
       ref:                         master
@@ -127,6 +129,7 @@ node-bench-regression-guard:
     - echo "In case of this job failure, check your pipeline's cargo-check-benches"
     - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
+  after_script: [""]
 
 cargo-check-subkey:
   stage:                           test

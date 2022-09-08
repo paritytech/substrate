@@ -30,7 +30,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -96,14 +95,14 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-thread_local! {
-	pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
+parameter_types! {
+	pub static MembersTestValue: Vec<u64> = vec![];
 }
 
 pub struct TestChangeMembers;
 impl ChangeMembers<u64> for TestChangeMembers {
 	fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
-		let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
+		let mut old_plus_incoming = MembersTestValue::get().to_vec();
 		old_plus_incoming.extend_from_slice(incoming);
 		old_plus_incoming.sort();
 
@@ -113,13 +112,13 @@ impl ChangeMembers<u64> for TestChangeMembers {
 
 		assert_eq!(old_plus_incoming, new_plus_outgoing);
 
-		MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
+		MembersTestValue::mutate(|m| *m = new.to_vec());
 	}
 }
 
 impl InitializeMembers<u64> for TestChangeMembers {
 	fn initialize_members(new_members: &[u64]) {
-		MEMBERS.with(|m| *m.borrow_mut() = new_members.to_vec());
+		MembersTestValue::mutate(|m| *m = new_members.to_vec());
 	}
 }
 

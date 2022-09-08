@@ -119,7 +119,8 @@ where
 	let header_at = command.header_at::<Block>()?;
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
-	let header = rpc_api::get_header::<Block, _>(header_ws_uri.clone(), header_at).await?;
+	let rpc_service = rpc_api::RpcService::new(header_ws_uri.clone(), false).await?;
+	let header = rpc_service.get_header::<Block>(header_at).await?;
 	log::info!(
 		target: LOG_TARGET,
 		"fetched header from {:?}, block number: {:?}",
