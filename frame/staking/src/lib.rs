@@ -351,6 +351,7 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 
 parameter_types! {
 	pub MaxUnlockingChunks: u32 = 32;
+	pub HistoryDepth: u32 = 84;
 }
 
 /// Information regarding the active era (era in used in session).
@@ -429,8 +430,8 @@ pub struct ValidatorPrefs {
 }
 
 /// Just a Balance/BlockNumber tuple to encode when a chunk of funds will be unlocked.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct UnlockChunk<Balance: HasCompact> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct UnlockChunk<Balance: HasCompact + MaxEncodedLen> {
 	/// Amount of funds to be unlocked.
 	#[codec(compact)]
 	value: Balance,
@@ -440,7 +441,7 @@ pub struct UnlockChunk<Balance: HasCompact> {
 }
 
 /// The ledger of a (bonded) stash.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebugNoBound, TypeInfo)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub struct StakingLedger<T: Config> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -459,7 +460,7 @@ pub struct StakingLedger<T: Config> {
 	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
-	pub claimed_rewards: Vec<EraIndex>,
+	pub claimed_rewards: BoundedVec<EraIndex, HistoryDepth>,
 }
 
 impl<T: Config> StakingLedger<T> {
@@ -470,7 +471,7 @@ impl<T: Config> StakingLedger<T> {
 			total: Zero::zero(),
 			active: Zero::zero(),
 			unlocking: Default::default(),
-			claimed_rewards: vec![],
+			claimed_rewards: Default::default(),
 		}
 	}
 

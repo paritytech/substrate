@@ -26,7 +26,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
-		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
+		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons, DefensiveResult,
 	},
 	weights::Weight,
 };
@@ -119,15 +119,17 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or(Error::<T>::NotController)?;
-
+		
 		ledger
 			.claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
+			
 		match ledger.claimed_rewards.binary_search(&era) {
 			Ok(_) =>
 				return Err(Error::<T>::AlreadyClaimed
 					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
-			Err(pos) => ledger.claimed_rewards.insert(pos, era),
+			Err(pos) => ledger.claimed_rewards.try_insert(pos, era)
+			.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 		}
 
 		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
@@ -966,7 +968,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				active: stake,
 				total: stake,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: Default::default(),
 			},
 		);
 
@@ -984,7 +986,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				active: stake,
 				total: stake,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: Default::default(),
 			},
 		);
 		Self::do_add_validator(
@@ -1025,7 +1027,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					active: stake,
 					total: stake,
 					unlocking: Default::default(),
-					claimed_rewards: vec![],
+					claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_validator(
@@ -1046,7 +1048,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					active: stake,
 					total: stake,
 					unlocking: Default::default(),
-					claimed_rewards: vec![],
+					claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_nominator(

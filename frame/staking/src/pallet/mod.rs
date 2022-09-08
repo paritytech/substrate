@@ -24,6 +24,7 @@ use frame_support::{
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EnsureOrigin,
 		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
+		TryCollect,
 	},
 	weights::Weight,
 	BoundedVec,
@@ -123,6 +124,11 @@ pub mod pallet {
 		/// Maximum number of nominations per nominator.
 		#[pallet::constant]
 		type MaxNominations: Get<u32>;
+
+		/// Maximum History Depth for the validator rewards to be claimed. 
+		/// This should never be decreased once set.  
+		#[pallet::constant]
+		type HistoryDepth: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -286,7 +292,6 @@ pub mod pallet {
 	/// Map from all (unlocked) "controller" accounts to the info regarding the staking.
 	#[pallet::storage]
 	#[pallet::getter(fn ledger)]
-	#[pallet::unbounded]
 	pub type Ledger<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, StakingLedger<T>>;
 
 	/// Where the reward payment should be made. Keyed by stash.
@@ -738,6 +743,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
+		/// Some bound is not met.
+		BoundNotMet,
 	}
 
 	#[pallet::hooks]
@@ -850,7 +857,9 @@ pub mod pallet {
 				total: value,
 				active: value,
 				unlocking: Default::default(),
-				claimed_rewards: (last_reward_era..current_era).collect(),
+				claimed_rewards: (last_reward_era..current_era)
+				.try_collect()
+				.map_err(|_| Error::<T>::BoundNotMet)?,
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())
