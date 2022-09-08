@@ -38,10 +38,10 @@ pub use frame_support::{
 pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
-use pallet_transaction_payment::CurrencyAdapter;
+use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-pub use sp_runtime::{Perbill, Permill};
+pub use sp_runtime::{Perbill, Permill, Perquintill, FixedPointNumber};
 
 /// Import the template pallet.
 pub use pallet_template;
@@ -251,13 +251,32 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
+parameter_types! {
+	/// The portion of the `NORMAL_DISPATCH_RATIO` that we adjust the fees with. Blocks filled less
+	/// than this will decrease the weight and more will increase.
+	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
+	/// The adjustment variable of the runtime. Higher values will cause `TargetBlockFullness` to
+	/// change the fees more rapidly.
+	pub AdjustmentVariable: Multiplier = Multiplier::saturating_from_rational(75, 1000_000);
+	/// Minimum amount of the multiplier. This value cannot be too low. A test case should ensure
+	/// that combined with `AdjustmentVariable`, we can recover from the minimum.
+	/// See [`multiplier_can_grow_from_zero`](https://github.com/paritytech/polkadot/blob/87d6cfc7c0531d888898c9bbd1a1e299538a546b/runtime/polkadot/src/lib.rs#L2296-L2307).
+	pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 10u128);
+}
+
+/// Parameterized slow adjusting fee updated based on
+/// https://research.web3.foundation/en/latest/polkadot/overview/2-token-economics.html#-2.-slow-adjusting-mechanism
+pub type SlowAdjustingFeeUpdate<R> =
+	TargetedFeeAdjustment<R, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
+
+
 impl pallet_transaction_payment::Config for Runtime {
 	type Event = Event;
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<Balance>;
 	type LengthToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = ();
+	type FeeMultiplierUpdate = SlowAdjustingFeeUpdate<Self>;
 }
 
 impl pallet_sudo::Config for Runtime {
