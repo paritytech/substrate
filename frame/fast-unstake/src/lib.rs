@@ -307,8 +307,7 @@ pub mod pallet {
 						.max(<T as Config>::WeightInfo::on_idle_unstake())
 				};
 				let mut try_eras_to_check = eras_to_check_per_block;
-				while dbg!(worse_weight(validator_count, try_eras_to_check)) >
-					dbg!(remaining_weight)
+				while worse_weight(validator_count, try_eras_to_check) > remaining_weight
 				{
 					try_eras_to_check.saturating_dec();
 					if try_eras_to_check.is_zero() {
@@ -484,6 +483,13 @@ pub mod pallet {
 		sp_std::marker::PhantomData<T>,
 	);
 
+	#[cfg(test)]
+	impl<T: Config + Send + Sync> PreventStakingOpsIfUnbonding<T> {
+		pub fn new() -> Self {
+			Self(Default::default())
+		}
+	}
+
 	impl<T: Config + Send + Sync> sp_runtime::traits::SignedExtension
 		for PreventStakingOpsIfUnbonding<T>
 	where
@@ -520,7 +526,9 @@ pub mod pallet {
 					}
 				};
 				match (
+					// mapped from controller.
 					pallet_staking::Ledger::<T>::get(&stash_or_controller),
+					// mapped from stash.
 					pallet_staking::Bonded::<T>::get(&stash_or_controller),
 				) {
 					(Some(ledger), None) => {

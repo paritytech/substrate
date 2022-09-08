@@ -23,10 +23,7 @@ use frame_support::{assert_noop, assert_ok, pallet_prelude::*, traits::Currency}
 use pallet_nomination_pools::{BondedPools, LastPoolId, RewardPools};
 use pallet_staking::CurrentEra;
 
-use sp_runtime::{
-	traits::BadOrigin,
-	DispatchError, ModuleError,
-};
+use sp_runtime::{traits::BadOrigin, DispatchError, ModuleError};
 use sp_staking::StakingInterface;
 use sp_std::prelude::*;
 
@@ -681,5 +678,67 @@ mod on_idle {
 
 mod signed_extension {
 	use super::*;
-	// TODO:
+	use crate::PreventStakingOpsIfUnbonding;
+	use sp_runtime::traits::SignedExtension;
+
+	const STAKING_CALL: crate::mock::Call =
+		crate::mock::Call::Staking(pallet_staking::Call::<T>::chill {});
+
+	#[test]
+	fn does_nothing_if_not_queued() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert!(PreventStakingOpsIfUnbonding::<T>::new()
+				.pre_dispatch(&1, &STAKING_CALL, &Default::default(), Default::default())
+				.is_ok());
+		})
+	}
+
+	#[test]
+	fn prevents_queued() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given: stash for 2 is 1.
+			// when
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(2), None));
+
+			// then
+			// stash can't.
+			assert!(PreventStakingOpsIfUnbonding::<T>::new()
+				.pre_dispatch(&1, &STAKING_CALL, &Default::default(), Default::default())
+				.is_err());
+
+			// controller can't.
+			assert!(PreventStakingOpsIfUnbonding::<T>::new()
+				.pre_dispatch(&2, &STAKING_CALL, &Default::default(), Default::default())
+				.is_err());
+		})
+	}
+
+	#[test]
+	fn prevents_head_stash() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given: stash for 2 is 1.
+			// when
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(2), None));
+
+			ErasToCheckPerBlock::<T>::put(1);
+			CurrentEra::<T>::put(BondingDuration::get());
+			next_block(true);
+
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest { stash: 1, checked: vec![3], maybe_pool_id: None })
+			);
+
+			// then
+			// stash can't
+			assert!(PreventStakingOpsIfUnbonding::<T>::new()
+				.pre_dispatch(&2, &STAKING_CALL, &Default::default(), Default::default())
+				.is_err());
+
+			// controller can't
+			assert!(PreventStakingOpsIfUnbonding::<T>::new()
+				.pre_dispatch(&1, &STAKING_CALL, &Default::default(), Default::default())
+				.is_err());
+		})
+	}
 }
