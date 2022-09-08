@@ -1028,15 +1028,6 @@ where
 		create_inherent_data_providers: CIDP::InherentDataProviders,
 		execution_context: ExecutionContext,
 	) -> Result<(), Error<Block>> {
-		// if let Err(e) = self.can_author_with.can_author_with(&block_id) {
-		// 	debug!(
-		// 		target: "babe",
-		// 		"Skipping `check_inherents` as authoring version is not compatible: {}",
-		// 		e,
-		// 	);
-        //
-		// 	return Ok(())
-		// }
 
 		let inherent_res = self
 			.client
