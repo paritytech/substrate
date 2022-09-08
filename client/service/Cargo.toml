@@ -20,6 +20,7 @@ rocksdb = ["sc-client-db/rocksdb"]
 wasmtime = ["sc-executor/wasmtime"]
 # exposes the client type
 test-helpers = []
+runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
 
 [dependencies]
 jsonrpsee = { version = "0.15.1", features = ["server"] }
