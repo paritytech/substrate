@@ -462,7 +462,7 @@ where
 		let max_weight = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
-		if remaining_weight > Weight::zero() {
+		if remaining_weight.all_gt(Weight::zero()) {
 			let used_weight = <AllPalletsWithSystem as OnIdle<System::BlockNumber>>::on_idle(
 				block_number,
 				remaining_weight,
