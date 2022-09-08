@@ -253,7 +253,7 @@ fn call_not_existing_function(wasm_method: WasmExecutionMethod) {
 	match call_in_wasm("test_calling_missing_external", &[], wasm_method, &mut ext).unwrap_err() {
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
-				WasmExecutionMethod::Interpreted => "Trap: Host(Other(\"Function `missing_external` is only a stub. Calling a stub is not allowed.\"))",
+				WasmExecutionMethod::Interpreted => "Other: Function `missing_external` is only a stub. Calling a stub is not allowed.",
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled { .. } => "call to a missing function env:missing_external"
 			};
@@ -273,7 +273,7 @@ fn call_yet_another_not_existing_function(wasm_method: WasmExecutionMethod) {
 	{
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
-				WasmExecutionMethod::Interpreted => "Trap: Host(Other(\"Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.\"))",
+				WasmExecutionMethod::Interpreted => "Other: Function `yet_another_missing_external` is only a stub. Calling a stub is not allowed.",
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled { .. } => "call to a missing function env:yet_another_missing_external"
 			};
@@ -909,7 +909,7 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 	match call_in_wasm("test_unreachable_intrinsic", &[], wasm_method, &mut ext).unwrap_err() {
 		Error::AbortedDueToTrap(error) => {
 			let expected = match wasm_method {
-				WasmExecutionMethod::Interpreted => "Trap: Unreachable",
+				WasmExecutionMethod::Interpreted => "unreachable",
 				#[cfg(feature = "wasmtime")]
 				WasmExecutionMethod::Compiled { .. } => "wasm trap: wasm `unreachable` instruction executed",
 			};
