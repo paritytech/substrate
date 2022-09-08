@@ -514,9 +514,6 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 	}
 
 	fn revert_pending(&mut self) {
-		if let Some(pruning) = &mut self.pruning {
-			pruning.revert_pending();
-		}
 		self.non_canonical.revert_pending();
 	}
 
@@ -803,6 +800,7 @@ mod tests {
 
 	#[test]
 	fn block_record_unavailable() {
+		let _ = env_logger::try_init();
 		let (mut db, state_db) = make_test_db(PruningMode::Constrained(Constraints {
 			max_blocks: Some(1),
 			max_mem: None,
