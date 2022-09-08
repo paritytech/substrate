@@ -22,6 +22,18 @@ parameter_types! {
     pub const MaxLocks: u32 = 50;
 }
 
+/// A PalletInfo implementation which just panics.
+pub struct PanicPalletInfo;
+
+impl frame_support::traits::PalletInfo for PanicPalletInfo {
+    fn index<P: 'static>() -> Option<usize> {
+        unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+    }
+    fn name<P: 'static>() -> Option<&'static str> {
+        unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+    }
+}
+
 impl frame_system::Config for Test {
     type BaseCallFilter = ();
     type BlockWeights = ();
@@ -40,7 +52,7 @@ impl frame_system::Config for Test {
     type DbWeight = ();
     type Version = ();
     // type ModuleToIndex = ();
-    type PalletInfo = ();
+    type PalletInfo = PanicPalletInfo;
     // type MaxLocks = MaxLocks;
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
