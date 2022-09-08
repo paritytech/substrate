@@ -1376,7 +1376,7 @@ mod tests {
 	};
 	use assert_matches::assert_matches;
 	use codec::{Decode, Encode};
-	use frame_support::{assert_err, assert_ok};
+	use frame_support::{assert_err, assert_ok, parameter_types};
 	use frame_system::{EventRecord, Phase};
 	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
@@ -1393,8 +1393,8 @@ mod tests {
 
 	type MockStack<'a> = Stack<'a, Test, MockExecutable>;
 
-	thread_local! {
-		static LOADER: RefCell<MockLoader> = RefCell::new(MockLoader::default());
+	parameter_types! {
+		static Loader: MockLoader = MockLoader::default();
 	}
 
 	fn events() -> Vec<Event<Test>> {
@@ -1420,8 +1420,8 @@ mod tests {
 		refcount: u64,
 	}
 
-	#[derive(Default)]
-	struct MockLoader {
+	#[derive(Default, Clone)]
+	pub struct MockLoader {
 		map: HashMap<CodeHash<Test>, MockExecutable>,
 		counter: u64,
 	}
@@ -1431,8 +1431,7 @@ mod tests {
 			func_type: ExportedFunction,
 			f: impl Fn(MockCtx, &MockExecutable) -> ExecResult + 'static,
 		) -> CodeHash<Test> {
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				// Generate code hashes as monotonically increasing values.
 				let hash = <Test as frame_system::Config>::Hash::from_low_u64_be(loader.counter);
 				loader.counter += 1;
@@ -1445,8 +1444,7 @@ mod tests {
 		}
 
 		fn increment_refcount(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				match loader.map.entry(code_hash) {
 					Entry::Vacant(_) => Err(<Error<Test>>::CodeNotFound)?,
 					Entry::Occupied(mut entry) => entry.get_mut().refcount += 1,
@@ -1457,8 +1455,7 @@ mod tests {
 
 		fn decrement_refcount(code_hash: CodeHash<Test>) {
 			use std::collections::hash_map::Entry::Occupied;
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				let mut entry = match loader.map.entry(code_hash) {
 					Occupied(e) => e,
 					_ => panic!("code_hash does not exist"),
@@ -1478,13 +1475,8 @@ mod tests {
 			_schedule: &Schedule<Test>,
 			_gas_meter: &mut GasMeter<Test>,
 		) -> Result<Self, DispatchError> {
-			LOADER.with(|loader| {
-				loader
-					.borrow_mut()
-					.map
-					.get(&code_hash)
-					.cloned()
-					.ok_or(Error::<Test>::CodeNotFound.into())
+			Loader::mutate(|loader| {
+				loader.map.get(&code_hash).cloned().ok_or(Error::<Test>::CodeNotFound.into())
 			})
 		}
 
@@ -1531,14 +1523,14 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		thread_local! {
-			static TEST_DATA: RefCell<Vec<usize>> = RefCell::new(vec![0]);
+		parameter_types! {
+			static TestData: Vec<usize> = vec![0];
 		}
 
 		let value = Default::default();
 		let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 		let exec_ch = MockLoader::insert(Call, |_ctx, _executable| {
-			TEST_DATA.with(|data| data.borrow_mut().push(1));
+			TestData::mutate(|data| data.push(1));
 			exec_success()
 		});
 
@@ -1562,7 +1554,7 @@ mod tests {
 			);
 		});
 
-		TEST_DATA.with(|data| assert_eq!(*data.borrow(), vec![0, 1]));
+		assert_eq!(TestData::get(), vec![0, 1]);
 	}
 
 	#[test]
@@ -1841,16 +1833,15 @@ mod tests {
 	fn max_depth() {
 		// This test verifies that when we reach the maximal depth creation of an
 		// yet another context fails.
-		thread_local! {
-			static REACHED_BOTTOM: RefCell<bool> = RefCell::new(false);
+		parameter_types! {
+			static ReachedBottom: bool = false;
 		}
 		let value = Default::default();
 		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
 			let r = ctx.ext.call(Weight::zero(), BOB, 0, vec![], true);
 
-			REACHED_BOTTOM.with(|reached_bottom| {
-				let mut reached_bottom = reached_bottom.borrow_mut();
+			ReachedBottom::mutate(|reached_bottom| {
 				if !*reached_bottom {
 					// We are first time here, it means we just reached bottom.
 					// Verify that we've got proper error and set `reached_bottom`.
@@ -1891,15 +1882,14 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 
-		thread_local! {
-			static WITNESSED_CALLER_BOB: RefCell<Option<AccountIdOf<Test>>> = RefCell::new(None);
-			static WITNESSED_CALLER_CHARLIE: RefCell<Option<AccountIdOf<Test>>> = RefCell::new(None);
+		parameter_types! {
+			static WitnessedCallerBob: Option<AccountIdOf<Test>> = None;
+			static WitnessedCallerCharlie: Option<AccountIdOf<Test>> = None;
 		}
 
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for bob.
-			WITNESSED_CALLER_BOB
-				.with(|caller| *caller.borrow_mut() = Some(ctx.ext.caller().clone()));
+			WitnessedCallerBob::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 
 			// Call into CHARLIE contract.
 			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
@@ -1907,8 +1897,7 @@ mod tests {
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for charlie.
-			WITNESSED_CALLER_CHARLIE
-				.with(|caller| *caller.borrow_mut() = Some(ctx.ext.caller().clone()));
+			WitnessedCallerCharlie::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 			exec_success()
 		});
 
@@ -1932,8 +1921,8 @@ mod tests {
 			assert_matches!(result, Ok(_));
 		});
 
-		WITNESSED_CALLER_BOB.with(|caller| assert_eq!(*caller.borrow(), Some(origin)));
-		WITNESSED_CALLER_CHARLIE.with(|caller| assert_eq!(*caller.borrow(), Some(dest)));
+		assert_eq!(WitnessedCallerBob::get(), Some(origin));
+		assert_eq!(WitnessedCallerCharlie::get(), Some(dest));
 	}
 
 	#[test]

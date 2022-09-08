@@ -39,15 +39,14 @@ use sp_runtime::{
 #[frame_support::pallet]
 pub mod logger {
 	use super::{OriginCaller, OriginTrait};
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, parameter_types};
 	use frame_system::pallet_prelude::*;
-	use std::cell::RefCell;
 
-	thread_local! {
-		static LOG: RefCell<Vec<(OriginCaller, u32)>> = RefCell::new(Vec::new());
+	parameter_types! {
+		static Log: Vec<(OriginCaller, u32)> = Vec::new();
 	}
 	pub fn log() -> Vec<(OriginCaller, u32)> {
-		LOG.with(|log| log.borrow().clone())
+		Log::get().clone()
 	}
 
 	#[pallet::pallet]
@@ -76,8 +75,8 @@ pub mod logger {
 		#[pallet::weight(*weight)]
 		pub fn log(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 			Self::deposit_event(Event::Logged(i, weight));
-			LOG.with(|log| {
-				log.borrow_mut().push((origin.caller().clone(), i));
+			Log::mutate(|log| {
+				log.push((origin.caller().clone(), i));
 			});
 			Ok(())
 		}
@@ -85,8 +84,8 @@ pub mod logger {
 		#[pallet::weight(*weight)]
 		pub fn log_without_filter(origin: OriginFor<T>, i: u32, weight: Weight) -> DispatchResult {
 			Self::deposit_event(Event::Logged(i, weight));
-			LOG.with(|log| {
-				log.borrow_mut().push((origin.caller().clone(), i));
+			Log::mutate(|log| {
+				log.push((origin.caller().clone(), i));
 			});
 			Ok(())
 		}
