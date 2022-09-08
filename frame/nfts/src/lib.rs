@@ -1035,8 +1035,6 @@ pub mod pallet {
 				}
 			}
 
-			ensure!(details.approvals.contains_key(&delegate), Error::<T, I>::NotDelegate);
-
 			details.approvals.remove(&delegate);
 			Item::<T, I>::insert(&collection, &item, &details);
 			Self::deposit_event(Event::ApprovalCancelled {
