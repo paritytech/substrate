@@ -149,7 +149,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		.assimilate_storage(&mut t)
 		.unwrap();
 	pallet_scored_pool::GenesisConfig::<Test> {
-		pool: bounded_vec![(10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3)),(5, None)],
+		pool: bounded_vec![(10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3)), (5, None)],
 		member_count: 2,
 	}
 	.assimilate_storage(&mut t)
