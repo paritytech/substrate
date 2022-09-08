@@ -368,7 +368,7 @@ pub mod pallet {
 				let hard_deadline = s.priority <= schedule::HARD_DEADLINE;
 				let test_weight =
 					total_weight.saturating_add(call_weight).saturating_add(item_weight);
-				if !hard_deadline && order > 0 && test_weight > limit {
+				if !hard_deadline && order > 0 && test_weight.any_gt(limit) {
 					// Cannot be scheduled this block - postpone until next.
 					total_weight.saturating_accrue(T::WeightInfo::item(false, named, None));
 					if let Some(ref id) = s.maybe_id {

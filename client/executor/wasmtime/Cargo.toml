@@ -21,7 +21,7 @@ parity-wasm = "0.42.0"
 
 # When bumping wasmtime do not forget to also bump rustix
 # to exactly the same version as used by wasmtime!
-wasmtime = { version = "0.38.0", default-features = false, features = [
+wasmtime = { version = "0.40.1", default-features = false, features = [
 	"cache",
 	"cranelift",
 	"jitdump",
@@ -35,16 +35,13 @@ sp-runtime-interface = { version = "6.0.0", path = "../../../primitives/runtime-
 sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
 sp-wasm-interface = { version = "6.0.0", features = ["wasmtime"], path = "../../../primitives/wasm-interface" }
 
-[target.'cfg(target_os = "linux")'.dependencies]
-rustix = { version = "0.35.6", default-features = false, features = ["std", "mm", "fs", "param", "use-libc"] }
-once_cell = "1.12.0"
-
 # Here we include the rustix crate used by wasmtime just to enable its 'use-libc' flag.
 #
 # By default rustix directly calls the appropriate syscalls completely bypassing libc;
 # this doesn't have any actual benefits for us besides making it harder to debug memory
 # problems (since then `mmap` etc. cannot be easily hooked into).
-rustix_wasmtime = { package = "rustix", version = "0.33.7", default-features = false, features = ["std", "use-libc"] }
+rustix = { version = "0.35.9", default-features = false, features = ["std", "mm", "fs", "param", "use-libc"] }
+once_cell = "1.12.0"
 
 [dev-dependencies]
 wat = "1.0"

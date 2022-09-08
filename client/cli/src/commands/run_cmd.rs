@@ -485,7 +485,7 @@ impl CliConfiguration for RunCmd {
 		Ok(if self.tmp {
 			Some(BasePath::new_temp_dir()?)
 		} else {
-			match self.shared_params().base_path() {
+			match self.shared_params().base_path()? {
 				Some(r) => Some(r),
 				// If `dev` is enabled, we use the temp base path.
 				None if self.shared_params().is_dev() => Some(BasePath::new_temp_dir()?),
