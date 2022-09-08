@@ -25,7 +25,6 @@ use crate::{
 };
 
 use bytes::Bytes;
-use codec::Encode;
 use futures::channel::oneshot;
 use libp2p::{
 	core::{Multiaddr, PeerId, PublicKey},
@@ -46,7 +45,7 @@ use sc_network_common::{
 	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
 	sync::{warp::WarpProofRequest, OpaqueBlockRequest, OpaqueStateRequest},
 };
-use sc_peerset::PeersetHandle;
+use sc_peerset::{PeersetHandle, ReputationChange};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
@@ -120,6 +119,12 @@ pub enum BehaviourOut<B: BlockT> {
 		duration: Duration,
 		/// Result of the request.
 		result: Result<(), RequestFailure>,
+	},
+
+	/// A request protocol handler issued reputation changes for the given peer.
+	ReputationChanges {
+		peer: PeerId,
+		changes: Vec<ReputationChange>,
 	},
 
 	/// Opened a substream with the given node with the given notifications protocol.
@@ -350,7 +355,7 @@ impl<B> From<void::Void> for BehaviourOut<B> {
 }
 
 impl<B> From<CustomMessageOutcome<B>> for BehaviourOut<B> {
-	fn from(event: CustomMessageOutcome<B>) {
+	fn from(event: CustomMessageOutcome<B>) -> Self {
 		match event {
 			CustomMessageOutcome::BlockImport(origin, blocks) =>
 				BehaviourOut::BlockImport(origin, blocks),
@@ -393,28 +398,15 @@ impl<B> From<CustomMessageOutcome<B>> for BehaviourOut<B> {
 	}
 }
 
-impl<B, Client> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
-{
-	fn inject_event(&mut self, event: request_responses::Event) {
+impl<B> From<request_responses::Event> for BehaviourOut<B> {
+	fn from(event: request_responses::Event) -> Self {
 		match event {
-			request_responses::Event::InboundRequest { peer, protocol, result } => {
-				self.events.push_back(BehaviourOut::InboundRequest { peer, protocol, result });
-			},
-			request_responses::Event::RequestFinished { peer, protocol, duration, result } => {
-				self.events.push_back(BehaviourOut::RequestFinished {
-					peer,
-					protocol,
-					duration,
-					result,
-				});
-			},
+			request_responses::Event::InboundRequest { peer, protocol, result } =>
+				BehaviourOut::InboundRequest { peer, protocol, result },
+			request_responses::Event::RequestFinished { peer, protocol, duration, result } =>
+				BehaviourOut::RequestFinished { peer, protocol, duration, result },
 			request_responses::Event::ReputationChanges { peer, changes } =>
-				for change in changes {
-					self.substrate.report_peer(peer, change);
-				},
+				BehaviourOut::ReputationChanges { peer, changes },
 		}
 	}
 }

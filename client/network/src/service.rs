@@ -1572,23 +1572,21 @@ where
 					target,
 					request,
 					pending_response,
-				})) => {
-					match self.warp_sync_protocol_name {
-						Some(name) => self.network_service.behaviour().send_request(
-							&target,
-							&name,
-							request.encode(),
-							pending_response,
-							IfDisconnected::ImmediateError,
-						),
-						None => {
-							log::warn!(
-								target: "sync",
-								"Trying to send warp sync request when no protocol is configured {:?}",
-								request,
-							);
-						},
-					}
+				})) => match self.warp_sync_protocol_name {
+					Some(name) => self.network_service.behaviour().send_request(
+						&target,
+						&name,
+						request.encode(),
+						pending_response,
+						IfDisconnected::ImmediateError,
+					),
+					None => {
+						log::warn!(
+							target: "sync",
+							"Trying to send warp sync request when no protocol is configured {:?}",
+							request,
+						);
+					},
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,
@@ -1664,6 +1662,13 @@ where
 									.inc();
 							},
 						}
+					},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::ReputationChanges {
+					peer,
+					changes,
+				})) =>
+					for change in changes {
+						self.network_service.behaviour().user_protocol().report_peer(peer, change);
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
 					protocol,
