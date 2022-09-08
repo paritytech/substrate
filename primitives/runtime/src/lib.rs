@@ -55,7 +55,6 @@ use sp_std::prelude::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
-pub mod bounded;
 pub mod curve;
 pub mod generic;
 pub mod legacy;
@@ -70,9 +69,6 @@ pub mod transaction_validity;
 
 pub use crate::runtime_string::*;
 
-// Re-export bounded types
-pub use bounded::{BoundedBTreeMap, BoundedBTreeSet, BoundedSlice, BoundedVec, WeakBoundedVec};
-
 // Re-export Multiaddress
 pub use multiaddress::MultiAddress;
 
@@ -82,9 +78,13 @@ pub use generic::{Digest, DigestItem};
 pub use sp_application_crypto::{BoundToRuntimeAppPublic, RuntimeAppPublic};
 /// Re-export this since it's part of the API of this crate.
 pub use sp_core::{
+	bounded::{BoundedBTreeMap, BoundedBTreeSet, BoundedSlice, BoundedVec, WeakBoundedVec},
 	crypto::{key_types, AccountId32, CryptoType, CryptoTypeId, KeyTypeId},
 	TypeId,
 };
+/// Re-export bounded_vec and bounded_btree_map macros only when std is enabled.
+#[cfg(feature = "std")]
+pub use sp_core::{bounded_btree_map, bounded_vec};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
@@ -831,45 +831,6 @@ macro_rules! assert_eq_error_rate {
 			$y,
 			$error,
 		);
-	};
-}
-
-/// Build a bounded vec from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_vec {
-	($ ($values:expr),* $(,)?) => {
-		{
-			$crate::sp_std::vec![$($values),*].try_into().unwrap()
-		}
-	};
-	( $value:expr ; $repetition:expr ) => {
-		{
-			$crate::sp_std::vec![$value ; $repetition].try_into().unwrap()
-		}
-	}
-}
-
-/// Build a bounded btree-map from the given literals.
-///
-/// The type of the outcome must be known.
-///
-/// Will not handle any errors and just panic if the given literals cannot fit in the corresponding
-/// bounded vec type. Thus, this is only suitable for testing and non-consensus code.
-#[macro_export]
-#[cfg(feature = "std")]
-macro_rules! bounded_btree_map {
-	($ ( $key:expr => $value:expr ),* $(,)?) => {
-		{
-			$crate::traits::TryCollect::<$crate::BoundedBTreeMap<_, _, _>>::try_collect(
-				$crate::sp_std::vec![$(($key, $value)),*].into_iter()
-			).unwrap()
-		}
 	};
 }
 
