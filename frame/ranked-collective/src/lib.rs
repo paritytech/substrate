@@ -52,10 +52,9 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
-	dispatch::{DispatchError, DispatchResultWithPostInfo},
+	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
 	ensure,
 	traits::{EnsureOrigin, PollStatus, Polling, VoteTally},
-	weights::PostDispatchInfo,
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
