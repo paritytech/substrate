@@ -7445,10 +7445,10 @@ version = "0.10.0-dev"
 dependencies = [
  "env_logger",
  "frame-support",
- "jsonrpsee",
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",
+ "rpc-utils",
  "serde",
  "serde_json",
  "sp-core",
@@ -7555,6 +7555,19 @@ checksum = "26b763cb66df1c928432cc35053f8bd4cec3335d8559fc16010017d16b3c1680"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "rpc-utils"
+version = "0.10.0-dev"
+dependencies = [
+ "async-trait",
+ "jsonrpsee",
+ "log",
+ "sc-rpc-api",
+ "serde",
+ "sp-runtime",
+ "tokio",
 ]
 
 [[package]]
@@ -11106,10 +11119,10 @@ version = "0.10.0-dev"
 dependencies = [
  "clap 3.1.18",
  "frame-try-runtime",
- "jsonrpsee",
  "log",
  "parity-scale-codec",
  "remote-externalities",
+ "rpc-utils",
  "sc-chain-spec",
  "sc-cli",
  "sc-executor",

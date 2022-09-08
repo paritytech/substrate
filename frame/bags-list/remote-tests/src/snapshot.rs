@@ -22,11 +22,14 @@ use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute create a snapshot from pallet-staking.
-pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
+pub async fn execute<Runtime: crate::RuntimeT, Block>(
 	voter_limit: Option<usize>,
 	currency_unit: u64,
 	ws_url: String,
-) {
+) where
+	Block: BlockT,
+	Block::Header: DeserializeOwned,
+{
 	use frame_support::storage::generator::StorageMap;
 
 	let mut ext = Builder::<Block>::new()

@@ -20,7 +20,7 @@ use crate::{
 	parse, state_machine_call, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
-use remote_externalities::rpc_api;
+use rpc_utils::ChainApi;
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use sp_core::storage::well_known_keys;
@@ -119,8 +119,11 @@ where
 	let header_at = command.header_at::<Block>()?;
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
-	let rpc_service = rpc_api::RpcService::new(header_ws_uri.clone(), false).await?;
-	let header = rpc_service.get_header::<Block>(header_at).await?;
+	let rpc = rpc_utils::ws_client(&header_ws_uri).await?;
+	let header = ChainApi::<(), Block::Hash, Block::Header, ()>::header(&rpc, Some(header_at))
+		.await
+		.unwrap()
+		.unwrap();
 	log::info!(
 		target: LOG_TARGET,
 		"fetched header from {:?}, block number: {:?}",

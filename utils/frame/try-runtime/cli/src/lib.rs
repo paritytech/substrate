@@ -267,9 +267,9 @@
 
 use parity_scale_codec::Decode;
 use remote_externalities::{
-	rpc_api::RpcService, Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig,
-	TestExternalities,
+	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
 };
+use rpc_utils::StateApi;
 use sc_chain_spec::ChainSpec;
 use sc_cli::{
 	execution_method_from_cli, CliConfiguration, ExecutionStrategy, WasmExecutionMethod,
@@ -633,9 +633,8 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 	expected_spec_version: u32,
 	relaxed: bool,
 ) {
-	let rpc_service = RpcService::new(uri.clone(), false).await.unwrap();
-	match rpc_service
-		.get_runtime_version::<Block>(None)
+	let rpc = rpc_utils::ws_client(&uri).await.unwrap();
+	match StateApi::<Block::Hash>::runtime_version(&rpc, None)
 		.await
 		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))
 		.map(|(spec_name, spec_version)| (spec_name.to_lowercase(), spec_version))

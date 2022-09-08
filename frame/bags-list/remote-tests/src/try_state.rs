@@ -25,11 +25,14 @@ use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute the sanity check of the bags-list.
-pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
+pub async fn execute<Runtime: crate::RuntimeT, Block>(
 	currency_unit: u64,
 	currency_name: &'static str,
 	ws_url: String,
-) {
+) where
+	Block: BlockT,
+	Block::Header: DeserializeOwned,
+{
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
