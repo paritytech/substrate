@@ -825,7 +825,6 @@ mod test {
 		super::slots::SlotInfo {
 			slot: slot.into(),
 			duration: SLOT_DURATION,
-			timestamp: Default::default(),
 			inherent_data: Default::default(),
 			ends_at: Instant::now() + SLOT_DURATION,
 			chain_head: Header::new(
