@@ -26,7 +26,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
@@ -42,7 +41,7 @@ frame_support::construct_runtime!(
 );
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-const MAX_BLOCK_WEIGHT: Weight = 1024;
+const MAX_BLOCK_WEIGHT: Weight = Weight::from_ref_time(1024);
 
 parameter_types! {
 	pub Version: RuntimeVersion = RuntimeVersion {
@@ -60,9 +59,9 @@ parameter_types! {
 		write: 100,
 	};
 	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
-		.base_block(10)
+		.base_block(Weight::from_ref_time(10))
 		.for_class(DispatchClass::all(), |weights| {
-			weights.base_extrinsic = 5;
+			weights.base_extrinsic = Weight::from_ref_time(5);
 		})
 		.for_class(DispatchClass::Normal, |weights| {
 			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
@@ -79,14 +78,14 @@ parameter_types! {
 		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
-thread_local! {
-	pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
+parameter_types! {
+	pub static Killed: Vec<u64> = vec![];
 }
 
 pub struct RecordKilled;
 impl OnKilledAccount<u64> for RecordKilled {
 	fn on_killed_account(who: &u64) {
-		KILLED.with(|r| r.borrow_mut().push(*who))
+		Killed::mutate(|r| r.push(*who))
 	}
 }
 

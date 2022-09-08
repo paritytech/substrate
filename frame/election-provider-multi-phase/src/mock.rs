@@ -226,7 +226,7 @@ const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
-		::with_sensible_defaults(2 * frame_support::weights::constants::WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
+		::with_sensible_defaults(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
 }
 
 impl pallet_balances::Config for Runtime {
@@ -241,8 +241,9 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = ();
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Default, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum MockedWeightInfo {
+	#[default]
 	Basic,
 	Complex,
 	Real,
@@ -349,9 +350,11 @@ impl MinerConfig for Runtime {
 
 	fn solution_weight(v: u32, t: u32, a: u32, d: u32) -> Weight {
 		match MockWeightInfo::get() {
-			MockedWeightInfo::Basic =>
-				(10 as Weight).saturating_add((5 as Weight).saturating_mul(a as Weight)),
-			MockedWeightInfo::Complex => (0 * v + 0 * t + 1000 * a + 0 * d) as Weight,
+			MockedWeightInfo::Basic => Weight::from_ref_time(
+				(10 as u64).saturating_add((5 as u64).saturating_mul(a as u64)),
+			),
+			MockedWeightInfo::Complex =>
+				Weight::from_ref_time((0 * v + 0 * t + 1000 * a + 0 * d) as u64),
 			MockedWeightInfo::Real =>
 				<() as multi_phase::weights::WeightInfo>::feasibility_check(v, t, a, d),
 		}

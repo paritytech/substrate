@@ -17,7 +17,7 @@
 
 //! Traits, types and structs to support a bounded `BTreeSet`.
 
-use crate::traits::{Get, TryCollect};
+use crate::{Get, TryCollect};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{borrow::Borrow, collections::btree_set::BTreeSet, marker::PhantomData, ops::Deref};
 
@@ -321,7 +321,7 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use crate::traits::ConstU32;
+	use crate::ConstU32;
 
 	fn set_from_keys<T>(keys: &[T]) -> BTreeSet<T>
 	where

@@ -18,6 +18,7 @@
 use crate::construct_runtime::Pallet;
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::str::FromStr;
 use syn::Ident;
 
 pub fn expand_outer_dispatch(
@@ -30,6 +31,7 @@ pub fn expand_outer_dispatch(
 	let mut variant_patterns = Vec::new();
 	let mut query_call_part_macros = Vec::new();
 	let mut pallet_names = Vec::new();
+	let mut pallet_attrs = Vec::new();
 	let system_path = &system_pallet.path;
 
 	let pallets_with_call = pallet_decls.iter().filter(|decl| decl.exists_part("Call"));
@@ -38,12 +40,24 @@ pub fn expand_outer_dispatch(
 		let name = &pallet_declaration.name;
 		let path = &pallet_declaration.path;
 		let index = pallet_declaration.index;
+		let attr =
+			pallet_declaration.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
+				let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
+					.expect("was successfully parsed before; qed");
+				quote! {
+					#acc
+					#attr
+				}
+			});
 
-		variant_defs.extend(
-			quote!(#[codec(index = #index)] #name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),),
-		);
+		variant_defs.extend(quote! {
+			#attr
+			#[codec(index = #index)]
+			#name( #scrate::dispatch::CallableCallFor<#name, #runtime> ),
+		});
 		variant_patterns.push(quote!(Call::#name(call)));
 		pallet_names.push(name);
+		pallet_attrs.push(attr);
 		query_call_part_macros.push(quote! {
 			#path::__substrate_call_check::is_call_part_defined!(#name);
 		});
@@ -69,6 +83,7 @@ pub fn expand_outer_dispatch(
 				use #scrate::dispatch::Callable;
 				use core::mem::size_of;
 				&[#(
+					#pallet_attrs
 					(
 						stringify!(#pallet_names),
 						size_of::< <#pallet_names as Callable<#runtime>>::Call >(),
@@ -101,7 +116,10 @@ pub fn expand_outer_dispatch(
 		impl #scrate::dispatch::GetDispatchInfo for Call {
 			fn get_dispatch_info(&self) -> #scrate::dispatch::DispatchInfo {
 				match self {
-					#( #variant_patterns => call.get_dispatch_info(), )*
+					#(
+						#pallet_attrs
+						#variant_patterns => call.get_dispatch_info(),
+					)*
 				}
 			}
 		}
@@ -110,6 +128,7 @@ pub fn expand_outer_dispatch(
 				use #scrate::dispatch::GetCallName;
 				match self {
 					#(
+						#pallet_attrs
 						#variant_patterns => {
 							let function_name = call.get_call_name();
 							let pallet_name = stringify!(#pallet_names);
@@ -121,6 +140,7 @@ pub fn expand_outer_dispatch(
 
 			fn get_module_names() -> &'static [&'static str] {
 				&[#(
+					#pallet_attrs
 					stringify!(#pallet_names),
 				)*]
 			}
@@ -129,6 +149,7 @@ pub fn expand_outer_dispatch(
 				use #scrate::dispatch::{Callable, GetCallName};
 				match module {
 					#(
+						#pallet_attrs
 						stringify!(#pallet_names) =>
 							<<#pallet_names as Callable<#runtime>>::Call
 								as GetCallName>::get_call_names(),
@@ -157,6 +178,7 @@ pub fn expand_outer_dispatch(
 			fn dispatch_bypass_filter(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
+						#pallet_attrs
 						#variant_patterns =>
 							#scrate::traits::UnfilteredDispatchable::dispatch_bypass_filter(call, origin),
 					)*
@@ -165,6 +187,7 @@ pub fn expand_outer_dispatch(
 		}
 
 		#(
+			#pallet_attrs
 			impl #scrate::traits::IsSubType<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for Call {
 				#[allow(unreachable_patterns)]
 				fn is_sub_type(&self) -> Option<&#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> {
@@ -176,6 +199,7 @@ pub fn expand_outer_dispatch(
 				}
 			}
 
+			#pallet_attrs
 			impl From<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for Call {
 				fn from(call: #scrate::dispatch::CallableCallFor<#pallet_names, #runtime>) -> Self {
 					#variant_patterns
