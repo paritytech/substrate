@@ -1,4 +1,4 @@
-use frame_support::traits::{Currency, OffchainWorker};
+use frame_support::traits::{Currency, OffchainWorker, GenesisBuild};
 use frame_system::Config as FSC;
 use pallet_contracts::{self as contracts, Config as CC};
 use sp_core::{
@@ -371,12 +371,11 @@ fn deploy_contract() -> AccountId {
     //let endowment = contracts::Config::<T>::subsistence_threshold_uncached();
     const GAS_LIMIT: Weight = 100_000_000_000;
     const ENDOWMENT: Balance = 100_000_000_000;
-    Contracts::put_code(Origin::signed(alice.clone()), wasm.to_vec()).unwrap();
-    Contracts::instantiate(
+    Contracts::instantiate_with_code(
         Origin::signed(alice.clone()),
         ENDOWMENT,
         GAS_LIMIT,
-        wasm_hash.into(),
+        wasm.to_vec(),
         contract_args.clone(),
         vec![]
     )
