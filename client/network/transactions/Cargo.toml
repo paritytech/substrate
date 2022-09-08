@@ -24,3 +24,4 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.
 sc-network-common = { version = "0.10.0-dev", path = "../common" }
 sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }

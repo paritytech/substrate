@@ -49,10 +49,7 @@ use std::{
 	iter,
 	num::NonZeroUsize,
 	pin::Pin,
-	sync::{
-		atomic::{AtomicBool, Ordering},
-		Arc,
-	},
+	sync::Arc,
 	task::Poll,
 };
 
@@ -159,12 +156,14 @@ impl TransactionsHandlerPrototype {
 	/// Turns the prototype into the actual handler. Returns a controller that allows controlling
 	/// the behaviour of the handler while it's running.
 	///
+	/// TODO: update doc
+	///
 	/// Important: the transactions handler is initially disabled and doesn't gossip transactions.
 	/// You must call [`TransactionsHandlerController::set_gossip_enabled`] to enable it.
 	pub fn build<
 		B: BlockT + 'static,
 		H: ExHashT,
-		S: NetworkPeers + NetworkEventStream + NetworkNotification,
+		S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
 	>(
 		self,
 		service: S,
@@ -173,14 +172,12 @@ impl TransactionsHandlerPrototype {
 	) -> error::Result<(TransactionsHandler<B, H, S>, TransactionsHandlerController<H>)> {
 		let event_stream = service.event_stream("transactions-handler");
 		let (to_handler, from_controller) = mpsc::unbounded();
-		let gossip_enabled = Arc::new(AtomicBool::new(false));
 
 		let handler = TransactionsHandler {
 			protocol_name: self.protocol_name,
 			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
 			pending_transactions: FuturesUnordered::new(),
 			pending_transactions_peers: HashMap::new(),
-			gossip_enabled: gossip_enabled.clone(),
 			service,
 			event_stream,
 			peers: HashMap::new(),
@@ -193,7 +190,7 @@ impl TransactionsHandlerPrototype {
 			},
 		};
 
-		let controller = TransactionsHandlerController { to_handler, gossip_enabled };
+		let controller = TransactionsHandlerController { to_handler };
 
 		Ok((handler, controller))
 	}
@@ -202,15 +199,9 @@ impl TransactionsHandlerPrototype {
 /// Controls the behaviour of a [`TransactionsHandler`] it is connected to.
 pub struct TransactionsHandlerController<H: ExHashT> {
 	to_handler: mpsc::UnboundedSender<ToHandler<H>>,
-	gossip_enabled: Arc<AtomicBool>,
 }
 
 impl<H: ExHashT> TransactionsHandlerController<H> {
-	/// Controls whether transactions are being gossiped on the network.
-	pub fn set_gossip_enabled(&mut self, enabled: bool) {
-		self.gossip_enabled.store(enabled, Ordering::Relaxed);
-	}
-
 	/// You may call this when new transactions are imported by the transaction pool.
 	///
 	/// All transactions will be fetched from the `TransactionPool` that was passed at
@@ -237,7 +228,7 @@ enum ToHandler<H: ExHashT> {
 pub struct TransactionsHandler<
 	B: BlockT + 'static,
 	H: ExHashT,
-	S: NetworkPeers + NetworkEventStream + NetworkNotification,
+	S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
 > {
 	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
@@ -256,7 +247,6 @@ pub struct TransactionsHandler<
 	// All connected peers
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
-	gossip_enabled: Arc<AtomicBool>,
 	from_controller: mpsc::UnboundedReceiver<ToHandler<H>>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
@@ -274,7 +264,7 @@ impl<B, H, S> TransactionsHandler<B, H, S>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	S: NetworkPeers + NetworkEventStream + NetworkNotification,
+	S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
 {
 	/// Turns the [`TransactionsHandler`] into a future that should run forever and not be
 	/// interrupted.
@@ -374,8 +364,8 @@ where
 
 	/// Called when peer sends us new transactions
 	fn on_transactions(&mut self, who: PeerId, transactions: Transactions<B::Extrinsic>) {
-		// Accept transactions only when enabled
-		if !self.gossip_enabled.load(Ordering::Relaxed) {
+		// Accept transactions only when node is not major syncing
+		if self.service.is_major_syncing() {
 			trace!(target: "sync", "{} Ignoring transactions while disabled", who);
 			return
 		}
@@ -425,10 +415,11 @@ where
 
 	/// Propagate one transaction.
 	pub fn propagate_transaction(&mut self, hash: &H) {
-		// Accept transactions only when enabled
-		if !self.gossip_enabled.load(Ordering::Relaxed) {
+		// Accept transactions only when node is not major syncing
+		if self.service.is_major_syncing() {
 			return
 		}
+
 		debug!(target: "sync", "Propagating transaction [{:?}]", hash);
 		if let Some(transaction) = self.transaction_pool.transaction(hash) {
 			let propagated_to = self.do_propagate_transactions(&[(hash.clone(), transaction)]);
@@ -476,10 +467,11 @@ where
 
 	/// Call when we must propagate ready transactions to peers.
 	fn propagate_transactions(&mut self) {
-		// Accept transactions only when enabled
-		if !self.gossip_enabled.load(Ordering::Relaxed) {
+		// Accept transactions only when node is not major syncing
+		if self.service.is_major_syncing() {
 			return
 		}
+
 		debug!(target: "sync", "Propagating transactions");
 		let transactions = self.transaction_pool.transactions();
 		let propagated_to = self.do_propagate_transactions(&transactions);
