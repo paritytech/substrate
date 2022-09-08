@@ -32,14 +32,14 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
 	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
-	dispatch::DispatchErrorWithPostInfo,
+	dispatch::{DispatchClass, DispatchErrorWithPostInfo, PostDispatchInfo},
 	parameter_types,
 	storage::child,
 	traits::{
 		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, OnIdle, OnInitialize,
 		ReservableCurrency,
 	},
-	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
+	weights::{constants::WEIGHT_PER_SECOND, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
