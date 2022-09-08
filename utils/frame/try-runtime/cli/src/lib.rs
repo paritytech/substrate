@@ -269,7 +269,6 @@ use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
 };
-use rpc_utils::StateApi;
 use sc_chain_spec::ChainSpec;
 use sc_cli::{
 	execution_method_from_cli, CliConfiguration, ExecutionStrategy, WasmExecutionMethod,
@@ -297,6 +296,7 @@ use sp_runtime::{
 use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
+use substrate_rpc_client::{ws_client, StateApi};
 
 mod commands;
 pub(crate) mod parse;
@@ -502,10 +502,11 @@ impl State {
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		Ok(match self {
-			State::Snap { snapshot_path } =>
+			State::Snap { snapshot_path } => {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
-				})),
+				}))
+			},
 			State::Live { snapshot_path, pallet, uri, at, child_tree } => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
@@ -551,34 +552,38 @@ impl TryRuntimeCmd {
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		match &self.command {
-			Command::OnRuntimeUpgrade(ref cmd) =>
+			Command::OnRuntimeUpgrade(ref cmd) => {
 				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await,
-			Command::OffchainWorker(cmd) =>
+				.await
+			},
+			Command::OffchainWorker(cmd) => {
 				commands::offchain_worker::offchain_worker::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await,
-			Command::ExecuteBlock(cmd) =>
+				.await
+			},
+			Command::ExecuteBlock(cmd) => {
 				commands::execute_block::execute_block::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await,
-			Command::FollowChain(cmd) =>
+				.await
+			},
+			Command::FollowChain(cmd) => {
 				commands::follow_chain::follow_chain::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await,
+				.await
+			},
 		}
 	}
 }
@@ -633,7 +638,7 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 	expected_spec_version: u32,
 	relaxed: bool,
 ) {
-	let rpc = rpc_utils::ws_client(&uri).await.unwrap();
+	let rpc = ws_client(&uri).await.unwrap();
 	match StateApi::<Block::Hash>::runtime_version(&rpc, None)
 		.await
 		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))

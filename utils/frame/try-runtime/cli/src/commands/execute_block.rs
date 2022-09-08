@@ -20,11 +20,11 @@ use crate::{
 	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
-use rpc_utils::ChainApi;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
+use substrate_rpc_client::{ws_client, ChainApi};
 
 /// Configurations of the [`Command::ExecuteBlock`].
 ///
@@ -90,7 +90,7 @@ impl ExecuteBlockCmd {
 		<Block::Hash as FromStr>::Err: Debug,
 		Block::Header: serde::de::DeserializeOwned,
 	{
-		let rpc = rpc_utils::ws_client(&ws_uri).await?;
+		let rpc = ws_client(&ws_uri).await?;
 
 		match (&self.block_at, &self.state) {
 			(Some(block_at), State::Snap { .. }) => hash_of::<Block>(block_at),
@@ -153,7 +153,7 @@ where
 
 	let block_ws_uri = command.block_ws_uri::<Block>();
 	let block_at = command.block_at::<Block>(block_ws_uri.clone()).await?;
-	let rpc = rpc_utils::ws_client(&block_ws_uri).await?;
+	let rpc = ws_client(&block_ws_uri).await?;
 	let block: Block = ChainApi::<(), Block::Hash, Block::Header, _>::block(&rpc, Some(block_at))
 		.await
 		.unwrap()

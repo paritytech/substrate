@@ -4699,7 +4699,6 @@ dependencies = [
  "platforms",
  "rand 0.8.4",
  "regex",
- "remote-externalities",
  "sc-authority-discovery",
  "sc-basic-authorship",
  "sc-block-builder",
@@ -4747,6 +4746,7 @@ dependencies = [
  "sp-trie",
  "substrate-build-script-utils",
  "substrate-frame-cli",
+ "substrate-rpc-client",
  "tempfile",
  "tokio",
  "try-runtime-cli",
@@ -7448,13 +7448,13 @@ dependencies = [
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",
- "rpc-utils",
  "serde",
  "serde_json",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-version",
+ "substrate-rpc-client",
  "tokio",
 ]
 
@@ -7555,19 +7555,6 @@ checksum = "26b763cb66df1c928432cc35053f8bd4cec3335d8559fc16010017d16b3c1680"
 dependencies = [
  "libc",
  "winapi",
-]
-
-[[package]]
-name = "rpc-utils"
-version = "0.10.0-dev"
-dependencies = [
- "async-trait",
- "jsonrpsee",
- "log",
- "sc-rpc-api",
- "serde",
- "sp-runtime",
- "tokio",
 ]
 
 [[package]]
@@ -10435,6 +10422,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-rpc-client"
+version = "0.10.0-dev"
+dependencies = [
+ "async-trait",
+ "jsonrpsee",
+ "log",
+ "sc-rpc-api",
+ "serde",
+ "sp-core",
+ "sp-runtime",
+ "tokio",
+]
+
+[[package]]
 name = "substrate-state-trie-migration-rpc"
 version = "4.0.0-dev"
 dependencies = [
@@ -11122,7 +11123,6 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "remote-externalities",
- "rpc-utils",
  "sc-chain-spec",
  "sc-cli",
  "sc-executor",
@@ -11135,6 +11135,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-version",
+ "substrate-rpc-client",
  "tokio",
  "zstd",
 ]

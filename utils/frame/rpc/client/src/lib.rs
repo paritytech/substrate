@@ -16,6 +16,26 @@
 // limitations under the License.
 
 //! # Shared JSON-RPC client related code and abstractions.
+//!
+//! It exposes a `WebSocket JSON-RPC` client that implements the RPC interface in [`sc-rpc-api`]
+//! along with some abstractions.
+//!
+//! ## Usage
+//!
+//! ```no_run
+//! # use substrate_rpc_client::{ws_client, StateApi};
+//! # use sp_core::{H256, storage::StorageKey};
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!
+//!     let client = ws_client("ws://127.0.0.1:9944").await.unwrap();
+//!     client.storage(StorageKey(vec![]), Some(H256::zero())).await.unwrap();
+//!
+//!     // if all type params are not known you need to provide type params
+//!     StateApi::<H256>::storage(&client, StorageKey(vec![]), None).await.unwrap();
+//! }
+//! ```
 
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;

@@ -21,13 +21,13 @@ use crate::{
 };
 use parity_scale_codec::{Decode, Encode};
 use remote_externalities::{Builder, Mode, OnlineConfig};
-use rpc_utils::{ChainApi, FinalizedHeaders, Subscription, WsClient};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
+use substrate_rpc_client::{ws_client, ChainApi, FinalizedHeaders, Subscription, WsClient};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
@@ -67,9 +67,7 @@ pub struct FollowChainCmd {
 async fn start_subscribing<Header: DeserializeOwned + Serialize + Send + Sync + 'static>(
 	url: &str,
 ) -> sc_cli::Result<(WsClient, Subscription<Header>)> {
-	let client = rpc_utils::ws_client(url)
-		.await
-		.map_err(|e| sc_cli::Error::Application(e.into()))?;
+	let client = ws_client(url).await.map_err(|e| sc_cli::Error::Application(e.into()))?;
 
 	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
 

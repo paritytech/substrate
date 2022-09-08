@@ -20,12 +20,12 @@ use crate::{
 	parse, state_machine_call, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
-use rpc_utils::ChainApi;
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
+use substrate_rpc_client::{ws_client, ChainApi};
 
 /// Configurations of the [`Command::OffchainWorker`].
 #[derive(Debug, Clone, clap::Parser)]
@@ -119,7 +119,7 @@ where
 	let header_at = command.header_at::<Block>()?;
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
-	let rpc = rpc_utils::ws_client(&header_ws_uri).await?;
+	let rpc = ws_client(&header_ws_uri).await?;
 	let header = ChainApi::<(), Block::Hash, Block::Header, ()>::header(&rpc, Some(header_at))
 		.await
 		.unwrap()
