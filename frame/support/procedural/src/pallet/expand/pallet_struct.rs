@@ -166,6 +166,15 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! { #frame_support::traits::StorageVersion::default() }
 	};
 
+	let whitelisted_storage_keys_impl = quote::quote![
+		impl<T> frame_support::traits::WhitelistedStorageKeys for Pallet<T> {
+			fn whitelisted_storage_keys(
+			) -> frame_support::inherent::Vec<frame_support::traits::TrackedStorageKey> {
+				frame_support::inherent::Vec::new()
+			}
+		}
+	];
+
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
 		#pallet_error_metadata
 
@@ -253,5 +262,6 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		}
 
 		#storage_info
+		#whitelisted_storage_keys_impl
 	)
 }

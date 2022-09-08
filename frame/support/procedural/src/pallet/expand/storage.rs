@@ -637,15 +637,6 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 	let type_impl_gen = &def.type_impl_generics(proc_macro2::Span::call_site());
 	let type_use_gen = &def.type_use_generics(proc_macro2::Span::call_site());
 
-	let whitelisted_storage_keys_impl = quote::quote![
-		impl<T> frame_support::traits::WhitelistedStorageKeys for Pallet<T> {
-			fn whitelisted_storage_keys(
-			) -> frame_support::inherent::Vec<frame_support::traits::TrackedStorageKey> {
-				frame_support::inherent::Vec::new()
-			}
-		}
-	];
-
 	quote::quote!(
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen>
 			#completed_where_clause
@@ -671,6 +662,5 @@ pub fn expand_storages(def: &mut Def) -> proc_macro2::TokenStream {
 		#( #getters )*
 		#( #prefix_structs )*
 		#( #on_empty_structs )*
-		#whitelisted_storage_keys_impl
 	)
 }
