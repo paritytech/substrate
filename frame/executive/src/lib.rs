@@ -293,10 +293,9 @@ where
 			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap()
 		};
 		let weight = Self::execute_on_runtime_upgrade();
-		frame_support::assert_storage_noop!(
-			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(state)
-				.unwrap()
-		);
+		let _guard = frame_support::StorageNoopGuard::default();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(state)
+			.unwrap();
 		Ok(weight)
 	}
 }

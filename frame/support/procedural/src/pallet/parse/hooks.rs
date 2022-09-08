@@ -30,8 +30,6 @@ pub struct HooksDef {
 	pub attr_span: proc_macro2::Span,
 	/// Boolean flag, set to true if the `on_runtime_upgrade` method of hooks was implemented.
 	pub has_runtime_upgrade: bool,
-	/// The `PreUpgradeState` type parameter of the trait.
-	pub pre_upgrade_state: Option<syn::Type>,
 }
 
 impl HooksDef {
@@ -72,24 +70,6 @@ impl HooksDef {
 			return Err(syn::Error::new(item_trait.span(), msg))
 		}
 
-		let err = || {
-			let msg = format!(
-				"Invalid generic type parameters for Hooks, expected Hooks<Gen1> or Hooks<Gen1, Gen2>"
-			);
-			syn::Error::new(item_trait.span(), msg)
-		};
-		let pre_upgrade_state = match &item_trait.segments[0].arguments {
-			syn::PathArguments::AngleBracketed(ab) => match ab.args.len() {
-				1 => None,
-				2 => match &ab.args[1] {
-					syn::GenericArgument::Type(t) => Some(t.clone()),
-					_ => return Err(err()),
-				},
-				_ => return Err(err()),
-			},
-			_ => return Err(err()),
-		};
-
 		let has_runtime_upgrade = item.items.iter().any(|i| match i {
 			syn::ImplItem::Method(method) => method.sig.ident == "on_runtime_upgrade",
 			_ => false,
@@ -101,7 +81,6 @@ impl HooksDef {
 			instances,
 			has_runtime_upgrade,
 			where_clause: item.generics.where_clause.clone(),
-			pre_upgrade_state,
 		})
 	}
 }
