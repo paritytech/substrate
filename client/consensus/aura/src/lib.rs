@@ -47,9 +47,7 @@ use sc_telemetry::TelemetryHandle;
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_blockchain::{HeaderBackend, Result as CResult};
-use sp_consensus::{
-	BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain,
-};
+use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_slots::Slot;
 use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
@@ -563,9 +561,7 @@ mod tests {
 	use sc_keystore::LocalKeystore;
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
-	use sp_consensus::{
-		DisableProofRecording, NoNetwork as DummyOracle, Proposal,
-	};
+	use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
 	use sp_keyring::sr25519::Keyring;

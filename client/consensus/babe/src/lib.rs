@@ -115,8 +115,7 @@ use sp_blockchain::{
 	Backend as _, Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult,
 };
 use sp_consensus::{
-	BlockOrigin, CacheKeyId, Environment, Error as ConsensusError, Proposer,
-	SelectChain,
+	BlockOrigin, CacheKeyId, Environment, Error as ConsensusError, Proposer, SelectChain,
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
@@ -1028,7 +1027,6 @@ where
 		create_inherent_data_providers: CIDP::InherentDataProviders,
 		execution_context: ExecutionContext,
 	) -> Result<(), Error<Block>> {
-
 		let inherent_res = self
 			.client
 			.runtime_api()

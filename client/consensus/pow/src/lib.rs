@@ -56,9 +56,7 @@ use sc_consensus::{
 use sp_api::ProvideRuntimeApi;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{well_known_cache_keys::Id as CacheKeyId, HeaderBackend};
-use sp_consensus::{
-	Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle,
-};
+use sp_consensus::{Environment, Error as ConsensusError, Proposer, SelectChain, SyncOracle};
 use sp_consensus_pow::{Seal, TotalDifficulty, POW_ENGINE_ID};
 use sp_core::ExecutionContext;
 use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
@@ -302,8 +300,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<B, I, C, S, Algorithm, CIDP> BlockImport<B>
-	for PowBlockImport<B, I, C, S, Algorithm, CIDP>
+impl<B, I, C, S, Algorithm, CIDP> BlockImport<B> for PowBlockImport<B, I, C, S, Algorithm, CIDP>
 where
 	B: BlockT,
 	I: BlockImport<B, Transaction = sp_api::TransactionFor<C, B>> + Send + Sync,
