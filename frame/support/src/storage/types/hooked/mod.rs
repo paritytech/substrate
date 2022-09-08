@@ -1,77 +1,45 @@
-use core::{marker::PhantomData, result};
-
-use codec::{Decode, Encode, EncodeLike, FullCodec};
-use frame_metadata::{StorageEntryMetadata, StorageEntryType};
-use scale_info::TypeInfo;
-use sp_arithmetic::traits::Bounded;
-
 use crate::{
 	storage::{self, StorageAppend, StorageDecodeLength, StorageTryAppend},
-	traits::{Get, OnUnbalanced, StorageInfo, StorageInstance},
 	StoragePrefixedMap,
 };
-// we don't bring this fully into scope because it can be confusing -- only to allow trait functions
-// being used.
-use storage::generator::StorageMap as _;
+use codec::{Decode, Encode, EncodeLike, FullCodec};
+use sp_arithmetic::traits::Bounded;
+use sp_std::marker::PhantomData;
 
-use super::{QueryKindTrait, StorageEntryMetadataBuilder};
+mod counted;
 
-// / This is fired IFF some value already existed in `key`.
-// #[impl_trait_for_tuples::impl_for_tuples(0, 32)]
-pub trait StorageOnRemove<K: FullCodec, V> {
-	fn on_remove<KeyArg: EncodeLike<K>>(key: &KeyArg, value: &V);
+/// This is fired IFF some value already existed in `key`.
+///
+/// This is fired AFTER `key` is already removed.
+#[impl_trait_for_tuples::impl_for_tuples(0, 32)]
+pub trait StorageOnRemove<K, V> {
+	fn on_remove(key: &K, value: &V);
 }
 
-// #[impl_trait_for_tuples::impl_for_tuples(0, 32)]
-pub trait StorageOnInsert<K: FullCodec, V> {
-	fn on_insert<KeyArg: EncodeLike<K>>(key: &KeyArg, value: &V);
+/// This is fired AFTER `key` is created.
+#[impl_trait_for_tuples::impl_for_tuples(0, 32)]
+pub trait StorageOnInsert<K, V> {
+	fn on_insert(key: &K, value: &V);
 }
 
-// #[impl_trait_for_tuples::impl_for_tuples(0, 32)]
-pub trait StorageOnUpdate<K: FullCodec, V> {
-	fn on_update<KeyArg: EncodeLike<K>>(key: &KeyArg, old_value: &V, new_value: &V);
+/// This is fired AFTER `key` is updated.
+#[impl_trait_for_tuples::impl_for_tuples(0, 32)]
+pub trait StorageOnUpdate<K, V> {
+	fn on_update(key: &K, old_value: &V, new_value: &V);
+}
+
+struct OnRemovalIteratorShim<K, V, SOR>(PhantomData<(K, V, SOR)>);
+impl<K: FullCodec, V: FullCodec, SOR: StorageOnRemove<K, V>> crate::storage::PrefixIteratorOnRemoval for OnRemovalIteratorShim<K, V, SOR> {
+	fn on_removal(key: &[u8], value: &[u8]) {
+		let key = K::decode(&mut &*key).unwrap_or_default();
+		let value = V::decode(&mut &*value).unwrap_or_default();
+		SOR::on_remove(&key, &value)
+	}
 }
 
 pub struct HookedMap<Map, Key, Value, OnRemove = (), OnInsert = (), OnUpdate = ()>(
 	PhantomData<(Map, Key, Value, OnRemove, OnInsert, OnUpdate)>,
 );
-
-impl<Key, Value, Map, OnRemove, OnInsert, OnUpdate> storage::generator::StorageMap<Key, Value>
-	for HookedMap<Map, Key, Value, OnRemove, OnInsert, OnUpdate>
-where
-	Key: FullCodec,
-	Value: FullCodec,
-	Map: storage::generator::StorageMap<Key, Value>,
-{
-	type Query = <Map as storage::StorageMap<Key, Value>>::Query;
-	type Hasher = Map::Hasher;
-	fn module_prefix() -> &'static [u8] {
-		Map::module_prefix()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		Map::storage_prefix()
-	}
-	fn from_optional_value_to_query(v: Option<Value>) -> Self::Query {
-		Map::from_optional_value_to_query(v)
-	}
-	fn from_query_to_optional_value(v: Self::Query) -> Option<Value> {
-		Map::from_query_to_optional_value(v)
-	}
-}
-
-impl<Key, Value, Map, OnRemove, OnInsert, OnUpdate> StoragePrefixedMap<Value>
-	for HookedMap<Map, Key, Value, OnRemove, OnInsert, OnUpdate>
-where
-	Value: FullCodec,
-	Map: StoragePrefixedMap<Value>,
-{
-	fn module_prefix() -> &'static [u8] {
-		Map::module_prefix()
-	}
-	fn storage_prefix() -> &'static [u8] {
-		Map::storage_prefix()
-	}
-}
 
 impl<Key, Value, Map, OnRemove, OnInsert, OnUpdate>
 	HookedMap<Map, Key, Value, OnRemove, OnInsert, OnUpdate>
@@ -79,27 +47,24 @@ where
 	OnRemove: StorageOnRemove<Key, Value>,
 	OnInsert: StorageOnInsert<Key, Value>,
 	OnUpdate: StorageOnUpdate<Key, Value>,
-	Key: FullCodec,
+	Key: FullCodec + Clone,
 	Value: FullCodec + Clone,
-	Map: storage::StorageMap<Key, Value>
-		+ storage::generator::StorageMap<Key, Value>
+	Map: storage::StorageMap<
+			Key,
+			Value,
+			Query = <Map as storage::generator::StorageMap<Key, Value>>::Query,
+		> + storage::generator::StorageMap<Key, Value>
 		+ StoragePrefixedMap<Value>,
-	<Map as storage::StorageMap<Key, Value>>::Query: Clone,
 {
 	/// Maybe get the value for the given key from the map.
 	///
 	/// Returns `Some` if it exists, `None` if not.
-	///
-	/// This is not publicly available, since it is equivalent to `get`.
 	fn maybe_get<KeyArg: EncodeLike<Key>>(key: KeyArg) -> Option<Value> {
 		Self::try_get(key).ok()
 	}
 
-	fn post_mutate_hooks<KeyArg: EncodeLike<Key>>(
-		key: KeyArg,
-		maybe_old_value: Option<Value>,
-		maybe_new_value: Option<Value>,
-	) {
+	//NOTE: some methods do not support this KeyArg thingy for technical reasons.a
+	fn post_mutate_hooks(key: Key, maybe_old_value: Option<Value>, maybe_new_value: Option<Value>) {
 		match (maybe_old_value, maybe_new_value) {
 			(Some(old_value), Some(new_value)) => {
 				OnUpdate::on_update(&key, &old_value, &new_value);
@@ -139,10 +104,7 @@ where
 	}
 
 	/// Swap the values of two keys.
-	pub fn swap<KeyArg1: EncodeLike<Key> + Clone, KeyArg2: EncodeLike<Key> + Clone>(
-		key1: KeyArg1,
-		key2: KeyArg2,
-	) {
+	pub fn swap(key1: Key, key2: Key) {
 		let maybe_value1 = Self::maybe_get(key1.clone());
 		let maybe_value2 = Self::maybe_get(key2.clone());
 		match (maybe_value1, maybe_value2) {
@@ -169,26 +131,28 @@ where
 	}
 
 	/// Store a value to be associated with the given key from the map.
-	pub fn insert<KeyArg: EncodeLike<Key>>(key: KeyArg, val: Value) {
-		OnInsert::on_insert(&key, &val);
-		<Map as storage::StorageMap<Key, Value>>::insert(key, val)
+	pub fn insert(key: Key, val: Value) {
+		let maybe_old_value = Self::maybe_get(key.clone());
+		<Map as storage::StorageMap<Key, Value>>::insert(key.clone(), val.clone());
+		if let Some(old_value) = maybe_old_value {
+			OnUpdate::on_update(&key, &old_value, &val);
+		} else {
+			OnInsert::on_insert(&key, &val);
+		}
 	}
 
 	/// Remove the value under a key.
-	pub fn remove<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) {
-		if let Ok(removed) = Self::try_get(key) {
-			OnRemove::on_remove(&key, &removed);
+	pub fn remove(key: Key) {
+		let maybe_old_value = Self::maybe_get(key.clone());
+		<Map as storage::StorageMap<Key, Value>>::remove(key.clone());
+		if let Some(old_value) = maybe_old_value {
+			OnRemove::on_remove(&key, &old_value);
 		}
-		<Map as storage::StorageMap<Key, Value>>::remove(key)
 	}
 
 	/// Mutate the value under a key.
-	pub fn mutate<
-		KeyArg: EncodeLike<Key> + Clone,
-		R,
-		F: FnOnce(&mut <Map as storage::StorageMap<Key, Value>>::Query) -> R,
-	>(
-		key: KeyArg,
+	pub fn mutate<R, F: FnOnce(&mut <Map as storage::StorageMap<Key, Value>>::Query) -> R>(
+		key: Key,
 		f: F,
 	) -> R {
 		let maybe_old_value = Self::maybe_get(key.clone());
@@ -202,9 +166,8 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned.
-	pub fn try_mutate<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
+	pub fn try_mutate<R, E, F>(key: Key, f: F) -> Result<R, E>
 	where
-		KeyArg: EncodeLike<Key> + Clone,
 		F: FnOnce(&mut <Map as storage::StorageMap<Key, Value>>::Query) -> Result<R, E>,
 	{
 		let maybe_old_value = Self::maybe_get(key.clone());
@@ -219,13 +182,10 @@ where
 	}
 
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
-	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(
-		key: KeyArg,
-		f: F,
-	) -> R {
-		let maybe_old_value = Self::maybe_get(key);
-		let result = <Map as storage::StorageMap<Key, Value>>::mutate_exists(key, f);
-		let maybe_new_value = Self::maybe_get(key);
+	pub fn mutate_exists<R, F: FnOnce(&mut Option<Value>) -> R>(key: Key, f: F) -> R {
+		let maybe_old_value = Self::maybe_get(key.clone());
+		let result = <Map as storage::StorageMap<Key, Value>>::mutate_exists(key.clone(), f);
+		let maybe_new_value = Self::maybe_get(key.clone());
 
 		Self::post_mutate_hooks(key, maybe_old_value, maybe_new_value);
 		result
@@ -234,16 +194,15 @@ where
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
 	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
 	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
-	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
-	where
-		KeyArg: EncodeLike<Key>,
-		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
-	{
-		let maybe_old_value = Self::maybe_get(key);
-		let result = <Map as storage::StorageMap<Key, Value>>::try_mutate_exists(key, f);
+	pub fn try_mutate_exists<R, E, F: FnOnce(&mut Option<Value>) -> Result<R, E>>(
+		key: Key,
+		f: F,
+	) -> Result<R, E> {
+		let maybe_old_value = Self::maybe_get(key.clone());
+		let result = <Map as storage::StorageMap<Key, Value>>::try_mutate_exists(key.clone(), f);
 
 		if result.is_ok() {
-			let maybe_new_value = Self::maybe_get(key);
+			let maybe_new_value = Self::maybe_get(key.clone());
 			Self::post_mutate_hooks(key, maybe_old_value, maybe_new_value);
 		}
 
@@ -251,12 +210,11 @@ where
 	}
 
 	/// Take the value under a key.
-	pub fn take<KeyArg: EncodeLike<Key> + Clone>(
-		key: KeyArg,
-	) -> <Map as storage::StorageMap<Key, Value>>::Query {
-		let r = <Map as storage::StorageMap<Key, Value>>::take(key);
+	pub fn take(key: Key) -> <Map as storage::StorageMap<Key, Value>>::Query {
+		let maybe_old_value = Self::maybe_get(key.clone());
+		let r = <Map as storage::StorageMap<Key, Value>>::take(key.clone());
 
-		if let Some(removed) = Self::from_query_to_optional_value(r) {
+		if let Some(removed) = maybe_old_value {
 			OnRemove::on_remove(&key, &removed);
 		}
 
@@ -272,9 +230,8 @@ where
 	/// If the storage item is not encoded properly, the storage will be overwritten
 	/// and set to `[item]`. Any default value set for the storage item will be ignored
 	/// on overwrite.
-	pub fn append<Item, EncodeLikeItem, EncodeLikeKey>(key: EncodeLikeKey, item: EncodeLikeItem)
+	pub fn append<Item, EncodeLikeItem, EncodeLikeKey>(key: Key, item: EncodeLikeItem)
 	where
-		EncodeLikeKey: EncodeLike<Key> + Clone,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item> + Clone,
 		Value: StorageAppend<Item>,
@@ -325,27 +282,37 @@ where
 	/// Try and append the given item to the value in the storage.
 	///
 	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
-	pub fn try_append<KArg, Item, EncodeLikeItem>(key: KArg, item: EncodeLikeItem) -> Result<(), ()>
+	pub fn try_append<Item, EncodeLikeItem>(key: Key, item: EncodeLikeItem) -> Result<(), ()>
 	where
-		KArg: EncodeLike<Key> + Clone,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageTryAppend<Item>,
 	{
-		<Map as storage::TryAppendMap<Key, Value, Item>>::try_append(key, item)
+		let maybe_old_value = Self::maybe_get(key.clone());
+		let r = <Map as storage::TryAppendMap<Key, Value, Item>>::try_append(key.clone(), item);
+		if r.is_ok() {
+			let maybe_new_value = Self::maybe_get(key.clone());
+			Self::post_mutate_hooks(key, maybe_old_value, maybe_new_value);
+		}
+		r
+	}
+
+	// TODO: the docs for functions that are just forwarded should also be forwarded to the trait.
+	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
+		todo!();
+		<Map as crate::storage::StoragePrefixedMap<Value>>::clear(limit, maybe_cursor)
 	}
 }
 
 impl<Key, Value, Map, OnRemove, OnInsert, OnUpdate>
 	HookedMap<Map, Key, Value, OnRemove, OnInsert, OnUpdate>
 where
-	OnRemove: StorageOnRemove<Key, <Map as storage::StorageMap<Key, Value>>::Query>,
+	OnRemove: StorageOnRemove<Key, Value>,
 	OnInsert: StorageOnInsert<Key, Value>,
-	OnUpdate: StorageOnUpdate<Key, <Map as storage::StorageMap<Key, Value>>::Query>,
+	OnUpdate: StorageOnUpdate<Key, Value>,
 	Key: FullCodec,
 	Value: FullCodec,
-	Map: storage::StorageMap<Key, Value>
-		+ storage::generator::StorageMap<Key, Value>
+	Map: storage::generator::StorageMap<Key, Value>
 		+ StoragePrefixedMap<Value>,
 	<Map as storage::generator::StorageMap<Key, Value>>::Hasher:
 		crate::hash::StorageHasher + crate::ReversibleStorageHasher,
@@ -378,7 +345,7 @@ where
 	/// Enumerate all elements in the map in no particular order.
 	///
 	/// If you alter the map while doing this, you'll get undefined results.
-	pub fn iter() -> storage::PrefixIterator<(Key, Value)> {
+	pub fn iter() -> storage::PrefixIterator<(Key, Value), OnRemovalIteratorShim<Key, Value, OnRemove>> {
 		<Map as storage::IterableStorageMap<Key, Value>>::iter()
 	}
 
@@ -405,98 +372,175 @@ where
 		<Map as storage::IterableStorageMap<Key, Value>>::iter_keys_from(starting_raw_key)
 	}
 
-	/// Remove all elements from the map and iterate through them in no particular order.
-	///
-	/// If you add elements to the map while doing this, you'll get undefined results.
-	pub fn drain() -> storage::PrefixIterator<(Key, Value)> {
-		<Map as storage::IterableStorageMap<Key, Value>>::drain()
-		// TODO:
-	}
-
-	/// Translate the values of all elements by a function `f`, in the map in no particular order.
-	///
-	/// By returning `None` from `f` for an element, you'll remove it from the map.
-	///
-	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
-	pub fn translate<O: Decode, F: FnMut(Key, O) -> Option<Value>>(f: F) {
-		<Map as storage::IterableStorageMap<Key, Value>>::translate(f)
-		// TODO:
-	}
+	// TODO: drain, translate, clear.
 }
 
-impl<Key, Value, Map> StorageEntryMetadataBuilder
-	for HookedMap<Map, Key, Value>
-where
-	Key: FullCodec + TypeInfo,
-	Value: FullCodec + TypeInfo,
-	Map: storage::generator::StorageMap<Key, Value>,
-{
+#[cfg(test)]
+mod tests_value_query {
+	use super::*;
+	use crate::{
+		hash::*,
+		parameter_types,
+		storage::{types, types::ValueQuery},
+		traits::StorageInstance,
+	};
+	use sp_io::{hashing::twox_128, TestExternalities};
 
-	fn build_metadata(docs: Vec<&'static str>, entries: &mut Vec<StorageEntryMetadata>) {
-		let docs = if cfg!(feature = "no-metadata-docs") { vec![] } else { docs };
+	parameter_types! {
+		static Inserted: Vec<(u32, u32)> = Default::default();
+		static Updated: Vec<(u32, u32, u32)> = Default::default();
+		static Removed: Vec<(u32, u32)> = Default::default();
+	}
 
-		let entry = StorageEntryMetadata {
-			name: <Map as storage::StorageMap<Key, Value>>::pal
-			modifier: <Map as storage::StorageMap<Key, Value>>::Query::METADATA,
-			ty: StorageEntryType::Map {
-				hashers: vec![Map::Hasher],
-				key: scale_info::meta_type::<Key>(),
-				value: scale_info::meta_type::<Value>(),
-			},
-			default: OnEmpty::get().encode(),
-			docs,
-		};
+	struct OnInsert;
+	impl super::StorageOnInsert<u32, u32> for OnInsert {
+		fn on_insert(key: &u32, value: &u32) {
+			Inserted::mutate(|d| d.push((key.clone(), value.clone())));
+		}
+	}
 
-		entries.push(entry);
+	struct OnRemove;
+	impl super::StorageOnRemove<u32, u32> for OnRemove {
+		fn on_remove(key: &u32, value: &u32) {
+			Removed::mutate(|d| d.push((key.clone(), value.clone())));
+		}
+	}
+
+	struct OnUpdate;
+	impl super::StorageOnUpdate<u32, u32> for OnUpdate {
+		fn on_update(key: &u32, old_value: &u32, new_value: &u32) {
+			Updated::mutate(|d| d.push((key.clone(), old_value.clone(), new_value.clone())));
+		}
+	}
+
+	struct Prefix;
+	impl StorageInstance for Prefix {
+		fn pallet_prefix() -> &'static str {
+			"test_pallet"
+		}
+		const STORAGE_PREFIX: &'static str = "Prefix";
+	}
+
+	// TODO: ui test for the wrong key-value (redundant) type.
+	type ValueMap = types::StorageMap<Prefix, Twox64Concat, u32, u32, ValueQuery>;
+	type ValueHooked = HookedMap<ValueMap, u32, u32, OnRemove, OnInsert, OnUpdate>;
+
+	// type ValueMapDefault = types::StorageMap<Prefix, Twox64Concat, u32, u32,
+	// ValueQuery>; type OptionMap = types::StorageMap<Prefix, Twox64Concat, u32, u32,
+	// OptionQuery>; type OptionHooked = HookedMap<OptionMap, ()>;
+
+	#[test]
+	fn insert_works() {
+		TestExternalities::new_empty().execute_with(|| {
+			// inserting a new key.
+			ValueHooked::insert(1, 1);
+			assert_eq!(Inserted::take(), vec![(1, 1)]);
+
+			// re-inserting will trigger an update.
+			ValueHooked::insert(1, 2);
+			// has not changed.
+			assert_eq!(Inserted::take(), vec![]);
+			assert_eq!(Updated::take(), vec![(1, 1, 2)]);
+		});
+	}
+
+	#[test]
+	fn remove_works() {
+		TestExternalities::new_empty().execute_with(|| {
+			// removing a non-existent key.
+			ValueHooked::remove(1);
+			assert_eq!(Removed::take(), vec![]);
+
+			// removing an existent key.
+			ValueHooked::insert(1, 42);
+			assert_eq!(Inserted::take(), vec![(1, 42)]);
+			ValueHooked::remove(1);
+			assert_eq!(Removed::take(), vec![(1, 42)]);
+		});
+	}
+
+	#[test]
+	fn swap_works() {
+		TestExternalities::new_empty().execute_with(|| {
+			// swapping two non-existent.
+			ValueHooked::swap(1, 2);
+			assert_eq!(Removed::take(), vec![]);
+			assert_eq!(Inserted::take(), vec![]);
+			assert_eq!(Updated::take(), vec![]);
+
+			// swapping existent to non-existent.
+			ValueHooked::insert(1, 1);
+			assert_eq!(Inserted::take(), vec![(1, 1)]);
+
+			ValueHooked::swap(1, 2);
+			assert_eq!(Removed::take(), vec![(1, 1)]);
+			assert_eq!(Inserted::take(), vec![(2, 1)]);
+			assert_eq!(Updated::take(), vec![]);
+
+			// swapping non-existent to existent.
+			ValueHooked::swap(3, 2);
+			assert_eq!(Removed::take(), vec![(2, 1)]);
+			assert_eq!(Inserted::take(), vec![(3, 1)]);
+			assert_eq!(Updated::take(), vec![]);
+
+			// swapping two existent.
+			ValueHooked::insert(4, 4); // and the other key that has value is 3 with value 1.
+			assert_eq!(Inserted::take(), vec![(4, 4)]);
+
+			ValueHooked::swap(3, 4);
+			assert_eq!(Removed::take(), vec![]);
+			assert_eq!(Inserted::take(), vec![]);
+			assert_eq!(Updated::take(), vec![(3, 1, 4), (4, 4, 1)]);
+		});
+	}
+
+	#[test]
+	fn take_works() {
+		TestExternalities::new_empty().execute_with(|| {
+			// take non-existent item.
+			assert_eq!(0, ValueHooked::take(1));
+			assert_eq!(Removed::take(), vec![]);
+			assert_eq!(Inserted::take(), vec![]);
+			assert_eq!(Updated::take(), vec![]);
+
+			// take an existing one.
+			ValueHooked::insert(1, 1);
+			assert_eq!(Inserted::take(), vec![(1, 1)]);
+
+			assert_eq!(1, ValueHooked::take(1));
+			assert_eq!(Removed::take(), vec![(1, 1)]);
+			assert_eq!(Inserted::take(), vec![]);
+			assert_eq!(Updated::take(), vec![]);
+		})
+	}
+
+	#[test]
+	fn mutate_works() {
+		todo!();
+	}
+
+	#[test]
+	fn try_mutate_works() {
+		todo!()
+	}
+
+	#[test]
+	fn mutate_exists_works() {
+		todo!();
+	}
+
+	#[test]
+	fn append_works() {
+		todo!();
+	}
+
+	#[test]
+	fn try_append_works() {
+		todo!();
+	}
+
+	#[test]
+	fn remove_all_works() {
+		todo!();
 	}
 }
-
-// impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues> crate::traits::StorageInfoTrait
-// 	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-// where
-// 	Prefix: StorageInstance,
-// 	Hasher: crate::hash::StorageHasher,
-// 	Key: FullCodec + MaxEncodedLen,
-// 	Value: FullCodec + MaxEncodedLen,
-// 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-// 	OnEmpty: Get<QueryKind::Query> + 'static,
-// 	MaxValues: Get<Option<u32>>,
-// {
-// 	fn storage_info() -> Vec<StorageInfo> {
-// 		vec![StorageInfo {
-// 			pallet_name: Self::module_prefix().to_vec(),
-// 			storage_name: Self::storage_prefix().to_vec(),
-// 			prefix: Self::final_prefix().to_vec(),
-// 			max_values: MaxValues::get(),
-// 			max_size: Some(
-// 				Hasher::max_len::<Key>()
-// 					.saturating_add(Value::max_encoded_len())
-// 					.saturated_into(),
-// 			),
-// 		}]
-// 	}
-// }
-
-// /// It doesn't require to implement `MaxEncodedLen` and give no information for `max_size`.
-// impl<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-// 	crate::traits::PartialStorageInfoTrait
-// 	for StorageMap<Prefix, Hasher, Key, Value, QueryKind, OnEmpty, MaxValues>
-// where
-// 	Prefix: StorageInstance,
-// 	Hasher: crate::hash::StorageHasher,
-// 	Key: FullCodec,
-// 	Value: FullCodec,
-// 	QueryKind: QueryKindTrait<Value, OnEmpty>,
-// 	OnEmpty: Get<QueryKind::Query> + 'static,
-// 	MaxValues: Get<Option<u32>>,
-// {
-// 	fn partial_storage_info() -> Vec<StorageInfo> {
-// 		vec![StorageInfo {
-// 			pallet_name: Self::module_prefix().to_vec(),
-// 			storage_name: Self::storage_prefix().to_vec(),
-// 			prefix: Self::final_prefix().to_vec(),
-// 			max_values: MaxValues::get(),
-// 			max_size: None,
-// 		}]
-// 	}
-// }
