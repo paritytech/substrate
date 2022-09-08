@@ -49,6 +49,7 @@ use libp2p::{
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
+	protocol::IdentifyInfo,
 	swarm::{
 		AddressScore, ConnectionError, ConnectionLimits, DialError, NetworkBehaviour,
 		PendingConnectionError, Swarm, SwarmBuilder, SwarmEvent,
@@ -1670,6 +1671,37 @@ where
 					for change in changes {
 						self.network_service.behaviour().user_protocol().report_peer(peer, change);
 					},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
+					peer_id,
+					info:
+						IdentifyInfo {
+							protocol_version,
+							agent_version,
+							mut listen_addrs,
+							protocols,
+							..
+						},
+				})) => {
+					if listen_addrs.len() > 30 {
+						debug!(
+							target: "sub-libp2p",
+							"Node {:?} has reported more than 30 addresses; it is identified by {:?} and {:?}",
+							peer_id, protocol_version, agent_version
+						);
+						listen_addrs.truncate(30);
+					}
+					for addr in listen_addrs {
+						self.network_service.behaviour().add_self_reported_address(
+							&peer_id,
+							protocols.iter(),
+							addr,
+						);
+					}
+					self.network_service
+						.behaviour()
+						.user_protocol()
+						.add_default_set_discovered_nodes(iter::once(peer_id));
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
 					protocol,
 				))) =>
