@@ -3759,9 +3759,9 @@ fn payout_stakers_handles_weight_refund() {
 		let half_max_nom_rewarded_weight =
 			<Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded);
 		let zero_nom_payouts_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
-		assert!(zero_nom_payouts_weight > Weight::zero());
-		assert!(half_max_nom_rewarded_weight > zero_nom_payouts_weight);
-		assert!(max_nom_rewarded_weight > half_max_nom_rewarded_weight);
+		assert!(zero_nom_payouts_weight.any_gt(Weight::zero()));
+		assert!(half_max_nom_rewarded_weight.any_gt(zero_nom_payouts_weight));
+		assert!(max_nom_rewarded_weight.any_gt(half_max_nom_rewarded_weight));
 
 		let balance = 1000;
 		bond_validator(11, 10, balance);
@@ -4238,7 +4238,7 @@ fn do_not_die_when_active_is_ed() {
 fn on_finalize_weight_is_nonzero() {
 	ExtBuilder::default().build_and_execute(|| {
 		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
-		assert!(<Staking as Hooks<u64>>::on_initialize(1) >= on_finalize_weight);
+		assert!(<Staking as Hooks<u64>>::on_initialize(1).all_gte(on_finalize_weight));
 	})
 }
 
@@ -4249,8 +4249,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			.all_lt(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND)
 		{
 			validators += 1;
 		}
@@ -4267,8 +4267,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			.all_lt(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND)
 		{
 			nominators += 1;
 		}
