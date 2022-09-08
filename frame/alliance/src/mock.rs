@@ -297,20 +297,62 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			twitter: Data::default(),
 		};
 		assert_ok!(Identity::set_identity(Origin::signed(1), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 1, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			1,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(2), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 2, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			2,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(3), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 3, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			3,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(4), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 4, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			4,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(5), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 5, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			5,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
 		assert_ok!(Identity::set_identity(Origin::signed(8), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 8, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			8,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 		assert_ok!(Identity::set_identity(Origin::signed(9), Box::new(info.clone())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(1), 0, 9, Judgement::KnownGood));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(1),
+			0,
+			9,
+			Judgement::KnownGood,
+			BlakeTwo256::hash_of(&info)
+		));
 
 		// Joining before init should fail.
 		assert_noop!(

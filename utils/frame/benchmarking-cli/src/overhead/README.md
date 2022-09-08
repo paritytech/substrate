@@ -126,6 +126,7 @@ Minimizing this is important to have a large transaction throughput.
 - [`--add`](../shared/README.md#arguments)
 - [`--metric`](../shared/README.md#arguments)
 - [`--weight-path`](../shared/README.md#arguments)
+- [`--header`](../shared/README.md#arguments)
 
 License: Apache-2.0
 

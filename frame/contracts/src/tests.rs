@@ -51,7 +51,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32,
 };
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 use crate as pallet_contracts;
 
@@ -113,10 +113,11 @@ pub mod test_utils {
 	}
 }
 
-thread_local! {
-	static TEST_EXTENSION: RefCell<TestExtension> = Default::default();
+parameter_types! {
+	static TestExtensionTestValue: TestExtension = Default::default();
 }
 
+#[derive(Clone)]
 pub struct TestExtension {
 	enabled: bool,
 	last_seen_buffer: Vec<u8>,
@@ -136,15 +137,15 @@ pub struct TempStorageExtension {
 
 impl TestExtension {
 	fn disable() {
-		TEST_EXTENSION.with(|e| e.borrow_mut().enabled = false)
+		TestExtensionTestValue::mutate(|e| e.enabled = false)
 	}
 
 	fn last_seen_buffer() -> Vec<u8> {
-		TEST_EXTENSION.with(|e| e.borrow().last_seen_buffer.clone())
+		TestExtensionTestValue::get().last_seen_buffer.clone()
 	}
 
 	fn last_seen_inputs() -> (u32, u32, u32, u32) {
-		TEST_EXTENSION.with(|e| e.borrow().last_seen_inputs)
+		TestExtensionTestValue::get().last_seen_inputs
 	}
 }
 
@@ -167,14 +168,13 @@ impl ChainExtension<Test> for TestExtension {
 				let mut env = env.buf_in_buf_out();
 				let input = env.read(8)?;
 				env.write(&input, false, None)?;
-				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
+				TestExtensionTestValue::mutate(|e| e.last_seen_buffer = input);
 				Ok(RetVal::Converging(id))
 			},
 			0x8001 => {
 				let env = env.only_in();
-				TEST_EXTENSION.with(|e| {
-					e.borrow_mut().last_seen_inputs =
-						(env.val0(), env.val1(), env.val2(), env.val3())
+				TestExtensionTestValue::mutate(|e| {
+					e.last_seen_inputs = (env.val0(), env.val1(), env.val2(), env.val3())
 				});
 				Ok(RetVal::Converging(id))
 			},
@@ -192,7 +192,7 @@ impl ChainExtension<Test> for TestExtension {
 	}
 
 	fn enabled() -> bool {
-		TEST_EXTENSION.with(|e| e.borrow().enabled)
+		TestExtensionTestValue::get().enabled
 	}
 }
 
@@ -210,7 +210,7 @@ impl ChainExtension<Test> for RevertingExtension {
 	}
 
 	fn enabled() -> bool {
-		TEST_EXTENSION.with(|e| e.borrow().enabled)
+		TestExtensionTestValue::get().enabled
 	}
 }
 
@@ -259,7 +259,7 @@ impl ChainExtension<Test> for TempStorageExtension {
 	}
 
 	fn enabled() -> bool {
-		TEST_EXTENSION.with(|e| e.borrow().enabled)
+		TestExtensionTestValue::get().enabled
 	}
 }
 
@@ -344,19 +344,30 @@ impl Convert<Weight, BalanceOf<Self>> for Test {
 /// A filter whose filter function can be swapped at runtime.
 pub struct TestFilter;
 
-thread_local! {
-	static CALL_FILTER: RefCell<fn(&Call) -> bool> = RefCell::new(|_| true);
+#[derive(Clone)]
+pub struct Filters {
+	filter: fn(&Call) -> bool,
+}
+
+impl Default for Filters {
+	fn default() -> Self {
+		Filters { filter: (|_| true) }
+	}
+}
+
+parameter_types! {
+	static CallFilter: Filters = Default::default();
 }
 
 impl TestFilter {
 	pub fn set_filter(filter: fn(&Call) -> bool) {
-		CALL_FILTER.with(|fltr| *fltr.borrow_mut() = filter);
+		CallFilter::mutate(|fltr| fltr.filter = filter);
 	}
 }
 
 impl Contains<Call> for TestFilter {
 	fn contains(call: &Call) -> bool {
-		CALL_FILTER.with(|fltr| fltr.borrow()(call))
+		(CallFilter::get().filter)(call)
 	}
 }
 
