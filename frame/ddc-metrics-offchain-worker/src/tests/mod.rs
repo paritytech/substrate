@@ -1,6 +1,5 @@
 use frame_support::traits::{Currency, OffchainWorker};
 use frame_system::Config as FSC;
-use pallet_contracts::Gas;
 use pallet_contracts::{self as contracts, Config as CC};
 use sp_core::{
     offchain::{testing, OffchainExt, Timestamp as OCWTimestamp, TransactionPoolExt}
@@ -20,6 +19,7 @@ use crate::{
 };
 use codec::Encode;
 use hex_literal::hex;
+use frame_support::weights::Weight;
 use sp_core::bytes::from_hex;
 
 mod test_runtime;
@@ -369,7 +369,7 @@ fn deploy_contract() -> AccountId {
 
     // Deploy the contract.
     //let endowment = contracts::Config::<T>::subsistence_threshold_uncached();
-    const GAS_LIMIT: Gas = 100_000_000_000;
+    const GAS_LIMIT: Weight = 100_000_000_000;
     const ENDOWMENT: Balance = 100_000_000_000;
     Contracts::put_code(Origin::signed(alice.clone()), wasm.to_vec()).unwrap();
     Contracts::instantiate(

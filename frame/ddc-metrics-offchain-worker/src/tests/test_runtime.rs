@@ -50,6 +50,18 @@ pub type Randomness = pallet_randomness_collective_flip::Module<Test>;
 
 pub type DdcMetricsOffchainWorker = Module<Test>;
 
+/// A PalletInfo implementation which just panics.
+pub struct PanicPalletInfo;
+
+impl frame_support::traits::PalletInfo for PanicPalletInfo {
+    fn index<P: 'static>() -> Option<usize> {
+        unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+    }
+    fn name<P: 'static>() -> Option<&'static str> {
+        unimplemented!("PanicPalletInfo mustn't be triggered by tests");
+    }
+}
+
 // Macros based on the names above. Not Rust syntax.
 impl_outer_event! {
     pub enum MetaEvent for Test {
@@ -101,7 +113,7 @@ impl frame_system::Config for Test {
     type BlockHashCount = BlockHashCount;
     type DbWeight = ();
     type Version = ();
-    type PalletInfo = ();
+    type PalletInfo = PanicPalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
@@ -175,6 +187,7 @@ impl contracts::Config for Test {
     type ChainExtension = ();
     type DeletionQueueDepth = ();
     type DeletionWeightLimit = ();
+    type MaxCodeSize = ();
 }
 
 parameter_types! {
