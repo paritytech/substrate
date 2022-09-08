@@ -124,6 +124,7 @@ pub fn expand_outer_dispatch(
 			}
 		}
 		// Deprecated, but will warn when used
+		#[allow(deprecated)]
 		impl #scrate::weights::GetDispatchInfo for Call {}
 		impl #scrate::dispatch::GetCallMetadata for Call {
 			fn get_call_metadata(&self) -> #scrate::dispatch::CallMetadata {
