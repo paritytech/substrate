@@ -35,8 +35,6 @@ use super::*;
 	Clone,
 	RuntimeDebug,
 	Default,
-	Ord,
-	PartialOrd,
 	CompactAs,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -163,6 +161,62 @@ impl Weight {
 	pub const fn zero() -> Self {
 		Self { ref_time: 0 }
 	}
+
+	/// Returns true if any of `self`'s constituent weights is strictly greater than that of the
+	/// `other`'s, otherwise returns false.
+	pub const fn any_gt(self, other: Self) -> bool {
+		self.ref_time > other.ref_time
+	}
+
+	/// Returns true if all of `self`'s constituent weights is strictly greater than that of the
+	/// `other`'s, otherwise returns false.
+	pub const fn all_gt(self, other: Self) -> bool {
+		self.ref_time > other.ref_time
+	}
+
+	/// Returns true if any of `self`'s constituent weights is strictly less than that of the
+	/// `other`'s, otherwise returns false.
+	pub const fn any_lt(self, other: Self) -> bool {
+		self.ref_time < other.ref_time
+	}
+
+	/// Returns true if all of `self`'s constituent weights is strictly less than that of the
+	/// `other`'s, otherwise returns false.
+	pub const fn all_lt(self, other: Self) -> bool {
+		self.ref_time < other.ref_time
+	}
+
+	/// Returns true if any of `self`'s constituent weights is greater than or equal to that of the
+	/// `other`'s, otherwise returns false.
+	pub const fn any_gte(self, other: Self) -> bool {
+		self.ref_time >= other.ref_time
+	}
+
+	/// Returns true if all of `self`'s constituent weights is greater than or equal to that of the
+	/// `other`'s, otherwise returns false.
+	pub const fn all_gte(self, other: Self) -> bool {
+		self.ref_time >= other.ref_time
+	}
+
+	/// Returns true if any of `self`'s constituent weights is less than or equal to that of the
+	/// `other`'s, otherwise returns false.
+	pub const fn any_lte(self, other: Self) -> bool {
+		self.ref_time <= other.ref_time
+	}
+
+	/// Returns true if all of `self`'s constituent weights is less than or equal to that of the
+	/// `other`'s, otherwise returns false.
+	pub const fn all_lte(self, other: Self) -> bool {
+		self.ref_time <= other.ref_time
+	}
+
+	/// Returns true if any of `self`'s constituent weights is equal to that of the `other`'s,
+	/// otherwise returns false.
+	pub const fn any_eq(self, other: Self) -> bool {
+		self.ref_time == other.ref_time
+	}
+
+	// NOTE: `all_eq` does not exist, as it's simply the `eq` method from the `PartialEq` trait.
 }
 
 impl Zero for Weight {
