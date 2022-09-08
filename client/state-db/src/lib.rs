@@ -372,9 +372,9 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 					match self.pruning.as_ref() {
 						None => IsPruned::NotPruned,
 						Some(pruning) => match pruning.have_block(hash, number) {
-							HaveBlock::NotHave => IsPruned::Pruned,
-							HaveBlock::Have => IsPruned::NotPruned,
-							HaveBlock::MayHave => IsPruned::MaybePruned,
+							HaveBlock::No => IsPruned::Pruned,
+							HaveBlock::Yes => IsPruned::NotPruned,
+							HaveBlock::Maybe => IsPruned::MaybePruned,
 						},
 					}
 				}
@@ -444,9 +444,9 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 				let have_block = self.non_canonical.have_block(hash) ||
 					self.pruning.as_ref().map_or(false, |pruning| {
 						match pruning.have_block(hash, number) {
-							HaveBlock::NotHave => false,
-							HaveBlock::Have => true,
-							HaveBlock::MayHave => hint(),
+							HaveBlock::No => false,
+							HaveBlock::Yes => true,
+							HaveBlock::Maybe => hint(),
 						}
 					});
 				if have_block {

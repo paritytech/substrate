@@ -113,7 +113,6 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		let cache_capacity = window_size.max(1).min(DEFAULT_MAX_BLOCK_CONSTRAINT) as usize;
 		let mut cache = VecDeque::with_capacity(cache_capacity);
 		trace!(target: "state-db", "Reading pruning journal for the database-backed queue. Pending #{}", base);
-		// Load block from db
 		DeathRowQueue::load_batch_from_db(
 			&db,
 			&mut cache,
@@ -126,11 +125,10 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	/// import a new block to the back of the queue
 	fn import(&mut self, base: u64, num: u64, journal_record: JournalRecord<BlockHash, Key>) {
 		let JournalRecord { hash, inserted, deleted } = journal_record;
+		trace!(target: "state-db", "Importing {}, base={}", num, base);
 		match self {
 			DeathRowQueue::DbBacked { cache, cache_capacity, last, .. } => {
 				// If the new block continues cached range and there is space, load it directly into cache.
-				trace!(target: "state-db", "Importing {}, base={}, cache.len() = {}, cap={}",
-					num, base, cache.len(), cache_capacity);
 				if num == base + cache.len() as u64 && cache.len() < *cache_capacity {
 					trace!(target: "state-db", "Adding to DB backed cache {:?} (#{})", hash, num);
 					cache.push_back(DeathRow { hash, deleted: deleted.into_iter().collect() });
@@ -163,7 +161,6 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		match self {
 			DeathRowQueue::DbBacked { db, cache, cache_capacity, .. } => {
 				if cache.is_empty() {
-					// load more blocks from db since there are still blocks in it
 					DeathRowQueue::load_batch_from_db(
 						db,
 						cache,
@@ -172,7 +169,6 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 					)?;
 				}
 				let next = cache.pop_front();
-				trace!(target: "state-db", "pop_front next={:?}", next);
 				Ok(next)
 			},
 			DeathRowQueue::Mem { death_rows, death_index } => match death_rows.pop_front() {
@@ -188,7 +184,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	}
 
 	/// Load a batch of blocks from the backend database into `cache`, start from (and include) the
-	/// next block followe the last block of `cache`, `base` is the block number of the first block
+	/// next block followed the last block of `cache`, `base` is the block number of the first block
 	/// of the queue
 	fn load_batch_from_db(
 		db: &D,
@@ -205,8 +201,6 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 					trace!(target: "state-db", "Fetched {}", start + i);
 					cache.push_back(row);
 				},
-				// block may added to the queue but not commit into the db yet, if there are
-				// data missing in the db `load_death_row_from_db` should return a db error
 				None => break,
 			}
 		}
@@ -214,16 +208,15 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	}
 
 	/// Check if the block at the given `index` of the queue exist
-	/// it is the caller's responsibility to ensure `index` won't be out of bound
+	/// it is the caller's responsibility to ensure `index` won't be out of bounds
 	fn have_block(&self, hash: &BlockHash, index: usize) -> HaveBlock {
 		match self {
 			DeathRowQueue::DbBacked { cache, .. } => {
 				if cache.len() > index {
 					(cache[index].hash == *hash).into()
 				} else {
-					// the block not exist in `cache`, but it may exist in the unload
-					// blocks
-					HaveBlock::MayHave
+					// The block is not in the cache but it still may exist on disk.
+					HaveBlock::Maybe
 				}
 			},
 			DeathRowQueue::Mem { death_rows, .. } => (death_rows[index].hash == *hash).into(),
@@ -295,20 +288,20 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 /// The result return by `RefWindow::have_block`
 #[derive(Debug, PartialEq, Eq)]
 pub enum HaveBlock {
-	/// Definitely not having this block
-	NotHave,
-	/// May or may not have this block, need futher checking
-	MayHave,
-	/// Definitely having this block
-	Have,
+	/// Definitely don't have this block.
+	No,
+	/// May or may not have this block, need further checking
+	Maybe,
+	/// Definitely has this block
+	Yes,
 }
 
 impl From<bool> for HaveBlock {
 	fn from(have: bool) -> Self {
 		if have {
-			HaveBlock::Have
+			HaveBlock::Yes
 		} else {
-			HaveBlock::NotHave
+			HaveBlock::No
 		}
 	}
 }
@@ -400,7 +393,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			number < self.pending() ||
 			number >= self.base + self.queue.len(self.base) as u64
 		{
-			return HaveBlock::NotHave
+			return HaveBlock::No
 		}
 		self.queue.have_block(hash, (number - self.base) as usize)
 	}
@@ -507,9 +500,9 @@ mod tests {
 		let hash = H256::random();
 		pruning.note_canonical(&hash, 0, &mut commit).unwrap();
 		db.commit(&commit);
-		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Have);
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Yes);
 		pruning.apply_pending();
-		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Have);
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Yes);
 		assert!(commit.data.deleted.is_empty());
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert_eq!(death_rows.len(), 1);
@@ -519,10 +512,10 @@ mod tests {
 
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
-		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::NotHave);
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::No);
 		db.commit(&commit);
 		pruning.apply_pending();
-		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::NotHave);
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::No);
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert!(death_rows.is_empty());
