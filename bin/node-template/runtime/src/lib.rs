@@ -41,7 +41,7 @@ pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-pub use sp_runtime::{Perbill, Permill, Perquintill, FixedPointNumber};
+pub use sp_runtime::{FixedPointNumber, Perbill, Permill, Perquintill};
 
 /// Import the template pallet.
 pub use pallet_template;
@@ -268,7 +268,6 @@ parameter_types! {
 /// https://research.web3.foundation/en/latest/polkadot/overview/2-token-economics.html#-2.-slow-adjusting-mechanism
 pub type SlowAdjustingFeeUpdate<R> =
 	TargetedFeeAdjustment<R, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
-
 
 impl pallet_transaction_payment::Config for Runtime {
 	type Event = Event;
