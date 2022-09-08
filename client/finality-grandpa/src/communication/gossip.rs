@@ -1652,7 +1652,7 @@ mod tests {
 	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sp_core::{crypto::UncheckedFrom, H256};
-	use substrate_test_runtime_client::runtime::{Header, Block};
+	use substrate_test_runtime_client::runtime::{Block, Header};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {

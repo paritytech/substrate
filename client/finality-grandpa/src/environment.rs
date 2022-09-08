@@ -50,7 +50,6 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 };
-use sp_runtime::traits::Header;
 
 use crate::{
 	authorities::{AuthoritySet, SharedAuthoritySet},
@@ -812,7 +811,11 @@ where
 		Ok(())
 	}
 
-	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block::Header>) -> Result<(), Self::Error> {
+	fn prevoted(
+		&self,
+		round: RoundNumber,
+		prevote: Prevote<Block::Header>,
+	) -> Result<(), Self::Error> {
 		let local_id = match self.voter_set_state.voting_on(round) {
 			Some(id) => id,
 			None => return Ok(()),
@@ -1093,7 +1096,11 @@ where
 	fn prevote_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: finality_grandpa::Equivocation<Self::Id, Prevote<Block::Header>, Self::Signature>,
+		equivocation: finality_grandpa::Equivocation<
+			Self::Id,
+			Prevote<Block::Header>,
+			Self::Signature,
+		>,
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
@@ -1104,7 +1111,11 @@ where
 	fn precommit_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: finality_grandpa::Equivocation<Self::Id, Precommit<Block::Header>, Self::Signature>,
+		equivocation: finality_grandpa::Equivocation<
+			Self::Id,
+			Precommit<Block::Header>,
+			Self::Signature,
+		>,
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {

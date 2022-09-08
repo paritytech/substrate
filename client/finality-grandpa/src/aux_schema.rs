@@ -500,8 +500,7 @@ mod test {
 	use super::*;
 	use sp_core::{crypto::UncheckedFrom, H256};
 	use sp_finality_grandpa::AuthorityId;
-	use substrate_test_runtime_client;
-	use substrate_test_runtime_client::runtime::Block;
+	use substrate_test_runtime_client::{self, runtime::Block};
 
 	fn dummy_id() -> AuthorityId {
 		AuthorityId::unchecked_from([1; 32])

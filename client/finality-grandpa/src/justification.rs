@@ -18,9 +18,9 @@
 
 use std::{
 	collections::{HashMap, HashSet},
+	marker::PhantomData,
 	sync::Arc,
 };
-use std::marker::PhantomData;
 
 use finality_grandpa::{voter_set::VoterSet, Error as GrandpaError};
 use parity_scale_codec::{Decode, Encode};
@@ -43,16 +43,24 @@ use crate::{AuthorityList, Commit, Error};
 /// nodes, and are used by syncing nodes to prove authority set handoffs.
 #[derive(Clone, Encode, Decode, PartialEq, Eq, Debug)]
 pub struct GrandpaJustification<Block: BlockT> {
+	/// The GRANDPA justification for block finality.
 	pub justification: sp_finality_grandpa::GrandpaJustification<Block::Header>,
 	_block: PhantomData<Block>,
 }
 
-impl<Block: BlockT> From<sp_finality_grandpa::GrandpaJustification<Block::Header>> for GrandpaJustification<Block> {
+impl<Block: BlockT> From<sp_finality_grandpa::GrandpaJustification<Block::Header>>
+	for GrandpaJustification<Block>
+{
 	fn from(justification: sp_finality_grandpa::GrandpaJustification<Block::Header>) -> Self {
-		Self {
-			justification,
-			_block: Default::default(),
-		}
+		Self { justification, _block: Default::default() }
+	}
+}
+
+impl<Block: BlockT> Into<sp_finality_grandpa::GrandpaJustification<Block::Header>>
+	for GrandpaJustification<Block>
+{
+	fn into(self) -> sp_finality_grandpa::GrandpaJustification<Block::Header> {
+		self.justification
 	}
 }
 
@@ -134,8 +142,10 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 		let justification = GrandpaJustification::<Block>::decode(&mut &*encoded)
 			.map_err(|_| ClientError::JustificationDecode)?;
 
-		if (justification.justification.commit.target_hash, justification.justification.commit.target_number) !=
-			finalized_target
+		if (
+			justification.justification.commit.target_hash,
+			justification.justification.commit.target_number,
+		) != finalized_target
 		{
 			let msg = "invalid commit target in grandpa justification".to_string();
 			Err(ClientError::BadJustification(msg))
@@ -168,7 +178,8 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 
 		let ancestry_chain = AncestryChain::<Block>::new(&self.justification.votes_ancestries);
 
-		match finality_grandpa::validate_commit(&self.justification.commit, voters, &ancestry_chain) {
+		match finality_grandpa::validate_commit(&self.justification.commit, voters, &ancestry_chain)
+		{
 			Ok(ref result) if result.is_valid() => {},
 			_ => {
 				let msg = "invalid commit in grandpa justification".to_string();
@@ -230,8 +241,12 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			}
 		}
 
-		let ancestry_hashes: HashSet<_> =
-			self.justification.votes_ancestries.iter().map(|h: &Block::Header| h.hash()).collect();
+		let ancestry_hashes: HashSet<_> = self
+			.justification
+			.votes_ancestries
+			.iter()
+			.map(|h: &Block::Header| h.hash())
+			.collect();
 
 		if visited_hashes != ancestry_hashes {
 			return Err(ClientError::BadJustification(

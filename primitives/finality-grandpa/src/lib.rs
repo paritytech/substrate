@@ -29,7 +29,10 @@ use codec::{Codec, Decode, Encode, Input};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::{traits::{NumberFor, Header as HeaderT}, ConsensusEngineId, RuntimeDebug};
+use sp_runtime::{
+	traits::{Header as HeaderT, NumberFor},
+	ConsensusEngineId, RuntimeDebug,
+};
 use sp_std::{borrow::Cow, vec::Vec};
 
 #[cfg(feature = "std")]
@@ -77,10 +80,7 @@ pub type RoundNumber = u64;
 pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
 
 /// A GRANDPA message for a substrate chain.
-pub type Message<Header> = grandpa::Message<
-	<Header as HeaderT>::Hash,
-	<Header as HeaderT>::Number,
->;
+pub type Message<Header> = grandpa::Message<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
 
 /// A signed message.
 pub type SignedMessage<Header> = grandpa::SignedMessage<
@@ -92,20 +92,12 @@ pub type SignedMessage<Header> = grandpa::SignedMessage<
 
 /// A primary propose message for this chain's block type.
 pub type PrimaryPropose<Header> =
-grandpa::PrimaryPropose<
-	<Header as HeaderT>::Hash,
-	<Header as HeaderT>::Number,
->;
+	grandpa::PrimaryPropose<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
 /// A prevote message for this chain's block type.
-pub type Prevote<Header> = grandpa::Prevote<
-	<Header as HeaderT>::Hash,
-	<Header as HeaderT>::Number,
->;
+pub type Prevote<Header> = grandpa::Prevote<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
 /// A precommit message for this chain's block type.
-pub type Precommit<Header> = grandpa::Precommit<
-	<Header as HeaderT>::Hash,
-	<Header as HeaderT>::Number,
->;
+pub type Precommit<Header> =
+	grandpa::Precommit<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
 /// A catch up message for this chain's block type.
 pub type CatchUp<Header> = grandpa::CatchUp<
 	<Header as HeaderT>::Hash,

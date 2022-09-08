@@ -389,8 +389,13 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block::Header> {
 
 /// Helper type definition for the stream which waits until vote targets for
 /// signed messages are imported.
-pub(crate) type UntilVoteTargetImported<Block, BlockStatus, BlockSyncRequester, I> =
-	UntilImported<Block, BlockStatus, BlockSyncRequester, I, SignedMessage<<Block as BlockT>::Header>>;
+pub(crate) type UntilVoteTargetImported<Block, BlockStatus, BlockSyncRequester, I> = UntilImported<
+	Block,
+	BlockStatus,
+	BlockSyncRequester,
+	I,
+	SignedMessage<<Block as BlockT>::Header>,
+>;
 
 /// This blocks a global message import, i.e. a commit or catch up messages,
 /// until all blocks referenced in its votes are known.

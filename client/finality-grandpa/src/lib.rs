@@ -71,7 +71,7 @@ use sc_consensus::BlockImport;
 use sc_network_common::protocol::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use sp_api::{ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
@@ -79,7 +79,7 @@ use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, NumberFor, Zero},
 };
 
 pub use finality_grandpa::BlockNumberOps;
@@ -144,7 +144,10 @@ use sp_finality_grandpa::{AuthorityList, AuthoritySignature, SetId};
 use until_imported::UntilGlobalMessageBlocksImported;
 
 // Re-export these two because it's just so damn convenient.
-pub use sp_finality_grandpa::{AuthorityId, AuthorityPair, GrandpaApi, ScheduledChange, CompactCommit, Message, SignedMessage, PrimaryPropose, Prevote, Precommit, CatchUp, Commit};
+pub use sp_finality_grandpa::{
+	AuthorityId, AuthorityPair, CatchUp, Commit, CompactCommit, GrandpaApi, Message, Precommit,
+	Prevote, PrimaryPropose, ScheduledChange, SignedMessage,
+};
 use std::marker::PhantomData;
 
 #[cfg(test)]
@@ -162,12 +165,14 @@ type CommunicationIn<Block> = voter::CommunicationIn<
 /// Global communication input stream for commits and catch up messages, with
 /// the hash type not being derived from the block, useful for forcing the hash
 /// to some type (e.g. `H256`) when the compiler can't do the inference.
-type CommunicationInH<Block, H> = voter::CommunicationIn<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
+type CommunicationInH<Block, H> =
+	voter::CommunicationIn<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
 
 /// Global communication sink for commits with the hash type not being derived
 /// from the block, useful for forcing the hash to some type (e.g. `H256`) when
 /// the compiler can't do the inference.
-type CommunicationOutH<Block, H> = voter::CommunicationOut<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
+type CommunicationOutH<Block, H> =
+	voter::CommunicationOut<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
 
 /// Shared voter state for querying.
 pub struct SharedVoterState {
