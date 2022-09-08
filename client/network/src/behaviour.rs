@@ -439,8 +439,8 @@ impl<B: BlockT> From<DiscoveryOut> for BehaviourOut<B> {
 			DiscoveryOut::UnroutablePeer(_peer_id) => {
 				// Obtaining and reporting listen addresses for unroutable peers back
 				// to Kademlia is handled by the `Identify` protocol, part of the
-				// `PeerInfoBehaviour`. See the `NetworkBehaviourEventProcess`
-				// implementation for `PeerInfoEvent`.
+				// `PeerInfoBehaviour`. See the `From<peer_info::PeerInfoEvent>`
+				// implementation.
 				BehaviourOut::None
 			},
 			DiscoveryOut::Discovered(peer_id) => BehaviourOut::Discovered(peer_id),
