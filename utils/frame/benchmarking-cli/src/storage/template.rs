@@ -45,6 +45,8 @@ pub(crate) struct TemplateData {
 	hostname: String,
 	/// CPU name of the machine that executed the benchmarks.
 	cpuname: String,
+	/// Header for the generated file.
+	header: String,
 	/// Command line arguments that were passed to the CLI.
 	args: Vec<String>,
 	/// Storage params of the executed command.
@@ -63,18 +65,26 @@ pub(crate) struct TemplateData {
 
 impl TemplateData {
 	/// Returns a new [`Self`] from the given configuration.
-	pub fn new(cfg: &Configuration, params: &StorageParams) -> Self {
-		TemplateData {
+	pub fn new(cfg: &Configuration, params: &StorageParams) -> Result<Self> {
+		let header = params
+			.header
+			.as_ref()
+			.map(|p| std::fs::read_to_string(p))
+			.transpose()?
+			.unwrap_or_default();
+
+		Ok(TemplateData {
 			db_name: format!("{}", cfg.database),
 			runtime_name: cfg.chain_spec.name().into(),
 			version: VERSION.into(),
 			date: chrono::Utc::now().format("%Y-%m-%d (Y/M/D)").to_string(),
 			hostname: params.hostinfo.hostname(),
 			cpuname: params.hostinfo.cpuname(),
+			header,
 			args: env::args().collect::<Vec<String>>(),
 			params: params.clone(),
 			..Default::default()
-		}
+		})
 	}
 
 	/// Sets the stats and calculates the final weights.

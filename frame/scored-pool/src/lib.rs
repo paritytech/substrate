@@ -116,6 +116,7 @@ type PoolT<T, I> = BoundedVec<
 >;
 type MembersT<T, I> =
 	BoundedVec<<T as frame_system::Config>::AccountId, <T as Config<I>>::MaximumMembers>;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -292,7 +293,7 @@ pub mod pallet {
 				let pool = <Pool<T, I>>::get();
 				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
-			0
+			Weight::zero()
 		}
 	}
 
@@ -359,7 +360,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn kick(
 			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: AccountIdLookupOf<T>,
 			index: u32,
 		) -> DispatchResult {
 			T::KickOrigin::ensure_origin(origin)?;
@@ -383,7 +384,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn score(
 			origin: OriginFor<T>,
-			dest: <T::Lookup as StaticLookup>::Source,
+			dest: AccountIdLookupOf<T>,
 			index: u32,
 			score: T::Score,
 		) -> DispatchResult {

@@ -299,7 +299,7 @@ fn candidacy_resubmitting_works() {
 }
 
 #[test]
-fn pool_candidates_exceded() {
+fn pool_candidates_exceeded() {
 	new_test_ext().execute_with(|| {
 		for i in [1, 2, 3, 4, 6] {
 			let who = i as u64;

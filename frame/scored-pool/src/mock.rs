@@ -49,7 +49,7 @@ construct_runtime!(
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 ord_parameter_types! {
 	pub const KickOrigin: u64 = 2;
@@ -149,7 +149,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		.assimilate_storage(&mut t)
 		.unwrap();
 	pallet_scored_pool::GenesisConfig::<Test> {
-		pool: bounded_vec![(5, None), (10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3))],
+		pool: bounded_vec![(10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3)),(5, None)],
 		member_count: 2,
 	}
 	.assimilate_storage(&mut t)

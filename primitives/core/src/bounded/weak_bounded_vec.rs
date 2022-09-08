@@ -19,7 +19,7 @@
 //! or a double map.
 
 use super::{BoundedSlice, BoundedVec};
-use crate::traits::Get;
+use crate::Get;
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut},
@@ -453,7 +453,7 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use crate::traits::ConstU32;
+	use crate::ConstU32;
 
 	#[test]
 	fn bound_returns_correct_value() {
