@@ -37,7 +37,7 @@ sp-version = { version = "5.0.0", path = "../../primitives/version" }
 sp-wasm-interface = { version = "6.0.0", path = "../../primitives/wasm-interface" }
 
 [dev-dependencies]
-array-bytes = "4.0"
+array-bytes = "4.1"
 wat = "1.0"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }

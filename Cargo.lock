@@ -114,9 +114,9 @@ checksum = "698b65a961a9d730fb45b6b0327e20207810c9f61ee421b082b27ba003f49e2b"
 
 [[package]]
 name = "array-bytes"
-version = "4.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b416dab85bd135a72cafdda91c8d930f02ae1d9c59349e9f184a8789e86824e"
+checksum = "6a913633b0c922e6b745072795f50d90ebea78ba31a57e2ac8c2fc7b50950949"
 
 [[package]]
 name = "arrayref"
