@@ -1017,13 +1017,19 @@ pub mod pallet {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			let mut details =
 				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check) = maybe_check {
-				let deadline =
-					details.approvals.get(&delegate).ok_or(Error::<T, I>::NotDelegate)?;
-				if let Some(d) = deadline {
-					let now = frame_system::Pallet::<T>::block_number();
-					ensure!(*d < now, Error::<T, I>::NoPermission);
-				} else {
+
+			let mut is_past_deadline = false;
+			let deadline = details.approvals.get(&delegate).ok_or(Error::<T, I>::NotDelegate)?;
+
+			if let Some(d) = deadline {
+				let now = frame_system::Pallet::<T>::block_number();
+				if *d < now {
+					is_past_deadline = true;
+				}
+			}
+
+			if !is_past_deadline {
+				if let Some(check) = maybe_check {
 					let permitted = check == collection_details.admin || check == details.owner;
 					ensure!(permitted, Error::<T, I>::NoPermission);
 				}
