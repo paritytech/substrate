@@ -432,12 +432,12 @@ fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	assert_eq!(
 		call_in_wasm("test_twox_128", &[0], wasm_method, &mut ext,).unwrap(),
-		array_bytes::hex2bytes_unchecked("99e9d85137db46ef4bbea33613baafd5").to_vec(),
+		array_bytes::hex2bytes_unchecked("99e9d85137db46ef4bbea33613baafd5").encode(),
 	);
 	assert_eq!(
 		call_in_wasm("test_twox_128", &b"Hello world!".to_vec().encode(), wasm_method, &mut ext,)
 			.unwrap(),
-		array_bytes::hex2bytes_unchecked("b27dfd7f223f177f2a13647b533599af").to_vec(),
+		array_bytes::hex2bytes_unchecked("b27dfd7f223f177f2a13647b533599af").encode(),
 	);
 }
 
