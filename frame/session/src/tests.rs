@@ -21,8 +21,8 @@ use super::*;
 use crate::mock::{
 	authorities, before_session_end_called, force_new_session, new_test_ext,
 	reset_before_session_end_called, session_changed, set_next_validators, set_session_length,
-	Origin, PreUpgradeMockSessionKeys, Session, System, Test, TestValidatorIdOf, SESSION_CHANGED,
-	TEST_SESSION_CHANGED,
+	Origin, PreUpgradeMockSessionKeys, Session, SessionChanged, System, Test, TestSessionChanged,
+	TestValidatorIdOf,
 };
 
 use codec::Decode;
@@ -35,7 +35,7 @@ use frame_support::{
 };
 
 fn initialize_block(block: u64) {
-	SESSION_CHANGED.with(|l| *l.borrow_mut() = false);
+	SessionChanged::mutate(|l| *l = false);
 	System::set_block_number(block);
 	Session::on_initialize(block);
 }
@@ -235,7 +235,7 @@ fn session_changed_flag_works() {
 
 	new_test_ext().execute_with(|| {
 		TestValidatorIdOf::set(vec![(1, 1), (2, 2), (3, 3), (69, 69)].into_iter().collect());
-		TEST_SESSION_CHANGED.with(|l| *l.borrow_mut() = true);
+		TestSessionChanged::mutate(|l| *l = true);
 
 		force_new_session();
 		initialize_block(1);
@@ -384,8 +384,8 @@ fn upgrade_keys() {
 	use sp_core::crypto::key_types::DUMMY;
 
 	// This test assumes certain mocks.
-	assert_eq!(mock::NEXT_VALIDATORS.with(|l| l.borrow().clone()), vec![1, 2, 3]);
-	assert_eq!(mock::VALIDATORS.with(|l| l.borrow().clone()), vec![1, 2, 3]);
+	assert_eq!(mock::NextValidators::get().clone(), vec![1, 2, 3]);
+	assert_eq!(mock::Validators::get().clone(), vec![1, 2, 3]);
 
 	new_test_ext().execute_with(|| {
 		let pre_one = PreUpgradeMockSessionKeys { a: [1u8; 32], b: [1u8; 64] };

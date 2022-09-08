@@ -96,13 +96,13 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub static Members: BoundedVec<u64,ConstU32<10_u32>> = bounded_vec![0,10];
+	pub static MembersTestValue: BoundedVec<u64,ConstU32<10_u32>> = bounded_vec![0,10];
 }
 
 pub struct TestChangeMembers;
 impl ChangeMembers<u64> for TestChangeMembers {
 	fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
-		let mut old_plus_incoming = Members::get().into_inner();
+		let mut old_plus_incoming = MembersTestValue::get().into_inner();
 		old_plus_incoming.extend_from_slice(incoming);
 		old_plus_incoming.sort();
 
@@ -112,13 +112,15 @@ impl ChangeMembers<u64> for TestChangeMembers {
 
 		assert_eq!(old_plus_incoming, new_plus_outgoing);
 
-		Members::set(<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(new.to_vec()));
+		MembersTestValue::set(<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(new.to_vec()));
 	}
 }
 
 impl InitializeMembers<u64> for TestChangeMembers {
 	fn initialize_members(new_members: &[u64]) {
-		Members::set(<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(new_members.to_vec()));
+		MembersTestValue::set(<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(
+			new_members.to_vec(),
+		));
 	}
 }
 

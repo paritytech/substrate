@@ -301,10 +301,7 @@ fn rewards_should_work() {
 		start_session(3);
 
 		assert_eq!(active_era(), 1);
-		assert_eq!(
-			mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()),
-			maximum_payout - total_payout_0,
-		);
+		assert_eq!(mock::RewardRemainderUnbalanced::get(), maximum_payout - total_payout_0,);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
 			Event::EraPaid(0, total_payout_0, maximum_payout - total_payout_0)
@@ -340,7 +337,7 @@ fn rewards_should_work() {
 
 		mock::start_active_era(2);
 		assert_eq!(
-			mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()),
+			mock::RewardRemainderUnbalanced::get(),
 			maximum_payout * 2 - total_payout_0 - total_payout_1,
 		);
 		assert_eq!(
