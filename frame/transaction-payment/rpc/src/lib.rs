@@ -81,7 +81,6 @@ impl From<Error> for i32 {
 	}
 }
 
-#[async_trait]
 impl<C, Block, Balance>
 	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
 	for TransactionPayment<C, Block>

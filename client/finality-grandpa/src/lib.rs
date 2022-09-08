@@ -71,7 +71,7 @@ use sc_consensus::BlockImport;
 use sc_network_common::protocol::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
@@ -79,7 +79,7 @@ use sp_core::crypto::ByteArray;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, NumberFor, Zero},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 };
 
 pub use finality_grandpa::BlockNumberOps;
@@ -144,72 +144,30 @@ use sp_finality_grandpa::{AuthorityList, AuthoritySignature, SetId};
 use until_imported::UntilGlobalMessageBlocksImported;
 
 // Re-export these two because it's just so damn convenient.
-pub use sp_finality_grandpa::{AuthorityId, AuthorityPair, GrandpaApi, ScheduledChange};
+pub use sp_finality_grandpa::{AuthorityId, AuthorityPair, GrandpaApi, ScheduledChange, CompactCommit, Message, SignedMessage, PrimaryPropose, Prevote, Precommit, CatchUp, Commit};
 use std::marker::PhantomData;
 
 #[cfg(test)]
 mod tests;
 
-/// A GRANDPA message for a substrate chain.
-pub type Message<Block> = finality_grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
-
-/// A signed message.
-pub type SignedMessage<Block> = finality_grandpa::SignedMessage<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-
-/// A primary propose message for this chain's block type.
-pub type PrimaryPropose<Block> =
-	finality_grandpa::PrimaryPropose<<Block as BlockT>::Hash, NumberFor<Block>>;
-/// A prevote message for this chain's block type.
-pub type Prevote<Block> = finality_grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
-/// A precommit message for this chain's block type.
-pub type Precommit<Block> = finality_grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
-/// A catch up message for this chain's block type.
-pub type CatchUp<Block> = finality_grandpa::CatchUp<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-/// A commit message for this chain's block type.
-pub type Commit<Block> = finality_grandpa::Commit<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-/// A compact commit message for this chain's block type.
-pub type CompactCommit<Block> = finality_grandpa::CompactCommit<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
 /// A global communication input stream for commits and catch up messages. Not
 /// exposed publicly, used internally to simplify types in the communication
 /// layer.
-type CommunicationIn<Block> = finality_grandpa::voter::CommunicationIn<
+type CommunicationIn<Block> = voter::CommunicationIn<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
 	AuthorityId,
 >;
-
 /// Global communication input stream for commits and catch up messages, with
 /// the hash type not being derived from the block, useful for forcing the hash
 /// to some type (e.g. `H256`) when the compiler can't do the inference.
-type CommunicationInH<Block, H> =
-	finality_grandpa::voter::CommunicationIn<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
+type CommunicationInH<Block, H> = voter::CommunicationIn<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
 
 /// Global communication sink for commits with the hash type not being derived
 /// from the block, useful for forcing the hash to some type (e.g. `H256`) when
 /// the compiler can't do the inference.
-type CommunicationOutH<Block, H> =
-	finality_grandpa::voter::CommunicationOut<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
+type CommunicationOutH<Block, H> = voter::CommunicationOut<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
 
 /// Shared voter state for querying.
 pub struct SharedVoterState {
@@ -233,7 +191,7 @@ impl SharedVoterState {
 	}
 
 	/// Get the inner `VoterState` instance.
-	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
+	pub fn voter_state(&self) -> Option<report::VoterState<AuthorityId>> {
 		self.inner.read().as_ref().map(|vs| vs.get())
 	}
 }
