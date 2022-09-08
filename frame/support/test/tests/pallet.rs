@@ -16,14 +16,16 @@
 // limitations under the License.
 
 use frame_support::{
-	dispatch::{Parameter, UnfilteredDispatchable},
+	dispatch::{
+		DispatchClass, DispatchInfo, GetDispatchInfo, Parameter, Pays, UnfilteredDispatchable,
+	},
 	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
 		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight, Weight},
+	weights::{RuntimeDbWeight, Weight},
 };
 use scale_info::{meta_type, TypeInfo};
 use sp_io::{
