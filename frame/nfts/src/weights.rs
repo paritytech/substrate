@@ -65,6 +65,7 @@ pub trait WeightInfo {
 	fn set_metadata() -> Weight;
 	fn clear_metadata() -> Weight;
 	fn set_collection_metadata() -> Weight;
+	fn try_increment_id() -> Weight;
 	fn clear_collection_metadata() -> Weight;
 	fn approve_transfer() -> Weight;
 	fn cancel_approval() -> Weight;
@@ -239,6 +240,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		(37_398_000 as Weight)
 			.saturating_add(T::DbWeight::get().reads(2 as Weight))
 			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+	}
+	// Storage: Uniques NextCollectionId (r:1 w:1)
+	// Storage: Uniques Class (r:1 w:0)
+	fn try_increment_id() -> Weight {
+		(19_233_000 as Weight)
+			.saturating_add(T::DbWeight::get().reads(2 as Weight))
+			.saturating_add(T::DbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:0)
 	// Storage: Uniques ClassMetadataOf (r:1 w:1)
@@ -456,6 +464,13 @@ impl WeightInfo for () {
 		(37_398_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+	}
+	// Storage: Uniques NextCollectionId (r:1 w:1)
+	// Storage: Uniques Class (r:1 w:0)
+	fn try_increment_id() -> Weight {
+		(19_233_000 as Weight)
+			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
+			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
 	}
 	// Storage: Uniques Class (r:1 w:0)
 	// Storage: Uniques ClassMetadataOf (r:1 w:1)

@@ -88,9 +88,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
+		let next_id = collection.increment();
+
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
+		NextCollectionId::<T, I>::set(next_id);
+
+		Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
 		Self::deposit_event(event);
-		Ok(())
+		Ok(())	
 	}
 
 	pub fn do_destroy_collection(

@@ -84,6 +84,12 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+impl Incrementable for u32 {
+	fn increment(&self) -> Self {
+		self.saturating_add(1)
+	}
+}
+
 impl Config for Test {
 	type Event = Event;
 	type CollectionId = u32;
@@ -111,4 +117,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
+}
+
+pub fn set_next_id(id: u32) {
+	NextCollectionId::<Test>::set(id);
+}
+
+pub fn get_next_id() -> <Test as Config>::CollectionId {
+	NextCollectionId::<Test>::get()
 }
