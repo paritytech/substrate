@@ -97,34 +97,36 @@ pub mod weights {
 
 	#[deprecated = "Function has moved to `frame_support::dispatch`"]
 	pub fn extract_actual_pays_fee(
-		_: &crate::dispatch::DispatchResultWithPostInfo,
-		_: &crate::dispatch::DispatchInfo,
-	) {
+		res: &crate::dispatch::DispatchResultWithPostInfo,
+		info: &crate::dispatch::DispatchInfo,
+	) -> crate::dispatch::Pays {
+		crate::dispatch::extract_actual_pays_fee(res, info)
 	}
 	#[deprecated = "Function has moved to `frame_support::dispatch`"]
 	pub fn extract_actual_weight(
-		_: &crate::dispatch::DispatchResultWithPostInfo,
-		_: &crate::dispatch::DispatchInfo,
-	) {
+		res: &crate::dispatch::DispatchResultWithPostInfo,
+		info: &crate::dispatch::DispatchInfo,
+	) -> sp_weights::Weight {
+		crate::dispatch::extract_actual_weight(res, info)
 	}
 	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
 	pub trait ClassifyDispatch<T> {}
 	#[deprecated = "Enum has moved to `frame_support::dispatch`"]
-	pub enum DispatchClass {}
+	pub type DispatchClass = crate::dispatch::DispatchClass;
 	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
-	pub struct DispatchInfo;
+	pub type DispatchInfo = crate::dispatch::DispatchInfo;
 	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
 	pub trait GetDispatchInfo {}
 	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
 	pub trait OneOrMany {}
 	#[deprecated = "Enum has moved to `frame_support::dispatch`"]
-	pub enum Pays {}
+	pub type Pays = crate::dispatch::Pays;
 	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
 	pub trait PaysFee<T> {}
 	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
-	pub struct PerDispatchClass;
+	pub type PerDispatchClass<T> = crate::dispatch::PerDispatchClass<T>;
 	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
-	pub struct PostDispatchInfo;
+	pub type PostDispatchInfo = crate::dispatch::PostDispatchInfo;
 	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
 	pub trait WeighData {}
 	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
