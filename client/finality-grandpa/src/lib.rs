@@ -68,6 +68,7 @@ use sc_client_api::{
 	StorageProvider, TransactionFor,
 };
 use sc_consensus::BlockImport;
+use sc_network_common::protocol::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
@@ -266,7 +267,7 @@ pub struct Config {
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
 	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
-	pub protocol_name: std::borrow::Cow<'static, str>,
+	pub protocol_name: ProtocolName,
 }
 
 impl Config {
@@ -723,7 +724,7 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
 /// For standard protocol name see [`crate::protocol_standard_name`].
 pub fn grandpa_peers_set_config(
-	protocol_name: std::borrow::Cow<'static, str>,
+	protocol_name: ProtocolName,
 ) -> sc_network::config::NonDefaultSetConfig {
 	use communication::grandpa_protocol_name;
 	sc_network::config::NonDefaultSetConfig {

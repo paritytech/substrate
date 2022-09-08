@@ -111,7 +111,7 @@ where
 
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.
-		if self.gas_left < amount {
+		if self.gas_left.any_lt(amount) {
 			Err(<Error<T>>::OutOfGas.into())
 		} else {
 			self.gas_left -= amount;

@@ -50,11 +50,13 @@ use libp2p::{
 		NetworkBehaviourAction, PollParameters,
 	},
 };
-use sc_network_common::request_responses::{
-	IfDisconnected, IncomingRequest, OutgoingResponse, ProtocolConfig, RequestFailure,
+use sc_network_common::{
+	protocol::ProtocolName,
+	request_responses::{
+		IfDisconnected, IncomingRequest, OutgoingResponse, ProtocolConfig, RequestFailure,
+	},
 };
 use std::{
-	borrow::Cow,
 	collections::{hash_map::Entry, HashMap},
 	io, iter,
 	pin::Pin,
@@ -75,7 +77,7 @@ pub enum Event {
 		/// Peer which has emitted the request.
 		peer: PeerId,
 		/// Name of the protocol in question.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// Whether handling the request was successful or unsuccessful.
 		///
 		/// When successful contains the time elapsed between when we received the request and when
@@ -91,7 +93,7 @@ pub enum Event {
 		/// Peer that we send a request to.
 		peer: PeerId,
 		/// Name of the protocol in question.
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// Duration the request took.
 		duration: Duration,
 		/// Result of the request.
@@ -110,12 +112,12 @@ pub enum Event {
 /// [`ProtocolRequestId`]s.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ProtocolRequestId {
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 	request_id: RequestId,
 }
 
-impl From<(Cow<'static, str>, RequestId)> for ProtocolRequestId {
-	fn from((protocol, request_id): (Cow<'static, str>, RequestId)) -> Self {
+impl From<(ProtocolName, RequestId)> for ProtocolRequestId {
+	fn from((protocol, request_id): (ProtocolName, RequestId)) -> Self {
 		Self { protocol, request_id }
 	}
 }
@@ -126,7 +128,7 @@ pub struct RequestResponsesBehaviour {
 	/// Contains the underlying libp2p `RequestResponse` behaviour, plus an optional
 	/// "response builder" used to build responses for incoming requests.
 	protocols: HashMap<
-		Cow<'static, str>,
+		ProtocolName,
 		(RequestResponse<GenericCodec>, Option<mpsc::Sender<IncomingRequest>>),
 	>,
 
@@ -162,7 +164,7 @@ struct MessageRequest {
 	request_id: RequestId,
 	request: Vec<u8>,
 	channel: ResponseChannel<Result<Vec<u8>, ()>>,
-	protocol: String,
+	protocol: ProtocolName,
 	resp_builder: Option<futures::channel::mpsc::Sender<IncomingRequest>>,
 	// Once we get incoming request we save all params, create an async call to Peerset
 	// to get the reputation of the peer.
@@ -173,7 +175,7 @@ struct MessageRequest {
 struct RequestProcessingOutcome {
 	peer: PeerId,
 	request_id: RequestId,
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 	inner_channel: ResponseChannel<Result<Vec<u8>, ()>>,
 	response: OutgoingResponse,
 }
@@ -495,7 +497,6 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 							debug_assert!(false, "Received message on outbound-only protocol.");
 						}
 
-						let protocol = Cow::from(protocol);
 						self.pending_responses.push(Box::pin(async move {
 							// The `tx` created above can be dropped if we are not capable of
 							// processing this request, which is reflected as a
@@ -618,7 +619,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 								request_id,
 								request,
 								channel,
-								protocol: protocol.to_string(),
+								protocol: protocol.clone(),
 								resp_builder: resp_builder.clone(),
 								get_peer_reputation,
 							});
@@ -766,7 +767,7 @@ impl NetworkBehaviour for RequestResponsesBehaviour {
 pub enum RegisterError {
 	/// A protocol has been specified multiple times.
 	#[error("{0}")]
-	DuplicateProtocol(Cow<'static, str>),
+	DuplicateProtocol(ProtocolName),
 }
 
 /// Error when processing a request sent by a remote.

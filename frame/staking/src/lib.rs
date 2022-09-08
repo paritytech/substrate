@@ -310,7 +310,7 @@ use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
-	Perbill, Perquintill, RuntimeDebug,
+	Perbill, Perquintill, Rounding, RuntimeDebug,
 };
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
@@ -564,6 +564,7 @@ impl<T: Config> StakingLedger<T> {
 			return Zero::zero()
 		}
 
+		use sp_runtime::PerThing as _;
 		use sp_staking::OnStakerSlash as _;
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;
@@ -594,7 +595,12 @@ impl<T: Config> StakingLedger<T> {
 						}
 					});
 				let affected_balance = self.active.saturating_add(unbonding_affected_balance);
-				let ratio = Perquintill::from_rational(slash_amount, affected_balance);
+				let ratio = Perquintill::from_rational_with_rounding(
+					slash_amount,
+					affected_balance,
+					Rounding::Up,
+				)
+				.unwrap_or_else(|_| Perquintill::one());
 				(
 					Some(ratio),
 					affected_indices.chain((0..first_slashable_index).rev()).collect::<Vec<_>>(),
@@ -618,7 +624,7 @@ impl<T: Config> StakingLedger<T> {
 
 		let mut slash_out_of = |target: &mut BalanceOf<T>, slash_remaining: &mut BalanceOf<T>| {
 			let mut slash_from_target = if let Some(ratio) = maybe_proportional {
-				ratio * (*target)
+				ratio.mul_ceil(*target)
 			} else {
 				*slash_remaining
 			}
