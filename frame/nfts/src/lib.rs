@@ -1023,7 +1023,7 @@ pub mod pallet {
 				if let Some(d) = deadline {
 					let now = frame_system::Pallet::<T>::block_number();
 					ensure!(*d < now, Error::<T, I>::NoPermission);
-				}else {
+				} else {
 					let permitted = check == collection_details.admin || check == details.owner;
 					ensure!(permitted, Error::<T, I>::NoPermission);
 				}

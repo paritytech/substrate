@@ -586,7 +586,10 @@ fn cancel_approval_works() {
 		assert_ok!(Nfts::mint(Origin::signed(1), 0, 69, 2));
 		// approval expires after 2 blocks.
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3, Some(2)));
-		assert_noop!(Nfts::cancel_approval(Origin::signed(5), 0, 42, 3), Error::<Test>::NoPermission);
+		assert_noop!(
+			Nfts::cancel_approval(Origin::signed(5), 0, 42, 3),
+			Error::<Test>::NoPermission
+		);
 
 		System::set_block_number(current_block + 3);
 		// 5 can cancel the approval since the deadline has passed.
