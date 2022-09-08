@@ -89,7 +89,7 @@ pub mod schedule;
 mod storage;
 pub use storage::{
 	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
-	WhitelistedStorageKeys,
+	TrackedStorageKey, WhitelistedStorageKeys,
 };
 
 mod dispatch;

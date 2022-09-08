@@ -19,7 +19,7 @@
 
 use crate::sp_std::collections::btree_map::BTreeMap;
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_core::storage::TrackedStorageKey;
+pub use sp_core::storage::TrackedStorageKey;
 use sp_std::prelude::*;
 
 /// An instance of a pallet in the storage.
