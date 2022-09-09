@@ -8542,7 +8542,6 @@ dependencies = [
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",
- "sc-network-transactions",
  "sc-service",
  "sp-blockchain",
  "sp-consensus",

@@ -64,7 +64,6 @@ use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
 	warp_request_handler, ChainSync,
 };
-pub use sc_network_transactions::config::EmptyTransactionPool;
 use sc_service::client::Client;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
