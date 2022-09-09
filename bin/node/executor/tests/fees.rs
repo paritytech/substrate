@@ -17,8 +17,9 @@
 
 use codec::{Encode, Joiner};
 use frame_support::{
+	dispatch::GetDispatchInfo,
 	traits::Currency,
-	weights::{constants::ExtrinsicBaseWeight, GetDispatchInfo, IdentityFee, WeightToFee},
+	weights::{constants::ExtrinsicBaseWeight, IdentityFee, WeightToFee},
 };
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
