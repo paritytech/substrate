@@ -1016,15 +1016,16 @@ pub mod pallet {
 			let mut details =
 				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let deadline = details.approvals.get(&delegate).ok_or(Error::<T, I>::NotDelegate)?;
-            let is_before_deadline = if let Some(d) = deadline {
+			let maybe_deadline =
+				details.approvals.get(&delegate).ok_or(Error::<T, I>::NotDelegate)?;
+			let is_past_deadline = if let Some(deadline) = maybe_deadline {
 				let now = frame_system::Pallet::<T>::block_number();
-				now <= *d
-			} else { 
-			    false 
+				now > *deadline
+			} else {
+				false
 			};
 
-			if is_before_deadline {
+			if !is_past_deadline {
 				if let Some(check) = maybe_check {
 					let permitted = check == collection_details.admin || check == details.owner;
 					ensure!(permitted, Error::<T, I>::NoPermission);
