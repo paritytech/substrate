@@ -166,24 +166,24 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! { #frame_support::traits::StorageVersion::default() }
 	};
 
-	let whitelisted_storage_names: Vec<String> = def
+	let whitelisted_storage_names: Vec<syn::Ident> = def
 		.storages
 		.iter()
 		.filter(|s| s.benchmarking_cached)
-		.map(|s| s.ident.to_string())
+		.map(|s| s.ident.clone())
 		.collect();
-	println!("{:?}", whitelisted_storage_names);
 
 	let whitelisted_storage_keys_impl = quote::quote![
-		use #frame_support::traits::StorageInfoTrait;
-		impl<#type_impl_gen> #frame_support::traits::WhitelistedStorageKeys for #pallet_ident<#type_use_gen> {
-			fn whitelisted_storage_keys() -> #frame_support::sp_std::vec::Vec<#frame_support::traits::TrackedStorageKey> {
-				#pallet_ident::<#type_use_gen>::storage_info().iter().map(|info| {
-					#frame_support::traits::TrackedStorageKey::new(info.encode())
-				}).collect()
+		use #frame_support::traits::{StorageInfoTrait, TrackedStorageKey, WhitelistedStorageKeys};
+		impl<#type_impl_gen> WhitelistedStorageKeys for #pallet_ident<#type_use_gen> {
+			fn whitelisted_storage_keys() -> #frame_support::sp_std::vec::Vec<TrackedStorageKey> {
+				use #frame_support::sp_std::vec;
+				use #frame_support::sp_std::vec::Vec;
+				vec![#(TrackedStorageKey::new(#whitelisted_storage_names::<#type_use_gen>::hashed_key().to_vec())), *]
 			}
 		}
 	];
+	println!("{}", whitelisted_storage_keys_impl);
 
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
 		#pallet_error_metadata
