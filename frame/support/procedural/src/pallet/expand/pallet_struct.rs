@@ -166,6 +166,14 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! { #frame_support::traits::StorageVersion::default() }
 	};
 
+	let whitelisted_storage_names: Vec<String> = def
+		.storages
+		.iter()
+		.filter(|s| s.benchmarking_cached)
+		.map(|s| s.ident.to_string())
+		.collect();
+	println!("{:?}", whitelisted_storage_names);
+
 	let whitelisted_storage_keys_impl = quote::quote![
 		use #frame_support::traits::StorageInfoTrait;
 		impl<#type_impl_gen> #frame_support::traits::WhitelistedStorageKeys for #pallet_ident<#type_use_gen> {
