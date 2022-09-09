@@ -100,7 +100,7 @@ pub mod module {
 			}
 			#[weight = 3]
 			fn aux_4(_origin) -> frame_support::dispatch::DispatchResult { unreachable!() }
-			#[weight = (5, frame_support::weights::DispatchClass::Operational)]
+			#[weight = (5, frame_support::dispatch::DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 		}
 	}
