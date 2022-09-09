@@ -647,8 +647,6 @@ pub mod pallet {
 
 			Self::do_transfer(collection, item, dest, |collection_details, details| {
 				if details.owner != origin && collection_details.admin != origin {
-					let approved = details.approvals.contains_key(&origin);
-					ensure!(approved, Error::<T, I>::NoPermission);
 
 					let deadline =
 						details.approvals.get(&origin).ok_or(Error::<T, I>::NoPermission)?;
