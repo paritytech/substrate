@@ -430,16 +430,16 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			ensure!(
 				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
 				"the on_chain version is equal or more than the current one"
 			);
-			Ok(())
+			Ok(Vec::new())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			ensure!(
 				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id)),
 				"not all of the stale metadata has been removed"
