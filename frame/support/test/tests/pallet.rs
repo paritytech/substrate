@@ -1171,8 +1171,14 @@ fn migrate_from_pallet_version_to_storage_version() {
 			AllPalletsWithSystem,
 		>(&db_weight);
 
-		// 4 pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(Weight::from_ref_time(4 * 2 * 5), weight);
+		let pallet_num = if cfg!(feature = "frame-feature-testing") {
+			5
+		} else {
+			4
+		};
+
+		// `pallet_num` pallets, 2 writes and every write costs 5 weight.
+		assert_eq!(Weight::from_ref_time(pallet_num * 2 * 5), weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
@@ -1493,6 +1499,16 @@ fn metadata() {
 			}),
 			calls: None,
 			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
+			constants: vec![],
+			error: None,
+		},
+		#[cfg(feature = "frame-feature-testing")]
+		PalletMetadata {
+			index: 3,
+			name: "Example3",
+			storage: None,
+			calls: None,
+			event: None,
 			constants: vec![],
 			error: None,
 		},

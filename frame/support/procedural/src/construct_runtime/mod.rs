@@ -373,8 +373,7 @@ fn decl_all_pallets<'a>(
 	// All possible features. This will be used below for the empty feature set.
 	let mut all_features = features_to_names
 		.iter()
-		.map(|f| f.0.iter().cloned())
-		.flatten()
+		.flat_map(|f| f.0.iter().cloned())
 		.collect::<HashSet<_>>();
 	let attribute_to_names = features_to_names
 		.into_iter()
