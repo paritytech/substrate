@@ -459,7 +459,7 @@ pub struct StakingLedger<T: Config> {
 	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
-	pub claimed_rewards: BoundedVec<EraIndex, T::EraHistoryDepth>,
+	pub claimed_rewards: BoundedVec<EraIndex, T::HistoryDepth>,
 }
 
 impl<T: Config> StakingLedger<T> {

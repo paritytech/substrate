@@ -889,8 +889,12 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This will return the currently configured History Depth
+	/// 
+	/// With release of v11, history_depth is migrated to a configurable 
+	/// value instead of being a storage item
+	/// This function replaces the old fn history_depth which read from storage
 	pub fn history_depth() -> u32 {
-		T::EraHistoryDepth::get()
+		T::HistoryDepth::get()
 	}
 }
 

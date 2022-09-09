@@ -128,7 +128,7 @@ pub mod pallet {
 		/// Era History Depth for the validator rewards to be claimed. 
 		/// This should never be decreased once set.  
 		#[pallet::constant]
-		type EraHistoryDepth: Get<u32>;
+		type HistoryDepth: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -827,7 +827,7 @@ pub mod pallet {
 			<Payee<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
-			let history_depth = T::EraHistoryDepth::get();
+			let history_depth = T::HistoryDepth::get();
 			let last_reward_era = current_era.saturating_sub(history_depth);
 
 			let stash_balance = T::Currency::free_balance(&stash);
