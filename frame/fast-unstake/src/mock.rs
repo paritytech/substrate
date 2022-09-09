@@ -30,7 +30,7 @@ use sp_runtime::{
 };
 
 use frame_system::RawOrigin;
-use pallet_staking::{Exposure, IndividualExposure};
+use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
 use sp_std::prelude::*;
 
 pub type AccountId = u128;
@@ -237,28 +237,40 @@ pub(crate) fn fast_unstake_events_since_last_call() -> Vec<super::Event<Runtime>
 }
 
 pub struct ExtBuilder {
-	stakers: Vec<(AccountId, AccountId, Balance)>,
+	exposed_nominators: Vec<(AccountId, AccountId, Balance)>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
-		Self { stakers: vec![(1, 2, 100), (3, 4, 100), (5, 6, 100), (7, 8, 100), (9, 10, 100)] }
+		Self {
+			exposed_nominators: vec![
+				(1, 2, 100),
+				(3, 4, 100),
+				(5, 6, 100),
+				(7, 8, 100),
+				(9, 10, 100),
+			],
+		}
 	}
 }
 
 pub(crate) const VALIDATORS_PER_ERA: AccountId = 32;
+pub(crate) const VALIDATOR_PREFIX: AccountId = 100;
 pub(crate) const NOMINATORS_PER_VALIDATOR_PER_ERA: AccountId = 4;
+pub(crate) const NOMINATOR_PREFIX: AccountId = 1000;
 
 impl ExtBuilder {
-	pub(crate) fn register_stakers_for_era(era: u32, validators: AccountId, nominators: AccountId) {
+	pub(crate) fn register_stakers_for_era(era: u32) {
 		// validators are prefixed with 100 and nominators with 1000 to prevent conflict. Make sure
 		// all the other accounts used in tests are below 100. Also ensure here that we don't
 		// overlap.
-		assert!(100 + validators < 10000);
+		assert!(VALIDATOR_PREFIX + VALIDATORS_PER_ERA < NOMINATOR_PREFIX);
 
-		(100..100 + validators)
+		(VALIDATOR_PREFIX..VALIDATOR_PREFIX + VALIDATORS_PER_ERA)
 			.map(|v| {
-				let others = (1000..(1000 + nominators))
+				// for the sake of sanity, let's register this taker as an actual validator.
+				let others = (NOMINATOR_PREFIX..
+					(NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA))
 					.map(|n| IndividualExposure { who: n, value: 0 as Balance })
 					.collect::<Vec<_>>();
 				(v, Exposure { total: 0, own: 0, others })
@@ -277,24 +289,35 @@ impl ExtBuilder {
 		let _ = pallet_nomination_pools::GenesisConfig::<Runtime> { ..Default::default() }
 			.assimilate_storage(&mut storage);
 
+		let validators_range = VALIDATOR_PREFIX..VALIDATOR_PREFIX + VALIDATORS_PER_ERA;
+		let nominators_range =
+			NOMINATOR_PREFIX..NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA;
+
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: self
-				.stakers
+				.exposed_nominators
 				.clone()
 				.into_iter()
 				.map(|(stash, _, balance)| (stash, balance * 2))
 				.chain(
-					self.stakers.clone().into_iter().map(|(_, ctrl, balance)| (ctrl, balance * 2)),
+					self.exposed_nominators
+						.clone()
+						.into_iter()
+						.map(|(_, ctrl, balance)| (ctrl, balance * 2)),
 				)
+				.chain(validators_range.clone().map(|x| (x, 100)))
+				.chain(nominators_range.clone().map(|x| (x, 100)))
 				.collect::<Vec<_>>(),
 		}
 		.assimilate_storage(&mut storage);
 
 		let _ = pallet_staking::GenesisConfig::<Runtime> {
 			stakers: self
-				.stakers
+				.exposed_nominators
 				.into_iter()
 				.map(|(x, y, z)| (x, y, z, pallet_staking::StakerStatus::Nominator(vec![42])))
+				.chain(validators_range.map(|x| (x, x, 100, StakerStatus::Validator)))
+				.chain(nominators_range.map(|x| (x, x, 100, StakerStatus::Nominator(vec![x]))))
 				.collect::<Vec<_>>(),
 			..Default::default()
 		}
@@ -307,11 +330,7 @@ impl ExtBuilder {
 			frame_system::Pallet::<Runtime>::set_block_number(1);
 
 			for era in 0..=(BondingDuration::get()) {
-				Self::register_stakers_for_era(
-					era,
-					VALIDATORS_PER_ERA,
-					NOMINATORS_PER_VALIDATOR_PER_ERA,
-				);
+				Self::register_stakers_for_era(era);
 			}
 
 			// because we read this value as a measure of how many validators we have.
@@ -328,7 +347,6 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			// TODO: sanity check, if any
 		})
 	}
 }

@@ -21,7 +21,7 @@ use super::*;
 use crate::{mock::*, weights::WeightInfo, Event};
 use frame_support::{assert_noop, assert_ok, pallet_prelude::*, traits::Currency};
 use pallet_nomination_pools::{BondedPools, LastPoolId, RewardPools};
-use pallet_staking::CurrentEra;
+use pallet_staking::{CurrentEra, IndividualExposure, RewardDestination};
 
 use sp_runtime::{traits::BadOrigin, DispatchError, ModuleError};
 use sp_staking::StakingInterface;
@@ -631,11 +631,7 @@ mod on_idle {
 			// then we register a new era.
 			Ongoing::set(false);
 			CurrentEra::<T>::put(CurrentEra::<T>::get().unwrap() + 1);
-			ExtBuilder::register_stakers_for_era(
-				CurrentEra::<T>::get().unwrap(),
-				VALIDATORS_PER_ERA,
-				NOMINATORS_PER_VALIDATOR_PER_ERA,
-			);
+			ExtBuilder::register_stakers_for_era(CurrentEra::<T>::get().unwrap());
 
 			// then we can progress again, but notice that the new era that had to be checked.
 			next_block(true);
@@ -672,6 +668,162 @@ mod on_idle {
 
 			assert_unstaked(&1);
 			assert!(pallet_nomination_pools::PoolMembers::<T>::contains_key(&1));
+		});
+	}
+
+	#[test]
+	fn exposed_nominator_cannot_unstake() {
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::<T>::put(1);
+			SlashPerEra::set(7);
+			CurrentEra::<T>::put(BondingDuration::get());
+
+			// create an exposed nominator in era 1
+			let exposed = 666 as AccountId;
+			pallet_staking::ErasStakers::<T>::mutate(1, VALIDATORS_PER_ERA, |expo| {
+				expo.others.push(IndividualExposure { who: exposed, value: 0 as Balance });
+			});
+			Balances::make_free_balance_be(&exposed, 100);
+			assert_ok!(Staking::bond(
+				Origin::signed(exposed),
+				exposed,
+				10,
+				RewardDestination::Staked
+			));
+			assert_ok!(Staking::nominate(Origin::signed(exposed), vec![exposed]));
+
+			// register the exposed one.
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(exposed), None));
+
+			// a few blocks later, we realize they are slashed
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest { stash: exposed, checked: vec![3], maybe_pool_id: None })
+			);
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest { stash: exposed, checked: vec![3, 2], maybe_pool_id: None })
+			);
+			next_block(true);
+			assert_eq!(Head::<T>::get(), None);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				// we slash them by 21, since we checked 3 eras in total (3, 2, 1).
+				vec![
+					Event::Checked { stash: exposed, eras: vec![3] },
+					Event::Checked { stash: exposed, eras: vec![2] },
+					Event::Slashed { stash: exposed, amount: 3 * 7 }
+				]
+			);
+		});
+	}
+
+	#[test]
+	fn exposed_nominator_cannot_unstake_multi_check() {
+		ExtBuilder::default().build_and_execute(|| {
+			// same as the previous check, but we check 2 eras per block, and we make the exposed be
+			// exposed in era 0, so that it is detected halfway in a check era.
+			ErasToCheckPerBlock::<T>::put(2);
+			SlashPerEra::set(7);
+			CurrentEra::<T>::put(BondingDuration::get());
+
+			// create an exposed nominator in era 1
+			let exposed = 666 as AccountId;
+			pallet_staking::ErasStakers::<T>::mutate(0, VALIDATORS_PER_ERA, |expo| {
+				expo.others.push(IndividualExposure { who: exposed, value: 0 as Balance });
+			});
+			Balances::make_free_balance_be(&exposed, 100);
+			assert_ok!(Staking::bond(
+				Origin::signed(exposed),
+				exposed,
+				10,
+				RewardDestination::Staked
+			));
+			assert_ok!(Staking::nominate(Origin::signed(exposed), vec![exposed]));
+
+			// register the exposed one.
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(exposed), None));
+
+			// a few blocks later, we realize they are slashed
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest { stash: exposed, checked: vec![3, 2], maybe_pool_id: None })
+			);
+			next_block(true);
+			assert_eq!(Head::<T>::get(), None);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				// we slash them by 28, since we checked 4 eras in total.
+				vec![
+					Event::Checked { stash: exposed, eras: vec![3, 2] },
+					Event::Slashed { stash: exposed, amount: 4 * 7 }
+				]
+			);
+		});
+	}
+
+	#[test]
+	fn validators_cannot_bail() {
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::<T>::put(BondingDuration::get() + 1);
+			CurrentEra::<T>::put(BondingDuration::get());
+
+			// a validator switches role and register...
+			assert_ok!(Staking::nominate(Origin::signed(VALIDATOR_PREFIX), vec![VALIDATOR_PREFIX]));
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(VALIDATOR_PREFIX), None));
+
+			// but they indeed are exposed!
+			assert!(pallet_staking::ErasStakers::<T>::contains_key(
+				BondingDuration::get() - 1,
+				VALIDATOR_PREFIX
+			));
+
+			// process a block, this validator is exposed and has been slashed.
+			next_block(true);
+			assert_eq!(Head::<T>::get(), None);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![Event::Slashed { stash: 100, amount: 100 }]
+			);
+		});
+	}
+
+	#[test]
+	fn unexposed_validator_can_fast_unstake() {
+		ExtBuilder::default().build_and_execute(|| {
+			ErasToCheckPerBlock::<T>::put(BondingDuration::get() + 1);
+			CurrentEra::<T>::put(BondingDuration::get());
+
+			// create a new validator that 100% not exposed.
+			Balances::make_free_balance_be(&42, 100);
+			assert_ok!(Staking::bond(Origin::signed(42), 42, 10, RewardDestination::Staked));
+			assert_ok!(Staking::validate(Origin::signed(42), Default::default()));
+
+			// let them register:
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(42), None));
+
+			// 2 block's enough to unstake them.
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest { stash: 42, checked: vec![3, 2, 1, 0], maybe_pool_id: None })
+			);
+			next_block(true);
+			assert_eq!(Head::<T>::get(), None);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![
+					Event::Checked { stash: 42, eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 42, maybe_pool_id: None, result: Ok(()) }
+				]
+			);
 		});
 	}
 }

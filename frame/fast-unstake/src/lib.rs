@@ -172,16 +172,16 @@ pub mod pallet {
 	#[cfg_attr(test, derive(PartialEq))]
 	pub enum Error<T> {
 		/// The provided Controller account was not found.
+		///
+		/// This means that the given account is not bonded.
 		NotController,
-		/// The nominator was not found.
-		NotNominator,
 		/// The bonded account has already been queued.
 		AlreadyQueued,
 		/// The bonded account has active unlocking chunks.
 		NotFullyBonded,
-		/// The provided unstaker is not in the `Queue`.
+		/// The provided un-staker is not in the `Queue`.
 		NotQueued,
-		/// The provided unstaker is already in Head, and cannot deregister.
+		/// The provided un-staker is already in Head, and cannot deregister.
 		AlreadyHead,
 	}
 
@@ -221,10 +221,6 @@ pub mod pallet {
 
 			let ledger =
 				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
-			ensure!(
-				pallet_staking::Nominators::<T>::contains_key(&ledger.stash),
-				Error::<T>::NotNominator
-			);
 			ensure!(!Queue::<T>::contains_key(&ledger.stash), Error::<T>::AlreadyQueued);
 			ensure!(
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != ledger.stash),
@@ -307,8 +303,7 @@ pub mod pallet {
 						.max(<T as Config>::WeightInfo::on_idle_unstake())
 				};
 				let mut try_eras_to_check = eras_to_check_per_block;
-				while worse_weight(validator_count, try_eras_to_check).all_gt(remaining_weight)
-				{
+				while worse_weight(validator_count, try_eras_to_check).all_gt(remaining_weight) {
 					try_eras_to_check.saturating_dec();
 					if try_eras_to_check.is_zero() {
 						log!(debug, "early existing because try_eras_to_check is zero");
@@ -439,8 +434,9 @@ pub mod pallet {
 
 				log!(
 					debug,
-					"checked {:?} eras, (v: {:?}, u: {:?})",
+					"checked {:?} eras, exposed? {}, (v: {:?}, u: {:?})",
 					eras_checked,
+					is_exposed,
 					validator_count,
 					eras_to_check.len()
 				);
@@ -449,7 +445,8 @@ pub mod pallet {
 				// the last 28 eras, have registered yourself to be unstaked, midway being checked,
 				// you are exposed.
 				if is_exposed {
-					let amount = T::SlashPerEra::get().saturating_mul(eras_checked.into());
+					let amount = T::SlashPerEra::get()
+						.saturating_mul(eras_checked.saturating_add(checked.len() as u32).into());
 					pallet_staking::slashing::do_slash::<T>(
 						&stash,
 						amount,
@@ -472,8 +469,9 @@ pub mod pallet {
 
 		/// Checks whether an account `who` has been exposed in an era.
 		fn is_exposed_in_era(who: &T::AccountId, era: &EraIndex) -> bool {
-			pallet_staking::ErasStakers::<T>::iter_prefix(era)
-				.any(|(_, exposures)| exposures.others.iter().any(|i| i.who == *who))
+			pallet_staking::ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
+				validator == *who || exposures.others.iter().any(|i| i.who == *who)
+			})
 		}
 	}
 
