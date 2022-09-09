@@ -320,10 +320,12 @@ pub struct DatabaseSettings {
 }
 
 /// Block pruning settings.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BlocksPruning {
-	/// Keep full block history.
-	All,
+	/// Keep full block history, including Non-Finalized blocks.
+	AllWithNonFinalized,
+	/// Keep full finalized block history.
+	AllFinalized,
 	/// Keep N recent finalized blocks.
 	Some(u32),
 }
@@ -1707,12 +1709,16 @@ impl<Block: BlockT> Backend<Block> {
 		finalized: NumberFor<Block>,
 		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
 	) -> ClientResult<()> {
-		if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
-			// Always keep the last finalized block
-			let keep = std::cmp::max(blocks_pruning, 1);
-			if finalized >= keep.into() {
-				let number = finalized.saturating_sub(keep.into());
-				self.prune_block(transaction, BlockId::<Block>::number(number))?;
+		if BlocksPruning::AllWithNonFinalized == self.blocks_pruning {
+			// Do nothing.
+		} else {
+			if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
+				// Always keep the last finalized block
+				let keep = std::cmp::max(blocks_pruning, 1);
+				if finalized >= keep.into() {
+					let number = finalized.saturating_sub(keep.into());
+					self.prune_block(transaction, BlockId::<Block>::number(number))?;
+				}
 			}
 
 			// Also discard all blocks from displaced branches
@@ -2506,7 +2512,7 @@ pub(crate) mod tests {
 				trie_cache_maximum_size: Some(16 * 1024 * 1024),
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
-				blocks_pruning: BlocksPruning::All,
+				blocks_pruning: BlocksPruning::AllFinalized,
 			},
 			0,
 		)

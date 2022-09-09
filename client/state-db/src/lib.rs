@@ -270,7 +270,7 @@ impl PruningMode {
 
 impl Default for PruningMode {
 	fn default() -> Self {
-		PruningMode::ArchiveCanonical
+		PruningMode::Constrained(Default::default())
 	}
 }
 
@@ -924,12 +924,12 @@ mod tests {
 	#[test]
 	fn pruning_mode_compatibility() {
 		for (created, reopened, expected) in [
-			(None, None, Ok(PruningMode::ArchiveCanonical)),
-			(None, Some(PruningMode::blocks_pruning(256)), Err(())),
-			(None, Some(PruningMode::blocks_pruning(128)), Err(())),
-			(None, Some(PruningMode::blocks_pruning(512)), Err(())),
+			(None, None, Ok(PruningMode::blocks_pruning(256))),
+			(None, Some(PruningMode::blocks_pruning(256)), Ok(PruningMode::blocks_pruning(256))),
+			(None, Some(PruningMode::blocks_pruning(128)), Ok(PruningMode::blocks_pruning(128))),
+			(None, Some(PruningMode::blocks_pruning(512)), Ok(PruningMode::blocks_pruning(512))),
 			(None, Some(PruningMode::ArchiveAll), Err(())),
-			(None, Some(PruningMode::ArchiveCanonical), Ok(PruningMode::ArchiveCanonical)),
+			(None, Some(PruningMode::ArchiveCanonical), Err(())),
 			(Some(PruningMode::blocks_pruning(256)), None, Ok(PruningMode::blocks_pruning(256))),
 			(
 				Some(PruningMode::blocks_pruning(256)),
