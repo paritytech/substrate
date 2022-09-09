@@ -24,7 +24,7 @@ use frame_support::{
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EnsureOrigin,
 		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
-		TryCollect,
+		TryCollect, DefensiveResult
 	},
 	weights::Weight,
 	BoundedVec,
@@ -859,7 +859,7 @@ pub mod pallet {
 				unlocking: Default::default(),
 				claimed_rewards: (last_reward_era..current_era)
 				.try_collect()
-				.map_err(|_| Error::<T>::BoundNotMet)?,
+				.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())
