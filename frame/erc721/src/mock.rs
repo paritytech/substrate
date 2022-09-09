@@ -14,18 +14,6 @@ use crate::{self as erc721, Config};
 use pallet_chainbridge as bridge;
 pub use pallet_balances as balances;
 
-/// A PalletInfo implementation which just panics.
-pub struct PanicPalletInfo;
-
-impl frame_support::traits::PalletInfo for PanicPalletInfo {
-    fn index<P: 'static>() -> Option<usize> {
-        unimplemented!("PanicPalletInfo mustn't be triggered by tests");
-    }
-    fn name<P: 'static>() -> Option<&'static str> {
-        unimplemented!("PanicPalletInfo mustn't be triggered by tests");
-    }
-}
-
 parameter_types! {
     pub const BlockHashCount: u64 = 250;
     pub const MaximumBlockWeight: Weight = 1024;
@@ -50,7 +38,7 @@ impl frame_system::Config for Test {
     type BlockHashCount = BlockHashCount;
     type DbWeight = ();
     type Version = ();
-    type PalletInfo = PanicPalletInfo;
+    type PalletInfo = PalletInfo;
     type AccountData = balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
