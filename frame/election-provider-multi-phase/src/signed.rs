@@ -24,11 +24,11 @@ use crate::{
 };
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::NposSolution;
-use frame_support::{
-	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency},
+use frame_support::traits::{
+	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
 use sp_runtime::{
 	traits::{Saturating, Zero},
@@ -37,7 +37,6 @@ use sp_runtime::{
 use sp_std::{
 	cmp::Ordering,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	ops::Deref,
 	vec::Vec,
 };
 
@@ -99,8 +98,10 @@ pub type SignedSubmissionOf<T> = SignedSubmission<
 	<<T as crate::Config>::MinerConfig as MinerConfig>::Solution,
 >;
 
-pub type SubmissionIndicesOf<T> =
-	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
+pub type SubmissionIndicesOf<T> = BoundedVec<
+	(ElectionScore, <T as frame_system::Config>::BlockNumber, u32),
+	<T as Config>::SignedMaxSubmissions,
+>;
 
 /// Outcome of [`SignedSubmissions::insert`].
 pub enum InsertResult<T: Config> {
@@ -119,7 +120,7 @@ pub enum InsertResult<T: Config> {
 /// `SignedSubmissionNextIndex<T>`.
 #[cfg_attr(feature = "std", derive(frame_support::DebugNoBound))]
 pub struct SignedSubmissions<T: Config> {
-	indices: SubmissionIndicesOf<T>,
+	pub(crate) indices: SubmissionIndicesOf<T>,
 	next_idx: u32,
 	insertion_overlay: BTreeMap<u32, SignedSubmissionOf<T>>,
 	deletion_overlay: BTreeSet<u32>,
@@ -134,10 +135,12 @@ impl<T: Config> SignedSubmissions<T> {
 			insertion_overlay: BTreeMap::new(),
 			deletion_overlay: BTreeSet::new(),
 		};
+
 		// validate that the stored state is sane
 		debug_assert!(submissions
 			.indices
-			.values()
+			.iter()
+			.map(|(_, _, index)| index)
 			.copied()
 			.max()
 			.map_or(true, |max_idx| submissions.next_idx > max_idx,));
@@ -155,7 +158,8 @@ impl<T: Config> SignedSubmissions<T> {
 			.map_or(true, |max_idx| self.next_idx > max_idx,));
 		debug_assert!(self
 			.indices
-			.values()
+			.iter()
+			.map(|(_, _, index)| index)
 			.copied()
 			.max()
 			.map_or(true, |max_idx| self.next_idx > max_idx,));
@@ -205,10 +209,12 @@ impl<T: Config> SignedSubmissions<T> {
 		remove_score: ElectionScore,
 		insert: Option<(ElectionScore, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
-		let remove_index = self.indices.remove(&remove_score)?;
+		let remove_pos = self.indices.iter().position(|(x, _, _)| x == &remove_score)?;
+		let (_remove_score, _bn, remove_index) = self.indices.remove(remove_pos);
 		if let Some((insert_score, insert_idx)) = insert {
+			let block_number = frame_system::Pallet::<T>::block_number();
 			self.indices
-				.try_insert(insert_score, insert_idx)
+				.try_push((insert_score, block_number, insert_idx))
 				.expect("just removed an item, we must be under capacity; qed");
 		}
 
@@ -224,17 +230,8 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Iterate through the set of signed submissions in order of increasing score.
 	pub fn iter(&self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
-		self.indices.iter().filter_map(move |(_score, &idx)| {
-			let maybe_submission = self.get_submission(idx);
-			if maybe_submission.is_none() {
-				log!(
-					error,
-					"SignedSubmissions internal state is invalid (idx {}); \
-					there is a logic error in code handling signed solution submissions",
-					idx,
-				)
-			}
-			maybe_submission
+		self.indices.iter().filter_map(move |(_score, _bn, idx)| {
+			self.get_submission(*idx).defensive()
 		})
 	}
 
@@ -283,41 +280,33 @@ impl<T: Config> SignedSubmissions<T> {
 	/// to `is_score_better`, we do not change anything.
 	pub fn insert(&mut self, submission: SignedSubmissionOf<T>) -> InsertResult<T> {
 		// verify the expectation that we never reuse an index
-		debug_assert!(!self.indices.values().any(|&idx| idx == self.next_idx));
+		debug_assert!(!self.indices.iter().map(|(_, _, x)| x).any(|&idx| idx == self.next_idx));
+		let block_number = frame_system::Pallet::<T>::block_number();
 
-		let weakest = match self.indices.try_insert(submission.raw_solution.score, self.next_idx) {
-			Ok(Some(prev_idx)) => {
-				// a submission of equal score was already present in the set;
-				// no point editing the actual backing map as we know that the newer solution can't
-				// be better than the old. However, we do need to put the old value back.
-				self.indices
-					.try_insert(submission.raw_solution.score, prev_idx)
-					.expect("didn't change the map size; qed");
-				return InsertResult::NotInserted
-			},
-			Ok(None) => {
-				// successfully inserted into the set; no need to take out weakest member
+		let weakest = match self.indices.try_push((submission.raw_solution.score, block_number, self.next_idx)) {
+			Ok(_) => {
 				None
 			},
-			Err((insert_score, insert_idx)) => {
-				// could not insert into the set because it is full.
-				// note that we short-circuit return here in case the iteration produces `None`.
-				// If there wasn't a weakest entry to remove, then there must be a capacity of 0,
-				// which means that we can't meaningfully proceed.
-				let weakest_score = match self.indices.iter().next() {
+			Err(_) => {
+				// the queue is full -- if this is better, insert it.
+				let weakest_score = match self.indices.iter().next().defensive() {
 					None => return InsertResult::NotInserted,
-					Some((score, _)) => *score,
+					Some((score, _, _)) => *score,
 				};
 				let threshold = T::BetterSignedThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
-				if !insert_score.strict_threshold_better(weakest_score, threshold) {
-					return InsertResult::NotInserted
+				if !submission.raw_solution.score.strict_threshold_better(weakest_score, threshold) {
+					return InsertResult::NotInserted;
 				}
 
-				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
-			},
+				self.swap_out_submission(weakest_score, Some((submission.raw_solution.score, self.next_idx)))
+			}
 		};
+
+		// this is the ONLY place that we insert, and we sort post insertion.
+		// TODO: we should sort based on reverse of BlockNumber. The lower, the better.
+		self.indices.sort();
 
 		// we've taken out the weakest, so update the storage map and the next index
 		debug_assert!(!self.insertion_overlay.contains_key(&self.next_idx));
@@ -332,18 +321,10 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Remove the signed submission with the highest score from the set.
 	pub fn pop_last(&mut self) -> Option<SignedSubmissionOf<T>> {
-		let (score, _) = self.indices.iter().rev().next()?;
+		let (score, _, _) = self.indices.iter().rev().next()?;
 		// deref in advance to prevent mutable-immutable borrow conflict
 		let score = *score;
 		self.swap_out_submission(score, None)
-	}
-}
-
-impl<T: Config> Deref for SignedSubmissions<T> {
-	type Target = SubmissionIndicesOf<T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.indices
 	}
 }
 
@@ -400,7 +381,7 @@ impl<T: Config> Pallet<T> {
 
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_accept_solution());
-					break
+					break;
 				},
 				Err(_) => {
 					Self::finalize_signed_phase_reject_solution(&who, deposit);
@@ -412,7 +393,7 @@ impl<T: Config> Pallet<T> {
 
 		// Any unprocessed solution is pointless to even consider. Feasible or malicious,
 		// they didn't end up being used. Unreserve the bonds.
-		let discarded = all_submissions.len();
+		let discarded = all_submissions.indices.len();
 		let mut refund_count = 0;
 		let max_refunds = T::SignedMaxRefunds::get();
 
@@ -534,6 +515,11 @@ mod tests {
 		Error, Perbill, Phase,
 	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
+
+	#[test]
+	fn allows_duplicate_submission() {
+		todo!("if duplicate submissions, the earlier, the better");
+	}
 
 	#[test]
 	fn cannot_submit_too_early() {
