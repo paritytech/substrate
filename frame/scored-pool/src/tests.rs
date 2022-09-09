@@ -297,3 +297,20 @@ fn candidacy_resubmitting_works() {
 		assert_eq!(ScoredPool::candidate_exists(who), true);
 	});
 }
+
+#[test]
+fn pool_candidates_exceeded() {
+	new_test_ext().execute_with(|| {
+		for i in [1, 2, 3, 4, 6] {
+			let who = i as u64;
+			assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
+			let index = find_in_pool(who).expect("entity must be in pool") as u32;
+			assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
+		}
+
+		assert_noop!(
+			ScoredPool::submit_candidacy(Origin::signed(8)),
+			Error::<Test, _>::TooManyMembers
+		);
+	});
+}
