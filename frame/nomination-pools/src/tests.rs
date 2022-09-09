@@ -47,6 +47,7 @@ fn test_setup_works() {
 		assert_eq!(SubPoolsStorage::<Runtime>::count(), 0);
 		assert_eq!(PoolMembers::<Runtime>::count(), 1);
 		assert_eq!(StakingMock::bonding_duration(), 3);
+		assert!(Metadata::<T>::contains_key(1));
 
 		let last_pool = LastPoolId::<Runtime>::get();
 		assert_eq!(
@@ -1286,6 +1287,59 @@ mod claim_payout {
 	}
 
 	#[test]
+	fn pending_rewards_per_member_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let ed = Balances::minimum_balance();
+
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 30).unwrap();
+			assert_eq!(Pools::pending_rewards(10), Some(30));
+			assert_eq!(Pools::pending_rewards(20), None);
+
+			Balances::make_free_balance_be(&20, ed + 10);
+			assert_ok!(Pools::join(Origin::signed(20), 10, 1));
+
+			assert_eq!(Pools::pending_rewards(10), Some(30));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 100).unwrap();
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::pending_rewards(20), Some(50));
+			assert_eq!(Pools::pending_rewards(30), None);
+
+			Balances::make_free_balance_be(&30, ed + 10);
+			assert_ok!(Pools::join(Origin::signed(30), 10, 1));
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50));
+			assert_eq!(Pools::pending_rewards(20), Some(50));
+			assert_eq!(Pools::pending_rewards(30), Some(0));
+
+			Balances::mutate_account(&default_reward_account(), |f| f.free += 60).unwrap();
+
+			assert_eq!(Pools::pending_rewards(10), Some(30 + 50 + 20));
+			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			// 10 should claim 10, 20 should claim nothing.
+			assert_ok!(Pools::claim_payout(Origin::signed(10)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(50 + 20));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			assert_ok!(Pools::claim_payout(Origin::signed(20)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+			assert_eq!(Pools::pending_rewards(30), Some(20));
+
+			assert_ok!(Pools::claim_payout(Origin::signed(30)));
+			assert_eq!(Pools::pending_rewards(10), Some(0));
+			assert_eq!(Pools::pending_rewards(20), Some(0));
+			assert_eq!(Pools::pending_rewards(30), Some(0));
+		});
+	}
+
+	#[test]
 	fn rewards_distribution_is_fair_bond_extra() {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
@@ -1875,6 +1929,7 @@ mod claim_payout {
 				]
 			);
 
+			assert!(!Metadata::<T>::contains_key(1));
 			// original ed + ed put into reward account + reward + bond + dust.
 			assert_eq!(Balances::free_balance(&10), 35 + 5 + 13 + 10 + 1);
 		})
@@ -3106,6 +3161,7 @@ mod withdraw_unbonded {
 						Event::Destroyed { pool_id: 1 }
 					]
 				);
+				assert!(!Metadata::<T>::contains_key(1));
 				assert_eq!(
 					balances_events_since_last_call(),
 					vec![
@@ -3216,6 +3272,10 @@ mod withdraw_unbonded {
 
 				CurrentEra::set(CurrentEra::get() + 3);
 
+				// set metadata to check that it's being removed on dissolve
+				assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
+				assert!(Metadata::<T>::contains_key(1));
+
 				// when
 				assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
@@ -3234,6 +3294,7 @@ mod withdraw_unbonded {
 						Event::Destroyed { pool_id: 1 }
 					]
 				);
+				assert!(!Metadata::<T>::contains_key(1));
 				assert_eq!(
 					balances_events_since_last_call(),
 					vec![
@@ -3744,6 +3805,7 @@ mod withdraw_unbonded {
 					Event::Destroyed { pool_id: 1 },
 				]
 			);
+			assert!(!Metadata::<T>::contains_key(1));
 		})
 	}
 }
@@ -3986,7 +4048,7 @@ mod set_state {
 			// Then
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().state, PoolState::Destroying);
 
-			// If the pool is not ok to be open, it cannot be permissionleslly set to a state that
+			// If the pool is not ok to be open, it cannot be permissionlessly set to a state that
 			// isn't destroying
 			unsafe_set_state(1, PoolState::Open);
 			assert_noop!(

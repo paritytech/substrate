@@ -172,7 +172,7 @@ pub mod pallet {
 			.map_err(|_| Error::<T>::UndecodableCall)?;
 
 			ensure!(
-				call.get_dispatch_info().weight <= call_weight_witness,
+				call.get_dispatch_info().weight.all_lte(call_weight_witness),
 				Error::<T>::InvalidCallWeightWitness
 			);
 

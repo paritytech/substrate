@@ -63,7 +63,7 @@ impl SlotTimestampProvider {
 		C: AuxStore + HeaderBackend<B> + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: BabeApi<B>,
 	{
-		let slot_duration = sc_consensus_babe::Config::get(&*client)?.slot_duration();
+		let slot_duration = sc_consensus_babe::configuration(&*client)?.slot_duration();
 
 		let time = Self::with_header(&client, slot_duration, |header| {
 			let slot_number = *sc_consensus_babe::find_pre_digest::<B>(&header)
