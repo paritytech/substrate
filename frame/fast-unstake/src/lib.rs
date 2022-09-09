@@ -17,9 +17,16 @@
 
 //! A pallet that's designed to ONLY do:
 //!
-//! If a nominator is not exposed at all in any `ErasStakers` (i.e. "has not backed any validators
-//! in the last `BondingDuration` days"), then they can register themselves in this pallet, and move
-//! quickly into a nomination pool.
+//! If a nominator is not exposed at all in any `ErasStakers` (i.e. "has not actively backed any
+//! validators in the last `BondingDuration` days"), then they can register themselves in this
+//! pallet, unstake faster than needing to wait an entire bonding duration, and potentially move
+//! into a nomination pool.
+//!
+//! Appearing in the exposure of a validator means being exposed equal to that validator from the
+//! point of view of the staking system. This usually means earning rewards with the validator, and
+//! also being at the risk of slashing with the validator. This is equivalent to the "Active
+//! Nominator" role explained in the
+//! [February Staking Update](https://polkadot.network/blog/staking-update-february-2022/).
 //!
 //! This pallet works of the basis of `on_idle`, meaning that it provides no guarantee about when it
 //! will succeed, if at all. Moreover, the queue implementation is unordered. In case of congestion,
