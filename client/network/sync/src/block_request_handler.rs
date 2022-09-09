@@ -405,11 +405,20 @@ where
 				indexed_body,
 			};
 
-			total_size += block_data.body.iter().map(|ex| ex.len()).sum::<usize>();
-			total_size += block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
+			let new_total_size = total_size +
+				block_data.body.iter().map(|ex| ex.len()).sum::<usize>() +
+				block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
+
+			// Send at least one block, but make sure to not exceed the limit.
+			if !blocks.is_empty() && new_total_size > MAX_BODY_BYTES {
+				break
+			}
+
+			total_size = new_total_size;
+
 			blocks.push(block_data);
 
-			if blocks.len() >= max_blocks as usize || total_size > MAX_BODY_BYTES {
+			if blocks.len() >= max_blocks as usize {
 				break
 			}
 

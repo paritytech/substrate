@@ -52,7 +52,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -190,11 +190,11 @@ fn weights_work() {
 	let default_call = pallet_example_basic::Call::<Test>::accumulate_dummy { increase_by: 10 };
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert!(info1.weight > 0);
+	assert!(info1.weight.all_gt(Weight::zero()));
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
 	let custom_call = pallet_example_basic::Call::<Test>::set_dummy { new_value: 20 };
 	let info2 = custom_call.get_dispatch_info();
-	assert!(info1.weight > info2.weight);
+	assert!(info1.weight.all_gt(info2.weight));
 }

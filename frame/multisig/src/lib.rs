@@ -257,9 +257,9 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_multi_threshold_1(call.using_encoded(|c| c.len() as u32))
-					.saturating_add(dispatch_info.weight)
 					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+					.saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)
 		})]
@@ -563,7 +563,10 @@ impl<T: Config> Pallet<T> {
 
 			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
-				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::MaxWeightTooLow);
+				ensure!(
+					call.get_dispatch_info().weight.all_lte(max_weight),
+					Error::<T>::MaxWeightTooLow
+				);
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.

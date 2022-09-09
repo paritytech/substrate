@@ -33,7 +33,7 @@ rand = { version = "0.8.5", features = ["small_rng"] }
 
 [features]
 runtime-benchmarks = []
-try-runtime = []
+try-runtime = [ "frame-support/try-runtime" ]
 fuzz-test = []
 default = ["std"]
 std = [

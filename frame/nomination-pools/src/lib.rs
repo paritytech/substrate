@@ -1141,7 +1141,7 @@ pub mod pallet {
 	use sp_runtime::traits::CheckedAdd;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -2138,6 +2138,11 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state(u8::MAX)
+		}
+
 		fn integrity_test() {
 			assert!(
 				T::MaxPointsToBalance::get() > 0,
@@ -2186,8 +2191,8 @@ impl<T: Config> Pallet<T> {
 	}
 	/// Remove everything related to the given bonded pool.
 	///
-	/// All sub-pools are also deleted. All accounts are dusted and the leftover of the reward
-	/// account is returned to the depositor.
+	/// Metadata and all of the sub-pools are also deleted. All accounts are dusted and the leftover
+	/// of the reward account is returned to the depositor.
 	pub fn dissolve_pool(bonded_pool: BondedPool<T>) {
 		let reward_account = bonded_pool.reward_account();
 		let bonded_account = bonded_pool.bonded_account();
@@ -2224,6 +2229,9 @@ impl<T: Config> Pallet<T> {
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
+		// Remove bonded pool metadata.
+		Metadata::<T>::remove(bonded_pool.id);
+
 		bonded_pool.remove();
 	}
 
@@ -2389,9 +2397,9 @@ impl<T: Config> Pallet<T> {
 	///
 	/// To cater for tests that want to escape parts of these checks, this function is split into
 	/// multiple `level`s, where the higher the level, the more checks we performs. So,
-	/// `sanity_check(255)` is the strongest sanity check, and `0` performs no checks.
+	/// `try_state(255)` is the strongest sanity check, and `0` performs no checks.
 	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
-	pub fn sanity_checks(level: u8) -> Result<(), &'static str> {
+	pub fn do_try_state(level: u8) -> Result<(), &'static str> {
 		if level.is_zero() {
 			return Ok(())
 		}
