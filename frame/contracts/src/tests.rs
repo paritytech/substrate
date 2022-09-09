@@ -37,8 +37,8 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, OnIdle, OnInitialize,
-		ReservableCurrency,
+		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, LockableCurrency, OnIdle,
+		OnInitialize, ReservableCurrency, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
 };
@@ -3654,7 +3654,6 @@ fn storage_deposit_limit_is_enforced_late() {
 	let (wasm_callee, code_hash_callee) = compile_module::<Test>("store").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
-		//let min_balance = <Test as Config>::Currency::minimum_balance();
 
 		// Create both contracts: Constructors do nothing.
 		assert_ok!(Contracts::instantiate_with_code(
@@ -3763,5 +3762,126 @@ fn storage_deposit_limit_is_enforced_late() {
 				.cloned()
 				.collect(),
 		));
+	});
+}
+
+#[test]
+fn deposit_limit_honors_liquidity_restrictions() {
+	let (wasm, code_hash) = compile_module::<Test>("store").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = Balances::deposit_creating(&BOB, 1_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Check that the contract has been instantiated and has the minimum balance
+		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
+
+		// check that the lock ins honored
+		Balances::set_lock([0; 8], &BOB, 1_000, WithdrawReasons::TRANSFER);
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(BOB),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(200)),
+				100u32.to_le_bytes().to_vec()
+			),
+			<Error<Test>>::StorageDepositNotEnoughFunds,
+		);
+		assert_eq!(Balances::free_balance(&BOB), 1_000);
+	});
+}
+
+#[test]
+fn deposit_limit_honors_existential_deposit() {
+	let (wasm, code_hash) = compile_module::<Test>("store").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = Balances::deposit_creating(&BOB, 1_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Check that the contract has been instantiated and has the minimum balance
+		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
+
+		// check that the deposit can't bring the account below the existential deposit
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(BOB),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(900)),
+				100u32.to_le_bytes().to_vec()
+			),
+			<Error<Test>>::StorageDepositNotEnoughFunds,
+		);
+		assert_eq!(Balances::free_balance(&BOB), 1_000);
+	});
+}
+
+#[test]
+fn deposit_limit_honors_min_leftover() {
+	let (wasm, code_hash) = compile_module::<Test>("store").unwrap();
+	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = Balances::deposit_creating(&BOB, 1_000);
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+
+		// Instantiate the BOB contract.
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			0,
+			GAS_LIMIT,
+			None,
+			wasm,
+			vec![],
+			vec![],
+		));
+		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		// Check that the contract has been instantiated and has the minimum balance
+		assert_eq!(get_contract(&addr).total_deposit(), min_balance);
+		assert_eq!(<Test as Config>::Currency::total_balance(&addr), min_balance);
+
+		// check that the minumum leftover (value send) is considered
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(BOB),
+				addr.clone(),
+				400,
+				GAS_LIMIT,
+				Some(codec::Compact(500)),
+				100u32.to_le_bytes().to_vec()
+			),
+			<Error<Test>>::StorageDepositNotEnoughFunds,
+		);
+		assert_eq!(Balances::free_balance(&BOB), 1_000);
 	});
 }

@@ -17,11 +17,15 @@
 
 //! This module contains functions to meter the storage deposit.
 
-use crate::{storage::ContractInfo, BalanceOf, Config, Error};
+use crate::{storage::ContractInfo, AccountIdOf, BalanceOf, Config, Error, Inspect};
 use codec::Encode;
 use frame_support::{
 	dispatch::DispatchError,
-	traits::{tokens::BalanceStatus, Currency, ExistenceRequirement, Get, ReservableCurrency},
+	ensure,
+	traits::{
+		tokens::{BalanceStatus, WithdrawConsequence},
+		Currency, ExistenceRequirement, Get, ReservableCurrency,
+	},
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
@@ -356,7 +360,8 @@ where
 
 		// Instantiate needs to transfer the minimum balance at least in order to pull the
 		// contract's account into existence.
-		deposit = deposit.max(Deposit::Charge(T::Currency::minimum_balance()));
+		deposit = deposit
+			.max(Deposit::Charge(<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance()));
 		if deposit.charge_or_zero() > self.limit {
 			return Err(<Error<T>>::StorageDepositLimitExhausted.into())
 		}
@@ -414,14 +419,14 @@ impl<T: Config> Ext<T> for ReservingExt {
 		limit: Option<BalanceOf<T>>,
 		min_leftover: BalanceOf<T>,
 	) -> Result<BalanceOf<T>, DispatchError> {
-		let max = T::Currency::free_balance(origin)
-			.saturating_sub(T::Currency::minimum_balance())
-			.saturating_sub(min_leftover);
-		match limit {
-			Some(limit) if limit <= max => Ok(limit),
-			None => Ok(max),
-			_ => Err(<Error<T>>::StorageDepositNotEnoughFunds.into()),
-		}
+		let max = T::Currency::reducible_balance(origin, true).saturating_sub(min_leftover);
+		let limit = limit.unwrap_or(max);
+		ensure!(
+			limit <= max &&
+				matches!(T::Currency::can_withdraw(origin, limit), WithdrawConsequence::Success),
+			<Error<T>>::StorageDepositNotEnoughFunds,
+		);
+		Ok(limit)
 	}
 
 	fn charge(
@@ -465,18 +470,18 @@ impl<T: Config> Ext<T> for ReservingExt {
 			// enough reserved balance because we track it in the `ContractInfo` and never send more
 			// back than we have.
 			Deposit::Refund(amount) => {
-				let amount = if terminated {
-					*amount
-				} else {
-					// This is necessary when the `storage_deposit` tracked inside the account
-					// info is out of sync with the actual balance. That can only happen due to
-					// slashing. We make sure to never dust the contract's account through a
-					// refund because we consider this unexpected behaviour.
-					*amount.min(
-						&T::Currency::reserved_balance(contract)
-							.saturating_sub(T::Currency::minimum_balance()),
-					)
-				};
+				let amount =
+					if terminated {
+						*amount
+					} else {
+						// This is necessary when the `storage_deposit` tracked inside the account
+						// info is out of sync with the actual balance. That can only happen due to
+						// slashing. We make sure to never dust the contract's account through a
+						// refund because we consider this unexpected behaviour.
+						*amount.min(&T::Currency::reserved_balance(contract).saturating_sub(
+							<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance(),
+						))
+					};
 				let result =
 					T::Currency::repatriate_reserved(contract, origin, amount, BalanceStatus::Free);
 				if matches!(result, Ok(val) if !val.is_zero()) || matches!(result, Err(_)) {

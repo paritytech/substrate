@@ -109,7 +109,10 @@ use codec::{Encode, HasCompact};
 use frame_support::{
 	dispatch::Dispatchable,
 	ensure,
-	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
+	traits::{
+		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
+		ReservableCurrency, Time,
+	},
 	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
 	BoundedVec,
 };
@@ -241,7 +244,8 @@ pub mod pallet {
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId>
+			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
