@@ -167,13 +167,15 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	let whitelisted_storage_keys_impl = quote::quote![
-		impl<T> frame_support::traits::WhitelistedStorageKeys for Pallet<T> {
-			fn whitelisted_storage_keys(
-			) -> frame_support::sp_std::vec::Vec<frame_support::traits::TrackedStorageKey> {
-				frame_support::sp_std::vec::Vec::new()
+		use #frame_support::traits::StorageInfoTrait;
+		impl<#type_impl_gen> #frame_support::traits::WhitelistedStorageKeys for #pallet_ident<#type_use_gen> {
+			fn whitelisted_storage_keys() -> #frame_support::sp_std::vec::Vec<#frame_support::traits::TrackedStorageKey> {
+				let info = #pallet_ident::<#type_use_gen>::storage_info();
+				#frame_support::sp_std::vec::Vec::new()
 			}
 		}
 	];
+	println!("{}", whitelisted_storage_keys_impl);
 
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
 		#pallet_error_metadata
