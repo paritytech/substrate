@@ -652,7 +652,7 @@ pub mod pallet {
 						details.approvals.get(&origin).ok_or(Error::<T, I>::NoPermission)?;
 					if let Some(d) = deadline {
 						let block_number = frame_system::Pallet::<T>::block_number();
-						ensure!(*d >= block_number, Error::<T, I>::ApprovalExpired);
+						ensure!(block_number <= *d, Error::<T, I>::ApprovalExpired);
 					}
 				}
 				Ok(())
