@@ -40,13 +40,12 @@ use sp_staking::{
 	offence::{self, DisableStrategy, Kind, OffenceDetails},
 	SessionIndex,
 };
-use std::cell::RefCell;
 
 pub struct OnOffenceHandler;
 
-thread_local! {
-	pub static ON_OFFENCE_PERBILL: RefCell<Vec<Perbill>> = RefCell::new(Default::default());
-	pub static OFFENCE_WEIGHT: RefCell<Weight> = RefCell::new(Default::default());
+parameter_types! {
+	pub static OnOffencePerbill: Vec<Perbill> = Default::default();
+	pub static OffenceWeight: Weight = Default::default();
 }
 
 impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
@@ -58,16 +57,16 @@ impl<Reporter, Offender> offence::OnOffenceHandler<Reporter, Offender, Weight>
 		_offence_session: SessionIndex,
 		_disable_strategy: DisableStrategy,
 	) -> Weight {
-		ON_OFFENCE_PERBILL.with(|f| {
-			*f.borrow_mut() = slash_fraction.to_vec();
+		OnOffencePerbill::mutate(|f| {
+			*f = slash_fraction.to_vec();
 		});
 
-		OFFENCE_WEIGHT.with(|w| *w.borrow())
+		OffenceWeight::get()
 	}
 }
 
 pub fn with_on_offence_fractions<R, F: FnOnce(&mut Vec<Perbill>) -> R>(f: F) -> R {
-	ON_OFFENCE_PERBILL.with(|fractions| f(&mut fractions.borrow_mut()))
+	OnOffencePerbill::mutate(|fractions| f(fractions))
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Runtime>;

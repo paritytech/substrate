@@ -34,7 +34,7 @@ use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
 	DispatchError, SaturatedConversion,
 };
-use sp_std::{cmp::Ordering, prelude::*};
+use sp_std::prelude::*;
 
 /// Storage key used to store the last block number at which offchain worker ran.
 pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -638,16 +638,17 @@ impl<T: MinerConfig> Miner<T> {
 		};
 
 		let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
-			match current_weight.cmp(&max_weight) {
-				Ordering::Less => {
-					let next_voters = voters.checked_add(step);
-					match next_voters {
-						Some(voters) if voters < max_voters => Ok(voters),
-						_ => Err(()),
-					}
-				},
-				Ordering::Greater => voters.checked_sub(step).ok_or(()),
-				Ordering::Equal => Ok(voters),
+			if current_weight.all_lt(max_weight) {
+				let next_voters = voters.checked_add(step);
+				match next_voters {
+					Some(voters) if voters < max_voters => Ok(voters),
+					_ => Err(()),
+				}
+			} else if current_weight.any_gt(max_weight) {
+				voters.checked_sub(step).ok_or(())
+			} else {
+				// If any of the constituent weights is equal to the max weight, we're at max
+				Ok(voters)
 			}
 		};
 
@@ -672,16 +673,16 @@ impl<T: MinerConfig> Miner<T> {
 
 		// Time to finish. We might have reduced less than expected due to rounding error. Increase
 		// one last time if we have any room left, the reduce until we are sure we are below limit.
-		while voters < max_voters && weight_with(voters + 1) < max_weight {
+		while voters < max_voters && weight_with(voters + 1).all_lt(max_weight) {
 			voters += 1;
 		}
-		while voters.checked_sub(1).is_some() && weight_with(voters) > max_weight {
+		while voters.checked_sub(1).is_some() && weight_with(voters).any_gt(max_weight) {
 			voters -= 1;
 		}
 
 		let final_decision = voters.min(size.voters);
 		debug_assert!(
-			weight_with(final_decision) <= max_weight,
+			weight_with(final_decision).all_lte(max_weight),
 			"weight_with({}) <= {}",
 			final_decision,
 			max_weight,

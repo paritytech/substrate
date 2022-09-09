@@ -42,12 +42,14 @@ use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::{
 	config::ProtocolId,
-	protocol::event::{Event, ObservedRole},
+	protocol::{
+		event::{Event, ObservedRole},
+		ProtocolName,
+	},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
 };
 use sp_runtime::traits::Block as BlockT;
 use std::{
-	borrow::Cow,
 	collections::{hash_map::Entry, HashMap},
 	iter,
 	num::NonZeroUsize,
@@ -130,8 +132,8 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 
 /// Prototype for a [`TransactionsHandler`].
 pub struct TransactionsHandlerPrototype {
-	protocol_name: Cow<'static, str>,
-	fallback_protocol_names: Vec<Cow<'static, str>>,
+	protocol_name: ProtocolName,
+	fallback_protocol_names: Vec<ProtocolName>,
 }
 
 impl TransactionsHandlerPrototype {
@@ -244,7 +246,7 @@ enum ToHandler<H: ExHashT> {
 
 /// Handler for transactions. Call [`TransactionsHandler::run`] to start the processing.
 pub struct TransactionsHandler<B: BlockT + 'static, H: ExHashT> {
-	protocol_name: Cow<'static, str>,
+	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
 	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Pending transactions verification tasks.

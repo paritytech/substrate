@@ -241,6 +241,10 @@ impl Default for Releases {
 	}
 }
 
+/// Default value for NextFeeMultiplier. This is used in genesis and is also used in
+/// NextFeeMultiplierOnEmpty() to provide a value when none exists in storage.
+const MULTIPLIER_DEFAULT_VALUE: Multiplier = Multiplier::from_u32(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -300,7 +304,7 @@ pub mod pallet {
 
 	#[pallet::type_value]
 	pub fn NextFeeMultiplierOnEmpty() -> Multiplier {
-		Multiplier::saturating_from_integer(1)
+		MULTIPLIER_DEFAULT_VALUE
 	}
 
 	#[pallet::storage]
@@ -312,12 +316,14 @@ pub mod pallet {
 	pub(super) type StorageVersion<T: Config> = StorageValue<_, Releases, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig;
+	pub struct GenesisConfig {
+		pub multiplier: Multiplier,
+	}
 
 	#[cfg(feature = "std")]
 	impl Default for GenesisConfig {
 		fn default() -> Self {
-			Self
+			Self { multiplier: MULTIPLIER_DEFAULT_VALUE }
 		}
 	}
 
@@ -325,6 +331,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			StorageVersion::<T>::put(Releases::V2);
+			NextFeeMultiplier::<T>::put(self.multiplier);
 		}
 	}
 
@@ -803,8 +810,6 @@ mod tests {
 	use super::*;
 	use crate as pallet_transaction_payment;
 
-	use std::cell::RefCell;
-
 	use codec::Encode;
 
 	use sp_core::H256;
@@ -816,7 +821,7 @@ mod tests {
 
 	use frame_support::{
 		assert_noop, assert_ok, parameter_types,
-		traits::{ConstU32, ConstU64, Currency, Imbalance, OnUnbalanced},
+		traits::{ConstU32, ConstU64, Currency, GenesisBuild, Imbalance, OnUnbalanced},
 		weights::{
 			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
 			WeightToFee as WeightToFeeT,
@@ -843,8 +848,8 @@ mod tests {
 	const CALL: &<Runtime as frame_system::Config>::Call =
 		&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
-	thread_local! {
-		static EXTRINSIC_BASE_WEIGHT: RefCell<Weight> = RefCell::new(Weight::zero());
+	parameter_types! {
+		static ExtrinsicBaseWeight: Weight = Weight::zero();
 	}
 
 	pub struct BlockWeights;
@@ -853,7 +858,7 @@ mod tests {
 			frame_system::limits::BlockWeights::builder()
 				.base_block(Weight::zero())
 				.for_class(DispatchClass::all(), |weights| {
-					weights.base_extrinsic = EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow()).into();
+					weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 				})
 				.for_class(DispatchClass::non_mandatory(), |weights| {
 					weights.max_total = Weight::from_ref_time(1024).into();
@@ -925,9 +930,9 @@ mod tests {
 		}
 	}
 
-	thread_local! {
-		static TIP_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
-		static FEE_UNBALANCED_AMOUNT: RefCell<u64> = RefCell::new(0);
+	parameter_types! {
+		static TipUnbalancedAmount: u64 = 0;
+		static FeeUnbalancedAmount: u64 = 0;
 	}
 
 	pub struct DealWithFees;
@@ -936,9 +941,9 @@ mod tests {
 			mut fees_then_tips: impl Iterator<Item = pallet_balances::NegativeImbalance<Runtime>>,
 		) {
 			if let Some(fees) = fees_then_tips.next() {
-				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() += fees.peek());
+				FeeUnbalancedAmount::mutate(|a| *a += fees.peek());
 				if let Some(tips) = fees_then_tips.next() {
-					TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() += tips.peek());
+					TipUnbalancedAmount::mutate(|a| *a += tips.peek());
 				}
 			}
 		}
@@ -958,11 +963,18 @@ mod tests {
 		base_weight: Weight,
 		byte_fee: u64,
 		weight_to_fee: u64,
+		initial_multiplier: Option<Multiplier>,
 	}
 
 	impl Default for ExtBuilder {
 		fn default() -> Self {
-			Self { balance_factor: 1, base_weight: Weight::zero(), byte_fee: 1, weight_to_fee: 1 }
+			Self {
+				balance_factor: 1,
+				base_weight: Weight::zero(),
+				byte_fee: 1,
+				weight_to_fee: 1,
+				initial_multiplier: None,
+			}
 		}
 	}
 
@@ -983,8 +995,12 @@ mod tests {
 			self.balance_factor = factor;
 			self
 		}
+		pub fn with_initial_multiplier(mut self, multiplier: Multiplier) -> Self {
+			self.initial_multiplier = Some(multiplier);
+			self
+		}
 		fn set_constants(&self) {
-			EXTRINSIC_BASE_WEIGHT.with(|v| *v.borrow_mut() = self.base_weight);
+			ExtrinsicBaseWeight::mutate(|v| *v = self.base_weight);
 			TRANSACTION_BYTE_FEE.with(|v| *v.borrow_mut() = self.byte_fee);
 			WEIGHT_TO_FEE.with(|v| *v.borrow_mut() = self.weight_to_fee);
 		}
@@ -1007,6 +1023,12 @@ mod tests {
 			}
 			.assimilate_storage(&mut t)
 			.unwrap();
+
+			if let Some(multiplier) = self.initial_multiplier {
+				let genesis = pallet::GenesisConfig { multiplier };
+				GenesisBuild::<Runtime>::assimilate_storage(&genesis, &mut t).unwrap();
+			}
+
 			t.into()
 		}
 	}
@@ -1050,10 +1072,10 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::free_balance(1), 100 - 5 - 5 - 10);
-				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5 + 5 + 10);
-				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 0);
+				assert_eq!(FeeUnbalancedAmount::get(), 5 + 5 + 10);
+				assert_eq!(TipUnbalancedAmount::get(), 0);
 
-				FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow_mut() = 0);
+				FeeUnbalancedAmount::mutate(|a| *a = 0);
 
 				let pre = ChargeTransactionPayment::<Runtime>::from(5 /* tipped */)
 					.pre_dispatch(&2, CALL, &info_from_weight(Weight::from_ref_time(100)), len)
@@ -1068,8 +1090,8 @@ mod tests {
 					&Ok(())
 				));
 				assert_eq!(Balances::free_balance(2), 200 - 5 - 10 - 50 - 5);
-				assert_eq!(FEE_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5 + 10 + 50);
-				assert_eq!(TIP_UNBALANCED_AMOUNT.with(|a| *a.borrow()), 5);
+				assert_eq!(FeeUnbalancedAmount::get(), 5 + 10 + 50);
+				assert_eq!(TipUnbalancedAmount::get(), 5);
 			});
 	}
 
@@ -1719,5 +1741,25 @@ mod tests {
 				assert_eq!(actual_fee, 5);
 				assert_eq!(refund_based_fee, actual_fee);
 			});
+	}
+
+	#[test]
+	fn genesis_config_works() {
+		ExtBuilder::default()
+			.with_initial_multiplier(Multiplier::from_u32(100))
+			.build()
+			.execute_with(|| {
+				assert_eq!(
+					<NextFeeMultiplier<Runtime>>::get(),
+					Multiplier::saturating_from_integer(100)
+				);
+			});
+	}
+
+	#[test]
+	fn genesis_default_works() {
+		ExtBuilder::default().build().execute_with(|| {
+			assert_eq!(<NextFeeMultiplier<Runtime>>::get(), Multiplier::saturating_from_integer(1));
+		});
 	}
 }

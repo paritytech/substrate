@@ -54,7 +54,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			elements::deserialize_buffer(original_code).map_err(|_| "Can't decode wasm code")?;
 
 		// Make sure that the module is valid.
-		validate_module::<PlainValidator>(&module).map_err(|_| "Module is not valid")?;
+		validate_module::<PlainValidator>(&module, ()).map_err(|_| "Module is not valid")?;
 
 		// Return a `ContractModule` instance with
 		// __valid__ module.

@@ -22,7 +22,10 @@
 #![recursion_limit = "128"]
 
 use codec::MaxEncodedLen;
-use frame_support::traits::{CrateVersion, PalletInfo as _};
+use frame_support::{
+	parameter_types,
+	traits::{CrateVersion, PalletInfo as _},
+};
 use scale_info::TypeInfo;
 use sp_core::{sr25519, H256};
 use sp_runtime::{
@@ -30,14 +33,13 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Verify},
 	DispatchError, ModuleError,
 };
-use sp_std::cell::RefCell;
 
 mod system;
 
 pub trait Currency {}
 
-thread_local! {
-	pub static INTEGRITY_TEST_EXEC: RefCell<u32> = RefCell::new(0);
+parameter_types! {
+	pub static IntegrityTestExec: u32 = 0;
 }
 
 mod module1 {
@@ -95,7 +97,7 @@ mod module2 {
 			}
 
 			fn integrity_test() {
-				INTEGRITY_TEST_EXEC.with(|i| *i.borrow_mut() += 1);
+				IntegrityTestExec::mutate(|i| *i += 1);
 			}
 		}
 	}
@@ -140,7 +142,7 @@ mod nested {
 				}
 
 				fn integrity_test() {
-					INTEGRITY_TEST_EXEC.with(|i| *i.borrow_mut() += 1);
+					IntegrityTestExec::mutate(|i| *i += 1);
 				}
 			}
 		}
@@ -377,7 +379,7 @@ fn check_modules_error_type() {
 #[test]
 fn integrity_test_works() {
 	__construct_runtime_integrity_test::runtime_integrity_tests();
-	assert_eq!(INTEGRITY_TEST_EXEC.with(|i| *i.borrow()), 2);
+	assert_eq!(IntegrityTestExec::get(), 2);
 }
 
 #[test]

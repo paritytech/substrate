@@ -28,7 +28,10 @@ use parity_scale_codec::Encode;
 use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
-	protocol::event::{Event as NetworkEvent, ObservedRole},
+	protocol::{
+		event::{Event as NetworkEvent, ObservedRole},
+		ProtocolName,
+	},
 	service::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
@@ -41,7 +44,6 @@ use sp_finality_grandpa::AuthorityList;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::traits::NumberFor;
 use std::{
-	borrow::Cow,
 	collections::HashSet,
 	pin::Pin,
 	sync::Arc,
@@ -78,7 +80,7 @@ impl NetworkPeers for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
 	}
 
-	fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+	fn disconnect_peer(&self, _who: PeerId, _protocol: ProtocolName) {}
 
 	fn accept_unreserved_peers(&self) {
 		unimplemented!();
@@ -98,7 +100,7 @@ impl NetworkPeers for TestNetwork {
 
 	fn set_reserved_peers(
 		&self,
-		_protocol: Cow<'static, str>,
+		_protocol: ProtocolName,
 		_peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		unimplemented!();
@@ -106,23 +108,23 @@ impl NetworkPeers for TestNetwork {
 
 	fn add_peers_to_reserved_set(
 		&self,
-		_protocol: Cow<'static, str>,
+		_protocol: ProtocolName,
 		_peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		unimplemented!();
 	}
 
-	fn remove_peers_from_reserved_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {}
+	fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
 
 	fn add_to_peers_set(
 		&self,
-		_protocol: Cow<'static, str>,
+		_protocol: ProtocolName,
 		_peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		unimplemented!();
 	}
 
-	fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+	fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 		unimplemented!();
 	}
 
@@ -143,14 +145,14 @@ impl NetworkEventStream for TestNetwork {
 }
 
 impl NetworkNotification for TestNetwork {
-	fn write_notification(&self, target: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
+	fn write_notification(&self, target: PeerId, _protocol: ProtocolName, message: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::WriteNotification(target, message));
 	}
 
 	fn notification_sender(
 		&self,
 		_target: PeerId,
-		_protocol: Cow<'static, str>,
+		_protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 		unimplemented!();
 	}

@@ -19,8 +19,6 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
-
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -57,18 +55,18 @@ frame_support::construct_runtime!(
 	}
 );
 
-thread_local! {
-	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![
+parameter_types! {
+	pub static Validators: Option<Vec<u64>> = Some(vec![
 		1,
 		2,
 		3,
-	]));
+	]);
 }
 
 pub struct TestSessionManager;
 impl pallet_session::SessionManager<u64> for TestSessionManager {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<u64>> {
-		VALIDATORS.with(|l| l.borrow_mut().take())
+		Validators::mutate(|l| l.take())
 	}
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
@@ -76,10 +74,8 @@ impl pallet_session::SessionManager<u64> for TestSessionManager {
 
 impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
-		VALIDATORS.with(|l| {
-			l.borrow_mut()
-				.take()
-				.map(|validators| validators.iter().map(|v| (*v, *v)).collect())
+		Validators::mutate(|l| {
+			l.take().map(|validators| validators.iter().map(|v| (*v, *v)).collect())
 		})
 	}
 	fn end_session(_: SessionIndex) {}
@@ -91,15 +87,15 @@ pub type Extrinsic = TestXt<Call, ()>;
 type IdentificationTuple = (u64, u64);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
-thread_local! {
-	pub static OFFENCES: RefCell<Vec<(Vec<u64>, Offence)>> = RefCell::new(vec![]);
+parameter_types! {
+	pub static Offences: Vec<(Vec<u64>, Offence)> = vec![];
 }
 
 /// A mock offence report handler.
 pub struct OffenceHandler;
 impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
-		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
+		Offences::mutate(|l| l.push((reporters, offence)));
 		Ok(())
 	}
 
@@ -183,12 +179,12 @@ impl pallet_authorship::Config for Runtime {
 	type EventHandler = ImOnline;
 }
 
-thread_local! {
-	pub static MOCK_CURRENT_SESSION_PROGRESS: RefCell<Option<Option<Permill>>> = RefCell::new(None);
+parameter_types! {
+	pub static MockCurrentSessionProgress: Option<Option<Permill>> = None;
 }
 
-thread_local! {
-	pub static MOCK_AVERAGE_SESSION_LENGTH: RefCell<Option<u64>> = RefCell::new(None);
+parameter_types! {
+	pub static MockAverageSessionLength: Option<u64> = None;
 }
 
 pub struct TestNextSessionRotation;
@@ -196,7 +192,7 @@ pub struct TestNextSessionRotation;
 impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSessionRotation {
 	fn average_session_length() -> u64 {
 		// take the mock result if any and return it
-		let mock = MOCK_AVERAGE_SESSION_LENGTH.with(|p| p.borrow_mut().take());
+		let mock = MockAverageSessionLength::mutate(|p| p.take());
 
 		mock.unwrap_or(pallet_session::PeriodicSessions::<Period, Offset>::average_session_length())
 	}
@@ -208,7 +204,7 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 			);
 
 		// take the mock result if any and return it
-		let mock = MOCK_CURRENT_SESSION_PROGRESS.with(|p| p.borrow_mut().take());
+		let mock = MockCurrentSessionProgress::mutate(|p| p.take());
 
 		(mock.unwrap_or(estimate), weight)
 	}
