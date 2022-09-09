@@ -24,7 +24,7 @@ use std::{
 };
 
 use codec::{Codec, Decode, Encode};
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
@@ -54,7 +54,7 @@ use beefy_primitives::{
 use crate::{
 	communication::{
 		gossip::{topic, GossipValidator},
-		request_response::outgoing_request::OnDemandJustififactionsEngine,
+		request_response::outgoing_request::OnDemandJustificationsEngine,
 	},
 	error::Error,
 	justification::BeefyVersionedFinalityProof,
@@ -209,7 +209,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, N> {
 	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
-	on_demand_justifications: OnDemandJustififactionsEngine<B, N>,
+	on_demand_justifications: OnDemandJustificationsEngine<B, N, R>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
@@ -264,8 +264,9 @@ where
 			.expect_header(BlockId::number(client.info().finalized_number))
 			.expect("latest block always has header available; qed.");
 
-		let on_demand_justifications = OnDemandJustififactionsEngine::new(
+		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
+			runtime.clone(),
 			// FIXME: use right protocol name.
 			"TODO: FIXME: proto-name-here".into(),
 		);
@@ -370,9 +371,9 @@ where
 			// Check for and enqueue potential new session.
 			if let Some(new_validator_set) = find_authorities_change::<B>(header) {
 				self.init_session_at(new_validator_set, *header.number());
-				// TODO: when adding SYNC protocol, fire up a request for justification for this
+				// TODO: when adding SYNC protocol, fire up request for justification for this
 				// mandatory block here.
-				self.on_demand_justifications.fire_request_for(*header.number());
+				self.on_demand_justifications.request(*header.number());
 			}
 		}
 	}
@@ -739,15 +740,10 @@ where
 					}
 				},
 				// TODO: join this stream's branch with the one above; how? .. ¯\_(ツ)_/¯
-				justif = self.on_demand_justifications.next() => {
-					if let Some(justif) = justif {
-						// TODO: make sure proofs are verified before consuming.
-						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: "beefy", "🥩 {}", err);
-						}
-					} else {
-						error!(target: "beefy", "🥩 On demand justifications stream terminated, closing worker.");
-						return;
+				justif = self.on_demand_justifications.next().fuse() => {
+					// TODO: make sure proofs are verified before consuming.
+					if let Err(err) = self.triage_incoming_justif(justif) {
+						debug!(target: "beefy", "🥩 {}", err);
 					}
 				},
 				vote = votes.next() => {
