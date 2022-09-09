@@ -272,7 +272,8 @@ mod tests {
 	};
 	use frame_support::{
 		assert_err, assert_ok,
-		weights::{Pays, Weight},
+		dispatch::Pays,
+		weights::Weight,
 	};
 	use sp_std::marker::PhantomData;
 
