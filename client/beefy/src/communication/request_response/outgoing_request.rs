@@ -31,16 +31,18 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block, NumberFor},
 };
-use std::sync::Arc;
+use std::{result::Result, sync::Arc};
+use log::debug;
 
 use crate::{
-	communication::request_response::JustificationRequest,
+	communication::request_response::{Error, JustificationRequest},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
-	ConsensusError,
 };
 
+/// Response type received from network.
+type Response = Result<Vec<u8>, RequestFailure>;
 /// Used to receive a response from the network.
-type ResponseReceiver = oneshot::Receiver<std::result::Result<Vec<u8>, RequestFailure>>;
+type ResponseReceiver = oneshot::Receiver<Response>;
 
 enum State<B: Block> {
 	Idle,
@@ -92,12 +94,32 @@ where
 			_ => unimplemented!(), // return future that never finishes.
 		};
 
-		let result = match rx.await {
-			Ok(result) => result,
+		let resp = match rx.await {
+			Ok(resp) => resp,
 			Err(_) => unimplemented!(),
 		};
 
-		let encoded = match result {
+		match self.process_response(resp, number) {
+			Ok(proof) => proof,
+			Err(e) => {
+				debug!(
+					target: "beefy",
+					"🥩 on demand justification (block {:?}) response error: {:?}",
+					number, e
+				);
+				self.request(number);
+
+				unimplemented!(); // return future that never finishes.
+			}
+		}
+	}
+
+	fn process_response(
+		&mut self,
+		resp: Response,
+		number: NumberFor<B>,
+	) -> Result<BeefyVersionedFinalityProof<B>, Error> {
+		let encoded = match resp {
 			Ok(encoded) => encoded,
 			Err(_) => unimplemented!(),
 		};
@@ -107,14 +129,11 @@ where
 			.runtime
 			.runtime_api()
 			.validator_set(&block_id)
-			.map_err(|e| ConsensusError::ClientImport(e.to_string()))
-			.unwrap_or_else(|_| unimplemented!())
-			.ok_or_else(|| ConsensusError::ClientImport("Unknown validator set".to_string()))
-			.unwrap_or_else(|_| unimplemented!());
+			.map_err(Error::RuntimeApi)?
+			.ok_or_else(|| Error::Pallet)?;
 
 		let proof = decode_and_verify_finality_proof::<B>(&encoded[..], number, &validator_set);
-		// FIXME: handle error.
-		proof.unwrap()
+		proof.map_err(|_| Error::TodoError)
 	}
 
 	/// Cancel any pending request for block numbers smaller or equal to `latest_block`.

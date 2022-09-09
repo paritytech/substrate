@@ -153,6 +153,12 @@ pub enum Error {
 	#[error(transparent)]
 	Client(#[from] sp_blockchain::Error),
 
+	#[error(transparent)]
+	RuntimeApi(#[from] sp_api::ApiError),
+
+	#[error("BEEFY pallet not available.")]
+	Pallet,
+
 	/// Decoding failed, we were able to change the peer's reputation accordingly.
 	#[error("Decoding request failed for peer {0}.")]
 	DecodingError(PeerId, #[source] CodecError),
@@ -167,6 +173,9 @@ pub enum Error {
 
 	#[error("Failed to send response.")]
 	SendResponse,
+
+	#[error("Failed to send response.")]
+	TodoError,
 }
 
 /// General result based on above `Error`.
