@@ -125,7 +125,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominations: Get<u32>;
 
-		/// Maximum History Depth for the validator rewards to be claimed. 
+		/// Era History Depth for the validator rewards to be claimed. 
 		/// This should never be decreased once set.  
 		#[pallet::constant]
 		type EraHistoryDepth: Get<u32>;
@@ -235,22 +235,6 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
-
-	#[pallet::type_value]
-	pub(crate) fn HistoryDepthOnEmpty() -> u32 {
-		84u32
-	}
-
-	/// Number of eras to keep in history.
-	///
-	/// Information is kept for eras in `[current_era - history_depth; current_era]`.
-	///
-	/// Must be more than the number of eras delayed by session otherwise. I.e. active era must
-	/// always be in history. I.e. `active_era > current_era - history_depth` must be
-	/// guaranteed.
-	#[pallet::storage]
-	#[pallet::getter(fn history_depth)]
-	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
 
 	/// The ideal number of staking participants.
 	#[pallet::storage]
@@ -554,7 +538,6 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub history_depth: u32,
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
 		pub invulnerables: Vec<T::AccountId>,
@@ -573,7 +556,6 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig {
-				history_depth: 84u32,
 				validator_count: Default::default(),
 				minimum_validator_count: Default::default(),
 				invulnerables: Default::default(),
@@ -592,7 +574,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			HistoryDepth::<T>::put(self.history_depth);
 			ValidatorCount::<T>::put(self.validator_count);
 			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
 			Invulnerables::<T>::put(&self.invulnerables);
@@ -846,7 +827,7 @@ pub mod pallet {
 			<Payee<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
-			let history_depth = Self::history_depth();
+			let history_depth = T::EraHistoryDepth::get();
 			let last_reward_era = current_era.saturating_sub(history_depth);
 
 			let stash_balance = T::Currency::free_balance(&stash);
@@ -1482,48 +1463,6 @@ pub mod pallet {
 				.saturating_add(initial_unlocking)
 				.saturating_sub(ledger.unlocking.len() as u32);
 			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
-		}
-
-		/// Set `HistoryDepth` value. This function will delete any history information
-		/// when `HistoryDepth` is reduced.
-		///
-		/// Parameters:
-		/// - `new_history_depth`: The new history depth you would like to set.
-		/// - `era_items_deleted`: The number of items that will be deleted by this dispatch. This
-		///   should report all the storage items that will be deleted by clearing old era history.
-		///   Needed to report an accurate weight for the dispatch. Trusted by `Root` to report an
-		///   accurate number.
-		///
-		/// Origin must be root.
-		///
-		/// # <weight>
-		/// - E: Number of history depths removed, i.e. 10 -> 7 = 3
-		/// - Weight: O(E)
-		/// - DB Weight:
-		///     - Reads: Current Era, History Depth
-		///     - Writes: History Depth
-		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
-		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake,
-		///       ErasStartSessionIndex
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_history_depth(*_era_items_deleted))]
-		pub fn set_history_depth(
-			origin: OriginFor<T>,
-			#[pallet::compact] new_history_depth: EraIndex,
-			#[pallet::compact] _era_items_deleted: u32,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			if let Some(current_era) = Self::current_era() {
-				HistoryDepth::<T>::mutate(|history_depth| {
-					let last_kept = current_era.saturating_sub(*history_depth);
-					let new_last_kept = current_era.saturating_sub(new_history_depth);
-					for era_index in last_kept..new_last_kept {
-						Self::clear_era_information(era_index);
-					}
-					*history_depth = new_history_depth
-				})
-			}
-			Ok(())
 		}
 
 		/// Remove all data structures concerning a staker/stash once it is at a state where it can

@@ -65,7 +65,6 @@ pub trait WeightInfo {
 	fn payout_stakers_dead_controller(n: u32, ) -> Weight;
 	fn payout_stakers_alive_staked(n: u32, ) -> Weight;
 	fn rebond(l: u32, ) -> Weight;
-	fn set_history_depth(e: u32, ) -> Weight;
 	fn reap_stash(s: u32, ) -> Weight;
 	fn new_era(v: u32, n: u32, ) -> Weight;
 	fn get_npos_voters(v: u32, n: u32, s: u32, ) -> Weight;
@@ -321,23 +320,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(Weight::from_ref_time(64_000 as u64).saturating_mul(l as u64))
 			.saturating_add(T::DbWeight::get().reads(9 as u64))
 			.saturating_add(T::DbWeight::get().writes(8 as u64))
-	}
-	// Storage: Staking CurrentEra (r:1 w:0)
-	// Storage: Staking HistoryDepth (r:1 w:1)
-	// Storage: Staking ErasStakersClipped (r:0 w:2)
-	// Storage: Staking ErasValidatorPrefs (r:0 w:2)
-	// Storage: Staking ErasValidatorReward (r:0 w:1)
-	// Storage: Staking ErasRewardPoints (r:0 w:1)
-	// Storage: Staking ErasStakers (r:0 w:2)
-	// Storage: Staking ErasTotalStake (r:0 w:1)
-	// Storage: Staking ErasStartSessionIndex (r:0 w:1)
-	fn set_history_depth(e: u32, ) -> Weight {
-		Weight::from_ref_time(0 as u64)
-			// Standard Error: 62_000
-			.saturating_add(Weight::from_ref_time(22_829_000 as u64).saturating_mul(e as u64))
-			.saturating_add(T::DbWeight::get().reads(2 as u64))
-			.saturating_add(T::DbWeight::get().writes(4 as u64))
-			.saturating_add(T::DbWeight::get().writes((7 as u64).saturating_mul(e as u64)))
 	}
 	// Storage: System Account (r:1 w:1)
 	// Storage: Staking Bonded (r:1 w:1)
@@ -707,23 +689,6 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_ref_time(64_000 as u64).saturating_mul(l as u64))
 			.saturating_add(RocksDbWeight::get().reads(9 as u64))
 			.saturating_add(RocksDbWeight::get().writes(8 as u64))
-	}
-	// Storage: Staking CurrentEra (r:1 w:0)
-	// Storage: Staking HistoryDepth (r:1 w:1)
-	// Storage: Staking ErasStakersClipped (r:0 w:2)
-	// Storage: Staking ErasValidatorPrefs (r:0 w:2)
-	// Storage: Staking ErasValidatorReward (r:0 w:1)
-	// Storage: Staking ErasRewardPoints (r:0 w:1)
-	// Storage: Staking ErasStakers (r:0 w:2)
-	// Storage: Staking ErasTotalStake (r:0 w:1)
-	// Storage: Staking ErasStartSessionIndex (r:0 w:1)
-	fn set_history_depth(e: u32, ) -> Weight {
-		Weight::from_ref_time(0 as u64)
-			// Standard Error: 62_000
-			.saturating_add(Weight::from_ref_time(22_829_000 as u64).saturating_mul(e as u64))
-			.saturating_add(RocksDbWeight::get().reads(2 as u64))
-			.saturating_add(RocksDbWeight::get().writes(4 as u64))
-			.saturating_add(RocksDbWeight::get().writes((7 as u64).saturating_mul(e as u64)))
 	}
 	// Storage: System Account (r:1 w:1)
 	// Storage: Staking Bonded (r:1 w:1)

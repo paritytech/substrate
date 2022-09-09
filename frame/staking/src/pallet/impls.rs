@@ -887,6 +887,11 @@ impl<T: Config> Pallet<T> {
 			DispatchClass::Mandatory,
 		);
 	}
+
+	/// This will return the currently configured History Depth
+	pub fn history_depth() -> u32 {
+		T::EraHistoryDepth::get()
+	}
 }
 
 impl<T: Config> ElectionDataProvider for Pallet<T> {

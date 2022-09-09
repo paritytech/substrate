@@ -3516,25 +3516,6 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 }
 
 #[test]
-fn set_history_depth_works() {
-	ExtBuilder::default().build_and_execute(|| {
-		mock::start_active_era(10);
-		Staking::set_history_depth(Origin::root(), 20, 0).unwrap();
-		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
-		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::root(), 4, 0).unwrap();
-		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::root(), 3, 0).unwrap();
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::root(), 8, 0).unwrap();
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-	});
-}
-
-#[test]
 fn test_payout_stakers() {
 	// Test that payout_stakers work in general, including that only the top
 	// `T::MaxNominatorRewardedPerValidator` nominators are rewarded.
