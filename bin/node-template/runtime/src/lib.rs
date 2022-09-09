@@ -514,7 +514,8 @@ impl_runtime_apis! {
 			impl frame_system_benchmarking::Config for Runtime {}
 			impl baseline::Config for Runtime {}
 
-			let whitelist: Vec<TrackedStorageKey> = Pallet::whitelisted_storage_keys();
+			use crate::sp_api_hidden_includes_construct_runtime::hidden_include::traits::WhitelistedStorageKeys;
+			let whitelist: Vec<TrackedStorageKey> = AllPalletsWithSystem::whitelisted_storage_keys();
 			// let whitelist: Vec<TrackedStorageKey> = vec![
 			// 	// Block Number
 			// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec().into(),

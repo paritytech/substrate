@@ -176,7 +176,6 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		}
 	];
-	println!("{}", whitelisted_storage_keys_impl);
 
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
 		#pallet_error_metadata
