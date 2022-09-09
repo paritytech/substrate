@@ -19,7 +19,6 @@
 
 use super::*;
 use crate as pallet_timestamp;
-use sp_std::cell::RefCell;
 
 use frame_support::{
 	parameter_types,
@@ -78,14 +77,14 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-thread_local! {
-	pub static CAPTURED_MOMENT: RefCell<Option<Moment>> = RefCell::new(None);
+parameter_types! {
+	pub static CapturedMoment: Option<Moment> = None;
 }
 
 pub struct MockOnTimestampSet;
 impl OnTimestampSet<Moment> for MockOnTimestampSet {
 	fn on_timestamp_set(moment: Moment) {
-		CAPTURED_MOMENT.with(|x| *x.borrow_mut() = Some(moment));
+		CapturedMoment::mutate(|x| *x = Some(moment));
 	}
 }
 
@@ -97,11 +96,11 @@ impl Config for Test {
 }
 
 pub(crate) fn clear_captured_moment() {
-	CAPTURED_MOMENT.with(|x| *x.borrow_mut() = None);
+	CapturedMoment::mutate(|x| *x = None);
 }
 
 pub(crate) fn get_captured_moment() -> Option<Moment> {
-	CAPTURED_MOMENT.with(|x| *x.borrow())
+	CapturedMoment::get()
 }
 
 pub(crate) fn new_test_ext() -> TestExternalities {

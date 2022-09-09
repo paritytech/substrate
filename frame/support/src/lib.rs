@@ -446,6 +446,21 @@ macro_rules! parameter_types_impl_thread_local {
 					pub fn set(t: $type) {
 						[<$name:snake:upper>].with(|v| *v.borrow_mut() = t);
 					}
+
+					/// Mutate the internal value in place.
+					pub fn mutate<R, F: FnOnce(&mut $type) -> R>(mutate: F) -> R{
+						let mut current = Self::get();
+						let result = mutate(&mut current);
+						Self::set(current);
+						result
+					}
+
+					/// Get current value and replace with initial value of the parameter type.
+					pub fn take() -> $type {
+						let current = Self::get();
+						Self::set($value);
+						current
+					}
 				}
 			)*
 		}

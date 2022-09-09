@@ -19,8 +19,6 @@
 
 #![cfg(test)]
 
-use std::cell::RefCell;
-
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -100,18 +98,17 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-thread_local! {
-	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
+parameter_types! {
+	static TenToFourteenTestValue: Vec<u128> = vec![10,11,12,13,14];
 }
 pub struct TenToFourteen;
 impl SortedMembers<u128> for TenToFourteen {
 	fn sorted_members() -> Vec<u128> {
-		TEN_TO_FOURTEEN.with(|v| v.borrow().clone())
+		TenToFourteenTestValue::get().clone()
 	}
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(new: &u128) {
-		TEN_TO_FOURTEEN.with(|v| {
-			let mut members = v.borrow_mut();
+		TenToFourteenTestValue::mutate(|members| {
 			members.push(*new);
 			members.sort();
 		})
@@ -119,7 +116,7 @@ impl SortedMembers<u128> for TenToFourteen {
 }
 impl ContainsLengthBound for TenToFourteen {
 	fn max_len() -> usize {
-		TEN_TO_FOURTEEN.with(|v| v.borrow().len())
+		TenToFourteenTestValue::get().len()
 	}
 	fn min_len() -> usize {
 		0

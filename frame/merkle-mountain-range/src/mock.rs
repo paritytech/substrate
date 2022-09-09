@@ -19,14 +19,17 @@ use crate as pallet_mmr;
 use crate::*;
 
 use codec::{Decode, Encode};
-use frame_support::traits::{ConstU32, ConstU64};
+use frame_support::{
+	parameter_types,
+	traits::{ConstU32, ConstU64},
+};
 use sp_core::H256;
 use sp_mmr_primitives::{Compact, LeafDataProvider};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, Keccak256},
 };
-use sp_std::{cell::RefCell, prelude::*};
+use sp_std::prelude::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -91,14 +94,14 @@ impl LeafData {
 	}
 }
 
-thread_local! {
-	pub static LEAF_DATA: RefCell<LeafData> = RefCell::new(Default::default());
+parameter_types! {
+	pub static LeafDataTestValue: LeafData = Default::default();
 }
 
 impl LeafDataProvider for LeafData {
 	type LeafData = Self;
 
 	fn leaf_data() -> Self::LeafData {
-		LEAF_DATA.with(|r| r.borrow().clone())
+		LeafDataTestValue::get().clone()
 	}
 }

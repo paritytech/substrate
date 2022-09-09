@@ -26,7 +26,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
@@ -79,14 +78,14 @@ parameter_types! {
 		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
-thread_local! {
-	pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
+parameter_types! {
+	pub static Killed: Vec<u64> = vec![];
 }
 
 pub struct RecordKilled;
 impl OnKilledAccount<u64> for RecordKilled {
 	fn on_killed_account(who: &u64) {
-		KILLED.with(|r| r.borrow_mut().push(*who))
+		Killed::mutate(|r| r.push(*who))
 	}
 }
 
