@@ -1018,6 +1018,7 @@ pub mod pallet {
 
 			let maybe_deadline =
 				details.approvals.get(&delegate).ok_or(Error::<T, I>::NotDelegate)?;
+
 			let is_past_deadline = if let Some(deadline) = maybe_deadline {
 				let now = frame_system::Pallet::<T>::block_number();
 				now > *deadline
