@@ -33,6 +33,8 @@ use core::fmt::Debug;
 
 use crate::error;
 
+use sp_core::bls::Pair as BLSPair;
+use sp_application_crypto::Pair as app_crypto_Pair;
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
@@ -167,7 +169,7 @@ impl BeefyKeystore for  BeefyBLSKeystore {
 		let msg = keccak_256(message);
 		let public = public.as_ref();
 
-		let sig = SyncCryptoStore::bls_sign_prehashed(&*store, KEY_TYPE, public, &msg)
+		let sig = SyncCryptoStore::bls_sign(&*store, KEY_TYPE, public, &msg)
 			.map_err(|e| error::Error::Keystore(e.to_string()))?
 			.ok_or_else(|| error::Error::Signature("ecdsa_sign_prehashed() failed".to_string()))?;
 
@@ -196,14 +198,14 @@ impl BeefyKeystore for  BeefyBLSKeystore {
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
 	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool {
-		let msg = keccak_256(message);
 		let sig = sig.as_ref();
 		let public = public.as_ref();
 
-		sp_core::bls::Pair::verify_prehashed(sig, &msg, public)
+		sp_core::bls::Pair::verify(sig, &message, public)
 	}
 
 }
+
 impl BeefyBLSnECDSAKeystore {
     fn both(&self) -> (BeefyECDSAKeystore, BeefyBLSKeystore) {
             ( BeefyECDSAKeystore(self.0.clone()), BeefyBLSKeystore(self.0.clone()))
@@ -213,30 +215,50 @@ impl BeefyBLSnECDSAKeystore {
 impl BeefyKeystore for BeefyBLSnECDSAKeystore {
         type Signature = (ECDSASignature,BLSSignature);
 	type Public = (ECDSAPublic,BLSPublic);
+	/// Check if the keystore contains a private key for one of the public keys
+	/// contained in `keys`. A public key with a matching private key is known
+	/// as a local authority id.
+	///
+	/// Return the public key for which we also do have a private key. If no
+	/// matching private key is found, `None` will be returned.
 	fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public> {
-		(self.both().0.authority_id, self.both().0.authority_id())
-		
+		let cloned_key : Vec<Self::Public>;
+		cloned_key.clone_from_slice(keys);
+		let (ecdsa_pubkeys, bls_pubkeys): (Vec<ECDSAPublic>, Vec<BLSPublic>) = cloned_key.into_iter().unzip();
+		let own_ecdsa_key = self.both().0.authority_id(&ecdsa_pubkeys);
+		let own_bls_key  = self.both().1.authority_id(&bls_pubkeys);
+		if own_ecdsa_key == None || own_bls_key == None {
+			None
+		} else {
+			Some((own_ecdsa_key.unwrap(), own_bls_key.unwrap()))
+		}
+				
 	}
 
 	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<Self::Signature,  error::Error> {
 		let bls_n_ecdsa = self.both();
-		(bls_n_ecdsa.0.sign(bls_n_ecdsa.0.0,message),
-		 bls_n_ecdsa.1.sign(bls_n_ecdsa.1.0,message))
+		match (bls_n_ecdsa.0.sign(&public.0, message), bls_n_ecdsa.1.sign(&public.1, message)) {
+			(Ok(ecdsa_sign),Ok(bls_sign))=> Ok((ecdsa_sign, bls_sign)),
+			_ => Err(error::Error::Signature(format!("could not sign with both bls and ecdsa keys")))
+		}
 	}
 								      
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
-				let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
+		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let bls_n_ecdsa = self.both();
-		let pk: Vec<Self::Public> = bls_n_ecdsa.0.public_keys().iter().zip(bls_n_ecdsa.1.public_keys().iter()).collect();
+		let pk  : Vec<Self::Public> = bls_n_ecdsa.0.public_keys()?.into_iter().zip(bls_n_ecdsa.1.public_keys()?.into_iter()).collect();
 
 		Ok(pk)
 
 	}
 
 	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool {
-		(public.0.verify(public.0.0, sig.0, message),
-		 public.1.verify(public.1.0, sig.1, message))
+		match (BeefyECDSAKeystore::verify(&public.0, &sig.0, message),
+		       BeefyBLSKeystore::verify(&public.1, &sig.1, message)) {
+			(true, true) => true,
+			_ => false
+		}
 	}
 	
 }
@@ -260,7 +282,7 @@ pub mod tests {
 	use std::sync::Arc;
 
 	use sc_keystore::LocalKeystore;
-	use sp_core::{ecdsa, keccak_256, Pair};
+	use sp_core::{ecdsa, bls, keccak_256, Pair};
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 	use beefy_primitives::{crypto, KEY_TYPE};

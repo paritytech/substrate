@@ -94,7 +94,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, BKS: BeefyKeystore> {
 	/// Best block a BEEFY voting round has been concluded for
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Used to keep RPC worker up to date on latest/best beefy
-	beefy_best_blollck_sender: BeefyBestBlockSender<B>,
+	beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Validator set id for the last signed commitment
 	last_signed_id: u64,
 	/// Handle to the sync oracle

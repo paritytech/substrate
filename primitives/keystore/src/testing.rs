@@ -69,6 +69,15 @@ impl KeyStore {
 				.map(|s| ecdsa::Pair::from_string(s, None).expect("`ecdsa` seed slice is valid"))
 		})
 	}
+
+	fn bls_key_pair(&self, id: KeyTypeId, pub_key: &bls::Public) -> Option<bls::Pair> {
+		self.keys.read().get(&id).and_then(|inner| {
+			inner
+				.get(pub_key.as_slice())
+				.map(|s| bls::Pair::from_string(s, None).expect("`bls` seed slice is valid"))
+		})
+	}
+
 }
 
 #[async_trait]
@@ -442,6 +451,17 @@ impl SyncCryptoStore for KeyStore {
 		let pair = self.ecdsa_key_pair(id, public);
 		pair.map(|k| k.sign_prehashed(msg)).map(Ok).transpose()
 	}
+
+	fn bls_sign(
+		&self,
+		id: KeyTypeId,
+		public: &bls::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<bls::Signature>, Error> {
+		let pair = self.bls_key_pair(id, public);
+		pair.map(|k| k.sign(msg)).map(Ok).transpose()
+	}
+
 }
 
 impl Into<SyncCryptoStorePtr> for KeyStore {

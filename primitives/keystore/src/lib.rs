@@ -409,6 +409,26 @@ pub trait SyncCryptoStore: CryptoStore + Send + Sync {
 		public: &ecdsa::Public,
 		msg: &[u8; 32],
 	) -> Result<Option<ecdsa::Signature>, Error>;
+
+	/// Generate an BLS12-377 signature for a given message.
+	///
+	/// Receives [`KeyTypeId`] and an [`bls::Public`] key to be able to map
+	/// them to a private key that exists in the keystore. This private key is,
+	/// in turn, used for signing the provided message.
+	///
+	/// The `msg` argument provided should be a message for which an
+	/// BLS12-377 signature should be generated.
+	///
+	/// Returns an [`bls::Signature`] or `None` in case the given `id` and
+	/// `public` combination doesn't exist in the keystore. An `Err` will be
+	/// returned if generating the signature itself failed.
+	fn bls_sign(
+		&self,
+		id: KeyTypeId,
+		public: &bls::Public,
+		msg: &[u8; 32],
+	) -> Result<Option<bls::Signature>, Error>;
+
 }
 
 /// A pointer to a keystore.
