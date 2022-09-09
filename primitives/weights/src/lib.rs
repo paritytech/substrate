@@ -196,8 +196,8 @@ where
 /// # Example
 ///
 /// ```
-/// # use frame_support::traits::ConstU128;
-/// # use frame_support::weights::ConstantMultiplier;
+/// # use sp_core::ConstU128;
+/// # use sp_weights::ConstantMultiplier;
 /// // Results in a multiplier of 10 for each unit of weight (or length)
 /// type LengthToFee = ConstantMultiplier::<u128, ConstU128<10u128>>;
 /// ```

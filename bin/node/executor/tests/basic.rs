@@ -17,8 +17,8 @@
 
 use codec::{Decode, Encode, Joiner};
 use frame_support::{
-	traits::Currency,
 	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo},
+	traits::Currency,
 	weights::Weight,
 };
 use frame_system::{self, AccountInfo, EventRecord, Phase};
