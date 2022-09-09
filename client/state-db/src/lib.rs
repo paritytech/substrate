@@ -496,27 +496,6 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		db.get(key.as_ref()).map_err(Error::Db)
 	}
 
-	fn apply_pending(&mut self) {
-		self.non_canonical.apply_pending();
-		if let Some(pruning) = &mut self.pruning {
-			pruning.apply_pending();
-		}
-		let next_hash = self.pruning.as_mut().map(|p| p.next_hash());
-		trace!(
-			target: "forks",
-			"First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
-			next_hash,
-			self.pruning.as_ref().map(|p| p.pending()).unwrap_or(0),
-			self.non_canonical.last_canonicalized_hash(),
-			self.non_canonical.last_canonicalized_block_number().unwrap_or(0),
-			self.non_canonical.top_level(),
-		);
-	}
-
-	fn revert_pending(&mut self) {
-		self.non_canonical.revert_pending();
-	}
-
 	fn memory_info(&self) -> StateDbMemoryInfo {
 		StateDbMemoryInfo {
 			non_canonical: MemorySize::from_bytes(malloc_size(&self.non_canonical)),

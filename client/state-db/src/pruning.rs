@@ -442,10 +442,6 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		self.queue.import(self.base, number, journal_record);
 		Ok(())
 	}
-
-	/// Apply all pending changes
-	pub fn apply_pending(&mut self) {
-	}
 }
 
 #[cfg(test)]
@@ -501,7 +497,6 @@ mod tests {
 		pruning.note_canonical(&hash, 0, &mut commit).unwrap();
 		db.commit(&commit);
 		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Yes);
-		pruning.apply_pending();
 		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Yes);
 		assert!(commit.data.deleted.is_empty());
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
@@ -514,7 +509,6 @@ mod tests {
 		pruning.prune_one(&mut commit).unwrap();
 		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::No);
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::No);
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
@@ -534,7 +528,6 @@ mod tests {
 		let mut commit = make_commit(&[5], &[2]);
 		pruning.note_canonical(&H256::random(), 1, &mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
 
 		check_journal(&pruning, &db);
@@ -542,12 +535,10 @@ mod tests {
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
 		assert_eq!(pruning.base, 2);
 	}
@@ -571,7 +562,6 @@ mod tests {
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
 		assert_eq!(pruning.base, 2);
 	}
@@ -591,7 +581,6 @@ mod tests {
 		pruning.note_canonical(&H256::random(), 2, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
-		pruning.apply_pending();
 
 		check_journal(&pruning, &db);
 
@@ -606,7 +595,6 @@ mod tests {
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
-		pruning.apply_pending();
 		assert_eq!(pruning.base, 3);
 	}
 
@@ -637,7 +625,6 @@ mod tests {
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
-		pruning.apply_pending();
 		assert_eq!(pruning.base, 3);
 	}
 
@@ -656,7 +643,6 @@ mod tests {
 		pruning.note_canonical(&H256::random(), 2, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
-		pruning.apply_pending();
 
 		check_journal(&pruning, &db);
 
@@ -762,7 +748,6 @@ mod tests {
 			}
 			assert_eq!(last, Some(i as u64));
 		}
-		pruning.apply_pending();
 		assert_eq!(pruning.window_size(), cache_capacity as u64 + 10);
 		let (cache, last) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity);
@@ -794,7 +779,6 @@ mod tests {
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert_eq!(pruning.window_size(), cache_capacity as u64 + 9);
 		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity - 1);
@@ -843,7 +827,6 @@ mod tests {
 			pruning.prune_one(&mut commit).unwrap();
 			db.commit(&commit);
 		}
-		pruning.apply_pending();
 		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert!(cache.is_empty());
 
