@@ -647,7 +647,6 @@ pub mod pallet {
 
 			Self::do_transfer(collection, item, dest, |collection_details, details| {
 				if details.owner != origin && collection_details.admin != origin {
-
 					let deadline =
 						details.approvals.get(&origin).ok_or(Error::<T, I>::NoPermission)?;
 					if let Some(d) = deadline {
