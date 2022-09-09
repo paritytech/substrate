@@ -1714,25 +1714,25 @@ impl<Block: BlockT> Backend<Block> {
 				let number = finalized.saturating_sub(keep.into());
 				self.prune_block(transaction, BlockId::<Block>::number(number))?;
 			}
-		}
 
-		// Discard all blocks from displaced (discarded) branches
-		for h in displaced.leaves() {
-			let mut number = finalized;
-			let mut hash = *h;
-			// Follow displaced chains back until we reach a finalized block.
-			// Since leaves are discarded due to finality, they can't have parents
-			// that are canonical, but not yet finalized. So we stop deleting as soon as
-			// we reach canonical chain.
-			while self.blockchain.hash(number)? != Some(hash) {
-				let id = BlockId::<Block>::hash(hash);
-				match self.blockchain.header(id)? {
-					Some(header) => {
-						self.prune_block(transaction, id)?;
-						number = header.number().saturating_sub(One::one());
-						hash = *header.parent_hash();
-					},
-					None => break,
+			// Also discard all blocks from displaced branches
+			for h in displaced.leaves() {
+				let mut number = finalized;
+				let mut hash = *h;
+				// Follow displaced chains back until we reach a finalized block.
+				// Since leaves are discarded due to finality, they can't have parents
+				// that are canonical, but not yet finalized. So we stop deleting as soon as
+				// we reach canonical chain.
+				while self.blockchain.hash(number)? != Some(hash) {
+					let id = BlockId::<Block>::hash(hash);
+					match self.blockchain.header(id)? {
+						Some(header) => {
+							self.prune_block(transaction, id)?;
+							number = header.number().saturating_sub(One::one());
+							hash = *header.parent_hash();
+						},
+						None => break,
+					}
 				}
 			}
 		}
@@ -1750,13 +1750,6 @@ impl<Block: BlockT> Backend<Block> {
 			&*self.storage.db,
 			columns::KEY_LOOKUP,
 			columns::BODY,
-			id,
-		)?;
-		utils::remove_from_db(
-			transaction,
-			&*self.storage.db,
-			columns::KEY_LOOKUP,
-			columns::JUSTIFICATIONS,
 			id,
 		)?;
 		if let Some(index) =
