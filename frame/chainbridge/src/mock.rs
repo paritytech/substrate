@@ -22,18 +22,6 @@ parameter_types! {
     pub const MaxLocks: u32 = 50;
 }
 
-/// A PalletInfo implementation which just panics.
-pub struct PanicPalletInfo;
-
-impl frame_support::traits::PalletInfo for PanicPalletInfo {
-    fn index<P: 'static>() -> Option<usize> {
-        unimplemented!("PanicPalletInfo mustn't be triggered by tests");
-    }
-    fn name<P: 'static>() -> Option<&'static str> {
-        unimplemented!("PanicPalletInfo mustn't be triggered by tests");
-    }
-}
-
 impl frame_system::Config for Test {
     type BaseCallFilter = ();
     type BlockWeights = ();
@@ -52,7 +40,7 @@ impl frame_system::Config for Test {
     type DbWeight = ();
     type Version = ();
     // type ModuleToIndex = ();
-    type PalletInfo = PanicPalletInfo;
+    type PalletInfo = PalletInfo;
     // type MaxLocks = MaxLocks;
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
@@ -92,8 +80,8 @@ impl Config for Test {
     type ProposalLifetime = ProposalLifetime;
 }
 
-pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
     pub enum Test where
