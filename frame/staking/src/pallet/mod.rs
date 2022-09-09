@@ -128,7 +128,7 @@ pub mod pallet {
 		/// Maximum History Depth for the validator rewards to be claimed. 
 		/// This should never be decreased once set.  
 		#[pallet::constant]
-		type HistoryDepth: Get<u32>;
+		type EraHistoryDepth: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).

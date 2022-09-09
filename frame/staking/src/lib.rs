@@ -351,7 +351,6 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 
 parameter_types! {
 	pub MaxUnlockingChunks: u32 = 32;
-	pub HistoryDepth: u32 = 84;
 }
 
 /// Information regarding the active era (era in used in session).
@@ -441,7 +440,7 @@ pub struct UnlockChunk<Balance: HasCompact + MaxEncodedLen> {
 }
 
 /// The ledger of a (bonded) stash.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
+#[derive(PartialEqNoBound, EqNoBound, Clone, Encode, Decode, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub struct StakingLedger<T: Config> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -460,7 +459,7 @@ pub struct StakingLedger<T: Config> {
 	pub unlocking: BoundedVec<UnlockChunk<BalanceOf<T>>, MaxUnlockingChunks>,
 	/// List of eras for which the stakers behind a validator have claimed rewards. Only updated
 	/// for validators.
-	pub claimed_rewards: BoundedVec<EraIndex, HistoryDepth>,
+	pub claimed_rewards: BoundedVec<EraIndex, T::EraHistoryDepth>,
 }
 
 impl<T: Config> StakingLedger<T> {
