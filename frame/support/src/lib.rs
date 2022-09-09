@@ -128,7 +128,10 @@ pub mod weights {
 	}
 	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
 	pub trait OneOrMany<T>: dispatch::OneOrMany<T> {
-		fn into_iter(self) -> Self::Iter where Self: Sized {
+		fn into_iter(self) -> Self::Iter
+		where
+			Self: Sized,
+		{
 			<Self as dispatch::OneOrMany<T>>::into_iter(self)
 		}
 	}
@@ -152,7 +155,10 @@ pub mod weights {
 	}
 	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
 	pub trait WithPostDispatchInfo: dispatch::WithPostDispatchInfo {
-		fn with_weight(self, actual_weight: Weight) -> dispatch::DispatchErrorWithPostInfo where Self: Sized {
+		fn with_weight(self, actual_weight: Weight) -> dispatch::DispatchErrorWithPostInfo
+		where
+			Self: Sized,
+		{
 			<Self as dispatch::WithPostDispatchInfo>::with_weight(self, actual_weight)
 		}
 	}
