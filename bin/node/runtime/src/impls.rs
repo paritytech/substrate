@@ -123,6 +123,7 @@ impl Incrementable for CollectionId {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
 impl From<u32> for CollectionId {
 	fn from(id: u32) -> Self {
 		CollectionId(id)
