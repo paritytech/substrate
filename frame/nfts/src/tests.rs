@@ -643,18 +643,18 @@ fn try_increment_id_works() {
 		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 2 }));
 
 		// there are now two collections.
-		assert_eq!(get_next_id(), 2);
+		assert_eq!(Nfts::get_next_id(), 2);
 
 		// reset the collections counter to test if the `try_increment_id`
 		// works.
-		set_next_id(0);
+		Nfts::set_next_id(0);
 		assert_ok!(Nfts::try_increment_id(Origin::signed(2)));
 
 		// `try_increment_id` should emit an event when successful.
 		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
 
 		// because reset, the collections count should be now 1
-		assert_eq!(get_next_id(), 1);
+		assert_eq!(Nfts::get_next_id(), 1);
 
 		// increment the collections count again.
 		assert_ok!(Nfts::try_increment_id(Origin::signed(2)));

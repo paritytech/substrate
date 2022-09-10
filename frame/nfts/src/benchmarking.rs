@@ -36,10 +36,6 @@ use crate::Pallet as Nfts;
 
 const SEED: u32 = 0;
 
-fn set_next_id<T: Config<I>, I: 'static>(id: <T as Config<I>>::CollectionId) {
-	NextCollectionId::<T, I>::set(id);
-}
-
 fn create_collection<T: Config<I>, I: 'static>(
 ) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller: T::AccountId = whitelisted_caller();
@@ -409,7 +405,7 @@ benchmarks_instance_pallet! {
 	try_increment_id {
 		let (_, caller, _) = create_collection::<T, I>();
 		// reset to zero, so that the next id is used, so try_increment_id doesn't throw error.
-		set_next_id::<T, I>(<T as Config<I>>::CollectionId::default());
+		Nfts::<T, I>::set_next_id(<T as Config<I>>::CollectionId::default());
 	}: _(SystemOrigin::Signed(caller.clone()))
 	verify {
 		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
