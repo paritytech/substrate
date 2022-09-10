@@ -1171,11 +1171,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 			AllPalletsWithSystem,
 		>(&db_weight);
 
-		let pallet_num = if cfg!(feature = "frame-feature-testing") {
-			5
-		} else {
-			4
-		};
+		let pallet_num = if cfg!(feature = "frame-feature-testing") { 5 } else { 4 };
 
 		// `pallet_num` pallets, 2 writes and every write costs 5 weight.
 		assert_eq!(Weight::from_ref_time(pallet_num * 2 * 5), weight);
