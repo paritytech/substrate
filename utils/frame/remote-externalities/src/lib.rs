@@ -56,7 +56,7 @@ type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
 const BATCH_SIZE: usize = 1000;
-const PAGE: u32 = 512;
+const PAGE: u32 = 1000;
 
 #[rpc(client)]
 pub trait RpcApi<Hash> {

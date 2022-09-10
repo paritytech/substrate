@@ -23,7 +23,7 @@ use frame_support::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
 		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight, Weight},
 };
 use scale_info::{meta_type, TypeInfo};
 use sp_io::{
@@ -165,7 +165,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
-			10
+			Weight::from_ref_time(10)
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -176,7 +176,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
-			30
+			Weight::from_ref_time(30)
 		}
 		fn integrity_test() {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -190,7 +190,7 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1,
 	{
 		/// Doc comment put in metadata
-		#[pallet::weight(Weight::from(*_foo))]
+		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -492,14 +492,14 @@ pub mod pallet2 {
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			Self::deposit_event(Event::Something(11));
-			0
+			Weight::zero()
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			Self::deposit_event(Event::Something(21));
 		}
 		fn on_runtime_upgrade() -> Weight {
 			Self::deposit_event(Event::Something(31));
-			0
+			Weight::zero()
 		}
 	}
 
@@ -668,7 +668,11 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3, bar: 0 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo {
+			weight: frame_support::weights::Weight::from_ref_time(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		}
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
@@ -1046,10 +1050,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(10));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(30));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -1085,10 +1089,16 @@ fn all_pallets_type_reversed_order_is_correct() {
 
 		#[allow(deprecated)]
 		{
-			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
+			assert_eq!(
+				AllPalletsWithoutSystemReversed::on_initialize(1),
+				Weight::from_ref_time(10)
+			);
 			AllPalletsWithoutSystemReversed::on_finalize(1);
 
-			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
+			assert_eq!(
+				AllPalletsWithoutSystemReversed::on_runtime_upgrade(),
+				Weight::from_ref_time(30)
+			);
 		}
 
 		assert_eq!(
@@ -1155,7 +1165,7 @@ fn migrate_from_pallet_version_to_storage_version() {
 		>(&db_weight);
 
 		// 4 pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(4 * 2 * 5, weight);
+		assert_eq!(Weight::from_ref_time(4 * 2 * 5), weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());

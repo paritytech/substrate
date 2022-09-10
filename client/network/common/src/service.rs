@@ -20,7 +20,7 @@
 
 use crate::{
 	config::MultiaddrWithPeerId,
-	protocol::event::Event,
+	protocol::{event::Event, ProtocolName},
 	request_responses::{IfDisconnected, RequestFailure},
 	sync::{warp::WarpSyncProgress, StateDownloadProgress, SyncState},
 };
@@ -30,7 +30,7 @@ use libp2p::{Multiaddr, PeerId};
 use sc_peerset::ReputationChange;
 pub use signature::Signature;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::{borrow::Cow, collections::HashSet, future::Future, pin::Pin, sync::Arc};
+use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
 mod signature;
 
@@ -171,7 +171,7 @@ pub trait NetworkPeers {
 	/// See also [`NetworkPeers::remove_from_peers_set`], which has the same effect but also
 	/// prevents the local node from re-establishing an outgoing substream to this peer until it
 	/// is added again.
-	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>);
+	fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName);
 
 	/// Connect to unreserved peers and allow unreserved peers to connect for syncing purposes.
 	fn accept_unreserved_peers(&self);
@@ -207,7 +207,7 @@ pub trait NetworkPeers {
 	/// invalid peer ID (which includes the local peer ID).
 	fn set_reserved_peers(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String>;
 
@@ -220,12 +220,12 @@ pub trait NetworkPeers {
 	/// invalid peer ID (which includes the local peer ID).
 	fn add_peers_to_reserved_set(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String>;
 
 	/// Remove peers from a peer set.
-	fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>);
+	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
 
 	/// Add a peer to a set of peers.
 	///
@@ -238,14 +238,14 @@ pub trait NetworkPeers {
 	/// invalid peer ID (which includes the local peer ID).
 	fn add_to_peers_set(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String>;
 
 	/// Remove peers from a peer set.
 	///
 	/// If we currently have an open substream with this peer, it will soon be closed.
-	fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>);
+	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>);
 
 	/// Returns the number of peers in the sync peer set we're connected to.
 	fn sync_num_connected(&self) -> usize;
@@ -273,7 +273,7 @@ where
 		T::report_peer(self, who, cost_benefit)
 	}
 
-	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {
+	fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName) {
 		T::disconnect_peer(self, who, protocol)
 	}
 
@@ -295,7 +295,7 @@ where
 
 	fn set_reserved_peers(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		T::set_reserved_peers(self, protocol, peers)
@@ -303,25 +303,25 @@ where
 
 	fn add_peers_to_reserved_set(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		T::add_peers_to_reserved_set(self, protocol, peers)
 	}
 
-	fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
 		T::remove_peers_from_reserved_set(self, protocol, peers)
 	}
 
 	fn add_to_peers_set(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		T::add_to_peers_set(self, protocol, peers)
 	}
 
-	fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
 		T::remove_from_peers_set(self, protocol, peers)
 	}
 
@@ -431,7 +431,7 @@ pub trait NetworkNotification {
 	///
 	/// The protocol must have been registered with
 	/// `crate::config::NetworkConfiguration::notifications_protocols`.
-	fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>);
+	fn write_notification(&self, target: PeerId, protocol: ProtocolName, message: Vec<u8>);
 
 	/// Obtains a [`NotificationSender`] for a connected peer, if it exists.
 	///
@@ -502,7 +502,7 @@ pub trait NetworkNotification {
 	fn notification_sender(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError>;
 }
 
@@ -511,14 +511,14 @@ where
 	T: ?Sized,
 	T: NetworkNotification,
 {
-	fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+	fn write_notification(&self, target: PeerId, protocol: ProtocolName, message: Vec<u8>) {
 		T::write_notification(self, target, protocol, message)
 	}
 
 	fn notification_sender(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 		T::notification_sender(self, target, protocol)
 	}
@@ -547,7 +547,7 @@ pub trait NetworkRequest {
 	async fn request(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		connect: IfDisconnected,
 	) -> Result<Vec<u8>, RequestFailure>;
@@ -565,7 +565,7 @@ pub trait NetworkRequest {
 	fn start_request(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
@@ -581,7 +581,7 @@ where
 	fn request<'life0, 'async_trait>(
 		&'life0 self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		connect: IfDisconnected,
 	) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, RequestFailure>> + Send + 'async_trait>>
@@ -595,7 +595,7 @@ where
 	fn start_request(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,

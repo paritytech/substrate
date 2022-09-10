@@ -70,6 +70,7 @@ pub(crate) mod tests;
 
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
+	use sc_network_common::protocol::ProtocolName;
 
 	pub(crate) const NAME: &str = "/grandpa/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
@@ -81,7 +82,7 @@ pub mod grandpa_protocol_name {
 	pub fn standard_name<Hash: AsRef<[u8]>>(
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
-	) -> std::borrow::Cow<'static, str> {
+	) -> ProtocolName {
 		let chain_prefix = match chain_spec.fork_id() {
 			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
 			None => format!("/{}", hex::encode(genesis_hash)),

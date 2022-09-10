@@ -881,7 +881,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(proposal_len <= length_bound, Error::<T, I>::WrongProposalLength);
 		let proposal = ProposalOf::<T, I>::get(hash).ok_or(Error::<T, I>::ProposalMissing)?;
 		let proposal_weight = proposal.get_dispatch_info().weight;
-		ensure!(proposal_weight <= weight_bound, Error::<T, I>::WrongProposalWeight);
+		ensure!(proposal_weight.all_lte(weight_bound), Error::<T, I>::WrongProposalWeight);
 		Ok((proposal, proposal_len as usize))
 	}
 
