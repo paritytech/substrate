@@ -175,7 +175,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let whitelisted_storage_keys_impl = quote::quote![
 		use #frame_support::traits::{StorageInfoTrait, TrackedStorageKey, WhitelistedStorageKeys};
-		impl<#type_impl_gen> WhitelistedStorageKeys for #pallet_ident<#type_use_gen> #storages_where_clause {
+		impl<#type_impl_gen> WhitelistedStorageKeys for #pallet_ident<#type_use_gen> #storages_where_clauses {
 			fn whitelisted_storage_keys() -> #frame_support::sp_std::vec::Vec<TrackedStorageKey> {
 				use #frame_support::sp_std::{vec, vec::Vec};
 				vec![#(TrackedStorageKey::new(#whitelisted_storage_idents::<#type_use_gen>::hashed_key().to_vec())), *]
