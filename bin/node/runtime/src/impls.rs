@@ -123,6 +123,12 @@ impl Incrementable for CollectionId {
 	}
 }
 
+impl From<u32> for CollectionId {
+	fn from(id: u32) -> Self {
+		CollectionId(id)
+	}
+}
+
 #[cfg(test)]
 mod multiplier_tests {
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};

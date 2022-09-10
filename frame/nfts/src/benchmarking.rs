@@ -405,11 +405,11 @@ benchmarks_instance_pallet! {
 	try_increment_id {
 		let (_, caller, _) = create_collection::<T, I>();
 		// reset to zero, so that the next id is used, so try_increment_id doesn't throw error.
-		Nfts::<T, I>::set_next_id(<T as Config<I>>::CollectionId::default());
+		Nfts::<T, I>::set_next_id(T::Helper::collection(0));
 	}: _(SystemOrigin::Signed(caller.clone()))
 	verify {
 		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
-			next_id: <T as Config<I>>::CollectionId::default().increment()
+			next_id: T::Helper::collection(1)
 		}.into());
 	}
 
