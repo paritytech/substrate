@@ -167,6 +167,7 @@ parameter_types! {
     pub const SurchargeReward: Balance = 150;
     pub const MaxDepth: u32 = 100;
     pub const MaxValueSize: u32 = 16_384;
+    pub MaxCodeSize: u32 = 256 * 1024;
 }
 
 // Contracts for Test Runtime.
@@ -193,7 +194,7 @@ impl contracts::Config for Test {
     type ChainExtension = ();
     type DeletionQueueDepth = ();
     type DeletionWeightLimit = ();
-    type MaxCodeSize = ();
+    type MaxCodeSize = MaxCodeSize;
 }
 
 parameter_types! {
