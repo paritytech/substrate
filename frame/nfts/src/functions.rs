@@ -283,7 +283,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn set_next_id(id: T::CollectionId) {
 		NextCollectionId::<T, I>::set(id);
 	}
-	
+
 	#[cfg(test)]
 	pub fn get_next_id() -> T::CollectionId {
 		NextCollectionId::<T, I>::get()
