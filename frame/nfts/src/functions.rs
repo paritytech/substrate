@@ -95,7 +95,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
 		Self::deposit_event(event);
-		Ok(())	
+		Ok(())
 	}
 
 	pub fn do_destroy_collection(

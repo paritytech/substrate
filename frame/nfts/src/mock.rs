@@ -119,10 +119,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub fn set_next_id(id: u32) {
+pub(crate) fn set_next_id(id: u32) {
 	NextCollectionId::<Test>::set(id);
 }
 
-pub fn get_next_id() -> <Test as Config>::CollectionId {
+pub(crate) fn get_next_id() -> <Test as Config>::CollectionId {
 	NextCollectionId::<Test>::get()
 }

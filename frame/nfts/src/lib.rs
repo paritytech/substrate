@@ -97,12 +97,7 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the collection of item.
-		type CollectionId: Member
-			+ Parameter
-			+ MaxEncodedLen
-			+ Copy
-			+ Default
-			+ Incrementable;
+		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Default + Incrementable;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
@@ -468,10 +463,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::create())]
-		pub fn create(
-			origin: OriginFor<T>,
-			admin: AccountIdLookupOf<T>,
-		) -> DispatchResult {
+		pub fn create(origin: OriginFor<T>, admin: AccountIdLookupOf<T>) -> DispatchResult {
 			let collection = NextCollectionId::<T, I>::get();
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;

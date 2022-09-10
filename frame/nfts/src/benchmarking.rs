@@ -36,16 +36,18 @@ use crate::Pallet as Nfts;
 
 const SEED: u32 = 0;
 
+fn set_next_id<T: Config<I>, I: 'static>(id: <T as Config<I>>::CollectionId) {
+	NextCollectionId::<T, I>::set(id);
+}
+
 fn create_collection<T: Config<I>, I: 'static>(
 ) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	assert!(
-		Nfts::<T, I>::force_create(SystemOrigin::Root.into(), caller_lookup.clone(), false,)
-			.is_ok()
-	);
+	assert!(Nfts::<T, I>::force_create(SystemOrigin::Root.into(), caller_lookup.clone(), false,)
+		.is_ok());
 	(collection, caller, caller_lookup)
 }
 
@@ -401,6 +403,17 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::CollectionMaxSupplySet {
 			collection,
 			max_supply: u32::MAX,
+		}.into());
+	}
+
+	try_increment_id {
+		let (_, caller, _) = create_collection::<T, I>();
+		// reset to zero, so that the next id is used, so try_increment_id doesn't throw error.
+		set_next_id::<T, I>(<T as Config<I>>::CollectionId::default());
+	}: _(SystemOrigin::Signed(caller.clone()))
+	verify {
+		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
+			next_id: <T as Config<I>>::CollectionId::default().increment()
 		}.into());
 	}
 
