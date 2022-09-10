@@ -323,9 +323,9 @@ pub struct DatabaseSettings {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BlocksPruning {
 	/// Keep full block history, including Non-Finalized blocks.
-	AllWithNonFinalized,
+	KeepAll,
 	/// Keep full finalized block history.
-	AllFinalized,
+	KeepFinalized,
 	/// Keep N recent finalized blocks.
 	Some(u32),
 }
@@ -1709,36 +1709,47 @@ impl<Block: BlockT> Backend<Block> {
 		finalized: NumberFor<Block>,
 		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
 	) -> ClientResult<()> {
-		if BlocksPruning::AllWithNonFinalized == self.blocks_pruning {
-			// Do nothing.
-		} else {
-			if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
+		match self.blocks_pruning {
+			BlocksPruning::KeepAll => {},
+			BlocksPruning::Some(blocks_pruning) => {
 				// Always keep the last finalized block
 				let keep = std::cmp::max(blocks_pruning, 1);
 				if finalized >= keep.into() {
 					let number = finalized.saturating_sub(keep.into());
 					self.prune_block(transaction, BlockId::<Block>::number(number))?;
 				}
-			}
+				self.prune_displaced_branches(transaction, finalized, displaced)?;
+			},
+			BlocksPruning::KeepFinalized => {
+				self.prune_displaced_branches(transaction, finalized, displaced)?;
+			},
+		}
+		Ok(())
+	}
 
-			// Also discard all blocks from displaced branches
-			for h in displaced.leaves() {
-				let mut number = finalized;
-				let mut hash = *h;
-				// Follow displaced chains back until we reach a finalized block.
-				// Since leaves are discarded due to finality, they can't have parents
-				// that are canonical, but not yet finalized. So we stop deleting as soon as
-				// we reach canonical chain.
-				while self.blockchain.hash(number)? != Some(hash) {
-					let id = BlockId::<Block>::hash(hash);
-					match self.blockchain.header(id)? {
-						Some(header) => {
-							self.prune_block(transaction, id)?;
-							number = header.number().saturating_sub(One::one());
-							hash = *header.parent_hash();
-						},
-						None => break,
-					}
+	fn prune_displaced_branches(
+		&self,
+		transaction: &mut Transaction<DbHash>,
+		finalized: NumberFor<Block>,
+		displaced: &FinalizationOutcome<Block::Hash, NumberFor<Block>>,
+	) -> ClientResult<()> {
+		// Discard all blocks from displaced branches
+		for h in displaced.leaves() {
+			let mut number = finalized;
+			let mut hash = *h;
+			// Follow displaced chains back until we reach a finalized block.
+			// Since leaves are discarded due to finality, they can't have parents
+			// that are canonical, but not yet finalized. So we stop deleting as soon as
+			// we reach canonical chain.
+			while self.blockchain.hash(number)? != Some(hash) {
+				let id = BlockId::<Block>::hash(hash);
+				match self.blockchain.header(id)? {
+					Some(header) => {
+						self.prune_block(transaction, id)?;
+						number = header.number().saturating_sub(One::one());
+						hash = *header.parent_hash();
+					},
+					None => break,
 				}
 			}
 		}
@@ -1756,6 +1767,13 @@ impl<Block: BlockT> Backend<Block> {
 			&*self.storage.db,
 			columns::KEY_LOOKUP,
 			columns::BODY,
+			id,
+		)?;
+		utils::remove_from_db(
+			transaction,
+			&*self.storage.db,
+			columns::KEY_LOOKUP,
+			columns::JUSTIFICATIONS,
 			id,
 		)?;
 		if let Some(index) =
@@ -2512,7 +2530,7 @@ pub(crate) mod tests {
 				trie_cache_maximum_size: Some(16 * 1024 * 1024),
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
-				blocks_pruning: BlocksPruning::AllFinalized,
+				blocks_pruning: BlocksPruning::KeepFinalized,
 			},
 			0,
 		)

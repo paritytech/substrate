@@ -58,9 +58,9 @@ impl PruningParams {
 	/// Get the block pruning value from the parameters
 	pub fn blocks_pruning(&self) -> error::Result<BlocksPruning> {
 		Ok(match self.blocks_pruning {
-			Some(0) => BlocksPruning::AllWithNonFinalized,
+			Some(0) => BlocksPruning::KeepAll,
 			Some(n) => BlocksPruning::Some(n),
-			None => BlocksPruning::AllFinalized,
+			None => BlocksPruning::KeepFinalized,
 		})
 	}
 }
