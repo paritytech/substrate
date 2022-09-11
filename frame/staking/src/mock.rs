@@ -179,6 +179,7 @@ impl pallet_session::Config for Test {
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type MaxActiveValidators = ConstU32<7>;
 	type WeightInfo = ();
 }
 
@@ -301,6 +302,7 @@ impl crate::pallet::pallet::Config for Test {
 	type MaxUnlockingChunks = ConstU32<32>;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
+	type MaxActiveValidators = ConstU32<15>;
 	type WeightInfo = ();
 }
 
@@ -311,7 +313,7 @@ pub struct ExtBuilder {
 	nominate: bool,
 	validator_count: u32,
 	minimum_validator_count: u32,
-	invulnerables: Vec<AccountId>,
+	invulnerables: BoundedVec<AccountId, <Test as Config>::MaxActiveValidators>,
 	has_stakers: bool,
 	initialize_first_session: bool,
 	pub min_nominator_bond: Balance,
@@ -329,7 +331,7 @@ impl Default for ExtBuilder {
 			validator_count: 2,
 			minimum_validator_count: 0,
 			balance_factor: 1,
-			invulnerables: vec![],
+			invulnerables: Default::default(),
 			has_stakers: true,
 			initialize_first_session: true,
 			min_nominator_bond: ExistentialDeposit::get(),
@@ -362,7 +364,7 @@ impl ExtBuilder {
 		SLASH_DEFER_DURATION.with(|v| *v.borrow_mut() = eras);
 		self
 	}
-	pub fn invulnerables(mut self, invulnerables: Vec<AccountId>) -> Self {
+	pub fn invulnerables(mut self, invulnerables: BoundedVec<AccountId, <Test as Config>::MaxActiveValidators>) -> Self {
 		self.invulnerables = invulnerables;
 		self
 	}

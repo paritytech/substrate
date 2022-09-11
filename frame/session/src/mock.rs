@@ -300,6 +300,7 @@ impl Config for Test {
 	type Keys = MockSessionKeys;
 	type Event = Event;
 	type NextSessionRotation = ();
+	type MaxActiveValidators = ConstU32<7>;
 	type WeightInfo = ();
 }
 

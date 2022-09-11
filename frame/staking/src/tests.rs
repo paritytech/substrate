@@ -285,11 +285,14 @@ fn rewards_should_work() {
 		assert_eq!(Balances::total_balance(&21), init_balance_21);
 		assert_eq!(Balances::total_balance(&100), init_balance_100);
 		assert_eq!(Balances::total_balance(&101), init_balance_101);
+		let mut individual: BoundedBTreeMap<AccountId, RewardPoint, <Test as Config>::MaxActiveValidators> = BoundedBTreeMap::new();
+		individual.try_insert(11, 100).unwrap();
+		individual.try_insert(21, 50).unwrap();
 		assert_eq!(
 			Staking::eras_reward_points(active_era()),
 			EraRewardPoints {
 				total: 50 * 3,
-				individual: vec![(11, 100), (21, 50)].into_iter().collect(),
+				individual: individual,
 			}
 		);
 		let part_for_10 = Perbill::from_rational::<u32>(1000, 1125);
@@ -2060,10 +2063,12 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		// Set staker
 		let _ = Balances::make_free_balance_be(&11, stake);
 
+		let mut individual: BoundedBTreeMap<AccountId, RewardPoint, <Test as Config>::MaxActiveValidators> = BoundedBTreeMap::new();
+		individual.try_insert(11, 1).unwrap();
 		let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
-		let reward = EraRewardPoints::<AccountId> {
+		let reward = EraRewardPoints::<Test> { // Needs work
 			total: 1,
-			individual: vec![(11, 1)].into_iter().collect(),
+			individual: individual,
 		};
 
 		// Check reward
@@ -2122,10 +2127,13 @@ fn reward_from_authorship_event_handler_works() {
 
 		// 21 is rewarded as an uncle producer
 		// 11 is rewarded as a block producer and uncle referencer and uncle producer
+		let mut individual: BoundedBTreeMap<AccountId, RewardPoint, <Test as Config>::MaxActiveValidators> = BoundedBTreeMap::new();
+		individual.try_insert(11, 25).unwrap();
+		individual.try_insert(21, 1).unwrap();
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
 			EraRewardPoints {
-				individual: vec![(11, 20 + 2 * 2 + 1), (21, 1)].into_iter().collect(),
+				individual: individual,
 				total: 26,
 			},
 		);
@@ -2142,9 +2150,12 @@ fn add_reward_points_fns_works() {
 
 		Pallet::<Test>::reward_by_ids(vec![(21, 1), (11, 1), (11, 1)]);
 
+		let mut individual: BoundedBTreeMap<AccountId, RewardPoint, <Test as Config>::MaxActiveValidators> = BoundedBTreeMap::new();
+		individual.try_insert(11, 4).unwrap();
+		individual.try_insert(21, 2).unwrap();
 		assert_eq!(
 			ErasRewardPoints::<Test>::get(active_era()),
-			EraRewardPoints { individual: vec![(11, 4), (21, 2)].into_iter().collect(), total: 6 },
+			EraRewardPoints { individual: individual, total: 6 },
 		);
 	})
 }
@@ -2409,7 +2420,7 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 #[test]
 fn invulnerables_are_not_slashed() {
 	// For invulnerable validators no slashing is performed.
-	ExtBuilder::default().invulnerables(vec![11]).build_and_execute(|| {
+	ExtBuilder::default().invulnerables(vec![11].try_into().unwrap()).build_and_execute(|| { //
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(21), 2000);
 
