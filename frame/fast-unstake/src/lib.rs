@@ -55,11 +55,14 @@ pub use pallet::*;
 
 #[cfg(test)]
 mod mock;
+
 #[cfg(test)]
 mod tests;
+
 // NOTE: enable benchmarking in tests as well.
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+mod types;
 pub mod weights;
 
 pub const LOG_TARGET: &'static str = "runtime::fast-unstake";
@@ -78,26 +81,19 @@ macro_rules! log {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::types::*;
 	use frame_election_provider_support::ElectionProvider;
-	use frame_support::{
-		pallet_prelude::*,
-		traits::{Currency, IsSubType},
-	};
+	use frame_support::pallet_prelude::*;
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use pallet_nomination_pools::PoolId;
 	use pallet_staking::Pallet as Staking;
 	use sp_runtime::{
 		traits::{Saturating, Zero},
-		transaction_validity::{InvalidTransaction, TransactionValidityError},
 		DispatchResult,
 	};
 	use sp_staking::EraIndex;
 	use sp_std::{prelude::*, vec::Vec};
 	use weights::WeightInfo;
-
-	type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
-		<T as frame_system::Config>::AccountId,
-	>>::Balance;
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -124,19 +120,6 @@ pub mod pallet {
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
-	}
-
-	/// An unstake request.
-	#[derive(
-		Encode, Decode, Eq, PartialEq, Clone, scale_info::TypeInfo, frame_support::RuntimeDebug,
-	)]
-	pub struct UnstakeRequest<AccountId> {
-		/// Their stash account.
-		pub(crate) stash: AccountId,
-		/// The list of eras for which they have been checked.
-		pub(crate) checked: Vec<EraIndex>,
-		/// The pool they wish to join, if any.
-		pub(crate) maybe_pool_id: Option<PoolId>,
 	}
 
 	/// The current "head of the queue" being unstaked.
@@ -479,80 +462,6 @@ pub mod pallet {
 			pallet_staking::ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
 				validator == *who || exposures.others.iter().any(|i| i.who == *who)
 			})
-		}
-	}
-
-	#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo, RuntimeDebugNoBound)]
-	#[scale_info(skip_type_params(T))]
-	pub struct PreventStakingOpsIfUnbonding<T: Config + Send + Sync>(
-		sp_std::marker::PhantomData<T>,
-	);
-
-	#[cfg(test)]
-	impl<T: Config + Send + Sync> PreventStakingOpsIfUnbonding<T> {
-		pub fn new() -> Self {
-			Self(Default::default())
-		}
-	}
-
-	impl<T: Config + Send + Sync> sp_runtime::traits::SignedExtension
-		for PreventStakingOpsIfUnbonding<T>
-	where
-		<T as frame_system::Config>::Call: IsSubType<pallet_staking::Call<T>>,
-	{
-		type AccountId = T::AccountId;
-		type Call = <T as frame_system::Config>::Call;
-		type AdditionalSigned = ();
-		type Pre = ();
-		const IDENTIFIER: &'static str = "PreventStakingOpsIfUnbonding";
-
-		fn additional_signed(&self) -> Result<Self::AdditionalSigned, TransactionValidityError> {
-			Ok(())
-		}
-
-		fn pre_dispatch(
-			self,
-			// NOTE: we want to prevent this stash-controller pair from doing anything in the
-			// staking system as long as they are registered here.
-			stash_or_controller: &Self::AccountId,
-			call: &Self::Call,
-			_info: &sp_runtime::traits::DispatchInfoOf<Self::Call>,
-			_len: usize,
-		) -> Result<Self::Pre, TransactionValidityError> {
-			// we don't check this in the tx-pool as it requires a storage read.
-			if <Self::Call as IsSubType<pallet_staking::Call<T>>>::is_sub_type(call).is_some() {
-				let check_stash = |stash: &T::AccountId| {
-					if Queue::<T>::contains_key(&stash) ||
-						Head::<T>::get().map_or(false, |u| &u.stash == stash)
-					{
-						Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
-					} else {
-						Ok(())
-					}
-				};
-				match (
-					// mapped from controller.
-					pallet_staking::Ledger::<T>::get(&stash_or_controller),
-					// mapped from stash.
-					pallet_staking::Bonded::<T>::get(&stash_or_controller),
-				) {
-					(Some(ledger), None) => {
-						// it is a controller.
-						check_stash(&ledger.stash)
-					},
-					(_, Some(_)) => {
-						// it is a stash.
-						let stash = stash_or_controller;
-						check_stash(stash)
-					},
-					(None, None) => {
-						// They are not a staker -- let them execute.
-						Ok(())
-					},
-				}
-			} else {
-				Ok(())
-			}
 		}
 	}
 }

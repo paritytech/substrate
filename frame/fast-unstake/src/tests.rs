@@ -18,7 +18,7 @@
 //! Tests for pallet-fast-unstake.
 
 use super::*;
-use crate::{mock::*, weights::WeightInfo, Event};
+use crate::{mock::*, types::*, weights::WeightInfo, Event};
 use frame_support::{assert_noop, assert_ok, pallet_prelude::*, traits::Currency};
 use pallet_nomination_pools::{BondedPools, LastPoolId, RewardPools};
 use pallet_staking::{CurrentEra, IndividualExposure, RewardDestination};
@@ -830,7 +830,7 @@ mod on_idle {
 
 mod signed_extension {
 	use super::*;
-	use crate::PreventStakingOpsIfUnbonding;
+	use crate::types::PreventStakingOpsIfUnbonding;
 	use sp_runtime::traits::SignedExtension;
 
 	const STAKING_CALL: crate::mock::Call =
