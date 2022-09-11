@@ -830,7 +830,6 @@ mod on_idle {
 
 mod signed_extension {
 	use super::*;
-	use crate::types::PreventStakingOpsIfUnbonding;
 	use sp_runtime::traits::SignedExtension;
 
 	const STAKING_CALL: crate::mock::Call =
