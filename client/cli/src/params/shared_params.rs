@@ -82,8 +82,13 @@ pub struct SharedParams {
 
 impl SharedParams {
 	/// Specify custom base path.
-	pub fn base_path(&self) -> Option<BasePath> {
-		self.base_path.clone().map(Into::into)
+	pub fn base_path(&self) -> Result<Option<BasePath>, crate::Error> {
+		match &self.base_path {
+			Some(r) => Ok(Some(r.clone().into())),
+			// If `dev` is enabled, we use the temp base path.
+			None if self.is_dev() => Ok(Some(BasePath::new_temp_dir()?)),
+			None => Ok(None),
+		}
 	}
 
 	/// Specify the development chain.

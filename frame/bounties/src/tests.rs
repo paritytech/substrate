@@ -21,7 +21,6 @@
 
 use super::*;
 use crate as pallet_bounties;
-use std::cell::RefCell;
 
 use frame_support::{
 	assert_noop, assert_ok,
@@ -101,9 +100,6 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
-}
-thread_local! {
-	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);

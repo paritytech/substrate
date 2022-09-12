@@ -21,7 +21,6 @@
 
 use super::*;
 use crate as pallet_child_bounties;
-use std::cell::RefCell;
 
 use frame_support::{
 	assert_noop, assert_ok,
@@ -60,7 +59,7 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const MaximumBlockWeight: Weight = 1024;
+	pub const MaximumBlockWeight: Weight = Weight::from_ref_time(1024);
 	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
@@ -104,9 +103,6 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
-}
-thread_local! {
-	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);

@@ -21,6 +21,7 @@ use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_consensus::BlockImport;
+use sc_network::ProtocolName;
 use sc_network_gossip::Network as GossipNetwork;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -172,8 +173,9 @@ where
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
-	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
-	pub protocol_name: std::borrow::Cow<'static, str>,
+	/// Chain specific BEEFY gossip protocol name. See
+	/// [`beefy_protocol_name::gossip_protocol_name`].
+	pub protocol_name: ProtocolName,
 	/// Links between the block importer, the background voter and the RPC layer.
 	pub links: BeefyVoterLinks<B>,
 }

@@ -25,6 +25,8 @@ pub(crate) mod gossip;
 pub(crate) mod peers;
 
 pub(crate) mod beefy_protocol_name {
+	use sc_network::ProtocolName;
+
 	/// BEEFY votes gossip protocol name suffix.
 	const GOSSIP_NAME: &str = "/beefy/1";
 	/// BEEFY justifications protocol name suffix.
@@ -39,7 +41,7 @@ pub(crate) mod beefy_protocol_name {
 	pub fn gossip_protocol_name<Hash: AsRef<[u8]>>(
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
-	) -> std::borrow::Cow<'static, str> {
+	) -> ProtocolName {
 		if let Some(fork_id) = fork_id {
 			format!("/{}/{}{}", hex::encode(genesis_hash), fork_id, GOSSIP_NAME).into()
 		} else {
@@ -51,7 +53,7 @@ pub(crate) mod beefy_protocol_name {
 	pub fn justifications_protocol_name<Hash: AsRef<[u8]>>(
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
-	) -> std::borrow::Cow<'static, str> {
+	) -> ProtocolName {
 		if let Some(fork_id) = fork_id {
 			format!("/{}/{}{}", hex::encode(genesis_hash), fork_id, JUSTIFICATIONS_NAME).into()
 		} else {
@@ -64,7 +66,7 @@ pub(crate) mod beefy_protocol_name {
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
 /// For standard protocol name see [`beefy_protocol_name::gossip_protocol_name`].
 pub fn beefy_peers_set_config(
-	gossip_protocol_name: std::borrow::Cow<'static, str>,
+	gossip_protocol_name: sc_network::ProtocolName,
 ) -> sc_network::config::NonDefaultSetConfig {
 	let mut cfg = sc_network::config::NonDefaultSetConfig::new(gossip_protocol_name, 1024 * 1024);
 

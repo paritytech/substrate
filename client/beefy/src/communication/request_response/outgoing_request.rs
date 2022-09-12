@@ -21,7 +21,8 @@
 use beefy_primitives::BeefyApi;
 use codec::Encode;
 use futures::channel::oneshot;
-use sc_network::PeerId;
+use log::debug;
+use sc_network::{PeerId, ProtocolName};
 use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::NetworkRequest,
@@ -32,7 +33,6 @@ use sp_runtime::{
 	traits::{Block, NumberFor},
 };
 use std::{result::Result, sync::Arc};
-use log::debug;
 
 use crate::{
 	communication::request_response::{Error, JustificationRequest},
@@ -52,7 +52,7 @@ enum State<B: Block> {
 pub struct OnDemandJustificationsEngine<B: Block, N, R> {
 	network: N,
 	runtime: Arc<R>,
-	protocol_name: std::borrow::Cow<'static, str>,
+	protocol_name: ProtocolName,
 	state: State<B>,
 }
 
@@ -63,7 +63,7 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
-	pub fn new(network: N, runtime: Arc<R>, protocol_name: std::borrow::Cow<'static, str>) -> Self {
+	pub fn new(network: N, runtime: Arc<R>, protocol_name: ProtocolName) -> Self {
 		Self { network, runtime, protocol_name, state: State::Idle }
 	}
 
@@ -110,7 +110,7 @@ where
 				self.request(number);
 
 				unimplemented!(); // return future that never finishes.
-			}
+			},
 		}
 	}
 

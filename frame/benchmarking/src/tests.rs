@@ -139,6 +139,7 @@ mod benchmarks {
 	use crate::{account, BenchmarkError, BenchmarkParameter, BenchmarkResult, BenchmarkingSetup};
 	use frame_support::{assert_err, assert_ok, ensure, traits::Get};
 	use frame_system::RawOrigin;
+	use rusty_fork::rusty_fork_test;
 	use sp_std::prelude::*;
 
 	// Additional used internally by the benchmark macro.
@@ -409,24 +410,29 @@ mod benchmarks {
 		});
 	}
 
-	/// Test that the benchmarking uses the correct values for each component and
-	/// that the number of components can be controlled with `VALUES_PER_COMPONENT`.
-	#[test]
-	fn test_values_per_component() {
-		let tests = vec![
-			(Some("1"), Err("`VALUES_PER_COMPONENT` must be at least 2".into())),
-			(Some("asdf"), Err("Could not parse env var `VALUES_PER_COMPONENT` as u32.".into())),
-			(None, Ok(vec![0, 2, 4, 6, 8, 10])),
-			(Some("2"), Ok(vec![0, 10])),
-			(Some("4"), Ok(vec![0, 3, 6, 10])),
-			(Some("6"), Ok(vec![0, 2, 4, 6, 8, 10])),
-			(Some("10"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 10])),
-			(Some("11"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
-			(Some("99"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
-		];
+	rusty_fork_test! {
+		/// Test that the benchmarking uses the correct values for each component and
+		/// that the number of components can be controlled with `VALUES_PER_COMPONENT`.
+		///
+		/// NOTE: This test needs to run in its own process, since it
+		/// otherwise messes up the env variable for the other tests.
+		#[test]
+		fn test_values_per_component() {
+			let tests = vec![
+				(Some("1"), Err("`VALUES_PER_COMPONENT` must be at least 2".into())),
+				(Some("asdf"), Err("Could not parse env var `VALUES_PER_COMPONENT` as u32.".into())),
+				(None, Ok(vec![0, 2, 4, 6, 8, 10])),
+				(Some("2"), Ok(vec![0, 10])),
+				(Some("4"), Ok(vec![0, 3, 6, 10])),
+				(Some("6"), Ok(vec![0, 2, 4, 6, 8, 10])),
+				(Some("10"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 10])),
+				(Some("11"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
+				(Some("99"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
+			];
 
-		for (num, expected) in tests {
-			run_test_values_per_component(num, expected);
+			for (num, expected) in tests {
+				run_test_values_per_component(num, expected);
+			}
 		}
 	}
 

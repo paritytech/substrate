@@ -138,7 +138,7 @@ impl BeefyTestNet {
 		})
 	}
 
-	pub(crate) fn generate_blocks(
+	pub(crate) fn generate_blocks_and_sync(
 		&mut self,
 		count: usize,
 		session_length: u64,
@@ -161,6 +161,7 @@ impl BeefyTestNet {
 
 			block
 		});
+		self.block_until_sync();
 	}
 }
 
@@ -521,8 +522,7 @@ fn beefy_finalizing_blocks() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
-	net.generate_blocks(42, session_len, &validator_set, true);
-	net.block_until_sync();
+	net.generate_blocks_and_sync(42, session_len, &validator_set, true);
 
 	let net = Arc::new(Mutex::new(net));
 
@@ -560,8 +560,7 @@ fn lagging_validators() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 62 blocks including `AuthorityChange` digests every 30 blocks.
-	net.generate_blocks(62, session_len, &validator_set, true);
-	net.block_until_sync();
+	net.generate_blocks_and_sync(62, session_len, &validator_set, true);
 
 	let net = Arc::new(Mutex::new(net));
 
@@ -637,8 +636,7 @@ fn correct_beefy_payload() {
 	runtime.spawn(initialize_beefy(&mut net, bad_peers, min_block_delta));
 
 	// push 10 blocks
-	net.generate_blocks(12, session_len, &validator_set, false);
-	net.block_until_sync();
+	net.generate_blocks_and_sync(12, session_len, &validator_set, false);
 
 	let net = Arc::new(Mutex::new(net));
 	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
