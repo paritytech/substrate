@@ -1555,8 +1555,8 @@ mod tests {
 
 		let gas_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		assert!(gas_left < gas_limit, "gas_left must be less than initial");
-		assert!(gas_left > actual_left, "gas_left must be greater than final");
+		assert!(gas_left.all_lt(gas_limit), "gas_left must be less than initial");
+		assert!(gas_left.all_gt(actual_left), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1953,7 +1953,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left() > Weight::zero());
+		assert!(mock_ext.gas_meter.gas_left().all_gt(Weight::zero()));
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"

@@ -79,6 +79,12 @@ pub struct StorageParams {
 	#[clap(long)]
 	pub template_path: Option<PathBuf>,
 
+	/// Add a header to the generated weight output file.
+	///
+	/// Good for adding LICENSE headers.
+	#[clap(long, value_name = "PATH")]
+	pub header: Option<PathBuf>,
+
 	/// Path to write the raw 'read' results in JSON format to. Can be a file or directory.
 	#[clap(long)]
 	pub json_read_path: Option<PathBuf>,
@@ -122,7 +128,7 @@ impl StorageCmd {
 		Block: BlockT<Hash = DbHash>,
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 	{
-		let mut template = TemplateData::new(&cfg, &self.params);
+		let mut template = TemplateData::new(&cfg, &self.params)?;
 
 		let block_id = BlockId::<Block>::Number(client.usage_info().chain.best_number);
 		template.set_block_number(block_id.to_string());
