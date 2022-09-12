@@ -63,7 +63,7 @@ fn init_members_works() {
 		// assert a retiring member from previous Alliance not removed
 		assert!(Alliance::is_member_of(&2, MemberRole::Retiring));
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::MembersInitialized {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MembersInitialized {
 			founders: vec![5, 8],
 			fellows: vec![4],
 			allies: vec![2],
@@ -117,7 +117,7 @@ fn disband_works() {
 		// deposit unreserved
 		assert_eq!(Balances::free_balance(9), 40);
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::AllianceDisbanded {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::AllianceDisbanded {
 			voting_members: 2,
 			ally_members: 1,
 			unreserved: 1,
@@ -154,7 +154,7 @@ fn propose_works() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				event: mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
@@ -182,13 +182,13 @@ fn vote_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 3
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
@@ -236,19 +236,19 @@ fn veto_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 3
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 1,
 					proposal_hash: vetoable_hash,
 					threshold: 3
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Disapproved {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Disapproved {
 					proposal_hash: vetoable_hash
 				})),
 			]
@@ -276,42 +276,42 @@ fn close_works() {
 		assert_eq!(
 			System::events(),
 			vec![
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Proposed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
 					account: 1,
 					proposal_index: 0,
 					proposal_hash: hash,
 					threshold: 3
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 1,
 					proposal_hash: hash,
 					voted: true,
 					yes: 1,
 					no: 0,
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 2,
 					proposal_hash: hash,
 					voted: true,
 					yes: 2,
 					no: 0,
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Voted {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Voted {
 					account: 3,
 					proposal_hash: hash,
 					voted: true,
 					yes: 3,
 					no: 0,
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Closed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Closed {
 					proposal_hash: hash,
 					yes: 3,
 					no: 0,
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Approved {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Approved {
 					proposal_hash: hash
 				})),
-				record(mock::Event::AllianceMotion(AllianceMotionEvent::Executed {
+				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Executed {
 					proposal_hash: hash,
 					result: Err(DispatchError::BadOrigin),
 				}))
@@ -327,7 +327,9 @@ fn set_rule_works() {
 		assert_ok!(Alliance::set_rule(Origin::signed(1), cid.clone()));
 		assert_eq!(Alliance::rule(), Some(cid.clone()));
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::NewRuleSet { rule: cid }));
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::NewRuleSet {
+			rule: cid,
+		}));
 	});
 }
 
@@ -341,7 +343,7 @@ fn announce_works() {
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
 
-		System::assert_last_event(mock::Event::Alliance(crate::Event::Announced {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::Announced {
 			announcement: cid,
 		}));
 	});
@@ -353,7 +355,7 @@ fn remove_announcement_works() {
 		let cid = test_cid();
 		assert_ok!(Alliance::announce(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![cid.clone()]);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::Announced {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::Announced {
 			announcement: cid.clone(),
 		}));
 
@@ -361,9 +363,9 @@ fn remove_announcement_works() {
 
 		assert_ok!(Alliance::remove_announcement(Origin::signed(3), cid.clone()));
 		assert_eq!(Alliance::announcements(), vec![]);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::AnnouncementRemoved {
-			announcement: cid,
-		}));
+		System::assert_last_event(mock::RuntimeEvent::Alliance(
+			crate::Event::AnnouncementRemoved { announcement: cid },
+		));
 	});
 }
 
@@ -498,7 +500,7 @@ fn give_retirement_notice_work() {
 		assert_ok!(Alliance::give_retirement_notice(Origin::signed(3)));
 		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
 		assert_eq!(Alliance::members(MemberRole::Retiring), vec![3]);
-		System::assert_last_event(mock::Event::Alliance(
+		System::assert_last_event(mock::RuntimeEvent::Alliance(
 			crate::Event::MemberRetirementPeriodStarted { member: (3) },
 		));
 
@@ -531,7 +533,7 @@ fn retire_works() {
 		System::set_block_number(System::block_number() + RetirementPeriod::get());
 		assert_ok!(Alliance::retire(Origin::signed(3)));
 		assert_eq!(Alliance::members(MemberRole::Fellow), Vec::<u64>::new());
-		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberRetired {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MemberRetired {
 			member: (3),
 			unreserved: None,
 		}));
@@ -585,7 +587,7 @@ fn kick_member_works() {
 		assert_ok!(Alliance::kick_member(Origin::signed(2), 2));
 		assert_eq!(Alliance::members(MemberRole::Founder), vec![1]);
 		assert_eq!(<DepositOf<Test, ()>>::get(2), None);
-		System::assert_last_event(mock::Event::Alliance(crate::Event::MemberKicked {
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MemberKicked {
 			member: (2),
 			slashed: Some(25),
 		}));

@@ -4147,7 +4147,7 @@ mod create {
 			Balances::make_free_balance_be(&11, 5 + 20);
 
 			// Then
-			let create = Call::Pools(crate::Call::<Runtime>::create {
+			let create = RuntimeCall::Pools(crate::Call::<Runtime>::create {
 				amount: 20,
 				root: 11,
 				nominator: 11,

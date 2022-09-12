@@ -243,13 +243,13 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+		type RuntimeCall: Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ codec::Decode
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Filter that is applied to calls dispatched by contracts.
 		///
@@ -260,7 +260,7 @@ pub mod pallet {
 		/// # Stability
 		///
 		/// The runtime **must** make sure that all dispatchables that are callable by
-		/// contracts remain stable. In addition [`Self::Call`] itself must remain stable.
+		/// contracts remain stable. In addition [`Self::RuntimeCall`] itself must remain stable.
 		/// This means that no existing variants are allowed to switch their positions.
 		///
 		/// # Note
@@ -270,7 +270,7 @@ pub mod pallet {
 		/// Therefore please make sure to be restrictive about which dispatchables are allowed
 		/// in order to not introduce a new DoS vector like memory allocation patterns that can
 		/// be exploited to drive the runtime into a panic.
-		type CallFilter: Contains<<Self as frame_system::Config>::Call>;
+		type CallFilter: Contains<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Used to answer contracts' queries regarding the current weight price. This is **not**
 		/// used to calculate the actual fee and is only for informational purposes.
@@ -1119,7 +1119,7 @@ where
 	fn deposit_event(topics: Vec<T::Hash>, event: Event<T>) {
 		<frame_system::Pallet<T>>::deposit_event_indexed(
 			&topics,
-			<T as Config>::Event::from(event).into(),
+			<T as Config>::RuntimeEvent::from(event).into(),
 		)
 	}
 }

@@ -240,7 +240,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The outer call dispatch type.
 		type Proposal: Parameter
@@ -249,7 +250,7 @@ pub mod pallet {
 			+ From<Call<Self, I>>
 			+ GetDispatchInfo
 			+ IsSubType<Call<Self, I>>
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Origin for admin-level operations, like setting the Alliance's rules.
 		type AdminOrigin: EnsureOrigin<Self::Origin>;
