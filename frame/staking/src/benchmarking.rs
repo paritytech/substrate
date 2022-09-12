@@ -660,25 +660,6 @@ benchmarks! {
 		assert!(original_bonded < new_bonded);
 	}
 
-	set_history_depth {
-		let e in 1 .. 100;
-		HistoryDepth::<T>::put(e);
-		CurrentEra::<T>::put(e);
-		let dummy = || -> T::AccountId { codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap() };
-		for i in 0 .. e {
-			<ErasStakers<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasValidatorPrefs<T>>::insert(i, dummy(), ValidatorPrefs::default());
-			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
-			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
-			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
-			ErasStartSessionIndex::<T>::insert(i, i);
-		}
-	}: _(RawOrigin::Root, EraIndex::zero(), u32::MAX)
-	verify {
-		assert_eq!(HistoryDepth::<T>::get(), 0);
-	}
-
 	reap_stash {
 		let s in 1 .. MAX_SPANS;
 		// clean up any existing state.
