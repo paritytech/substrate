@@ -23,7 +23,7 @@ use frame_support::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
 		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight, Weight},
 };
 use scale_info::{meta_type, TypeInfo};
 use sp_io::{
@@ -165,7 +165,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
-			10
+			Weight::from_ref_time(10)
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -176,7 +176,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
-			30
+			Weight::from_ref_time(30)
 		}
 		fn integrity_test() {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -190,7 +190,7 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1,
 	{
 		/// Doc comment put in metadata
-		#[pallet::weight(Weight::from(*_foo))]
+		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -334,22 +334,22 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_value)]
-	#[cfg(feature = "conditional-storage")]
+	#[cfg(feature = "frame-feature-testing")]
 	pub type ConditionalValue<T> = StorageValue<_, u32>;
 
-	#[cfg(feature = "conditional-storage")]
+	#[cfg(feature = "frame-feature-testing")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_map)]
 	pub type ConditionalMap<T> =
 		StorageMap<_, Twox64Concat, u16, u32, OptionQuery, GetDefault, ConstU32<12>>;
 
-	#[cfg(feature = "conditional-storage")]
+	#[cfg(feature = "frame-feature-testing")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_double_map)]
 	pub type ConditionalDoubleMap<T> =
 		StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
 
-	#[cfg(feature = "conditional-storage")]
+	#[cfg(feature = "frame-feature-testing")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_nmap)]
 	pub type ConditionalNMap<T> =
@@ -492,14 +492,14 @@ pub mod pallet2 {
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			Self::deposit_event(Event::Something(11));
-			0
+			Weight::zero()
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			Self::deposit_event(Event::Something(21));
 		}
 		fn on_runtime_upgrade() -> Weight {
 			Self::deposit_event(Event::Something(31));
-			0
+			Weight::zero()
 		}
 	}
 
@@ -550,7 +550,9 @@ pub mod pallet2 {
 #[frame_support::pallet]
 pub mod pallet3 {
 	#[pallet::config]
-	pub trait Config: frame_system::Config<Origin = ()> {}
+	pub trait Config: frame_system::Config<Origin = <Self as Config>::Origin> {
+		type Origin;
+	}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -612,6 +614,11 @@ impl pallet2::Config for Runtime {
 
 impl pallet4::Config for Runtime {}
 
+#[cfg(feature = "frame-feature-testing")]
+impl pallet3::Config for Runtime {
+	type Origin = Origin;
+}
+
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
@@ -626,7 +633,7 @@ frame_support::construct_runtime!(
 		System: frame_system exclude_parts { Pallet, Storage },
 		Example: pallet,
 		Example2: pallet2 exclude_parts { Call },
-		#[cfg(feature = "example3")]
+		#[cfg(feature = "frame-feature-testing")]
 		Example3: pallet3,
 		Example4: pallet4 use_parts { Call },
 	}
@@ -668,7 +675,11 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3, bar: 0 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo {
+			weight: frame_support::weights::Weight::from_ref_time(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		}
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
@@ -1020,7 +1031,7 @@ fn storage_expand() {
 			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
 		);
 
-		#[cfg(feature = "conditional-storage")]
+		#[cfg(feature = "frame-feature-testing")]
 		{
 			pallet::ConditionalValue::<Runtime>::put(1);
 			pallet::ConditionalMap::<Runtime>::insert(1, 2);
@@ -1046,10 +1057,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(10));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(30));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -1085,10 +1096,16 @@ fn all_pallets_type_reversed_order_is_correct() {
 
 		#[allow(deprecated)]
 		{
-			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
+			assert_eq!(
+				AllPalletsWithoutSystemReversed::on_initialize(1),
+				Weight::from_ref_time(10)
+			);
 			AllPalletsWithoutSystemReversed::on_finalize(1);
 
-			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
+			assert_eq!(
+				AllPalletsWithoutSystemReversed::on_runtime_upgrade(),
+				Weight::from_ref_time(30)
+			);
 		}
 
 		assert_eq!(
@@ -1154,8 +1171,10 @@ fn migrate_from_pallet_version_to_storage_version() {
 			AllPalletsWithSystem,
 		>(&db_weight);
 
-		// 4 pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(4 * 2 * 5, weight);
+		let pallet_num = if cfg!(feature = "frame-feature-testing") { 5 } else { 4 };
+
+		// `pallet_num` pallets, 2 writes and every write costs 5 weight.
+		assert_eq!(Weight::from_ref_time(pallet_num * 2 * 5), weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
@@ -1322,7 +1341,7 @@ fn metadata() {
 						default: vec![1, 1],
 						docs: vec![],
 					},
-					#[cfg(feature = "conditional-storage")]
+					#[cfg(feature = "frame-feature-testing")]
 					StorageEntryMetadata {
 						name: "ConditionalValue",
 						modifier: StorageEntryModifier::Optional,
@@ -1330,7 +1349,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-					#[cfg(feature = "conditional-storage")]
+					#[cfg(feature = "frame-feature-testing")]
 					StorageEntryMetadata {
 						name: "ConditionalMap",
 						modifier: StorageEntryModifier::Optional,
@@ -1342,7 +1361,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-					#[cfg(feature = "conditional-storage")]
+					#[cfg(feature = "frame-feature-testing")]
 					StorageEntryMetadata {
 						name: "ConditionalDoubleMap",
 						modifier: StorageEntryModifier::Optional,
@@ -1357,7 +1376,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-					#[cfg(feature = "conditional-storage")]
+					#[cfg(feature = "frame-feature-testing")]
 					StorageEntryMetadata {
 						name: "ConditionalNMap",
 						modifier: StorageEntryModifier::Optional,
@@ -1476,6 +1495,16 @@ fn metadata() {
 			}),
 			calls: None,
 			event: Some(PalletEventMetadata { ty: meta_type::<pallet2::Event>() }),
+			constants: vec![],
+			error: None,
+		},
+		#[cfg(feature = "frame-feature-testing")]
+		PalletMetadata {
+			index: 3,
+			name: "Example3",
+			storage: None,
+			calls: None,
+			event: None,
 			constants: vec![],
 			error: None,
 		},
@@ -1623,7 +1652,7 @@ fn test_storage_info() {
 				max_values: None,
 				max_size: Some(16 + 1 + 8 + 2 + 16),
 			},
-			#[cfg(feature = "conditional-storage")]
+			#[cfg(feature = "frame-feature-testing")]
 			{
 				StorageInfo {
 					pallet_name: b"Example".to_vec(),
@@ -1633,7 +1662,7 @@ fn test_storage_info() {
 					max_size: Some(4),
 				}
 			},
-			#[cfg(feature = "conditional-storage")]
+			#[cfg(feature = "frame-feature-testing")]
 			{
 				StorageInfo {
 					pallet_name: b"Example".to_vec(),
@@ -1643,7 +1672,7 @@ fn test_storage_info() {
 					max_size: Some(8 + 2 + 4),
 				}
 			},
-			#[cfg(feature = "conditional-storage")]
+			#[cfg(feature = "frame-feature-testing")]
 			{
 				StorageInfo {
 					pallet_name: b"Example".to_vec(),
@@ -1653,7 +1682,7 @@ fn test_storage_info() {
 					max_size: Some(16 + 1 + 8 + 2 + 4),
 				}
 			},
-			#[cfg(feature = "conditional-storage")]
+			#[cfg(feature = "frame-feature-testing")]
 			{
 				StorageInfo {
 					pallet_name: b"Example".to_vec(),
@@ -1720,7 +1749,12 @@ fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
 	// Just ensure the 2 types are same.
 	#[allow(deprecated)]
 	fn _a(_t: AllPalletsReversedWithSystemFirst) {}
+	#[cfg(not(feature = "frame-feature-testing"))]
 	fn _b(t: (System, Example4, Example2, Example)) {
+		_a(t)
+	}
+	#[cfg(feature = "frame-feature-testing")]
+	fn _b(t: (System, Example4, Example3, Example2, Example)) {
 		_a(t)
 	}
 }
@@ -1729,7 +1763,12 @@ fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
 fn assert_type_all_pallets_with_system_is_correct() {
 	// Just ensure the 2 types are same.
 	fn _a(_t: AllPalletsWithSystem) {}
+	#[cfg(not(feature = "frame-feature-testing"))]
 	fn _b(t: (System, Example, Example2, Example4)) {
+		_a(t)
+	}
+	#[cfg(feature = "frame-feature-testing")]
+	fn _b(t: (System, Example, Example2, Example3, Example4)) {
 		_a(t)
 	}
 }
@@ -1738,7 +1777,12 @@ fn assert_type_all_pallets_with_system_is_correct() {
 fn assert_type_all_pallets_without_system_is_correct() {
 	// Just ensure the 2 types are same.
 	fn _a(_t: AllPalletsWithoutSystem) {}
+	#[cfg(not(feature = "frame-feature-testing"))]
 	fn _b(t: (Example, Example2, Example4)) {
+		_a(t)
+	}
+	#[cfg(feature = "frame-feature-testing")]
+	fn _b(t: (Example, Example2, Example3, Example4)) {
 		_a(t)
 	}
 }
@@ -1748,7 +1792,12 @@ fn assert_type_all_pallets_with_system_reversed_is_correct() {
 	// Just ensure the 2 types are same.
 	#[allow(deprecated)]
 	fn _a(_t: AllPalletsWithSystemReversed) {}
+	#[cfg(not(feature = "frame-feature-testing"))]
 	fn _b(t: (Example4, Example2, Example, System)) {
+		_a(t)
+	}
+	#[cfg(feature = "frame-feature-testing")]
+	fn _b(t: (Example4, Example3, Example2, Example, System)) {
 		_a(t)
 	}
 }
@@ -1758,7 +1807,12 @@ fn assert_type_all_pallets_without_system_reversed_is_correct() {
 	// Just ensure the 2 types are same.
 	#[allow(deprecated)]
 	fn _a(_t: AllPalletsWithoutSystemReversed) {}
+	#[cfg(not(feature = "frame-feature-testing"))]
 	fn _b(t: (Example4, Example2, Example)) {
+		_a(t)
+	}
+	#[cfg(feature = "frame-feature-testing")]
+	fn _b(t: (Example4, Example3, Example2, Example)) {
 		_a(t)
 	}
 }
