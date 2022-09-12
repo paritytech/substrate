@@ -4664,7 +4664,6 @@ dependencies = [
  "node-primitives",
  "node-runtime",
  "pallet-contracts-rpc",
- "pallet-mmr-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
  "sc-client-api",
