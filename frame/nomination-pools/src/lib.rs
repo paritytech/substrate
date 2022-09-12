@@ -1453,7 +1453,7 @@ pub mod pallet {
 		PartialUnbondNotAllowedPermissionlessly,
 	}
 
-	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError)]
+	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
 	pub enum DefensiveError {
 		/// There isn't enough space in the unbond pool.
 		NotEnoughSpaceInUnbondPool,
@@ -1758,8 +1758,8 @@ pub mod pallet {
 
 			let bonded_pool = BondedPool::<T>::get(member.pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?;
-			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
-				.defensive_ok_or::<Error<T>>(DefensiveError::SubPoolsNotFound.into())?;
+			let mut sub_pools =
+				SubPoolsStorage::<T>::get(member.pool_id).ok_or(Error::<T>::SubPoolsNotFound)?;
 
 			bonded_pool.ok_to_withdraw_unbonded_with(&caller, &member_account)?;
 
@@ -1887,10 +1887,10 @@ pub mod pallet {
 			);
 			ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
-			let pool_id = LastPoolId::<T>::mutate(|id| {
-				*id += 1;
-				*id
-			});
+			let pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
+				*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
+				Ok(*id)
+			})?;
 			let mut bonded_pool = BondedPool::<T>::new(
 				pool_id,
 				PoolRoles {
@@ -2416,16 +2416,46 @@ impl<T: Config> Pallet<T> {
 
 		for id in reward_pools {
 			let account = Self::create_reward_account(id);
-			assert!(T::Currency::free_balance(&account) >= T::Currency::minimum_balance());
+			assert!(
+				T::Currency::free_balance(&account) >= T::Currency::minimum_balance(),
+				"reward pool of {id}: {:?} (ed = {:?})",
+				T::Currency::free_balance(&account),
+				T::Currency::minimum_balance()
+			);
 		}
 
 		let mut pools_members = BTreeMap::<PoolId, u32>::new();
+		let mut pools_members_pending_rewards = BTreeMap::<PoolId, BalanceOf<T>>::new();
 		let mut all_members = 0u32;
 		PoolMembers::<T>::iter().for_each(|(_, d)| {
-			assert!(BondedPools::<T>::contains_key(d.pool_id));
+			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
 			assert!(!d.total_points().is_zero(), "no member should have zero points: {:?}", d);
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
+
+			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
+			if !bonded_pool.points.is_zero() {
+				let current_rc =
+					reward_pool.current_reward_counter(d.pool_id, bonded_pool.points).unwrap();
+				*pools_members_pending_rewards.entry(d.pool_id).or_default() +=
+					d.pending_rewards(current_rc).unwrap();
+			} // else this pool has been heavily slashed and cannot have any rewards anymore.
+		});
+
+		RewardPools::<T>::iter_keys().for_each(|id| {
+			// the sum of the pending rewards must be less than the leftover balance. Since the
+			// reward math rounds down, we might accumulate some dust here.
+			log!(
+				trace,
+				"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
+				id,
+				pools_members_pending_rewards.get(&id),
+				RewardPool::<T>::current_balance(id)
+			);
+			assert!(
+				RewardPool::<T>::current_balance(id) >=
+					pools_members_pending_rewards.get(&id).map(|x| *x).unwrap_or_default()
+			)
 		});
 
 		BondedPools::<T>::iter().for_each(|(id, inner)| {
@@ -2470,6 +2500,7 @@ impl<T: Config> Pallet<T> {
 				sum_unbonding_balance
 			);
 		}
+
 		Ok(())
 	}
 
