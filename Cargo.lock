@@ -10757,7 +10757,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "digest 0.10.3",
  "rand 0.8.5",
  "static_assertions",
@@ -11898,10 +11898,6 @@ name = "sc-finality-grandpa-rpc"
 version = "0.10.0-dev"
 
 [[patch.unused]]
-name = "sc-finality-grandpa-rpc"
-version = "0.10.0-dev"
-
-[[patch.unused]]
 name = "orml-unknown-tokens"
 version = "0.4.1-dev"
 source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
@@ -11920,3 +11916,7 @@ source = "git+https://github.com/mangata-finance//open-runtime-module-library?br
 name = "orml-xtokens"
 version = "0.4.1-dev"
 source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
+
+[[patch.unused]]
+name = "sc-finality-grandpa-rpc"
+version = "0.10.0-dev"
