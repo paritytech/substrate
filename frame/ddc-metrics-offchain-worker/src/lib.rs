@@ -11,7 +11,7 @@ use alt_serde::{de::DeserializeOwned, Deserialize};
 use codec::{Decode, Encode};
 use frame_support::traits::Get;
 use frame_support::{
-    debug::{error, info, warn},
+    log::{error, info, warn},
     decl_event, decl_module, decl_storage,
 };
 use frame_system::offchain::{

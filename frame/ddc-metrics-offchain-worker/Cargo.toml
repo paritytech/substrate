@@ -22,7 +22,7 @@ sp-core = { version = "3.0.0", default-features = false, path = "../../primitive
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-pallet-contracts  = { version = '2.0.0', default-features = false, path = "../contracts" }
+pallet-contracts  = { version = '3.0.0', default-features = false, path = "../contracts" }
 lite-json = { version = "0.1", default-features = false }
 alt_serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, git = "https://github.com/Cerebellum-Network/json", branch = "no-std-cere", features = ["alloc"] }
