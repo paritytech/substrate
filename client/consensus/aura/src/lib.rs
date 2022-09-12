@@ -578,7 +578,6 @@ mod tests {
 		traits::{Block as BlockT, Header as _},
 		Digest,
 	};
-	use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 	use std::{
 		task::Poll,
 		time::{Duration, Instant},
@@ -662,12 +661,10 @@ mod tests {
 			import_queue::AuraVerifier::new(
 				client,
 				Box::new(|_, _| async {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
+						sp_timestamp::current_timestamp(),
 						SlotDuration::from_millis(6000),
 					);
-
 					Ok((slot,))
 				}),
 				AlwaysCanAuthor,
@@ -747,13 +744,12 @@ mod tests {
 					sync_oracle: DummyOracle,
 					justification_sync_link: (),
 					create_inherent_data_providers: |_, _| async {
-						let timestamp = TimestampInherentDataProvider::from_system_time();
 						let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-							*timestamp,
+							sp_timestamp::current_timestamp(),
 							SlotDuration::from_millis(6000),
 						);
 
-						Ok((slot, timestamp))
+						Ok((slot,))
 					},
 					force_authoring: false,
 					backoff_authoring_blocks: Some(

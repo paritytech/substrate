@@ -43,7 +43,6 @@ use sp_runtime::{
 	generic::{Digest, DigestItem},
 	traits::Block as BlockT,
 };
-use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 use std::{cell::RefCell, task::Poll, time::Duration};
 
 type Item = DigestItem;
@@ -322,12 +321,10 @@ impl TestNetFactory for BabeTestNet {
 				client: client.clone(),
 				select_chain: longest_chain,
 				create_inherent_data_providers: Box::new(|_, _| async {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
+						sp_timestamp::current_timestamp(),
 						SlotDuration::from_millis(6000),
 					);
-
 					Ok((slot,))
 				}),
 				config: data.link.config.clone(),
@@ -435,12 +432,10 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				env: environ,
 				sync_oracle: DummyOracle,
 				create_inherent_data_providers: Box::new(|_, _| async {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
+						sp_timestamp::current_timestamp(),
 						SlotDuration::from_millis(6000),
 					);
-
 					Ok((slot,))
 				}),
 				force_authoring: false,
