@@ -48,6 +48,7 @@ parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 	pub static ExistentialDeposit: u64 = 0;
+	pub static IsTransferable: bool = true;
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -95,6 +96,7 @@ impl Config for Test {
 	type MaxReserves = ConstU32<2>;
 	type ReserveIdentifier = [u8; 8];
 	type WeightInfo = ();
+	type IsTransferable = IsTransferable;
 }
 
 pub struct ExtBuilder {
