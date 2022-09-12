@@ -333,16 +333,6 @@ fn reported_roles_to_observed_role(roles: Roles) -> ObservedRole {
 	}
 }
 
-impl<B, Client> NetworkBehaviourEventProcess<void::Void> for Behaviour<B, Client>
-where
-	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
-{
-	fn inject_event(&mut self, event: void::Void) {
-		void::unreachable(event)
-	}
-}
-
 impl<B, Client> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behaviour<B, Client>
 where
 	B: BlockT,

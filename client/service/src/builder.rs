@@ -873,7 +873,7 @@ where
 		light_client_request_protocol_config,
 		request_response_protocol_configs: request_response_protocol_configs
 			.into_iter()
-			.filter_map(std::convert::identity)
+			.flatten()
 			.collect::<Vec<_>>(),
 	};
 
