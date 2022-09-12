@@ -105,7 +105,7 @@ pub struct StorageParams {
 	/// Trie cache size in bytes.
 	///
 	/// Providing `0` will disable the cache.
-	#[clap(long, default_value = "0")]
+	#[clap(long, default_value = "1024")]
 	pub trie_cache_size: usize,
 
 	/// Include child trees in benchmark.
