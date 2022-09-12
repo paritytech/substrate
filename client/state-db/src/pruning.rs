@@ -232,7 +232,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		&self,
 	) -> Option<(&VecDeque<DeathRow<BlockHash, Key>>, Option<u64>)> {
 		match self {
-			DeathRowQueue::DbBacked { cache, last, .. } => Some((cache, last.clone())),
+			DeathRowQueue::DbBacked { cache, last, .. } => Some((cache, *last)),
 			DeathRowQueue::Mem { .. } => None,
 		}
 	}
