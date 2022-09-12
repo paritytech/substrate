@@ -14,13 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Bitswap server for substrate.
+//! Bitswap server for Substrate.
 //!
 //! Allows querying transactions by hash over standard bitswap protocol
 //! Only supports bitswap 1.2.0.
 //! CID is expected to reference 256-bit Blake2b transaction hash.
 
-// #![allow(unused)]
 use cid::{self, Version};
 use futures::{channel::mpsc, StreamExt};
 use libp2p::core::PeerId;
@@ -91,7 +90,7 @@ impl Prefix {
 	}
 }
 
-/// Network behaviour that handles sending and receiving IPFS blocks.
+/// Bitswap request handler
 pub struct BitswapRequestHandler<B> {
 	client: Arc<dyn BlockBackend<B> + Send + Sync>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
@@ -140,6 +139,8 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 				Err(err) => {
 					error!(target: LOG_TARGET, "Failed to process request from {peer}: {err}");
 
+					// TODO: adjust reputation?
+
 					let response = OutgoingResponse {
 						result: Err(()),
 						reputation_changes: vec![],
@@ -187,7 +188,6 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 			let cid = match cid::Cid::read_bytes(entry.block.as_slice()) {
 				Ok(cid) => cid,
 				Err(e) => {
-					println!("bad ci");
 					trace!(target: LOG_TARGET, "Bad CID {:?}: {:?}", entry.block, e);
 					continue
 				},
@@ -197,7 +197,6 @@ impl<B: BlockT> BitswapRequestHandler<B> {
 				cid.hash().code() != u64::from(cid::multihash::Code::Blake2b256) ||
 				cid.hash().size() != 32
 			{
-				println!("invlid data");
 				debug!(target: LOG_TARGET, "Ignoring unsupported CID {}: {}", peer, cid);
 				continue
 			}
