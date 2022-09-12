@@ -319,12 +319,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
-		let timestamp = slot_info.duration.as_millis().saturating_mul(u64::from(slot) as u128);
-		debug!(
-			target: logging_target,
-			"Starting authorship at slot: {slot}, timestamp: {timestamp}"
-		);
+		debug!(target: logging_target, "Starting authorship at slot: {slot}");
 
+		let timestamp = slot_info.duration.as_millis().saturating_mul(u64::from(slot) as u128);
 		telemetry!(
 			telemetry;
 			CONSENSUS_DEBUG;
