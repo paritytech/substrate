@@ -20,8 +20,12 @@
 
 use beefy_primitives::BeefyApi;
 use codec::Encode;
-use futures::channel::oneshot;
-use log::debug;
+use futures::{
+	channel::{oneshot, oneshot::Canceled},
+	future::Either,
+	stream::{FuturesUnordered, StreamExt},
+};
+use log::{debug, error};
 use sc_network::{PeerId, ProtocolName};
 use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
@@ -46,7 +50,7 @@ type ResponseReceiver = oneshot::Receiver<Response>;
 
 enum State<B: Block> {
 	Idle,
-	AwaitingResponse(NumberFor<B>, ResponseReceiver),
+	AwaitingResponse(NumberFor<B>),
 }
 
 pub struct OnDemandJustificationsEngine<B: Block, N, R> {
@@ -54,6 +58,9 @@ pub struct OnDemandJustificationsEngine<B: Block, N, R> {
 	runtime: Arc<R>,
 	protocol_name: ProtocolName,
 	state: State<B>,
+	engine: FuturesUnordered<
+		Either<std::future::Pending<std::result::Result<Response, Canceled>>, ResponseReceiver>,
+	>,
 }
 
 impl<B, N, R> OnDemandJustificationsEngine<B, N, R>
@@ -64,7 +71,11 @@ where
 	R::Api: BeefyApi<B>,
 {
 	pub fn new(network: N, runtime: Arc<R>, protocol_name: ProtocolName) -> Self {
-		Self { network, runtime, protocol_name, state: State::Idle }
+		let engine = FuturesUnordered::new();
+		let pending = Either::Left(std::future::pending::<_>());
+		engine.push(pending);
+
+		Self { network, runtime, protocol_name, state: State::Idle, engine }
 	}
 
 	/// Start requesting justification for `block` number.
@@ -84,46 +95,69 @@ where
 			IfDisconnected::ImmediateError,
 		);
 
-		self.state = State::AwaitingResponse(block, rx);
+		self.engine.push(Either::Right(rx));
+		self.state = State::AwaitingResponse(block);
 	}
 
-	/// FIXME (Andre): this to replace 'impl Stream'
-	pub async fn next(&mut self) -> BeefyVersionedFinalityProof<B> {
-		let (number, rx) = match std::mem::replace(&mut self.state, State::Idle) {
-			State::AwaitingResponse(block, rx) => (block, rx),
-			_ => unimplemented!(), // return future that never finishes.
+	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B>> {
+		// The `engine` contains at the very least a `Pending` future (future that never finishes).
+		// This "blocks" until:
+		//  - we have a [ResponseReceiver] added to the engine, and
+		//  - we also get a [Response] on it.
+		let resp = self.engine.next().await;
+
+		let resp = resp.expect("Engine will never end because of inner `Pending` future, qed.");
+		let number = match self.state {
+			State::AwaitingResponse(block) => block,
+			// Programming error to have active [ResponseReceiver]s in the engine with no pending
+			// requests.
+			State::Idle => unreachable!(),
 		};
 
-		let resp = match rx.await {
+		let resp = match resp {
 			Ok(resp) => resp,
-			Err(_) => unimplemented!(),
-		};
-
-		match self.process_response(resp, number) {
-			Ok(proof) => proof,
 			Err(e) => {
 				debug!(
 					target: "beefy",
-					"🥩 on demand justification (block {:?}) response error: {:?}",
+					"🥩 on demand justification (block {:?}) peer hung up: {:?}",
 					number, e
 				);
 				self.request(number);
+				return None
+			},
+		};
 
-				unimplemented!(); // return future that never finishes.
+		let encoded = match resp {
+			Ok(encoded) => encoded,
+			Err(e) => {
+				error!(
+					target: "beefy",
+					"🥩 on demand justification (block {:?}) peer responded with error: {:?}",
+					number, e
+				);
+				return None
+			},
+		};
+
+		match self.process_response(encoded, number) {
+			Ok(proof) => Some(proof),
+			Err(e) => {
+				debug!(
+					target: "beefy",
+					"🥩 on demand justification (block {:?}) invalid proof: {:?}",
+					number, e
+				);
+				self.request(number);
+				None
 			},
 		}
 	}
 
 	fn process_response(
 		&mut self,
-		resp: Response,
+		encoded: Vec<u8>,
 		number: NumberFor<B>,
 	) -> Result<BeefyVersionedFinalityProof<B>, Error> {
-		let encoded = match resp {
-			Ok(encoded) => encoded,
-			Err(_) => unimplemented!(),
-		};
-
 		let block_id = BlockId::number(number);
 		let validator_set = self
 			.runtime
@@ -139,71 +173,11 @@ where
 	/// Cancel any pending request for block numbers smaller or equal to `latest_block`.
 	pub fn cancel_requests_older_than(&mut self, latest_block: NumberFor<B>) {
 		match &self.state {
-			State::AwaitingResponse(block, _) if *block <= latest_block => {
+			State::AwaitingResponse(block) if *block <= latest_block => {
 				self.state = State::Idle;
+				// TODO: reset `self.engine`
 			},
 			_ => (),
 		}
 	}
 }
-
-// impl<B, N> Stream for OnDemandJustificationsEngine<B, N>
-// where
-// 	B: Block,
-// 	N: NetworkRequest,
-// {
-// 	type Item = BeefyVersionedFinalityProof<B>;
-//
-// 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-// 		// TODO: I don't think we need this waker, should remove.
-// 		let waker = cx.waker().clone();
-//
-// 		let response_receiver = match &mut self.state {
-// 			// If there's nothing to do,
-// 			State::Init | State::Idle(_) => {
-// 				self.state = State::Idle(waker);
-// 				// do nothing.
-// 				return Poll::Pending
-// 			},
-// 			State::AwaitingResponse(_block, receiver) => receiver,
-// 		};
-//
-// 		match response_receiver.poll_unpin(cx) {
-// 			Poll::Ready(Ok(Ok(encoded))) => {
-// 				self.state = State::Idle(waker);
-//
-// 				match <BeefyVersionedFinalityProof<B>>::decode(&mut &*encoded) {
-// 					// TODO: Verify this proof is valid.
-// 					Ok(proof) => return Poll::Ready(Some(proof)),
-// 					Err(_) => {
-// 						// TODO: decode error, try another peer.
-// 					},
-// 				}
-// 			},
-// 			Poll::Ready(Err(_)) | Poll::Ready(Ok(Err(_))) => {
-// 				self.state = State::Idle(waker);
-// 				// TODO: this peer closed connection or couldn't/refused to answer, try another.
-// 			},
-// 			Poll::Pending => (),
-// 		}
-//
-// 		Poll::Pending
-// 	}
-// }
-//
-// impl<B, N> FusedStream for OnDemandJustificationsEngine<B, N>
-// where
-// 	B: Block,
-// 	N: NetworkRequest,
-// {
-// 	fn is_terminated(&self) -> bool {
-// 		false
-// 	}
-// }
-//
-// impl<B, N> Unpin for OnDemandJustificationsEngine<B, N>
-// where
-// 	B: Block,
-// 	N: NetworkRequest,
-// {
-// }

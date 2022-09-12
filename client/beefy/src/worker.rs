@@ -836,9 +836,10 @@ where
 				},
 				// TODO: join this stream's branch with the one above; how? .. ¯\_(ツ)_/¯
 				justif = self.on_demand_justifications.next().fuse() => {
-					// TODO: make sure proofs are verified before consuming.
-					if let Err(err) = self.triage_incoming_justif(justif) {
-						debug!(target: "beefy", "🥩 {}", err);
+					if let Some(justif) = justif {
+						if let Err(err) = self.triage_incoming_justif(justif) {
+							debug!(target: "beefy", "🥩 {}", err);
+						}
 					}
 				},
 				vote = votes.next() => {
