@@ -708,6 +708,25 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	// Expose miner configs over the metadata such that they can be re-implemented.
+	#[pallet::extra_constants]
+	impl<T: Config> Pallet<T> {
+		#[pallet::constant_name(MinerMaxLength)]
+		fn max_length() -> u32 {
+			<T::MinerConfig as MinerConfig>::MaxLength::get()
+		}
+
+		#[pallet::constant_name(MinerMaxWeight)]
+		fn max_weight() -> Weight {
+			<T::MinerConfig as MinerConfig>::MaxWeight::get()
+		}
+
+		#[pallet::constant_name(MinerMaxVotesPerVoter)]
+		fn max_votes_per_voter() -> u32 {
+			<T::MinerConfig as MinerConfig>::MaxVotesPerVoter::get()
+		}
+	}
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(now: T::BlockNumber) -> Weight {
