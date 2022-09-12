@@ -84,7 +84,6 @@ use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_support::{
-	benchmarking,
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
 	storage,
 	traits::{
@@ -198,6 +197,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
 	use frame_support::pallet_prelude::*;
+	use frame_support::benchmarking;
 	use sp_runtime::DispatchErrorWithPostInfo;
 
 	/// System configuration trait. Implemented by runtime.
