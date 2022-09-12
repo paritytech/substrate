@@ -240,7 +240,7 @@ pub struct TestVerifier {
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+				InherentDataProviders = (InherentDataProvider,),
 			>,
 		>,
 	>,
@@ -328,7 +328,7 @@ impl TestNetFactory for BabeTestNet {
 						SlotDuration::from_millis(6000),
 					);
 
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
@@ -441,7 +441,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 						SlotDuration::from_millis(6000),
 					);
 
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),

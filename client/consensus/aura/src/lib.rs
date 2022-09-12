@@ -638,7 +638,7 @@ mod tests {
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+				InherentDataProviders = (InherentDataProvider,),
 			>,
 		>,
 	>;
@@ -668,7 +668,7 @@ mod tests {
 						SlotDuration::from_millis(6000),
 					);
 
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
 				AlwaysCanAuthor,
 				CheckForEquivocation::Yes,
@@ -753,7 +753,7 @@ mod tests {
 							SlotDuration::from_millis(6000),
 						);
 
-						Ok((timestamp, slot))
+						Ok((slot, timestamp))
 					},
 					force_authoring: false,
 					backoff_authoring_blocks: Some(
