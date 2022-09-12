@@ -19,7 +19,7 @@
 //! or a double map.
 
 use super::WeakBoundedVec;
-use crate::traits::{Get, TryCollect};
+use crate::{Get, TryCollect};
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use core::{
 	ops::{Deref, Index, IndexMut, RangeBounds},
@@ -884,7 +884,7 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use crate::{bounded_vec, traits::ConstU32};
+	use crate::{bounded_vec, ConstU32};
 
 	#[test]
 	fn slide_works() {

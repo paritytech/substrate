@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Set Git tag
-        uses: s3krit/walking-tag-action@master
+        uses: s3krit/walking-tag-action@d04f7a53b72ceda4e20283736ce3627011275178 # latest version from master
         with:
           TAG_NAME: release
           TAG_MESSAGE: Latest release

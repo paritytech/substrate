@@ -30,7 +30,7 @@ sp-externalities = { version = "0.12.0", default-features = false, path = "../ex
 sp-tracing = { version = "5.0.0", default-features = false, path = "../tracing" }
 log = { version = "0.4.17", optional = true }
 futures = { version = "0.3.21", features = ["thread-pool"], optional = true }
-parking_lot = { version = "0.12.0", optional = true }
+parking_lot = { version = "0.12.1", optional = true }
 secp256k1 = { version = "0.24.0", features = ["recovery", "global-context"], optional = true }
 tracing = { version = "0.1.29", default-features = false }
 tracing-core = { version = "0.1.28", default-features = false}
