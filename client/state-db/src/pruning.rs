@@ -29,10 +29,8 @@ use crate::{
 	DEFAULT_MAX_BLOCK_CONSTRAINT,
 };
 use codec::{Decode, Encode};
-use log::{trace};
-use std::{
-	collections::{HashMap, HashSet, VecDeque},
-};
+use log::trace;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub(crate) const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
@@ -113,13 +111,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		let cache_capacity = window_size.max(1).min(DEFAULT_MAX_BLOCK_CONSTRAINT) as usize;
 		let mut cache = VecDeque::with_capacity(cache_capacity);
 		trace!(target: "state-db", "Reading pruning journal for the database-backed queue. Pending #{}", base);
-		DeathRowQueue::load_batch_from_db(
-			&db,
-			&mut cache,
-			base,
-			cache_capacity,
-		)?;
-		Ok(DeathRowQueue::DbBacked { db, cache, cache_capacity, last})
+		DeathRowQueue::load_batch_from_db(&db, &mut cache, base, cache_capacity)?;
+		Ok(DeathRowQueue::DbBacked { db, cache, cache_capacity, last })
 	}
 
 	/// import a new block to the back of the queue
@@ -128,7 +121,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		trace!(target: "state-db", "Importing {}, base={}", num, base);
 		match self {
 			DeathRowQueue::DbBacked { cache, cache_capacity, last, .. } => {
-				// If the new block continues cached range and there is space, load it directly into cache.
+				// If the new block continues cached range and there is space, load it directly into
+				// cache.
 				if num == base + cache.len() as u64 && cache.len() < *cache_capacity {
 					trace!(target: "state-db", "Adding to DB backed cache {:?} (#{})", hash, num);
 					cache.push_back(DeathRow { hash, deleted: deleted.into_iter().collect() });
@@ -161,12 +155,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		match self {
 			DeathRowQueue::DbBacked { db, cache, cache_capacity, .. } => {
 				if cache.is_empty() {
-					DeathRowQueue::load_batch_from_db(
-						db,
-						cache,
-						base,
-						*cache_capacity,
-					)?;
+					DeathRowQueue::load_batch_from_db(db, cache, base, *cache_capacity)?;
 				}
 				let next = cache.pop_front();
 				Ok(next)
@@ -183,9 +172,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		}
 	}
 
-	/// Load a batch of blocks from the backend database into `cache`, start from (and include) the
-	/// next block followed the last block of `cache`, `base` is the block number of the first block
-	/// of the queue
+	/// Load a batch of blocks from the backend database into `cache`, starting from `base` and up
+	/// to `base + cache_capacity`
 	fn load_batch_from_db(
 		db: &D,
 		cache: &mut VecDeque<DeathRow<BlockHash, Key>>,
@@ -195,10 +183,8 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		let start = base + cache.len() as u64;
 		let batch_size = cache_capacity;
 		for i in 0..batch_size as u64 {
-			trace!(target: "state-db", "Fetching {}", start + i);
 			match load_death_row_from_db::<BlockHash, Key, D>(db, start + i)? {
 				Some(row) => {
-					trace!(target: "state-db", "Fetched {}", start + i);
 					cache.push_back(row);
 				},
 				None => break,
@@ -226,10 +212,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	/// Return the number of block in the pruning window
 	fn len(&self, base: u64) -> u64 {
 		match self {
-			DeathRowQueue::DbBacked { last, .. } => {
-				trace!(target: "state-db", "len, base={}, last={:?}",  base, last);
-				last.map_or(0, |l| l + 1 - base)
-			},
+			DeathRowQueue::DbBacked { last, .. } => last.map_or(0, |l| l + 1 - base),
 			DeathRowQueue::Mem { death_rows, .. } => death_rows.len() as u64,
 		}
 	}
@@ -245,10 +228,11 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	}
 
 	#[cfg(test)]
-	fn get_db_backed_queue_state(&self) -> Option<(&VecDeque<DeathRow<BlockHash, Key>>, Option<u64>)> {
+	fn get_db_backed_queue_state(
+		&self,
+	) -> Option<(&VecDeque<DeathRow<BlockHash, Key>>, Option<u64>)> {
 		match self {
-			DeathRowQueue::DbBacked { cache, last, .. } =>
-				Some((cache, last.clone())),
+			DeathRowQueue::DbBacked { cache, last, .. } => Some((cache, last.clone())),
 			DeathRowQueue::Mem { .. } => None,
 		}
 	}
@@ -351,20 +335,13 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 	/// Get the hash of the next pruning block
 	pub fn next_hash(&mut self) -> Result<Option<BlockHash>, Error<D::Error>> {
 		let res = match &mut self.queue {
-			DeathRowQueue::DbBacked { db, cache, cache_capacity, .. } =>
-				{
-					if cache.is_empty() {
-						DeathRowQueue::load_batch_from_db(
-							db,
-							cache,
-							self.base,
-							*cache_capacity,
-						)?;
-					}
-					cache.front().map(|r| r.hash.clone())
-				},
-			DeathRowQueue::Mem { death_rows, .. } =>
-				death_rows.front().map(|r| r.hash.clone()),
+			DeathRowQueue::DbBacked { db, cache, cache_capacity, .. } => {
+				if cache.is_empty() {
+					DeathRowQueue::load_batch_from_db(db, cache, self.base, *cache_capacity)?;
+				}
+				cache.front().map(|r| r.hash.clone())
+			},
+			DeathRowQueue::Mem { death_rows, .. } => death_rows.front().map(|r| r.hash.clone()),
 		};
 		Ok(res)
 	}
@@ -405,10 +382,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 			let index = self.base;
 			commit.data.deleted.extend(pruned.deleted.into_iter());
 			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), index.encode()));
-			commit
-				.meta
-				.deleted
-				.push(to_journal_key(self.base));
+			commit.meta.deleted.push(to_journal_key(self.base));
 			self.base += 1;
 			Ok(())
 		} else {
@@ -480,7 +454,10 @@ mod tests {
 		let mut pruning: RefWindow<H256, H256, TestDb> =
 			RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
 		let mut commit = CommitSet::default();
-		assert_eq!(Err(Error::StateDb(StateDbError::BlockUnavailable)), pruning.prune_one(&mut commit));
+		assert_eq!(
+			Err(Error::StateDb(StateDbError::BlockUnavailable)),
+			pruning.prune_one(&mut commit)
+		);
 		assert_eq!(pruning.base, 0);
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert!(death_rows.is_empty());
@@ -816,7 +793,7 @@ mod tests {
 		// the following operations won't trigger loading block from db:
 		// - getting block in cache
 		// - getting block not in the queue
-		assert_eq!( pruning.next_hash().unwrap().unwrap(), 0);
+		assert_eq!(pruning.next_hash().unwrap().unwrap(), 0);
 		let (cache, last) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity);
 		assert_eq!(last, Some(cache_capacity as u64 * 2 + 10 - 1));
@@ -832,10 +809,7 @@ mod tests {
 
 		// getting the hash of block that not in cache will also trigger loading
 		// the remaining blocks from db
-		assert_eq!(
-			pruning.next_hash().unwrap().unwrap(),
-			(cache_capacity * 2) as u64
-		);
+		assert_eq!(pruning.next_hash().unwrap().unwrap(), (cache_capacity * 2) as u64);
 		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), 10);
 

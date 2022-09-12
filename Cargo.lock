@@ -8819,7 +8819,6 @@ dependencies = [
 name = "sc-state-db"
 version = "0.10.0-dev"
 dependencies = [
- "env_logger",
  "log",
  "parity-scale-codec",
  "parity-util-mem",

@@ -35,7 +35,6 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	last_canonicalized: Option<(BlockHash, u64)>,
 	levels: VecDeque<OverlayLevel<BlockHash, Key>>,
 	parents: HashMap<BlockHash, BlockHash>,
-	pending_canonicalizations: Vec<BlockHash>,
 	values: HashMap<Key, (u32, DBValue)>, // ref counted
 	// would be deleted but kept around because block is pinned, ref counted.
 	pinned: HashMap<BlockHash, u32>,
@@ -226,7 +225,6 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			last_canonicalized,
 			levels,
 			parents,
-			pending_canonicalizations: Default::default(),
 			pinned: Default::default(),
 			pinned_insertions: Default::default(),
 			values,
@@ -350,24 +348,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	pub fn last_canonicalized_block_number(&self) -> Option<u64> {
-		match self.last_canonicalized.as_ref().map(|&(_, n)| n) {
-			Some(n) => Some(n + self.pending_canonicalizations.len() as u64),
-			None if !self.pending_canonicalizations.is_empty() =>
-				Some(self.pending_canonicalizations.len() as u64),
-			_ => None,
-		}
-	}
-
-	pub fn last_canonicalized_hash(&self) -> Option<BlockHash> {
-		self.last_canonicalized.as_ref().map(|&(ref h, _)| h.clone())
-	}
-
-	pub fn top_level(&self) -> Vec<(BlockHash, u64)> {
-		let start = self.last_canonicalized_block_number().unwrap_or(0);
-		self.levels
-			.get(0)
-			.map(|level| level.blocks.iter().map(|r| (r.hash.clone(), start)).collect())
-			.unwrap_or_default()
+		self.last_canonicalized.as_ref().map(|&(_, n)| n)
 	}
 
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
@@ -415,12 +396,12 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 					&overlay.hash,
 				);
 				pinned_children = discard_descendants(
-						&mut self.levels.as_mut_slices(),
-						&mut self.values,
-						&mut self.parents,
-						&self.pinned,
-						&mut self.pinned_insertions,
-						&overlay.hash,
+					&mut self.levels.as_mut_slices(),
+					&mut self.values,
+					&mut self.parents,
+					&self.pinned,
+					&mut self.pinned_insertions,
+					&overlay.hash,
 				);
 			}
 			if self.pinned.contains_key(&overlay.hash) {
@@ -429,17 +410,16 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			if pinned_children != 0 {
 				self.pinned_insertions
 					.insert(overlay.hash.clone(), (overlay.inserted, pinned_children));
-				} else {
-					self.parents.remove(&overlay.hash);
-					discard_values(&mut self.values, overlay.inserted);
+			} else {
+				self.parents.remove(&overlay.hash);
+				discard_values(&mut self.values, overlay.inserted);
 			}
 			discarded_journals.push(overlay.journal_key.clone());
 			discarded_blocks.push(overlay.hash.clone());
 		}
 		commit.meta.deleted.append(&mut discarded_journals);
 
-		let canonicalized =
-			(hash.clone(), self.front_block_number());
+		let canonicalized = (hash.clone(), self.front_block_number());
 		commit
 			.meta
 			.inserted
@@ -462,8 +442,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 	/// Check if the block is in the canonicalization queue.
 	pub fn have_block(&self, hash: &BlockHash) -> bool {
-		self.parents.contains_key(hash) &&
-			!self.pending_canonicalizations.contains(hash)
+		self.parents.contains_key(hash)
 	}
 
 	/// Revert a single level. Returns commit set that deletes the journal or `None` if not
@@ -715,7 +694,6 @@ mod tests {
 
 	#[test]
 	fn insert_canonicalize_two() {
-		let _ = env_logger::try_init();
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2, 3, 4]);
@@ -761,7 +739,7 @@ mod tests {
 	}
 
 	#[test]
-	fn insert_with_pending_canonicalization() {
+	fn insert_and_canonicalize() {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let h3 = H256::random();
@@ -780,7 +758,6 @@ mod tests {
 
 	#[test]
 	fn complex_tree() {
-		let _ = env_logger::try_init();
 		let mut db = make_db(&[]);
 
 		#[rustfmt::skip]
