@@ -45,7 +45,6 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, HashFor, Header as HeaderT},
 };
-use sp_timestamp::Timestamp;
 use std::{fmt::Debug, ops::Deref, time::Duration};
 
 /// The changes that need to applied to the storage to create the state for a block.
@@ -321,14 +320,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		debug!(target: logging_target, "Starting authorship at slot: {slot}");
 
-		let timestamp = slot_info.duration.as_millis().saturating_mul(u64::from(slot) as u128);
-		telemetry!(
-			telemetry;
-			CONSENSUS_DEBUG;
-			"slots.starting_authorship";
-			"slot_num" => slot,
-			"timestamp" => timestamp,
-		);
+		telemetry!(telemetry; CONSENSUS_DEBUG; "slots.starting_authorship"; "slot_num" => slot);
 
 		let proposer = match self.proposer(&slot_info.chain_head).await {
 			Ok(p) => p,
@@ -441,44 +433,35 @@ impl<T: SimpleSlotWorker<B> + Send + Sync, B: BlockT>
 
 /// Slot specific extension that the inherent data provider needs to implement.
 pub trait InherentDataProviderExt {
-	/// The current timestamp that will be found in the
-	/// [`InherentData`](`sp_inherents::InherentData`).
-	fn timestamp(&self) -> Timestamp;
-
 	/// The current slot that will be found in the [`InherentData`](`sp_inherents::InherentData`).
 	fn slot(&self) -> Slot;
 }
 
 /// Small macro for implementing `InherentDataProviderExt` for inherent data provider tuple.
 macro_rules! impl_inherent_data_provider_ext_tuple {
-	( T, S $(, $TN:ident)* $( , )?) => {
-		impl<T, S, $( $TN ),*>  InherentDataProviderExt for (T, S, $($TN),*)
+	( S $(, $TN:ident)* $( , )?) => {
+		impl<S, $( $TN ),*>  InherentDataProviderExt for (S, $($TN),*)
 		where
-			T: Deref<Target = Timestamp>,
 			S: Deref<Target = Slot>,
 		{
-			fn timestamp(&self) -> Timestamp {
-				*self.0.deref()
-			}
-
 			fn slot(&self) -> Slot {
-				*self.1.deref()
+				*self.0.deref()
 			}
 		}
 	}
 }
 
-impl_inherent_data_provider_ext_tuple!(T, S);
-impl_inherent_data_provider_ext_tuple!(T, S, A);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
+impl_inherent_data_provider_ext_tuple!(S);
+impl_inherent_data_provider_ext_tuple!(S, A);
+impl_inherent_data_provider_ext_tuple!(S, A, B);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F, G);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F, G, H);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F, G, H, I);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F, G, H, I, J);
 
 /// Start a new slot worker.
 ///

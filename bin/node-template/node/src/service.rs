@@ -126,7 +126,7 @@ pub fn new_partial(
 						slot_duration,
 					);
 
-				Ok((timestamp, slot))
+				Ok((slot, timestamp))
 			},
 			spawner: &task_manager.spawn_essential_handle(),
 			can_author_with: sp_consensus::CanAuthorWithNativeVersion::new(
@@ -275,7 +275,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 							slot_duration,
 						);
 
-					Ok((timestamp, slot))
+					Ok((slot, timestamp))
 				},
 				force_authoring,
 				backoff_authoring_blocks,
