@@ -58,9 +58,7 @@ use sc_consensus_epochs::{
 	descendent_query, Epoch as EpochT, EpochChangesFor, EpochIdentifier, EpochIdentifierPosition,
 	SharedEpochChanges, ViableEpochDescriptor,
 };
-use sc_consensus_slots::{
-	check_equivocation, CheckedHeader, InherentDataProviderExt, SlotInfo, StorageChanges,
-};
+use sc_consensus_slots::{CheckedHeader, InherentDataProviderExt, SlotInfo, StorageChanges};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;

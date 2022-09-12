@@ -54,8 +54,8 @@ use frame_support::{traits::Get, weights::Weight, BoundedVec, WeakBoundedVec};
 use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
-	AuthorityId, Randomness, SassafrasAuthorityWeight, SassafrasEpochConfiguration, Slot, Ticket,
-	SASSAFRAS_ENGINE_ID,
+	AuthorityId, EquivocationProof, Randomness, SassafrasAuthorityWeight,
+	SassafrasEpochConfiguration, Slot, Ticket, SASSAFRAS_ENGINE_ID,
 };
 use sp_runtime::{
 	generic::DigestItem,
@@ -302,6 +302,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit next epoch tickets.
+		///
 		/// TODO-SASS-P3: this is an unsigned extrinsic. Can we remov ethe weight?
 		#[pallet::weight(10_000)]
 		pub fn submit_tickets(
@@ -321,21 +322,53 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
-		/// the next call to `enact_session_change`. The config will be activated one epoch after.
-		/// Multiple calls to this method will replace any existing planned config change that had
-		/// not been enacted yet.
+		/// Plan an epoch config change.
+		///
+		/// The epoch config change is recorded and will be enacted on the next call to
+		/// `enact_session_change`.
+		///
+		/// The config will be activated one epoch after. Multiple calls to this method will
+		/// replace any existing planned config change that had not been enacted yet.
+		///
+		/// TODO: TODO-SASS-P4: proper weight
 		#[pallet::weight(10_000)]
 		pub fn plan_config_change(
 			origin: OriginFor<T>,
 			config: SassafrasEpochConfiguration,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+
 			ensure!(
 				config.redundancy_factor != 0 && config.attempts_number != 0,
 				Error::<T>::InvalidConfiguration
 			);
 			PendingEpochConfigChange::<T>::put(config);
+			Ok(())
+		}
+
+		/// Report authority equivocation.
+		///
+		/// This method will verify the equivocation proof and validate the given key ownership
+		/// proof against the extracted offender. If both are valid, the offence will be reported.
+		///
+		/// This extrinsic must be called unsigned and it is expected that only block authors will
+		/// call it (validated in `ValidateUnsigned`), as such if the block author is defined it
+		/// will be defined as the equivocation reporter.
+		///
+		/// TODO: TODO-SASS-P4: proper weight
+		#[pallet::weight(10_000)]
+		pub fn report_equivocation_unsigned(
+			origin: OriginFor<T>,
+			_equivocation_proof: EquivocationProof<T::Header>,
+			//key_owner_proof: T::KeyOwnerProof,
+		) -> DispatchResult {
+			ensure_none(origin)?;
+
+			// Self::do_report_equivocation(
+			// 	T::HandleEquivocation::block_author(),
+			// 	*equivocation_proof,
+			// 	key_owner_proof,
+			// )
 			Ok(())
 		}
 	}
@@ -728,17 +761,47 @@ impl<T: Config> Pallet<T> {
 		metadata.segments_count = segments_count;
 	}
 
-	/// Submit next epoch validator tickets via an unsigned extrinsic.
+	/// Submit next epoch validator tickets via an unsigned extrinsic constructed with a call to
+	/// `submit_unsigned_transaction`.
+	///
 	/// The submitted tickets are added to the `NextTickets` list as long as the extrinsic has
 	/// is called within the first half of the epoch. That is, tickets received within the
 	/// second half are dropped.
+	///
 	/// TODO-SASS-P3: we have to add the zk validity proofs
 	pub fn submit_tickets_unsigned_extrinsic(mut tickets: Vec<Ticket>) -> bool {
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
 		tickets.sort_unstable();
 		let tickets = BoundedVec::truncate_from(tickets);
 		let call = Call::submit_tickets { tickets };
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()).is_ok()
+		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
+			Ok(_) => true,
+			Err(e) => {
+				log::error!(target: "runtime::sassafras", "Error submitting tickets {:?}", e);
+				false
+			},
+		}
+	}
+
+	/// Submits an equivocation via an unsigned extrinsic.
+	///
+	/// Unsigned extrinsic is created with a call to `report_equivocation_unsigned`.
+	pub fn submit_unsigned_equivocation_report(
+		equivocation_proof: EquivocationProof<T::Header>,
+		//key_owner_proof: T::KeyOwnerProof,
+	) -> bool {
+		let call = Call::report_equivocation_unsigned {
+			equivocation_proof,
+			//	key_owner_proof,
+		};
+
+		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
+			Ok(()) => true,
+			Err(e) => {
+				log::error!(target: "runtime::sassafras", "Error submitting equivocation report: {:?}",	e);
+				false
+			},
+		}
 	}
 }
 

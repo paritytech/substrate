@@ -224,16 +224,22 @@ where
 		}
 
 		// Check if authorship of this header is an equivocation and return a proof if so.
-		let equivocation_proof =
-			match check_equivocation(&*self.client, slot_now, slot, header, author)
-				.map_err(Error::Client)?
-			{
-				Some(proof) => proof,
-				None => return Ok(()),
-			};
+		let equivocation_proof = match sc_consensus_slots::check_equivocation(
+			&*self.client,
+			slot_now,
+			slot,
+			header,
+			author,
+		)
+		.map_err(Error::Client)?
+		{
+			Some(proof) => proof,
+			None => return Ok(()),
+		};
 
 		info!(
-			"Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
+			target: "sassafras",
+			"🌳 Slot author {:?} is equivocating at slot {} with headers {:?} and {:?}",
 			author,
 			slot,
 			equivocation_proof.first_header.hash(),
@@ -241,14 +247,50 @@ where
 		);
 
 		// Get the best block on which we will build and send the equivocation report.
-		let _best_id: BlockId<Block> = self
+		let best_id = self
 			.select_chain
 			.best_chain()
 			.await
 			.map(|h| BlockId::Hash(h.hash()))
 			.map_err(|e| Error::Client(e.into()))?;
 
-		// TODO-SASS-P2
+		// Generate a key ownership proof. We start by trying to generate the key owernship proof
+		// at the parent of the equivocating header, this will make sure that proof generation is
+		// successful since it happens during the on-going session (i.e. session keys are available
+		// in the state to be able to generate the proof). This might fail if the equivocation
+		// happens on the first block of the session, in which case its parent would be on the
+		// previous session. If generation on the parent header fails we try with best block as
+		// well.
+		let generate_key_owner_proof = |block_id: &BlockId<Block>| {
+			self.client
+				.runtime_api()
+				.generate_key_ownership_proof(block_id, slot, equivocation_proof.offender.clone())
+				.map_err(Error::RuntimeApi)
+		};
+
+		let parent_id = BlockId::Hash(*header.parent_hash());
+		let key_owner_proof = match generate_key_owner_proof(&parent_id)? {
+			Some(proof) => proof,
+			None => match generate_key_owner_proof(&best_id)? {
+				Some(proof) => proof,
+				None => {
+					debug!(target: "babe", "Equivocation offender is not part of the authority set.");
+					return Ok(())
+				},
+			},
+		};
+
+		// submit equivocation report at best block.
+		self.client
+			.runtime_api()
+			.submit_report_equivocation_unsigned_extrinsic(
+				&best_id,
+				equivocation_proof,
+				key_owner_proof,
+			)
+			.map_err(Error::RuntimeApi)?;
+
+		info!(target: "sassafras", "🌳 Submitted equivocation report for author {:?}", author);
 
 		Ok(())
 	}
