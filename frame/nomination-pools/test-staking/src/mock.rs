@@ -16,13 +16,24 @@
 // limitations under the License.
 
 use frame_election_provider_support::VoteWeight;
-use frame_support::{assert_ok, pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
-use sp_runtime::traits::{Convert, IdentityLookup};
+use frame_support::{
+	assert_ok,
+	pallet_prelude::*,
+	parameter_types,
+	traits::{ConstU64, ConstU8},
+	PalletId,
+};
+use sp_runtime::{
+	traits::{Convert, IdentityLookup},
+	FixedU128,
+};
 
 type AccountId = u128;
 type AccountIndex = u32;
 type BlockNumber = u64;
 type Balance = u128;
+
+pub(crate) type T = Runtime;
 
 pub(crate) const POOL1_BONDED: AccountId = 20318131474730217858575332831085u128;
 pub(crate) const POOL1_REWARD: AccountId = 20397359637244482196168876781421u128;
@@ -35,13 +46,13 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -70,7 +81,7 @@ impl pallet_balances::Config for Runtime {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -100,7 +111,7 @@ impl pallet_staking::Config for Runtime {
 	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = ();
@@ -127,7 +138,7 @@ parameter_types! {
 }
 
 impl pallet_bags_list::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
 	type ScoreProvider = Staking;
@@ -154,25 +165,19 @@ parameter_types! {
 }
 
 impl pallet_nomination_pools::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = Balances;
+	type CurrencyBalance = Balance;
+	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
 	type StakingInterface = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
 	type MaxUnbonding = ConstU32<8>;
-	type MinPointsToBalance = ConstU32<10>;
+	type MaxPointsToBalance = ConstU8<10>;
 	type PalletId = PoolsPalletId;
-}
-
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
-where
-	Call: From<LocalCall>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = UncheckedExtrinsic;
 }
 
 type Block = frame_system::mocking::MockBlock<Runtime>;
@@ -194,13 +199,14 @@ frame_support::construct_runtime!(
 );
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
+	sp_tracing::try_init_simple();
 	let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 	let _ = pallet_nomination_pools::GenesisConfig::<Runtime> {
 		min_join_bond: 2,
 		min_create_bond: 2,
 		max_pools: Some(3),
-		max_members_per_pool: Some(3),
-		max_members: Some(3 * 3),
+		max_members_per_pool: Some(5),
+		max_members: Some(3 * 5),
 	}
 	.assimilate_storage(&mut storage)
 	.unwrap();
@@ -242,7 +248,7 @@ pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Even
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Pools(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = ObservedEventsPools::get();
 	ObservedEventsPools::set(events.len());
@@ -253,7 +259,7 @@ pub(crate) fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runt
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = ObservedEventsStaking::get();
 	ObservedEventsStaking::set(events.len());

@@ -27,22 +27,18 @@ use std::{
 	marker::PhantomData,
 	panic::{AssertUnwindSafe, UnwindSafe},
 	path::PathBuf,
-	result,
 	sync::{
 		atomic::{AtomicU64, Ordering},
 		mpsc, Arc,
 	},
 };
 
-use codec::{Decode, Encode};
+use codec::Encode;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{AllocationStats, InvokeMethod, WasmInstance, WasmModule},
 };
-use sp_core::{
-	traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt},
-	NativeOrEncoded,
-};
+use sp_core::traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt};
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
 use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
@@ -101,7 +97,8 @@ pub struct WasmExecutor<H> {
 	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
 	/// compiled artifacts.
 	cache_path: Option<PathBuf>,
-
+	/// Ignore missing function imports.
+	allow_missing_host_functions: bool,
 	phantom: PhantomData<H>,
 }
 
@@ -112,6 +109,7 @@ impl<H> Clone for WasmExecutor<H> {
 			default_heap_pages: self.default_heap_pages,
 			cache: self.cache.clone(),
 			cache_path: self.cache_path.clone(),
+			allow_missing_host_functions: self.allow_missing_host_functions,
 			phantom: self.phantom,
 		}
 	}
@@ -130,14 +128,13 @@ where
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	///   Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
 	///
-	/// `host_functions` - The set of host functions to be available for import provided by this
-	///   executor.
-	///
 	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
 	///
 	/// `cache_path` - A path to a directory where the executor can place its files for purposes of
 	///   caching. This may be important in cases when there are many different modules with the
 	///   compiled execution method is used.
+	///
+	/// `runtime_cache_size` - The capacity of runtime cache.
 	pub fn new(
 		method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
@@ -154,8 +151,14 @@ where
 				runtime_cache_size,
 			)),
 			cache_path,
+			allow_missing_host_functions: false,
 			phantom: PhantomData,
 		}
+	}
+
+	/// Ignore missing function imports if set true.
+	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
+		self.allow_missing_host_functions = allow_missing_host_functions
 	}
 
 	/// Execute the given closure `f` with the latest runtime (based on `runtime_code`).
@@ -171,11 +174,10 @@ where
 	/// runtime is invalidated on any `panic!` to prevent a poisoned state. `ext` is already
 	/// implicitly handled as unwind safe, as we store it in a global variable while executing the
 	/// native runtime.
-	fn with_instance<R, F>(
+	pub fn with_instance<R, F>(
 		&self,
 		runtime_code: &RuntimeCode,
 		ext: &mut dyn Externalities,
-		allow_missing_host_functions: bool,
 		f: F,
 	) -> Result<R>
 	where
@@ -191,7 +193,7 @@ where
 			ext,
 			self.method,
 			self.default_heap_pages,
-			allow_missing_host_functions,
+			self.allow_missing_host_functions,
 			|module, instance, version, ext| {
 				let module = AssertUnwindSafe(module);
 				let instance = AssertUnwindSafe(instance);
@@ -209,7 +211,7 @@ where
 	/// The runtime is passed as a [`RuntimeBlob`]. The runtime will be instantiated with the
 	/// parameters this `WasmExecutor` was initialized with.
 	///
-	/// In case of problems with during creation of the runtime or instantation, a `Err` is
+	/// In case of problems with during creation of the runtime or instantiation, a `Err` is
 	/// returned. that describes the message.
 	#[doc(hidden)] // We use this function for tests across multiple crates.
 	pub fn uncached_call(
@@ -219,6 +221,47 @@ where
 		allow_missing_host_functions: bool,
 		export_name: &str,
 		call_data: &[u8],
+	) -> std::result::Result<Vec<u8>, Error> {
+		self.uncached_call_impl(
+			runtime_blob,
+			ext,
+			allow_missing_host_functions,
+			export_name,
+			call_data,
+			&mut None,
+		)
+	}
+
+	/// Same as `uncached_call`, except it also returns allocation statistics.
+	#[doc(hidden)] // We use this function in tests.
+	pub fn uncached_call_with_allocation_stats(
+		&self,
+		runtime_blob: RuntimeBlob,
+		ext: &mut dyn Externalities,
+		allow_missing_host_functions: bool,
+		export_name: &str,
+		call_data: &[u8],
+	) -> (std::result::Result<Vec<u8>, Error>, Option<AllocationStats>) {
+		let mut allocation_stats = None;
+		let result = self.uncached_call_impl(
+			runtime_blob,
+			ext,
+			allow_missing_host_functions,
+			export_name,
+			call_data,
+			&mut allocation_stats,
+		);
+		(result, allocation_stats)
+	}
+
+	fn uncached_call_impl(
+		&self,
+		runtime_blob: RuntimeBlob,
+		ext: &mut dyn Externalities,
+		allow_missing_host_functions: bool,
+		export_name: &str,
+		call_data: &[u8],
+		allocation_stats_out: &mut Option<AllocationStats>,
 	) -> std::result::Result<Vec<u8>, Error> {
 		let module = crate::wasm_runtime::create_wasm_runtime_with_code::<H>(
 			self.method,
@@ -235,10 +278,14 @@ where
 		let mut instance = AssertUnwindSafe(instance);
 		let mut ext = AssertUnwindSafe(ext);
 		let module = AssertUnwindSafe(module);
+		let mut allocation_stats_out = AssertUnwindSafe(allocation_stats_out);
 
 		with_externalities_safe(&mut **ext, move || {
 			preregister_builtin_ext(module.clone());
-			instance.call_export(export_name, call_data)
+			let (result, allocation_stats) =
+				instance.call_with_allocation_stats(export_name.into(), call_data);
+			**allocation_stats_out = allocation_stats;
+			result
 		})
 		.and_then(|r| r)
 	}
@@ -288,18 +335,14 @@ where
 {
 	type Error = Error;
 
-	fn call<
-		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
-	>(
+	fn call(
 		&self,
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		_use_native: bool,
-		_native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>>, bool) {
+	) -> (Result<Vec<u8>>, bool) {
 		tracing::trace!(
 			target: "executor",
 			%method,
@@ -309,11 +352,10 @@ where
 		let result = self.with_instance(
 			runtime_code,
 			ext,
-			false,
 			|module, mut instance, _onchain_version, mut ext| {
 				with_externalities_safe(&mut **ext, move || {
 					preregister_builtin_ext(module.clone());
-					instance.call_export(method, data).map(NativeOrEncoded::Encoded)
+					instance.call_export(method, data)
 				})
 			},
 		);
@@ -330,7 +372,7 @@ where
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
+		self.with_instance(runtime_code, ext, |_module, _instance, version, _ext| {
 			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
 		})
 	}
@@ -343,7 +385,7 @@ where
 	D: NativeExecutionDispatch,
 {
 	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	_dummy: std::marker::PhantomData<D>,
+	_dummy: PhantomData<D>,
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// Fallback wasm executor.
@@ -360,13 +402,17 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 	///
 	/// `default_heap_pages` - Number of 64KB pages to allocate for Wasm execution.
 	/// 	Defaults to `DEFAULT_HEAP_PAGES` if `None` is provided.
+	///
+	/// `max_runtime_instances` - The number of runtime instances to keep in memory ready for reuse.
+	///
+	/// `runtime_cache_size` - The capacity of runtime cache.
 	pub fn new(
 		fallback_method: WasmExecutionMethod,
 		default_heap_pages: Option<u64>,
 		max_runtime_instances: usize,
 		runtime_cache_size: u8,
 	) -> Self {
-		let wasm_executor = WasmExecutor::new(
+		let wasm = WasmExecutor::new(
 			fallback_method,
 			default_heap_pages,
 			max_runtime_instances,
@@ -377,8 +423,13 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 		NativeElseWasmExecutor {
 			_dummy: Default::default(),
 			native_version: D::native_version(),
-			wasm: wasm_executor,
+			wasm,
 		}
+	}
+
+	/// Ignore missing function imports if set true.
+	pub fn allow_missing_host_functions(&mut self, allow_missing_host_functions: bool) {
+		self.wasm.allow_missing_host_functions = allow_missing_host_functions
 	}
 }
 
@@ -388,10 +439,9 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeElseWasmExecutor<D> 
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm
-			.with_instance(runtime_code, ext, false, |_module, _instance, version, _ext| {
-				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-			})
+		self.wasm.with_instance(runtime_code, ext, |_module, _instance, version, _ext| {
+			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+		})
 	}
 }
 
@@ -536,18 +586,14 @@ fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
 impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecutor<D> {
 	type Error = Error;
 
-	fn call<
-		R: Decode + Encode + PartialEq,
-		NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
-	>(
+	fn call(
 		&self,
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 		method: &str,
 		data: &[u8],
 		use_native: bool,
-		native_call: Option<NC>,
-	) -> (Result<NativeOrEncoded<R>>, bool) {
+	) -> (Result<Vec<u8>>, bool) {
 		tracing::trace!(
 			target: "executor",
 			function = %method,
@@ -558,7 +604,6 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 		let result = self.wasm.with_instance(
 			runtime_code,
 			ext,
-			false,
 			|module, mut instance, onchain_version, mut ext| {
 				let onchain_version =
 					onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;
@@ -566,49 +611,31 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 				let can_call_with =
 					onchain_version.can_call_with(&self.native_version.runtime_version);
 
-				match (use_native, can_call_with, native_call) {
-					(_, false, _) | (false, _, _) => {
-						if !can_call_with {
-							tracing::trace!(
-								target: "executor",
-								native = %self.native_version.runtime_version,
-								chain = %onchain_version,
-								"Request for native execution failed",
-							);
-						}
+				if use_native && can_call_with {
+					tracing::trace!(
+						target: "executor",
+						native = %self.native_version.runtime_version,
+						chain = %onchain_version,
+						"Request for native execution succeeded",
+					);
 
-						with_externalities_safe(&mut **ext, move || {
-							preregister_builtin_ext(module.clone());
-							instance.call_export(method, data).map(NativeOrEncoded::Encoded)
-						})
-					},
-					(true, true, Some(call)) => {
+					used_native = true;
+					Ok(with_externalities_safe(&mut **ext, move || D::dispatch(method, data))?
+						.ok_or_else(|| Error::MethodNotFound(method.to_owned())))
+				} else {
+					if !can_call_with {
 						tracing::trace!(
 							target: "executor",
 							native = %self.native_version.runtime_version,
 							chain = %onchain_version,
-							"Request for native execution with native call succeeded"
+							"Request for native execution failed",
 						);
+					}
 
-						used_native = true;
-						let res = with_externalities_safe(&mut **ext, move || (call)())
-							.and_then(|r| r.map(NativeOrEncoded::Native).map_err(Error::ApiError));
-
-						Ok(res)
-					},
-					_ => {
-						tracing::trace!(
-							target: "executor",
-							native = %self.native_version.runtime_version,
-							chain = %onchain_version,
-							"Request for native execution succeeded",
-						);
-
-						used_native = true;
-						Ok(with_externalities_safe(&mut **ext, move || D::dispatch(method, data))?
-							.map(NativeOrEncoded::Encoded)
-							.ok_or_else(|| Error::MethodNotFound(method.to_owned())))
-					},
+					with_externalities_safe(&mut **ext, move || {
+						preregister_builtin_ext(module.clone());
+						instance.call_export(method, data)
+					})
 				}
 			},
 		);

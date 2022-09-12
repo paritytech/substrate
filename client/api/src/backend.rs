@@ -32,7 +32,8 @@ use sp_runtime::{
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	ChildStorageCollection, IndexOperation, OffchainChangesCollection, StorageCollection,
+	backend::AsTrieBackend, ChildStorageCollection, IndexOperation, OffchainChangesCollection,
+	StorageCollection,
 };
 use sp_storage::{ChildInfo, StorageData, StorageKey};
 use std::collections::{HashMap, HashSet};
@@ -448,7 +449,12 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated blockchain backend type.
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>> + Send;
+	type State: StateBackend<HashFor<Block>>
+		+ Send
+		+ AsTrieBackend<
+			HashFor<Block>,
+			TrieBackendStorage = <Self::State as StateBackend<HashFor<Block>>>::TrieBackendStorage,
+		>;
 	/// Offchain workers local storage.
 	type OffchainStorage: OffchainStorage;
 
@@ -507,7 +513,8 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
 	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
-	/// inconsistent state.
+	/// inconsistent state. All blocks higher than the best block are also reverted and not counting
+	/// towards `n`.
 	///
 	/// Returns the number of blocks that were successfully reverted and the list of finalized
 	/// blocks that has been reverted.

@@ -165,7 +165,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, Dispatchable, Hash, Saturating, Zero},
+	traits::{Bounded, Dispatchable, Hash, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -206,6 +206,7 @@ type BalanceOf<T> =
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum PreimageStatus<AccountId, Balance, BlockNumber> {
@@ -253,7 +254,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Sized {
 		type Proposal: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self>>;
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
@@ -600,6 +601,8 @@ pub mod pallet {
 		MaxVotesReached,
 		/// Maximum number of proposals reached.
 		TooManyProposals,
+		/// Voting period too low
+		VotingPeriodLow,
 	}
 
 	#[pallet::hooks]
@@ -800,8 +803,9 @@ pub mod pallet {
 		/// The dispatch of this call must be `FastTrackOrigin`.
 		///
 		/// - `proposal_hash`: The hash of the current external proposal.
-		/// - `voting_period`: The period that is allowed for voting on this proposal. Increased to
-		///   `FastTrackVotingPeriod` if too low.
+		/// - `voting_period`: The period that is allowed for voting on this proposal.
+		/// 	Must be always greater than zero.
+		/// 	For `FastTrackOrigin` must be equal or greater than `FastTrackVotingPeriod`.
 		/// - `delay`: The number of block after voting has ended in approval and this should be
 		///   enacted. This doesn't have a minimum amount.
 		///
@@ -830,7 +834,7 @@ pub mod pallet {
 				T::InstantOrigin::ensure_origin(ensure_instant)?;
 				ensure!(T::InstantAllowed::get(), Error::<T>::InstantNotAllowed);
 			}
-
+			ensure!(voting_period > T::BlockNumber::zero(), Error::<T>::VotingPeriodLow);
 			let (e_proposal_hash, threshold) =
 				<NextExternal<T>>::get().ok_or(Error::<T>::ProposalMissing)?;
 			ensure!(
@@ -941,11 +945,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
 		pub fn delegate(
 			origin: OriginFor<T>,
-			to: T::AccountId,
+			to: AccountIdLookupOf<T>,
 			conviction: Conviction,
 			balance: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			let to = T::Lookup::lookup(to)?;
 			let votes = Self::try_delegate(who, to, conviction, balance)?;
 
 			Ok(Some(T::WeightInfo::delegate(votes)).into())
@@ -1124,8 +1129,9 @@ pub mod pallet {
 			T::WeightInfo::unlock_set(T::MaxVotes::get())
 				.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))
 		)]
-		pub fn unlock(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
+		pub fn unlock(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&target);
 			Ok(())
 		}
@@ -1181,10 +1187,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
-			target: T::AccountId,
+			target: AccountIdLookupOf<T>,
 			index: ReferendumIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, scope)?;
 			Ok(())
@@ -1758,7 +1765,7 @@ impl<T: Config> Pallet<T> {
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
-		let mut weight = 0;
+		let mut weight = Weight::zero();
 
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();

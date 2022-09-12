@@ -24,7 +24,7 @@ use sp_core::storage::StorageKey;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
-use sp_storage::StateVersion;
+use sp_storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 
 use clap::{Args, Parser};
 use log::info;
@@ -79,6 +79,12 @@ pub struct StorageParams {
 	#[clap(long)]
 	pub template_path: Option<PathBuf>,
 
+	/// Add a header to the generated weight output file.
+	///
+	/// Good for adding LICENSE headers.
+	#[clap(long, value_name = "PATH")]
+	pub header: Option<PathBuf>,
+
 	/// Path to write the raw 'read' results in JSON format to. Can be a file or directory.
 	#[clap(long)]
 	pub json_read_path: Option<PathBuf>,
@@ -96,9 +102,15 @@ pub struct StorageParams {
 	#[clap(long, possible_values = ["0", "1"])]
 	pub state_version: u8,
 
-	/// State cache size.
-	#[clap(long, default_value = "0")]
-	pub state_cache_size: usize,
+	/// Trie cache size in bytes.
+	///
+	/// Providing `0` will disable the cache.
+	#[clap(long, default_value = "1024")]
+	pub trie_cache_size: usize,
+
+	/// Include child trees in benchmark.
+	#[clap(long)]
+	pub include_child_trees: bool,
 }
 
 impl StorageCmd {
@@ -116,7 +128,7 @@ impl StorageCmd {
 		Block: BlockT<Hash = DbHash>,
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 	{
-		let mut template = TemplateData::new(&cfg, &self.params);
+		let mut template = TemplateData::new(&cfg, &self.params)?;
 
 		let block_id = BlockId::<Block>::Number(client.usage_info().chain.best_number);
 		template.set_block_number(block_id.to_string());
@@ -155,6 +167,16 @@ impl StorageCmd {
 		}
 	}
 
+	/// Returns Some if child node and None if regular
+	pub(crate) fn is_child_key(&self, key: Vec<u8>) -> Option<ChildInfo> {
+		if let Some((ChildType::ParentKeyId, storage_key)) =
+			ChildType::from_prefixed_key(&PrefixedStorageKey::new(key))
+		{
+			return Some(ChildInfo::new_default(storage_key))
+		}
+		None
+	}
+
 	/// Run some rounds of the (read) benchmark as warmup.
 	/// See `frame_benchmarking_cli::storage::read::bench_read` for detailed comments.
 	fn bench_warmup<B, BA, C>(&self, client: &Arc<C>) -> Result<()>
@@ -171,7 +193,7 @@ impl StorageCmd {
 
 		for i in 0..self.params.warmups {
 			info!("Warmup round {}/{}", i + 1, self.params.warmups);
-			for key in keys.clone() {
+			for key in keys.as_slice() {
 				let _ = client
 					.storage(&block, &key)
 					.expect("Checked above to exist")
@@ -197,7 +219,11 @@ impl CliConfiguration for StorageCmd {
 		Some(&self.pruning_params)
 	}
 
-	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.params.state_cache_size)
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		if self.params.trie_cache_size == 0 {
+			Ok(None)
+		} else {
+			Ok(Some(self.params.trie_cache_size))
+		}
 	}
 }
