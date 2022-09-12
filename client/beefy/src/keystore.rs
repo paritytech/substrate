@@ -47,8 +47,11 @@ pub(crate)  trait BeefyKeystore : From<Option<SyncCryptoStorePtr>> + Sync + Send
 
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error>;
 
+	// TODO: Maybe future plan: We only use ecdsa public key as list of authority ids to stay compatible with other part of the code 
+	// fn authority_ids(&self) -> Result<Vec<ECDSAPublic>, error::Error>;
+
 	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool;
-	
+
 }
 
 
@@ -222,9 +225,7 @@ impl BeefyKeystore for BeefyBLSnECDSAKeystore {
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
 	fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public> {
-		let cloned_key : Vec<Self::Public>;
-		cloned_key.clone_from_slice(keys);
-		let (ecdsa_pubkeys, bls_pubkeys): (Vec<ECDSAPublic>, Vec<BLSPublic>) = cloned_key.into_iter().unzip();
+		let (ecdsa_pubkeys, bls_pubkeys): (Vec<ECDSAPublic>, Vec<BLSPublic>) = keys.iter().cloned().unzip();
 		let own_ecdsa_key = self.both().0.authority_id(&ecdsa_pubkeys);
 		let own_bls_key  = self.both().1.authority_id(&bls_pubkeys);
 		if own_ecdsa_key == None || own_bls_key == None {
