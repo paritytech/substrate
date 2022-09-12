@@ -5245,6 +5245,7 @@ mod fuzz_test {
 					});
 				System::reset_events();
 
+				// trigger an era change, and check the status of the reward agent.
 				if iteration % ERA == 0 {
 					CurrentEra::mutate(|c| *c += 1);
 					BondedPools::<T>::iter().for_each(|(id, _)| {
