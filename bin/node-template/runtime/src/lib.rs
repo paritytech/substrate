@@ -14,7 +14,9 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
-	traits::{AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, Verify},
+	traits::{
+		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
+	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
 };
@@ -38,7 +40,7 @@ pub use frame_support::{
 pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
-use pallet_transaction_payment::CurrencyAdapter;
+use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
@@ -251,13 +253,17 @@ impl pallet_balances::Config for Runtime {
 	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
 }
 
+parameter_types! {
+	pub FeeMultiplier: Multiplier = Multiplier::one();
+}
+
 impl pallet_transaction_payment::Config for Runtime {
 	type Event = Event;
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<Balance>;
 	type LengthToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = ();
+	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
 }
 
 impl pallet_sudo::Config for Runtime {

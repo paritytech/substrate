@@ -251,7 +251,7 @@ test-frame-support:
     RUN_UI_TESTS:                  1
   script:
     - rusty-cachier snapshot create
-    - time cargo test -p frame-support-test --features=conditional-storage,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
+    - time cargo test -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - rusty-cachier cache upload
 
