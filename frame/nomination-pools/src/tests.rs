@@ -5037,8 +5037,14 @@ mod fuzz_test {
 	}
 
 	fn random_call<R: Rng>(mut rng: &mut R) -> (crate::pallet::Call<T>, Origin) {
-		let op = rng.gen::<u8>();
-		match op % 8 {
+		let op = rng.gen::<usize>();
+		let mut op_count =
+			<crate::pallet::Call<T> as frame_support::dispatch::GetCallName>::get_call_names()
+				.len();
+		// Exclude set_state, set_metadata, set_configs, update_roles and chill.
+		max_op_index -= 5;
+
+		match op % op_count {
 			0 => {
 				// join
 				let pool_id = random_existing_pool(&mut rng).unwrap_or_default();
