@@ -22,7 +22,7 @@ use alloc::string::String;
 use wasmi::{
 	memory_units::Pages, Externals, FuncInstance, FuncRef, GlobalDescriptor, GlobalRef,
 	ImportResolver, MemoryDescriptor, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
-	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap, TrapKind,
+	RuntimeArgs, RuntimeValue, Signature, TableDescriptor, TableRef, Trap,
 };
 
 use sp_std::{
@@ -113,7 +113,7 @@ impl<'a, T> Externals for GuestExternals<'a, T> {
 				ReturnValue::Value(v) => Some(to_wasmi(v)),
 				ReturnValue::Unit => None,
 			}),
-			Err(HostError) => Err(TrapKind::Host(Box::new(DummyHostError)).into()),
+			Err(HostError) => Err(Trap::host(DummyHostError)),
 		}
 	}
 }
