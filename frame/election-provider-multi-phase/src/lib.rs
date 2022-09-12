@@ -1987,7 +1987,7 @@ mod tests {
 			assert!(MultiPhase::snapshot_metadata().is_none());
 			assert!(MultiPhase::desired_targets().is_none());
 			assert!(MultiPhase::queued_solution().is_none());
-			assert!(MultiPhase::signed_submissions().indices.is_empty());
+			assert!(MultiPhase::signed_submissions().len().is_zero());
 		})
 	}
 
@@ -2023,7 +2023,7 @@ mod tests {
 			assert!(MultiPhase::snapshot_metadata().is_none());
 			assert!(MultiPhase::desired_targets().is_none());
 			assert!(MultiPhase::queued_solution().is_none());
-			assert!(MultiPhase::signed_submissions().indices.is_empty());
+			assert!(MultiPhase::signed_submissions().len().is_zero());
 		})
 	}
 
