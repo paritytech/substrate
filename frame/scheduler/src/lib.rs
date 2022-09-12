@@ -143,7 +143,7 @@ struct WeightCounter {
 impl WeightCounter {
 	fn check_accrue(&mut self, w: Weight) -> bool {
 		let test = self.used.saturating_add(w);
-		if test > self.limit {
+		if test.any_gt(self.limit) {
 			false
 		} else {
 			self.used = test;
@@ -151,7 +151,7 @@ impl WeightCounter {
 		}
 	}
 	fn can_accrue(&mut self, w: Weight) -> bool {
-		self.used.saturating_add(w) <= self.limit
+		self.used.saturating_add(w).all_lte(self.limit)
 	}
 }
 
