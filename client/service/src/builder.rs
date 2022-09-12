@@ -747,6 +747,8 @@ where
 		warp_sync,
 	} = params;
 
+	let mut request_response_protocol_configs = Vec::new();
+
 	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
@@ -837,11 +839,11 @@ where
 		warp_sync_provider,
 	)?;
 
-	let bitswap_protocol_config = config.network.ipfs_server.then(|| {
+	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
 		spawn_handle.spawn("bitswap-request-handler", Some("networking"), handler.run());
 		protocol_config
-	});
+	}));
 
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
@@ -865,11 +867,14 @@ where
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		bitswap_protocol_config,
 		block_request_protocol_config,
 		state_request_protocol_config,
 		warp_sync_protocol_config,
 		light_client_request_protocol_config,
+		request_response_protocol_configs: request_response_protocol_configs
+			.into_iter()
+			.filter_map(std::convert::identity)
+			.collect::<Vec<_>>(),
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();

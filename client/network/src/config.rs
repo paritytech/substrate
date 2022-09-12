@@ -104,9 +104,6 @@ where
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
 
-	/// Request response configuration for Bitswap
-	pub bitswap_protocol_config: Option<RequestResponseConfig>,
-
 	/// Request response configuration for the block request protocol.
 	///
 	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
@@ -139,6 +136,9 @@ where
 
 	/// Optional warp sync protocol config.
 	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
+
+	/// Request response protocol configurations
+	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
 }
 
 /// Role of the local node.
