@@ -225,7 +225,7 @@ pub use frame_support_procedural::storage_alias;
 /// for the value and a more accurate benchmarking weight
 ///
 /// ## Example
-/// ```rust
+/// ```no_run
 /// #[pallet::storage]
 /// #[benchmarking(cached)]
 /// #[pallet::getter(fn block_number)]
