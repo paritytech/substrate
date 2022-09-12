@@ -2142,7 +2142,7 @@ impl_runtime_apis! {
 			impl baseline::Config for Runtime {}
 			impl pallet_nomination_pools_benchmarking::Config for Runtime {}
 
-			use crate::sp_api_hidden_includes_construct_runtime::hidden_include::traits::WhitelistedStorageKeys;
+			use frame_support::traits::WhitelistedStorageKeys
 			let whitelist: Vec<TrackedStorageKey> = AllPalletsWithSystem::whitelisted_storage_keys();
 			/*let whitelist: Vec<TrackedStorageKey> = vec![
 				// Block Number
