@@ -125,8 +125,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominations: Get<u32>;
 
-		/// Era History Depth for the validator rewards to be claimed. 
-		/// This should never be decreased once set.  
+		/// `HistoryDepth` stores the number of previous eras for which
+		/// we keep track of validator `claimed_rewards`.
+		///
+		/// Since `HistoryDepth` is used as a bound for BoundedVec
+		/// `claimed_rewards`, we should use extreme caution while
+		/// changing this value once it has been already deployed in
+		/// production. In general, increasing this value should be okay
+		/// but decreasing it will cause inconsistencies and needs to be
+		/// handled by doing migration of `StakingLedger.claimed_rewards`.
 		#[pallet::constant]
 		type HistoryDepth: Get<u32>;
 
@@ -840,6 +847,8 @@ pub mod pallet {
 				unlocking: Default::default(),
 				claimed_rewards: (last_reward_era..current_era)
 				.try_collect()
+				// Since last_reward_era is calculated as `current_era - HistoryDepth`,
+				// following bound is always expected to be satisfied.
 				.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
 			Self::update_ledger(&controller, &item);

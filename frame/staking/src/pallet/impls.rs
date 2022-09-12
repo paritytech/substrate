@@ -129,6 +129,8 @@ impl<T: Config> Pallet<T> {
 				return Err(Error::<T>::AlreadyClaimed
 					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
 			Err(pos) => ledger.claimed_rewards.try_insert(pos, era)
+			// Since we retain era entries in `claimed_rewards` only upto
+			// `HistoryDepth`, following bound is always expected to be satisfied.
 			.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 		}
 
@@ -888,11 +890,11 @@ impl<T: Config> Pallet<T> {
 		);
 	}
 
-	/// This will return the currently configured History Depth
+	/// This will return the currently configured `HistoryDepth`
 	/// 
-	/// With release of v11, history_depth is migrated to a configurable 
-	/// value instead of being a storage item
-	/// This function replaces the old fn history_depth which read from storage
+	/// With release of v11, `HistoryDepth` is migrated to a configurable
+	/// value instead of being a storage item. This function replaces the
+	/// old fn history_depth that used to read from the storage.
 	pub fn history_depth() -> u32 {
 		T::HistoryDepth::get()
 	}
