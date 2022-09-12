@@ -5225,7 +5225,7 @@ mod fuzz_test {
 
 				// execute sanity checks at a fixed interval, possibly on every block.
 				if iteration %
-					(std::env::var("SANITY").ok().and_then(|x| x.parse::<u64>().ok()))
+					(std::env::var("SANITY_CHECK_INTERVAL").ok().and_then(|x| x.parse::<u64>().ok()))
 						.unwrap_or(1) == 0
 				{
 					log!(info, "running sanity checks at {}", iteration);
