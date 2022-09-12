@@ -181,22 +181,17 @@ impl<T: Config> SignedSubmissions<T> {
 	}
 
 	/// Get the submission at a particular index.
-	///
-	/// if `take` is set to `true`, the value is removed as well.
-	fn get_submission(&self, index: u32, take: bool) -> Option<SignedSubmissionOf<T>> {
+	fn get_submission(&self, index: u32) -> Option<SignedSubmissionOf<T>> {
 		if self.deletion_overlay.contains(&index) {
-			// Note: can't actually remove the item from the insertion overlay (if present)
-			// because we don't want to use `&mut self` here. There may be some kind of
-			// `RefCell` optimization possible here in the future.
+			// Note: can't actually remove the item from the insertion overlay (if present) because
+			// we don't want to use `&mut self` here. There may be some kind of `RefCell`
+			// optimization possible here in the future.
 			None
 		} else {
-			self.insertion_overlay.get(&index).cloned().or_else(|| {
-				if take {
-					SignedSubmissionsMap::<T>::take(index)
-				} else {
-					SignedSubmissionsMap::<T>::get(index)
-				}
-			})
+			self.insertion_overlay
+				.get(&index)
+				.cloned()
+				.or_else(|| SignedSubmissionsMap::<T>::get(index))
 		}
 	}
 
@@ -209,11 +204,8 @@ impl<T: Config> SignedSubmissions<T> {
 	/// The call site must ensure that `remove_pos` is a valid index. If otherwise, `None` is
 	/// silently returned.
 	///
-	/// Note: this does not enforce any ordering relation between the submission removed and that
-	/// inserted.
-	///
 	/// Note: this doesn't insert into `insertion_overlay`, the optional new insertion must be
-	/// inserted into  `insertion_overlay` to keep the variable `self` in a valid state.
+	/// inserted into `insertion_overlay` to keep the variable `self` in a valid state.
 	fn swap_out_submission(
 		&mut self,
 		remove_pos: usize,
@@ -252,7 +244,7 @@ impl<T: Config> SignedSubmissions<T> {
 	pub fn iter(&self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
 		self.indices
 			.iter()
-			.filter_map(move |(_score, _bn, idx)| self.get_submission(*idx, false).defensive())
+			.filter_map(move |(_score, _bn, idx)| self.get_submission(*idx).defensive())
 	}
 
 	/// Empty the set of signed submissions, returning an iterator of signed submissions in
@@ -323,10 +315,10 @@ impl<T: Config> SignedSubmissions<T> {
 					return InsertResult::NotInserted
 				}
 
-				dbg!(self.swap_out_submission(
+				self.swap_out_submission(
 					0, // swap out the worse one, which is always index 0.
-					Some((dbg!(submission.raw_solution.score), block_number, self.next_idx)),
-				))
+					Some((submission.raw_solution.score, block_number, self.next_idx)),
+				)
 			},
 		};
 
