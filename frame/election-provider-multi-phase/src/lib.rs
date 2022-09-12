@@ -708,7 +708,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	// Expose some of the miner configs over the metadata such that they can be re-implemented.
+	// Expose miner configs over the metadata such that they can be re-implemented.
 	#[pallet::extra_constants]
 	impl<T: Config> Pallet<T> {
 		#[pallet::constant_name(MinerMaxLength)]
