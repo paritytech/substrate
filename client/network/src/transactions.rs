@@ -319,14 +319,16 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 			},
 
 			Event::NotificationStreamOpened { remote, protocol, role } if protocol == self.protocol_name => {
-				self.peers.insert(remote, Peer {
+				let _was_in = self.peers.insert(remote, Peer {
 					known_transactions: LruHashSet::new(NonZeroUsize::new(MAX_KNOWN_TRANSACTIONS)
 						.expect("Constant is nonzero")),
 					role,
 				});
+				debug_assert!(_was_in.is_none());
 			}
 			Event::NotificationStreamClosed { remote, protocol } if protocol == self.protocol_name => {
-				self.peers.remove(&remote);
+				let _peer = self.peers.remove(&remote);
+				debug_assert!(_peer.is_some());
 			}
 
 			Event::NotificationsReceived { remote, messages } => {

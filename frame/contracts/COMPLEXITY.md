@@ -176,7 +176,7 @@ Before a call or instantiate can be performed the execution context must be init
 For the first call or instantiation in the handling of an extrinsic, this involves two calls:
 
 1. `<timestamp::Module<T>>::now()`
-2. `<system::Module<T>>::block_number()`
+2. `<system::Pallet<T>>::block_number()`
 
 The complexity of initialization depends on the complexity of these functions. In the current
 implementation they just involve a DB read.

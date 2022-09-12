@@ -128,6 +128,7 @@ mod tests {
 				nonce: 1,
 				consumers: 0,
 				providers: 0,
+				sufficients: 0,
 				data: 0,
 			});
 			let info = DispatchInfo::default();

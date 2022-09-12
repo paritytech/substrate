@@ -37,9 +37,9 @@
 //! from the `Pool` and `Members`; the entity is immediately replaced
 //! by the next highest scoring candidate in the pool, if available.
 //!
-//! - [`scored_pool::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Interface
 //!

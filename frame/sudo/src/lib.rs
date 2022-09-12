@@ -17,8 +17,8 @@
 
 //! # Sudo Module
 //!
-//! - [`sudo::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
+//! - [`Config`]
+//! - [`Call`]
 //!
 //! ## Overview
 //!
@@ -81,8 +81,6 @@
 //!
 //! * [Democracy](../pallet_democracy/index.html)
 //!
-//! [`Call`]: ./enum.Call.html
-//! [`Config`]: ./trait.Config.html
 //! [`Origin`]: https://docs.substrate.dev/docs/substrate-types
 
 #![cfg_attr(not(feature = "std"), no_std)]

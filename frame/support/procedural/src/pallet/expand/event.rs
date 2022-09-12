@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Def;
+use crate::pallet::{Def, parse::helper::get_doc_literals};
 
 /// * Add __Ignore variant on Event
 /// * Impl various trait on Event including metadata
@@ -81,6 +81,15 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 		event_item.variants.push(variant);
 	}
 
+	if get_doc_literals(&event_item.attrs).is_empty() {
+		event_item.attrs.push(syn::parse_quote!(
+			#[doc = r"
+			The [event](https://substrate.dev/docs/en/knowledgebase/runtime/events) emitted
+			by this pallet.
+			"]
+		));
+	}
+
 	// derive some traits because system event require Clone, FullCodec, Eq, PartialEq and Debug
 	event_item.attrs.push(syn::parse_quote!(
 		#[derive(
@@ -92,7 +101,6 @@ pub fn expand_event(def: &mut Def) -> proc_macro2::TokenStream {
 			#frame_support::codec::Decode,
 		)]
 	));
-
 
 	let deposit_event = if let Some((fn_vis, fn_span)) = &event.deposit_event {
 		let event_use_gen = &event.gen_kind.type_use_gen(event.attr_span);

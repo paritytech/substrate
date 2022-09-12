@@ -23,6 +23,10 @@ use frame_support::weights::{
 };
 
 impl crate::WeightInfo for () {
+	fn plan_config_change() -> Weight {
+		DbWeight::get().writes(1)
+	}
+
 	fn report_equivocation(validator_count: u32) -> Weight {
 		// we take the validator set count from the membership proof to
 		// calculate the weight but we set a floor of 100 validators.

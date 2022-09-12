@@ -69,11 +69,26 @@ pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+#[cfg(feature = "std")]
+pub mod wasm_binary_logging_disabled {
+	include!(concat!(env!("OUT_DIR"), "/wasm_binary_logging_disabled.rs"));
+}
+
 /// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
 	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
 						supported with the flag disabled.")
+}
+
+/// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
+#[cfg(feature = "std")]
+pub fn wasm_binary_logging_disabled_unwrap() -> &'static [u8] {
+	wasm_binary_logging_disabled::WASM_BINARY
+		.expect(
+			"Development wasm binary is not available. Testing is only supported with the flag \
+			disabled."
+		)
 }
 
 /// Test runtime version.
@@ -436,13 +451,13 @@ impl From<frame_system::Event<Runtime>> for Event {
 impl frame_support::traits::PalletInfo for Runtime {
 	fn index<P: 'static>() -> Option<usize> {
 		let type_id = sp_std::any::TypeId::of::<P>();
-		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
 			return Some(0)
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
 			return Some(1)
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some(2)
 		}
 
@@ -450,13 +465,13 @@ impl frame_support::traits::PalletInfo for Runtime {
 	}
 	fn name<P: 'static>() -> Option<&'static str> {
 		let type_id = sp_std::any::TypeId::of::<P>();
-		if type_id == sp_std::any::TypeId::of::<system::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<system::Pallet<Runtime>>() {
 			return Some("System")
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_timestamp::Pallet<Runtime>>() {
 			return Some("Timestamp")
 		}
-		if type_id == sp_std::any::TypeId::of::<pallet_babe::Module<Runtime>>() {
+		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("Babe")
 		}
 
@@ -600,7 +615,7 @@ cfg_if! {
 				}
 
 				fn execute_block(block: Block) {
-					system::execute_block(block)
+					system::execute_block(block);
 				}
 
 				fn initialize_block(header: &<Block as BlockT>::Header) {
@@ -742,13 +757,15 @@ cfg_if! {
 				}
 
 				fn do_trace_log() {
-					frame_support::debug::RuntimeLogger::init();
-					frame_support::debug::trace!("Hey I'm runtime");
+					log::trace!("Hey I'm runtime");
 				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1000 }
+				fn slot_duration() -> sp_consensus_aura::SlotDuration {
+					sp_consensus_aura::SlotDuration::from_millis(1000)
+				}
+
 				fn authorities() -> Vec<AuraId> {
 					system::authorities().into_iter().map(|a| {
 						let authority: sr25519::Public = a.into();
@@ -765,21 +782,21 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
 				fn current_epoch_start() -> Slot {
-					<pallet_babe::Module<Runtime>>::current_epoch_start()
+					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
 				}
 
 				fn current_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::current_epoch()
+					<pallet_babe::Pallet<Runtime>>::current_epoch()
 				}
 
 				fn next_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::next_epoch()
+					<pallet_babe::Pallet<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(
@@ -855,7 +872,7 @@ cfg_if! {
 				}
 
 				fn execute_block(block: Block) {
-					system::execute_block(block)
+					system::execute_block(block);
 				}
 
 				fn initialize_block(header: &<Block as BlockT>::Header) {
@@ -1001,13 +1018,15 @@ cfg_if! {
 				}
 
 				fn do_trace_log() {
-					frame_support::debug::RuntimeLogger::init();
-					frame_support::debug::trace!("Hey I'm runtime");
+					log::error!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
 				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-				fn slot_duration() -> u64 { 1000 }
+				fn slot_duration() -> sp_consensus_aura::SlotDuration {
+					sp_consensus_aura::SlotDuration::from_millis(1000)
+				}
+
 				fn authorities() -> Vec<AuraId> {
 					system::authorities().into_iter().map(|a| {
 						let authority: sr25519::Public = a.into();
@@ -1024,21 +1043,21 @@ cfg_if! {
 						c: (3, 10),
 						genesis_authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
-						randomness: <pallet_babe::Module<Runtime>>::randomness(),
+						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 					}
 				}
 
 				fn current_epoch_start() -> Slot {
-					<pallet_babe::Module<Runtime>>::current_epoch_start()
+					<pallet_babe::Pallet<Runtime>>::current_epoch_start()
 				}
 
 				fn current_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::current_epoch()
+					<pallet_babe::Pallet<Runtime>>::current_epoch()
 				}
 
 				fn next_epoch() -> sp_consensus_babe::Epoch {
-					<pallet_babe::Module<Runtime>>::next_epoch()
+					<pallet_babe::Pallet<Runtime>>::next_epoch()
 				}
 
 				fn submit_report_equivocation_unsigned_extrinsic(

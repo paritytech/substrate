@@ -20,9 +20,9 @@
 //! The Session module allows validators to manage their session keys, provides a function for
 //! changing the session length, and handles session rotation.
 //!
-//! - [`session::Config`](./trait.Config.html)
-//! - [`Call`](./enum.Call.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Call`]
+//! - [`Module`]
 //!
 //! ## Overview
 //!
@@ -116,8 +116,10 @@ pub mod weights;
 
 use sp_std::{prelude::*, marker::PhantomData, ops::{Sub, Rem}};
 use codec::Decode;
-use sp_runtime::{KeyTypeId, Perbill, RuntimeAppPublic};
-use sp_runtime::traits::{Convert, Zero, Member, OpaqueKeys, Saturating};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
+	KeyTypeId, Perbill, Percent, RuntimeAppPublic,
+};
 use sp_staking::SessionIndex;
 use frame_support::{
 	ensure, decl_module, decl_event, decl_storage, decl_error, ConsensusEngineId, Parameter,
@@ -142,16 +144,14 @@ pub trait ShouldEndSession<BlockNumber> {
 /// The first session will have length of `Offset`, and
 /// the following sessions will have length of `Period`.
 /// This may prove nonsensical if `Offset` >= `Period`.
-pub struct PeriodicSessions<
-	Period,
-	Offset,
->(PhantomData<(Period, Offset)>);
+pub struct PeriodicSessions<Period, Offset>(PhantomData<(Period, Offset)>);
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd,
+	BlockNumber: Rem<Output = BlockNumber> + Sub<Output = BlockNumber> + Zero + PartialOrd,
 	Period: Get<BlockNumber>,
 	Offset: Get<BlockNumber>,
-> ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset> {
+> ShouldEndSession<BlockNumber> for PeriodicSessions<Period, Offset>
+{
 	fn should_end_session(now: BlockNumber) -> bool {
 		let offset = Offset::get();
 		now >= offset && ((now - offset) % Period::get()).is_zero()
@@ -159,14 +159,47 @@ impl<
 }
 
 impl<
-	BlockNumber: Rem<Output=BlockNumber> + Sub<Output=BlockNumber> + Zero + PartialOrd + Saturating + Clone,
+	BlockNumber: AtLeast32BitUnsigned + Clone,
 	Period: Get<BlockNumber>,
-	Offset: Get<BlockNumber>,
-> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset> {
-	fn estimate_next_session_rotation(now: BlockNumber) -> Option<BlockNumber> {
+	Offset: Get<BlockNumber>
+> EstimateNextSessionRotation<BlockNumber> for PeriodicSessions<Period, Offset>
+{
+	fn average_session_length() -> BlockNumber {
+		Period::get()
+	}
+
+	fn estimate_current_session_progress(now: BlockNumber) -> (Option<Percent>, Weight) {
 		let offset = Offset::get();
 		let period = Period::get();
-		Some(if now > offset {
+
+		// NOTE: we add one since we assume that the current block has already elapsed,
+		// i.e. when evaluating the last block in the session the progress should be 100%
+		// (0% is never returned).
+		let progress = if now >= offset {
+			let current = (now - offset) % period.clone() + One::one();
+			Some(Percent::from_rational(
+				current.clone(),
+				period.clone(),
+			))
+		} else {
+			Some(Percent::from_rational(
+				now + One::one(),
+				offset,
+			))
+		};
+
+		// Weight note: `estimate_current_session_progress` has no storage reads and trivial
+		// computational overhead. There should be no risk to the chain having this weight value be
+		// zero for now. However, this value of zero was not properly calculated, and so it would be
+		// reasonable to come back here and properly calculate the weight of this function.
+		(progress, Zero::zero())
+	}
+
+	fn estimate_next_session_rotation(now: BlockNumber) -> (Option<BlockNumber>, Weight) {
+		let offset = Offset::get();
+		let period = Period::get();
+
+		let next_session = if now > offset {
 			let block_after_last_session = (now.clone() - offset) % period.clone();
 			if block_after_last_session > Zero::zero() {
 				now.saturating_add(period.saturating_sub(block_after_last_session))
@@ -179,19 +212,13 @@ impl<
 			}
 		} else {
 			offset
-		})
-	}
+		};
 
-	fn weight(_now: BlockNumber) -> Weight {
 		// Weight note: `estimate_next_session_rotation` has no storage reads and trivial
 		// computational overhead. There should be no risk to the chain having this weight value be
 		// zero for now. However, this value of zero was not properly calculated, and so it would be
 		// reasonable to come back here and properly calculate the weight of this function.
-		0
-	}
-
-	fn average_session_length() -> BlockNumber {
-		Period::get()
+		(Some(next_session), Zero::zero())
 	}
 }
 
@@ -415,7 +442,11 @@ decl_storage! {
 			for (account, val, keys) in config.keys.iter().cloned() {
 				<Module<T>>::inner_set_keys(&val, keys)
 					.expect("genesis config must not contain duplicates; qed");
-				assert!(frame_system::Module::<T>::inc_consumers(&account).is_ok());
+				assert!(
+					frame_system::Pallet::<T>::inc_consumers(&account).is_ok(),
+					"Account ({:?}) does not exist at genesis to set key. Account not endowed?",
+					account,
+				);
 			}
 
 			let initial_validators_0 = T::SessionManager::new_session(0)
@@ -719,10 +750,10 @@ impl<T: Config> Module<T> {
 		let who = T::ValidatorIdOf::convert(account.clone())
 			.ok_or(Error::<T>::NoAssociatedValidatorId)?;
 
-		frame_system::Module::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
+		frame_system::Pallet::<T>::inc_consumers(&account).map_err(|_| Error::<T>::NoAccount)?;
 		let old_keys = Self::inner_set_keys(&who, keys)?;
 		if old_keys.is_some() {
-			let _ = frame_system::Module::<T>::dec_consumers(&account);
+			let _ = frame_system::Pallet::<T>::dec_consumers(&account);
 			// ^^^ Defensive only; Consumers were incremented just before, so should never fail.
 		}
 
@@ -771,7 +802,7 @@ impl<T: Config> Module<T> {
 			let key_data = old_keys.get_raw(*id);
 			Self::clear_key_owner(*id, key_data);
 		}
-		frame_system::Module::<T>::dec_consumers(&account);
+		frame_system::Pallet::<T>::dec_consumers(&account);
 
 		Ok(())
 	}
@@ -833,17 +864,13 @@ impl<T: Config, Inner: FindAuthor<u32>> FindAuthor<T::ValidatorId>
 }
 
 impl<T: Config> EstimateNextNewSession<T::BlockNumber> for Module<T> {
-	/// This session module always calls new_session and next_session at the same time, hence we
-	/// do a simple proxy and pass the function to next rotation.
-	fn estimate_next_new_session(now: T::BlockNumber) -> Option<T::BlockNumber> {
-		T::NextSessionRotation::estimate_next_session_rotation(now)
-	}
-
 	fn average_session_length() -> T::BlockNumber {
 		T::NextSessionRotation::average_session_length()
 	}
 
-	fn weight(now: T::BlockNumber) -> Weight {
-		T::NextSessionRotation::weight(now)
+	/// This session module always calls new_session and next_session at the same time, hence we
+	/// do a simple proxy and pass the function to next rotation.
+	fn estimate_next_new_session(now: T::BlockNumber) -> (Option<T::BlockNumber>, Weight) {
+		T::NextSessionRotation::estimate_next_session_rotation(now)
 	}
 }

@@ -215,3 +215,34 @@ fn call_runtime_api_with_multiple_arguments() {
 		.test_multiple_arguments(&block_id, data.clone(), data.clone(), data.len() as u32)
 		.unwrap();
 }
+
+#[test]
+fn disable_logging_works() {
+	if std::env::var("RUN_TEST").is_ok() {
+		sp_tracing::try_init_simple();
+
+		let mut builder = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm);
+		builder.genesis_init_mut().set_wasm_code(
+			substrate_test_runtime_client::runtime::wasm_binary_logging_disabled_unwrap().to_vec(),
+		);
+
+		let client = builder.build();
+		let runtime_api = client.runtime_api();
+		let block_id = BlockId::Number(0);
+		runtime_api.do_trace_log(&block_id).expect("Logging should not fail");
+		log::error!("Logging from native works");
+	} else {
+		let executable = std::env::current_exe().unwrap();
+		let output = std::process::Command::new(executable)
+			.env("RUN_TEST", "1")
+			.env("RUST_LOG", "info")
+			.args(&["--nocapture", "disable_logging_works"])
+			.output()
+			.unwrap();
+
+		let output = dbg!(String::from_utf8(output.stderr).unwrap());
+		assert!(!output.contains("Hey I'm runtime"));
+		assert!(output.contains("Logging from native works"));
+	}
+}

@@ -192,8 +192,8 @@ where
 
 		let mut imports = sp_sandbox::EnvironmentDefinitionBuilder::new();
 		imports.add_memory(self::prepare::IMPORT_MODULE_MEMORY, "memory", memory.clone());
-		runtime::Env::impls(&mut |name, func_ptr| {
-			imports.add_host_func(self::prepare::IMPORT_MODULE_FN, name, func_ptr);
+		runtime::Env::impls(&mut |module, name, func_ptr| {
+			imports.add_host_func(module, name, func_ptr);
 		});
 
 		let mut runtime = Runtime::new(
@@ -224,12 +224,20 @@ where
 	fn occupied_storage(&self) -> u32 {
 		// We disregard the size of the struct itself as the size is completely
 		// dominated by the code size.
-		let len = self.original_code_len.saturating_add(self.code.len() as u32);
+		let len = self.aggregate_code_len();
 		len.checked_div(self.refcount as u32).unwrap_or(len)
 	}
 
 	fn code_len(&self) -> u32 {
 		self.code.len() as u32
+	}
+
+	fn aggregate_code_len(&self) -> u32 {
+		self.original_code_len.saturating_add(self.code_len())
+	}
+
+	fn refcount(&self) -> u32 {
+		self.refcount as u32
 	}
 }
 
@@ -237,8 +245,8 @@ where
 mod tests {
 	use super::*;
 	use crate::{
-		CodeHash, BalanceOf, Error, Module as Contracts,
-		exec::{Ext, StorageKey, AccountIdOf, Executable},
+		CodeHash, BalanceOf, Error, Pallet as Contracts,
+		exec::{Ext, StorageKey, AccountIdOf, Executable, SeedOf, BlockNumberOf, RentParams},
 		gas::GasMeter,
 		tests::{Test, Call, ALICE, BOB},
 	};
@@ -249,6 +257,7 @@ mod tests {
 	use frame_support::{dispatch::DispatchResult, weights::Weight};
 	use assert_matches::assert_matches;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags, ExecError, ErrorOrigin};
+	use pretty_assertions::assert_eq;
 
 	const GAS_LIMIT: Weight = 10_000_000_000;
 
@@ -295,6 +304,7 @@ mod tests {
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
 		schedule: Schedule<Test>,
+		rent_params: RentParams<Test>,
 	}
 
 	impl Ext for MockExt {
@@ -395,45 +405,37 @@ mod tests {
 		fn value_transferred(&self) -> u64 {
 			1337
 		}
-
 		fn now(&self) -> &u64 {
 			&1111
 		}
-
 		fn minimum_balance(&self) -> u64 {
 			666
 		}
-
 		fn tombstone_deposit(&self) -> u64 {
 			16
 		}
-
-		fn random(&self, subject: &[u8]) -> H256 {
-			H256::from_slice(subject)
+		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
+			(H256::from_slice(subject), 42)
 		}
-
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
 			self.events.push((topics, data))
 		}
-
 		fn set_rent_allowance(&mut self, rent_allowance: u64) {
 			self.rent_allowance = rent_allowance;
 		}
-
 		fn rent_allowance(&self) -> u64 {
 			self.rent_allowance
 		}
-
 		fn block_number(&self) -> u64 { 121 }
-
 		fn max_value_size(&self) -> u32 { 16_384 }
-
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
 			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
 		}
-
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
+		}
+		fn rent_params(&self) -> &RentParams<Self::T> {
+			&self.rent_params
 		}
 	}
 
@@ -513,7 +515,7 @@ mod tests {
 		fn tombstone_deposit(&self) -> u64 {
 			(**self).tombstone_deposit()
 		}
-		fn random(&self, subject: &[u8]) -> H256 {
+		fn random(&self, subject: &[u8]) -> (SeedOf<Self::T>, BlockNumberOf<Self::T>) {
 			(**self).random(subject)
 		}
 		fn deposit_event(&mut self, topics: Vec<H256>, data: Vec<u8>) {
@@ -536,6 +538,9 @@ mod tests {
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			(**self).schedule()
+		}
+		fn rent_params(&self) -> &RentParams<Self::T> {
+			(**self).rent_params()
 		}
 	}
 
@@ -1526,6 +1531,85 @@ mod tests {
 		);
 	}
 
+	const CODE_RANDOM_V1: &str = r#"
+(module
+	(import "seal1" "seal_random" (func $seal_random (param i32 i32 i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0,128) is reserved for the result of PRNG.
+
+	;; the subject used for the PRNG. [128,160)
+	(data (i32.const 128)
+		"\00\01\02\03\04\05\06\07\08\09\0A\0B\0C\0D\0E\0F"
+		"\00\01\02\03\04\05\06\07\08\09\0A\0B\0C\0D\0E\0F"
+	)
+
+	;; size of our buffer is 128 bytes
+	(data (i32.const 160) "\80")
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; This stores the block random seed in the buffer
+		(call $seal_random
+			(i32.const 128) ;; Pointer in memory to the start of the subject buffer
+			(i32.const 32) ;; The subject buffer's length
+			(i32.const 0) ;; Pointer to the output buffer
+			(i32.const 160) ;; Pointer to the output buffer length
+		)
+
+		;; assert len == 32
+		(call $assert
+			(i32.eq
+				(i32.load (i32.const 160))
+				(i32.const 40)
+			)
+		)
+
+		;; return the random data
+		(call $seal_return
+			(i32.const 0)
+			(i32.const 0)
+			(i32.const 40)
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn random_v1() {
+		let mut gas_meter = GasMeter::new(GAS_LIMIT);
+
+		let output = execute(
+			CODE_RANDOM_V1,
+			vec![],
+			MockExt::default(),
+			&mut gas_meter,
+		).unwrap();
+
+		// The mock ext just returns the same data that was passed as the subject.
+		assert_eq!(
+			output,
+			ExecReturnValue {
+				flags: ReturnFlags::empty(),
+				data: (
+						hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"),
+						42u64,
+					).encode(),
+			},
+		);
+	}
+
+
 	const CODE_DEPOSIT_EVENT: &str = r#"
 (module
 	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
@@ -1840,4 +1924,45 @@ mod tests {
 		);
 	}
 
+	const CODE_RENT_PARAMS: &str = r#"
+(module
+	(import "seal0" "seal_rent_params" (func $seal_rent_params (param i32 i32)))
+	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; [0, 4) buffer size = 128 bytes
+	(data (i32.const 0) "\80")
+
+	;; [4; inf) buffer where the result is copied
+
+	(func (export "call")
+		;; Load the rent params into memory
+		(call $seal_rent_params
+			(i32.const 4)		;; Pointer to the output buffer
+			(i32.const 0)		;; Pointer to the size of the buffer
+		)
+
+		;; Return the contents of the buffer
+		(call $seal_return
+			(i32.const 0)				;; return flags
+			(i32.const 4)				;; buffer pointer
+			(i32.load (i32.const 0))	;; buffer size
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+	#[test]
+	fn rent_params_work() {
+		let output = execute(
+			CODE_RENT_PARAMS,
+			vec![],
+			MockExt::default(),
+			&mut GasMeter::new(GAS_LIMIT),
+		).unwrap();
+		let rent_params = <RentParams<Test>>::default().encode();
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: rent_params });
+	}
 }

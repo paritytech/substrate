@@ -58,7 +58,7 @@ pub use frame_metadata::{
 ///
 /// struct Runtime;
 /// frame_support::impl_runtime_metadata! {
-///     for Runtime with modules where Extrinsic = UncheckedExtrinsic
+///     for Runtime with pallets where Extrinsic = UncheckedExtrinsic
 ///         module0::Module as Module0 { index 0 } with,
 ///         module1::Module as Module1 { index 1 } with,
 ///         module2::Module as Module2 { index 2 } with Storage,
@@ -69,7 +69,7 @@ pub use frame_metadata::{
 #[macro_export]
 macro_rules! impl_runtime_metadata {
 	(
-		for $runtime:ident with modules where Extrinsic = $ext:ident
+		for $runtime:ident with pallets where Extrinsic = $ext:ident
 			$( $rest:tt )*
 	) => {
 		impl $runtime {
@@ -421,7 +421,7 @@ mod tests {
 	impl crate::traits::PalletInfo for TestRuntime {
 		fn index<P: 'static>() -> Option<usize> {
 			let type_id = sp_std::any::TypeId::of::<P>();
-			if type_id == sp_std::any::TypeId::of::<system::Module<TestRuntime>>() {
+			if type_id == sp_std::any::TypeId::of::<system::Pallet<TestRuntime>>() {
 				return Some(0)
 			}
 			if type_id == sp_std::any::TypeId::of::<EventModule>() {
@@ -435,7 +435,7 @@ mod tests {
 		}
 		fn name<P: 'static>() -> Option<&'static str> {
 			let type_id = sp_std::any::TypeId::of::<P>();
-			if type_id == sp_std::any::TypeId::of::<system::Module<TestRuntime>>() {
+			if type_id == sp_std::any::TypeId::of::<system::Pallet<TestRuntime>>() {
 				return Some("System")
 			}
 			if type_id == sp_std::any::TypeId::of::<EventModule>() {
@@ -492,8 +492,8 @@ mod tests {
 	}
 
 	impl_runtime_metadata!(
-		for TestRuntime with modules where Extrinsic = TestExtrinsic
-			system::Module as System { index 0 } with Event,
+		for TestRuntime with pallets where Extrinsic = TestExtrinsic
+			system::Pallet as System { index 0 } with Event,
 			event_module::Module as Module { index 1 } with Event Call,
 			event_module2::Module as Module2 { index 2 } with Event Storage Call,
 	);

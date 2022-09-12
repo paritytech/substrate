@@ -22,6 +22,7 @@ use futures::{Future, executor::block_on};
 use super::*;
 use sp_consensus::block_validation::Validation;
 use substrate_test_runtime::Header;
+use sp_runtime::Justifications;
 
 fn test_ancestor_search_when_common_is(n: usize) {
 	sp_tracing::try_init_simple();
@@ -248,13 +249,14 @@ fn sync_justifications() {
 	net.block_until_sync();
 
 	// there's currently no justification for block #10
-	assert_eq!(net.peer(0).client().justification(&BlockId::Number(10)).unwrap(), None);
-	assert_eq!(net.peer(1).client().justification(&BlockId::Number(10)).unwrap(), None);
+	assert_eq!(net.peer(0).client().justifications(&BlockId::Number(10)).unwrap(), None);
+	assert_eq!(net.peer(1).client().justifications(&BlockId::Number(10)).unwrap(), None);
 
 	// we finalize block #10, #15 and #20 for peer 0 with a justification
-	net.peer(0).client().finalize_block(BlockId::Number(10), Some(Vec::new()), true).unwrap();
-	net.peer(0).client().finalize_block(BlockId::Number(15), Some(Vec::new()), true).unwrap();
-	net.peer(0).client().finalize_block(BlockId::Number(20), Some(Vec::new()), true).unwrap();
+	let just = (*b"FRNK", Vec::new());
+	net.peer(0).client().finalize_block(BlockId::Number(10), Some(just.clone()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(15), Some(just.clone()), true).unwrap();
+	net.peer(0).client().finalize_block(BlockId::Number(20), Some(just.clone()), true).unwrap();
 
 	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
 	let h2 = net.peer(1).client().header(&BlockId::Number(15)).unwrap().unwrap();
@@ -269,10 +271,20 @@ fn sync_justifications() {
 		net.poll(cx);
 
 		for height in (10..21).step_by(5) {
-			if net.peer(0).client().justification(&BlockId::Number(height)).unwrap() != Some(Vec::new()) {
+			if net
+				.peer(0)
+				.client()
+				.justifications(&BlockId::Number(height))
+				.unwrap() != Some(Justifications::from((*b"FRNK", Vec::new())))
+			{
 				return Poll::Pending;
 			}
-			if net.peer(1).client().justification(&BlockId::Number(height)).unwrap() != Some(Vec::new()) {
+			if net
+				.peer(1)
+				.client()
+				.justifications(&BlockId::Number(height))
+				.unwrap() != Some(Justifications::from((*b"FRNK", Vec::new())))
+			{
 				return Poll::Pending;
 			}
 		}
@@ -295,7 +307,8 @@ fn sync_justifications_across_forks() {
 	// for both and finalize the small fork instead.
 	net.block_until_sync();
 
-	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(Vec::new()), true).unwrap();
+	let just = (*b"FRNK", Vec::new());
+	net.peer(0).client().finalize_block(BlockId::Hash(f1_best), Some(just), true).unwrap();
 
 	net.peer(1).request_justification(&f1_best, 10);
 	net.peer(1).request_justification(&f2_best, 11);
@@ -303,8 +316,16 @@ fn sync_justifications_across_forks() {
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
 
-		if net.peer(0).client().justification(&BlockId::Number(10)).unwrap() == Some(Vec::new()) &&
-			net.peer(1).client().justification(&BlockId::Number(10)).unwrap() == Some(Vec::new())
+		if net
+			.peer(0)
+			.client()
+			.justifications(&BlockId::Number(10))
+			.unwrap() == Some(Justifications::from((*b"FRNK", Vec::new())))
+			&& net
+				.peer(1)
+				.client()
+				.justifications(&BlockId::Number(10))
+				.unwrap() == Some(Justifications::from((*b"FRNK", Vec::new())))
 		{
 			Poll::Ready(())
 		} else {
@@ -699,8 +720,9 @@ fn can_sync_to_peers_with_wrong_common_block() {
 	net.block_until_connected();
 
 	// both peers re-org to the same fork without notifying each other
-	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
-	net.peer(1).client().finalize_block(BlockId::Hash(fork_hash), Some(Vec::new()), true).unwrap();
+	let just = Some((*b"FRNK", Vec::new()));
+	net.peer(0).client().finalize_block(BlockId::Hash(fork_hash), just.clone(), true).unwrap();
+	net.peer(1).client().finalize_block(BlockId::Hash(fork_hash), just, true).unwrap();
 	let final_hash = net.peer(0).push_blocks(1, false);
 
 	net.block_until_sync();
@@ -940,4 +962,57 @@ fn continue_to_sync_after_some_block_announcement_verifications_failed() {
 
 	net.block_until_sync();
 	assert!(net.peer(1).has_block(&block_hash));
+}
+
+/// When being spammed by the same request of a peer, we ban this peer. However, we should only ban
+/// this peer if the request was successful. In the case of a justification request for example,
+/// we ask our peers multiple times until we got the requested justification. This test ensures that
+/// asking for the same justification multiple times doesn't ban a peer.
+#[test]
+fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
+	sp_tracing::try_init_simple();
+	let mut net = JustificationTestNet::new(2);
+	net.peer(0).push_blocks(10, false);
+	net.block_until_sync();
+
+	// there's currently no justification for block #10
+	assert_eq!(net.peer(0).client().justifications(&BlockId::Number(10)).unwrap(), None);
+	assert_eq!(net.peer(1).client().justifications(&BlockId::Number(10)).unwrap(), None);
+
+	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
+
+	// Let's assume block 10 was finalized, but we still need the justification from the network.
+	net.peer(1).request_justification(&h1.hash().into(), 10);
+
+	// Let's build some more blocks and wait always for the network to have synced them
+	for _ in 0..5 {
+		// We need to sleep 10 seconds as this is the time we wait between sending a new
+		// justification request.
+		std::thread::sleep(std::time::Duration::from_secs(10));
+		net.peer(0).push_blocks(1, false);
+		net.block_until_sync();
+		assert_eq!(1, net.peer(0).num_peers());
+	}
+
+	// Finalize the block and make the justification available.
+	net.peer(0).client().finalize_block(
+		BlockId::Number(10),
+		Some((*b"FRNK", Vec::new())),
+		true,
+	).unwrap();
+
+	block_on(futures::future::poll_fn::<(), _>(|cx| {
+		net.poll(cx);
+
+		if net
+			.peer(1)
+			.client()
+			.justifications(&BlockId::Number(10))
+			.unwrap() != Some(Justifications::from((*b"FRNK", Vec::new())))
+		{
+			return Poll::Pending;
+		}
+
+		Poll::Ready(())
+	}));
 }

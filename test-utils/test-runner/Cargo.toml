@@ -1,0 +1,61 @@
+[package]
+name = "test-runner"
+version = "0.9.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+# client deps
+sc-executor = { version = "0.9.0", path = "../../client/executor" }
+sc-service = { version = "0.9.0", path = "../../client/service" }
+sc-informant = { version = "0.9.0", path = "../../client/informant" }
+sc-network = { version = "0.9.0", path = "../../client/network" }
+sc-cli = { version = "0.9.0", path = "../../client/cli" }
+sc-basic-authorship = { version = "0.9.0", path = "../../client/basic-authorship" }
+sc-rpc = { version = "3.0.0", path = "../../client/rpc" }
+sc-transaction-pool = { version = "3.0.0", path = "../../client/transaction-pool" }
+sc-transaction-graph = { version = "3.0.0", path = "../../client/transaction-pool/graph" }
+sc-client-api = { version = "3.0.0", path = "../../client/api" }
+sc-rpc-server = { version = "3.0.0", path = "../../client/rpc-servers" }
+manual-seal = { package = "sc-consensus-manual-seal", version = "0.9.0", path = "../../client/consensus/manual-seal" }
+
+# primitive deps
+sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-blockchain = { version = "3.0.0", path = "../../primitives/blockchain" }
+sp-block-builder = { version = "3.0.0", path = "../../primitives/block-builder" }
+sp-api = { version = "3.0.0", path = "../../primitives/api" }
+sp-io = { version = "3.0.0", path = "../../primitives/io" }
+sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
+sp-consensus = { version = "0.9.0", path = "../../primitives/consensus/common" }
+sp-keystore = { version = "0.9.0", path = "../../primitives/keystore" }
+sp-runtime = { version = "3.0.0", path = "../../primitives/runtime" }
+sp-session = { version = "3.0.0", path = "../../primitives/session" }
+sp-offchain = { version = "3.0.0", path = "../../primitives/offchain" }
+sp-inherents = { version = "3.0.0", path = "../../primitives/inherents" }
+sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
+
+sp-externalities = { version = "0.9.0", path = "../../primitives/externalities" }
+sp-state-machine = { version = "0.9.0", path = "../../primitives/state-machine" }
+sp-wasm-interface = { version = "3.0.0", path = "../../primitives/wasm-interface" }
+sp-runtime-interface = { version = "3.0.0", path = "../../primitives/runtime-interface" }
+
+# pallets
+frame-system = { version = "3.0.0", path = "../../frame/system" }
+
+parity-scale-codec = "1.3.1"
+env_logger = "0.7.1"
+log = "0.4.8"
+futures01 = { package = "futures", version = "0.1.29" }
+futures = { package = "futures", version = "0.3", features = ["compat"] }
+rand = "0.7"
+tokio = { version = "0.2", features = ["full"] }
+libp2p = "0.35.1"
+
+# Calling RPC
+jsonrpc-core = "15.1"
+[dev-dependencies]
+sc-finality-grandpa = { version = "0.9.0", path = "../../client/finality-grandpa" }
+sc-consensus-babe = { version = "0.9.0", path = "../../client/consensus/babe" }
+sp-consensus-babe = { version = "0.9.0", path = "../../primitives/consensus/babe" }
+node-cli = { version = "2.0.0", path = "../../bin/node/cli" }

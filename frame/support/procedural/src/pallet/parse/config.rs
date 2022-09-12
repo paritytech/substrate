@@ -309,7 +309,7 @@ impl ConfigDef {
 				|| check_event_type(frame_system, trait_item, has_instance)?;
 
 			// Parse for constant
-			let type_attrs_const: Vec<TypeAttrConst> = helper::take_item_attrs(trait_item)?;
+			let type_attrs_const: Vec<TypeAttrConst> = helper::take_item_pallet_attrs(trait_item)?;
 
 			if type_attrs_const.len() > 1 {
 				let msg = "Invalid attribute in pallet::config, only one attribute is expected";
@@ -339,7 +339,7 @@ impl ConfigDef {
 			}
 		}
 
-		let attr: Option<DisableFrameSystemSupertraitCheck> = helper::take_first_item_attr(
+		let attr: Option<DisableFrameSystemSupertraitCheck> = helper::take_first_item_pallet_attr(
 			&mut item.attrs
 		)?;
 

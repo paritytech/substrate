@@ -21,6 +21,7 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../primit
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
+log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
 sp-io = { version = "3.0.0", path = "../../primitives/io" }
@@ -37,5 +38,7 @@ std = [
 	"sp-staking/std",
 	"frame-support/std",
 	"frame-system/std",
+	"log/std",
 ]
 runtime-benchmarks = []
+try-runtime = ["frame-support/try-runtime"]

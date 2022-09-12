@@ -129,6 +129,7 @@ fn new_account_info(free_dollars: u128) -> Vec<u8> {
 		nonce: 0u32,
 		consumers: 0,
 		providers: 0,
+		sufficients: 0,
 		data: (free_dollars * DOLLARS, 0 * DOLLARS, 0 * DOLLARS, 0 * DOLLARS),
 	}.encode()
 }

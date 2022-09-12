@@ -26,7 +26,7 @@ use std::sync::{Weak, Arc};
 use codec::Decode;
 use sp_core::{
 	ExecutionContext,
-	offchain::{self, OffchainExt, TransactionPoolExt},
+	offchain::{self, OffchainWorkerExt, TransactionPoolExt, OffchainDbExt},
 };
 use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::{
@@ -76,6 +76,18 @@ impl ExtensionsFactory for () {
 	}
 }
 
+/// Create a Offchain DB accessor object.
+pub trait DbExternalitiesFactory: Send + Sync {
+	/// Create [`offchain::DbExternalities`] instance.
+	fn create(&self) -> Box<dyn offchain::DbExternalities>;
+}
+
+impl<T: offchain::DbExternalities + Clone + Sync + Send + 'static> DbExternalitiesFactory for T {
+	fn create(&self) -> Box<dyn offchain::DbExternalities> {
+		Box::new(self.clone())
+	}
+}
+
 /// A producer of execution extensions for offchain calls.
 ///
 /// This crate aggregates extensions available for the offchain calls
@@ -84,6 +96,7 @@ impl ExtensionsFactory for () {
 pub struct ExecutionExtensions<Block: traits::Block> {
 	strategies: ExecutionStrategies,
 	keystore: Option<SyncCryptoStorePtr>,
+	offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
 	// FIXME: these two are only RwLock because of https://github.com/paritytech/substrate/issues/4587
 	//        remove when fixed.
 	// To break retain cycle between `Client` and `TransactionPool` we require this
@@ -99,6 +112,7 @@ impl<Block: traits::Block> Default for ExecutionExtensions<Block> {
 		Self {
 			strategies: Default::default(),
 			keystore: None,
+			offchain_db: None,
 			transaction_pool: RwLock::new(None),
 			extensions_factory: RwLock::new(Box::new(())),
 		}
@@ -110,12 +124,14 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	pub fn new(
 		strategies: ExecutionStrategies,
 		keystore: Option<SyncCryptoStorePtr>,
+		offchain_db: Option<Box<dyn DbExternalitiesFactory>>,
 	) -> Self {
 		let transaction_pool = RwLock::new(None);
 		let extensions_factory = Box::new(());
 		Self {
 			strategies,
 			keystore,
+			offchain_db,
 			extensions_factory: RwLock::new(extensions_factory),
 			transaction_pool,
 		}
@@ -164,9 +180,22 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 			}
 		}
 
+		if capabilities.has(offchain::Capability::OffchainDbRead) ||
+			capabilities.has(offchain::Capability::OffchainDbWrite)
+		{
+			if let Some(offchain_db) = self.offchain_db.as_ref() {
+				extensions.register(
+					OffchainDbExt::new(offchain::LimitedExternalities::new(
+						capabilities,
+						offchain_db.create(),
+					))
+				);
+			}
+		}
+
 		if let ExecutionContext::OffchainCall(Some(ext)) = context {
 			extensions.register(
-				OffchainExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)),
+				OffchainWorkerExt::new(offchain::LimitedExternalities::new(capabilities, ext.0)),
 			);
 		}
 

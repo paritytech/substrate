@@ -95,15 +95,15 @@ mod tests {
 			Assignment {
 				who: 1u32,
 				distribution: vec![
-					(10u32, Perbill::from_fraction(0.5)),
-					(20, Perbill::from_fraction(0.5)),
+					(10u32, Perbill::from_float(0.5)),
+					(20, Perbill::from_float(0.5)),
 				],
 			},
 			Assignment {
 				who: 2u32,
 				distribution: vec![
-					(10, Perbill::from_fraction(0.33)),
-					(20, Perbill::from_fraction(0.67)),
+					(10, Perbill::from_float(0.33)),
+					(20, Perbill::from_float(0.67)),
 				],
 			},
 		];

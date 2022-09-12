@@ -24,10 +24,10 @@ use frame_support::{
 	IterableStorageMap,
 	traits::{Currency, Get, EnsureOrigin, OnInitialize, UnfilteredDispatchable, schedule::DispatchTime},
 };
-use frame_system::{RawOrigin, Module as System, self, EventRecord};
+use frame_system::{RawOrigin, Pallet as System, self, EventRecord};
 use sp_runtime::traits::{Bounded, One};
 
-use crate::Module as Democracy;
+use crate::Pallet as Democracy;
 
 const SEED: u32 = 0;
 const MAX_REFERENDUMS: u32 = 99;

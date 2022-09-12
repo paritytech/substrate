@@ -24,10 +24,9 @@ use syn::{
 	TraitItem, parse_quote, spanned::Spanned, Result, Meta, NestedMeta, Lit, Attribute,
 };
 
-use proc_macro_crate::crate_name;
+use proc_macro_crate::{crate_name, FoundCrate};
 
-use std::env;
-use std::collections::{BTreeMap, btree_map::Entry};
+use std::{env, collections::{BTreeMap, btree_map::Entry}};
 
 use quote::quote;
 
@@ -77,21 +76,18 @@ impl<'a> RuntimeInterface<'a> {
 
 /// Generates the include for the runtime-interface crate.
 pub fn generate_runtime_interface_include() -> TokenStream {
-	if env::var("CARGO_PKG_NAME").unwrap() == "sp-runtime-interface" {
-		TokenStream::new()
-	} else {
-		match crate_name("sp-runtime-interface") {
-			Ok(crate_name) => {
-				let crate_name = Ident::new(&crate_name, Span::call_site());
-				quote!(
-					#[doc(hidden)]
-					extern crate #crate_name as proc_macro_runtime_interface;
-				)
-			},
-			Err(e) => {
-				let err = Error::new(Span::call_site(), &e).to_compile_error();
-				quote!( #err )
-			}
+	match crate_name("sp-runtime-interface") {
+		Ok(FoundCrate::Itself) => quote!(),
+		Ok(FoundCrate::Name(crate_name)) => {
+			let crate_name = Ident::new(&crate_name, Span::call_site());
+			quote!(
+				#[doc(hidden)]
+				extern crate #crate_name as proc_macro_runtime_interface;
+			)
+		},
+		Err(e) => {
+			let err = Error::new(Span::call_site(), e).to_compile_error();
+			quote!( #err )
 		}
 	}
 }

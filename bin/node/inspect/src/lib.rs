@@ -73,7 +73,7 @@ impl<TBlock: Block> PrettyPrinter<TBlock> for DebugPrinter {
 	}
 
 	fn fmt_extrinsic(&self, fmt: &mut fmt::Formatter, extrinsic: &TBlock::Extrinsic) -> fmt::Result {
-		writeln!(fmt, " {:?}", extrinsic)?;
+		writeln!(fmt, " {:#?}", extrinsic)?;
 		writeln!(fmt, " Bytes: {:?}", HexDisplay::from(&extrinsic.encode()))?;
 		Ok(())
 	}

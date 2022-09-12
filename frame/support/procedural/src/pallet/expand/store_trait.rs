@@ -37,10 +37,12 @@ pub fn expand_store_trait(def: &mut Def) -> proc_macro2::TokenStream {
 	let completed_where_clause = super::merge_where_clauses(&where_clauses);
 
 	let storage_names = &def.storages.iter().map(|storage| &storage.ident).collect::<Vec<_>>();
+	let storage_cfg_attrs = &def.storages.iter().map(|storage| &storage.cfg_attrs).collect::<Vec<_>>();
 
 	quote::quote_spanned!(trait_store.span() =>
 		#trait_vis trait #trait_store {
 			#(
+				#(#storage_cfg_attrs)*
 				type #storage_names;
 			)*
 		}
@@ -48,6 +50,7 @@ pub fn expand_store_trait(def: &mut Def) -> proc_macro2::TokenStream {
 			#completed_where_clause
 		{
 			#(
+				#(#storage_cfg_attrs)*
 				type #storage_names = #storage_names<#type_use_gen>;
 			)*
 		}

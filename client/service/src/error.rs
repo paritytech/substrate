@@ -46,6 +46,9 @@ pub enum Error {
 	#[error(transparent)]
 	Keystore(#[from] sc_keystore::Error),
 
+	#[error(transparent)]
+	Telemetry(#[from] sc_telemetry::Error),
+
 	#[error("Best chain selection strategy (SelectChain) is not provided.")]
 	SelectChainRequired,
 

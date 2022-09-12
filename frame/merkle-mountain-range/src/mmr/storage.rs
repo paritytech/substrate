@@ -62,10 +62,9 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<OffchainStorage, T,
 	fn get_elem(&self, pos: u64) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
 		let key = Module::<T, I>::offchain_key(pos);
 		// Retrieve the element from Off-chain DB.
-		Ok(
-			sp_io::offchain ::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
-				.and_then(|v| codec::Decode::decode(&mut &*v).ok())
-		)
+		Ok(sp_io::offchain
+			::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
 	}
 
 	fn append(&mut self, _: u64, _: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
@@ -95,9 +94,8 @@ impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, 
 			// on-chain we only store the hash (even if it's a leaf)
 			<Nodes<T, I>>::insert(size, elem.hash());
 			// Indexing API is used to store the full leaf content.
-			elem.using_encoded(|elem| {
-				sp_io::offchain_index::set(&Module::<T, I>::offchain_key(size), elem)
-			});
+			let key = Module::<T, I>::offchain_key(size);
+			elem.using_encoded(|elem| sp_io::offchain_index::set(&key, elem));
 			size += 1;
 
 			if let Node::Data(..) = elem {

@@ -26,8 +26,6 @@ use crate::{hash::H256, hash::H512};
 use codec::{Encode, Decode};
 
 #[cfg(feature = "full_crypto")]
-use blake2_rfc;
-#[cfg(feature = "full_crypto")]
 use core::convert::TryFrom;
 #[cfg(feature = "full_crypto")]
 use ed25519_dalek::{Signer as _, Verifier as _};

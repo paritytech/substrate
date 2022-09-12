@@ -1,6 +1,6 @@
 [package]
 name = "pallet-contracts-rpc-runtime-api"
-version = "0.8.1"
+version = "3.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -8,7 +8,6 @@ homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
 description = "Runtime API definition required by Contracts RPC extensions."
 readme = "README.md"
-publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -18,7 +17,7 @@ sp-api = { version = "3.0.0", default-features = false, path = "../../../../prim
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../../../../primitives/std" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../../../primitives/runtime" }
-pallet-contracts-primitives = { version = "2.0.0", default-features = false, path = "../../common" }
+pallet-contracts-primitives = { version = "3.0.0", default-features = false, path = "../../common" }
 
 [features]
 default = ["std"]

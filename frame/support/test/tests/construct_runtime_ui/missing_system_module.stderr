@@ -1,4 +1,4 @@
-error: `System` module declaration is missing. Please add this line: `System: frame_system::{Module, Call, Storage, Config, Event<T>},`
+error: `System` pallet declaration is missing. Please add this line: `System: frame_system::{Pallet, Call, Storage, Config, Event<T>},`
  --> $DIR/missing_system_module.rs:8:2
   |
 8 |       {

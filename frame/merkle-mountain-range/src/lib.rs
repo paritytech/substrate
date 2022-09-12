@@ -127,7 +127,7 @@ pub trait Config<I = DefaultInstance>: frame_system::Config {
 	///
 	/// For some applications it might be beneficial to make the MMR root available externally
 	/// apart from having it in the storage. For instance you might output it in the header digest
-	/// (see [frame_system::Module::deposit_log]) to make it available for Light Clients.
+	/// (see [`frame_system::Pallet::deposit_log`]) to make it available for Light Clients.
 	/// Hook complexity should be `O(1)`.
 	type OnNewRoot: primitives::OnNewRoot<<Self as Config<I>>::Hash>;
 

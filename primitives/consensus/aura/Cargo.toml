@@ -21,6 +21,7 @@ sp-runtime = { version = "3.0.0", default-features = false, path = "../../runtim
 sp-inherents = { version = "3.0.0", default-features = false, path = "../../inherents" }
 sp-timestamp = { version = "3.0.0", default-features = false, path = "../../timestamp" }
 sp-consensus-slots = { version = "0.9.0", default-features = false, path = "../slots" }
+sp-consensus = { version = "0.9.0", path = "../common", optional = true }
 
 [features]
 default = ["std"]
@@ -32,4 +33,6 @@ std = [
 	"sp-runtime/std",
 	"sp-inherents/std",
 	"sp-timestamp/std",
+	"sp-consensus-slots/std",
+	"sp-consensus",
 ]

@@ -17,8 +17,8 @@
 
 //! # Aura Module
 //!
-//! - [`aura::Config`](./trait.Config.html)
-//! - [`Module`](./struct.Module.html)
+//! - [`Config`]
+//! - [`Pallet`]
 //!
 //! ## Overview
 //!
@@ -39,12 +39,13 @@
 
 use sp_std::prelude::*;
 use codec::{Encode, Decode};
-use frame_support::{Parameter, traits::{Get, FindAuthor, OneSessionHandler}, ConsensusEngineId};
+use frame_support::{
+	Parameter, traits::{Get, FindAuthor, OneSessionHandler, OnTimestampSet}, ConsensusEngineId,
+};
 use sp_runtime::{
 	RuntimeAppPublic,
 	traits::{SaturatedConversion, Saturating, Zero, Member, IsMember}, generic::DigestItem,
 };
-use sp_timestamp::OnTimestampSet;
 use sp_consensus_aura::{AURA_ENGINE_ID, ConsensusLog, AuthorityIndex, Slot};
 
 mod mock;
@@ -129,7 +130,7 @@ impl<T: Config> Pallet<T> {
 			AURA_ENGINE_ID,
 			ConsensusLog::AuthoritiesChange(new).encode()
 		);
-		<frame_system::Module<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 
 	fn initialize_authorities(authorities: &[T::AuthorityId]) {
@@ -193,7 +194,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			ConsensusLog::<T::AuthorityId>::OnDisabled(i as AuthorityIndex).encode(),
 		);
 
-		<frame_system::Module<T>>::deposit_log(log.into());
+		<frame_system::Pallet<T>>::deposit_log(log.into());
 	}
 }
 

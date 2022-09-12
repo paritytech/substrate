@@ -21,11 +21,11 @@
 
 use super::*;
 
-use frame_system::{RawOrigin, Module as System};
+use frame_system::{RawOrigin, Pallet as System};
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Bounded;
 
-use crate::Module as Vesting;
+use crate::Pallet as Vesting;
 
 const SEED: u32 = 0;
 
