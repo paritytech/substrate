@@ -4,6 +4,7 @@ use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
 use sp_runtime::FixedU128;
 
+pub type BlockNumber = u64;
 pub type AccountId = u128;
 pub type Balance = u128;
 pub type RewardCounter = FixedU128;
@@ -129,7 +130,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Origin = Origin;
 	type Index = u64;
-	type BlockNumber = u64;
+	type BlockNumber = BlockNumber;
 	type Call = Call;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
