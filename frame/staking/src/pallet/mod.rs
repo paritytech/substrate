@@ -22,9 +22,9 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
-		TryCollect, DefensiveResult
+		Currency, CurrencyToVote, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
+		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
+		UnixTime,
 	},
 	weights::Weight,
 	BoundedVec,
@@ -846,10 +846,10 @@ pub mod pallet {
 				active: value,
 				unlocking: Default::default(),
 				claimed_rewards: (last_reward_era..current_era)
-				.try_collect()
-				// Since last_reward_era is calculated as `current_era - HistoryDepth`,
-				// following bound is always expected to be satisfied.
-				.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
+					.try_collect()
+					// Since last_reward_era is calculated as `current_era - HistoryDepth`,
+					// following bound is always expected to be satisfied.
+					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())

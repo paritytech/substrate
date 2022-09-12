@@ -78,6 +78,21 @@ pub mod v11 {
 				log!(warn, "v11::migrate should be removed.");
 				T::DbWeight::get().reads(1)
 			}
+
+			let old_pallet_prefix = twox_128(N::get().as_bytes());
+			frame_support::ensure!(
+				sp_io::storage::next_key(&old_pallet_prefix).is_none(),
+				"old pallet data hasn't been removed"
+			);
+
+			let new_pallet_name = <P as PalletInfoAccess>::name();
+			let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
+			frame_support::ensure!(
+				sp_io::storage::next_key(&new_pallet_prefix).is_some(),
+				"new pallet data hasn't been created"
+			);
+
+			Ok(())
 		}
 
 		#[cfg(feature = "try-runtime")]

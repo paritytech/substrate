@@ -304,7 +304,7 @@ use frame_support::{
 	parameter_types,
 	traits::{Currency, Defensive, Get},
 	weights::Weight,
-	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound, CloneNoBound,
+	BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -440,7 +440,16 @@ pub struct UnlockChunk<Balance: HasCompact + MaxEncodedLen> {
 }
 
 /// The ledger of a (bonded) stash.
-#[derive(PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
+#[derive(
+	PartialEqNoBound,
+	EqNoBound,
+	CloneNoBound,
+	Encode,
+	Decode,
+	RuntimeDebugNoBound,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 #[scale_info(skip_type_params(T))]
 pub struct StakingLedger<T: Config> {
 	/// The stash account whose balance is actually locked and at stake.
@@ -676,7 +685,9 @@ impl<T: Config> StakingLedger<T> {
 }
 
 /// A record of the nominations made by a specific account.
-#[derive(PartialEqNoBound, EqNoBound, Clone, Encode, Decode, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen)]
+#[derive(
+	PartialEqNoBound, EqNoBound, Clone, Encode, Decode, RuntimeDebugNoBound, TypeInfo, MaxEncodedLen,
+)]
 #[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 pub struct Nominations<T: Config> {
