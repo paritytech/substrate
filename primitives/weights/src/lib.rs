@@ -28,10 +28,6 @@
 
 extern crate self as sp_weights;
 
-mod block_weights;
-mod extrinsic_weights;
-mod paritydb_weights;
-mod rocksdb_weights;
 mod weight_v2;
 
 use codec::{Decode, Encode};
@@ -48,8 +44,6 @@ use sp_debug_derive::RuntimeDebug;
 
 pub use weight_v2::*;
 
-/// These constants are specific to FRAME, and the current implementation of its various components.
-/// For example: FRAME System, FRAME Executive, our FRAME support libraries, etc...
 pub mod constants {
 	use super::Weight;
 
@@ -57,14 +51,6 @@ pub mod constants {
 	pub const WEIGHT_PER_MILLIS: Weight = Weight::from_ref_time(1_000_000_000);
 	pub const WEIGHT_PER_MICROS: Weight = Weight::from_ref_time(1_000_000);
 	pub const WEIGHT_PER_NANOS: Weight = Weight::from_ref_time(1_000);
-
-	// Expose the Block and Extrinsic base weights.
-	pub use super::{block_weights::BlockExecutionWeight, extrinsic_weights::ExtrinsicBaseWeight};
-
-	// Expose the DB weights.
-	pub use super::{
-		paritydb_weights::constants::ParityDbWeight, rocksdb_weights::constants::RocksDbWeight,
-	};
 }
 
 /// The weight of database operations that the runtime can invoke.

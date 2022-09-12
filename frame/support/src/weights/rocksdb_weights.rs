@@ -16,8 +16,9 @@
 // limitations under the License.
 
 pub mod constants {
+	use frame_support::weights::constants;
 	use sp_core::parameter_types;
-	use sp_weights::{constants, RuntimeDbWeight};
+	use sp_weights::RuntimeDbWeight;
 
 	parameter_types! {
 		/// By default, Substrate uses RocksDB, so this will be the weight used throughout

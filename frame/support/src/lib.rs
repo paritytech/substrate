@@ -81,6 +81,7 @@ pub mod crypto;
 pub mod instances;
 pub mod migrations;
 pub mod traits;
+pub mod weights;
 
 #[doc(hidden)]
 pub mod unsigned {
@@ -90,78 +91,6 @@ pub mod unsigned {
 	pub use crate::sp_runtime::transaction_validity::{
 		TransactionSource, TransactionValidity, TransactionValidityError, UnknownTransaction,
 	};
-}
-
-pub mod weights {
-	use crate::dispatch;
-	pub use sp_weights::*;
-
-	#[deprecated = "Function has moved to `frame_support::dispatch`"]
-	pub fn extract_actual_pays_fee(
-		res: &dispatch::DispatchResultWithPostInfo,
-		info: &dispatch::DispatchInfo,
-	) -> dispatch::Pays {
-		dispatch::extract_actual_pays_fee(res, info)
-	}
-	#[deprecated = "Function has moved to `frame_support::dispatch`"]
-	pub fn extract_actual_weight(
-		res: &dispatch::DispatchResultWithPostInfo,
-		info: &dispatch::DispatchInfo,
-	) -> Weight {
-		dispatch::extract_actual_weight(res, info)
-	}
-	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
-	pub trait ClassifyDispatch<T>: dispatch::ClassifyDispatch<T> {
-		fn classify_dispatch(&self, target: T) -> dispatch::DispatchClass {
-			<Self as dispatch::ClassifyDispatch<T>>::classify_dispatch(self, target)
-		}
-	}
-	#[deprecated = "Enum has moved to `frame_support::dispatch`"]
-	pub type DispatchClass = dispatch::DispatchClass;
-	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
-	pub type DispatchInfo = dispatch::DispatchInfo;
-	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
-	pub trait GetDispatchInfo: dispatch::GetDispatchInfo {
-		fn get_dispatch_info(&self) -> dispatch::DispatchInfo {
-			<Self as dispatch::GetDispatchInfo>::get_dispatch_info(self)
-		}
-	}
-	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
-	pub trait OneOrMany<T>: dispatch::OneOrMany<T> {
-		fn into_iter(self) -> Self::Iter
-		where
-			Self: Sized,
-		{
-			<Self as dispatch::OneOrMany<T>>::into_iter(self)
-		}
-	}
-	#[deprecated = "Enum has moved to `frame_support::dispatch`"]
-	pub type Pays = dispatch::Pays;
-	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
-	pub trait PaysFee<T>: dispatch::PaysFee<T> {
-		fn pays_fee(&self, target: T) -> dispatch::Pays {
-			<Self as dispatch::PaysFee<T>>::pays_fee(self, target)
-		}
-	}
-	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
-	pub type PerDispatchClass<T> = dispatch::PerDispatchClass<T>;
-	#[deprecated = "Struct has moved to `frame_support::dispatch`"]
-	pub type PostDispatchInfo = dispatch::PostDispatchInfo;
-	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
-	pub trait WeighData<T>: dispatch::WeighData<T> {
-		fn weigh_data(&self, target: T) -> Weight {
-			<Self as dispatch::WeighData<T>>::weigh_data(self, target)
-		}
-	}
-	#[deprecated = "Trait has moved to `frame_support::dispatch`"]
-	pub trait WithPostDispatchInfo: dispatch::WithPostDispatchInfo {
-		fn with_weight(self, actual_weight: Weight) -> dispatch::DispatchErrorWithPostInfo
-		where
-			Self: Sized,
-		{
-			<Self as dispatch::WithPostDispatchInfo>::with_weight(self, actual_weight)
-		}
-	}
 }
 
 #[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
