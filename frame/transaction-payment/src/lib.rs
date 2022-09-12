@@ -226,6 +226,30 @@ where
 	}
 }
 
+/// A struct to make the fee multiplier a constant
+pub struct ConstFeeMultiplier<M: Get<Multiplier>>(sp_std::marker::PhantomData<M>);
+
+impl<M: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M> {
+	fn min() -> Multiplier {
+		M::get()
+	}
+	fn target() -> Perquintill {
+		Default::default()
+	}
+	fn variability() -> Multiplier {
+		Default::default()
+	}
+}
+
+impl<M> Convert<Multiplier, Multiplier> for ConstFeeMultiplier<M>
+where
+	M: Get<Multiplier>,
+{
+	fn convert(_previous: Multiplier) -> Multiplier {
+		Self::min()
+	}
+}
+
 /// Storage releases of the pallet.
 #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 enum Releases {
@@ -371,7 +395,8 @@ pub mod pallet {
 			// add 1 percent;
 			let addition = target / 100;
 			if addition == Weight::zero() {
-				// this is most likely because in a test setup we set everything to ().
+				// this is most likely because in a test setup we set everything to ()
+				// or to `ConstFeeMultiplier`.
 				return
 			}
 
