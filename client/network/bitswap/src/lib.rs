@@ -21,7 +21,7 @@
 //! CID is expected to reference 256-bit Blake2b transaction hash.
 
 // #![allow(unused)]
-use cid::Version;
+use cid::{self, Version};
 use futures::{channel::mpsc, StreamExt};
 use libp2p::core::PeerId;
 use log::{debug, error, trace};
@@ -36,7 +36,7 @@ use schema::bitswap::{
 	Message as BitswapMessage,
 };
 use sp_runtime::traits::Block as BlockT;
-use std::{io, marker::PhantomData, sync::Arc, time::Duration};
+use std::{io, sync::Arc, time::Duration};
 use unsigned_varint::encode as varint_encode;
 
 mod schema;
@@ -92,15 +92,14 @@ impl Prefix {
 }
 
 /// Network behaviour that handles sending and receiving IPFS blocks.
-pub struct BitswapRequestHandler<B, Client> {
-	client: Arc<Client>,
+pub struct BitswapRequestHandler<B> {
+	client: Arc<dyn BlockBackend<B> + Send + Sync>,
 	request_receiver: mpsc::Receiver<IncomingRequest>,
-	_block: PhantomData<B>,
 }
 
-impl<B: BlockT, Client: BlockBackend<B>> BitswapRequestHandler<B, Client> {
+impl<B: BlockT> BitswapRequestHandler<B> {
 	/// Create a new [`BitswapRequestHandler`].
-	pub fn new(client: Arc<Client>) -> (Self, ProtocolConfig) {
+	pub fn new(client: Arc<dyn BlockBackend<B> + Send + Sync>) -> (Self, ProtocolConfig) {
 		let (tx, request_receiver) = mpsc::channel(MAX_REQUEST_QUEUE);
 
 		let config = ProtocolConfig {
@@ -112,7 +111,7 @@ impl<B: BlockT, Client: BlockBackend<B>> BitswapRequestHandler<B, Client> {
 			inbound_queue: Some(tx),
 		};
 
-		(Self { client, _block: PhantomData::default(), request_receiver }, config)
+		(Self { client, request_receiver }, config)
 	}
 
 	/// Run [`BitswapRequestHandler`].
@@ -188,6 +187,7 @@ impl<B: BlockT, Client: BlockBackend<B>> BitswapRequestHandler<B, Client> {
 			let cid = match cid::Cid::read_bytes(entry.block.as_slice()) {
 				Ok(cid) => cid,
 				Err(e) => {
+					println!("bad ci");
 					trace!(target: LOG_TARGET, "Bad CID {:?}: {:?}", entry.block, e);
 					continue
 				},
@@ -197,6 +197,7 @@ impl<B: BlockT, Client: BlockBackend<B>> BitswapRequestHandler<B, Client> {
 				cid.hash().code() != u64::from(cid::multihash::Code::Blake2b256) ||
 				cid.hash().size() != 32
 			{
+				println!("invlid data");
 				debug!(target: LOG_TARGET, "Ignoring unsupported CID {}: {}", peer, cid);
 				continue
 			}
@@ -276,11 +277,249 @@ pub enum BitswapError {
 	#[error("Failed to send response.")]
 	SendResponse,
 
-	/// Message contains an empty WANT list.
+	/// Message doesn't have a WANT list.
 	#[error("Invalid WANT list.")]
 	InvalidWantList,
 
 	/// Too many blocks requested.
 	#[error("Too many block entries in the request.")]
 	TooManyEntries,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use futures::{channel::oneshot, SinkExt};
+	use sc_block_builder::BlockBuilderProvider;
+	use schema::bitswap::{
+		message::{wantlist::Entry, Wantlist},
+		Message as BitswapMessage,
+	};
+	use sp_consensus::BlockOrigin;
+	use sp_runtime::codec::Encode;
+	use substrate_test_runtime::Extrinsic;
+	use substrate_test_runtime_client::{self, prelude::*, TestClientBuilder};
+
+	#[tokio::test]
+	async fn undecodeable_message() {
+		let client = substrate_test_runtime_client::new();
+		let (bitswap, config) = BitswapRequestHandler::new(Arc::new(client));
+
+		tokio::spawn(async move { bitswap.run().await });
+
+		let (tx, rx) = oneshot::channel();
+		config
+			.inbound_queue
+			.unwrap()
+			.send(IncomingRequest {
+				peer: PeerId::random(),
+				payload: vec![0x13, 0x37, 0x13, 0x38],
+				pending_response: tx,
+			})
+			.await
+			.unwrap();
+
+		if let Ok(OutgoingResponse { result, reputation_changes, sent_feedback }) = rx.await {
+			assert_eq!(result, Err(()));
+			assert_eq!(reputation_changes, Vec::new());
+			assert!(sent_feedback.is_none());
+		} else {
+			panic!("invalid event received");
+		}
+	}
+
+	#[tokio::test]
+	async fn empty_want_list() {
+		let client = substrate_test_runtime_client::new();
+		let (bitswap, mut config) = BitswapRequestHandler::new(Arc::new(client));
+
+		tokio::spawn(async move { bitswap.run().await });
+
+		let (tx, rx) = oneshot::channel();
+		config
+			.inbound_queue
+			.as_mut()
+			.unwrap()
+			.send(IncomingRequest {
+				peer: PeerId::random(),
+				payload: BitswapMessage { wantlist: None, ..Default::default() }.encode_to_vec(),
+				pending_response: tx,
+			})
+			.await
+			.unwrap();
+
+		if let Ok(OutgoingResponse { result, reputation_changes, sent_feedback }) = rx.await {
+			assert_eq!(result, Err(()));
+			assert_eq!(reputation_changes, Vec::new());
+			assert!(sent_feedback.is_none());
+		} else {
+			panic!("invalid event received");
+		}
+
+		// Empty WANT list should not cause an error
+		let (tx, rx) = oneshot::channel();
+		config
+			.inbound_queue
+			.unwrap()
+			.send(IncomingRequest {
+				peer: PeerId::random(),
+				payload: BitswapMessage {
+					wantlist: Some(Default::default()),
+					..Default::default()
+				}
+				.encode_to_vec(),
+				pending_response: tx,
+			})
+			.await
+			.unwrap();
+
+		if let Ok(OutgoingResponse { result, reputation_changes, sent_feedback }) = rx.await {
+			assert_eq!(result, Ok(BitswapMessage::default().encode_to_vec()));
+			assert_eq!(reputation_changes, Vec::new());
+			assert!(sent_feedback.is_none());
+		} else {
+			panic!("invalid event received");
+		}
+	}
+
+	#[tokio::test]
+	async fn too_long_want_list() {
+		let client = substrate_test_runtime_client::new();
+		let (bitswap, config) = BitswapRequestHandler::new(Arc::new(client));
+
+		tokio::spawn(async move { bitswap.run().await });
+
+		let (tx, rx) = oneshot::channel();
+		config
+			.inbound_queue
+			.unwrap()
+			.send(IncomingRequest {
+				peer: PeerId::random(),
+				payload: BitswapMessage {
+					wantlist: Some(Wantlist {
+						entries: (0..MAX_WANTED_BLOCKS + 1)
+							.map(|_| Entry::default())
+							.collect::<Vec<_>>(),
+						full: false,
+					}),
+					..Default::default()
+				}
+				.encode_to_vec(),
+				pending_response: tx,
+			})
+			.await
+			.unwrap();
+
+		if let Ok(OutgoingResponse { result, reputation_changes, sent_feedback }) = rx.await {
+			assert_eq!(result, Err(()));
+			assert_eq!(reputation_changes, Vec::new());
+			assert!(sent_feedback.is_none());
+		} else {
+			panic!("invalid event received");
+		}
+	}
+
+	#[tokio::test]
+	async fn transaction_not_found() {
+		let client = TestClientBuilder::with_tx_storage(u32::MAX).build();
+
+		let (bitswap, config) = BitswapRequestHandler::new(Arc::new(client));
+		tokio::spawn(async move { bitswap.run().await });
+
+		let (tx, rx) = oneshot::channel();
+		config
+			.inbound_queue
+			.unwrap()
+			.send(IncomingRequest {
+				peer: PeerId::random(),
+				payload: BitswapMessage {
+					wantlist: Some(Wantlist {
+						entries: vec![Entry {
+							block: cid::Cid::new_v1(
+								0x70,
+								cid::multihash::Multihash::wrap(
+									u64::from(cid::multihash::Code::Blake2b256),
+									&[0u8; 32],
+								)
+								.unwrap(),
+							)
+							.to_bytes(),
+							..Default::default()
+						}],
+						full: false,
+					}),
+					..Default::default()
+				}
+				.encode_to_vec(),
+				pending_response: tx,
+			})
+			.await
+			.unwrap();
+
+		if let Ok(OutgoingResponse { result, reputation_changes, sent_feedback }) = rx.await {
+			assert_eq!(result, Ok(vec![]));
+			assert_eq!(reputation_changes, Vec::new());
+			assert!(sent_feedback.is_none());
+		} else {
+			panic!("invalid event received");
+		}
+	}
+
+	#[tokio::test]
+	async fn transaction_found() {
+		let mut client = TestClientBuilder::with_tx_storage(u32::MAX).build();
+		let mut block_builder = client.new_block(Default::default()).unwrap();
+
+		let ext = Extrinsic::Store(vec![0x13, 0x37, 0x13, 0x38]);
+
+		block_builder.push(ext.clone()).unwrap();
+		let block = block_builder.build().unwrap().block;
+
+		client.import(BlockOrigin::File, block).await.unwrap();
+
+		let (bitswap, config) = BitswapRequestHandler::new(Arc::new(client));
+
+		tokio::spawn(async move { bitswap.run().await });
+
+		let (tx, rx) = oneshot::channel();
+		config
+			.inbound_queue
+			.unwrap()
+			.send(IncomingRequest {
+				peer: PeerId::random(),
+				payload: BitswapMessage {
+					wantlist: Some(Wantlist {
+						entries: vec![Entry {
+							block: cid::Cid::new_v1(
+								0x70,
+								cid::multihash::Multihash::wrap(
+									u64::from(cid::multihash::Code::Blake2b256),
+									&sp_core::hashing::blake2_256(&ext.encode()[2..]),
+								)
+								.unwrap(),
+							)
+							.to_bytes(),
+							..Default::default()
+						}],
+						full: false,
+					}),
+					..Default::default()
+				}
+				.encode_to_vec(),
+				pending_response: tx,
+			})
+			.await
+			.unwrap();
+
+		if let Ok(OutgoingResponse { result, reputation_changes, sent_feedback }) = rx.await {
+			assert_eq!(reputation_changes, Vec::new());
+			assert!(sent_feedback.is_none());
+
+			let response =
+				schema::bitswap::Message::decode(&result.expect("fetch to succeed")[..]).unwrap();
+			assert_eq!(response.payload[0].data, vec![0x13, 0x37, 0x13, 0x38]);
+		} else {
+			panic!("invalid event received");
+		}
+	}
 }
