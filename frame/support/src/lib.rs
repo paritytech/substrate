@@ -217,8 +217,7 @@ pub use frame_support_procedural::storage_alias;
 ///
 /// This is an attribute macro that can be attached to a [`StorageValue`]. Doing
 /// so will exclude reads of that value's storage key from counting towards
-/// weight calculations during benchmarking and will also ensure that the value
-/// is automatically cached/read at the beginning of every block.
+/// weight calculations during benchmarking.
 ///
 /// This attribute should be attached to [`StorageValue`]s that are known to be
 /// read/used in every block. This will result in a more efficient read pattern
