@@ -262,7 +262,7 @@ pub enum Curve {
 	/// A recipocal (`K/(x+S)-T`) curve: `factor` is `K` and `x_offset` is `S`, `y_offset` is `T`.
 	Reciprocal { factor: FixedI64, x_offset: FixedI64, y_offset: FixedI64 },
 	/// Exponential decay curve defined by `f(x) = n_0 * (2 ^ -(x / half_time)) + offset`
-	/// https://en.wikipedia.org/wiki/Exponential_decay
+	/// <https://en.wikipedia.org/wiki/Exponential_decay>
 	/// f(0) = n_0
 	/// the function will exponentially decay towards offset
 	/// half_time determines the x value where y = 0.5 * n_0 + offset, ie. the time it takes for
