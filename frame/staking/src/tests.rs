@@ -3343,7 +3343,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		assert!(total_payout_2 != total_payout_0);
 		assert!(total_payout_2 != total_payout_1);
 
-		mock::start_active_era(Staking::history_depth() + 1);
+		mock::start_active_era(HistoryDepth::get() + 1);
 
 		let active_era = active_era();
 
@@ -3351,7 +3351,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		let current_era = Staking::current_era().unwrap();
 
 		// Last kept is 1:
-		assert!(current_era - Staking::history_depth() == 1);
+		assert!(current_era - HistoryDepth::get() == 1);
 		assert_noop!(
 			Staking::payout_stakers(Origin::signed(1337), 11, 0),
 			// Fail: Era out of history

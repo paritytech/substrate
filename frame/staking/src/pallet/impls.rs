@@ -101,7 +101,7 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::InvalidEraToReward
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
-		let history_depth = Self::history_depth();
+		let history_depth = T::HistoryDepth::get();
 		ensure!(
 			era <= current_era && era >= current_era.saturating_sub(history_depth),
 			Error::<T>::InvalidEraToReward
@@ -132,7 +132,8 @@ impl<T: Config> Pallet<T> {
 				.claimed_rewards
 				.try_insert(pos, era)
 				// Since we retain era entries in `claimed_rewards` only upto
-				// `HistoryDepth`, following bound is always expected to be satisfied.
+				// `HistoryDepth`, following bound is always expected to be
+				// satisfied.
 				.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 		}
 
@@ -423,7 +424,7 @@ impl<T: Config> Pallet<T> {
 		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
 
 		// Clean old era information.
-		if let Some(old_era) = new_planned_era.checked_sub(Self::history_depth() + 1) {
+		if let Some(old_era) = new_planned_era.checked_sub(T::HistoryDepth::get() + 1) {
 			Self::clear_era_information(old_era);
 		}
 
@@ -890,15 +891,6 @@ impl<T: Config> Pallet<T> {
 			weight,
 			DispatchClass::Mandatory,
 		);
-	}
-
-	/// This will return the currently configured `HistoryDepth`
-	///
-	/// With release of v11, `HistoryDepth` is migrated to a configurable
-	/// value instead of being a storage item. This function replaces the
-	/// old fn history_depth that used to read from the storage.
-	pub fn history_depth() -> u32 {
-		T::HistoryDepth::get()
 	}
 }
 

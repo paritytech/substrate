@@ -125,15 +125,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominations: Get<u32>;
 
-		/// `HistoryDepth` stores the number of previous eras for which
-		/// we keep track of validator `claimed_rewards`.
+		/// `HistoryDepth` is the number of eras to keep in history.
 		///
-		/// Since `HistoryDepth` is used as a bound for BoundedVec
-		/// `claimed_rewards`, we should use extreme caution while
-		/// changing this value once it has been already deployed in
-		/// production. In general, increasing this value should be okay
-		/// but decreasing it will cause inconsistencies and needs to be
-		/// handled by doing migration of `StakingLedger.claimed_rewards`.
+		/// This used to be a storage value previously. If you are migrating
+		/// from storage value to config value, you should read this value from
+		/// storage and set the same value in configuration.
+		///
+		/// Note: `HistoryDepth` is used as the upper bound for the `BoundedVec`
+		/// item `StakingLedger.claimed_rewards`. Setting this value lower than
+		/// the existing value can lead to inconsistencies and will need to be
+		/// handled properly in migration.
 		#[pallet::constant]
 		type HistoryDepth: Get<u32>;
 
@@ -847,8 +848,9 @@ pub mod pallet {
 				unlocking: Default::default(),
 				claimed_rewards: (last_reward_era..current_era)
 					.try_collect()
-					// Since last_reward_era is calculated as `current_era - HistoryDepth`,
-					// following bound is always expected to be satisfied.
+					// Since last_reward_era is calculated as `current_era -
+					// HistoryDepth`, following bound is always expected to be
+					// satisfied.
 					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
 			Self::update_ledger(&controller, &item);
