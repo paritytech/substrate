@@ -25,10 +25,12 @@
 //! `DispatchClass`. This module contains configuration object for both resources,
 //! which should be passed to `frame_system` configuration when runtime is being set up.
 
-use frame_support::dispatch::{DispatchClass, OneOrMany, PerDispatchClass};
+use frame_support::{
+	dispatch::{DispatchClass, OneOrMany, PerDispatchClass},
+	weights::{constants, Weight},
+};
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Bounded, Perbill, RuntimeDebug};
-use sp_weights::{constants, Weight};
 
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
