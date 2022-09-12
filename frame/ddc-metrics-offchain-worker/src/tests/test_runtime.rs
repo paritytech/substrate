@@ -167,7 +167,7 @@ parameter_types! {
     pub const SurchargeReward: Balance = 150;
     pub const MaxDepth: u32 = 100;
     pub const MaxValueSize: u32 = 16_384;
-    pub MaxCodeSize: u32 = 256 * 1024;
+    pub MaxCodeSize: u32 = 160 * 1024;
 }
 
 // Contracts for Test Runtime.
