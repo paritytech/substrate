@@ -30,7 +30,7 @@ mod pallet_old {
 	pub trait Config<I: Instance = DefaultInstance>: frame_system::Config {
 		type SomeConst: Get<Self::Balance>;
 		type Balance: Parameter + codec::HasCompact + From<u32> + Into<u64> + Default;
-		type Event: From<Event<Self, I>> + Into<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	decl_storage! {
@@ -105,7 +105,8 @@ pub mod pallet {
 			+ scale_info::StaticTypeInfo;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -212,13 +213,13 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -231,39 +232,39 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance2> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance3> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet_old::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet_old::Config<pallet_old::Instance2> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet_old::Config<pallet_old::Instance3> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where

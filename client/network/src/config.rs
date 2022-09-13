@@ -32,8 +32,6 @@ pub use sc_network_common::{
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
-use crate::bitswap::Bitswap;
-
 use core::{fmt, iter};
 use libp2p::{
 	identity::{ed25519, Keypair},
@@ -75,9 +73,6 @@ where
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<Client>,
-
-	/// Bitswap block request protocol implementation.
-	pub bitswap: Option<Bitswap<B>>,
 
 	/// Legacy name of the protocol to use on the wire. Should be different for each chain.
 	pub protocol_id: ProtocolId,
@@ -130,6 +125,9 @@ where
 
 	/// Optional warp sync protocol config.
 	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
+
+	/// Request response protocol configurations
+	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
 }
 
 /// Role of the local node.

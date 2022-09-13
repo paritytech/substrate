@@ -138,7 +138,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: sp_blockchain::HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
@@ -362,7 +362,6 @@ where
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
 					params.warp_sync_protocol_config,
-					params.bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
@@ -1721,14 +1720,10 @@ where
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(
-									PingFailure::Timeout,
-								))),
+								EitherError::B(EitherError::A(PingFailure::Timeout)),
 							)))) => "ping-timeout",
 							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(
-									NotifsHandlerError::SyncNotificationsClogged,
-								)),
+								EitherError::A(NotifsHandlerError::SyncNotificationsClogged),
 							)))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(_)) => "protocol-error",
 							Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",

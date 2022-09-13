@@ -855,8 +855,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, Call as OuterCall,
-			ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin, Runtime, System,
+			roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, ExtBuilder, Extrinsic,
+			MinerMaxWeight, MultiPhase, Origin, Runtime, RuntimeCall as OuterCall, System,
 			TestNposSolution, TrimHelpers, UnsignedPhase,
 		},
 		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,

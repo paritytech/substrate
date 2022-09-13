@@ -179,13 +179,13 @@ pub mod mock {
 		type Origin = Origin;
 		type Index = AccountIndex;
 		type BlockNumber = BlockNumber;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::testing::Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ();
 		type Version = ();
 		type PalletInfo = PalletInfo;

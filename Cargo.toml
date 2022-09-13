@@ -43,6 +43,7 @@ members = [
 	"client/keystore",
 	"client/network",
 	"client/network-gossip",
+	"client/network/bitswap",
 	"client/network/common",
 	"client/network/light",
 	"client/network/sync",

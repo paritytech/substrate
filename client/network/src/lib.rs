@@ -249,11 +249,9 @@ mod discovery;
 mod peer_info;
 mod protocol;
 mod request_responses;
-mod schema;
 mod service;
 mod transport;
 
-pub mod bitswap;
 pub mod config;
 pub mod network_state;
 

@@ -363,7 +363,8 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// The outer event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The origin required to add or promote a mmember. The success value indicates the
 		/// maximum rank *to which* the promotion may be.
