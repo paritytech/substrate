@@ -194,7 +194,7 @@ fn build_ext_for_contracts() -> sp_io::TestExternalities {
     ext
 }
 
-#[test]
+// #[test]
 fn should_submit_signed_transaction_on_chain() {
     let mut t = build_ext();
 
