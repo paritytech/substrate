@@ -54,8 +54,12 @@ parameter_types! {
 }
 
 ord_parameter_types! {
+	pub const ChallengePeriod: u64 = 8;
+	pub const ClaimPeriod: u64 = 1;
 	pub const FounderSetAccount: u128 = 1;
 	pub const SuspensionJudgementSetAccount: u128 = 2;
+	pub const MaxPayouts: u32 = 10;
+	pub const MaxBids: u32 = 10;
 }
 
 impl frame_system::Config for Test {
@@ -105,12 +109,13 @@ impl Config for Test {
 	type GraceStrikes = ConstU32<1>;
 	type PeriodSpend = ConstU64<1000>;
 	type VotingPeriod = ConstU64<3>;
-	type ClaimPeriod = ConstU64<1>;
+	type ClaimPeriod = ClaimPeriod;
 	type MaxLockDuration = ConstU64<100>;
 	type FounderSetOrigin = EnsureSignedBy<FounderSetAccount, u128>;
-	type ChallengePeriod = ConstU64<8>;
-	type MaxPayouts = ConstU32<10>;
-	type MaxBids = ConstU32<10>;
+	type ChallengePeriod = ChallengePeriod;
+	type MaxPayouts = MaxPayouts;
+	type MaxBids = MaxBids;
+	type WeightInfo = ();
 }
 
 pub struct EnvBuilder {

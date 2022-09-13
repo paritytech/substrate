@@ -1128,20 +1128,26 @@ pub mod pallet {
 			ensure!(Founder::<T, I>::get().as_ref() == Some(&founder), Error::<T, I>::NotFounder);
 			ensure!(MemberCount::<T, I>::get() == 1, Error::<T, I>::NotHead);
 
-			#[allow(deprecated)]
-			Members::<T, I>::remove_all(None);
+			let _ = Members::<T, I>::clear(u32::MAX, None);
 			MemberCount::<T, I>::kill();
-			#[allow(deprecated)]
-			MemberByIndex::<T, I>::remove_all(None);
-			#[allow(deprecated)]
-			Members::<T, I>::remove_all(None);
-			#[allow(deprecated)]
-			Votes::<T, I>::remove_all(None);
+			let _ = MemberByIndex::<T, I>::clear(u32::MAX, None);
+			let _ = SuspendedMembers::<T, I>::clear(u32::MAX, None);
+			let _ = Payouts::<T, I>::clear(u32::MAX, None);
+			let _ = Votes::<T, I>::clear(u32::MAX, None);
+			let _ = VoteClearCursor::<T, I>::clear(u32::MAX, None);
 			Head::<T, I>::kill();
+			NextHead::<T, I>::kill();
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
-			#[allow(deprecated)]
-			Candidates::<T, I>::remove_all(None);
+			Parameters::<T, I>::kill();
+			Pot::<T, I>::kill();
+			RoundCount::<T, I>::kill();
+			Bids::<T, I>::kill();
+			Skeptic::<T, I>::kill();
+			ChallengeRoundCount::<T, I>::kill();
+			Defending::<T, I>::kill();
+			let _ = DefenderVotes::<T, I>::clear(u32::MAX, None);
+			let _ = Candidates::<T, I>::clear(u32::MAX, None);
 			Self::deposit_event(Event::<T, I>::Unfounded { founder });
 			Ok(())
 		}
@@ -1169,11 +1175,8 @@ pub mod pallet {
 			who: T::AccountId,
 			forgive: bool,
 		) -> DispatchResultWithPostInfo {
-			let founder = ensure_signed(origin)?;
-			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
-
+			ensure!(Some(ensure_signed(origin)?) == Founder::<T, I>::get(), Error::<T, I>::NotFounder);
 			let record = SuspendedMembers::<T, I>::get(&who).ok_or(Error::<T, I>::NotSuspended)?;
-
 			if forgive {
 				// Try to add member back to society. Can fail with `MaxMembers` limit.
 				Self::reinstate_member(&who, record.rank)?;
@@ -1183,7 +1186,6 @@ pub mod pallet {
 					.map(|x| x.1).fold(Zero::zero(), |acc: BalanceOf<T, I>, x| acc.saturating_add(x));
 				Self::unreserve_payout(total);
 			}
-
 			SuspendedMembers::<T, I>::remove(&who);
 			Self::deposit_event(Event::<T, I>::SuspendedMemberJudgement { who, judged: forgive });
 			Ok(Pays::No.into())
@@ -1249,8 +1251,7 @@ pub mod pallet {
 		/// clearly rejected.
 		#[pallet::weight(T::WeightInfo::bestow_membership())]
 		pub fn bestow_membership(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResultWithPostInfo {
-			let founder = ensure_signed(origin)?;
-			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+			ensure!(Some(ensure_signed(origin)?) == Founder::<T, I>::get(), Error::<T, I>::NotFounder);
 			let candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!candidacy.tally.clear_rejection(), Error::<T, I>::Rejected);
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
@@ -1265,8 +1266,7 @@ pub mod pallet {
 		/// Any bid deposit is lost and voucher is banned.
 		#[pallet::weight(T::WeightInfo::kick_candidate())]
 		pub fn kick_candidate(origin: OriginFor<T>, candidate: T::AccountId) -> DispatchResultWithPostInfo {
-			let founder = ensure_signed(origin)?;
-			ensure!(Founder::<T, I>::get() == Some(founder.clone()), Error::<T, I>::NotFounder);
+			ensure!(Some(ensure_signed(origin)?) == Founder::<T, I>::get(), Error::<T, I>::NotFounder);
 			let mut candidacy = Candidates::<T, I>::get(&candidate).ok_or(Error::<T, I>::NotCandidate)?;
 			ensure!(!Self::in_progress(candidacy.round), Error::<T, I>::InProgress);
 			ensure!(!candidacy.tally.clear_approval(), Error::<T, I>::Approved);
@@ -1333,9 +1333,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			ensure!(challenge_round < ChallengeRoundCount::<T, I>::get(), Error::<T, I>::InProgress);
-			let r = DefenderVotes::<T, I>::clear_prefix(challenge_round, max, None);
-			let (_, backend, _, _) = r.deconstruct();
-			if backend == 0 { return Err(Error::<T, I>::NoVotes.into()); };
+			let _ = DefenderVotes::<T, I>::clear_prefix(challenge_round, max, None);
+			// clear_prefix() v2 is always returning backend = 0, ignoring it till v3.
+			// let (_, backend, _, _) = r.deconstruct();
+			// if backend == 0 { return Err(Error::<T, I>::NoVotes.into()); };
 			Ok(Pays::No.into())
 		}
 	}
@@ -1677,7 +1678,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		Self::add_new_member(&candidate, rank)?;
 		Self::check_skeptic(&candidate, &mut candidacy);
-		
+
 		let next_head = NextHead::<T, I>::get()
 			.filter(|old| {
 				old.round > candidacy.round
