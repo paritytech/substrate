@@ -213,7 +213,7 @@ pub struct DispatchInfo {
 }
 
 /// A `Dispatchable` function (aka transaction) that can carry some static information along with
-/// it, using the `#[weight]` attribute.
+/// it, using the `#[pallet::weight]` attribute.
 pub trait GetDispatchInfo {
 	/// Return a `DispatchInfo`, containing relevant information of this dispatch.
 	///
