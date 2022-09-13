@@ -158,10 +158,6 @@ pub trait OnRuntimeUpgrade {
 	}
 }
 
-// A helper struct to help encode/decode tuple
-#[derive(Default, Encode, Decode)]
-struct TupleCodecHelper(Vec<Vec<u8>>);
-
 #[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
@@ -174,16 +170,16 @@ impl OnRuntimeUpgrade for Tuple {
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		let mut helper = TupleCodecHelper::default();
-		for_tuples!( #( helper.0.push(Tuple::pre_upgrade()?); )* );
-		Ok(helper.encode())
+		let mut state: Vec<Vec<u8>> = Vec::default();
+		for_tuples!( #( state.push(Tuple::pre_upgrade()?); )* );
+		Ok(state.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-		let helper: TupleCodecHelper = Decode::decode(&mut state.as_slice())
+		let state: Vec<Vec<u8>> = Decode::decode(&mut state.as_slice())
 			.expect("the state parameter should be the same as pre_upgrade generated");
-		let mut state_iter = helper.0.into_iter();
+		let mut state_iter = state.into_iter();
 		for_tuples!( #( Tuple::post_upgrade(
 			state_iter.next().expect("the state parameter should be the same as pre_upgrade generated")
 		)?; )* );
