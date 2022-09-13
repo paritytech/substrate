@@ -28,8 +28,8 @@ use sp_runtime::{
 
 use kitchensink_runtime::{
 	constants::{currency::*, time::SLOT_DURATION},
-	Balances, Call, CheckedExtrinsic, Event, Header, Runtime, System, TransactionPayment,
-	UncheckedExtrinsic,
+	Balances, CheckedExtrinsic, Header, Runtime, RuntimeCall, RuntimeEvent, System,
+	TransactionPayment, UncheckedExtrinsic,
 };
 use node_primitives::{Balance, Hash};
 use node_testing::keyring::*;
@@ -67,7 +67,7 @@ fn transfer_fee<E: Encode>(extrinsic: &E) -> Balance {
 fn xt() -> UncheckedExtrinsic {
 	sign(CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(0, 0))),
-		function: Call::Balances(default_transfer_call()),
+		function: RuntimeCall::Balances(default_transfer_call()),
 	})
 }
 
@@ -84,11 +84,11 @@ fn changes_trie_block() -> (Vec<u8>, Hash) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set { now: time }),
+				function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: time }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: bob().into(),
 					value: 69 * DOLLARS,
 				}),
@@ -111,11 +111,11 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set { now: time1 }),
+				function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: time1 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: bob().into(),
 					value: 69 * DOLLARS,
 				}),
@@ -131,18 +131,18 @@ fn blocks() -> ((Vec<u8>, Hash), (Vec<u8>, Hash)) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set { now: time2 }),
+				function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: time2 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((bob(), signed_extra(0, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: alice().into(),
 					value: 5 * DOLLARS,
 				}),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(1, 0))),
-				function: Call::Balances(pallet_balances::Call::transfer {
+				function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 					dest: bob().into(),
 					value: 15 * DOLLARS,
 				}),
@@ -166,11 +166,11 @@ fn block_with_size(time: u64, nonce: u32, size: usize) -> (Vec<u8>, Hash) {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
+				function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: time * 1000 }),
 			},
 			CheckedExtrinsic {
 				signed: Some((alice(), signed_extra(nonce, 0))),
-				function: Call::System(frame_system::Call::remark { remark: vec![0; size] }),
+				function: RuntimeCall::System(frame_system::Call::remark { remark: vec![0; size] }),
 			},
 		],
 		(time * 1000 / SLOT_DURATION).into(),
@@ -324,7 +324,7 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
 						weight: timestamp_weight,
 						class: DispatchClass::Mandatory,
@@ -335,7 +335,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Withdraw {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Withdraw {
 					who: alice().into(),
 					amount: fees,
 				}),
@@ -343,7 +343,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Transfer {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 					from: alice().into(),
 					to: bob().into(),
 					amount: 69 * DOLLARS,
@@ -352,7 +352,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Deposit {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Deposit {
 					who: pallet_treasury::Pallet::<Runtime>::account_id(),
 					amount: fees * 8 / 10,
 				}),
@@ -360,12 +360,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit {
+					value: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::TransactionPayment(
+				event: RuntimeEvent::TransactionPayment(
 					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: alice().into(),
 						actual_fee: fees,
@@ -376,7 +378,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
 				topics: vec![],
@@ -398,7 +400,7 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo {
 						weight: timestamp_weight,
 						class: DispatchClass::Mandatory,
@@ -409,7 +411,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Withdraw {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Withdraw {
 					who: bob().into(),
 					amount: fees,
 				}),
@@ -417,7 +419,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Transfer {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 					from: bob().into(),
 					to: alice().into(),
 					amount: 5 * DOLLARS,
@@ -426,7 +428,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Balances(pallet_balances::Event::Deposit {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Deposit {
 					who: pallet_treasury::Pallet::<Runtime>::account_id(),
 					amount: fees * 8 / 10,
 				}),
@@ -434,12 +436,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit {
+					value: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::TransactionPayment(
+				event: RuntimeEvent::TransactionPayment(
 					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: bob().into(),
 						actual_fee: fees,
@@ -450,14 +454,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(pallet_balances::Event::Withdraw {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Withdraw {
 					who: alice().into(),
 					amount: fees,
 				}),
@@ -465,7 +469,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(pallet_balances::Event::Transfer {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 					from: alice().into(),
 					to: bob().into(),
 					amount: 15 * DOLLARS,
@@ -474,7 +478,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Balances(pallet_balances::Event::Deposit {
+				event: RuntimeEvent::Balances(pallet_balances::Event::Deposit {
 					who: pallet_treasury::Pallet::<Runtime>::account_id(),
 					amount: fees * 8 / 10,
 				}),
@@ -482,12 +486,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 8 / 10 }),
+				event: RuntimeEvent::Treasury(pallet_treasury::Event::Deposit {
+					value: fees * 8 / 10,
+				}),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::TransactionPayment(
+				event: RuntimeEvent::TransactionPayment(
 					pallet_transaction_payment::Event::TransactionFeePaid {
 						who: alice().into(),
 						actual_fee: fees,
@@ -498,7 +504,7 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+				event: RuntimeEvent::System(frame_system::Event::ExtrinsicSuccess {
 					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
 				}),
 				topics: vec![],
@@ -648,24 +654,24 @@ fn deploying_wasm_contract_should_work() {
 		vec![
 			CheckedExtrinsic {
 				signed: None,
-				function: Call::Timestamp(pallet_timestamp::Call::set { now: time }),
+				function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: time }),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
-				function: Call::Contracts(
-					pallet_contracts::Call::instantiate_with_code::<Runtime> {
-						value: 0,
-						gas_limit: Weight::from_ref_time(500_000_000),
-						storage_deposit_limit: None,
-						code: transfer_code,
-						data: Vec::new(),
-						salt: Vec::new(),
-					},
-				),
+				function: RuntimeCall::Contracts(pallet_contracts::Call::instantiate_with_code::<
+					Runtime,
+				> {
+					value: 0,
+					gas_limit: Weight::from_ref_time(500_000_000),
+					storage_deposit_limit: None,
+					code: transfer_code,
+					data: Vec::new(),
+					salt: Vec::new(),
+				}),
 			},
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(1, 0))),
-				function: Call::Contracts(pallet_contracts::Call::call::<Runtime> {
+				function: RuntimeCall::Contracts(pallet_contracts::Call::call::<Runtime> {
 					dest: sp_runtime::MultiAddress::Id(addr.clone()),
 					value: 10,
 					gas_limit: Weight::from_ref_time(500_000_000),
