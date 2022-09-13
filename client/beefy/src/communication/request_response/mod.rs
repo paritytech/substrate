@@ -44,7 +44,7 @@ const JUSTIF_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 ///
 /// Returns a receiver for messages received on this protocol and the requested
 /// `ProtocolConfig`.
-pub fn justif_protocol_config<Hash: AsRef<[u8]>>(
+pub(crate) fn justif_protocol_config<Hash: AsRef<[u8]>>(
 	genesis_hash: Hash,
 	fork_id: Option<&str>,
 ) -> (IncomingRequestReceiver, RequestResponseConfig) {
@@ -73,7 +73,7 @@ pub struct JustificationRequest<B: Block> {
 
 /// A request coming in, including a sender for sending responses.
 #[derive(Debug)]
-pub struct IncomingRequest<B: Block> {
+pub(crate) struct IncomingRequest<B: Block> {
 	/// `PeerId` of sending peer.
 	pub peer: PeerId,
 	/// The sent request.
@@ -123,10 +123,10 @@ impl<B: Block> IncomingRequest<B> {
 	}
 }
 
-/// Receiver for incoming requests.
+/// Receiver for incoming BEEFY justifications requests.
 ///
 /// Takes care of decoding and handling of invalid encoded requests.
-pub struct IncomingRequestReceiver {
+pub(crate) struct IncomingRequestReceiver {
 	raw: mpsc::Receiver<netconfig::IncomingRequest>,
 }
 

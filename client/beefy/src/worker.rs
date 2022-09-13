@@ -192,6 +192,7 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, N> {
 	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B, N, R>,
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub min_block_delta: u32,
@@ -255,6 +256,7 @@ where
 			network,
 			gossip_engine,
 			gossip_validator,
+			on_demand_justifications,
 			known_peers,
 			links,
 			metrics,
@@ -265,13 +267,6 @@ where
 			.blockchain()
 			.expect_header(BlockId::number(backend.blockchain().info().finalized_number))
 			.expect("latest block always has header available; qed.");
-
-		let on_demand_justifications = OnDemandJustificationsEngine::new(
-			network.clone(),
-			runtime.clone(),
-			// FIXME: use right protocol name.
-			"TODO: FIXME: proto-name-here".into(),
-		);
 
 		BeefyWorker {
 			client: client.clone(),

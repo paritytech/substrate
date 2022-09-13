@@ -19,9 +19,10 @@
 use beefy_primitives::{BeefyApi, MmrRootHash};
 use parking_lot::Mutex;
 use prometheus::Registry;
-use sc_client_api::{Backend, BlockchainEvents, Finalizer};
+use sc_client_api::{Backend, BlockBackend, BlockchainEvents, Finalizer};
 use sc_consensus::BlockImport;
 use sc_network::ProtocolName;
+use sc_network_common::service::NetworkRequest;
 use sc_network_gossip::Network as GossipNetwork;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -29,7 +30,7 @@ use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::Block;
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 mod error;
 mod keystore;
@@ -51,6 +52,7 @@ use crate::{
 			BeefyVersionedFinalityProofStream,
 		},
 		peers::KnownPeers,
+		request_response::outgoing_request::OnDemandJustificationsEngine,
 	},
 	import::BeefyBlockImport,
 };
@@ -58,7 +60,6 @@ use crate::{
 pub use communication::beefy_protocol_name::{
 	gossip_protocol_name, justifications_protocol_name as justifs_protocol_name,
 };
-use sc_network_common::service::NetworkRequest;
 
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
@@ -149,6 +150,24 @@ where
 	(import, voter_links, rpc_links)
 }
 
+/// BEEFY gadget network parameters.
+pub struct BeefyNetworkParams<B, N>
+where
+	B: Block,
+	N: GossipNetwork<B> + NetworkRequest + Clone + SyncOracle + Send + Sync + 'static,
+{
+	/// Network implementing gossip, requests and sync-oracle.
+	pub network: N,
+	/// Chain specific BEEFY gossip protocol name. See
+	/// [`beefy_protocol_name::gossip_protocol_name`].
+	pub gossip_protocol_name: ProtocolName,
+	/// Chain specific BEEFY on-demand justifications protocol name. See
+	/// [`beefy_protocol_name::justifications_protocol_name`].
+	pub justifications_protocol_name: ProtocolName,
+
+	_phantom: PhantomData<B>,
+}
+
 /// BEEFY gadget initialization parameters.
 pub struct BeefyParams<B, BE, C, N, R>
 where
@@ -167,15 +186,12 @@ where
 	pub runtime: Arc<R>,
 	/// Local key store
 	pub key_store: Option<SyncCryptoStorePtr>,
-	/// Gossip network
-	pub network: N,
+	/// BEEFY voter network params
+	pub network_params: BeefyNetworkParams<B, N>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
-	/// Chain specific BEEFY gossip protocol name. See
-	/// [`beefy_protocol_name::gossip_protocol_name`].
-	pub protocol_name: ProtocolName,
 	/// Links between the block importer, the background voter and the RPC layer.
 	pub links: BeefyVoterLinks<B>,
 }
@@ -187,7 +203,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, R>(beefy_params: BeefyParams<B, BE,
 where
 	B: Block,
 	BE: Backend<B>,
-	C: Client<B, BE>,
+	C: Client<B, BE> + BlockBackend<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + NetworkRequest + Clone + SyncOracle + Send + Sync + 'static,
@@ -197,21 +213,29 @@ where
 		backend,
 		runtime,
 		key_store,
-		network,
+		network_params,
 		min_block_delta,
 		prometheus_registry,
-		protocol_name,
 		links,
 	} = beefy_params;
+
+	let BeefyNetworkParams { network, gossip_protocol_name, justifications_protocol_name, .. } =
+		network_params;
 
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 	let gossip_validator =
 		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
 	let gossip_engine = sc_network_gossip::GossipEngine::new(
 		network.clone(),
-		protocol_name,
+		gossip_protocol_name,
 		gossip_validator.clone(),
 		None,
+	);
+
+	let on_demand_justifications = OnDemandJustificationsEngine::new(
+		network.clone(),
+		runtime.clone(),
+		justifications_protocol_name,
 	);
 
 	let metrics =
@@ -237,6 +261,7 @@ where
 		known_peers,
 		gossip_engine,
 		gossip_validator,
+		on_demand_justifications,
 		links,
 		metrics,
 		min_block_delta,

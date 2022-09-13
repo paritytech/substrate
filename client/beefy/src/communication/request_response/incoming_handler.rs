@@ -17,9 +17,10 @@
 //! Helper for handling (i.e. answering) BEEFY justifications requests from a remote peer.
 
 use beefy_primitives::BEEFY_ENGINE_ID;
-use log::debug;
+use log::{debug, trace};
 use sc_client_api::BlockBackend;
 use sc_network::{config as netconfig, config::RequestResponseConfig};
+use sc_network_common::protocol::ProtocolName;
 use sp_runtime::{generic::BlockId, traits::Block};
 use std::{marker::PhantomData, sync::Arc};
 
@@ -29,16 +30,16 @@ use crate::communication::request_response::{
 
 /// Handler for incoming BEEFY justifications requests from a remote peer.
 pub struct BeefyJustifsRequestHandler<B, Client> {
-	request_receiver: IncomingRequestReceiver,
-	/// Blockchain client.
-	client: Arc<Client>,
-	_block: PhantomData<B>,
+	pub(crate) request_receiver: IncomingRequestReceiver,
+	pub(crate) justif_protocol_name: ProtocolName,
+	pub(crate) client: Arc<Client>,
+	pub(crate) _block: PhantomData<B>,
 }
 
 impl<B, Client> BeefyJustifsRequestHandler<B, Client>
 where
 	B: Block,
-	Client: BlockBackend<B> + Send + Sync + 'static,
+	Client: BlockBackend<B> + Send + Sync,
 {
 	/// Create a new [`BeefyJustifsRequestHandler`].
 	pub fn new(fork_id: Option<&str>, client: Arc<Client>) -> (Self, RequestResponseConfig) {
@@ -48,8 +49,13 @@ where
 			.flatten()
 			.expect("Genesis block exists; qed");
 		let (request_receiver, config) = justif_protocol_config(genesis_hash, fork_id);
+		let justif_protocol_name = config.name.clone();
 
-		(Self { client, request_receiver, _block: PhantomData }, config)
+		(Self { request_receiver, justif_protocol_name, client, _block: PhantomData }, config)
+	}
+
+	pub fn protocol_name(&self) -> ProtocolName {
+		self.justif_protocol_name.clone()
 	}
 
 	async fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
@@ -76,20 +82,22 @@ where
 
 	/// Run [`BeefyJustifsRequestHandler`].
 	pub async fn run(mut self) {
+		trace!(target: "beefy::sync", "🥩 Running BeefyJustifsRequestHandler");
+
 		while let Ok(request) = self.request_receiver.recv(|| vec![]).await {
 			let peer = request.peer;
 			match self.handle_request(request).await {
 				Ok(()) => {
 					debug!(
 						target: "beefy::sync",
-						"Handled BEEFY justification request from {}.", peer
+						"🥩 Handled BEEFY justification request from {}.", peer
 					)
 				},
 				Err(e) => {
 					// TODO: handle reputation changes here
 					debug!(
 						target: "beefy::sync",
-						"Failed to handle BEEFY justification request from {}: {}", peer, e,
+						"🥩 Failed to handle BEEFY justification request from {}: {}", peer, e,
 					)
 				},
 			}
