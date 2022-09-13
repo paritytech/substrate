@@ -30,6 +30,7 @@ pub use extrinsic::{ExtrinsicBuilder, ExtrinsicCmd, ExtrinsicFactory};
 pub use machine::{MachineCmd, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
 pub use overhead::OverheadCmd;
 pub use pallet::PalletCmd;
+pub use sc_service::BasePath;
 pub use storage::StorageCmd;
 
 use sc_cli::{CliConfiguration, DatabaseParams, ImportParams, PruningParams, Result, SharedParams};
@@ -85,6 +86,20 @@ impl CliConfiguration for BenchmarkCmd {
 		unwrap_cmd! {
 			self, cmd, cmd.database_params()
 		}
+	}
+
+	fn base_path(&self) -> Result<Option<BasePath>> {
+		let inner = unwrap_cmd! {
+			self, cmd, cmd.base_path()
+		};
+
+		if let Ok(ref path) = inner {
+			if path.is_none() {
+				return Some(BasePath::new_temp_dir()).transpose().map_err(|e| e.into())
+			}
+		}
+
+		inner
 	}
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
