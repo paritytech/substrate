@@ -29,5 +29,7 @@
 //! Methods are prefixed by `chainSpec`.
 
 pub mod api;
+pub mod chain_spec;
 
 pub use api::ChainSpecApiServer;
+pub use chain_spec::ChainSpec;
