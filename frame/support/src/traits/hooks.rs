@@ -448,26 +448,55 @@ mod tests {
 			}
 		}
 
-		type Test123 = (Test1, Test2, Test3);
-		let state = <Test123 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		let helper: TupleCodecHelper = Decode::decode(&mut state.as_slice()).unwrap();
+		type TestEmpty = ();
+		let origin_state = <TestEmpty as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert!(states.is_empty());
+		<TestEmpty as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+
+		type Test1Tuple = (Test1,);
+		let origin_state = <Test1Tuple as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert_eq!(states.len(), 1);
 		assert_eq!(
-			<String as Decode>::decode(&mut helper.0[0].as_slice()).unwrap(),
+			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
 			"Test1".to_owned()
 		);
-		assert_eq!(<u32 as Decode>::decode(&mut helper.0[1].as_slice()).unwrap(), 100u32);
-		assert_eq!(<bool as Decode>::decode(&mut helper.0[2].as_slice()).unwrap(), true);
-		<Test123 as OnRuntimeUpgrade>::post_upgrade(state).unwrap();
+		<Test1Tuple as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+
+		type Test123 = (Test1, Test2, Test3);
+		let origin_state = <Test123 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert_eq!(
+			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
+			"Test1".to_owned()
+		);
+		assert_eq!(<u32 as Decode>::decode(&mut states[1].as_slice()).unwrap(), 100u32);
+		assert_eq!(<bool as Decode>::decode(&mut states[2].as_slice()).unwrap(), true);
+		<Test123 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
 
 		type Test321 = (Test3, Test2, Test1);
-		let state = <Test321 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		let helper: TupleCodecHelper = Decode::decode(&mut state.as_slice()).unwrap();
-		assert_eq!(<bool as Decode>::decode(&mut helper.0[0].as_slice()).unwrap(), true);
-		assert_eq!(<u32 as Decode>::decode(&mut helper.0[1].as_slice()).unwrap(), 100u32);
+		let origin_state = <Test321 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert_eq!(<bool as Decode>::decode(&mut states[0].as_slice()).unwrap(), true);
+		assert_eq!(<u32 as Decode>::decode(&mut states[1].as_slice()).unwrap(), 100u32);
 		assert_eq!(
-			<String as Decode>::decode(&mut helper.0[2].as_slice()).unwrap(),
+			<String as Decode>::decode(&mut states[2].as_slice()).unwrap(),
 			"Test1".to_owned()
 		);
-		<Test321 as OnRuntimeUpgrade>::post_upgrade(state).unwrap();
+		<Test321 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+
+		type TestNested123 = (Test1, (Test2, Test3));
+		let origin_state = <TestNested123 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert_eq!(
+			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
+			"Test1".to_owned()
+		);
+		// nested state for (Test2, Test3)
+		let nested_states: Vec<Vec<u8>> = Decode::decode(&mut states[1].as_slice()).unwrap();
+		assert_eq!(<u32 as Decode>::decode(&mut nested_states[0].as_slice()).unwrap(), 100u32);
+		assert_eq!(<bool as Decode>::decode(&mut nested_states[1].as_slice()).unwrap(), true);
+		<TestNested123 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
 	}
 }
