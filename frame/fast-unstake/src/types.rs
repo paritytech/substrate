@@ -60,10 +60,10 @@ impl<T: Config + Send + Sync> PreventStakingOpsIfUnbonding<T> {
 impl<T: Config + Send + Sync> sp_runtime::traits::SignedExtension
 	for PreventStakingOpsIfUnbonding<T>
 where
-	<T as frame_system::Config>::Call: IsSubType<pallet_staking::Call<T>>,
+	<T as frame_system::Config>::RuntimeCall: IsSubType<pallet_staking::Call<T>>,
 {
 	type AccountId = T::AccountId;
-	type Call = <T as frame_system::Config>::Call;
+	type Call = <T as frame_system::Config>::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = ();
 	const IDENTIFIER: &'static str = "PreventStakingOpsIfUnbonding";

@@ -19,7 +19,7 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use crate::{Pallet as FastUnstake, *};
+use crate::{Pallet as FastUnstake, *, types::*};
 use frame_benchmarking::{benchmarks, whitelist_account};
 use frame_support::{
 	assert_ok,
@@ -72,7 +72,7 @@ pub(crate) fn fast_unstake_events<T: Config>() -> Vec<crate::Event<T>> {
 	frame_system::Pallet::<T>::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| <T as Config>::Event::from(e).try_into().ok())
+		.filter_map(|e| <T as Config>::RuntimeEvent::from(e).try_into().ok())
 		.collect::<Vec<_>>()
 }
 

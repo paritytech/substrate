@@ -106,8 +106,8 @@ pub mod pallet {
 		> + pallet_nomination_pools::Config
 	{
 		/// The overarching event type.
-		type Event: From<Event<Self>>
-			+ IsType<<Self as frame_system::Config>::Event>
+		type RuntimeEvent: From<Event<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
 			+ TryInto<Event<Self>>;
 
 		/// The amount of balance slashed per each era that was wastefully checked.

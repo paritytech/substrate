@@ -832,8 +832,8 @@ mod signed_extension {
 	use super::*;
 	use sp_runtime::traits::SignedExtension;
 
-	const STAKING_CALL: crate::mock::Call =
-		crate::mock::Call::Staking(pallet_staking::Call::<T>::chill {});
+	const STAKING_CALL: crate::mock::RuntimeCall =
+		crate::mock::RuntimeCall::Staking(pallet_staking::Call::<T>::chill {});
 
 	#[test]
 	fn does_nothing_if_not_queued() {
