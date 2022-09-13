@@ -4830,6 +4830,7 @@ dependencies = [
  "sc-finality-grandpa-rpc",
  "sc-rpc",
  "sc-rpc-api",
+ "sc-rpc-spec",
  "sc-sync-state-rpc",
  "sc-transaction-pool-api",
  "sp-api",
