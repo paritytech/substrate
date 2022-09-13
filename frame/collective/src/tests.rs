@@ -18,9 +18,10 @@
 use super::{Event as CollectiveEvent, *};
 use crate as pallet_collective;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types,
+	assert_noop, assert_ok,
+	dispatch::Pays,
+	parameter_types,
 	traits::{ConstU32, ConstU64, GenesisBuild, StorageVersion},
-	weights::Pays,
 	Hashable,
 };
 use frame_system::{EventRecord, Phase};

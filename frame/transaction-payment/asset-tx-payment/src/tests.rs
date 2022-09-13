@@ -18,10 +18,11 @@ use crate as pallet_asset_tx_payment;
 
 use frame_support::{
 	assert_ok,
+	dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo},
 	pallet_prelude::*,
 	parameter_types,
 	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
-	weights::{DispatchClass, DispatchInfo, PostDispatchInfo, Weight, WeightToFee as WeightToFeeT},
+	weights::{Weight, WeightToFee as WeightToFeeT},
 	ConsensusEngineId,
 };
 use frame_system as system;

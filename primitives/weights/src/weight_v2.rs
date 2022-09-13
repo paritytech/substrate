@@ -17,10 +17,8 @@
 
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
-use sp_runtime::{
-	traits::{Bounded, CheckedAdd, CheckedSub, Zero},
-	RuntimeDebug,
-};
+use sp_arithmetic::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
+use sp_debug_derive::RuntimeDebug;
 
 use super::*;
 
@@ -266,11 +264,11 @@ macro_rules! weight_mul_per_impl {
 	}
 }
 weight_mul_per_impl!(
-	sp_runtime::Percent,
-	sp_runtime::PerU16,
-	sp_runtime::Permill,
-	sp_runtime::Perbill,
-	sp_runtime::Perquintill,
+	sp_arithmetic::Percent,
+	sp_arithmetic::PerU16,
+	sp_arithmetic::Permill,
+	sp_arithmetic::Perbill,
+	sp_arithmetic::Perquintill,
 );
 
 macro_rules! weight_mul_primitive_impl {
@@ -310,91 +308,6 @@ impl CheckedSub for Weight {
 	}
 }
 
-impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
-	fn pays_fee(&self, _: T) -> Pays {
-		self.2
-	}
-}
-
-impl<T> WeighData<T> for (Weight, DispatchClass) {
-	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
-	}
-}
-
-impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
-	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (Weight, DispatchClass) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		self.1
-	}
-}
-
-impl<T> PaysFee<T> for (Weight, DispatchClass) {
-	fn pays_fee(&self, _: T) -> Pays {
-		Pays::Yes
-	}
-}
-
-impl<T> WeighData<T> for (Weight, Pays) {
-	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (Weight, Pays) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::Normal
-	}
-}
-
-impl<T> PaysFee<T> for (Weight, Pays) {
-	fn pays_fee(&self, _: T) -> Pays {
-		self.1
-	}
-}
-
-impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
-	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
-		let (actual_weight, pays_fee) = post_weight_info;
-		Self { actual_weight, pays_fee }
-	}
-}
-
-impl From<Option<Weight>> for PostDispatchInfo {
-	fn from(actual_weight: Option<Weight>) -> Self {
-		Self { actual_weight, pays_fee: Default::default() }
-	}
-}
-
-impl<T> WeighData<T> for Weight {
-	fn weigh_data(&self, _: T) -> Weight {
-		return *self
-	}
-}
-
-impl<T> ClassifyDispatch<T> for Weight {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::Normal
-	}
-}
-
-impl<T> PaysFee<T> for Weight {
-	fn pays_fee(&self, _: T) -> Pays {
-		Pays::Yes
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		self.1
-	}
-}
-
 impl core::fmt::Display for Weight {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		write!(f, "Weight(ref_time: {})", self.ref_time)
@@ -421,106 +334,3 @@ impl SubAssign for Weight {
 		*self = Self { ref_time: self.ref_time - other.ref_time };
 	}
 }
-
-impl sp_runtime::traits::Printable for Weight {
-	fn print(&self) {
-		self.ref_time().print()
-	}
-}
-
-// TODO: Eventually remove these
-
-impl From<Option<u64>> for PostDispatchInfo {
-	fn from(maybe_actual_computation: Option<u64>) -> Self {
-		let actual_weight = match maybe_actual_computation {
-			Some(actual_computation) => Some(Weight::zero().set_ref_time(actual_computation)),
-			None => None,
-		};
-		Self { actual_weight, pays_fee: Default::default() }
-	}
-}
-
-impl From<(Option<u64>, Pays)> for PostDispatchInfo {
-	fn from(post_weight_info: (Option<u64>, Pays)) -> Self {
-		let (maybe_actual_time, pays_fee) = post_weight_info;
-		let actual_weight = match maybe_actual_time {
-			Some(actual_time) => Some(Weight::zero().set_ref_time(actual_time)),
-			None => None,
-		};
-		Self { actual_weight, pays_fee }
-	}
-}
-
-impl<T> WeighData<T> for u64 {
-	fn weigh_data(&self, _: T) -> Weight {
-		return Weight::zero().set_ref_time(*self)
-	}
-}
-
-impl<T> ClassifyDispatch<T> for u64 {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::Normal
-	}
-}
-
-impl<T> PaysFee<T> for u64 {
-	fn pays_fee(&self, _: T) -> Pays {
-		Pays::Yes
-	}
-}
-
-impl<T> WeighData<T> for (u64, DispatchClass, Pays) {
-	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (u64, DispatchClass, Pays) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		self.1
-	}
-}
-
-impl<T> PaysFee<T> for (u64, DispatchClass, Pays) {
-	fn pays_fee(&self, _: T) -> Pays {
-		self.2
-	}
-}
-
-impl<T> WeighData<T> for (u64, DispatchClass) {
-	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (u64, DispatchClass) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		self.1
-	}
-}
-
-impl<T> PaysFee<T> for (u64, DispatchClass) {
-	fn pays_fee(&self, _: T) -> Pays {
-		Pays::Yes
-	}
-}
-
-impl<T> WeighData<T> for (u64, Pays) {
-	fn weigh_data(&self, args: T) -> Weight {
-		return self.0.weigh_data(args)
-	}
-}
-
-impl<T> ClassifyDispatch<T> for (u64, Pays) {
-	fn classify_dispatch(&self, _: T) -> DispatchClass {
-		DispatchClass::Normal
-	}
-}
-
-impl<T> PaysFee<T> for (u64, Pays) {
-	fn pays_fee(&self, _: T) -> Pays {
-		self.1
-	}
-}
-
-// END TODO

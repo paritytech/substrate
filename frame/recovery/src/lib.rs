@@ -160,9 +160,8 @@ use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversi
 use sp_std::prelude::*;
 
 use frame_support::{
-	dispatch::PostDispatchInfo,
+	dispatch::{GetDispatchInfo, PostDispatchInfo},
 	traits::{BalanceStatus, Currency, ReservableCurrency},
-	weights::GetDispatchInfo,
 	BoundedVec, RuntimeDebug,
 };
 

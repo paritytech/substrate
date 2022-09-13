@@ -16,10 +16,9 @@
 // limitations under the License.
 
 pub mod constants {
-	use frame_support::{
-		parameter_types,
-		weights::{constants, RuntimeDbWeight},
-	};
+	use frame_support::weights::constants;
+	use sp_core::parameter_types;
+	use sp_weights::RuntimeDbWeight;
 
 	parameter_types! {
 		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
@@ -33,7 +32,7 @@ pub mod constants {
 	#[cfg(test)]
 	mod test_db_weights {
 		use super::constants::ParityDbWeight as W;
-		use frame_support::weights::constants;
+		use sp_weights::constants;
 
 		/// Checks that all weights exist and have sane values.
 		// NOTE: If this test fails but you are sure that the generated values are fine,

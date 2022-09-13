@@ -118,12 +118,12 @@
 
 use codec::{Codec, Encode};
 use frame_support::{
-	dispatch::PostDispatchInfo,
+	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
 	traits::{
 		EnsureInherentsAreFirst, ExecuteBlock, OffchainWorker, OnFinalize, OnIdle, OnInitialize,
 		OnRuntimeUpgrade,
 	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
+	weights::Weight,
 };
 use sp_runtime::{
 	generic::Digest,

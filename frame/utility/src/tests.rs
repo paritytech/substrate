@@ -24,10 +24,10 @@ use super::*;
 use crate as utility;
 use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
-	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
+	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable, Pays},
 	parameter_types, storage,
 	traits::{ConstU32, ConstU64, Contains},
-	weights::{Pays, Weight},
+	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{

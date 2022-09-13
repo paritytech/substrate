@@ -58,9 +58,8 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::PostDispatchInfo,
+	dispatch::{extract_actual_weight, GetDispatchInfo, PostDispatchInfo},
 	traits::{IsSubType, OriginTrait, UnfilteredDispatchable},
-	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;

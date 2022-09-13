@@ -49,12 +49,15 @@ use sp_std::{marker::PhantomData, prelude::*, result};
 
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
-	dispatch::{DispatchError, DispatchResultWithPostInfo, Dispatchable, PostDispatchInfo},
+	dispatch::{
+		DispatchError, DispatchResultWithPostInfo, Dispatchable, GetDispatchInfo, Pays,
+		PostDispatchInfo,
+	},
 	ensure,
 	traits::{
 		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
 	},
-	weights::{GetDispatchInfo, Pays, Weight},
+	weights::Weight,
 };
 
 #[cfg(test)]

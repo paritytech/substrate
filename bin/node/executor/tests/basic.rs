@@ -17,8 +17,9 @@
 
 use codec::{Decode, Encode, Joiner};
 use frame_support::{
+	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo},
 	traits::Currency,
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Weight},
+	weights::Weight,
 };
 use frame_system::{self, AccountInfo, EventRecord, Phase};
 use sp_core::{storage::well_known_keys, traits::Externalities};

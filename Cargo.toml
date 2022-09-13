@@ -212,6 +212,7 @@ members = [
 	"primitives/version",
 	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
+	"primitives/weights",
 	"test-utils/client",
 	"test-utils/derive",
 	"test-utils/runtime",
