@@ -17,16 +17,19 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+#[cfg(test)]
+pub mod mock;
+#[cfg(test)]
+mod tests;
+
 use frame_support::{
 	pallet_prelude::*,
 	traits::{CallMetadata, Contains, GetCallMetadata},
 };
 use frame_system::pallet_prelude::*;
 use sp_std::{convert::TryInto, prelude::*};
-
-mod benchmarking;
-mod mock;
-mod tests;
 
 pub use pallet::*;
 
@@ -100,6 +103,7 @@ pub mod pallet {
 
 	/// The set of calls that are explicitly paused.
 	#[pallet::storage]
+	#[pallet::getter(fn paused_calls)]
 	pub type PausedCalls<T: Config> =
 		StorageMap<_, Blake2_128Concat, (PalletNameOf<T>, FunctionNameOf<T>), (), OptionQuery>;
 

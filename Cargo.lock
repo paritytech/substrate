@@ -6479,8 +6479,12 @@ version = "4.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-balances",
  "parity-scale-codec",
  "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 
