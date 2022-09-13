@@ -165,7 +165,7 @@ pub fn expand_outer_dispatch(
 			type Origin = Origin;
 			type Config = RuntimeCall;
 			type Info = #scrate::weights::DispatchInfo;
-			type PostInfo = #scrate::weights::PostDispatchInfo;
+			type PostInfo = #scrate::dispatch::PostDispatchInfo;
 			fn dispatch(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				if !<Self::Origin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
 					return #scrate::sp_std::result::Result::Err(
