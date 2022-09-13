@@ -23,13 +23,13 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
+	dispatch::{DispatchResultWithPostInfo, Pays},
 	ensure,
 	traits::{
 		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
 		OneSessionHandler,
 	},
-	weights::{Pays, Weight},
+	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
 use sp_application_crypto::ByteArray;
