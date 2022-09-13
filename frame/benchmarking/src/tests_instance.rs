@@ -33,7 +33,7 @@ mod pallet_test {
 
 	frame_support::decl_storage! {
 		trait Store for Module<T: Config<I>, I: Instance = DefaultInstance> as Test where
-			<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::Event>
+			<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>
 		{
 			pub Value get(fn value): Option<u32>;
 		}
@@ -41,7 +41,7 @@ mod pallet_test {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where
-			origin: T::Origin, <T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::Event>
+			origin: T::Origin, <T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>
 		{
 			#[weight = 0]
 			fn set_value(origin, n: u32) -> frame_support::dispatch::DispatchResult {
@@ -64,9 +64,9 @@ mod pallet_test {
 
 	pub trait Config<I: Instance = DefaultInstance>: frame_system::Config + OtherConfig
 	where
-		Self::OtherEvent: Into<<Self as Config<I>>::Event>,
+		Self::OtherEvent: Into<<Self as Config<I>>::RuntimeEvent>,
 	{
-		type Event;
+		type RuntimeEvent;
 		type LowerBound: Get<u32>;
 		type UpperBound: Get<u32>;
 	}
@@ -95,12 +95,12 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -114,13 +114,13 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_test::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type LowerBound = ConstU32<1>;
 	type UpperBound = ConstU32<100>;
 }
 
 impl pallet_test::OtherConfig for Test {
-	type OtherEvent = Event;
+	type OtherEvent = RuntimeEvent;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
@@ -142,8 +142,8 @@ mod benchmarks {
 		where_clause {
 			where
 				<T as pallet_test::OtherConfig>::OtherEvent: Clone
-					+ Into<<T as pallet_test::Config<I>>::Event>,
-				<T as pallet_test::Config<I>>::Event: Clone,
+					+ Into<<T as pallet_test::Config<I>>::RuntimeEvent>,
+				<T as pallet_test::Config<I>>::RuntimeEvent: Clone,
 		}
 
 		set_value {

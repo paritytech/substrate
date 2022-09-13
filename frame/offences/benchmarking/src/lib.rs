@@ -216,7 +216,7 @@ fn make_offenders_im_online<T: Config>(
 }
 
 #[cfg(test)]
-fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expected: I) {
+fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::RuntimeEvent>>(expected: I) {
 	let events = System::<T>::events()
 		.into_iter()
 		.map(|frame_system::EventRecord { event, .. }| event)
@@ -308,16 +308,16 @@ benchmarks! {
 		let reward_amount = slash_amount.saturating_mul(1 + n) / 2;
 		let reward = reward_amount / r;
 		let slash = |id| core::iter::once(
-			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
 		);
 		let balance_slash = |id| core::iter::once(
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
+			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
 		);
 		let chill = |id| core::iter::once(
-			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled(id))
 		);
 		let balance_deposit = |id, amount: u32|
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});
+			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});
 		let mut first = true;
 		let slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
@@ -339,7 +339,7 @@ benchmarks! {
 						.flat_map(|reporter| vec![
 							balance_deposit(reporter.clone(), reward).into(),
 							frame_system::Event::<T>::NewAccount { account: reporter.clone() }.into(),
-							<T as BalancesConfig>::Event::from(
+							<T as BalancesConfig>::RuntimeEvent::from(
 								pallet_balances::Event::<T>::Endowed{account: reporter, free_balance: reward.into()}
 							).into(),
 						])
@@ -366,7 +366,7 @@ benchmarks! {
 			check_events::<T, _>(
 				std::iter::empty()
 					.chain(slash_events.into_iter().map(Into::into))
-					.chain(std::iter::once(<T as OffencesConfig>::Event::from(
+					.chain(std::iter::once(<T as OffencesConfig>::RuntimeEvent::from(
 						pallet_offences::Event::Offence{
 							kind: UnresponsivenessOffence::<T>::ID,
 							timeslot: 0_u32.to_le_bytes().to_vec(),

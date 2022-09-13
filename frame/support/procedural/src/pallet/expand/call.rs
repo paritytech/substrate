@@ -300,7 +300,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 		impl<#type_impl_gen> #frame_support::dispatch::Callable<T> for #pallet_ident<#type_use_gen>
 			#where_clause
 		{
-			type Call = #call_ident<#type_use_gen>;
+			type RuntimeCall = #call_ident<#type_use_gen>;
 		}
 
 		impl<#type_impl_gen> #pallet_ident<#type_use_gen> #where_clause {

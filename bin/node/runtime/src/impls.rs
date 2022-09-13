@@ -18,8 +18,8 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use crate::{
-	AccountId, AllianceCollective, AllianceMotion, Assets, Authorship, Balances, Call, Hash,
-	NegativeImbalance, Runtime,
+	AccountId, AllianceMotion, Assets, Authorship, Balances, Hash, NegativeImbalance, Runtime,
+	RuntimeCall,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -78,11 +78,11 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 }
 
 pub struct AllianceProposalProvider;
-impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
+impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider {
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
-		proposal: Box<Call>,
+		proposal: Box<RuntimeCall>,
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError> {
 		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
@@ -110,17 +110,8 @@ impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
 		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
 	}
 
-	fn proposal_of(proposal_hash: Hash) -> Option<Call> {
+	fn proposal_of(proposal_hash: Hash) -> Option<RuntimeCall> {
 		AllianceMotion::proposal_of(proposal_hash)
-	}
-
-	fn proposals() -> Vec<Hash> {
-		AllianceMotion::proposals().into_inner()
-	}
-
-	fn proposals_count() -> u32 {
-		pallet_collective::Proposals::<Runtime, AllianceCollective>::decode_len().unwrap_or(0)
-			as u32
 	}
 }
 
