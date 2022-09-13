@@ -3851,7 +3851,11 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				claimed_rewards: (0..5).collect::<Vec<_>>().try_into().unwrap(),
 			})
 		);
-		mock::start_active_era(99);
+
+		// make sure only era upto history depth is stored
+		let current_era = 99;
+		let last_reward_era = 99 - HistoryDepth::get();
+		mock::start_active_era(current_era);
 		bond_validator(13, 12, 1000);
 		assert_eq!(
 			Staking::ledger(&12),
@@ -3860,7 +3864,10 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (15..99).collect::<Vec<_>>().try_into().unwrap(),
+				claimed_rewards: (last_reward_era..current_era)
+					.collect::<Vec<_>>()
+					.try_into()
+					.unwrap(),
 			})
 		);
 	});
