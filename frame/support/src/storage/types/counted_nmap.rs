@@ -31,6 +31,7 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use sp_arithmetic::traits::Zero;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -407,7 +408,13 @@ where
 	/// operating on the same map should always pass `Some`, and this should be equal to the
 	/// previous call result's `maybe_cursor` field.
 	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
-		CounterFor::<Prefix>::set(0u32);
+		let mut current = CounterFor::<Prefix>::get();
+		current = current.saturating_sub(limit);
+		if current.is_zero() {
+			CounterFor::<Prefix>::kill();
+		} else {
+			CounterFor::<Prefix>::set(current);
+		}
 		<Self as MapWrapper>::Map::clear(limit, maybe_cursor)
 	}
 
@@ -817,6 +824,13 @@ mod test {
 
 			A::insert((3,), 10);
 			A::insert((4,), 10);
+			assert_eq!(A::count(), 3);
+			let _ = A::clear(1, None);
+			// one of the item has been removed
+			assert!(!A::contains_key((2,)) || !A::contains_key((3,)) || !A::contains_key((4,)));
+			assert!(A::contains_key((2,)) || A::contains_key((3,)) || A::contains_key((4,)));
+			assert_eq!(A::count(), 2);
+
 			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key((3,)), false);
 			assert_eq!(A::contains_key((4,)), false);
@@ -1053,6 +1067,14 @@ mod test {
 
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
+			assert_eq!(A::count(), 3);
+			let _ = A::clear(1, None);
+			// one of the item has been removed
+			assert!(
+				!A::contains_key((2, 20)) || !A::contains_key((3, 30)) || !A::contains_key((4, 40))
+			);
+			assert_eq!(A::count(), 2);
+
 			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key((3, 30)), false);
 			assert_eq!(A::contains_key((4, 40)), false);
@@ -1321,6 +1343,21 @@ mod test {
 
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
+			assert_eq!(A::count(), 3);
+			let _ = A::clear(1, None);
+			// one of the item has been removed
+			assert!(
+				!A::contains_key((2, 20, 200)) ||
+					!A::contains_key((3, 30, 300)) ||
+					!A::contains_key((4, 40, 400))
+			);
+			assert!(
+				A::contains_key((2, 20, 200)) ||
+					A::contains_key((3, 30, 300)) ||
+					A::contains_key((4, 40, 400))
+			);
+			assert_eq!(A::count(), 2);
+
 			let _ = A::clear(u32::max_value(), None);
 			assert_eq!(A::contains_key((3, 30, 300)), false);
 			assert_eq!(A::contains_key((4, 40, 400)), false);
