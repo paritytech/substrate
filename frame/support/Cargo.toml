@@ -26,6 +26,7 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
 tt-call = "1.0.8"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
@@ -62,6 +63,7 @@ std = [
 	"sp-inherents/std",
 	"sp-staking/std",
 	"sp-state-machine",
+	"sp-weights/std",
 	"frame-support-procedural/std",
 	"log/std",
 ]
