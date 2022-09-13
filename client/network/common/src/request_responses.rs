@@ -18,16 +18,20 @@
 
 //! Collection of generic data structures for request-response protocols.
 
+use crate::protocol::ProtocolName;
 use futures::channel::{mpsc, oneshot};
-use libp2p::PeerId;
+use libp2p::{request_response::OutboundFailure, PeerId};
 use sc_peerset::ReputationChange;
-use std::{borrow::Cow, time::Duration};
+use std::time::Duration;
 
 /// Configuration for a single request-response protocol.
 #[derive(Debug, Clone)]
 pub struct ProtocolConfig {
 	/// Name of the protocol on the wire. Should be something like `/foo/bar`.
-	pub name: Cow<'static, str>,
+	pub name: ProtocolName,
+
+	/// Fallback on the wire protocol names to support.
+	pub fallback_names: Vec<ProtocolName>,
 
 	/// Maximum allowed size, in bytes, of a request.
 	///
@@ -111,4 +115,41 @@ pub struct OutgoingResponse {
 	/// >			when the response has been fully sent out, but rather when it has fully been
 	/// >			written to the buffer managed by the operating system.
 	pub sent_feedback: Option<oneshot::Sender<()>>,
+}
+
+/// When sending a request, what to do on a disconnected recipient.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum IfDisconnected {
+	/// Try to connect to the peer.
+	TryConnect,
+	/// Just fail if the destination is not yet connected.
+	ImmediateError,
+}
+
+/// Convenience functions for `IfDisconnected`.
+impl IfDisconnected {
+	/// Shall we connect to a disconnected peer?
+	pub fn should_connect(self) -> bool {
+		match self {
+			Self::TryConnect => true,
+			Self::ImmediateError => false,
+		}
+	}
+}
+
+/// Error in a request.
+#[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+pub enum RequestFailure {
+	#[error("We are not currently connected to the requested peer.")]
+	NotConnected,
+	#[error("Given protocol hasn't been registered.")]
+	UnknownProtocol,
+	#[error("Remote has closed the substream before answering, thereby signaling that it considers the request as valid, but refused to answer it.")]
+	Refused,
+	#[error("The remote replied, but the local node is no longer interested in the response.")]
+	Obsolete,
+	/// Problem on the network.
+	#[error("Problem on the network: {0}")]
+	Network(OutboundFailure),
 }

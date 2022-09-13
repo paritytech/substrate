@@ -1,10 +1,10 @@
 error: `BlockId` needs to be taken by reference and not by value!
-  --> $DIR/mock_advanced_block_id_by_value.rs:12:1
+  --> tests/ui/mock_advanced_block_id_by_value.rs:12:1
    |
 12 | / sp_api::mock_impl_runtime_apis! {
 13 | |     impl Api<Block> for MockApi {
 14 | |         #[advanced]
-15 | |         fn test(&self, _: BlockId<Block>) -> Result<sp_core::NativeOrEncoded<()>, ApiError> {
+15 | |         fn test(&self, _: BlockId<Block>) -> Result<(), ApiError> {
 ...  |
 18 | |     }
 19 | | }

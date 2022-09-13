@@ -32,7 +32,7 @@ use crate::{
 	protocol::message,
 	service::NetworkService,
 	utils::{interval, LruHashSet},
-	Event, ExHashT, ObservedRole,
+	ExHashT,
 };
 
 use codec::{Decode, Encode};
@@ -40,10 +40,16 @@ use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::config::ProtocolId;
+use sc_network_common::{
+	config::ProtocolId,
+	protocol::{
+		event::{Event, ObservedRole},
+		ProtocolName,
+	},
+	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
+};
 use sp_runtime::traits::Block as BlockT;
 use std::{
-	borrow::Cow,
 	collections::{hash_map::Entry, HashMap},
 	iter,
 	num::NonZeroUsize,
@@ -83,8 +89,6 @@ mod rep {
 	pub const GOOD_TRANSACTION: Rep = Rep::new(1 << 7, "Good transaction");
 	/// Reputation change when a peer sends us a bad transaction.
 	pub const BAD_TRANSACTION: Rep = Rep::new(-(1 << 12), "Bad transaction");
-	/// We received an unexpected transaction packet.
-	pub const UNEXPECTED_TRANSACTIONS: Rep = Rep::new_fatal("Unexpected transactions packet");
 }
 
 struct Metrics {
@@ -128,20 +132,35 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 
 /// Prototype for a [`TransactionsHandler`].
 pub struct TransactionsHandlerPrototype {
-	protocol_name: Cow<'static, str>,
+	protocol_name: ProtocolName,
+	fallback_protocol_names: Vec<ProtocolName>,
 }
 
 impl TransactionsHandlerPrototype {
 	/// Create a new instance.
-	pub fn new(protocol_id: ProtocolId) -> Self {
-		Self { protocol_name: format!("/{}/transactions/1", protocol_id.as_ref()).into() }
+	pub fn new<Hash: AsRef<[u8]>>(
+		protocol_id: ProtocolId,
+		genesis_hash: Hash,
+		fork_id: Option<String>,
+	) -> Self {
+		let protocol_name = if let Some(fork_id) = fork_id {
+			format!("/{}/{}/transactions/1", hex::encode(genesis_hash), fork_id)
+		} else {
+			format!("/{}/transactions/1", hex::encode(genesis_hash))
+		};
+		let legacy_protocol_name = format!("/{}/transactions/1", protocol_id.as_ref());
+
+		Self {
+			protocol_name: protocol_name.into(),
+			fallback_protocol_names: iter::once(legacy_protocol_name.into()).collect(),
+		}
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
 	pub fn set_config(&self) -> config::NonDefaultSetConfig {
 		config::NonDefaultSetConfig {
 			notifications_protocol: self.protocol_name.clone(),
-			fallback_names: Vec::new(),
+			fallback_names: self.fallback_protocol_names.clone(),
 			max_notification_size: MAX_TRANSACTIONS_SIZE,
 			set_config: config::SetConfig {
 				in_peers: 0,
@@ -160,11 +179,10 @@ impl TransactionsHandlerPrototype {
 	pub fn build<B: BlockT + 'static, H: ExHashT>(
 		self,
 		service: Arc<NetworkService<B, H>>,
-		local_role: config::Role,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(TransactionsHandler<B, H>, TransactionsHandlerController<H>)> {
-		let event_stream = service.event_stream("transactions-handler").boxed();
+		let event_stream = service.event_stream("transactions-handler");
 		let (to_handler, from_controller) = mpsc::unbounded();
 		let gossip_enabled = Arc::new(AtomicBool::new(false));
 
@@ -178,7 +196,6 @@ impl TransactionsHandlerPrototype {
 			event_stream,
 			peers: HashMap::new(),
 			transaction_pool,
-			local_role,
 			from_controller,
 			metrics: if let Some(r) = metrics_registry {
 				Some(Metrics::register(r)?)
@@ -229,7 +246,7 @@ enum ToHandler<H: ExHashT> {
 
 /// Handler for transactions. Call [`TransactionsHandler::run`] to start the processing.
 pub struct TransactionsHandler<B: BlockT + 'static, H: ExHashT> {
-	protocol_name: Cow<'static, str>,
+	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
 	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Pending transactions verification tasks.
@@ -247,7 +264,6 @@ pub struct TransactionsHandler<B: BlockT + 'static, H: ExHashT> {
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
 	gossip_enabled: Arc<AtomicBool>,
-	local_role: config::Role,
 	from_controller: mpsc::UnboundedReceiver<ToHandler<H>>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
@@ -360,14 +376,6 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	/// Called when peer sends us new transactions
 	fn on_transactions(&mut self, who: PeerId, transactions: message::Transactions<B::Extrinsic>) {
-		// sending transaction to light node is considered a bad behavior
-		if matches!(self.local_role, config::Role::Light) {
-			debug!(target: "sync", "Peer {} is trying to send transactions to the light node", who);
-			self.service.disconnect_peer(who, self.protocol_name.clone());
-			self.service.report_peer(who, rep::UNEXPECTED_TRANSACTIONS);
-			return
-		}
-
 		// Accept transactions only when enabled
 		if !self.gossip_enabled.load(Ordering::Relaxed) {
 			trace!(target: "sync", "{} Ignoring transactions while disabled", who);
@@ -419,11 +427,11 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	/// Propagate one transaction.
 	pub fn propagate_transaction(&mut self, hash: &H) {
-		debug!(target: "sync", "Propagating transaction [{:?}]", hash);
 		// Accept transactions only when enabled
 		if !self.gossip_enabled.load(Ordering::Relaxed) {
 			return
 		}
+		debug!(target: "sync", "Propagating transaction [{:?}]", hash);
 		if let Some(transaction) = self.transaction_pool.transaction(hash) {
 			let propagated_to = self.do_propagate_transactions(&[(hash.clone(), transaction)]);
 			self.transaction_pool.on_broadcasted(propagated_to);

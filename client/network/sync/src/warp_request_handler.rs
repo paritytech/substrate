@@ -1,4 +1,4 @@
-// Copyright 2021 Parity Technologies (UK) Ltd.
+// Copyright 2022 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@
 
 //! Helper for handling (i.e. answering) grandpa warp sync requests from a remote peer.
 
-use codec::{Decode, Encode};
+use codec::Decode;
 use futures::{
 	channel::{mpsc, oneshot},
 	stream::StreamExt,
@@ -27,57 +27,24 @@ use sc_network_common::{
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
+	sync::warp::{EncodedProof, WarpProofRequest, WarpSyncProvider},
 };
 use sp_runtime::traits::Block as BlockT;
 use std::{sync::Arc, time::Duration};
 
-pub use sp_finality_grandpa::{AuthorityList, SetId};
-
-/// Scale-encoded warp sync proof response.
-pub struct EncodedProof(pub Vec<u8>);
-
-/// Warp sync request
-#[derive(Encode, Decode, Debug)]
-pub struct Request<B: BlockT> {
-	/// Start collecting proofs from this block.
-	pub begin: B::Hash,
-}
-
 const MAX_RESPONSE_SIZE: u64 = 16 * 1024 * 1024;
-
-/// Proof verification result.
-pub enum VerificationResult<Block: BlockT> {
-	/// Proof is valid, but the target was not reached.
-	Partial(SetId, AuthorityList, Block::Hash),
-	/// Target finality is proved.
-	Complete(SetId, AuthorityList, Block::Header),
-}
-
-/// Warp sync backend. Handles retrieveing and verifying warp sync proofs.
-pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
-	/// Generate proof starting at given block hash. The proof is accumulated until maximum proof
-	/// size is reached.
-	fn generate(
-		&self,
-		start: B::Hash,
-	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>>;
-	/// Verify warp proof against current set of authorities.
-	fn verify(
-		&self,
-		proof: &EncodedProof,
-		set_id: SetId,
-		authorities: AuthorityList,
-	) -> Result<VerificationResult<B>, Box<dyn std::error::Error + Send + Sync>>;
-	/// Get current list of authorities. This is supposed to be genesis authorities when starting
-	/// sync.
-	fn current_authorities(&self) -> AuthorityList;
-}
 
 /// Generates a [`RequestResponseConfig`] for the grandpa warp sync request protocol, refusing
 /// incoming requests.
-pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestResponseConfig {
+pub fn generate_request_response_config<Hash: AsRef<[u8]>>(
+	protocol_id: ProtocolId,
+	genesis_hash: Hash,
+	fork_id: Option<&str>,
+) -> RequestResponseConfig {
 	RequestResponseConfig {
-		name: generate_protocol_name(protocol_id).into(),
+		name: generate_protocol_name(genesis_hash, fork_id).into(),
+		fallback_names: std::iter::once(generate_legacy_protocol_name(protocol_id).into())
+			.collect(),
 		max_request_size: 32,
 		max_response_size: MAX_RESPONSE_SIZE,
 		request_timeout: Duration::from_secs(10),
@@ -85,8 +52,17 @@ pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestRespo
 	}
 }
 
-/// Generate the grandpa warp sync protocol name from chain specific protocol identifier.
-fn generate_protocol_name(protocol_id: ProtocolId) -> String {
+/// Generate the grandpa warp sync protocol name from the genesi hash and fork id.
+fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {
+	if let Some(fork_id) = fork_id {
+		format!("/{}/{}/sync/warp", hex::encode(genesis_hash), fork_id)
+	} else {
+		format!("/{}/sync/warp", hex::encode(genesis_hash))
+	}
+}
+
+/// Generate the legacy grandpa warp sync protocol name from chain specific protocol identifier.
+fn generate_legacy_protocol_name(protocol_id: ProtocolId) -> String {
 	format!("/{}/sync/warp", protocol_id.as_ref())
 }
 
@@ -98,13 +74,16 @@ pub struct RequestHandler<TBlock: BlockT> {
 
 impl<TBlock: BlockT> RequestHandler<TBlock> {
 	/// Create a new [`RequestHandler`].
-	pub fn new(
+	pub fn new<Hash: AsRef<[u8]>>(
 		protocol_id: ProtocolId,
+		genesis_hash: Hash,
+		fork_id: Option<&str>,
 		backend: Arc<dyn WarpSyncProvider<TBlock>>,
 	) -> (Self, RequestResponseConfig) {
 		let (tx, request_receiver) = mpsc::channel(20);
 
-		let mut request_response_config = generate_request_response_config(protocol_id);
+		let mut request_response_config =
+			generate_request_response_config(protocol_id, genesis_hash, fork_id);
 		request_response_config.inbound_queue = Some(tx);
 
 		(Self { backend, request_receiver }, request_response_config)
@@ -115,7 +94,7 @@ impl<TBlock: BlockT> RequestHandler<TBlock> {
 		payload: Vec<u8>,
 		pending_response: oneshot::Sender<OutgoingResponse>,
 	) -> Result<(), HandleRequestError> {
-		let request = Request::<TBlock>::decode(&mut &payload[..])?;
+		let request = WarpProofRequest::<TBlock>::decode(&mut &payload[..])?;
 
 		let EncodedProof(proof) = self
 			.backend

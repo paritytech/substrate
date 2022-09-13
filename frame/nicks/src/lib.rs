@@ -47,6 +47,7 @@ type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountIdOf<T>>>::Balance;
 type NegativeImbalanceOf<T> =
 	<<T as Config>::Currency as Currency<AccountIdOf<T>>>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -57,7 +58,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -193,10 +194,7 @@ pub mod pallet {
 		/// - One event.
 		/// # </weight>
 		#[pallet::weight(70_000_000)]
-		pub fn kill_name(
-			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn kill_name(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			// Figure out who we're meant to be clearing.
@@ -225,7 +223,7 @@ pub mod pallet {
 		#[pallet::weight(70_000_000)]
 		pub fn force_name(
 			origin: OriginFor<T>,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 			name: Vec<u8>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -275,7 +273,7 @@ mod tests {
 
 	parameter_types! {
 		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(1024);
+			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 	}
 	impl frame_system::Config for Test {
 		type BaseCallFilter = frame_support::traits::Everything;
@@ -286,12 +284,12 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -309,7 +307,7 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -320,7 +318,7 @@ mod tests {
 		pub const One: u64 = 1;
 	}
 	impl Config for Test {
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
 		type ReservationFee = ConstU64<2>;
 		type Slashed = ();

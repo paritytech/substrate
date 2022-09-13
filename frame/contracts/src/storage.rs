@@ -32,7 +32,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_core::crypto::UncheckedFrom;
-use sp_io::{hashing::blake2_256, KillStorageResult};
+use sp_io::KillStorageResult;
 use sp_runtime::{
 	traits::{Hash, Zero},
 	RuntimeDebug,
@@ -124,16 +124,16 @@ where
 	///
 	/// The read is performed from the `trie_id` only. The `address` is not necessary. If the
 	/// contract doesn't store under the given `key` `None` is returned.
-	pub fn read(trie_id: &TrieId, key: &StorageKey) -> Option<Vec<u8>> {
-		child::get_raw(&child_trie_info(trie_id), &blake2_256(key))
+	pub fn read<K: StorageKey<T>>(trie_id: &TrieId, key: &K) -> Option<Vec<u8>> {
+		child::get_raw(&child_trie_info(trie_id), key.hash().as_slice())
 	}
 
 	/// Returns `Some(len)` (in bytes) if a storage item exists at `key`.
 	///
 	/// Returns `None` if the `key` wasn't previously set by `set_storage` or
 	/// was deleted.
-	pub fn size(trie_id: &TrieId, key: &StorageKey) -> Option<u32> {
-		child::len(&child_trie_info(trie_id), &blake2_256(key))
+	pub fn size<K: StorageKey<T>>(trie_id: &TrieId, key: &K) -> Option<u32> {
+		child::len(&child_trie_info(trie_id), key.hash().as_slice())
 	}
 
 	/// Update a storage entry into a contract's kv storage.
@@ -143,15 +143,15 @@ where
 	///
 	/// This function also records how much storage was created or removed if a `storage_meter`
 	/// is supplied. It should only be absent for testing or benchmarking code.
-	pub fn write(
+	pub fn write<K: StorageKey<T>>(
 		trie_id: &TrieId,
-		key: &StorageKey,
+		key: &K,
 		new_value: Option<Vec<u8>>,
 		storage_meter: Option<&mut meter::NestedMeter<T>>,
 		take: bool,
 	) -> Result<WriteOutcome, DispatchError> {
-		let hashed_key = blake2_256(key);
 		let child_trie_info = &child_trie_info(trie_id);
+		let hashed_key = key.hash();
 		let (old_len, old_value) = if take {
 			let val = child::get_raw(child_trie_info, &hashed_key);
 			(val.as_ref().map(|v| v.len() as u32), val)
@@ -227,9 +227,10 @@ where
 		let base_weight = T::WeightInfo::on_process_deletion_queue_batch();
 		let weight_per_queue_item = T::WeightInfo::on_initialize_per_queue_item(1) -
 			T::WeightInfo::on_initialize_per_queue_item(0);
-		let weight_per_key = T::WeightInfo::on_initialize_per_trie_key(1) -
-			T::WeightInfo::on_initialize_per_trie_key(0);
-		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as Weight);
+		let weight_per_key = (T::WeightInfo::on_initialize_per_trie_key(1) -
+			T::WeightInfo::on_initialize_per_trie_key(0))
+		.ref_time();
+		let decoding_weight = weight_per_queue_item.saturating_mul(queue_len as u64);
 
 		// `weight_per_key` being zero makes no sense and would constitute a failure to
 		// benchmark properly. We opt for not removing any keys at all in this case.
@@ -237,7 +238,8 @@ where
 			.saturating_sub(base_weight)
 			.saturating_sub(decoding_weight)
 			.checked_div(weight_per_key)
-			.unwrap_or(0) as u32;
+			.unwrap_or(Weight::zero())
+			.ref_time() as u32;
 
 		(weight_per_key, key_budget)
 	}
@@ -248,7 +250,7 @@ where
 	pub fn process_deletion_queue_batch(weight_limit: Weight) -> Weight {
 		let queue_len = <DeletionQueue<T>>::decode_len().unwrap_or(0);
 		if queue_len == 0 {
-			return 0
+			return Weight::zero()
 		}
 
 		let (weight_per_key, mut remaining_key_budget) =
@@ -282,7 +284,10 @@ where
 		}
 
 		<DeletionQueue<T>>::put(queue);
-		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
+		let ref_time_weight = weight_limit
+			.ref_time()
+			.saturating_sub(weight_per_key.saturating_mul(u64::from(remaining_key_budget)));
+		Weight::from_ref_time(ref_time_weight)
 	}
 
 	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.

@@ -54,7 +54,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			elements::deserialize_buffer(original_code).map_err(|_| "Can't decode wasm code")?;
 
 		// Make sure that the module is valid.
-		validate_module::<PlainValidator>(&module).map_err(|_| "Module is not valid")?;
+		validate_module::<PlainValidator>(&module, ()).map_err(|_| "Module is not valid")?;
 
 		// Return a `ContractModule` instance with
 		// __valid__ module.
@@ -517,6 +517,7 @@ mod tests {
 		schedule::Limits,
 		tests::{Test, ALICE},
 	};
+	use pallet_contracts_proc_macro::define_env;
 	use std::fmt;
 
 	impl fmt::Debug for PrefabWasmModule<Test> {
@@ -532,17 +533,27 @@ mod tests {
 
 		// Define test environment for tests. We need ImportSatisfyCheck
 		// implementation from it. So actual implementations doesn't matter.
-		define_env!(Test, <E: Ext>,
-			[seal0] panic(_ctx) => { unreachable!(); },
+		#[define_env]
+		pub mod test_env {
+			fn panic(_ctx: crate::wasm::Runtime<E>) -> Result<(), TrapReason> {
+				Ok(())
+			}
 
 			// gas is an implementation defined function and a contract can't import it.
-			[seal0] gas(_ctx, _amount: u32) => { unreachable!(); },
+			fn gas(_ctx: crate::wasm::Runtime<E>, _amount: u32) -> Result<(), TrapReason> {
+				Ok(())
+			}
 
-			[seal0] nop(_ctx, _unused: u64) => { unreachable!(); },
+			fn nop(_ctx: crate::wasm::Runtime<E>, _unused: u64) -> Result<(), TrapReason> {
+				Ok(())
+			}
 
 			// new version of nop with other data type for argumebt
-			[seal1] nop(_ctx, _unused: i32) => { unreachable!(); },
-		);
+			#[version(1)]
+			fn nop(_ctx: crate::wasm::Runtime<E>, _unused: i32) -> Result<(), TrapReason> {
+				Ok(())
+			}
+		}
 	}
 
 	macro_rules! prepare_test {
@@ -561,7 +572,7 @@ mod tests {
 					},
 					.. Default::default()
 				};
-				let r = do_preparation::<env::Test, Test>(wasm, &schedule, ALICE);
+				let r = do_preparation::<env::Env, Test>(wasm, &schedule, ALICE);
 				assert_matches::assert_matches!(r.map_err(|(_, msg)| msg), $($expected)*);
 			}
 		};

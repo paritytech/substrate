@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{channel::mpsc::Receiver, Future};
 use sc_transaction_pool_api::error;
@@ -108,6 +108,8 @@ pub struct Options {
 	pub future: base::Limit,
 	/// Reject future transactions.
 	pub reject_future_transactions: bool,
+	/// How long the extrinsic is banned for.
+	pub ban_time: Duration,
 }
 
 impl Default for Options {
@@ -116,6 +118,7 @@ impl Default for Options {
 			ready: base::Limit { count: 8192, total_bytes: 20 * 1024 * 1024 },
 			future: base::Limit { count: 512, total_bytes: 1 * 1024 * 1024 },
 			reject_future_transactions: false,
+			ban_time: Duration::from_secs(60 * 30),
 		}
 	}
 }
@@ -638,7 +641,7 @@ mod tests {
 		.unwrap();
 
 		// when
-		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()])).unwrap();
+		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1])).unwrap();
 
 		// then
 		assert!(pool.validated_pool.is_banned(&hash1));
@@ -790,12 +793,8 @@ mod tests {
 			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// when
-			block_on(pool.prune_tags(
-				&BlockId::Number(2),
-				vec![vec![0u8]],
-				vec![watcher.hash().clone()],
-			))
-			.unwrap();
+			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![*watcher.hash()]))
+				.unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 0);
 			assert_eq!(pool.validated_pool().status().future, 0);
 

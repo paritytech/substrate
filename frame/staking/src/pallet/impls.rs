@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
 use sp_runtime::{
-	traits::{Bounded, Convert, SaturatedConversion, Saturating, StaticLookup, Zero},
+	traits::{Bounded, Convert, One, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
 };
 use sp_staking::{
@@ -599,20 +599,17 @@ impl<T: Config> Pallet<T> {
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.
 	fn apply_unapplied_slashes(active_era: EraIndex) {
-		let slash_defer_duration = T::SlashDeferDuration::get();
-		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if let Some(ref mut earliest) = earliest {
-				let keep_from = active_era.saturating_sub(slash_defer_duration);
-				for era in (*earliest)..keep_from {
-					let era_slashes = <Self as Store>::UnappliedSlashes::take(&era);
-					for slash in era_slashes {
-						slashing::apply_slash::<T>(slash, era);
-					}
-				}
-
-				*earliest = (*earliest).max(keep_from)
-			}
-		})
+		let era_slashes = <Self as Store>::UnappliedSlashes::take(&active_era);
+		log!(
+			debug,
+			"found {} slashes scheduled to be executed in era {:?}",
+			era_slashes.len(),
+			active_era,
+		);
+		for slash in era_slashes {
+			let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
+			slashing::apply_slash::<T>(slash, slash_era);
+		}
 	}
 
 	/// Add reward points to validators using their stash account ID.
@@ -792,7 +789,6 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
 		);
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
@@ -812,7 +808,6 @@ impl<T: Config> Pallet<T> {
 			false
 		};
 
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
@@ -840,7 +835,6 @@ impl<T: Config> Pallet<T> {
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
 		);
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 	}
 
 	/// This function will remove a validator from the `Validators` storage map.
@@ -859,7 +853,6 @@ impl<T: Config> Pallet<T> {
 			false
 		};
 
-		debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
@@ -1170,7 +1163,7 @@ where
 		disable_strategy: DisableStrategy,
 	) -> Weight {
 		let reward_proportion = SlashRewardFraction::<T>::get();
-		let mut consumed_weight: Weight = 0;
+		let mut consumed_weight = Weight::from_ref_time(0);
 		let mut add_db_reads_writes = |reads, writes| {
 			consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
 		};
@@ -1209,11 +1202,6 @@ where
 			}
 		};
 
-		<Self as Store>::EarliestUnappliedSlash::mutate(|earliest| {
-			if earliest.is_none() {
-				*earliest = Some(active_era)
-			}
-		});
 		add_db_reads_writes(1, 1);
 
 		let slash_defer_duration = T::SlashDeferDuration::get();
@@ -1263,9 +1251,18 @@ where
 					}
 				} else {
 					// Defer to end of some `slash_defer_duration` from now.
-					<Self as Store>::UnappliedSlashes::mutate(active_era, move |for_later| {
-						for_later.push(unapplied)
-					});
+					log!(
+						debug,
+						"deferring slash of {:?}% happened in {:?} (reported in {:?}) to {:?}",
+						slash_fraction,
+						slash_era,
+						active_era,
+						slash_era + slash_defer_duration + 1,
+					);
+					<Self as Store>::UnappliedSlashes::mutate(
+						slash_era.saturating_add(slash_defer_duration).saturating_add(One::one()),
+						move |for_later| for_later.push(unapplied),
+					);
 					add_db_reads_writes(1, 1);
 				}
 			} else {
@@ -1368,7 +1365,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		// nothing to do upon regenerate.
 		0
 	}
-	fn sanity_check() -> Result<(), &'static str> {
+	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -1449,5 +1446,106 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
 		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
+	}
+}
+
+#[cfg(feature = "try-runtime")]
+impl<T: Config> Pallet<T> {
+	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+		T::VoterList::try_state()?;
+		Self::check_nominators()?;
+		Self::check_exposures()?;
+		Self::check_ledgers()?;
+		Self::check_count()
+	}
+
+	fn check_count() -> Result<(), &'static str> {
+		ensure!(
+			<T as Config>::VoterList::count() ==
+				Nominators::<T>::count() + Validators::<T>::count(),
+			"wrong external count"
+		);
+		Ok(())
+	}
+
+	fn check_ledgers() -> Result<(), &'static str> {
+		Bonded::<T>::iter()
+			.map(|(_, ctrl)| Self::ensure_ledger_consistent(ctrl))
+			.collect::<Result<_, _>>()
+	}
+
+	fn check_exposures() -> Result<(), &'static str> {
+		// a check per validator to ensure the exposure struct is always sane.
+		let era = Self::active_era().unwrap().index;
+		ErasStakers::<T>::iter_prefix_values(era)
+			.map(|expo| {
+				ensure!(
+					expo.total ==
+						expo.own +
+							expo.others
+								.iter()
+								.map(|e| e.value)
+								.fold(Zero::zero(), |acc, x| acc + x),
+					"wrong total exposure.",
+				);
+				Ok(())
+			})
+			.collect::<Result<_, _>>()
+	}
+
+	fn check_nominators() -> Result<(), &'static str> {
+		// a check per nominator to ensure their entire stake is correctly distributed. Will only
+		// kick-in if the nomination was submitted before the current era.
+		let era = Self::active_era().unwrap().index;
+		<Nominators<T>>::iter()
+			.filter_map(
+				|(nominator, nomination)| {
+					if nomination.submitted_in > era {
+						Some(nominator)
+					} else {
+						None
+					}
+				},
+			)
+			.map(|nominator| {
+				// must be bonded.
+				Self::ensure_is_stash(&nominator)?;
+				let mut sum = BalanceOf::<T>::zero();
+				T::SessionInterface::validators()
+					.iter()
+					.map(|v| Self::eras_stakers(era, v))
+					.map(|e| {
+						let individual =
+							e.others.iter().filter(|e| e.who == nominator).collect::<Vec<_>>();
+						let len = individual.len();
+						match len {
+							0 => { /* not supporting this validator at all. */ },
+							1 => sum += individual[0].value,
+							_ => return Err("nominator cannot back a validator more than once."),
+						};
+						Ok(())
+					})
+					.collect::<Result<_, _>>()
+			})
+			.collect::<Result<_, _>>()
+	}
+
+	fn ensure_is_stash(who: &T::AccountId) -> Result<(), &'static str> {
+		ensure!(Self::bonded(who).is_some(), "Not a stash.");
+		Ok(())
+	}
+
+	fn ensure_ledger_consistent(ctrl: T::AccountId) -> Result<(), &'static str> {
+		// ensures ledger.total == ledger.active + sum(ledger.unlocking).
+		let ledger = Self::ledger(ctrl.clone()).ok_or("Not a controller.")?;
+		let real_total: BalanceOf<T> =
+			ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
+		ensure!(real_total == ledger.total, "ledger.total corrupt");
+
+		if !(ledger.active >= T::Currency::minimum_balance() || ledger.active.is_zero()) {
+			log!(warn, "ledger.active less than ED: {:?}, {:?}", ctrl, ledger)
+		}
+
+		Ok(())
 	}
 }

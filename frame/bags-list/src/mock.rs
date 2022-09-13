@@ -52,13 +52,13 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type DbWeight = ();
 	type BlockLength = ();
@@ -78,7 +78,7 @@ parameter_types! {
 }
 
 impl bags_list::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
 	type ScoreProvider = StakingMock;
@@ -147,7 +147,7 @@ impl ExtBuilder {
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
-			List::<Runtime>::sanity_check().expect("Sanity check post condition failed")
+			List::<Runtime>::try_state().expect("Try-state post condition failed")
 		})
 	}
 

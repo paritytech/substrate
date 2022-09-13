@@ -25,16 +25,31 @@ use sc_network_common::{config::ProtocolId, request_responses::ProtocolConfig};
 
 use std::time::Duration;
 
-/// Generate the light client protocol name from chain specific protocol identifier.
-fn generate_protocol_name(protocol_id: &ProtocolId) -> String {
+/// Generate the light client protocol name from the genesis hash and fork id.
+fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {
+	if let Some(fork_id) = fork_id {
+		format!("/{}/{}/light/2", hex::encode(genesis_hash), fork_id)
+	} else {
+		format!("/{}/light/2", hex::encode(genesis_hash))
+	}
+}
+
+/// Generate the legacy light client protocol name from chain specific protocol identifier.
+fn generate_legacy_protocol_name(protocol_id: &ProtocolId) -> String {
 	format!("/{}/light/2", protocol_id.as_ref())
 }
 
 /// Generates a [`ProtocolConfig`] for the light client request protocol, refusing incoming
 /// requests.
-pub fn generate_protocol_config(protocol_id: &ProtocolId) -> ProtocolConfig {
+pub fn generate_protocol_config<Hash: AsRef<[u8]>>(
+	protocol_id: &ProtocolId,
+	genesis_hash: Hash,
+	fork_id: Option<&str>,
+) -> ProtocolConfig {
 	ProtocolConfig {
-		name: generate_protocol_name(protocol_id).into(),
+		name: generate_protocol_name(genesis_hash, fork_id).into(),
+		fallback_names: std::iter::once(generate_legacy_protocol_name(protocol_id).into())
+			.collect(),
 		max_request_size: 1 * 1024 * 1024,
 		max_response_size: 16 * 1024 * 1024,
 		request_timeout: Duration::from_secs(15),

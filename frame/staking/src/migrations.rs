@@ -20,6 +20,45 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::OnRuntimeUpgrade;
 
+pub mod v10 {
+	use super::*;
+	use frame_support::storage_alias;
+
+	#[storage_alias]
+	type EarliestUnappliedSlash<T: Config> = StorageValue<Pallet<T>, EraIndex>;
+
+	/// Apply any pending slashes that where queued.
+	///
+	/// That means we might slash someone a bit too early, but we will definitely
+	/// won't forget to slash them. The cap of 512 is somewhat randomly taken to
+	/// prevent us from iterating over an arbitrary large number of keys `on_runtime_upgrade`.
+	pub struct MigrateToV10<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if StorageVersion::<T>::get() == Releases::V9_0_0 {
+				let pending_slashes = <Pallet<T> as Store>::UnappliedSlashes::iter().take(512);
+				for (era, slashes) in pending_slashes {
+					for slash in slashes {
+						// in the old slashing scheme, the slash era was the key at which we read
+						// from `UnappliedSlashes`.
+						log!(warn, "prematurely applying a slash ({:?}) for era {:?}", slash, era);
+						slashing::apply_slash::<T>(slash, era);
+					}
+				}
+
+				EarliestUnappliedSlash::<T>::kill();
+				StorageVersion::<T>::put(Releases::V10_0_0);
+
+				log!(info, "MigrateToV10 executed successfully");
+				T::DbWeight::get().reads_writes(1, 1)
+			} else {
+				log!(warn, "MigrateToV10 should be removed.");
+				T::DbWeight::get().reads(1)
+			}
+		}
+	}
+}
+
 pub mod v9 {
 	use super::*;
 
@@ -114,7 +153,7 @@ pub mod v8 {
 				Nominators::<T>::iter().map(|(id, _)| id),
 				Pallet::<T>::weight_of_fn(),
 			);
-			debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+			debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 
 			StorageVersion::<T>::put(crate::Releases::V8_0_0);
 			crate::log!(
@@ -131,7 +170,7 @@ pub mod v8 {
 
 	#[cfg(feature = "try-runtime")]
 	pub fn post_migrate<T: Config>() -> Result<(), &'static str> {
-		T::VoterList::sanity_check().map_err(|_| "VoterList is not in a sane state.")?;
+		T::VoterList::try_state().map_err(|_| "VoterList is not in a sane state.")?;
 		crate::log!(info, "👜 staking bags-list migration passes POST migrate checks ✅",);
 		Ok(())
 	}
