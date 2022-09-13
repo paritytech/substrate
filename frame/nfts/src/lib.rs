@@ -516,31 +516,6 @@ pub mod pallet {
 			)
 		}
 
-		/// Increments the `CollectionId` stored in `NextCollectionId`.
-		///
-		/// This is only callable when the next `CollectionId` is already being
-		/// used for some other collection.
-		///
-		/// The origin must be Signed and the sender must have sufficient funds
-		/// free.
-		///
-		/// Emits `NextCollectionIdIncremented` event when successful.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::try_increment_id())]
-		pub fn try_increment_id(origin: OriginFor<T>) -> DispatchResult {
-			ensure_signed(origin)?;
-			ensure!(
-				Collection::<T, I>::contains_key(NextCollectionId::<T, I>::get()),
-				Error::<T, I>::NextIdNotUsed
-			);
-
-			let next_id = NextCollectionId::<T, I>::get().increment();
-			NextCollectionId::<T, I>::set(next_id);
-			Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
-			Ok(())
-		}
-
 		/// Destroy a collection of fungible items.
 		///
 		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be the

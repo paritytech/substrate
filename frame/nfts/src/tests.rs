@@ -631,39 +631,6 @@ fn cancel_approval_works_with_force() {
 }
 
 #[test]
-fn try_increment_id_works() {
-	new_test_ext().execute_with(|| {
-		// should fail because the next `CollectionId` is not being used.
-		assert_noop!(Nfts::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
-
-		// create two collections & check for events.
-		assert_ok!(Nfts::force_create(Origin::root(), 1, true));
-		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
-		assert_ok!(Nfts::force_create(Origin::root(), 1, true));
-		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 2 }));
-
-		// there are now two collections.
-		assert_eq!(Nfts::get_next_id(), 2);
-
-		// reset the collections counter to test if the `try_increment_id`
-		// works.
-		Nfts::set_next_id(0);
-		assert_ok!(Nfts::try_increment_id(Origin::signed(2)));
-
-		// `try_increment_id` should emit an event when successful.
-		assert!(events().contains(&Event::<Test>::NextCollectionIdIncremented { next_id: 1 }));
-
-		// because reset, the collections count should be now 1
-		assert_eq!(Nfts::get_next_id(), 1);
-
-		// increment the collections count again.
-		assert_ok!(Nfts::try_increment_id(Origin::signed(2)));
-		// should fail because the next `CollectionId` is not being used.
-		assert_noop!(Nfts::try_increment_id(Origin::signed(2)), Error::<Test>::NextIdNotUsed);
-	});
-}
-
-#[test]
 fn max_supply_should_work() {
 	new_test_ext().execute_with(|| {
 		let collection_id = 0;

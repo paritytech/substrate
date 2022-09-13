@@ -402,17 +402,6 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	try_increment_id {
-		let (_, caller, _) = create_collection::<T, I>();
-		// reset to zero, so that the next id is used, so try_increment_id doesn't throw error.
-		Nfts::<T, I>::set_next_id(T::Helper::collection(0));
-	}: _(SystemOrigin::Signed(caller.clone()))
-	verify {
-		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
-			next_id: T::Helper::collection(1)
-		}.into());
-	}
-
 	set_price {
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
