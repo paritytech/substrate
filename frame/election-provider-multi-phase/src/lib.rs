@@ -234,9 +234,10 @@ use frame_election_provider_support::{
 	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
+	dispatch::DispatchClass,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::{DispatchClass, Weight},
+	weights::Weight,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -570,8 +571,8 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type Event: From<Event<Self>>
-			+ IsType<<Self as frame_system::Config>::Event>
+		type RuntimeEvent: From<Event<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
 			+ TryInto<Event<Self>>;
 
 		/// Currency type.
@@ -706,6 +707,25 @@ pub mod pallet {
 
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
+	}
+
+	// Expose miner configs over the metadata such that they can be re-implemented.
+	#[pallet::extra_constants]
+	impl<T: Config> Pallet<T> {
+		#[pallet::constant_name(MinerMaxLength)]
+		fn max_length() -> u32 {
+			<T::MinerConfig as MinerConfig>::MaxLength::get()
+		}
+
+		#[pallet::constant_name(MinerMaxWeight)]
+		fn max_weight() -> Weight {
+			<T::MinerConfig as MinerConfig>::MaxWeight::get()
+		}
+
+		#[pallet::constant_name(MinerMaxVotesPerVoter)]
+		fn max_votes_per_voter() -> u32 {
+			<T::MinerConfig as MinerConfig>::MaxVotesPerVoter::get()
+		}
 	}
 
 	#[pallet::hooks]

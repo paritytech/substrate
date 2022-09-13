@@ -17,10 +17,9 @@
 
 /// Storage DB weights for the `{{runtime_name}}` runtime and `{{db_name}}`.
 pub mod constants {
-	use frame_support::{
-		parameter_types,
-		weights::{constants, RuntimeDbWeight},
-	};
+	use frame_support::weights::constants;
+	use sp_core::parameter_types;
+	use sp_weights::RuntimeDbWeight;
 
 	parameter_types! {
 		{{#if (eq db_name "ParityDb")}}
@@ -66,7 +65,7 @@ pub mod constants {
 	#[cfg(test)]
 	mod test_db_weights {
 		use super::constants::{{db_name}}Weight as W;
-		use frame_support::weights::constants;
+		use sp_weights::constants;
 
 		/// Checks that all weights exist and have sane values.
 		// NOTE: If this test fails but you are sure that the generated values are fine,

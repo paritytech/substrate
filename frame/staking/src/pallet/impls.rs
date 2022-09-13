@@ -22,12 +22,13 @@ use frame_election_provider_support::{
 	Supports, VoteWeight, VoterOf,
 };
 use frame_support::{
+	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
 		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
-	weights::{Weight, WithPostDispatchInfo},
+	weights::Weight,
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;

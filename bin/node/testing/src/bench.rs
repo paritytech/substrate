@@ -35,8 +35,8 @@ use crate::{
 use codec::{Decode, Encode};
 use futures::executor;
 use kitchensink_runtime::{
-	constants::currency::DOLLARS, AccountId, BalancesCall, Call, CheckedExtrinsic, MinimumPeriod,
-	Signature, SystemCall, UncheckedExtrinsic,
+	constants::currency::DOLLARS, AccountId, BalancesCall, CheckedExtrinsic, MinimumPeriod,
+	RuntimeCall, Signature, SystemCall, UncheckedExtrinsic,
 };
 use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
@@ -308,12 +308,12 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 				)),
 				function: match self.content.block_type {
 					BlockType::RandomTransfersKeepAlive =>
-						Call::Balances(BalancesCall::transfer_keep_alive {
+						RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							value: kitchensink_runtime::ExistentialDeposit::get() + 1,
 						}),
 					BlockType::RandomTransfersReaping => {
-						Call::Balances(BalancesCall::transfer {
+						RuntimeCall::Balances(BalancesCall::transfer {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.
@@ -321,7 +321,8 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 								(kitchensink_runtime::ExistentialDeposit::get() - 1),
 						})
 					},
-					BlockType::Noop => Call::System(SystemCall::remark { remark: Vec::new() }),
+					BlockType::Noop =>
+						RuntimeCall::System(SystemCall::remark { remark: Vec::new() }),
 				},
 			},
 			self.runtime_version.spec_version,
