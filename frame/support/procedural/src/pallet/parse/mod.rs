@@ -130,10 +130,14 @@ impl Def {
 					if let syn::Item::Type(typ) = item {
 						for attr in typ.attrs.as_slice() {
 							if let Some(seg) = attr.path.segments.last() {
-								if seg.to_token_stream().to_string() == "benchmarking" &&
-									attr.tokens.to_string() == "(cached)"
+								if let Ok(_) =
+									syn::parse2::<keyword::benchmarking>(seg.to_token_stream())
 								{
-									storage_def.benchmarking_cached = true;
+									if let Ok(_) =
+										syn::parse2::<keyword::cached>(attr.path.to_token_stream())
+									{
+										storage_def.benchmarking_cached = true;
+									}
 								}
 							}
 						}
@@ -398,6 +402,8 @@ mod keyword {
 	syn::custom_keyword!(generate_store);
 	syn::custom_keyword!(Store);
 	syn::custom_keyword!(extra_constants);
+	syn::custom_keyword!(cached);
+	syn::custom_keyword!(benchmarking);
 }
 
 /// Parse attributes for item in pallet module
