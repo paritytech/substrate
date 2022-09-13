@@ -28,6 +28,9 @@
 //!
 //! Methods are prefixed by `chainSpec`.
 
+#[cfg(test)]
+mod tests;
+
 pub mod api;
 pub mod chain_spec;
 
