@@ -90,12 +90,13 @@ parameter_types! {
 	pub const ExtendDuration: u64 = 30;
 	pub const EnableStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
 	pub const ExtendStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
-	pub const EnableOrigin: u64 = 4;
-	pub const ExtendOrigin: u64 = 4;
-	pub const DisableOrigin: u64 = 4;
+	pub const EnableOrigin: u64 = 1;
+	pub const ExtendOrigin: u64 = 2;
+	pub const DisableOrigin: u64 =3;
 	pub const RepayOrigin: u64 = 4;
 }
 
+// Required impl to use some <Configured Origin>::get() in tests
 impl SortedMembers<u64> for EnableOrigin {
 	fn sorted_members() -> Vec<u64> {
 		vec![Self::get()]
@@ -132,9 +133,9 @@ impl Config for Test {
 	type EnableDuration = EnableDuration;
 	type ExtendDuration = ExtendDuration;
 	type EnableOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-	type ExtendOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-	type DisableOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-	type RepayOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
+	type ExtendOrigin = EitherOfDiverse<EnsureSignedBy<ExtendOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
+	type DisableOrigin = EitherOfDiverse<EnsureSignedBy<DisableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
+	type RepayOrigin = EitherOfDiverse<EnsureSignedBy<RepayOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
 	type EnableStakeAmount = EnableStakeAmount;
 	type ExtendStakeAmount = ExtendStakeAmount;
 }
@@ -149,8 +150,8 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
-		SafeMode: pallet_safe_mode::{Pallet, Call, Storage, Event<T>},
+		Balances: pallet_balances,
+		SafeMode: pallet_safe_mode,
 	}
 );
 
@@ -158,7 +159,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(1, 500), (2, 500), (3, 500), (4, 500)],
+		balances: vec![(0,1234), (1, 5678), (2, 5678), (3, 5678), (4, 5678)], // The 0 account is NOT a special origin, the rest may be.
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
