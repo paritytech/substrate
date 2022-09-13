@@ -20,7 +20,7 @@
 use super::*;
 use crate as pallet_safe_mode;
 
-use frame_support::{parameter_types, traits::{InsideBoth, SortedMembers, EitherOfDiverse}};
+use frame_support::{parameter_types, traits::{InsideBoth, SortedMembers, EitherOfDiverse, Everything}};
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
@@ -32,7 +32,7 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 impl frame_system::Config for Test {
-	type BaseCallFilter = InsideBoth<frame_support::traits::Everything, SafeMode>;
+	type BaseCallFilter = InsideBoth<Everything, SafeMode>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
