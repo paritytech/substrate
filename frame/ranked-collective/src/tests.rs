@@ -61,13 +61,13 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -171,7 +171,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 
 impl Config for Test {
 	type WeightInfo = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type PromoteOrigin = EitherOf<
 		// Root can promote arbitrarily.
 		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,

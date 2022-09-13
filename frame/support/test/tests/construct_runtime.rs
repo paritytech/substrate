@@ -250,9 +250,9 @@ impl system::Config for Runtime {
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 }
 
@@ -280,7 +280,7 @@ frame_support::construct_runtime!(
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 #[test]
 fn check_modules_error_type() {
@@ -373,7 +373,7 @@ fn check_modules_error_type() {
 				message: Some("Something")
 			})),
 		);
-	});
+	})
 }
 
 #[test]
@@ -422,53 +422,53 @@ fn event_codec() {
 	use codec::Encode;
 
 	let event = system::Event::<Runtime>::ExtrinsicSuccess;
-	assert_eq!(Event::from(event).encode()[0], 30);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 30);
 
 	let event = module1::Event::<Runtime, module1::Instance1>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 31);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 31);
 
 	let event = module2::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 32);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 32);
 
 	let event = module1::Event::<Runtime, module1::Instance2>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 33);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 33);
 
 	let event = nested::module3::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 34);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 34);
 
 	let event = module3::Event::A;
-	assert_eq!(Event::from(event).encode()[0], 35);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 35);
 
 	let event = module1::Event::<Runtime, module1::Instance5>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 4);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 4);
 
 	let event = module1::Event::<Runtime, module1::Instance6>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 1);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 1);
 
 	let event = module1::Event::<Runtime, module1::Instance7>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 2);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 2);
 
 	let event = module1::Event::<Runtime, module1::Instance8>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 12);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 12);
 
 	let event = module1::Event::<Runtime, module1::Instance9>::A(test_pub());
-	assert_eq!(Event::from(event).encode()[0], 13);
+	assert_eq!(RuntimeEvent::from(event).encode()[0], 13);
 }
 
 #[test]
 fn call_codec() {
 	use codec::Encode;
-	assert_eq!(Call::System(system::Call::noop {}).encode()[0], 30);
-	assert_eq!(Call::Module1_1(module1::Call::fail {}).encode()[0], 31);
-	assert_eq!(Call::Module2(module2::Call::fail {}).encode()[0], 32);
-	assert_eq!(Call::Module1_2(module1::Call::fail {}).encode()[0], 33);
-	assert_eq!(Call::NestedModule3(nested::module3::Call::fail {}).encode()[0], 34);
-	assert_eq!(Call::Module3(module3::Call::fail {}).encode()[0], 35);
-	assert_eq!(Call::Module1_4(module1::Call::fail {}).encode()[0], 3);
-	assert_eq!(Call::Module1_6(module1::Call::fail {}).encode()[0], 1);
-	assert_eq!(Call::Module1_7(module1::Call::fail {}).encode()[0], 2);
-	assert_eq!(Call::Module1_8(module1::Call::fail {}).encode()[0], 12);
-	assert_eq!(Call::Module1_9(module1::Call::fail {}).encode()[0], 13);
+	assert_eq!(RuntimeCall::System(system::Call::noop {}).encode()[0], 30);
+	assert_eq!(RuntimeCall::Module1_1(module1::Call::fail {}).encode()[0], 31);
+	assert_eq!(RuntimeCall::Module2(module2::Call::fail {}).encode()[0], 32);
+	assert_eq!(RuntimeCall::Module1_2(module1::Call::fail {}).encode()[0], 33);
+	assert_eq!(RuntimeCall::NestedModule3(nested::module3::Call::fail {}).encode()[0], 34);
+	assert_eq!(RuntimeCall::Module3(module3::Call::fail {}).encode()[0], 35);
+	assert_eq!(RuntimeCall::Module1_4(module1::Call::fail {}).encode()[0], 3);
+	assert_eq!(RuntimeCall::Module1_6(module1::Call::fail {}).encode()[0], 1);
+	assert_eq!(RuntimeCall::Module1_7(module1::Call::fail {}).encode()[0], 2);
+	assert_eq!(RuntimeCall::Module1_8(module1::Call::fail {}).encode()[0], 12);
+	assert_eq!(RuntimeCall::Module1_9(module1::Call::fail {}).encode()[0], 13);
 }
 
 #[test]
@@ -537,7 +537,7 @@ fn call_name() {
 #[test]
 fn call_metadata() {
 	use frame_support::dispatch::{CallMetadata, GetCallMetadata};
-	let call = Call::Module3(module3::Call::<Runtime>::aux_4 {});
+	let call = RuntimeCall::Module3(module3::Call::<Runtime>::aux_4 {});
 	let metadata = call.get_call_metadata();
 	let expected = CallMetadata { function_name: "aux_4".into(), pallet_name: "Module3".into() };
 	assert_eq!(metadata, expected);
@@ -553,7 +553,7 @@ fn get_call_names() {
 #[test]
 fn get_module_names() {
 	use frame_support::dispatch::GetCallMetadata;
-	let module_names = Call::get_module_names();
+	let module_names = RuntimeCall::get_module_names();
 	assert_eq!(
 		[
 			"System",
@@ -575,13 +575,13 @@ fn get_module_names() {
 #[test]
 fn call_subtype_conversion() {
 	use frame_support::{dispatch::CallableCallFor, traits::IsSubType};
-	let call = Call::Module3(module3::Call::<Runtime>::fail {});
+	let call = RuntimeCall::Module3(module3::Call::<Runtime>::fail {});
 	let subcall: Option<&CallableCallFor<Module3, Runtime>> = call.is_sub_type();
 	let subcall_none: Option<&CallableCallFor<Module2, Runtime>> = call.is_sub_type();
 	assert_eq!(Some(&module3::Call::<Runtime>::fail {}), subcall);
 	assert_eq!(None, subcall_none);
 
-	let from = Call::from(subcall.unwrap().clone());
+	let from = RuntimeCall::from(subcall.unwrap().clone());
 	assert_eq!(from, call);
 }
 

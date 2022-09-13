@@ -82,7 +82,8 @@ pub type PeriodicIndex = u32;
 /// The location of a scheduled task that can be used to remove it.
 pub type TaskAddress<BlockNumber> = (BlockNumber, u32);
 
-pub type CallOrHashOf<T> = MaybeHashed<<T as Config>::Call, <T as frame_system::Config>::Hash>;
+pub type CallOrHashOf<T> =
+	MaybeHashed<<T as Config>::RuntimeCall, <T as frame_system::Config>::Hash>;
 
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode)]
@@ -113,7 +114,7 @@ pub struct ScheduledV3<Call, BlockNumber, PalletsOrigin, AccountId> {
 use crate::ScheduledV3 as ScheduledV2;
 
 pub type ScheduledV2Of<T> = ScheduledV3<
-	<T as Config>::Call,
+	<T as Config>::RuntimeCall,
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
 	<T as frame_system::Config>::AccountId,
@@ -198,7 +199,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The aggregated origin which the dispatch will take.
 		type Origin: OriginTrait<PalletsOrigin = Self::PalletsOrigin>
@@ -209,7 +210,7 @@ pub mod pallet {
 		type PalletsOrigin: From<system::RawOrigin<Self::AccountId>> + Codec + Clone + Eq + TypeInfo;
 
 		/// The aggregated call type.
-		type Call: Parameter
+		type RuntimeCall: Parameter
 			+ Dispatchable<Origin = <Self as Config>::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<system::Call<Self>>;
@@ -543,27 +544,28 @@ impl<T: Config> Pallet<T> {
 	pub fn migrate_v1_to_v3() -> Weight {
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
 
-		Agenda::<T>::translate::<Vec<Option<ScheduledV1<<T as Config>::Call, T::BlockNumber>>>, _>(
-			|_, agenda| {
-				Some(
-					agenda
-						.into_iter()
-						.map(|schedule| {
-							weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+		Agenda::<T>::translate::<
+			Vec<Option<ScheduledV1<<T as Config>::RuntimeCall, T::BlockNumber>>>,
+			_,
+		>(|_, agenda| {
+			Some(
+				agenda
+					.into_iter()
+					.map(|schedule| {
+						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 
-							schedule.map(|schedule| ScheduledV3 {
-								maybe_id: schedule.maybe_id,
-								priority: schedule.priority,
-								call: schedule.call.into(),
-								maybe_periodic: schedule.maybe_periodic,
-								origin: system::RawOrigin::Root.into(),
-								_phantom: Default::default(),
-							})
+						schedule.map(|schedule| ScheduledV3 {
+							maybe_id: schedule.maybe_id,
+							priority: schedule.priority,
+							call: schedule.call.into(),
+							maybe_periodic: schedule.maybe_periodic,
+							origin: system::RawOrigin::Root.into(),
+							_phantom: Default::default(),
 						})
-						.collect::<Vec<_>>(),
-				)
-			},
-		);
+					})
+					.collect::<Vec<_>>(),
+			)
+		});
 
 		#[allow(deprecated)]
 		frame_support::storage::migration::remove_storage_prefix(
@@ -859,7 +861,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
+impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::RuntimeCall, T::PalletsOrigin>
 	for Pallet<T>
 {
 	type Address = TaskAddress<T::BlockNumber>;
@@ -891,7 +893,7 @@ impl<T: Config> schedule::v2::Anon<T::BlockNumber, <T as Config>::Call, T::Palle
 	}
 }
 
-impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::Call, T::PalletsOrigin>
+impl<T: Config> schedule::v2::Named<T::BlockNumber, <T as Config>::RuntimeCall, T::PalletsOrigin>
 	for Pallet<T>
 {
 	type Address = TaskAddress<T::BlockNumber>;

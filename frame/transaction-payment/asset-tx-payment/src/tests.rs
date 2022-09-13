@@ -55,8 +55,8 @@ frame_support::construct_runtime!(
 	}
 );
 
-const CALL: &<Runtime as frame_system::Config>::Call =
-	&Call::Balances(BalancesCall::transfer { dest: 2, value: 69 });
+const CALL: &<Runtime as frame_system::Config>::RuntimeCall =
+	&RuntimeCall::Balances(BalancesCall::transfer { dest: 2, value: 69 });
 
 parameter_types! {
 	static ExtrinsicBaseWeight: Weight = Weight::zero();
@@ -90,13 +90,13 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -115,7 +115,7 @@ parameter_types! {
 
 impl pallet_balances::Config for Runtime {
 	type Balance = Balance;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<10>;
 	type AccountStore = System;
@@ -144,7 +144,7 @@ impl WeightToFeeT for TransactionByteFee {
 }
 
 impl pallet_transaction_payment::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 	type WeightToFee = WeightToFee;
 	type LengthToFee = TransactionByteFee;
@@ -153,7 +153,7 @@ impl pallet_transaction_payment::Config for Runtime {
 }
 
 impl pallet_assets::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
 	type AssetId = u32;
 	type Currency = Balances;
@@ -199,7 +199,7 @@ impl HandleCredit<AccountId, Assets> for CreditToBlockAuthor {
 }
 
 impl Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Fungibles = Assets;
 	type OnChargeAssetTransaction = FungiblesAdapter<
 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto>,

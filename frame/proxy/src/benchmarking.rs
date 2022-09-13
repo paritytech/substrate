@@ -27,7 +27,7 @@ use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
 
-fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -88,7 +88,7 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		let real_lookup = T::Lookup::unlookup(real);
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark { remark: vec![] }.into();
 	}: _(RawOrigin::Signed(caller), real_lookup, Some(T::ProxyType::default()), Box::new(call))
 	verify {
 		assert_last_event::<T>(Event::ProxyExecuted { result: Ok(()) }.into())
@@ -105,7 +105,7 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		let real_lookup = T::Lookup::unlookup(real);
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(delegate.clone()).into(),
 			real_lookup.clone(),
@@ -126,7 +126,7 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		let real_lookup = T::Lookup::unlookup(real);
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real_lookup.clone(),
@@ -149,7 +149,7 @@ benchmarks! {
 		// ... and "real" is the traditional caller. This is not a typo.
 		let real: T::AccountId = whitelisted_caller();
 		let real_lookup = T::Lookup::unlookup(real.clone());
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		Proxy::<T>::announce(
 			RawOrigin::Signed(caller.clone()).into(),
 			real_lookup,
@@ -172,7 +172,7 @@ benchmarks! {
 		let real: T::AccountId = whitelisted_caller();
 		let real_lookup = T::Lookup::unlookup(real.clone());
 		add_announcements::<T>(a, Some(caller.clone()), None)?;
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
+		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark { remark: vec![] }.into();
 		let call_hash = T::CallHasher::hash_of(&call);
 	}: _(RawOrigin::Signed(caller.clone()), real_lookup, call_hash)
 	verify {

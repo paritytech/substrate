@@ -100,7 +100,7 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	approvals: Vec<AccountId>,
 }
 
-type OpaqueCall<T> = WrapperKeepOpaque<<T as Config>::Call>;
+type OpaqueCall<T> = WrapperKeepOpaque<<T as Config>::RuntimeCall>;
 
 type CallHash = [u8; 32];
 
@@ -118,10 +118,10 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Parameter
+		type RuntimeCall: Parameter
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
@@ -267,7 +267,7 @@ pub mod pallet {
 		pub fn as_multi_threshold_1(
 			origin: OriginFor<T>,
 			other_signatories: Vec<T::AccountId>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let max_sigs = T::MaxSignatories::get() as usize;
@@ -699,7 +699,7 @@ impl<T: Config> Pallet<T> {
 	fn get_call(
 		hash: &[u8; 32],
 		maybe_known: Option<&OpaqueCall<T>>,
-	) -> Option<(<T as Config>::Call, usize)> {
+	) -> Option<(<T as Config>::RuntimeCall, usize)> {
 		maybe_known.map_or_else(
 			|| {
 				Calls::<T>::get(hash)

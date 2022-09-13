@@ -62,10 +62,10 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: IsType<<Self as frame_system::Config>::Call>
+		type RuntimeCall: IsType<<Self as frame_system::Config>::RuntimeCall>
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ FullCodec
@@ -166,7 +166,7 @@ pub mod pallet {
 			let call = T::PreimageProvider::get_preimage(&call_hash)
 				.ok_or(Error::<T>::UnavailablePreImage)?;
 
-			let call = <T as Config>::Call::decode_all_with_depth_limit(
+			let call = <T as Config>::RuntimeCall::decode_all_with_depth_limit(
 				sp_api::MAX_EXTRINSIC_DEPTH,
 				&mut &call[..],
 			)
@@ -192,7 +192,7 @@ pub mod pallet {
 		})]
 		pub fn dispatch_whitelisted_call_with_preimage(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			T::DispatchWhitelistedOrigin::ensure_origin(origin)?;
 
@@ -217,7 +217,7 @@ impl<T: Config> Pallet<T> {
 	/// Clean whitelisting/preimage and dispatch call.
 	///
 	/// Return the call actual weight of the dispatched call if there is some.
-	fn clean_and_dispatch(call_hash: T::Hash, call: <T as Config>::Call) -> Option<Weight> {
+	fn clean_and_dispatch(call_hash: T::Hash, call: <T as Config>::RuntimeCall) -> Option<Weight> {
 		WhitelistedCall::<T>::remove(call_hash);
 
 		T::PreimageProvider::unrequest_preimage(&call_hash);

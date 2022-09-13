@@ -25,12 +25,12 @@ pub trait Config: 'static + Eq + Clone {
 	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
-	type BaseCallFilter: frame_support::traits::Contains<Self::Call>;
+	type BaseCallFilter: frame_support::traits::Contains<Self::RuntimeCall>;
 	type BlockNumber: Decode + Encode + EncodeLike + Clone + Default + scale_info::TypeInfo;
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode + scale_info::TypeInfo;
-	type Call;
-	type Event: From<Event<Self>>;
+	type RuntimeCall;
+	type RuntimeEvent: From<Event<Self>>;
 	type PalletInfo: frame_support::traits::PalletInfo;
 	type DbWeight: Get<RuntimeDbWeight>;
 }
@@ -43,7 +43,7 @@ frame_support::decl_module! {
 }
 
 impl<T: Config> Module<T> {
-	pub fn deposit_event(_event: impl Into<T::Event>) {}
+	pub fn deposit_event(_event: impl Into<T::RuntimeEvent>) {}
 }
 
 frame_support::decl_event!(

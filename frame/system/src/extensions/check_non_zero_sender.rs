@@ -53,10 +53,10 @@ impl<T: Config + Send + Sync> CheckNonZeroSender<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for CheckNonZeroSender<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckNonZeroSender";

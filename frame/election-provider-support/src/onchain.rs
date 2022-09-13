@@ -214,13 +214,13 @@ mod tests {
 		type Origin = Origin;
 		type Index = AccountId;
 		type BlockNumber = BlockNumber;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::testing::Header;
-		type Event = ();
+		type RuntimeEvent = ();
 		type BlockHashCount = ();
 		type DbWeight = ();
 		type BlockLength = ();
