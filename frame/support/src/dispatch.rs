@@ -56,12 +56,12 @@ pub type DispatchErrorWithPostInfo =
 
 /// Serializable version of pallet dispatchable.
 pub trait Callable<T> {
-	type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
+	type RuntimeCall: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
+pub type CallableCallFor<A, R> = <A as Callable<R>>::RuntimeCall;
 
 /// Origin for the System pallet.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -1497,7 +1497,7 @@ macro_rules! decl_module {
 		{
 			/// Deposits an event using `frame_system::Pallet::deposit_event`.
 			$vis fn deposit_event(
-				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
+				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::RuntimeEvent>
 			) {
 				<$system::Pallet<$trait_instance>>::deposit_event(event.into())
 			}
@@ -2376,7 +2376,7 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable<$trait_instance>
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			type Call = $call_type<$trait_instance $(, $instance)?>;
+			type RuntimeCall = $call_type<$trait_instance $(, $instance)?>;
 		}
 
 		$crate::__dispatch_impl_metadata! {
@@ -2648,9 +2648,9 @@ mod tests {
 
 		pub trait Config: 'static {
 			type AccountId;
-			type Call;
+			type RuntimeCall;
 			type BaseCallFilter;
-			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
+			type Origin: crate::traits::OriginTrait<Call = Self::RuntimeCall>;
 			type BlockNumber: Into<u32>;
 			type PalletInfo: crate::traits::PalletInfo;
 			type DbWeight: Get<RuntimeDbWeight>;
@@ -2751,7 +2751,7 @@ mod tests {
 	}
 
 	impl crate::traits::OriginTrait for OuterOrigin {
-		type Call = <TraitImpl as system::Config>::Call;
+		type Call = <TraitImpl as system::Config>::RuntimeCall;
 		type PalletsOrigin = OuterOrigin;
 		type AccountId = <TraitImpl as system::Config>::AccountId;
 
@@ -2799,7 +2799,7 @@ mod tests {
 	impl system::Config for TraitImpl {
 		type Origin = OuterOrigin;
 		type AccountId = u32;
-		type Call = ();
+		type RuntimeCall = ();
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockNumber = u32;
 		type PalletInfo = Self;

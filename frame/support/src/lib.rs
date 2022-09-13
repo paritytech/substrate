@@ -1452,9 +1452,9 @@ pub mod pallet_prelude {
 /// I.e. a regular trait definition named `Config`, with supertrait `frame_system::Config`,
 /// optionally other supertrait and where clause.
 ///
-/// The associated type `Event` is reserved, if defined it must bounds `From<Event>` and
-/// `IsType<<Self as frame_system::Config>::Event>`, see `#[pallet::event]` for more
-/// information.
+/// The associated type `RuntimeEvent` is reserved, if defined it must bounds
+/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`, see
+/// `#[pallet::event]` for more information.
 ///
 /// To put `Get` associated type into metadatas, use the attribute `#[pallet::constant]`, e.g.:
 /// ```ignore
@@ -2078,7 +2078,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant] // put the constant in metadata
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+/// 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 /// 	}
 ///
 /// 	// Define some additional constant to put into the constant metadata.
@@ -2267,7 +2267,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant]
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+/// 		type RuntimeEvent: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 /// 	}
 ///
 /// 	#[pallet::extra_constants]
@@ -2423,7 +2423,7 @@ pub mod pallet_prelude {
 /// 	```
 /// 5. **migrate Config**: move trait into the module with
 /// 	* all const in decl_module to `#[pallet::constant]`
-/// 	* add bound `IsType<<Self as frame_system::Config>::Event>` to `type Event`
+/// 	* add bound `IsType<<Self as frame_system::Config>::RuntimeEvent>` to `type RuntimeEvent`
 /// 7. **migrate decl_module**: write:
 /// 	```ignore
 /// 	#[pallet::hooks]

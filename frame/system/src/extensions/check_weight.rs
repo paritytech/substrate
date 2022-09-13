@@ -40,12 +40,12 @@ pub struct CheckWeight<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
 impl<T: Config + Send + Sync> CheckWeight<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	/// Checks if the current extrinsic does not exceed the maximum weight a single extrinsic
 	/// with given `DispatchClass` can have.
 	fn check_extrinsic_weight(
-		info: &DispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 	) -> Result<(), TransactionValidityError> {
 		let max = T::BlockWeights::get().get(info.class).max_extrinsic;
 		match max {
@@ -59,18 +59,18 @@ where
 	///
 	/// Upon successes, it returns the new block weight as a `Result`.
 	fn check_block_weight(
-		info: &DispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 	) -> Result<crate::ConsumedWeight, TransactionValidityError> {
 		let maximum_weight = T::BlockWeights::get();
 		let all_weight = Pallet::<T>::block_weight();
-		calculate_consumed_weight::<T::Call>(maximum_weight, all_weight, info)
+		calculate_consumed_weight::<T::RuntimeCall>(maximum_weight, all_weight, info)
 	}
 
 	/// Checks if the current extrinsic can fit into the block with respect to block length limits.
 	///
 	/// Upon successes, it returns the new block length as a `Result`.
 	fn check_block_length(
-		info: &DispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
 	) -> Result<u32, TransactionValidityError> {
 		let length_limit = T::BlockLength::get();
@@ -93,7 +93,7 @@ where
 	///
 	/// It checks and notes the new weight and length.
 	pub fn do_pre_dispatch(
-		info: &DispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
 	) -> Result<(), TransactionValidityError> {
 		let next_len = Self::check_block_length(info, len)?;
@@ -108,7 +108,7 @@ where
 	/// Do the validate checks. This can be applied to both signed and unsigned.
 	///
 	/// It only checks that the block weight and length limit will not exceed.
-	pub fn do_validate(info: &DispatchInfoOf<T::Call>, len: usize) -> TransactionValidity {
+	pub fn do_validate(info: &DispatchInfoOf<T::RuntimeCall>, len: usize) -> TransactionValidity {
 		// ignore the next length. If they return `Ok`, then it is below the limit.
 		let _ = Self::check_block_length(info, len)?;
 		// during validation we skip block limit check. Since the `validate_transaction`
@@ -170,10 +170,10 @@ where
 
 impl<T: Config + Send + Sync> SignedExtension for CheckWeight<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckWeight";
@@ -713,13 +713,13 @@ mod tests {
 		};
 
 		// when
-		assert_ok!(calculate_consumed_weight::<<Test as Config>::Call>(
+		assert_ok!(calculate_consumed_weight::<<Test as Config>::RuntimeCall>(
 			maximum_weight.clone(),
 			all_weight.clone(),
 			&mandatory1
 		));
 		assert_err!(
-			calculate_consumed_weight::<<Test as Config>::Call>(
+			calculate_consumed_weight::<<Test as Config>::RuntimeCall>(
 				maximum_weight,
 				all_weight,
 				&mandatory2

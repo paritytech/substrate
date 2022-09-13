@@ -134,10 +134,10 @@ impl nested::module::Config for RuntimeOriginTest {}
 impl module::Config for RuntimeOriginTest {}
 
 pub struct BaseCallFilter;
-impl Contains<Call> for BaseCallFilter {
-	fn contains(c: &Call) -> bool {
+impl Contains<RuntimeCall> for BaseCallFilter {
+	fn contains(c: &RuntimeCall) -> bool {
 		match c {
-			Call::NestedModule(_) => true,
+			RuntimeCall::NestedModule(_) => true,
 			_ => false,
 		}
 	}
@@ -149,9 +149,9 @@ impl system::Config for RuntimeOriginTest {
 	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = u32;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 }
 
@@ -170,7 +170,7 @@ frame_support::construct_runtime!(
 pub type Signature = sr25519::Signature;
 pub type BlockNumber = u64;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 #[test]
@@ -192,7 +192,7 @@ fn origin_default_filter() {
 	assert_eq!(Origin::from(nested::module::Origin).filter_call(&rejected_call), false);
 
 	let mut origin = Origin::from(Some(0));
-	origin.add_filter(|c| matches!(c, Call::Module(_)));
+	origin.add_filter(|c| matches!(c, RuntimeCall::Module(_)));
 	assert_eq!(origin.filter_call(&accepted_call), false);
 	assert_eq!(origin.filter_call(&rejected_call), false);
 
