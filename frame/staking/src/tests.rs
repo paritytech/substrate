@@ -3613,7 +3613,11 @@ fn test_payout_stakers() {
 			})
 		);
 
-		for i in 16..100 {
+		let last_era = 99;
+		let history_depth = HistoryDepth::get();
+		let expected_last_reward_era = last_era - 1;
+		let expected_start_reward_era = last_era - history_depth;
+		for i in 16..=last_era {
 			Staking::reward_by_ids(vec![(11, 1)]);
 			// compute and ensure the reward amount is greater than zero.
 			let _ = current_total_payout_for_duration(reward_time_per_era());
@@ -3621,8 +3625,8 @@ fn test_payout_stakers() {
 		}
 
 		// We clean it up as history passes
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 15));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 98));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, expected_start_reward_era));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, expected_last_reward_era));
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3630,7 +3634,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![15, 98]
+				claimed_rewards: bounded_vec![expected_start_reward_era, expected_last_reward_era]
 			})
 		);
 
@@ -3645,7 +3649,13 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![15, 23, 42, 69, 98]
+				claimed_rewards: bounded_vec![
+					expected_start_reward_era,
+					23,
+					42,
+					69,
+					expected_last_reward_era
+				]
 			})
 		);
 	});
@@ -3686,32 +3696,39 @@ fn payout_stakers_handles_basic_errors() {
 			Error::<Test>::NotStash.with_weight(err_weight)
 		);
 
-		for i in 3..100 {
+		let last_era = 99;
+		for i in 3..=last_era {
 			Staking::reward_by_ids(vec![(11, 1)]);
 			// compute and ensure the reward amount is greater than zero.
 			let _ = current_total_payout_for_duration(reward_time_per_era());
 			mock::start_active_era(i);
 		}
-		// We are at era 99, with history depth of 84
-		// We should be able to payout era 15 through 98 (84 total eras), but not 14 or 99.
+
+		let history_depth = HistoryDepth::get();
+		let expected_last_reward_era = last_era - 1;
+		let expected_start_reward_era = last_era - history_depth;
+
+		// We are at era last_era=99. Given history_depth=80, we should be able
+		// to payout era starting from expected_start_reward_era=19 through
+		// expected_last_reward_era=98 (80 total eras), but not 18 or 99.
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 14),
+			Staking::payout_stakers(Origin::signed(1337), 11, expected_start_reward_era - 1),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 99),
+			Staking::payout_stakers(Origin::signed(1337), 11, expected_last_reward_era + 1),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 15));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 98));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, expected_start_reward_era));
+		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, expected_last_reward_era));
 
 		// Can't claim again
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 15),
+			Staking::payout_stakers(Origin::signed(1337), 11, expected_start_reward_era),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 98),
+			Staking::payout_stakers(Origin::signed(1337), 11, expected_last_reward_era),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 	});
