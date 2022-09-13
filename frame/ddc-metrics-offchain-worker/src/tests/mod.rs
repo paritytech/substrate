@@ -2,7 +2,7 @@ use frame_support::traits::{Currency, OffchainWorker, GenesisBuild};
 use frame_system::Config as FSC;
 use pallet_contracts::{self as contracts, Config as CC};
 use sp_core::{
-    offchain::{testing, OffchainExt, Timestamp as OCWTimestamp, TransactionPoolExt}
+    offchain::{testing, OffchainWorkerExt, Timestamp as OCWTimestamp, TransactionPoolExt}
 };
 use sp_runtime::{traits::Hash, AccountId32, RuntimeAppPublic};
 use test_runtime::{
@@ -19,7 +19,6 @@ use crate::{
 };
 use codec::Encode;
 use hex_literal::hex;
-use frame_support::weights::Weight;
 use sp_core::bytes::from_hex;
 
 mod test_runtime;
@@ -182,10 +181,8 @@ fn build_ext_for_contracts() -> sp_io::TestExternalities {
         .assimilate_storage(&mut t)
         .unwrap();
     contracts::GenesisConfig::<Test> {
-        current_schedule: contracts::Schedule {
-            enable_println: true,
-            ..Default::default()
-        },
+        current_schedule: pallet_contracts::Schedule::default()
+            .enable_println(true),
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -216,7 +213,7 @@ fn should_submit_signed_transaction_on_chain() {
     t.register_extension(KeystoreExt(Arc::new(keystore)));
 
     let (offchain, offchain_state) = testing::TestOffchainExt::new();
-    t.register_extension(OffchainExt::new(offchain));
+    t.register_extension(OffchainWorkerExt::new(offchain));
 
     {
         let mut state = offchain_state.write();
@@ -369,7 +366,7 @@ fn deploy_contract() -> AccountId {
 
     // Deploy the contract.
     //let endowment = contracts::Config::<T>::subsistence_threshold_uncached();
-    const GAS_LIMIT: Weight = 100_000_000_000;
+    const GAS_LIMIT: frame_support::weights::Weight = 100_000_000_000;
     const ENDOWMENT: Balance = 100_000_000_000;
     Contracts::instantiate_with_code(
         Origin::signed(alice.clone()),

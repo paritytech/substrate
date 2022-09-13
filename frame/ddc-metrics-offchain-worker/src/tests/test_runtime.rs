@@ -9,6 +9,7 @@ use frame_support::{
     impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types, traits::Get,
     weights::Weight,
 };
+use frame_support::traits::Currency;
 use sp_core::H256;
 use sp_runtime::{
     generic,
@@ -73,12 +74,12 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Module, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
-	    Contracts: contracts::{Module, Call, Config<T>, Storage, Event<T>},
-        Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
-        Randomness: pallet_randomness_collective_flip::{Module, Call, Storage},
-        DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Module, Call, Event<T>},
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+	    Contracts: contracts::{Pallet, Call, Config<T>, Storage, Event<T>},
+        Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
+        Randomness: pallet_randomness_collective_flip::{Pallet, Call, Storage},
+        DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Pallet, Call, Event<T>},
     }
 );
 
@@ -171,8 +172,9 @@ parameter_types! {
 }
 
 // Contracts for Test Runtime.
+use contracts::{Config as contractsConfig};
 
-use contracts::{BalanceOf};
+type BalanceOf<T> = <<T as contractsConfig>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 impl contracts::Config for Test {
     type Time = Timestamp;
