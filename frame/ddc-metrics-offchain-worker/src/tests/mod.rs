@@ -2,7 +2,7 @@ use frame_support::traits::{Currency, OffchainWorker, GenesisBuild};
 use frame_system::Config as FSC;
 use pallet_contracts::{self as contracts, Config as CC};
 use sp_core::{
-    offchain::{testing, OffchainWorkerExt, Timestamp as OCWTimestamp, TransactionPoolExt}
+    offchain::{testing, OffchainWorkerExt, OffchainDbExt, Timestamp as OCWTimestamp, TransactionPoolExt}
 };
 use sp_runtime::{traits::Hash, AccountId32, RuntimeAppPublic};
 use test_runtime::{
@@ -194,7 +194,7 @@ fn build_ext_for_contracts() -> sp_io::TestExternalities {
     ext
 }
 
-// #[test]
+#[test]
 fn should_submit_signed_transaction_on_chain() {
     let mut t = build_ext();
 
@@ -213,6 +213,7 @@ fn should_submit_signed_transaction_on_chain() {
     t.register_extension(KeystoreExt(Arc::new(keystore)));
 
     let (offchain, offchain_state) = testing::TestOffchainExt::new();
+    t.register_extension(OffchainDbExt::new(offchain.clone()));
     t.register_extension(OffchainWorkerExt::new(offchain));
 
     {
