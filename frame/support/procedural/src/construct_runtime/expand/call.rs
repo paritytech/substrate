@@ -203,7 +203,7 @@ pub fn expand_outer_dispatch(
 			}
 
 			#pallet_attrs
-			impl From<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for Call {
+			impl From<#scrate::dispatch::CallableCallFor<#pallet_names, #runtime>> for RuntimeCall {
 				fn from(call: #scrate::dispatch::CallableCallFor<#pallet_names, #runtime>) -> Self {
 					#variant_patterns
 				}
