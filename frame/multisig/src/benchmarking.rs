@@ -188,47 +188,6 @@ benchmarks! {
 		assert_eq!(multisig.approvals.len(), 2);
 	}
 
-	/// TODO: in the documentation it's said that the last approval should be `as_multi` which
-	/// is clearly not the case here. Shall this be removed?
-	approve_as_multi_complete {
-		// Signatories, need at least 2 people
-		let s in 2 .. T::MaxSignatories::get() as u32;
-		// Transaction Length, not a component
-		let z = 10_000;
-		let (mut signatories, call) = setup_multi::<T>(s, z)?;
-		let multi_account_id = Multisig::<T>::multi_account_id(&signatories, s.try_into().unwrap());
-		let mut signatories2 = signatories.clone();
-		let caller = signatories.pop().ok_or("signatories should have len 2 or more")?;
-		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		let call_hash = call.using_encoded(blake2_256);
-		// before the call, get the timepoint
-		let timepoint = Multisig::<T>::timepoint();
-		// Create the multi
-		Multisig::<T>::as_multi(RawOrigin::Signed(caller).into(), s as u16, signatories, None, call.clone(), Weight::zero())?;
-		// Everyone except the first person approves
-		for i in 1 .. s - 1 {
-			let mut signatories_loop = signatories2.clone();
-			let caller_loop = signatories_loop.remove(i as usize);
-			let o = RawOrigin::Signed(caller_loop).into();
-			Multisig::<T>::as_multi(o, s as u16, signatories_loop, Some(timepoint), call.clone(), Weight::zero())?;
-		}
-		let caller2 = signatories2.remove(0);
-		assert!(Multisigs::<T>::contains_key(&multi_account_id, call_hash));
-		// Whitelist caller account from further DB operations.
-		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller2);
-		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
-	}: approve_as_multi(
-		RawOrigin::Signed(caller2),
-		s as u16,
-		signatories2,
-		Some(timepoint),
-		call_hash,
-		Weight::MAX
-	)
-	verify {
-		assert!(!Multisigs::<T>::contains_key(multi_account_id, call_hash));
-	}
-
 	cancel_as_multi {
 		// Signatories, need at least 2 people
 		let s in 2 .. T::MaxSignatories::get() as u32;
