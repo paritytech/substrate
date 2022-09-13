@@ -125,7 +125,7 @@ pub fn expand_outer_dispatch(
 		}
 		// Deprecated, but will warn when used
 		#[allow(deprecated)]
-		impl #scrate::weights::GetDispatchInfo for RuntimeCall {}
+		impl #scrate::dispatch::GetDispatchInfo for RuntimeCall {}
 		impl #scrate::dispatch::GetCallMetadata for RuntimeCall {
 			fn get_call_metadata(&self) -> #scrate::dispatch::CallMetadata {
 				use #scrate::dispatch::GetCallName;
@@ -164,7 +164,7 @@ pub fn expand_outer_dispatch(
 		impl #scrate::dispatch::Dispatchable for RuntimeCall {
 			type Origin = Origin;
 			type Config = RuntimeCall;
-			type Info = #scrate::weights::DispatchInfo;
+			type Info = #scrate::dispatch::DispatchInfo;
 			type PostInfo = #scrate::dispatch::PostDispatchInfo;
 			fn dispatch(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				if !<Self::Origin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
