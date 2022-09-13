@@ -103,6 +103,7 @@ pub trait ClassifyDispatch<T> {
 }
 
 /// Indicates if dispatch function should pay fees or not.
+/// 
 /// If set to `Pays::No`, the block resource limits are applied, yet no fee is deducted.
 pub trait PaysFee<T> {
 	fn pays_fee(&self, _target: T) -> Pays;
