@@ -262,7 +262,7 @@ impl Default for RpcMethods {
 	}
 }
 
-#[static_init::dynamic(drop,lazy)]
+#[static_init::dynamic(drop, lazy)]
 static mut BASE_PATH_TEMP: Option<TempDir> = None;
 
 /// The base path that is used for everything that needs to be written on disk to run a node.
