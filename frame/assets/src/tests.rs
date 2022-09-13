@@ -977,3 +977,25 @@ fn transfer_large_asset() {
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, amount - 1));
 	})
 }
+
+#[test]
+fn querying_roles_should_work() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::tokens::fungibles::roles::Inspect;
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::set_team(
+			Origin::signed(1),
+			0,
+			// Issuer
+			2,
+			// Admin
+			3,
+			// Freezer
+			4,
+		));
+		assert_eq!(Assets::owner(0), Some(1));
+		assert_eq!(Assets::issuer(0), Some(2));
+		assert_eq!(Assets::admin(0), Some(3));
+		assert_eq!(Assets::freezer(0), Some(4));
+	});
+}
