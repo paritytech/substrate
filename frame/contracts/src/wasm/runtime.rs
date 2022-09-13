@@ -2314,7 +2314,7 @@ pub mod env {
 		call_ptr: u32,
 		call_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		use frame_support::{dispatch::GetDispatchInfo, weights::extract_actual_weight};
+		use frame_support::dispatch::{extract_actual_weight, GetDispatchInfo};
 		ctx.charge_gas(RuntimeCosts::CopyFromContract(call_len))?;
 		let call: <E::T as Config>::RuntimeCall =
 			ctx.read_sandbox_memory_as_unbounded(call_ptr, call_len)?;

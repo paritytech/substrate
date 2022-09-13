@@ -1376,7 +1376,10 @@ pub mod pallet_prelude {
 	#[cfg(feature = "std")]
 	pub use crate::traits::GenesisBuild;
 	pub use crate::{
-		dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter},
+		dispatch::{
+			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
+			Pays,
+		},
 		ensure,
 		inherent::{InherentData, InherentIdentifier, ProvideInherent},
 		storage,
@@ -1391,7 +1394,6 @@ pub mod pallet_prelude {
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
 			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
-		weights::{DispatchClass, Pays, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
@@ -1407,6 +1409,7 @@ pub mod pallet_prelude {
 		MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
+	pub use sp_weights::Weight;
 }
 
 /// `pallet` attribute macro allows to define a pallet to be used in `construct_runtime!`.

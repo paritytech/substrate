@@ -35,10 +35,9 @@ pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchError,
+	dispatch::{DispatchError, GetDispatchInfo},
 	ensure,
 	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
-	weights::GetDispatchInfo,
 	RuntimeDebug,
 };
 use frame_system::{self as system};

@@ -2294,6 +2294,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
+ "sp-weights",
  "tt-call",
 ]
 
@@ -2391,6 +2392,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-version",
+ "sp-weights",
  "substrate-test-runtime-client",
 ]
 
@@ -10033,6 +10035,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
+ "sp-weights",
  "substrate-test-runtime-client",
  "zstd",
 ]
@@ -10336,6 +10339,21 @@ dependencies = [
  "sp-std",
  "wasmi",
  "wasmtime",
+]
+
+[[package]]
+name = "sp-weights"
+version = "4.0.0"
+dependencies = [
+ "impl-trait-for-tuples",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "smallvec",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-debug-derive",
+ "sp-std",
 ]
 
 [[package]]

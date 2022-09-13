@@ -200,7 +200,7 @@ pub mod module3 {
 			}
 			#[weight = 3]
 			fn aux_4(_origin) -> frame_support::dispatch::DispatchResult { unreachable!() }
-			#[weight = (5, frame_support::weights::DispatchClass::Operational)]
+			#[weight = (5, frame_support::dispatch::DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 		}
 	}
@@ -504,8 +504,8 @@ fn call_encode_is_correct_and_decode_works() {
 #[test]
 fn call_weight_should_attach_to_call_enum() {
 	use frame_support::{
-		dispatch::{DispatchInfo, GetDispatchInfo},
-		weights::{DispatchClass, Pays, Weight},
+		dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
+		weights::Weight,
 	};
 	// operational.
 	assert_eq!(
