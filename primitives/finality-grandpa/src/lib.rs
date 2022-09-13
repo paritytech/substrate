@@ -29,7 +29,10 @@ use codec::{Codec, Decode, Encode, Input};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::{traits::NumberFor, ConsensusEngineId, RuntimeDebug};
+use sp_runtime::{
+	traits::{Header as HeaderT, NumberFor},
+	ConsensusEngineId, RuntimeDebug,
+};
 use sp_std::{borrow::Cow, vec::Vec};
 
 #[cfg(feature = "std")]
@@ -75,6 +78,63 @@ pub type RoundNumber = u64;
 
 /// A list of Grandpa authorities with associated weights.
 pub type AuthorityList = Vec<(AuthorityId, AuthorityWeight)>;
+
+/// A GRANDPA message for a substrate chain.
+pub type Message<Header> = grandpa::Message<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
+
+/// A signed message.
+pub type SignedMessage<Header> = grandpa::SignedMessage<
+	<Header as HeaderT>::Hash,
+	<Header as HeaderT>::Number,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// A primary propose message for this chain's block type.
+pub type PrimaryPropose<Header> =
+	grandpa::PrimaryPropose<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
+/// A prevote message for this chain's block type.
+pub type Prevote<Header> = grandpa::Prevote<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
+/// A precommit message for this chain's block type.
+pub type Precommit<Header> =
+	grandpa::Precommit<<Header as HeaderT>::Hash, <Header as HeaderT>::Number>;
+/// A catch up message for this chain's block type.
+pub type CatchUp<Header> = grandpa::CatchUp<
+	<Header as HeaderT>::Hash,
+	<Header as HeaderT>::Number,
+	AuthoritySignature,
+	AuthorityId,
+>;
+/// A commit message for this chain's block type.
+pub type Commit<Header> = grandpa::Commit<
+	<Header as HeaderT>::Hash,
+	<Header as HeaderT>::Number,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// A compact commit message for this chain's block type.
+pub type CompactCommit<Header> = grandpa::CompactCommit<
+	<Header as HeaderT>::Hash,
+	<Header as HeaderT>::Number,
+	AuthoritySignature,
+	AuthorityId,
+>;
+
+/// A GRANDPA justification for block finality, it includes a commit message and
+/// an ancestry proof including all headers routing all precommit target blocks
+/// to the commit target block. Due to the current voting strategy the precommit
+/// targets should be the same as the commit target, since honest voters don't
+/// vote past authority set change blocks.
+///
+/// This is meant to be stored in the db and passed around the network to other
+/// nodes, and are used by syncing nodes to prove authority set handoffs.
+#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+pub struct GrandpaJustification<Header: HeaderT> {
+	pub round: u64,
+	pub commit: Commit<Header>,
+	pub votes_ancestries: Vec<Header>,
+}
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Serialize))]

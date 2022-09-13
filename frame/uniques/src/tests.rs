@@ -74,7 +74,7 @@ fn events() -> Vec<Event<Test>> {
 	let result = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let mock::Event::Uniques(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let mock::RuntimeEvent::Uniques(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 
 	System::reset_events();
@@ -887,7 +887,7 @@ fn buy_item_should_work() {
 			// freeze collection
 			assert_ok!(Uniques::freeze_collection(Origin::signed(user_1), collection_id));
 
-			let buy_item_call = mock::Call::Uniques(crate::Call::<Test>::buy_item {
+			let buy_item_call = mock::RuntimeCall::Uniques(crate::Call::<Test>::buy_item {
 				collection: collection_id,
 				item: item_3,
 				bid_price: price_1,
@@ -899,7 +899,7 @@ fn buy_item_should_work() {
 			// freeze item
 			assert_ok!(Uniques::freeze(Origin::signed(user_1), collection_id, item_3));
 
-			let buy_item_call = mock::Call::Uniques(crate::Call::<Test>::buy_item {
+			let buy_item_call = mock::RuntimeCall::Uniques(crate::Call::<Test>::buy_item {
 				collection: collection_id,
 				item: item_3,
 				bid_price: price_1,

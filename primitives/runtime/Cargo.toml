@@ -29,6 +29,7 @@ sp-arithmetic = { version = "5.0.0", default-features = false, path = "../arithm
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
 sp-io = { version = "6.0.0", default-features = false, path = "../io" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../weights" }
 
 [dev-dependencies]
 rand = "0.7.2"

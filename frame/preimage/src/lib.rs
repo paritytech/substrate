@@ -41,10 +41,10 @@ use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	dispatch::Pays,
 	ensure,
 	pallet_prelude::Get,
 	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency},
-	weights::Pays,
 	BoundedVec,
 };
 use scale_info::TypeInfo;
@@ -76,7 +76,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Weight information for this pallet.
 		type WeightInfo: weights::WeightInfo;

@@ -20,8 +20,8 @@
 use super::{Call, *};
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
+	dispatch::{GetDispatchInfo, Pays},
 	traits::{Currency, EstimateNextSessionRotation, OnFinalize},
-	weights::{GetDispatchInfo, Pays},
 };
 use mock::*;
 use pallet_session::ShouldEndSession;

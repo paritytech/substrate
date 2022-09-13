@@ -29,10 +29,12 @@ log = { version = "0.4.0", default-features = false }
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+rand = { version = "0.8.5", features = ["small_rng"] }
 
 [features]
 runtime-benchmarks = []
 try-runtime = [ "frame-support/try-runtime" ]
+fuzz-test = []
 default = ["std"]
 std = [
 	"codec/std",
