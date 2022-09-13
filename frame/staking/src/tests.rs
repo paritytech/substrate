@@ -5292,3 +5292,60 @@ fn proportional_ledger_slash_works() {
 		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 0)])
 	);
 }
+
+#[test]
+fn pre_bonding_era_cannot_be_claimed() {
+	// Verifies initial conditions of mock
+	ExtBuilder::default().nominate(false).build_and_execute(|| {
+		let history_depth = HistoryDepth::get();
+		// jump to some era above history_depth
+		let mut current_era = history_depth + 10;
+		let last_reward_era = current_era - 1;
+		let start_reward_era = current_era - history_depth;
+
+		// put some money in stash=3 and controller=4.
+		for i in 3..5 {
+			let _ = Balances::make_free_balance_be(&i, 2000);
+		}
+
+		mock::start_active_era(current_era);
+
+		// add a new candidate for being a validator. account 3 controlled by 4.
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
+
+		// all previous era before the bonding action should be marked as
+		// claimed.
+		let mut claimed_rewards = vec![];
+		for i in start_reward_era..=last_reward_era {
+			claimed_rewards.push(i);
+		}
+
+		let claimed_rewards: BoundedVec<_, _> = claimed_rewards.try_into().unwrap();
+		assert_eq!(
+			Staking::ledger(&4).unwrap(),
+			StakingLedger {
+				stash: 3,
+				total: 1500,
+				active: 1500,
+				unlocking: Default::default(),
+				claimed_rewards,
+			}
+		);
+
+		// start next era
+		current_era = current_era + 1;
+		mock::start_active_era(current_era);
+
+		// claiming reward for last era in which validator was active works
+		assert_ok!(Staking::payout_stakers(Origin::signed(4), 3, current_era - 1));
+
+		// consumed weight for all payout_stakers dispatches that fail
+		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+		// cannot claim rewards for an era before bonding occured as it is
+		// already marked as claimed.
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(4), 3, current_era - 2),
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+		);
+	});
+}
