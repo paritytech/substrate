@@ -74,3 +74,30 @@ pub fn beefy_peers_set_config(
 	cfg.add_fallback_names(beefy_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect());
 	cfg
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use sp_core::H256;
+
+	#[test]
+	fn beefy_gossip_protocol_name() {
+		use beefy_protocol_name::gossip_protocol_name;
+		// Create protocol name using random genesis hash.
+		let genesis_hash = H256::random();
+		let expected = format!("/{}/beefy/1", hex::encode(genesis_hash));
+		let proto_name = gossip_protocol_name(&genesis_hash, None);
+		assert_eq!(proto_name.to_string(), expected);
+
+		// Create protocol name using hardcoded genesis hash. Verify exact representation.
+		let genesis_hash = [
+			50, 4, 60, 123, 58, 106, 216, 246, 194, 188, 139, 193, 33, 212, 202, 171, 9, 55, 123,
+			94, 8, 43, 12, 251, 187, 57, 173, 19, 188, 74, 205, 147,
+		];
+		let expected =
+			"/32043c7b3a6ad8f6c2bc8bc121d4caab09377b5e082b0cfbbb39ad13bc4acd93/beefy/1".to_string();
+		let proto_name = gossip_protocol_name(&genesis_hash, None);
+		assert_eq!(proto_name.to_string(), expected);
+	}
+}

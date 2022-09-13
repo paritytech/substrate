@@ -993,7 +993,7 @@ pub(crate) mod tests {
 		keystore::tests::Keyring,
 		tests::{
 			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
-			BeefyPeer, BeefyTestNet, BEEFY_PROTOCOL_NAME,
+			BeefyPeer, BeefyTestNet,
 		},
 		BeefyRPCLinks,
 	};
@@ -1039,7 +1039,7 @@ pub(crate) mod tests {
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
 		let gossip_engine =
-			GossipEngine::new(network.clone(), BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
 		let worker_params = crate::worker::WorkerParams {
 			client: peer.client().as_client(),
 			backend: peer.client().as_backend(),
