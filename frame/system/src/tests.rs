@@ -18,8 +18,7 @@
 use crate::*;
 use frame_support::{
 	assert_noop, assert_ok,
-	dispatch::PostDispatchInfo,
-	weights::{Pays, WithPostDispatchInfo},
+	dispatch::{Pays, PostDispatchInfo, WithPostDispatchInfo},
 };
 use mock::{Origin, *};
 use sp_core::H256;
