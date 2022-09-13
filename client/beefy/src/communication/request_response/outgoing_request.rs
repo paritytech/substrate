@@ -72,9 +72,7 @@ where
 {
 	pub fn new(network: N, runtime: Arc<R>, protocol_name: ProtocolName) -> Self {
 		let engine = FuturesUnordered::new();
-		let pending = Either::Left(std::future::pending::<_>());
-		engine.push(pending);
-
+		engine.push(Either::Left(std::future::pending::<_>()));
 		Self { network, runtime, protocol_name, state: State::Idle, engine }
 	}
 
@@ -111,7 +109,14 @@ where
 			State::AwaitingResponse(block) => block,
 			// Programming error to have active [ResponseReceiver]s in the engine with no pending
 			// requests.
-			State::Idle => unreachable!(),
+			State::Idle => {
+				error!(
+					target: "beefy",
+					"🥩 unexpected response received: {:?}",
+					resp
+				);
+				return None
+			},
 		};
 
 		let resp = match resp {
@@ -174,8 +179,14 @@ where
 	pub fn cancel_requests_older_than(&mut self, latest_block: NumberFor<B>) {
 		match &self.state {
 			State::AwaitingResponse(block) if *block <= latest_block => {
+				debug!(
+					target: "beefy",
+					"🥩 cancel pending request for block: {:?}",
+					block
+				);
 				self.state = State::Idle;
-				// TODO: reset `self.engine`
+				self.engine = FuturesUnordered::new();
+				self.engine.push(Either::Left(std::future::pending::<_>()));
 			},
 			_ => (),
 		}

@@ -55,6 +55,7 @@ use sc_network::{
 	},
 	Multiaddr, NetworkService, NetworkWorker,
 };
+use sc_network::config::RequestResponseConfig;
 use sc_network_common::{
 	config::{MultiaddrWithPeerId, ProtocolId},
 	protocol::ProtocolName,
@@ -683,6 +684,8 @@ pub struct FullPeerConfig {
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
 	pub notifications_protocols: Vec<ProtocolName>,
+	/// List of request-response protocols that the network must support.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// The indices of the peers the peer should be connected to.
 	///
 	/// If `None`, it will be connected to all other peers.
@@ -785,6 +788,7 @@ where
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
+		network_config.request_response_protocols.extend(config.request_response_protocols);
 		network_config.extra_sets = config
 			.notifications_protocols
 			.into_iter()

@@ -135,7 +135,7 @@ where
 		}
 	}
 
-	pub(crate) fn try_conclude(
+	pub(crate) fn should_conclude(
 		&mut self,
 		round: &(P, NumberFor<B>),
 	) -> Option<Vec<Option<Signature>>> {
@@ -148,7 +148,6 @@ where
 
 		if done {
 			let signatures = self.rounds.remove(round)?.votes;
-			self.conclude(round.1);
 			Some(
 				self.validators()
 					.iter()
@@ -279,7 +278,7 @@ mod tests {
 			true
 		));
 		// round not concluded
-		assert!(rounds.try_conclude(&round).is_none());
+		assert!(rounds.should_conclude(&round).is_none());
 		// self vote already present, should not self vote
 		assert!(!rounds.should_self_vote(&round));
 
@@ -296,7 +295,7 @@ mod tests {
 			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed")),
 			false
 		));
-		assert!(rounds.try_conclude(&round).is_none());
+		assert!(rounds.should_conclude(&round).is_none());
 
 		// add 2nd good vote
 		assert!(rounds.add_vote(
@@ -305,7 +304,7 @@ mod tests {
 			false
 		));
 		// round not concluded
-		assert!(rounds.try_conclude(&round).is_none());
+		assert!(rounds.should_conclude(&round).is_none());
 
 		// add 3rd good vote
 		assert!(rounds.add_vote(
@@ -314,7 +313,8 @@ mod tests {
 			false
 		));
 		// round concluded
-		assert!(rounds.try_conclude(&round).is_some());
+		assert!(rounds.should_conclude(&round).is_some());
+		rounds.conclude(round.1);
 
 		// Eve is a validator, but round was concluded, adding vote disallowed
 		assert!(!rounds.add_vote(
@@ -432,11 +432,12 @@ mod tests {
 		assert_eq!(3, rounds.rounds.len());
 
 		// conclude unknown round
-		assert!(rounds.try_conclude(&(H256::from_low_u64_le(5), 5)).is_none());
+		assert!(rounds.should_conclude(&(H256::from_low_u64_le(5), 5)).is_none());
 		assert_eq!(3, rounds.rounds.len());
 
 		// conclude round 2
-		let signatures = rounds.try_conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
+		let signatures = rounds.should_conclude(&(H256::from_low_u64_le(2), 2)).unwrap();
+		rounds.conclude(2);
 		assert_eq!(1, rounds.rounds.len());
 
 		assert_eq!(

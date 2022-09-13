@@ -448,7 +448,7 @@ where
 		let rounds = self.voting_oracle.rounds_mut().ok_or(Error::UninitSession)?;
 
 		if rounds.add_vote(&round, vote, self_vote) {
-			if let Some(signatures) = rounds.try_conclude(&round) {
+			if let Some(signatures) = rounds.should_conclude(&round) {
 				self.gossip_validator.conclude_round(round.1);
 
 				let block_num = round.1;
@@ -1035,6 +1035,11 @@ pub(crate) mod tests {
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
 		let gossip_engine =
 			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
+		let on_demand_justifications = OnDemandJustificationsEngine::new(
+			network.clone(),
+			api.clone(),
+			"/beefy/justifs/1".into(),
+		);
 		let worker_params = crate::worker::WorkerParams {
 			client: peer.client().as_client(),
 			backend: peer.client().as_backend(),
@@ -1047,6 +1052,7 @@ pub(crate) mod tests {
 			min_block_delta,
 			metrics: None,
 			network,
+			on_demand_justifications,
 		};
 		BeefyWorker::<_, _, _, _, _>::new(worker_params)
 	}
@@ -1298,7 +1304,7 @@ pub(crate) mod tests {
 	fn keystore_vs_validator_set() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		// keystore doesn't contain other keys than validators'
@@ -1321,7 +1327,7 @@ pub(crate) mod tests {
 	fn should_finalize_correctly() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
@@ -1408,7 +1414,7 @@ pub(crate) mod tests {
 	fn should_init_session() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		assert!(worker.voting_oracle.sessions.is_empty());
@@ -1442,7 +1448,7 @@ pub(crate) mod tests {
 	fn should_triage_votes_and_process_later() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		fn new_vote(
@@ -1503,7 +1509,7 @@ pub(crate) mod tests {
 	fn should_initialize_correct_voter() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 
 		// push 15 blocks with `AuthorityChange` digests every 10 blocks

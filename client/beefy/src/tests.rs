@@ -21,7 +21,7 @@
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc, task::Poll};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
 use tokio::{runtime::Runtime, time::Duration};
 
 use sc_client_api::HeaderBackend;
@@ -32,7 +32,7 @@ use sc_consensus::{
 use sc_keystore::LocalKeystore;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
-	TestNetFactory,
+	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
 
@@ -41,6 +41,7 @@ use beefy_primitives::{
 	BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, VersionedFinalityProof, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
 };
+use sc_network::{config::RequestResponseConfig, ProtocolName};
 use sp_mmr_primitives::{
 	BatchProof, EncodableOpaqueLeaf, Error as MmrError, LeafIndex, MmrApi, Proof,
 };
@@ -59,11 +60,21 @@ use sp_runtime::{
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 
 use crate::{
-	beefy_block_import_and_links, justification::*, keystore::tests::Keyring as BeefyKeyring,
+	beefy_block_import_and_links,
+	communication::request_response::{
+		incoming_handler::BeefyJustifsRequestHandler, justif_protocol_config,
+	},
+	gossip_protocol_name,
+	justification::*,
+	keystore::tests::Keyring as BeefyKeyring,
 	BeefyRPCLinks, BeefyVoterLinks,
 };
 
-pub(crate) const BEEFY_PROTOCOL_NAME: &'static str = "/beefy/1";
+const GENESIS_HASH: H256 = H256::zero();
+fn beefy_gossip_proto_name() -> ProtocolName {
+	gossip_protocol_name(GENESIS_HASH, None)
+}
+
 const GOOD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0xbf);
 const BAD_MMR_ROOT: MmrRootHash = MmrRootHash::repeat_byte(0x42);
 
@@ -92,6 +103,8 @@ impl BuildStorage for Genesis {
 pub(crate) struct PeerData {
 	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block>>>,
 	pub(crate) beefy_voter_links: Mutex<Option<BeefyVoterLinks<Block>>>,
+	pub(crate) beefy_justif_req_handler:
+		Mutex<Option<BeefyJustifsRequestHandler<Block, PeersFullClient>>>,
 }
 
 #[derive(Default)]
@@ -100,23 +113,34 @@ pub(crate) struct BeefyTestNet {
 }
 
 impl BeefyTestNet {
-	pub(crate) fn new(n_authority: usize, n_full: usize) -> Self {
-		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority + n_full) };
-		for _ in 0..n_authority {
-			net.add_authority_peer();
-		}
-		for _ in 0..n_full {
-			net.add_full_peer();
+	pub(crate) fn new(n_authority: usize) -> Self {
+		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority) };
+
+		for i in 0..n_authority {
+			let (rx, cfg) = justif_protocol_config(GENESIS_HASH, None);
+			let justif_protocol_name = cfg.name.clone();
+
+			net.add_authority_peer(vec![cfg]);
+
+			let client = net.peers[i].client().as_client();
+			let justif_handler = BeefyJustifsRequestHandler {
+				request_receiver: rx,
+				justif_protocol_name,
+				client,
+				_block: PhantomData,
+			};
+			*net.peers[i].data.beefy_justif_req_handler.lock() = Some(justif_handler);
 		}
 		net
 	}
 
-	pub(crate) fn add_authority_peer(&mut self) {
+	pub(crate) fn add_authority_peer(&mut self, req_resp_cfgs: Vec<RequestResponseConfig>) {
 		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![BEEFY_PROTOCOL_NAME.into()],
+			notifications_protocols: vec![beefy_gossip_proto_name()],
+			request_response_protocols: req_resp_cfgs,
 			is_authority: true,
 			..Default::default()
-		})
+		});
 	}
 
 	pub(crate) fn generate_blocks_and_sync(
@@ -172,6 +196,7 @@ impl TestNetFactory for BeefyTestNet {
 		let peer_data = PeerData {
 			beefy_rpc_links: Mutex::new(Some(rpc_links)),
 			beefy_voter_links: Mutex::new(Some(voter_links)),
+			..Default::default()
 		};
 		(BlockImportAdapter::new(block_import), None, peer_data)
 	}
@@ -189,11 +214,8 @@ impl TestNetFactory for BeefyTestNet {
 	}
 
 	fn add_full_peer(&mut self) {
-		self.add_full_peer_with_config(FullPeerConfig {
-			notifications_protocols: vec![BEEFY_PROTOCOL_NAME.into()],
-			is_authority: false,
-			..Default::default()
-		})
+		// `add_authority_peer()` used instead.
+		unimplemented!()
 	}
 }
 
@@ -321,7 +343,7 @@ where
 	API: ProvideRuntimeApi<Block> + Default + Sync + Send,
 	API::Api: BeefyApi<Block> + MmrApi<Block, MmrRootHash>,
 {
-	let voters = FuturesUnordered::new();
+	let tasks = FuturesUnordered::new();
 
 	for (peer_id, key, api) in peers.into_iter() {
 		let peer = &net.peers[peer_id];
@@ -329,31 +351,44 @@ where
 		let keystore = create_beefy_keystore(*key);
 
 		let (_, _, peer_data) = net.make_block_import(peer.client().clone());
-		let PeerData { beefy_rpc_links, beefy_voter_links } = peer_data;
+		let PeerData { beefy_rpc_links, beefy_voter_links, .. } = peer_data;
 
 		let beefy_voter_links = beefy_voter_links.lock().take();
 		*peer.data.beefy_rpc_links.lock() = beefy_rpc_links.lock().take();
 		*peer.data.beefy_voter_links.lock() = beefy_voter_links.clone();
+
+		let on_demand_justif_handler = peer.data.beefy_justif_req_handler.lock().take().unwrap();
+
+		let network_params = crate::BeefyNetworkParams {
+			network: peer.network_service().clone(),
+			gossip_protocol_name: beefy_gossip_proto_name(),
+			justifications_protocol_name: on_demand_justif_handler.protocol_name(),
+			_phantom: PhantomData,
+		};
 
 		let beefy_params = crate::BeefyParams {
 			client: peer.client().as_client(),
 			backend: peer.client().as_backend(),
 			runtime: api.clone(),
 			key_store: Some(keystore),
-			network: peer.network_service().clone(),
+			network_params,
 			links: beefy_voter_links.unwrap(),
 			min_block_delta,
 			prometheus_registry: None,
-			protocol_name: BEEFY_PROTOCOL_NAME.into(),
 		};
-		let gadget = crate::start_beefy_gadget::<_, _, _, _, _>(beefy_params);
+		let task = async move {
+			futures::join!(
+				crate::start_beefy_gadget::<_, _, _, _, _>(beefy_params),
+				on_demand_justif_handler.run()
+			);
+		};
 
 		fn assert_send<T: Send>(_: &T) {}
-		assert_send(&gadget);
-		voters.push(gadget);
+		assert_send(&task);
+		tasks.push(task);
 	}
 
-	voters.for_each(|_| async move {})
+	tasks.for_each(|_| async move {})
 }
 
 fn block_until(future: impl Future + Unpin, net: &Arc<Mutex<BeefyTestNet>>, runtime: &mut Runtime) {
@@ -496,7 +531,7 @@ fn beefy_finalizing_blocks() {
 	let session_len = 10;
 	let min_block_delta = 4;
 
-	let mut net = BeefyTestNet::new(2, 0);
+	let mut net = BeefyTestNet::new(2);
 
 	let api = Arc::new(two_validators::TestApi {});
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
@@ -535,7 +570,7 @@ fn lagging_validators() {
 	let session_len = 30;
 	let min_block_delta = 1;
 
-	let mut net = BeefyTestNet::new(2, 0);
+	let mut net = BeefyTestNet::new(2);
 	let api = Arc::new(two_validators::TestApi {});
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
@@ -584,7 +619,7 @@ fn lagging_validators() {
 	// Bob catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
 	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
-	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #40
+	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #60
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[60]);
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[60]);
 }
@@ -600,7 +635,7 @@ fn correct_beefy_payload() {
 	let session_len = 20;
 	let min_block_delta = 2;
 
-	let mut net = BeefyTestNet::new(4, 0);
+	let mut net = BeefyTestNet::new(4);
 
 	// Alice, Bob, Charlie will vote on good payloads
 	let good_api = Arc::new(four_validators::TestApi {});
@@ -674,11 +709,11 @@ fn beefy_importing_blocks() {
 
 	sp_tracing::try_init_simple();
 
-	let mut net = BeefyTestNet::new(2, 0);
+	let mut net = BeefyTestNet::new(2);
 
 	let client = net.peer(0).client().clone();
 	let (mut block_import, _, peer_data) = net.make_block_import(client.clone());
-	let PeerData { beefy_rpc_links: _, beefy_voter_links } = peer_data;
+	let PeerData { beefy_voter_links, .. } = peer_data;
 	let justif_stream = beefy_voter_links.lock().take().unwrap().from_block_import_justif_stream;
 
 	let params = |block: Block, justifications: Option<Justifications>| {
