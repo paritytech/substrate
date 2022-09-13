@@ -20,8 +20,8 @@
 use super::*;
 use crate as pallet_safe_mode;
 
-use frame_support::{parameter_types, traits::{InsideBoth, SortedMembers, EitherOfDiverse, Everything}};
-use frame_system::{EnsureRoot, EnsureSignedBy};
+use frame_support::{parameter_types, traits::{InsideBoth, SortedMembers, Everything}};
+use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -132,10 +132,10 @@ impl Config for Test {
 	type SafeModeFilter = MockSafeModeFilter;
 	type EnableDuration = EnableDuration;
 	type ExtendDuration = ExtendDuration;
-	type EnableOrigin = EitherOfDiverse<EnsureSignedBy<EnableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-	type ExtendOrigin = EitherOfDiverse<EnsureSignedBy<ExtendOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-	type DisableOrigin = EitherOfDiverse<EnsureSignedBy<DisableOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-	type RepayOrigin = EitherOfDiverse<EnsureSignedBy<RepayOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
+	type EnableOrigin = EnsureSignedBy<EnableOrigin, Self::AccountId>;
+	type ExtendOrigin = EnsureSignedBy<ExtendOrigin, Self::AccountId>;
+	type DisableOrigin = EnsureSignedBy<DisableOrigin, Self::AccountId>;
+	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
 	type EnableStakeAmount = EnableStakeAmount;
 	type ExtendStakeAmount = ExtendStakeAmount;
 }

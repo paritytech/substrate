@@ -66,7 +66,7 @@ fn fails_to_extend_if_not_enabled() {
 fn can_automatically_disable_after_timeout() {
 	new_test_ext().execute_with(|| {
 		let enabled_at_block = System::block_number();
-		assert_ok!(SafeMode::force_enable(Origin::root()));
+		assert_ok!(SafeMode::force_enable(Origin::signed(mock::EnableOrigin::get())));
 		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
 		SafeMode::on_initialize(System::block_number());
 		assert_eq!(SafeMode::enabled(), None);
@@ -135,7 +135,7 @@ fn fails_signed_origin_when_explicit_origin_required() {
 #[test]
 fn fails_force_disable_if_not_enabled() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(SafeMode::force_disable(Origin::root()), Error::<Test>::IsDisabled);
+		assert_noop!(SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())), Error::<Test>::IsDisabled);
 		assert_noop!(
 			SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())),
 			Error::<Test>::IsDisabled
@@ -248,77 +248,5 @@ fn fails_when_explicit_origin_required() {
 		assert_err!(SafeMode::force_extend(Origin::signed(mock::RepayOrigin::get())), DispatchError::BadOrigin);
 		assert_err!(SafeMode::force_disable(Origin::signed(mock::RepayOrigin::get())), DispatchError::BadOrigin);
 
-	});
-}
-
-// ROOT ORIGIN CALL TESTS ---------------------
-
-#[test]
-fn can_force_enable_with_root() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::force_enable(Origin::root()));
-		assert_eq!(
-			SafeMode::enabled().unwrap(),
-			System::block_number() + mock::EnableDuration::get()
-		);
-		assert_noop!(SafeMode::force_enable(Origin::root()), Error::<Test>::IsEnabled);
-		// assert_eq!(Balances::reserved_balance(Origin::root()), 0);
-		// TODO: without an explicit account required... can "raw" root ever have a balance reserved?
-		// If so, check here and below.
-	});
-}
-
-#[test]
-fn can_force_extend_with_root() {
-	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::force_enable(Origin::root()));
-		assert_eq!(
-			SafeMode::enabled().unwrap(),
-			System::block_number() + mock::EnableDuration::get()
-		);
-		assert_ok!(SafeMode::force_extend(Origin::root()));
-		assert_eq!(
-			SafeMode::enabled().unwrap(),
-			System::block_number() + mock::EnableDuration::get() + mock::ExtendDuration::get()
-		);
-	});
-}
-
-#[test]
-fn can_force_disable_with_root() {
-	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::enabled(), None);
-		assert_err!(SafeMode::force_disable(Origin::root()), Error::<Test>::IsDisabled);
-		assert_ok!(SafeMode::force_enable(Origin::root()));
-		assert_ok!(SafeMode::force_disable(Origin::root()));
-	});
-}
-
-#[test]
-fn can_repay_stake_with_root() {
-	new_test_ext().execute_with(|| {
-		let enabled_at_block = System::block_number();
-		assert_ok!(SafeMode::enable(Origin::signed(0)));
-		assert_err!(
-			SafeMode::repay_stake(Origin::root(), 0, enabled_at_block),
-			Error::<Test>::IsEnabled
-		);
-		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
-		SafeMode::on_initialize(System::block_number());
-		assert_ok!(SafeMode::repay_stake(Origin::root(), 0, enabled_at_block));
-	});
-}
-
-#[test]
-fn can_slash_stake_with_root() {
-	new_test_ext().execute_with(|| {
-		let enabled_at_block = System::block_number();
-		assert_ok!(SafeMode::enable(Origin::signed(0)));
-		assert_err!(
-			SafeMode::slash_stake(Origin::root(), 0, enabled_at_block),
-			Error::<Test>::IsEnabled
-		);
-		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
-		assert_ok!(SafeMode::slash_stake(Origin::root(), 0, enabled_at_block));
 	});
 }
