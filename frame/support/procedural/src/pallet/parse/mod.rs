@@ -36,8 +36,9 @@ pub mod type_value;
 pub mod validate_unsigned;
 
 use frame_support_procedural_tools::generate_crate_access_2018;
+use proc_macro2::Group;
 use quote::ToTokens;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, AttrStyle};
 
 /// Parsed definition of a pallet.
 pub struct Def {
@@ -129,14 +130,19 @@ impl Def {
 					// check for #[benchmarking(cached)] calls
 					if let syn::Item::Type(typ) = item {
 						for attr in typ.attrs.as_slice() {
-							if let Some(seg) = attr.path.segments.last() {
-								if let Ok(_) =
-									syn::parse2::<keyword::benchmarking>(seg.to_token_stream())
-								{
+							if attr.style == AttrStyle::Outer {
+								if let Some(seg) = attr.path.segments.last() {
 									if let Ok(_) =
-										syn::parse2::<keyword::cached>(attr.path.to_token_stream())
+										syn::parse2::<keyword::benchmarking>(seg.to_token_stream())
 									{
-										storage_def.benchmarking_cached = true;
+										if let Ok(group) = syn::parse2::<Group>(attr.tokens.clone())
+										{
+											if let Ok(_) =
+												syn::parse2::<keyword::cached>(group.stream())
+											{
+												storage_def.benchmarking_cached = true;
+											}
+										}
 									}
 								}
 							}
