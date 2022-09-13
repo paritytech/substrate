@@ -188,6 +188,8 @@ benchmarks! {
 		assert_eq!(multisig.approvals.len(), 2);
 	}
 
+	/// TODO: in the documentation it's said that the last approval should be `as_multi` which
+	/// is clearly not the case here. Shall this be removed?
 	approve_as_multi_complete {
 		// Signatories, need at least 2 people
 		let s in 2 .. T::MaxSignatories::get() as u32;
