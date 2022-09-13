@@ -72,8 +72,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type ExtendStakeAmount: Get<Option<BalanceOf<Self>>>;
 
-		type EnableOrigin: EnsureOrigin<Self::Origin>;
-		type ExtendOrigin: EnsureOrigin<Self::Origin>;
+		type EnableOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
+		type ExtendOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
 		type DisableOrigin: EnsureOrigin<Self::Origin>;
 		type RepayOrigin: EnsureOrigin<Self::Origin>;
 
@@ -181,7 +181,7 @@ pub mod pallet {
 		pub fn enable(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_enable(Some(who))
+			Self::do_enable(Some(who), T::EnableDuration::get())
 		}
 
 		/// Enable the safe-mode by force for [`Config::EnableDuration`] blocks.
@@ -191,9 +191,9 @@ pub mod pallet {
 		/// Emits an [`Event::Enabled`] event on success.
 		#[pallet::weight(0)]
 		pub fn force_enable(origin: OriginFor<T>) -> DispatchResult {
-			T::EnableOrigin::ensure_origin(origin)?;
+			let duration = T::EnableOrigin::ensure_origin(origin)?;
 
-			Self::do_enable(None)
+			Self::do_enable(None, duration)
 		}
 
 		/// Extend the safe-mode permissionlessly for [`Config::ExtendDuration`] blocks.
@@ -205,7 +205,7 @@ pub mod pallet {
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_extend(Some(who))
+			Self::do_extend(Some(who), T::ExtendDuration::get())
 		}
 
 		/// Extend the safe-mode by force for [`Config::ExtendDuration`] blocks.
@@ -214,9 +214,9 @@ pub mod pallet {
 		/// Can only be called by the [`Config::ExtendOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn force_extend(origin: OriginFor<T>) -> DispatchResult {
-			T::ExtendOrigin::ensure_origin(origin)?;
+			let duration = T::ExtendOrigin::ensure_origin(origin)?;
 
-			Self::do_extend(None)
+			Self::do_extend(None, duration)
 		}
 
 		/// Disable the safe-mode by force.
@@ -282,30 +282,27 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Logic for the [`crate::Pallet::enable`] and [`crate::Pallet::force_enable`] calls.
-	fn do_enable(who: Option<T::AccountId>) -> DispatchResult {
+	fn do_enable(who: Option<T::AccountId>, duration: T::BlockNumber) -> DispatchResult {
 		if let Some(who) = who {
 			let stake = T::EnableStakeAmount::get().ok_or(Error::<T>::NotConfigured)?;
 			Self::reserve(who, stake)?;
 		}
 
 		ensure!(!Enabled::<T>::exists(), Error::<T>::IsEnabled);
-		let limit =
-			<frame_system::Pallet<T>>::block_number().saturating_add(T::EnableDuration::get());
+		let limit = <frame_system::Pallet<T>>::block_number().saturating_add(duration);
 		Enabled::<T>::put(limit);
 		Self::deposit_event(Event::Enabled(limit));
 		Ok(())
 	}
 
 	/// Logic for the [`crate::Pallet::extend`] and [`crate::Pallet::force_extend`] calls.
-	fn do_extend(who: Option<T::AccountId>) -> DispatchResult {
+	fn do_extend(who: Option<T::AccountId>, duration: T::BlockNumber) -> DispatchResult {
 		if let Some(who) = who {
 			let stake = T::ExtendStakeAmount::get().ok_or(Error::<T>::NotConfigured)?;
 			Self::reserve(who, stake)?;
 		}
 
-		let limit = Enabled::<T>::take()
-			.ok_or(Error::<T>::IsDisabled)?
-			.saturating_add(T::ExtendDuration::get());
+		let limit = Enabled::<T>::take().ok_or(Error::<T>::IsDisabled)?.saturating_add(duration);
 		Enabled::<T>::put(limit);
 		Self::deposit_event(Event::<T>::Extended(limit));
 		Ok(())
