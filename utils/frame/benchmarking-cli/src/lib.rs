@@ -93,13 +93,10 @@ impl CliConfiguration for BenchmarkCmd {
 			self, cmd, cmd.base_path()
 		};
 
-		if let Ok(ref path) = inner {
-			if path.is_none() {
-				return Some(BasePath::new_temp_dir()).transpose().map_err(|e| e.into())
-			}
+		match inner {
+			Ok(None) => Some(BasePath::new_temp_dir()).transpose().map_err(|e| e.into()),
+			e => e,
 		}
-
-		inner
 	}
 
 	fn pruning_params(&self) -> Option<&PruningParams> {
