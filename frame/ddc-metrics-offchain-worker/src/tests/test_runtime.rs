@@ -42,29 +42,6 @@ mod example_offchain_worker {
     pub use frame_support::impl_outer_event;
 }
 
-// Macro hack: Give names to the modules.
-// pub type Balances = balances::Module<Test>;
-// pub type Timestamp = pallet_timestamp::Module<Test>;
-// pub type Contracts = contracts::Module<Test>;
-// pub type System = frame_system::Module<Test>;
-// pub type Randomness = pallet_randomness_collective_flip::Module<Test>;
-
-// pub type DdcMetricsOffchainWorker = Module<Test>;
-
-// Macros based on the names above. Not Rust syntax.
-// impl_outer_event! {
-//     pub enum MetaEvent for Test {
-//         system<T>,
-//         balances<T>,
-//         contracts<T>,
-//         example_offchain_worker<T>,
-//     }
-// }
-
-// impl_outer_origin! {
-//     pub enum Origin for Test where system = frame_system {}
-// }
-
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -83,19 +60,6 @@ frame_support::construct_runtime!(
     }
 );
 
-// impl_outer_dispatch! {
-//     pub enum MetaCall for Test where origin: Origin {
-//         balances::Balances,
-//         contracts::Contracts,
-//         example_offchain_worker::DdcMetricsOffchainWorker,
-//     }
-// }
-
-// For testing the module, we construct most of a mock runtime. This means
-// first constructing a configuration type (`Test`) which `impl`s each of the
-// configuration traits of modules we want to use.
-// #[derive(Clone, Eq, PartialEq, Encode, Decode)]
-// pub struct Test;
 parameter_types! {
     pub const BlockHashCount: BlockNumber = 250;
     pub const MaximumBlockWeight: Weight = 1024;
