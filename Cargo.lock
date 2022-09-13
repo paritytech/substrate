@@ -8757,6 +8757,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sc-rpc-spec"
+version = "0.10.0-dev"
+dependencies = [
+ "hex",
+ "jsonrpsee",
+ "sc-chain-spec",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "sc-runtime-test"
 version = "2.0.0"
 dependencies = [
