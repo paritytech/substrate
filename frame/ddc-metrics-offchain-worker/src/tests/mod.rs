@@ -326,7 +326,7 @@ fn should_run_contract() {
         )
         .unwrap();
 
-        let contract_exec_result = pallet_contracts::Module::<T>::bare_call(
+        let contract_exec_result = pallet_contracts::Pallet::<T>::bare_call(
             alice.clone(),
             contract_id,
             0,

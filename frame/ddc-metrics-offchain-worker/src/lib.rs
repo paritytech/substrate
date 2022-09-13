@@ -320,7 +320,7 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
         contract_id: <T as frame_system::Config>::AccountId,
     ) -> ResultStr<u64> {
         let call_data = Self::encode_get_current_period_ms();
-        let contract_exec_result = pallet_contracts::Module::<T>::bare_call(
+        let contract_exec_result = pallet_contracts::Pallet::<T>::bare_call(
             Default::default(),
             contract_id,
             0u32.into(),
@@ -558,7 +558,7 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
         contract_id: <T as frame_system::Config>::AccountId,
     ) -> ResultStr<Vec<DDCNode>> {
         let call_data = Self::encode_get_all_ddc_nodes();
-        let contract_exec_result = pallet_contracts::Module::<T>::bare_call(
+        let contract_exec_result = pallet_contracts::Pallet::<T>::bare_call(
             Default::default(),
             contract_id,
             0u32.into(),
