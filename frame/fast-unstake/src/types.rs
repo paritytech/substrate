@@ -84,7 +84,8 @@ where
 		// we don't check this in the tx-pool as it requires a storage read.
 		if <Self::Call as IsSubType<pallet_staking::Call<T>>>::is_sub_type(call).is_some() {
 			let check_stash = |stash: &T::AccountId| {
-				if Queue::<T>::contains_key(&stash) || Head::<T>::get().map_or(false, |u| &u.stash == stash)
+				if Queue::<T>::contains_key(&stash) ||
+					Head::<T>::get().map_or(false, |u| &u.stash == stash)
 				{
 					Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 				} else {

@@ -19,7 +19,7 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use crate::{Pallet as FastUnstake, *, types::*};
+use crate::{types::*, Pallet as FastUnstake, *};
 use frame_benchmarking::{benchmarks, whitelist_account};
 use frame_support::{
 	assert_ok,
