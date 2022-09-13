@@ -48,7 +48,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
 	type Hash = H256;
@@ -56,7 +56,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
 	type Version = ();
@@ -77,7 +77,7 @@ parameter_types! {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -96,8 +96,8 @@ parameter_types! {
 type AllianceCollective = pallet_collective::Instance1;
 impl pallet_collective::Config<AllianceCollective> for Test {
 	type Origin = Origin;
-	type Proposal = Call;
-	type Event = Event;
+	type Proposal = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = MotionDuration;
 	type MaxProposals = MaxProposals;
 	type MaxMembers = MaxMembers;
@@ -124,7 +124,7 @@ type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>
 type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 
 impl pallet_identity::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type BasicDeposit = BasicDeposit;
 	type FieldDeposit = FieldDeposit;
@@ -162,11 +162,11 @@ impl IdentityVerifier<u64> for AllianceIdentityVerifier {
 }
 
 pub struct AllianceProposalProvider;
-impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
+impl ProposalProvider<u64, H256, RuntimeCall> for AllianceProposalProvider {
 	fn propose_proposal(
 		who: u64,
 		threshold: u32,
-		proposal: Box<Call>,
+		proposal: Box<RuntimeCall>,
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError> {
 		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
@@ -194,7 +194,7 @@ impl ProposalProvider<u64, H256, Call> for AllianceProposalProvider {
 		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
 	}
 
-	fn proposal_of(proposal_hash: H256) -> Option<Call> {
+	fn proposal_of(proposal_hash: H256) -> Option<RuntimeCall> {
 		AllianceMotion::proposal_of(proposal_hash)
 	}
 }
@@ -207,8 +207,8 @@ parameter_types! {
 	pub const RetirementPeriod: BlockNumber = MOTION_DURATION_IN_BLOCKS + 1;
 }
 impl Config for Test {
-	type Event = Event;
-	type Proposal = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type Proposal = RuntimeCall;
 	type AdminOrigin = EnsureSignedBy<One, u64>;
 	type MembershipManager = EnsureSignedBy<Two, u64>;
 	type AnnouncementOrigin = EnsureSignedBy<Three, u64>;
@@ -380,19 +380,19 @@ pub fn test_cid() -> Cid {
 	Cid::new_v0(&*result)
 }
 
-pub fn make_remark_proposal(value: u64) -> (Call, u32, H256) {
-	make_proposal(Call::System(frame_system::Call::remark { remark: value.encode() }))
+pub fn make_remark_proposal(value: u64) -> (RuntimeCall, u32, H256) {
+	make_proposal(RuntimeCall::System(frame_system::Call::remark { remark: value.encode() }))
 }
 
-pub fn make_set_rule_proposal(rule: Cid) -> (Call, u32, H256) {
-	make_proposal(Call::Alliance(pallet_alliance::Call::set_rule { rule }))
+pub fn make_set_rule_proposal(rule: Cid) -> (RuntimeCall, u32, H256) {
+	make_proposal(RuntimeCall::Alliance(pallet_alliance::Call::set_rule { rule }))
 }
 
-pub fn make_kick_member_proposal(who: u64) -> (Call, u32, H256) {
-	make_proposal(Call::Alliance(pallet_alliance::Call::kick_member { who }))
+pub fn make_kick_member_proposal(who: u64) -> (RuntimeCall, u32, H256) {
+	make_proposal(RuntimeCall::Alliance(pallet_alliance::Call::kick_member { who }))
 }
 
-pub fn make_proposal(proposal: Call) -> (Call, u32, H256) {
+pub fn make_proposal(proposal: RuntimeCall) -> (RuntimeCall, u32, H256) {
 	let len: u32 = proposal.using_encoded(|p| p.len() as u32);
 	let hash = BlakeTwo256::hash_of(&proposal);
 	(proposal, len, hash)

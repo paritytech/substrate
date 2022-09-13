@@ -786,14 +786,14 @@ mod tests {
 		type DbWeight = ();
 		type Origin = Origin;
 		type Index = u64;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<u64>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = RuntimeVersion;
 		type PalletInfo = PalletInfo;
@@ -809,7 +809,7 @@ mod tests {
 	type Balance = u64;
 	impl pallet_balances::Config for Runtime {
 		type Balance = Balance;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -823,7 +823,7 @@ mod tests {
 		pub const TransactionByteFee: Balance = 0;
 	}
 	impl pallet_transaction_payment::Config for Runtime {
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
 		type OperationalFeeMultiplier = ConstU8<5>;
 		type WeightToFee = IdentityFee<Balance>;
@@ -850,7 +850,7 @@ mod tests {
 		frame_system::CheckWeight<Runtime>,
 		pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
 	);
-	type TestXt = sp_runtime::testing::TestXt<Call, SignedExtra>;
+	type TestXt = sp_runtime::testing::TestXt<RuntimeCall, SignedExtra>;
 	type TestBlock = Block<TestXt>;
 	type TestUncheckedExtrinsic = TestXt;
 
@@ -889,8 +889,8 @@ mod tests {
 		Some((who, extra(nonce, fee)))
 	}
 
-	fn call_transfer(dest: u64, value: u64) -> Call {
-		Call::Balances(BalancesCall::transfer { dest, value })
+	fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
+		RuntimeCall::Balances(BalancesCall::transfer { dest, value })
 	}
 
 	#[test]
@@ -1033,7 +1033,7 @@ mod tests {
 		let mut t = new_test_ext(10000);
 		// given: TestXt uses the encoded len as fixed Len:
 		let xt = TestXt::new(
-			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
 		let encoded = xt.encode();
@@ -1056,7 +1056,7 @@ mod tests {
 
 			for nonce in 0..=num_to_exhaust_block {
 				let xt = TestXt::new(
-					Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+					RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 					sign_extra(1, nonce.into(), 0),
 				);
 				let res = Executive::apply_extrinsic(xt);
@@ -1081,15 +1081,15 @@ mod tests {
 	#[test]
 	fn block_weight_and_size_is_stored_per_tx() {
 		let xt = TestXt::new(
-			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
 		let x1 = TestXt::new(
-			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 			sign_extra(1, 1, 0),
 		);
 		let x2 = TestXt::new(
-			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 			sign_extra(1, 2, 0),
 		);
 		let len = xt.clone().encode().len() as u32;
@@ -1145,8 +1145,8 @@ mod tests {
 
 	#[test]
 	fn validate_unsigned() {
-		let valid = TestXt::new(Call::Custom(custom::Call::allowed_unsigned {}), None);
-		let invalid = TestXt::new(Call::Custom(custom::Call::unallowed_unsigned {}), None);
+		let valid = TestXt::new(RuntimeCall::Custom(custom::Call::allowed_unsigned {}), None);
+		let invalid = TestXt::new(RuntimeCall::Custom(custom::Call::unallowed_unsigned {}), None);
 		let mut t = new_test_ext(1);
 
 		t.execute_with(|| {
@@ -1184,7 +1184,7 @@ mod tests {
 					id, &1, 110, lock,
 				);
 				let xt = TestXt::new(
-					Call::System(SystemCall::remark { remark: vec![1u8] }),
+					RuntimeCall::System(SystemCall::remark { remark: vec![1u8] }),
 					sign_extra(1, 0, 0),
 				);
 				let weight = xt.get_dispatch_info().weight +
@@ -1360,7 +1360,7 @@ mod tests {
 	#[test]
 	fn custom_runtime_upgrade_is_called_when_using_execute_block_trait() {
 		let xt = TestXt::new(
-			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
 
@@ -1459,7 +1459,7 @@ mod tests {
 
 	#[test]
 	fn calculating_storage_root_twice_works() {
-		let call = Call::Custom(custom::Call::calculate_storage_root {});
+		let call = RuntimeCall::Custom(custom::Call::calculate_storage_root {});
 		let xt = TestXt::new(call, sign_extra(1, 0, 0));
 
 		let header = new_test_ext(1).execute_with(|| {
@@ -1486,10 +1486,10 @@ mod tests {
 	#[should_panic(expected = "Invalid inherent position for extrinsic at index 1")]
 	fn invalid_inherent_position_fail() {
 		let xt1 = TestXt::new(
-			Call::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
+			RuntimeCall::Balances(BalancesCall::transfer { dest: 33, value: 0 }),
 			sign_extra(1, 0, 0),
 		);
-		let xt2 = TestXt::new(Call::Custom(custom::Call::inherent_call {}), None);
+		let xt2 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 
 		let header = new_test_ext(1).execute_with(|| {
 			// Let's build some fake block.
@@ -1514,7 +1514,7 @@ mod tests {
 
 	#[test]
 	fn valid_inherents_position_works() {
-		let xt1 = TestXt::new(Call::Custom(custom::Call::inherent_call {}), None);
+		let xt1 = TestXt::new(RuntimeCall::Custom(custom::Call::inherent_call {}), None);
 		let xt2 = TestXt::new(call_transfer(33, 0), sign_extra(1, 0, 0));
 
 		let header = new_test_ext(1).execute_with(|| {

@@ -84,16 +84,16 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Parameter
+		type RuntimeCall: Parameter
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>
 			+ UnfilteredDispatchable<Origin = Self::Origin>
 			+ IsSubType<Call<Self>>
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// The caller origin, overarching type of all pallets origins.
 		type PalletsOrigin: Parameter +
@@ -133,8 +133,9 @@ pub mod pallet {
 		/// The limit on the number of batched calls.
 		fn batched_calls_limit() -> u32 {
 			let allocator_limit = sp_core::MAX_POSSIBLE_ALLOCATION;
-			let call_size = ((sp_std::mem::size_of::<<T as Config>::Call>() as u32 + CALL_ALIGN -
-				1) / CALL_ALIGN) * CALL_ALIGN;
+			let call_size = ((sp_std::mem::size_of::<<T as Config>::RuntimeCall>() as u32 +
+				CALL_ALIGN - 1) / CALL_ALIGN) *
+				CALL_ALIGN;
 			// The margin to take into account vec doubling capacity.
 			let margin_factor = 3;
 
@@ -147,7 +148,7 @@ pub mod pallet {
 		fn integrity_test() {
 			// If you hit this error, you need to try to `Box` big dispatchable parameters.
 			assert!(
-				sp_std::mem::size_of::<<T as Config>::Call>() as u32 <= CALL_ALIGN,
+				sp_std::mem::size_of::<<T as Config>::RuntimeCall>() as u32 <= CALL_ALIGN,
 				"Call enum size should be smaller than {} bytes.",
 				CALL_ALIGN,
 			);
@@ -201,7 +202,7 @@ pub mod pallet {
 		})]
 		pub fn batch(
 			origin: OriginFor<T>,
-			calls: Vec<<T as Config>::Call>,
+			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
@@ -262,7 +263,7 @@ pub mod pallet {
 		pub fn as_derivative(
 			origin: OriginFor<T>,
 			index: u16,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let mut origin = origin;
 			let who = ensure_signed(origin.clone())?;
@@ -317,7 +318,7 @@ pub mod pallet {
 		})]
 		pub fn batch_all(
 			origin: OriginFor<T>,
-			calls: Vec<<T as Config>::Call>,
+			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
@@ -333,10 +334,12 @@ pub mod pallet {
 				} else {
 					let mut filtered_origin = origin.clone();
 					// Don't allow users to nest `batch_all` calls.
-					filtered_origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
-						let c = <T as Config>::Call::from_ref(c);
-						!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
-					});
+					filtered_origin.add_filter(
+						move |c: &<T as frame_system::Config>::RuntimeCall| {
+							let c = <T as Config>::RuntimeCall::from_ref(c);
+							!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
+						},
+					);
 					call.dispatch(filtered_origin)
 				};
 				// Add the weight of this call.
@@ -376,7 +379,7 @@ pub mod pallet {
 		pub fn dispatch_as(
 			origin: OriginFor<T>,
 			as_origin: Box<T::PalletsOrigin>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
@@ -422,7 +425,7 @@ pub mod pallet {
 		})]
 		pub fn force_batch(
 			origin: OriginFor<T>,
-			calls: Vec<<T as Config>::Call>,
+			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();

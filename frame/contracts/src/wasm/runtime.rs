@@ -2316,7 +2316,7 @@ pub mod env {
 	) -> Result<ReturnCode, TrapReason> {
 		use frame_support::{dispatch::GetDispatchInfo, weights::extract_actual_weight};
 		ctx.charge_gas(RuntimeCosts::CopyFromContract(call_len))?;
-		let call: <E::T as Config>::Call =
+		let call: <E::T as Config>::RuntimeCall =
 			ctx.read_sandbox_memory_as_unbounded(call_ptr, call_len)?;
 		let dispatch_info = call.get_dispatch_info();
 		let charged = ctx.charge_gas(RuntimeCosts::CallRuntime(dispatch_info.weight))?;

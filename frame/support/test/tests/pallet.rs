@@ -125,7 +125,7 @@ pub mod pallet {
 
 		type Balance: Parameter + Default + TypeInfo;
 
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::extra_constants]
@@ -477,7 +477,7 @@ pub mod pallet2 {
 	where
 		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
-		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -579,13 +579,13 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -601,7 +601,7 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type MyGetParam = ConstU32<10>;
 	type MyGetParam2 = ConstU32<11>;
 	type MyGetParam3 = MyGetParam3;
@@ -609,7 +609,7 @@ impl pallet::Config for Runtime {
 }
 
 impl pallet2::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 }
 
 impl pallet4::Config for Runtime {}
@@ -621,7 +621,7 @@ impl pallet3::Config for Runtime {
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -639,10 +639,10 @@ frame_support::construct_runtime!(
 	}
 );
 
-// Test that the part `Call` is excluded from Example2 and included in Example4.
-fn _ensure_call_is_correctly_excluded_and_included(call: Call) {
+// Test that the part `RuntimeCall` is excluded from Example2 and included in Example4.
+fn _ensure_call_is_correctly_excluded_and_included(call: RuntimeCall) {
 	match call {
-		Call::System(_) | Call::Example(_) | Call::Example4(_) => (),
+		RuntimeCall::System(_) | RuntimeCall::Example(_) | RuntimeCall::Example4(_) => (),
 	}
 }
 
@@ -665,7 +665,7 @@ fn transactional_works() {
 				.iter()
 				.map(|e| &e.event)
 				.collect::<Vec<_>>(),
-			vec![&Event::Example(pallet::Event::Something(0))],
+			vec![&RuntimeEvent::Example(pallet::Event::Something(0))],
 		);
 	})
 }
@@ -730,7 +730,7 @@ fn inherent_expand() {
 	let inherents = InherentData::new().create_extrinsics();
 
 	let expected = vec![UncheckedExtrinsic {
-		function: Call::Example(pallet::Call::foo_no_post_info {}),
+		function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 		signature: None,
 	}];
 	assert_eq!(expected, inherents);
@@ -745,11 +745,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info {}),
+				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -767,11 +767,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info {}),
+				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 0, bar: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 0, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -788,7 +788,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+			function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -806,7 +806,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: Call::Example(pallet::Call::foo_no_post_info {}),
+			function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 			signature: Some((1, (), ())),
 		}],
 	);
@@ -825,11 +825,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -847,15 +847,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info {}),
+				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -873,15 +873,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: Some((1, (), ())),
 			},
 			UncheckedExtrinsic {
-				function: Call::Example(pallet::Call::foo_no_post_info {}),
+				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -925,7 +925,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Example(pallet::Event::Something(3)),
+			RuntimeEvent::Example(pallet::Event::Something(3)),
 		);
 	})
 }
@@ -1064,27 +1064,27 @@ fn pallet_hooks_expand() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Example(pallet::Event::Something(10)),
+			RuntimeEvent::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Example2(pallet2::Event::Something(11)),
+			RuntimeEvent::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::Example(pallet::Event::Something(20)),
+			RuntimeEvent::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			Event::Example2(pallet2::Event::Something(21)),
+			RuntimeEvent::Example2(pallet2::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::Example(pallet::Event::Something(30)),
+			RuntimeEvent::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::Example2(pallet2::Event::Something(31)),
+			RuntimeEvent::Example2(pallet2::Event::Something(31)),
 		);
 	})
 }
@@ -1110,27 +1110,27 @@ fn all_pallets_type_reversed_order_is_correct() {
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Example2(pallet2::Event::Something(11)),
+			RuntimeEvent::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Example(pallet::Event::Something(10)),
+			RuntimeEvent::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::Example2(pallet2::Event::Something(21)),
+			RuntimeEvent::Example2(pallet2::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			Event::Example(pallet::Event::Something(20)),
+			RuntimeEvent::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::Example2(pallet2::Event::Something(31)),
+			RuntimeEvent::Example2(pallet2::Event::Something(31)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::Example(pallet::Event::Something(30)),
+			RuntimeEvent::Example(pallet::Event::Something(30)),
 		);
 	})
 }

@@ -129,7 +129,7 @@ pub mod pallet {
 		type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for the unbalanced reduction when slashing a staker.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
