@@ -38,6 +38,7 @@ use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{config::SyncMode, NetworkService};
+use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
 	service::{NetworkStateInfo, NetworkStatusProvider, NetworkTransaction},
 	sync::warp::WarpSyncProvider,
@@ -206,8 +207,7 @@ where
 
 	let (client, backend) = {
 		let db_config = sc_client_db::DatabaseSettings {
-			state_cache_size: config.state_cache_size,
-			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
+			trie_cache_maximum_size: config.trie_cache_maximum_size,
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			blocks_pruning: config.blocks_pruning,
@@ -712,7 +712,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// An optional warp sync provider.
 	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 }
-
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>,
@@ -747,6 +746,8 @@ where
 		block_announce_validator_builder,
 		warp_sync,
 	} = params;
+
+	let mut request_response_protocol_configs = Vec::new();
 
 	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
@@ -837,6 +838,13 @@ where
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
 	)?;
+
+	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
+		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
+		spawn_handle.spawn("bitswap-request-handler", Some("networking"), handler.run());
+		protocol_config
+	}));
+
 	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
@@ -863,6 +871,10 @@ where
 		state_request_protocol_config,
 		warp_sync_protocol_config,
 		light_client_request_protocol_config,
+		request_response_protocol_configs: request_response_protocol_configs
+			.into_iter()
+			.flatten()
+			.collect::<Vec<_>>(),
 	};
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
@@ -924,6 +936,11 @@ where
 pub struct NetworkStarter(oneshot::Sender<()>);
 
 impl NetworkStarter {
+	/// Create a new NetworkStarter
+	pub fn new(sender: oneshot::Sender<()>) -> Self {
+		NetworkStarter(sender)
+	}
+
 	/// Start the network. Call this after all sub-components have been initialized.
 	///
 	/// > **Note**: If you don't call this function, the networking will not work.

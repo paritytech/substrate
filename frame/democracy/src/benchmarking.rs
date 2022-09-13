@@ -37,13 +37,15 @@ const MAX_REFERENDUMS: u32 = 99;
 const MAX_SECONDERS: u32 = 100;
 const MAX_BYTES: u32 = 16_384;
 
-fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 fn funded_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let caller: T::AccountId = account(name, index, SEED);
-	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+	// Give the account half of the maximum value of the `Balance` type.
+	// Otherwise some transfers will fail with an overflow error.
+	T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value() / 2u32.into());
 	caller
 }
 

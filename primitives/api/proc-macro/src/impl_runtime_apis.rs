@@ -277,9 +277,13 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 				std::clone::Clone::clone(&self.recorder)
 			}
 
-			fn extract_proof(&mut self) -> std::option::Option<#crate_::StorageProof> {
-				std::option::Option::take(&mut self.recorder)
-					.map(|recorder| #crate_::ProofRecorder::<Block>::to_storage_proof(&recorder))
+			fn extract_proof(
+				&mut self,
+			) -> std::option::Option<#crate_::StorageProof> {
+				let recorder = std::option::Option::take(&mut self.recorder);
+				std::option::Option::map(recorder, |recorder| {
+					#crate_::ProofRecorder::<Block>::drain_storage_proof(recorder)
+				})
 			}
 
 			fn into_storage_changes(
@@ -445,28 +449,30 @@ impl<'a> ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 				}
 
 				let res = (|| {
-				let version = #crate_::CallApiAt::<__SR_API_BLOCK__>::runtime_version_at(self.call, at)?;
+					let version = #crate_::CallApiAt::<__SR_API_BLOCK__>::runtime_version_at(
+						self.call,
+						at,
+					)?;
 
-				let params = #crate_::CallApiAtParams::<_, fn() -> _, _> {
-					at,
-					function: (*fn_name)(version),
-					native_call: None,
-					arguments: params,
-					overlayed_changes: &self.changes,
-					storage_transaction_cache: &self.storage_transaction_cache,
-					context,
-					recorder: &self.recorder,
-				};
+					let params = #crate_::CallApiAtParams {
+						at,
+						function: (*fn_name)(version),
+						arguments: params,
+						overlayed_changes: &self.changes,
+						storage_transaction_cache: &self.storage_transaction_cache,
+						context,
+						recorder: &self.recorder,
+					};
 
-				#crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at::<#crate_::NeverNativeValue, _>(
-					self.call,
-					params,
-				)
-			})();
+					#crate_::CallApiAt::<__SR_API_BLOCK__>::call_api_at(
+						self.call,
+						params,
+					)
+				})();
 
 				self.commit_or_rollback(std::result::Result::is_ok(&res));
 
-				res.map(#crate_::NativeOrEncoded::into_encoded)
+				res
 			}
 		});
 

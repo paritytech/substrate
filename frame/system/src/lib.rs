@@ -84,20 +84,20 @@ use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResult, DispatchResultWithPostInfo},
+	dispatch::{
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
+	},
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
-	weights::{
-		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
-		PerDispatchClass, RuntimeDbWeight, Weight,
-	},
 	Parameter,
 };
 use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
+use sp_weights::{RuntimeDbWeight, Weight};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -205,7 +205,7 @@ pub mod pallet {
 	pub trait Config: 'static + Eq + Clone {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
-		type BaseCallFilter: Contains<Self::Call>;
+		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
 		#[pallet::constant]
@@ -219,10 +219,10 @@ pub mod pallet {
 		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<Call = Self::Call>;
+			+ OriginTrait<Call = Self::RuntimeCall>;
 
-		/// The aggregated `Call` type.
-		type Call: Dispatchable + Debug;
+		/// The aggregated `RuntimeCall` type.
+		type RuntimeCall: Dispatchable + Debug;
 
 		/// Account index (aka nonce) type. This stores the number of previous transactions
 		/// associated with a sender account.
@@ -293,11 +293,11 @@ pub mod pallet {
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
 
 		/// The aggregated event type of the runtime.
-		type Event: Parameter
+		type RuntimeEvent: Parameter
 			+ Member
 			+ From<Event<Self>>
 			+ Debug
-			+ IsType<<Self as frame_system::Config>::Event>;
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
@@ -333,7 +333,7 @@ pub mod pallet {
 
 		type SystemWeightInfo: WeightInfo;
 
-		/// The designated SS85 prefix of this chain.
+		/// The designated SS58 prefix of this chain.
 		///
 		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
 		/// that the runtime should know about the prefix in order to make use of it as
@@ -608,7 +608,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::unbounded]
 	pub(super) type Events<T: Config> =
-		StorageValue<_, Vec<Box<EventRecord<T::Event, T::Hash>>>, ValueQuery>;
+		StorageValue<_, Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
@@ -1216,7 +1216,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits an event into this block's event record.
-	pub fn deposit_event(event: impl Into<T::Event>) {
+	pub fn deposit_event(event: impl Into<T::RuntimeEvent>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
@@ -1225,7 +1225,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
-	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::RuntimeEvent) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
@@ -1309,9 +1309,10 @@ impl<T: Config> Pallet<T> {
 	pub fn finalize() -> T::Header {
 		log::debug!(
 			target: "runtime::system",
-			"[{:?}] length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight: {} ({}%) \
-			/ op weight {} ({}%) / mandatory weight {} ({}%)",
+			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
+			 {} ({}%) op weight {} ({}%) / mandatory weight {} ({}%)",
 			Self::block_number(),
+			Self::extrinsic_index().unwrap_or_default(),
 			Self::all_extrinsics_len(),
 			sp_runtime::Percent::from_rational(
 				Self::all_extrinsics_len(),
@@ -1327,18 +1328,18 @@ impl<T: Config> Pallet<T> {
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Normal),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Normal),
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Normal).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Operational),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Operational),
-				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Operational).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Mandatory),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Mandatory),
-				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Mandatory).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 		);
 		ExecutionPhase::<T>::kill();
@@ -1414,7 +1415,7 @@ impl<T: Config> Pallet<T> {
 	/// impact on the PoV size of a block. Users should use alternative and well bounded storage
 	/// items for any behavior like this.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn events() -> Vec<EventRecord<T::Event, T::Hash>> {
+	pub fn events() -> Vec<EventRecord<T::RuntimeEvent, T::Hash>> {
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
 		Self::read_events_no_consensus().into_iter().map(|e| *e).collect()
@@ -1424,7 +1425,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Should only be called if you know what you are doing and outside of the runtime block
 	/// execution else it can have a large impact on the PoV size of a block.
-	pub fn read_events_no_consensus() -> Vec<Box<EventRecord<T::Event, T::Hash>>> {
+	pub fn read_events_no_consensus() -> Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>> {
 		Events::<T>::get()
 	}
 
@@ -1469,13 +1470,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Assert the given `event` exists.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn assert_has_event(event: T::Event) {
+	pub fn assert_has_event(event: T::RuntimeEvent) {
 		assert!(Self::events().iter().any(|record| record.event == event))
 	}
 
 	/// Assert the last event equal to the given `event`.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn assert_last_event(event: T::Event) {
+	pub fn assert_last_event(event: T::RuntimeEvent) {
 		assert_eq!(Self::events().last().expect("events expected").event, event);
 	}
 

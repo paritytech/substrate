@@ -32,7 +32,7 @@ use sp_runtime::traits::Bounded;
 
 const SEED: u32 = 0;
 
-fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -76,9 +76,11 @@ fn create_sub_accounts<T: Config>(
 	}
 
 	// Set identity so `set_subs` does not fail.
-	let _ = T::Currency::make_free_balance_be(who, BalanceOf::<T>::max_value() / 2u32.into());
-	let info = create_identity_info::<T>(1);
-	Identity::<T>::set_identity(who_origin.into(), Box::new(info))?;
+	if IdentityOf::<T>::get(who).is_none() {
+		let _ = T::Currency::make_free_balance_be(who, BalanceOf::<T>::max_value() / 2u32.into());
+		let info = create_identity_info::<T>(1);
+		Identity::<T>::set_identity(who_origin.into(), Box::new(info))?;
+	}
 
 	Ok(subs)
 }
@@ -120,7 +122,8 @@ benchmarks! {
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
 		ensure!(Registrars::<T>::get().len() as u32 == r, "Registrars not set up correctly.");
 		let origin = T::RegistrarOrigin::successful_origin();
-	}: _<T::Origin>(origin, account("registrar", r + 1, SEED))
+		let account = T::Lookup::unlookup(account("registrar", r + 1, SEED));
+	}: _<T::Origin>(origin, account)
 	verify {
 		ensure!(Registrars::<T>::get().len() as u32 == r + 1, "Registrars not added.");
 	}
@@ -137,7 +140,7 @@ benchmarks! {
 
 			// Add an initial identity
 			let initial_info = create_identity_info::<T>(1);
-			Identity::<T>::set_identity(caller_origin.clone(), Box::new(initial_info))?;
+			Identity::<T>::set_identity(caller_origin.clone(), Box::new(initial_info.clone()))?;
 
 			// User requests judgement from all the registrars, and they approve
 			for i in 0..r {
@@ -146,7 +149,8 @@ benchmarks! {
 					RawOrigin::Signed(account("registrar", i, SEED)).into(),
 					i,
 					caller_lookup.clone(),
-					Judgement::Reasonable
+					Judgement::Reasonable,
+					T::Hashing::hash_of(&initial_info),
 				)?;
 			}
 			caller
@@ -199,13 +203,13 @@ benchmarks! {
 			let caller: T::AccountId = whitelisted_caller();
 			let _ = add_sub_accounts::<T>(&caller, s)?;
 		};
-		let x in 1 .. T::MaxAdditionalFields::get() => {
-			// Create their main identity with x additional fields
-			let info = create_identity_info::<T>(x);
-			let caller: T::AccountId = whitelisted_caller();
-			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
-			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
-		};
+		let x in 1 .. T::MaxAdditionalFields::get();
+
+		// Create their main identity with x additional fields
+		let info = create_identity_info::<T>(x);
+		let caller: T::AccountId = whitelisted_caller();
+		let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller.clone()));
+		Identity::<T>::set_identity(caller_origin.clone(), Box::new(info.clone()))?;
 
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
@@ -214,7 +218,8 @@ benchmarks! {
 				RawOrigin::Signed(account("registrar", i, SEED)).into(),
 				i,
 				caller_lookup.clone(),
-				Judgement::Reasonable
+				Judgement::Reasonable,
+				T::Hashing::hash_of(&info),
 			)?;
 		}
 		ensure!(IdentityOf::<T>::contains_key(&caller), "Identity does not exist.");
@@ -287,7 +292,8 @@ benchmarks! {
 		Identity::<T>::add_registrar(registrar_origin, caller_lookup)?;
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().account == caller, "id not set.");
-	}: _(RawOrigin::Signed(caller), r, account("new", 0, SEED))
+		let new_account = T::Lookup::unlookup(account("new", 0, SEED));
+	}: _(RawOrigin::Signed(caller), r, new_account)
 	verify {
 		let registrars = Registrars::<T>::get();
 		ensure!(registrars[r as usize].as_ref().unwrap().account == account("new", 0, SEED), "id not changed.");
@@ -326,15 +332,16 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
-		let x in 1 .. T::MaxAdditionalFields::get() => {
-			let info = create_identity_info::<T>(x);
-			Identity::<T>::set_identity(user_origin.clone(), Box::new(info))?;
-		};
+		let x in 1 .. T::MaxAdditionalFields::get();
+
+		let info = create_identity_info::<T>(x);
+		let info_hash = T::Hashing::hash_of(&info);
+		Identity::<T>::set_identity(user_origin.clone(), Box::new(info))?;
 
 		let registrar_origin = T::RegistrarOrigin::successful_origin();
 		Identity::<T>::add_registrar(registrar_origin, caller_lookup)?;
 		Identity::<T>::request_judgement(user_origin, r, 10u32.into())?;
-	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable)
+	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable, info_hash)
 	verify {
 		assert_last_event::<T>(Event::<T>::JudgementGiven { target: user, registrar_index: r }.into())
 	}
@@ -350,7 +357,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 
 		let info = create_identity_info::<T>(x);
-		Identity::<T>::set_identity(target_origin.clone(), Box::new(info))?;
+		Identity::<T>::set_identity(target_origin.clone(), Box::new(info.clone()))?;
 		let _ = add_sub_accounts::<T>(&target, s)?;
 
 		// User requests judgement from all the registrars, and they approve
@@ -360,7 +367,8 @@ benchmarks! {
 				RawOrigin::Signed(account("registrar", i, SEED)).into(),
 				i,
 				target_lookup.clone(),
-				Judgement::Reasonable
+				Judgement::Reasonable,
+				T::Hashing::hash_of(&info),
 			)?;
 		}
 		ensure!(IdentityOf::<T>::contains_key(&target), "Identity not set");

@@ -19,6 +19,7 @@
 
 use crate::{
 	backend::Backend, trie_backend::TrieBackend, StorageCollection, StorageKey, StorageValue,
+	TrieBackendBuilder,
 };
 use codec::Codec;
 use hash_db::Hasher;
@@ -46,7 +47,7 @@ where
 {
 	let db = GenericMemoryDB::default();
 	// V1 is same as V0 for an empty trie.
-	TrieBackend::new(db, empty_trie_root::<LayoutV1<H>>())
+	TrieBackendBuilder::new(db, empty_trie_root::<LayoutV1<H>>()).build()
 }
 
 impl<H: Hasher, KF> TrieBackend<GenericMemoryDB<H, KF>, H>
@@ -87,14 +88,14 @@ where
 	pub fn update_backend(&self, root: H::Out, changes: GenericMemoryDB<H, KF>) -> Self {
 		let mut clone = self.backend_storage().clone();
 		clone.consolidate(changes);
-		Self::new(clone, root)
+		TrieBackendBuilder::new(clone, root).build()
 	}
 
 	/// Apply the given transaction to this backend and set the root to the given value.
 	pub fn apply_transaction(&mut self, root: H::Out, transaction: GenericMemoryDB<H, KF>) {
 		let mut storage = sp_std::mem::take(self).into_storage();
 		storage.consolidate(transaction);
-		*self = TrieBackend::new(storage, root);
+		*self = TrieBackendBuilder::new(storage, root).build();
 	}
 
 	/// Compare with another in-memory backend.
@@ -109,7 +110,7 @@ where
 	KF: KeyFunction<H> + Send + Sync,
 {
 	fn clone(&self) -> Self {
-		TrieBackend::new(self.backend_storage().clone(), *self.root())
+		TrieBackendBuilder::new(self.backend_storage().clone(), *self.root()).build()
 	}
 }
 
@@ -203,7 +204,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::backend::Backend;
+	use crate::backend::{AsTrieBackend, Backend};
 	use sp_core::storage::StateVersion;
 	use sp_runtime::traits::BlakeTwo256;
 
@@ -218,7 +219,7 @@ mod tests {
 			vec![(Some(child_info.clone()), vec![(b"2".to_vec(), Some(b"3".to_vec()))])],
 			state_version,
 		);
-		let trie_backend = storage.as_trie_backend().unwrap();
+		let trie_backend = storage.as_trie_backend();
 		assert_eq!(trie_backend.child_storage(child_info, b"2").unwrap(), Some(b"3".to_vec()));
 		let storage_key = child_info.prefixed_storage_key();
 		assert!(trie_backend.storage(storage_key.as_slice()).unwrap().is_some());

@@ -107,10 +107,10 @@ use crate::{
 };
 use codec::{Encode, HasCompact};
 use frame_support::{
-	dispatch::Dispatchable,
+	dispatch::{DispatchClass, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
 	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
-	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
+	weights::Weight,
 	BoundedVec,
 };
 use frame_system::{limits::BlockWeights, Pallet as System};
@@ -214,7 +214,7 @@ impl<B: Get<BlockWeights>, const P: u32> Get<Weight> for DefaultContractAccessWe
 			.get(DispatchClass::Normal)
 			.max_total
 			.unwrap_or(block_weights.max_block) /
-			Weight::from(P)
+			u64::from(P)
 	}
 }
 
@@ -243,13 +243,13 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+		type RuntimeCall: Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ codec::Decode
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Filter that is applied to calls dispatched by contracts.
 		///
@@ -260,7 +260,7 @@ pub mod pallet {
 		/// # Stability
 		///
 		/// The runtime **must** make sure that all dispatchables that are callable by
-		/// contracts remain stable. In addition [`Self::Call`] itself must remain stable.
+		/// contracts remain stable. In addition [`Self::RuntimeCall`] itself must remain stable.
 		/// This means that no existing variants are allowed to switch their positions.
 		///
 		/// # Note
@@ -270,7 +270,7 @@ pub mod pallet {
 		/// Therefore please make sure to be restrictive about which dispatchables are allowed
 		/// in order to not introduce a new DoS vector like memory allocation patterns that can
 		/// be exploited to drive the runtime into a panic.
-		type CallFilter: Contains<<Self as frame_system::Config>::Call>;
+		type CallFilter: Contains<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Used to answer contracts' queries regarding the current weight price. This is **not**
 		/// used to calculate the actual fee and is only for informational purposes.
@@ -631,11 +631,14 @@ pub mod pallet {
 				};
 				<PrefabWasmModule<T>>::add_user(code_hash)?;
 				<PrefabWasmModule<T>>::remove_user(contract.code_hash);
-				Self::deposit_event(Event::ContractCodeUpdated {
-					contract: dest.clone(),
-					new_code_hash: code_hash,
-					old_code_hash: contract.code_hash,
-				});
+				Self::deposit_event(
+					vec![T::Hashing::hash_of(&dest), code_hash, contract.code_hash],
+					Event::ContractCodeUpdated {
+						contract: dest.clone(),
+						new_code_hash: code_hash,
+						old_code_hash: contract.code_hash,
+					},
+				);
 				contract.code_hash = code_hash;
 				Ok(())
 			})
@@ -643,7 +646,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// Contract deployed by address at the specified address.
 		Instantiated { deployer: T::AccountId, contract: T::AccountId },
@@ -684,6 +686,35 @@ pub mod pallet {
 			new_code_hash: T::Hash,
 			/// Previous code hash of the contract.
 			old_code_hash: T::Hash,
+		},
+
+		/// A contract was called either by a plain account or another contract.
+		///
+		/// # Note
+		///
+		/// Please keep in mind that like all events this is only emitted for successful
+		/// calls. This is because on failure all storage changes including events are
+		/// rolled back.
+		Called {
+			/// The account that called the `contract`.
+			caller: T::AccountId,
+			/// The contract that was called.
+			contract: T::AccountId,
+		},
+
+		/// A contract delegate called a code hash.
+		///
+		/// # Note
+		///
+		/// Please keep in mind that like all events this is only emitted for successful
+		/// calls. This is because on failure all storage changes including events are
+		/// rolled back.
+		DelegateCalled {
+			/// The contract that performed the delegate call and hence in whose context
+			/// the `code_hash` is executed.
+			contract: T::AccountId,
+			/// The code hash that was delegate called.
+			code_hash: CodeHash<T>,
 		},
 	}
 
@@ -873,8 +904,8 @@ where
 		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
-			gas_consumed: output.gas_meter.gas_consumed(),
-			gas_required: output.gas_meter.gas_required(),
+			gas_consumed: output.gas_meter.gas_consumed().ref_time(),
+			gas_required: output.gas_meter.gas_required().ref_time(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
@@ -918,8 +949,8 @@ where
 				.result
 				.map(|(account_id, result)| InstantiateReturnValue { result, account_id })
 				.map_err(|e| e.error),
-			gas_consumed: output.gas_meter.gas_consumed(),
-			gas_required: output.gas_meter.gas_required(),
+			gas_consumed: output.gas_meter.gas_consumed().ref_time(),
+			gas_required: output.gas_meter.gas_required().ref_time(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
@@ -1083,5 +1114,12 @@ where
 			result
 		};
 		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
+	}
+
+	fn deposit_event(topics: Vec<T::Hash>, event: Event<T>) {
+		<frame_system::Pallet<T>>::deposit_event_indexed(
+			&topics,
+			<T as Config>::RuntimeEvent::from(event).into(),
+		)
 	}
 }

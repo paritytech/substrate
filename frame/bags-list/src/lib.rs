@@ -105,7 +105,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
@@ -263,6 +264,11 @@ pub mod pallet {
 				"thresholds must strictly increase, and have no duplicates",
 			);
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
+			<Self as SortedListProvider<T::AccountId>>::try_state()
+		}
 	}
 }
 
@@ -340,14 +346,8 @@ impl<T: Config<I>, I: 'static> SortedListProvider<T::AccountId> for Pallet<T, I>
 		List::<T, I>::unsafe_regenerate(all, score_of)
 	}
 
-	#[cfg(feature = "std")]
-	fn sanity_check() -> Result<(), &'static str> {
-		List::<T, I>::sanity_check()
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn sanity_check() -> Result<(), &'static str> {
-		Ok(())
+	fn try_state() -> Result<(), &'static str> {
+		List::<T, I>::try_state()
 	}
 
 	fn unsafe_clear() {

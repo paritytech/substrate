@@ -378,7 +378,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The societies's pallet id
 		#[pallet::constant]
@@ -614,7 +615,7 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 
-			let mut weight = 0;
+			let mut weight = Weight::zero();
 			let weights = T::BlockWeights::get();
 
 			// Run a candidate/membership rotation

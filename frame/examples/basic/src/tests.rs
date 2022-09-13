@@ -19,9 +19,10 @@
 
 use crate::*;
 use frame_support::{
-	assert_ok, parameter_types,
+	assert_ok,
+	dispatch::{DispatchInfo, GetDispatchInfo},
+	parameter_types,
 	traits::{ConstU64, OnInitialize},
-	weights::{DispatchInfo, GetDispatchInfo},
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
@@ -52,7 +53,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -63,12 +64,12 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -87,7 +88,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -95,7 +96,7 @@ impl pallet_balances::Config for Test {
 
 impl Config for Test {
 	type MagicNumber = ConstU64<1_000_000_000>;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 }
 
@@ -190,11 +191,11 @@ fn weights_work() {
 	let default_call = pallet_example_basic::Call::<Test>::accumulate_dummy { increase_by: 10 };
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	assert!(info1.weight > 0);
+	assert!(info1.weight.all_gt(Weight::zero()));
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
 	let custom_call = pallet_example_basic::Call::<Test>::set_dummy { new_value: 20 };
 	let info2 = custom_call.get_dispatch_info();
-	assert!(info1.weight > info2.weight);
+	assert!(info1.weight.all_gt(info2.weight));
 }

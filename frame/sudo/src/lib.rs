@@ -95,7 +95,7 @@
 use sp_runtime::{traits::StaticLookup, DispatchResult};
 use sp_std::prelude::*;
 
-use frame_support::{traits::UnfilteredDispatchable, weights::GetDispatchInfo};
+use frame_support::{dispatch::GetDispatchInfo, traits::UnfilteredDispatchable};
 
 #[cfg(test)]
 mod mock;
@@ -115,10 +115,12 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// A sudo-able call.
-		type Call: Parameter + UnfilteredDispatchable<Origin = Self::Origin> + GetDispatchInfo;
+		type RuntimeCall: Parameter
+			+ UnfilteredDispatchable<Origin = Self::Origin>
+			+ GetDispatchInfo;
 	}
 
 	#[pallet::pallet]
@@ -139,11 +141,11 @@ pub mod pallet {
 		/// # </weight>
 		#[pallet::weight({
 			let dispatch_info = call.get_dispatch_info();
-			(dispatch_info.weight.saturating_add(10_000), dispatch_info.class)
+			(dispatch_info.weight, dispatch_info.class)
 		})]
 		pub fn sudo(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;
@@ -168,7 +170,7 @@ pub mod pallet {
 		#[pallet::weight((*_weight, call.get_dispatch_info().class))]
 		pub fn sudo_unchecked_weight(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 			_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -222,7 +224,6 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(
 				dispatch_info.weight
-					.saturating_add(10_000)
 					// AccountData for inner call origin accountdata.
 					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 				dispatch_info.class,
@@ -231,7 +232,7 @@ pub mod pallet {
 		pub fn sudo_as(
 			origin: OriginFor<T>,
 			who: AccountIdLookupOf<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let sender = ensure_signed(origin)?;

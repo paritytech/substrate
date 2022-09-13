@@ -19,6 +19,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub use frame_support::traits::TryStateSelect;
 use frame_support::weights::Weight;
 
 sp_api::decl_runtime_apis! {
@@ -37,6 +38,6 @@ sp_api::decl_runtime_apis! {
 		///
 		/// This is only sensible where the incoming block is from a different network, yet it has
 		/// the same block format as the runtime implementing this API.
-		fn execute_block_no_check(block: Block) -> Weight;
+		fn execute_block(block: Block, state_root_check: bool, try_state: TryStateSelect) -> Weight;
 	}
 }
