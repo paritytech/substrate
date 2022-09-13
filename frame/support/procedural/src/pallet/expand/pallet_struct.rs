@@ -169,8 +169,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	let whitelisted_storage_idents: Vec<syn::Ident> = def
 		.storages
 		.iter()
-		.filter(|s| s.benchmarking_cached)
-		.map(|s| s.ident.clone())
+		.filter_map(|s| s.benchmarking_cached.then_some(s.ident.clone()))
 		.collect();
 
 	let whitelisted_storage_keys_impl = quote::quote![
