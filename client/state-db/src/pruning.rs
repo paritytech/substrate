@@ -157,8 +157,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 				if cache.is_empty() {
 					DeathRowQueue::load_batch_from_db(db, cache, base, *cache_capacity)?;
 				}
-				let next = cache.pop_front();
-				Ok(next)
+				Ok(cache.pop_front())
 			},
 			DeathRowQueue::Mem { death_rows, death_index } => match death_rows.pop_front() {
 				Some(row) => {
@@ -350,26 +349,15 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		0
 	}
 
-	// Return the block number of the first block that not been pending pruned
-	pub fn pending(&self) -> u64 {
-		self.base
-	}
-
 	fn is_empty(&self) -> bool {
-		trace!(target: "state-db", "is_empty {}, base={}, queue={:?}",
-			self.queue.len(self.base) == 0,
-			self.base, self.queue.len(self.base));
-		self.queue.len(self.base) == 0
+		self.window_size() == 0
 	}
 
 	// Check if a block is in the pruning window and not be pruned yet
 	pub fn have_block(&self, hash: &BlockHash, number: u64) -> HaveBlock {
 		// if the queue is empty or the block number exceed the pruning window, we definitely
 		// do not have this block
-		if self.is_empty() ||
-			number < self.pending() ||
-			number >= self.base + self.queue.len(self.base) as u64
-		{
+		if self.is_empty() || number < self.base || number >= self.base + self.window_size() {
 			return HaveBlock::No
 		}
 		self.queue.have_block(hash, (number - self.base) as usize)
@@ -401,7 +389,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		if self.base == 0 && self.is_empty() && number > 0 {
 			// assume that parent was canonicalized
 			self.base = number;
-		} else if (self.base + self.queue.len(self.base) as u64) != number {
+		} else if (self.base + self.window_size()) != number {
 			return Err(Error::StateDb(StateDbError::InvalidBlockNumber))
 		}
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
