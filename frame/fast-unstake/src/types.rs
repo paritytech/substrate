@@ -102,7 +102,7 @@ where
 					check_stash(&ledger.stash)
 				},
 				(_, Some(_)) => {
-					// it is a stash.
+					// it's a stash.
 					let stash = stash_or_controller;
 					check_stash(stash)
 				},
