@@ -301,10 +301,7 @@ fn rewards_should_work() {
 		start_session(3);
 
 		assert_eq!(active_era(), 1);
-		assert_eq!(
-			mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()),
-			maximum_payout - total_payout_0,
-		);
+		assert_eq!(mock::RewardRemainderUnbalanced::get(), maximum_payout - total_payout_0,);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
 			Event::EraPaid(0, total_payout_0, maximum_payout - total_payout_0)
@@ -340,7 +337,7 @@ fn rewards_should_work() {
 
 		mock::start_active_era(2);
 		assert_eq!(
-			mock::REWARD_REMAINDER_UNBALANCED.with(|v| *v.borrow()),
+			mock::RewardRemainderUnbalanced::get(),
 			maximum_payout * 2 - total_payout_0 - total_payout_1,
 		);
 		assert_eq!(
@@ -3759,9 +3756,9 @@ fn payout_stakers_handles_weight_refund() {
 		let half_max_nom_rewarded_weight =
 			<Test as Config>::WeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded);
 		let zero_nom_payouts_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
-		assert!(zero_nom_payouts_weight > Weight::zero());
-		assert!(half_max_nom_rewarded_weight > zero_nom_payouts_weight);
-		assert!(max_nom_rewarded_weight > half_max_nom_rewarded_weight);
+		assert!(zero_nom_payouts_weight.any_gt(Weight::zero()));
+		assert!(half_max_nom_rewarded_weight.any_gt(zero_nom_payouts_weight));
+		assert!(max_nom_rewarded_weight.any_gt(half_max_nom_rewarded_weight));
 
 		let balance = 1000;
 		bond_validator(11, 10, balance);
@@ -3782,8 +3779,7 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(2);
 
 		// Collect payouts when there are no nominators
-		let call =
-			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 1 });
+		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 1 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
@@ -3796,8 +3792,7 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(3);
 
 		// Collect payouts for an era where the validator did not receive any points.
-		let call =
-			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
+		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
@@ -3810,8 +3805,7 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(4);
 
 		// Collect payouts when the validator has `half_max_nom_rewarded` nominators.
-		let call =
-			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 3 });
+		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 3 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
@@ -3834,16 +3828,14 @@ fn payout_stakers_handles_weight_refund() {
 		start_active_era(6);
 
 		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.
-		let call =
-			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
+		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), max_nom_rewarded_weight);
 
 		// Try and collect payouts for an era that has already been collected.
-		let call =
-			TestRuntimeCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
+		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
 		let info = call.get_dispatch_info();
 		let result = call.dispatch(Origin::signed(20));
 		assert!(result.is_err());
@@ -4238,7 +4230,7 @@ fn do_not_die_when_active_is_ed() {
 fn on_finalize_weight_is_nonzero() {
 	ExtBuilder::default().build_and_execute(|| {
 		let on_finalize_weight = <Test as frame_system::Config>::DbWeight::get().reads(1);
-		assert!(<Staking as Hooks<u64>>::on_initialize(1) >= on_finalize_weight);
+		assert!(<Staking as Hooks<u64>>::on_initialize(1).all_gte(on_finalize_weight));
 	})
 }
 
@@ -4249,8 +4241,8 @@ mod election_data_provider {
 	#[test]
 	fn targets_2sec_block() {
 		let mut validators = 1000;
-		while <Test as Config>::WeightInfo::get_npos_targets(validators) <
-			2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_targets(validators)
+			.all_lt(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND)
 		{
 			validators += 1;
 		}
@@ -4267,8 +4259,8 @@ mod election_data_provider {
 		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans) <
-			2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+			.all_lt(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND)
 		{
 			nominators += 1;
 		}

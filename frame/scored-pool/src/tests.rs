@@ -33,7 +33,7 @@ fn query_membership_works() {
 		assert_eq!(ScoredPool::members(), vec![20, 40]);
 		assert_eq!(Balances::reserved_balance(31), CandidateDeposit::get());
 		assert_eq!(Balances::reserved_balance(40), CandidateDeposit::get());
-		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), vec![20, 40]);
+		assert_eq!(MembersTestValue::get().clone(), vec![20, 40]);
 	});
 }
 
@@ -128,7 +128,7 @@ fn kicking_works() {
 		// then
 		assert_eq!(find_in_pool(who), None);
 		assert_eq!(ScoredPool::members(), vec![20, 31]);
-		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
+		assert_eq!(MembersTestValue::get().clone(), ScoredPool::members());
 		assert_eq!(Balances::reserved_balance(who), 0); // deposit must have been returned
 	});
 }
@@ -152,7 +152,7 @@ fn unscored_entities_must_not_be_used_for_filling_members() {
 		// then
 		// the `None` candidates should not have been filled in
 		assert!(ScoredPool::members().is_empty());
-		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
+		assert_eq!(MembersTestValue::get().clone(), ScoredPool::members());
 	});
 }
 
@@ -170,7 +170,7 @@ fn refreshing_works() {
 
 		// then
 		assert_eq!(ScoredPool::members(), vec![15, 40]);
-		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
+		assert_eq!(MembersTestValue::get().clone(), ScoredPool::members());
 	});
 }
 
@@ -190,7 +190,7 @@ fn refreshing_happens_every_period() {
 
 		// then
 		assert_eq!(ScoredPool::members(), vec![15, 40]);
-		assert_eq!(MEMBERS.with(|m| m.borrow().clone()), ScoredPool::members());
+		assert_eq!(MembersTestValue::get().clone(), ScoredPool::members());
 	});
 }
 
@@ -295,5 +295,22 @@ fn candidacy_resubmitting_works() {
 
 		// then
 		assert_eq!(ScoredPool::candidate_exists(who), true);
+	});
+}
+
+#[test]
+fn pool_candidates_exceeded() {
+	new_test_ext().execute_with(|| {
+		for i in [1, 2, 3, 4, 6] {
+			let who = i as u64;
+			assert_ok!(ScoredPool::submit_candidacy(Origin::signed(who)));
+			let index = find_in_pool(who).expect("entity must be in pool") as u32;
+			assert_ok!(ScoredPool::score(Origin::signed(ScoreOrigin::get()), who, index, 99));
+		}
+
+		assert_noop!(
+			ScoredPool::submit_candidacy(Origin::signed(8)),
+			Error::<Test, _>::TooManyMembers
+		);
 	});
 }
