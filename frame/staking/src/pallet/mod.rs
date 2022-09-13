@@ -155,7 +155,7 @@ pub mod pallet {
 		type SlashDeferDuration: Get<EraIndex>;
 
 		/// The origin which can cancel a deferred slash. Root can always do this.
-		type SlashCancelOrigin: EnsureOrigin<Self::Origin>;
+		type SlashCancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: SessionInterface<Self::AccountId>;
@@ -580,18 +580,18 @@ pub mod pallet {
 					"Stash does not have enough balance to bond."
 				);
 				frame_support::assert_ok!(<Pallet<T>>::bond(
-					T::Origin::from(Some(stash.clone()).into()),
+					T::RuntimeOrigin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
 				));
 				frame_support::assert_ok!(match status {
 					crate::StakerStatus::Validator => <Pallet<T>>::validate(
-						T::Origin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(controller.clone()).into()),
 						Default::default(),
 					),
 					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
-						T::Origin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(controller.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),

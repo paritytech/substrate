@@ -655,7 +655,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
-	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> DispatchResult {
+	fn accumulate_foo(origin: T::RuntimeOrigin, increase_by: T::Balance) -> DispatchResult {
 		let _sender = ensure_signed(origin)?;
 
 		let prev = <Foo<T>>::get();

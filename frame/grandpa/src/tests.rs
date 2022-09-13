@@ -359,7 +359,7 @@ fn report_equivocation_current_set_works() {
 
 		// report the equivocation and the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
@@ -437,7 +437,7 @@ fn report_equivocation_old_set_works() {
 		// report the equivocation using the key ownership proof generated on
 		// the old set, the tx should be dispatched successfully
 		assert_ok!(Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		),);
@@ -500,7 +500,7 @@ fn report_equivocation_invalid_set_id() {
 		// the call for reporting the equivocation should error
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
@@ -541,7 +541,7 @@ fn report_equivocation_invalid_session() {
 		// proof from the previous set, the session should be invalid.
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				key_owner_proof,
 			),
@@ -586,7 +586,7 @@ fn report_equivocation_invalid_key_owner_proof() {
 		// proof for a different key than the one in the equivocation proof.
 		assert_err!(
 			Grandpa::report_equivocation_unsigned(
-				Origin::none(),
+				RuntimeOrigin::none(),
 				Box::new(equivocation_proof),
 				invalid_key_owner_proof,
 			),
@@ -617,7 +617,7 @@ fn report_equivocation_invalid_equivocation_proof() {
 		let assert_invalid_equivocation_proof = |equivocation_proof| {
 			assert_err!(
 				Grandpa::report_equivocation_unsigned(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					Box::new(equivocation_proof),
 					key_owner_proof.clone(),
 				),
@@ -723,7 +723,7 @@ fn report_equivocation_validate_unsigned_prevents_duplicates() {
 
 		// we submit the report
 		Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)
@@ -861,7 +861,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 
 		// report the equivocation.
 		let post_info = Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof.clone()),
 			key_owner_proof.clone(),
 		)
@@ -875,7 +875,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		// report the equivocation again which is invalid now since it is
 		// duplicate.
 		let post_info = Grandpa::report_equivocation_unsigned(
-			Origin::none(),
+			RuntimeOrigin::none(),
 			Box::new(equivocation_proof),
 			key_owner_proof,
 		)

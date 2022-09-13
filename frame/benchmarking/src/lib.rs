@@ -112,14 +112,14 @@ macro_rules! whitelist {
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
-///   }: _(Origin::Signed(caller), vec![0u8; l])
+///   }: _(RuntimeOrigin::Signed(caller), vec![0u8; l])
 ///
 ///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
 ///   // `l`.
 ///   // In this case, we explicitly name the call using `bar` instead of `_`.
 ///   bar {
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
-///   }: bar(Origin::Root, vec![0u8; l])
+///   }: bar(RuntimeOrigin::Root, vec![0u8; l])
 ///
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
 ///   // other two but has its own complexity `c` that needs setting up. It uses `caller` (in the
@@ -128,20 +128,20 @@ macro_rules! whitelist {
 ///   baz1 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
-///   }: baz(Origin::Signed(caller))
+///   }: baz(RuntimeOrigin::Signed(caller))
 ///
 ///   // this is a second benchmark of the baz dispatchable with a different setup.
 ///   baz2 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c_in_some_other_way(&caller, c);
-///   }: baz(Origin::Signed(caller))
+///   }: baz(RuntimeOrigin::Signed(caller))
 ///
 ///   // You may optionally specify the origin type if it can't be determined automatically like
 ///   // this.
 ///   baz3 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
-///   }: baz<T::Origin>(Origin::Signed(caller), vec![0u8; l])
+///   }: baz<T::RuntimeOrigin>(RuntimeOrigin::Signed(caller), vec![0u8; l])
 ///
 ///   // this is benchmarking some code that is not a dispatchable.
 ///   populate_a_set {
@@ -617,7 +617,7 @@ macro_rules! to_origin {
 		$origin.into()
 	};
 	($origin:expr, $origin_type:ty) => {
-		<<T as frame_system::Config>::Origin as From<$origin_type>>::from($origin)
+		<<T as frame_system::Config>::RuntimeOrigin as From<$origin_type>>::from($origin)
 	};
 }
 

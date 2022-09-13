@@ -38,7 +38,7 @@ mod nested {
 
 		frame_support::decl_module! {
 			pub struct Module<T: Config> for enum Call
-				where origin: <T as system::Config>::Origin, system=system
+				where origin: <T as system::Config>::RuntimeOrigin, system=system
 			{
 				#[weight = 0]
 				pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -80,7 +80,7 @@ pub mod module {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call
-			where origin: <T as system::Config>::Origin, system=system
+			where origin: <T as system::Config>::RuntimeOrigin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -146,7 +146,7 @@ impl Contains<RuntimeCall> for BaseCallFilter {
 impl system::Config for RuntimeOriginTest {
 	type BaseCallFilter = BaseCallFilter;
 	type Hash = H256;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type BlockNumber = BlockNumber;
 	type AccountId = u32;
 	type RuntimeEvent = RuntimeEvent;
@@ -178,12 +178,12 @@ fn origin_default_filter() {
 	let accepted_call = nested::module::Call::fail {}.into();
 	let rejected_call = module::Call::fail {}.into();
 
-	assert_eq!(Origin::root().filter_call(&accepted_call), true);
-	assert_eq!(Origin::root().filter_call(&rejected_call), true);
-	assert_eq!(Origin::none().filter_call(&accepted_call), true);
-	assert_eq!(Origin::none().filter_call(&rejected_call), false);
-	assert_eq!(Origin::signed(0).filter_call(&accepted_call), true);
-	assert_eq!(Origin::signed(0).filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::root().filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::root().filter_call(&rejected_call), true);
+	assert_eq!(RuntimeOrigin::none().filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::none().filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::signed(0).filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::signed(0).filter_call(&rejected_call), false);
 	assert_eq!(Origin::from(Some(0)).filter_call(&accepted_call), true);
 	assert_eq!(Origin::from(Some(0)).filter_call(&rejected_call), false);
 	assert_eq!(Origin::from(None).filter_call(&accepted_call), true);
@@ -198,7 +198,7 @@ fn origin_default_filter() {
 
 	// Now test for root origin and filters:
 	let mut origin = Origin::from(Some(0));
-	origin.set_caller_from(Origin::root());
+	origin.set_caller_from(RuntimeOrigin::root());
 	assert!(matches!(origin.caller, OriginCaller::system(system::RawOrigin::Root)));
 
 	// Root origin bypass all filter.
@@ -211,7 +211,7 @@ fn origin_default_filter() {
 	assert_eq!(origin.filter_call(&accepted_call), true);
 	assert_eq!(origin.filter_call(&rejected_call), false);
 
-	origin.set_caller_from(Origin::root());
+	origin.set_caller_from(RuntimeOrigin::root());
 	origin.reset_filter();
 
 	// Root origin bypass all filter, even when they are reset.

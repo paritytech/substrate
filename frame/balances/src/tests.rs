@@ -825,7 +825,7 @@ macro_rules! decl_tests {
 					/* User has no reference counter, so they can die in these scenarios */
 
 					// SCENARIO: Slash would not kill account.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 0));
 					// Slashed completed in full
 					assert_eq!(Balances::slash(&1, 900), (NegativeImbalance::new(900), 0));
 					// Account is still alive
@@ -833,35 +833,35 @@ macro_rules! decl_tests {
 					System::assert_last_event(RuntimeEvent::Balances(crate::Event::Slashed { who: 1, amount: 900 }));
 
 					// SCENARIO: Slash will kill account because not enough balance left.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 0));
 					// Slashed completed in full
 					assert_eq!(Balances::slash(&1, 950), (NegativeImbalance::new(950), 0));
 					// Account is killed
 					assert!(!System::account_exists(&1));
 
 					// SCENARIO: Over-slash will kill account, and report missing slash amount.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 0));
 					// Slashed full free_balance, and reports 300 not slashed
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1000), 300));
 					// Account is dead
 					assert!(!System::account_exists(&1));
 
 					// SCENARIO: Over-slash can take from reserved, but keep alive.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 400));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 400));
 					// Slashed full free_balance and 300 of reserved balance
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1300), 0));
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Over-slash can take from reserved, and kill.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 350));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 350));
 					// Slashed full free_balance and 300 of reserved balance
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1300), 0));
 					// Account is dead because 50 reserved balance is not enough to keep alive
 					assert!(!System::account_exists(&1));
 
 					// SCENARIO: Over-slash can take as much as possible from reserved, kill, and report missing amount.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 250));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 250));
 					// Slashed full free_balance and 300 of reserved balance
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1250), 50));
 					// Account is super dead
@@ -870,7 +870,7 @@ macro_rules! decl_tests {
 					/* User will now have a reference counter on them, keeping them alive in these scenarios */
 
 					// SCENARIO: Slash would not kill account.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 0));
 					assert_ok!(System::inc_consumers(&1)); // <-- Reference counter added here is enough for all tests
 					// Slashed completed in full
 					assert_eq!(Balances::slash(&1, 900), (NegativeImbalance::new(900), 0));
@@ -878,35 +878,35 @@ macro_rules! decl_tests {
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Slash will take as much as possible without killing account.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 0));
 					// Slashed completed in full
 					assert_eq!(Balances::slash(&1, 950), (NegativeImbalance::new(900), 50));
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Over-slash will not kill account, and report missing slash amount.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 0));
 					// Slashed full free_balance minus ED, and reports 400 not slashed
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(900), 400));
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Over-slash can take from reserved, but keep alive.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 400));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 400));
 					// Slashed full free_balance and 300 of reserved balance
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1300), 0));
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Over-slash can take from reserved, but keep alive.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 350));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 350));
 					// Slashed full free_balance and 250 of reserved balance to leave ED
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1250), 50));
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Over-slash can take as much as possible from reserved and report missing amount.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 250));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 1_000, 250));
 					// Slashed full free_balance and 300 of reserved balance
 					assert_eq!(Balances::slash(&1, 1_300), (NegativeImbalance::new(1150), 150));
 					// Account is still alive
@@ -926,28 +926,28 @@ macro_rules! decl_tests {
 					/* User has no reference counter, so they can die in these scenarios */
 
 					// SCENARIO: Slash would not kill account.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 50, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 50, 1_000));
 					// Slashed completed in full
 					assert_eq!(Balances::slash_reserved(&1, 900), (NegativeImbalance::new(900), 0));
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Slash would kill account.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 50, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 50, 1_000));
 					// Slashed completed in full
 					assert_eq!(Balances::slash_reserved(&1, 1_000), (NegativeImbalance::new(1_000), 0));
 					// Account is dead
 					assert!(!System::account_exists(&1));
 
 					// SCENARIO: Over-slash would kill account, and reports left over slash.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 50, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 50, 1_000));
 					// Slashed completed in full
 					assert_eq!(Balances::slash_reserved(&1, 1_300), (NegativeImbalance::new(1_000), 300));
 					// Account is dead
 					assert!(!System::account_exists(&1));
 
 					// SCENARIO: Over-slash does not take from free balance.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 300, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 300, 1_000));
 					// Slashed completed in full
 					assert_eq!(Balances::slash_reserved(&1, 1_300), (NegativeImbalance::new(1_000), 300));
 					// Account is alive because of free balance
@@ -956,7 +956,7 @@ macro_rules! decl_tests {
 					/* User has a reference counter, so they cannot die */
 
 					// SCENARIO: Slash would not kill account.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 50, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 50, 1_000));
 					assert_ok!(System::inc_consumers(&1)); // <-- Reference counter added here is enough for all tests
 					// Slashed completed in full
 					assert_eq!(Balances::slash_reserved(&1, 900), (NegativeImbalance::new(900), 0));
@@ -964,21 +964,21 @@ macro_rules! decl_tests {
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Slash as much as possible without killing.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 50, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 50, 1_000));
 					// Slashed as much as possible
 					assert_eq!(Balances::slash_reserved(&1, 1_000), (NegativeImbalance::new(950), 50));
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Over-slash reports correctly, where reserved is needed to keep alive.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 50, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 50, 1_000));
 					// Slashed as much as possible
 					assert_eq!(Balances::slash_reserved(&1, 1_300), (NegativeImbalance::new(950), 350));
 					// Account is still alive
 					assert!(System::account_exists(&1));
 
 					// SCENARIO: Over-slash reports correctly, where full reserved is removed.
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 1_000));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 1_000));
 					// Slashed as much as possible
 					assert_eq!(Balances::slash_reserved(&1, 1_300), (NegativeImbalance::new(1_000), 300));
 					// Account is still alive
@@ -1018,7 +1018,7 @@ macro_rules! decl_tests {
 				.existential_deposit(100)
 				.build()
 				.execute_with(|| {
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 100, 100));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 100, 100));
 					assert_ok!(Balances::transfer_keep_alive(Some(1).into(), 2, 100));
 					assert_eq!(Balances::total_balance(&1), 100);
 					assert_eq!(Balances::total_balance(&2), 100);
@@ -1032,32 +1032,32 @@ macro_rules! decl_tests {
 				.build()
 				.execute_with(|| {
 					// setup
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 0));
-					assert_ok!(Balances::set_balance(Origin::root(), 2, 0, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
 					// transfer all and allow death
 					assert_ok!(Balances::transfer_all(Some(1).into(), 2, false));
 					assert_eq!(Balances::total_balance(&1), 0);
 					assert_eq!(Balances::total_balance(&2), 200);
 
 					// setup
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 0));
-					assert_ok!(Balances::set_balance(Origin::root(), 2, 0, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
 					// transfer all and keep alive
 					assert_ok!(Balances::transfer_all(Some(1).into(), 2, true));
 					assert_eq!(Balances::total_balance(&1), 100);
 					assert_eq!(Balances::total_balance(&2), 100);
 
 					// setup
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 10));
-					assert_ok!(Balances::set_balance(Origin::root(), 2, 0, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 10));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
 					// transfer all and allow death w/ reserved
 					assert_ok!(Balances::transfer_all(Some(1).into(), 2, false));
 					assert_eq!(Balances::total_balance(&1), 0);
 					assert_eq!(Balances::total_balance(&2), 200);
 
 					// setup
-					assert_ok!(Balances::set_balance(Origin::root(), 1, 200, 10));
-					assert_ok!(Balances::set_balance(Origin::root(), 2, 0, 0));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1, 200, 10));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 2, 0, 0));
 					// transfer all and keep alive w/ reserved
 					assert_ok!(Balances::transfer_all(Some(1).into(), 2, true));
 					assert_eq!(Balances::total_balance(&1), 100);
@@ -1281,7 +1281,7 @@ macro_rules! decl_tests {
 					let _ = Balances::deposit_creating(&1, 111);
 					assert_ok!(frame_system::Pallet::<Test>::inc_consumers(&1));
 					assert_noop!(
-						Balances::set_balance(Origin::root(), 1, 0, 0),
+						Balances::set_balance(RuntimeOrigin::root(), 1, 0, 0),
 						DispatchError::ConsumerRemaining,
 					);
 			});
@@ -1291,7 +1291,7 @@ macro_rules! decl_tests {
 		fn set_balance_handles_total_issuance() {
 			<$ext_builder>::default().build().execute_with(|| {
 					let old_total_issuance = Balances::total_issuance();
-					assert_ok!(Balances::set_balance(Origin::root(), 1337, 69, 42));
+					assert_ok!(Balances::set_balance(RuntimeOrigin::root(), 1337, 69, 42));
 					assert_eq!(Balances::total_issuance(), old_total_issuance + 69 + 42);
 					assert_eq!(Balances::total_balance(&1337), 69 + 42);
 					assert_eq!(Balances::free_balance(&1337), 69);

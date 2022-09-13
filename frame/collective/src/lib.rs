@@ -178,12 +178,14 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The outer origin type.
-		type Origin: From<RawOrigin<Self::AccountId, I>>;
+		type RuntimeOrigin: From<RawOrigin<Self::AccountId, I>>;
 
 		/// The outer call dispatch type.
 		type Proposal: Parameter
-			+ Dispatchable<Origin = <Self as Config<I>>::Origin, PostInfo = PostDispatchInfo>
-			+ From<frame_system::Call<Self>>
+			+ Dispatchable<
+				RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin,
+				PostInfo = PostDispatchInfo,
+			> + From<frame_system::Call<Self>>
 			+ GetDispatchInfo;
 
 		/// The outer event type.
@@ -240,7 +242,7 @@ pub mod pallet {
 
 	/// Origin for the collective pallet.
 	#[pallet::origin]
-	pub type Origin<T, I = ()> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
+	pub type RuntimeOrigin<T, I = ()> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
 
 	/// The hashes of the active proposals.
 	#[pallet::storage]

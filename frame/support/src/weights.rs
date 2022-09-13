@@ -41,7 +41,7 @@
 //! ```
 //! # use frame_system::Config;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 //!         #[weight = 1000]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -55,7 +55,7 @@
 //! # use frame_system::Config;
 //! # use frame_support::weights::DispatchClass;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 //!         #[weight = (1000, DispatchClass::Operational)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -69,7 +69,7 @@
 //! # use frame_system::Config;
 //! # use frame_support::weights::Pays;
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 //!         #[weight = (1000, Pays::No)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -83,7 +83,7 @@
 //! # use frame_system::Config;
 //! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 //!         #[weight = (1000, DispatchClass::Operational, Pays::No)]
 //!         fn dispatching(origin) { unimplemented!() }
 //!     }
@@ -99,7 +99,7 @@
 //! # use frame_system::Config;
 //! # use frame_support::weights::{DispatchClass, Pays};
 //! frame_support::decl_module! {
-//!     pub struct Module<T: Config> for enum Call where origin: T::Origin {
+//!     pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 //!         #[weight = (
 //! 			*a as u64 + *b,
 //! 			DispatchClass::Operational,
@@ -687,7 +687,7 @@ mod tests {
 	use smallvec::smallvec;
 
 	pub trait Config: 'static {
-		type Origin;
+		type RuntimeOrigin;
 		type Balance;
 		type BlockNumber;
 		type DbWeight: Get<RuntimeDbWeight>;
@@ -704,7 +704,7 @@ mod tests {
 	}
 
 	impl Config for TraitImpl {
-		type Origin = u32;
+		type RuntimeOrigin = u32;
 		type BlockNumber = u32;
 		type Balance = u32;
 		type DbWeight = DbWeight;
@@ -712,7 +712,7 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {
 			// no arguments, fixed weight
 			#[weight = 1000]
 			fn f00(_origin) { unimplemented!(); }

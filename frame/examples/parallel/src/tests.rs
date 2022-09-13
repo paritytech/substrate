@@ -45,7 +45,7 @@ parameter_types! {
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type PalletInfo = PalletInfo;
 	type Index = u64;
@@ -77,7 +77,7 @@ fn test_pub(n: u8) -> sp_core::sr25519::Public {
 }
 
 fn test_origin(n: u8) -> Origin {
-	Origin::signed(test_pub(n))
+	RuntimeOrigin::signed(test_pub(n))
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn it_can_enlist() {
 			},
 		];
 
-		Example::enlist_participants(Origin::signed(test_pub(1)), participants)
+		Example::enlist_participants(RuntimeOrigin::signed(test_pub(1)), participants)
 			.expect("Failed to enlist");
 
 		assert_eq!(Example::participants().len(), 2);

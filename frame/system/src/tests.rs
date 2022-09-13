@@ -639,7 +639,7 @@ fn ensure_signed_stuff_works() {
 		}
 	}
 
-	let signed_origin = Origin::signed(0u64);
+	let signed_origin = RuntimeOrigin::signed(0u64);
 	assert_ok!(EnsureSigned::try_origin(signed_origin.clone()));
 	assert_ok!(EnsureSignedBy::<Members, _>::try_origin(signed_origin));
 

@@ -230,10 +230,10 @@ impl<
 /// `construct_runtime`.
 pub trait UnfilteredDispatchable {
 	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
-	type Origin;
+	type RuntimeOrigin;
 
 	/// Dispatch this call but do not check the filter in origin.
-	fn dispatch_bypass_filter(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
+	fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo;
 }
 
 /// Methods available on `frame_system::Config::Origin`.

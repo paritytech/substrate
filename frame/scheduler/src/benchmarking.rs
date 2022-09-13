@@ -31,7 +31,7 @@ use frame_system::Pallet as System;
 
 const BLOCK_NUMBER: u32 = 2;
 
-type SystemOrigin<T> = <T as frame_system::Config>::Origin;
+type SystemOrigin<T> = <T as frame_system::Config>::RuntimeOrigin;
 
 /// Add `n` named items to the schedule.
 ///

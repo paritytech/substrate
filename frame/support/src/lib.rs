@@ -845,7 +845,7 @@ pub mod tests {
 
 	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default + TypeInfo;
-		type Origin;
+		type RuntimeOrigin;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
@@ -856,7 +856,7 @@ pub mod tests {
 		use super::Config;
 
 		decl_module! {
-			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
+			pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self  {}
 		}
 	}
 
@@ -888,7 +888,7 @@ pub mod tests {
 
 	impl Config for Test {
 		type BlockNumber = u32;
-		type Origin = u32;
+		type RuntimeOrigin = u32;
 		type PalletInfo = PanicPalletInfo;
 		type DbWeight = ();
 	}

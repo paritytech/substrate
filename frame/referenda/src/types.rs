@@ -33,7 +33,8 @@ pub type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 pub type CallOf<T, I> = <T as Config<I>>::RuntimeCall;
 pub type VotesOf<T, I> = <T as Config<I>>::Votes;
 pub type TallyOf<T, I> = <T as Config<I>>::Tally;
-pub type PalletsOriginOf<T> = <<T as frame_system::Config>::Origin as OriginTrait>::PalletsOrigin;
+pub type PalletsOriginOf<T> =
+	<<T as frame_system::Config>::RuntimeOrigin as OriginTrait>::PalletsOrigin;
 pub type ReferendumInfoOf<T, I> = ReferendumInfo<
 	TrackIdOf<T, I>,
 	PalletsOriginOf<T>,
@@ -139,13 +140,13 @@ pub trait TracksInfo<Balance, Moment> {
 	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync + 'static + MaxEncodedLen;
 
 	/// The origin type from which a track is implied.
-	type Origin;
+	type RuntimeOrigin;
 
 	/// Return the array of known tracks and their information.
 	fn tracks() -> &'static [(Self::Id, TrackInfo<Balance, Moment>)];
 
 	/// Determine the voting track for the given `origin`.
-	fn track_for(origin: &Self::Origin) -> Result<Self::Id, ()>;
+	fn track_for(origin: &Self::RuntimeOrigin) -> Result<Self::Id, ()>;
 
 	/// Return the track info for track `id`, by default this just looks it up in `Self::tracks()`.
 	fn info(id: Self::Id) -> Option<&'static TrackInfo<Balance, Moment>> {

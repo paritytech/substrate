@@ -233,11 +233,14 @@ impl ExtrinsicT for Extrinsic {
 }
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Config = ();
 	type Info = ();
 	type PostInfo = ();
-	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
 		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
@@ -584,7 +587,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;

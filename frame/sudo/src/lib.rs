@@ -119,7 +119,7 @@ pub mod pallet {
 
 		/// A sudo-able call.
 		type RuntimeCall: Parameter
-			+ UnfilteredDispatchable<Origin = Self::Origin>
+			+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ GetDispatchInfo;
 	}
 

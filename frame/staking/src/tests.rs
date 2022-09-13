@@ -45,7 +45,7 @@ fn set_staking_configs_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// setting works
 		assert_ok!(Staking::set_staking_configs(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ConfigOp::Set(1_500),
 			ConfigOp::Set(2_000),
 			ConfigOp::Set(10),
@@ -62,7 +62,7 @@ fn set_staking_configs_works() {
 
 		// noop does nothing
 		assert_storage_noop!(assert_ok!(Staking::set_staking_configs(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ConfigOp::Noop,
 			ConfigOp::Noop,
 			ConfigOp::Noop,
@@ -73,7 +73,7 @@ fn set_staking_configs_works() {
 
 		// removing works
 		assert_ok!(Staking::set_staking_configs(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ConfigOp::Remove,
 			ConfigOp::Remove,
 			ConfigOp::Remove,
@@ -99,22 +99,22 @@ fn force_unstake_works() {
 		add_slash(&11);
 		// Cant transfer
 		assert_noop!(
-			Balances::transfer(Origin::signed(11), 1, 10),
+			Balances::transfer(RuntimeOrigin::signed(11), 1, 10),
 			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 		// Force unstake requires root.
-		assert_noop!(Staking::force_unstake(Origin::signed(11), 11, 2), BadOrigin);
+		assert_noop!(Staking::force_unstake(RuntimeOrigin::signed(11), 11, 2), BadOrigin);
 		// Force unstake needs correct number of slashing spans (for weight calculation)
 		assert_noop!(
-			Staking::force_unstake(Origin::root(), 11, 0),
+			Staking::force_unstake(RuntimeOrigin::root(), 11, 0),
 			Error::<Test>::IncorrectSlashingSpans
 		);
 		// We now force them to unstake
-		assert_ok!(Staking::force_unstake(Origin::root(), 11, 2));
+		assert_ok!(Staking::force_unstake(RuntimeOrigin::root(), 11, 2));
 		// No longer bonded.
 		assert_eq!(Staking::bonded(&11), None);
 		// Transfer works.
-		assert_ok!(Balances::transfer(Origin::signed(11), 1, 10));
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(11), 1, 10));
 	});
 }
 
@@ -236,19 +236,19 @@ fn change_controller_works() {
 		assert_eq!(Staking::bonded(&11), Some(10));
 
 		// 10 can control 11 who is initially a validator.
-		assert_ok!(Staking::chill(Origin::signed(10)));
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(10)));
 
 		// change controller
-		assert_ok!(Staking::set_controller(Origin::signed(11), 5));
+		assert_ok!(Staking::set_controller(RuntimeOrigin::signed(11), 5));
 		assert_eq!(Staking::bonded(&11), Some(5));
 		mock::start_active_era(1);
 
 		// 10 is no longer in control.
 		assert_noop!(
-			Staking::validate(Origin::signed(10), ValidatorPrefs::default()),
+			Staking::validate(RuntimeOrigin::signed(10), ValidatorPrefs::default()),
 			Error::<Test>::NotController,
 		);
-		assert_ok!(Staking::validate(Origin::signed(5), ValidatorPrefs::default()));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(5), ValidatorPrefs::default()));
 	})
 }
 
@@ -383,9 +383,13 @@ fn staking_should_work() {
 		// --- Block 2:
 		start_session(2);
 		// add a new candidate for being a validator. account 3 controlled by 4.
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
-		assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
-		assert_ok!(Session::set_keys(Origin::signed(4), SessionKeys { other: 4.into() }, vec![]));
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 1500, RewardDestination::Controller));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(4), ValidatorPrefs::default()));
+		assert_ok!(Session::set_keys(
+			RuntimeOrigin::signed(4),
+			SessionKeys { other: 4.into() },
+			vec![]
+		));
 
 		// No effects will be seen so far.
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
@@ -409,7 +413,7 @@ fn staking_should_work() {
 		assert_eq_uvec!(validator_controllers(), vec![20, 4]);
 		// --- Block 6: Unstake 4 as a validator, freeing up the balance stashed in 3
 		// 4 will chill
-		Staking::chill(Origin::signed(4)).unwrap();
+		Staking::chill(RuntimeOrigin::signed(4)).unwrap();
 
 		// --- Block 7: nothing. 4 is still there.
 		start_session(7);
@@ -448,20 +452,20 @@ fn blocking_and_kicking_works() {
 		.build_and_execute(|| {
 			// block validator 10/11
 			assert_ok!(Staking::validate(
-				Origin::signed(10),
+				RuntimeOrigin::signed(10),
 				ValidatorPrefs { blocked: true, ..Default::default() }
 			));
 			// attempt to nominate from 100/101...
-			assert_ok!(Staking::nominate(Origin::signed(100), vec![11]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(100), vec![11]));
 			// should have worked since we're already nominated them
 			assert_eq!(Nominators::<Test>::get(&101).unwrap().targets, vec![11]);
 			// kick the nominator
-			assert_ok!(Staking::kick(Origin::signed(10), vec![101]));
+			assert_ok!(Staking::kick(RuntimeOrigin::signed(10), vec![101]));
 			// should have been kicked now
 			assert!(Nominators::<Test>::get(&101).unwrap().targets.is_empty());
 			// attempt to nominate from 100/101...
 			assert_noop!(
-				Staking::nominate(Origin::signed(100), vec![11]),
+				Staking::nominate(RuntimeOrigin::signed(100), vec![11]),
 				Error::<Test>::BadTarget
 			);
 		});
@@ -507,7 +511,7 @@ fn no_candidate_emergency_condition() {
 			<Staking as crate::Store>::MinimumValidatorCount::put(10);
 
 			// try to chill
-			let res = Staking::chill(Origin::signed(10));
+			let res = Staking::chill(RuntimeOrigin::signed(10));
 			assert_ok!(res);
 
 			let current_era = CurrentEra::<Test>::get();
@@ -543,14 +547,26 @@ fn nominating_and_rewards_should_work() {
 			assert_eq_uvec!(validator_controllers(), vec![40, 20]);
 
 			// re-validate with 11 and 31.
-			assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
-			assert_ok!(Staking::validate(Origin::signed(30), Default::default()));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(10), Default::default()));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(30), Default::default()));
 
 			// Set payee to controller.
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
-			assert_ok!(Staking::set_payee(Origin::signed(20), RewardDestination::Controller));
-			assert_ok!(Staking::set_payee(Origin::signed(30), RewardDestination::Controller));
-			assert_ok!(Staking::set_payee(Origin::signed(40), RewardDestination::Controller));
+			assert_ok!(Staking::set_payee(
+				RuntimeOrigin::signed(10),
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::set_payee(
+				RuntimeOrigin::signed(20),
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::set_payee(
+				RuntimeOrigin::signed(30),
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::set_payee(
+				RuntimeOrigin::signed(40),
+				RewardDestination::Controller
+			));
 
 			// give the man some money
 			let initial_balance = 1000;
@@ -559,11 +575,21 @@ fn nominating_and_rewards_should_work() {
 			}
 
 			// bond two account pairs and state interest in nomination.
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 21, 31]));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				1000,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11, 21, 31]));
 
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![11, 21, 41]));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(3),
+				4,
+				1000,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![11, 21, 41]));
 
 			// the total reward for era 0
 			let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
@@ -715,20 +741,28 @@ fn double_staking_should_fail() {
 		let arbitrary_value = 5;
 		// 2 = controller, 1 stashed => ok
 		assert_ok!(Staking::bond(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			2,
 			arbitrary_value,
 			RewardDestination::default()
 		));
 		// 4 = not used so far, 1 stashed => not allowed.
 		assert_noop!(
-			Staking::bond(Origin::signed(1), 4, arbitrary_value, RewardDestination::default()),
+			Staking::bond(
+				RuntimeOrigin::signed(1),
+				4,
+				arbitrary_value,
+				RewardDestination::default()
+			),
 			Error::<Test>::AlreadyBonded,
 		);
 		// 1 = stashed => attempting to nominate should fail.
-		assert_noop!(Staking::nominate(Origin::signed(1), vec![1]), Error::<Test>::NotController);
+		assert_noop!(
+			Staking::nominate(RuntimeOrigin::signed(1), vec![1]),
+			Error::<Test>::NotController
+		);
 		// 2 = controller  => nominating should work.
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![1]));
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![1]));
 	});
 }
 
@@ -741,14 +775,19 @@ fn double_controlling_should_fail() {
 		let arbitrary_value = 5;
 		// 2 = controller, 1 stashed => ok
 		assert_ok!(Staking::bond(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			2,
 			arbitrary_value,
 			RewardDestination::default(),
 		));
 		// 2 = controller, 3 stashed (Note that 2 is reused.) => no-op
 		assert_noop!(
-			Staking::bond(Origin::signed(3), 2, arbitrary_value, RewardDestination::default()),
+			Staking::bond(
+				RuntimeOrigin::signed(3),
+				2,
+				arbitrary_value,
+				RewardDestination::default()
+			),
 			Error::<Test>::AlreadyPaired,
 		);
 	});
@@ -914,14 +953,14 @@ fn cannot_transfer_staked_balance() {
 		assert_eq!(Staking::eras_stakers(active_era(), 11).total, 1000);
 		// Confirm account 11 cannot transfer as a result
 		assert_noop!(
-			Balances::transfer(Origin::signed(11), 20, 1),
+			Balances::transfer(RuntimeOrigin::signed(11), 20, 1),
 			BalancesError::<Test, _>::LiquidityRestrictions
 		);
 
 		// Give account 11 extra free balance
 		let _ = Balances::make_free_balance_be(&11, 10000);
 		// Confirm that account 11 can now transfer some balance
-		assert_ok!(Balances::transfer(Origin::signed(11), 20, 1));
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(11), 20, 1));
 	});
 }
 
@@ -939,10 +978,10 @@ fn cannot_transfer_staked_balance_2() {
 		assert_eq!(Staking::eras_stakers(active_era(), 21).total, 1000);
 		// Confirm account 21 can transfer at most 1000
 		assert_noop!(
-			Balances::transfer(Origin::signed(21), 20, 1001),
+			Balances::transfer(RuntimeOrigin::signed(21), 20, 1001),
 			BalancesError::<Test, _>::LiquidityRestrictions
 		);
-		assert_ok!(Balances::transfer(Origin::signed(21), 20, 1000));
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(21), 20, 1000));
 	});
 }
 
@@ -1134,7 +1173,7 @@ fn bond_extra_works() {
 		let _ = Balances::make_free_balance_be(&11, 1000000);
 
 		// Call the bond_extra function from controller, add only 100
-		assert_ok!(Staking::bond_extra(Origin::signed(11), 100));
+		assert_ok!(Staking::bond_extra(RuntimeOrigin::signed(11), 100));
 		// There should be 100 more `total` and `active` in the ledger
 		assert_eq!(
 			Staking::ledger(&10),
@@ -1148,7 +1187,7 @@ fn bond_extra_works() {
 		);
 
 		// Call the bond_extra function with a large number, should handle it
-		assert_ok!(Staking::bond_extra(Origin::signed(11), Balance::max_value()));
+		assert_ok!(Staking::bond_extra(RuntimeOrigin::signed(11), Balance::max_value()));
 		// The full amount of the funds should now be in the total and active
 		assert_eq!(
 			Staking::ledger(&10),
@@ -1173,7 +1212,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 	// * Once the unbonding period is done, it can actually take the funds out of the stash.
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Set payee to controller. avoids confusion
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(10), RewardDestination::Controller));
 
 		// Give account 11 some large free balance greater than total
 		let _ = Balances::make_free_balance_be(&11, 1000000);
@@ -1204,7 +1243,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 
 		// deposit the extra 100 units
-		Staking::bond_extra(Origin::signed(11), 100).unwrap();
+		Staking::bond_extra(RuntimeOrigin::signed(11), 100).unwrap();
 
 		assert_eq!(
 			Staking::ledger(&10),
@@ -1244,7 +1283,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 
 		// Unbond almost all of the funds in stash.
-		Staking::unbond(Origin::signed(10), 1000).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 1000).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1257,7 +1296,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		);
 
 		// Attempting to free the balances now will fail. 2 eras need to pass.
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
+		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0));
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1273,7 +1312,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		mock::start_active_era(3);
 
 		// nothing yet
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
+		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0));
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1288,7 +1327,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 		// trigger next era.
 		mock::start_active_era(5);
 
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
+		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0));
 		// Now the value is free and the staking ledger is updated.
 		assert_eq!(
 			Staking::ledger(&10),
@@ -1312,7 +1351,7 @@ fn too_many_unbond_calls_should_not_work() {
 			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
 			current_era = i as u32;
 			mock::start_active_era(current_era);
-			assert_ok!(Staking::unbond(Origin::signed(10), 1));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		}
 
 		current_era += 1;
@@ -1320,24 +1359,24 @@ fn too_many_unbond_calls_should_not_work() {
 
 		// This chunk is locked at `current_era` through `current_era + 2` (because BondingDuration
 		// == 3).
-		assert_ok!(Staking::unbond(Origin::signed(10), 1));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
 			Staking::ledger(&10).unwrap().unlocking.len(),
 			MaxUnlockingChunks::get() as usize
 		);
 		// can't do more.
-		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
 		current_era += 2;
 		mock::start_active_era(current_era);
 
-		assert_noop!(Staking::unbond(Origin::signed(10), 1), Error::<Test>::NoMoreChunks);
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
 		// free up everything except the most recently added chunk.
-		assert_ok!(Staking::withdraw_unbonded(Origin::signed(10), 0));
+		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0));
 		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 1);
 
 		// Can add again.
-		assert_ok!(Staking::unbond(Origin::signed(10), 1));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 2);
 	})
 }
@@ -1351,7 +1390,7 @@ fn rebond_works() {
 	// * it can re-bond a portion of the funds scheduled to unlock.
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Set payee to controller. avoids confusion
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(10), RewardDestination::Controller));
 
 		// Give account 11 some large free balance greater than total
 		let _ = Balances::make_free_balance_be(&11, 1000000);
@@ -1375,10 +1414,10 @@ fn rebond_works() {
 		assert_eq!(active_era(), 2);
 
 		// Try to rebond some funds. We get an error since no fund is unbonded.
-		assert_noop!(Staking::rebond(Origin::signed(10), 500), Error::<Test>::NoUnlockChunk);
+		assert_noop!(Staking::rebond(RuntimeOrigin::signed(10), 500), Error::<Test>::NoUnlockChunk);
 
 		// Unbond almost all of the funds in stash.
-		Staking::unbond(Origin::signed(10), 900).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 900).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1391,7 +1430,7 @@ fn rebond_works() {
 		);
 
 		// Re-bond all the funds unbonded.
-		Staking::rebond(Origin::signed(10), 900).unwrap();
+		Staking::rebond(RuntimeOrigin::signed(10), 900).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1404,7 +1443,7 @@ fn rebond_works() {
 		);
 
 		// Unbond almost all of the funds in stash.
-		Staking::unbond(Origin::signed(10), 900).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 900).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1417,7 +1456,7 @@ fn rebond_works() {
 		);
 
 		// Re-bond part of the funds unbonded.
-		Staking::rebond(Origin::signed(10), 500).unwrap();
+		Staking::rebond(RuntimeOrigin::signed(10), 500).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1430,7 +1469,7 @@ fn rebond_works() {
 		);
 
 		// Re-bond the remainder of the funds unbonded.
-		Staking::rebond(Origin::signed(10), 500).unwrap();
+		Staking::rebond(RuntimeOrigin::signed(10), 500).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1443,9 +1482,9 @@ fn rebond_works() {
 		);
 
 		// Unbond parts of the funds in stash.
-		Staking::unbond(Origin::signed(10), 300).unwrap();
-		Staking::unbond(Origin::signed(10), 300).unwrap();
-		Staking::unbond(Origin::signed(10), 300).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 300).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 300).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 300).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1458,7 +1497,7 @@ fn rebond_works() {
 		);
 
 		// Re-bond part of the funds unbonded.
-		Staking::rebond(Origin::signed(10), 500).unwrap();
+		Staking::rebond(RuntimeOrigin::signed(10), 500).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1477,7 +1516,7 @@ fn rebond_is_fifo() {
 	// Rebond should proceed by reversing the most recent bond operations.
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Set payee to controller. avoids confusion
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(10), RewardDestination::Controller));
 
 		// Give account 11 some large free balance greater than total
 		let _ = Balances::make_free_balance_be(&11, 1000000);
@@ -1500,7 +1539,7 @@ fn rebond_is_fifo() {
 		mock::start_active_era(2);
 
 		// Unbond some of the funds in stash.
-		Staking::unbond(Origin::signed(10), 400).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 400).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1515,7 +1554,7 @@ fn rebond_is_fifo() {
 		mock::start_active_era(3);
 
 		// Unbond more of the funds in stash.
-		Staking::unbond(Origin::signed(10), 300).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 300).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1533,7 +1572,7 @@ fn rebond_is_fifo() {
 		mock::start_active_era(4);
 
 		// Unbond yet more of the funds in stash.
-		Staking::unbond(Origin::signed(10), 200).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 200).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1550,7 +1589,7 @@ fn rebond_is_fifo() {
 		);
 
 		// Re-bond half of the unbonding funds.
-		Staking::rebond(Origin::signed(10), 400).unwrap();
+		Staking::rebond(RuntimeOrigin::signed(10), 400).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1573,7 +1612,7 @@ fn rebond_emits_right_value_in_event() {
 	// and the rebond event emits the actual value rebonded.
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Set payee to controller. avoids confusion
-		assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(10), RewardDestination::Controller));
 
 		// Give account 11 some large free balance greater than total
 		let _ = Balances::make_free_balance_be(&11, 1000000);
@@ -1582,7 +1621,7 @@ fn rebond_emits_right_value_in_event() {
 		mock::start_active_era(1);
 
 		// Unbond almost all of the funds in stash.
-		Staking::unbond(Origin::signed(10), 900).unwrap();
+		Staking::unbond(RuntimeOrigin::signed(10), 900).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1595,7 +1634,7 @@ fn rebond_emits_right_value_in_event() {
 		);
 
 		// Re-bond less than the total
-		Staking::rebond(Origin::signed(10), 100).unwrap();
+		Staking::rebond(RuntimeOrigin::signed(10), 100).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1610,7 +1649,7 @@ fn rebond_emits_right_value_in_event() {
 		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 100));
 
 		// Re-bond way more than available
-		Staking::rebond(Origin::signed(10), 100_000).unwrap();
+		Staking::rebond(RuntimeOrigin::signed(10), 100_000).unwrap();
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -1700,11 +1739,14 @@ fn reap_stash_works() {
 
 			// stash is not reapable
 			assert_noop!(
-				Staking::reap_stash(Origin::signed(20), 11, 0),
+				Staking::reap_stash(RuntimeOrigin::signed(20), 11, 0),
 				Error::<Test>::FundedTarget
 			);
 			// controller or any other account is not reapable
-			assert_noop!(Staking::reap_stash(Origin::signed(20), 10, 0), Error::<Test>::NotStash);
+			assert_noop!(
+				Staking::reap_stash(RuntimeOrigin::signed(20), 10, 0),
+				Error::<Test>::NotStash
+			);
 
 			// no easy way to cause an account to go below ED, we tweak their staking ledger
 			// instead.
@@ -1720,7 +1762,7 @@ fn reap_stash_works() {
 			);
 
 			// reap-able
-			assert_ok!(Staking::reap_stash(Origin::signed(20), 11, 0));
+			assert_ok!(Staking::reap_stash(RuntimeOrigin::signed(20), 11, 0));
 
 			// then
 			assert!(!<Ledger<Test>>::contains_key(&10));
@@ -1737,7 +1779,10 @@ fn switching_roles() {
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		// Reset reward destination
 		for i in &[10, 20] {
-			assert_ok!(Staking::set_payee(Origin::signed(*i), RewardDestination::Controller));
+			assert_ok!(Staking::set_payee(
+				RuntimeOrigin::signed(*i),
+				RewardDestination::Controller
+			));
 		}
 
 		assert_eq_uvec!(validator_controllers(), vec![20, 10]);
@@ -1748,16 +1793,20 @@ fn switching_roles() {
 		}
 
 		// add 2 nominators
-		assert_ok!(Staking::bond(Origin::signed(1), 2, 2000, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 5]));
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(1), 2, 2000, RewardDestination::Controller));
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11, 5]));
 
-		assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
-		assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 1]));
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 500, RewardDestination::Controller));
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![21, 1]));
 
 		// add a new validator candidate
-		assert_ok!(Staking::bond(Origin::signed(5), 6, 1000, RewardDestination::Controller));
-		assert_ok!(Staking::validate(Origin::signed(6), ValidatorPrefs::default()));
-		assert_ok!(Session::set_keys(Origin::signed(6), SessionKeys { other: 6.into() }, vec![]));
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(5), 6, 1000, RewardDestination::Controller));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(6), ValidatorPrefs::default()));
+		assert_ok!(Session::set_keys(
+			RuntimeOrigin::signed(6),
+			SessionKeys { other: 6.into() },
+			vec![]
+		));
 
 		mock::start_active_era(1);
 
@@ -1765,8 +1814,12 @@ fn switching_roles() {
 		assert_eq_uvec!(validator_controllers(), vec![6, 10]);
 
 		// 2 decides to be a validator. Consequences:
-		assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
-		assert_ok!(Session::set_keys(Origin::signed(2), SessionKeys { other: 2.into() }, vec![]));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+		assert_ok!(Session::set_keys(
+			RuntimeOrigin::signed(2),
+			SessionKeys { other: 2.into() },
+			vec![]
+		));
 		// new stakes:
 		// 10: 1000 self vote
 		// 20: 1000 self vote + 250 vote
@@ -1818,15 +1871,20 @@ fn bond_with_no_staked_value() {
 		.build_and_execute(|| {
 			// Can't bond with 1
 			assert_noop!(
-				Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller),
+				Staking::bond(RuntimeOrigin::signed(1), 2, 1, RewardDestination::Controller),
 				Error::<Test>::InsufficientBond,
 			);
 			// bonded with absolute minimum value possible.
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 5, RewardDestination::Controller));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				5,
+				RewardDestination::Controller
+			));
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			// unbonding even 1 will cause all to be unbonded.
-			assert_ok!(Staking::unbond(Origin::signed(2), 1));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(2), 1));
 			assert_eq!(
 				Staking::ledger(2),
 				Some(StakingLedger {
@@ -1842,14 +1900,14 @@ fn bond_with_no_staked_value() {
 			mock::start_active_era(2);
 
 			// not yet removed.
-			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2), 0));
+			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
 			assert!(Staking::ledger(2).is_some());
 			assert_eq!(Balances::locks(&1)[0].amount, 5);
 
 			mock::start_active_era(3);
 
 			// poof. Account 1 is removed from the staking system.
-			assert_ok!(Staking::withdraw_unbonded(Origin::signed(2), 0));
+			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
 			assert!(Staking::ledger(2).is_none());
 			assert_eq!(Balances::locks(&1).len(), 0);
 		});
@@ -1863,16 +1921,24 @@ fn bond_with_little_staked_value_bounded() {
 		.minimum_validator_count(1)
 		.build_and_execute(|| {
 			// setup
-			assert_ok!(Staking::chill(Origin::signed(30)));
-			assert_ok!(Staking::set_payee(Origin::signed(10), RewardDestination::Controller));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(30)));
+			assert_ok!(Staking::set_payee(
+				RuntimeOrigin::signed(10),
+				RewardDestination::Controller
+			));
 			let init_balance_2 = Balances::free_balance(&2);
 			let init_balance_10 = Balances::free_balance(&10);
 
 			// Stingy validator.
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1, RewardDestination::Controller));
-			assert_ok!(Staking::validate(Origin::signed(2), ValidatorPrefs::default()));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				1,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
 			assert_ok!(Session::set_keys(
-				Origin::signed(2),
+				RuntimeOrigin::signed(2),
 				SessionKeys { other: 2.into() },
 				vec![]
 			));
@@ -1945,11 +2011,21 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
 				let _ = Balances::make_free_balance_be(i, initial_balance);
 			}
 
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21, 31]));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				1000,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11, 11, 11, 21, 31]));
 
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![21, 31]));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(3),
+				4,
+				1000,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![21, 31]));
 
 			// winners should be 21 and 31. Otherwise this election is taking duplicates into
 			// account.
@@ -1990,11 +2066,21 @@ fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
 				let _ = Balances::make_free_balance_be(i, initial_balance);
 			}
 
-			assert_ok!(Staking::bond(Origin::signed(1), 2, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(2), vec![11, 11, 11, 21]));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(1),
+				2,
+				1000,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(2), vec![11, 11, 11, 21]));
 
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 1000, RewardDestination::Controller));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![21]));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(3),
+				4,
+				1000,
+				RewardDestination::Controller
+			));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![21]));
 
 			// winners should be 21 and 11.
 			let supports = <Test as Config>::ElectionProvider::elect().unwrap();
@@ -2026,8 +2112,8 @@ fn phragmen_should_not_overflow() {
 		// This is the maximum value that we can have as the outcome of CurrencyToVote.
 		type Votes = u64;
 
-		let _ = Staking::chill(Origin::signed(10));
-		let _ = Staking::chill(Origin::signed(20));
+		let _ = Staking::chill(RuntimeOrigin::signed(10));
+		let _ = Staking::chill(RuntimeOrigin::signed(20));
 
 		bond_validator(3, 2, Votes::max_value() as Balance);
 		bond_validator(5, 4, Votes::max_value() as Balance);
@@ -2068,7 +2154,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		ErasStakers::<Test>::insert(0, 11, &exposure);
 		ErasStakersClipped::<Test>::insert(0, 11, exposure);
 		ErasValidatorReward::<Test>::insert(0, stake);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 0));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0));
 		assert_eq!(Balances::total_balance(&11), stake * 2);
 
 		// Set staker
@@ -2076,7 +2162,8 @@ fn reward_validator_slashing_validator_does_not_overflow() {
 		let _ = Balances::make_free_balance_be(&2, stake);
 
 		// only slashes out of bonded stake are applied. without this line, it is 0.
-		Staking::bond(Origin::signed(2), 20000, stake - 1, RewardDestination::default()).unwrap();
+		Staking::bond(RuntimeOrigin::signed(2), 20000, stake - 1, RewardDestination::default())
+			.unwrap();
 		// Override exposure of 11
 		ErasStakers::<Test>::insert(
 			0,
@@ -2152,7 +2239,7 @@ fn unbonded_balance_is_not_slashable() {
 		// total amount staked is slashable.
 		assert_eq!(Staking::slashable_balance_of(&11), 1000);
 
-		assert_ok!(Staking::unbond(Origin::signed(10), 800));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 800));
 
 		// only the active portion.
 		assert_eq!(Staking::slashable_balance_of(&11), 200);
@@ -2208,7 +2295,7 @@ fn offence_forces_new_era() {
 #[test]
 fn offence_ensures_new_era_without_clobbering() {
 	ExtBuilder::default().build_and_execute(|| {
-		assert_ok!(Staking::force_new_era_always(Origin::root()));
+		assert_ok!(Staking::force_new_era_always(RuntimeOrigin::root()));
 		assert_eq!(Staking::force_era(), Forcing::ForceAlways);
 
 		on_offence_now(
@@ -2289,7 +2376,7 @@ fn slash_in_old_span_does_not_deselect() {
 
 		mock::start_active_era(2);
 
-		Staking::validate(Origin::signed(10), Default::default()).unwrap();
+		Staking::validate(RuntimeOrigin::signed(10), Default::default()).unwrap();
 		assert_eq!(Staking::force_era(), Forcing::NotForcing);
 		assert!(<Validators<Test>>::contains_key(11));
 		assert!(!Session::validators().contains(&11));
@@ -2548,10 +2635,10 @@ fn garbage_collection_after_slashing() {
 
 			// reap_stash respects num_slashing_spans so that weight is accurate
 			assert_noop!(
-				Staking::reap_stash(Origin::signed(20), 11, 0),
+				Staking::reap_stash(RuntimeOrigin::signed(20), 11, 0),
 				Error::<Test>::IncorrectSlashingSpans
 			);
-			assert_ok!(Staking::reap_stash(Origin::signed(20), 11, 2));
+			assert_ok!(Staking::reap_stash(RuntimeOrigin::signed(20), 11, 2));
 
 			assert!(<Staking as crate::Store>::SlashingSpans::get(&11).is_none());
 			assert_eq!(<Staking as crate::Store>::SpanSlash::get(&(11, 0)).amount(), &0);
@@ -2714,7 +2801,7 @@ fn slashes_are_summed_across_spans() {
 		assert_eq!(Balances::free_balance(21), 1900);
 
 		// 21 has been force-chilled. re-signal intent to validate.
-		Staking::validate(Origin::signed(20), Default::default()).unwrap();
+		Staking::validate(RuntimeOrigin::signed(20), Default::default()).unwrap();
 
 		mock::start_active_era(4);
 
@@ -2833,8 +2920,8 @@ fn retroactive_deferred_slashes_one_before() {
 
 		// unbond at slash era.
 		mock::start_active_era(2);
-		assert_ok!(Staking::chill(Origin::signed(10)));
-		assert_ok!(Staking::unbond(Origin::signed(10), 100));
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(10)));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 100));
 
 		mock::start_active_era(3);
 		on_offence_in_era(
@@ -2866,7 +2953,7 @@ fn retroactive_deferred_slashes_one_before() {
 
 		// their ledger has already been slashed.
 		assert_eq!(Staking::ledger(10).unwrap().total, 900);
-		assert_ok!(Staking::unbond(Origin::signed(10), 1000));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1000));
 		assert_eq!(Staking::ledger(10).unwrap().total, 900);
 	})
 }
@@ -2892,8 +2979,8 @@ fn staker_cannot_bail_deferred_slash() {
 		);
 
 		// now we chill
-		assert_ok!(Staking::chill(Origin::signed(100)));
-		assert_ok!(Staking::unbond(Origin::signed(100), 500));
+		assert_ok!(Staking::chill(RuntimeOrigin::signed(100)));
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(100), 500));
 
 		assert_eq!(Staking::current_era().unwrap(), 1);
 		assert_eq!(active_era(), 1);
@@ -2928,7 +3015,9 @@ fn staker_cannot_bail_deferred_slash() {
 		assert_eq!(active_era(), 3);
 
 		// and cannot yet unbond:
-		assert_storage_noop!(assert!(Staking::withdraw_unbonded(Origin::signed(100), 0).is_ok()));
+		assert_storage_noop!(assert!(
+			Staking::withdraw_unbonded(RuntimeOrigin::signed(100), 0).is_ok()
+		));
 		assert_eq!(
 			Ledger::<Test>::get(100).unwrap().unlocking.into_inner(),
 			vec![UnlockChunk { era: 4u32, value: 500 as Balance }],
@@ -2977,12 +3066,12 @@ fn remove_deferred() {
 
 		// fails if empty
 		assert_noop!(
-			Staking::cancel_deferred_slash(Origin::root(), 1, vec![]),
+			Staking::cancel_deferred_slash(RuntimeOrigin::root(), 1, vec![]),
 			Error::<Test>::EmptyTargets
 		);
 
 		// cancel one of them.
-		assert_ok!(Staking::cancel_deferred_slash(Origin::root(), 4, vec![0]));
+		assert_ok!(Staking::cancel_deferred_slash(RuntimeOrigin::root(), 4, vec![0]));
 
 		assert_eq!(Balances::free_balance(11), 1000);
 		assert_eq!(Balances::free_balance(101), 2000);
@@ -3063,21 +3152,21 @@ fn remove_multi_deferred() {
 
 		// fails if list is not sorted
 		assert_noop!(
-			Staking::cancel_deferred_slash(Origin::root(), 1, vec![2, 0, 4]),
+			Staking::cancel_deferred_slash(RuntimeOrigin::root(), 1, vec![2, 0, 4]),
 			Error::<Test>::NotSortedAndUnique
 		);
 		// fails if list is not unique
 		assert_noop!(
-			Staking::cancel_deferred_slash(Origin::root(), 1, vec![0, 2, 2]),
+			Staking::cancel_deferred_slash(RuntimeOrigin::root(), 1, vec![0, 2, 2]),
 			Error::<Test>::NotSortedAndUnique
 		);
 		// fails if bad index
 		assert_noop!(
-			Staking::cancel_deferred_slash(Origin::root(), 1, vec![1, 2, 3, 4, 5]),
+			Staking::cancel_deferred_slash(RuntimeOrigin::root(), 1, vec![1, 2, 3, 4, 5]),
 			Error::<Test>::InvalidSlashIndex
 		);
 
-		assert_ok!(Staking::cancel_deferred_slash(Origin::root(), 4, vec![0, 2, 4]));
+		assert_ok!(Staking::cancel_deferred_slash(RuntimeOrigin::root(), 4, vec![0, 2, 4]));
 
 		let slashes = <Staking as Store>::UnappliedSlashes::get(&4);
 		assert_eq!(slashes.len(), 2);
@@ -3127,7 +3216,7 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		assert!(nominations.submitted_in < last_slash);
 
 		// actually re-bond the slashed validator
-		assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(10), Default::default()));
 
 		mock::start_active_era(2);
 		let exposure_11 = Staking::eras_stakers(active_era(), &11);
@@ -3354,19 +3443,19 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		// Last kept is 1:
 		assert!(current_era - Staking::history_depth() == 1);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 0),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0),
 			// Fail: Era out of history
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 2));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2));
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 2),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2),
 			// Fail: Double claim
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, active_era),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era),
 			// Fail: Era not finished yet
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
@@ -3487,12 +3576,12 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 			let balance = 10_000 + i as Balance;
 			Balances::make_free_balance_be(&stash, balance);
 			assert_ok!(Staking::bond(
-				Origin::signed(stash),
+				RuntimeOrigin::signed(stash),
 				controller,
 				balance,
 				RewardDestination::Stash
 			));
-			assert_ok!(Staking::nominate(Origin::signed(controller), vec![11]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![11]));
 		}
 		mock::start_active_era(1);
 
@@ -3520,16 +3609,16 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 fn set_history_depth_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		mock::start_active_era(10);
-		Staking::set_history_depth(Origin::root(), 20, 0).unwrap();
+		Staking::set_history_depth(RuntimeOrigin::root(), 20, 0).unwrap();
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::root(), 4, 0).unwrap();
+		Staking::set_history_depth(RuntimeOrigin::root(), 4, 0).unwrap();
 		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::root(), 3, 0).unwrap();
+		Staking::set_history_depth(RuntimeOrigin::root(), 3, 0).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(Origin::root(), 8, 0).unwrap();
+		Staking::set_history_depth(RuntimeOrigin::root(), 8, 0).unwrap();
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
 		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
 	});
@@ -3571,7 +3660,7 @@ fn test_payout_stakers() {
 
 		let pre_payout_total_issuance = Balances::total_issuance();
 		RewardOnUnbalanceWasCalled::set(false);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
 		assert_eq_error_rate!(
 			Balances::total_issuance(),
 			pre_payout_total_issuance + actual_paid_out,
@@ -3612,7 +3701,7 @@ fn test_payout_stakers() {
 
 			mock::start_active_era(i);
 			RewardOnUnbalanceWasCalled::set(false);
-			assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, i - 1));
+			assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, i - 1));
 			assert_eq_error_rate!(
 				Balances::total_issuance(),
 				pre_payout_total_issuance + actual_paid_out,
@@ -3641,8 +3730,8 @@ fn test_payout_stakers() {
 		}
 
 		// We clean it up as history passes
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 15));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 98));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 15));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 98));
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3655,9 +3744,9 @@ fn test_payout_stakers() {
 		);
 
 		// Out of order claims works.
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 69));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 23));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 42));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 69));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 23));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 42));
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3697,12 +3786,12 @@ fn payout_stakers_handles_basic_errors() {
 
 		// Wrong Era, too big
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 2),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 2),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		// Wrong Staker
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 10, 1),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 10, 1),
 			Error::<Test>::NotStash.with_weight(err_weight)
 		);
 
@@ -3715,23 +3804,23 @@ fn payout_stakers_handles_basic_errors() {
 		// We are at era 99, with history depth of 84
 		// We should be able to payout era 15 through 98 (84 total eras), but not 14 or 99.
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 14),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 14),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 99),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 99),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 15));
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 98));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 15));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 98));
 
 		// Can't claim again
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 15),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 15),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(Origin::signed(1337), 11, 98),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 98),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 	});
@@ -3781,7 +3870,7 @@ fn payout_stakers_handles_weight_refund() {
 		// Collect payouts when there are no nominators
 		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 1 });
 		let info = call.get_dispatch_info();
-		let result = call.dispatch(Origin::signed(20));
+		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
 
@@ -3794,7 +3883,7 @@ fn payout_stakers_handles_weight_refund() {
 		// Collect payouts for an era where the validator did not receive any points.
 		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
 		let info = call.get_dispatch_info();
-		let result = call.dispatch(Origin::signed(20));
+		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
 
@@ -3807,7 +3896,7 @@ fn payout_stakers_handles_weight_refund() {
 		// Collect payouts when the validator has `half_max_nom_rewarded` nominators.
 		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 3 });
 		let info = call.get_dispatch_info();
-		let result = call.dispatch(Origin::signed(20));
+		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), half_max_nom_rewarded_weight);
 
@@ -3830,14 +3919,14 @@ fn payout_stakers_handles_weight_refund() {
 		// Collect payouts when the validator had `half_max_nom_rewarded` nominators.
 		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
 		let info = call.get_dispatch_info();
-		let result = call.dispatch(Origin::signed(20));
+		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert_ok!(result);
 		assert_eq!(extract_actual_weight(&result, &info), max_nom_rewarded_weight);
 
 		// Try and collect payouts for an era that has already been collected.
 		let call = TestCall::Staking(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
 		let info = call.get_dispatch_info();
-		let result = call.dispatch(Origin::signed(20));
+		let result = call.dispatch(RuntimeOrigin::signed(20));
 		assert!(result.is_err());
 		// When there is an error the consumed weight == weight when there are 0 nominator payouts.
 		assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
@@ -3966,7 +4055,7 @@ fn payout_creates_controller() {
 		bond_nominator(1234, 1337, 100, vec![11]);
 
 		// kill controller
-		assert_ok!(Balances::transfer(Origin::signed(1337), 1234, 100));
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(1337), 1234, 100));
 		assert_eq!(Balances::free_balance(1337), 0);
 
 		mock::start_active_era(1);
@@ -3974,7 +4063,7 @@ fn payout_creates_controller() {
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
 
 		// Controller is created
 		assert!(Balances::free_balance(1337) > 0);
@@ -3992,7 +4081,7 @@ fn payout_to_any_account_works() {
 		bond_nominator(1234, 1337, 100, vec![11]);
 
 		// Update payout location
-		assert_ok!(Staking::set_payee(Origin::signed(1337), RewardDestination::Account(42)));
+		assert_ok!(Staking::set_payee(RuntimeOrigin::signed(1337), RewardDestination::Account(42)));
 
 		// Reward Destination account doesn't exist
 		assert_eq!(Balances::free_balance(42), 0);
@@ -4002,7 +4091,7 @@ fn payout_to_any_account_works() {
 		// compute and ensure the reward amount is greater than zero.
 		let _ = current_total_payout_for_duration(reward_time_per_era());
 		mock::start_active_era(2);
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), 11, 1));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
 
 		// Payment is successful
 		assert!(Balances::free_balance(42) > 0);
@@ -4130,8 +4219,8 @@ fn cannot_rebond_to_lower_than_ed() {
 			);
 
 			// unbond all of it. must be chilled first.
-			assert_ok!(Staking::chill(Origin::signed(20)));
-			assert_ok!(Staking::unbond(Origin::signed(20), 10 * 1000));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(20)));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(20), 10 * 1000));
 			assert_eq!(
 				Staking::ledger(&20).unwrap(),
 				StakingLedger {
@@ -4144,7 +4233,10 @@ fn cannot_rebond_to_lower_than_ed() {
 			);
 
 			// now bond a wee bit more
-			assert_noop!(Staking::rebond(Origin::signed(20), 5), Error::<Test>::InsufficientBond);
+			assert_noop!(
+				Staking::rebond(RuntimeOrigin::signed(20), 5),
+				Error::<Test>::InsufficientBond
+			);
 		})
 }
 
@@ -4167,8 +4259,8 @@ fn cannot_bond_extra_to_lower_than_ed() {
 			);
 
 			// unbond all of it. must be chilled first.
-			assert_ok!(Staking::chill(Origin::signed(20)));
-			assert_ok!(Staking::unbond(Origin::signed(20), 10 * 1000));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(20)));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(20), 10 * 1000));
 			assert_eq!(
 				Staking::ledger(&20).unwrap(),
 				StakingLedger {
@@ -4182,7 +4274,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 
 			// now bond a wee bit more
 			assert_noop!(
-				Staking::bond_extra(Origin::signed(21), 5),
+				Staking::bond_extra(RuntimeOrigin::signed(21), 5),
 				Error::<Test>::InsufficientBond,
 			);
 		})
@@ -4208,9 +4300,9 @@ fn do_not_die_when_active_is_ed() {
 			);
 
 			// when unbond all of it except ed.
-			assert_ok!(Staking::unbond(Origin::signed(20), 999 * ed));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(20), 999 * ed));
 			start_active_era(3);
-			assert_ok!(Staking::withdraw_unbonded(Origin::signed(20), 100));
+			assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(20), 100));
 
 			// then
 			assert_eq!(
@@ -4313,7 +4405,7 @@ mod election_data_provider {
 			);
 
 			// resubmit and it is back
-			assert_ok!(Staking::nominate(Origin::signed(100), vec![11, 21]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(100), vec![11, 21]));
 			assert_eq!(
 				<Staking as ElectionDataProvider>::electing_voters(None)
 					.unwrap()
@@ -4471,13 +4563,13 @@ mod election_data_provider {
 			assert_eq!(staking_events().len(), 3);
 			assert_eq!(*staking_events().last().unwrap(), Event::StakersElected);
 
-			Staking::force_no_eras(Origin::root()).unwrap();
+			Staking::force_no_eras(RuntimeOrigin::root()).unwrap();
 			assert_eq!(Staking::next_election_prediction(System::block_number()), u64::MAX);
 
-			Staking::force_new_era_always(Origin::root()).unwrap();
+			Staking::force_new_era_always(RuntimeOrigin::root()).unwrap();
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
 
-			Staking::force_new_era(Origin::root()).unwrap();
+			Staking::force_new_era(RuntimeOrigin::root()).unwrap();
 			assert_eq!(Staking::next_election_prediction(System::block_number()), 45 + 5);
 
 			// Do a fail election
@@ -4527,40 +4619,51 @@ fn min_bond_checks_work() {
 		.min_validator_bond(1_500)
 		.build_and_execute(|| {
 			// 500 is not enough for any role
-			assert_ok!(Staking::bond(Origin::signed(3), 4, 500, RewardDestination::Controller));
+			assert_ok!(Staking::bond(
+				RuntimeOrigin::signed(3),
+				4,
+				500,
+				RewardDestination::Controller
+			));
 			assert_noop!(
-				Staking::nominate(Origin::signed(4), vec![1]),
+				Staking::nominate(RuntimeOrigin::signed(4), vec![1]),
 				Error::<Test>::InsufficientBond
 			);
 			assert_noop!(
-				Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
+				Staking::validate(RuntimeOrigin::signed(4), ValidatorPrefs::default()),
 				Error::<Test>::InsufficientBond,
 			);
 
 			// 1000 is enough for nominator
-			assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
+			assert_ok!(Staking::bond_extra(RuntimeOrigin::signed(3), 500));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![1]));
 			assert_noop!(
-				Staking::validate(Origin::signed(4), ValidatorPrefs::default()),
+				Staking::validate(RuntimeOrigin::signed(4), ValidatorPrefs::default()),
 				Error::<Test>::InsufficientBond,
 			);
 
 			// 1500 is enough for validator
-			assert_ok!(Staking::bond_extra(Origin::signed(3), 500));
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
-			assert_ok!(Staking::validate(Origin::signed(4), ValidatorPrefs::default()));
+			assert_ok!(Staking::bond_extra(RuntimeOrigin::signed(3), 500));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![1]));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(4), ValidatorPrefs::default()));
 
 			// Can't unbond anything as validator
-			assert_noop!(Staking::unbond(Origin::signed(4), 500), Error::<Test>::InsufficientBond);
+			assert_noop!(
+				Staking::unbond(RuntimeOrigin::signed(4), 500),
+				Error::<Test>::InsufficientBond
+			);
 
 			// Once they are a nominator, they can unbond 500
-			assert_ok!(Staking::nominate(Origin::signed(4), vec![1]));
-			assert_ok!(Staking::unbond(Origin::signed(4), 500));
-			assert_noop!(Staking::unbond(Origin::signed(4), 500), Error::<Test>::InsufficientBond);
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(4), vec![1]));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 500));
+			assert_noop!(
+				Staking::unbond(RuntimeOrigin::signed(4), 500),
+				Error::<Test>::InsufficientBond
+			);
 
 			// Once they are chilled they can unbond everything
-			assert_ok!(Staking::chill(Origin::signed(4)));
-			assert_ok!(Staking::unbond(Origin::signed(4), 1000));
+			assert_ok!(Staking::chill(RuntimeOrigin::signed(4)));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 1000));
 		})
 }
 
@@ -4586,21 +4689,21 @@ fn chill_other_works() {
 
 				// Nominator
 				assert_ok!(Staking::bond(
-					Origin::signed(a),
+					RuntimeOrigin::signed(a),
 					b,
 					1000,
 					RewardDestination::Controller
 				));
-				assert_ok!(Staking::nominate(Origin::signed(b), vec![1]));
+				assert_ok!(Staking::nominate(RuntimeOrigin::signed(b), vec![1]));
 
 				// Validator
 				assert_ok!(Staking::bond(
-					Origin::signed(c),
+					RuntimeOrigin::signed(c),
 					d,
 					1500,
 					RewardDestination::Controller
 				));
-				assert_ok!(Staking::validate(Origin::signed(d), ValidatorPrefs::default()));
+				assert_ok!(Staking::validate(RuntimeOrigin::signed(d), ValidatorPrefs::default()));
 			}
 
 			// To chill other users, we need to:
@@ -4613,17 +4716,17 @@ fn chill_other_works() {
 
 			// Can't chill these users
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 1),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 3),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 3),
 				Error::<Test>::CannotChillOther
 			);
 
 			// Change the minimum bond... but no limits.
 			assert_ok!(Staking::set_staking_configs(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				ConfigOp::Set(1_500),
 				ConfigOp::Set(2_000),
 				ConfigOp::Remove,
@@ -4634,17 +4737,17 @@ fn chill_other_works() {
 
 			// Still can't chill these users
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 1),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 3),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 3),
 				Error::<Test>::CannotChillOther
 			);
 
 			// Add limits, but no threshold
 			assert_ok!(Staking::set_staking_configs(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				ConfigOp::Noop,
 				ConfigOp::Noop,
 				ConfigOp::Set(10),
@@ -4655,17 +4758,17 @@ fn chill_other_works() {
 
 			// Still can't chill these users
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 1),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 3),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 3),
 				Error::<Test>::CannotChillOther
 			);
 
 			// Add threshold, but no limits
 			assert_ok!(Staking::set_staking_configs(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				ConfigOp::Noop,
 				ConfigOp::Noop,
 				ConfigOp::Remove,
@@ -4676,17 +4779,17 @@ fn chill_other_works() {
 
 			// Still can't chill these users
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 1),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 3),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 3),
 				Error::<Test>::CannotChillOther
 			);
 
 			// Add threshold and limits
 			assert_ok!(Staking::set_staking_configs(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				ConfigOp::Noop,
 				ConfigOp::Noop,
 				ConfigOp::Set(10),
@@ -4704,19 +4807,19 @@ fn chill_other_works() {
 			for i in 6..15 {
 				let b = 4 * i + 1;
 				let d = 4 * i + 3;
-				assert_ok!(Staking::chill_other(Origin::signed(1337), b));
-				assert_ok!(Staking::chill_other(Origin::signed(1337), d));
+				assert_ok!(Staking::chill_other(RuntimeOrigin::signed(1337), b));
+				assert_ok!(Staking::chill_other(RuntimeOrigin::signed(1337), d));
 			}
 
 			// chill a nominator. Limit is not reached, not chill-able
 			assert_eq!(Nominators::<Test>::count(), 7);
 			assert_noop!(
-				Staking::chill_other(Origin::signed(1337), 1),
+				Staking::chill_other(RuntimeOrigin::signed(1337), 1),
 				Error::<Test>::CannotChillOther
 			);
 			// chill a validator. Limit is reached, chill-able.
 			assert_eq!(Validators::<Test>::count(), 9);
-			assert_ok!(Staking::chill_other(Origin::signed(1337), 3));
+			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(1337), 3));
 		})
 }
 
@@ -4731,7 +4834,7 @@ fn capped_stakers_works() {
 		// Change the maximums
 		let max = 10;
 		assert_ok!(Staking::set_staking_configs(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ConfigOp::Set(10),
 			ConfigOp::Set(10),
 			ConfigOp::Set(max),
@@ -4749,7 +4852,10 @@ fn capped_stakers_works() {
 				RewardDestination::Controller,
 			)
 			.unwrap();
-			assert_ok!(Staking::validate(Origin::signed(controller), ValidatorPrefs::default()));
+			assert_ok!(Staking::validate(
+				RuntimeOrigin::signed(controller),
+				ValidatorPrefs::default()
+			));
 			some_existing_validator = controller;
 		}
 
@@ -4762,7 +4868,7 @@ fn capped_stakers_works() {
 		.unwrap();
 
 		assert_noop!(
-			Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()),
+			Staking::validate(RuntimeOrigin::signed(last_validator), ValidatorPrefs::default()),
 			Error::<Test>::TooManyValidators,
 		);
 
@@ -4775,7 +4881,7 @@ fn capped_stakers_works() {
 				RewardDestination::Controller,
 			)
 			.unwrap();
-			assert_ok!(Staking::nominate(Origin::signed(controller), vec![1]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(controller), vec![1]));
 			some_existing_nominator = controller;
 		}
 
@@ -4787,21 +4893,21 @@ fn capped_stakers_works() {
 		)
 		.unwrap();
 		assert_noop!(
-			Staking::nominate(Origin::signed(last_nominator), vec![1]),
+			Staking::nominate(RuntimeOrigin::signed(last_nominator), vec![1]),
 			Error::<Test>::TooManyNominators
 		);
 
 		// Re-nominate works fine
-		assert_ok!(Staking::nominate(Origin::signed(some_existing_nominator), vec![1]));
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(some_existing_nominator), vec![1]));
 		// Re-validate works fine
 		assert_ok!(Staking::validate(
-			Origin::signed(some_existing_validator),
+			RuntimeOrigin::signed(some_existing_validator),
 			ValidatorPrefs::default()
 		));
 
 		// No problem when we set to `None` again
 		assert_ok!(Staking::set_staking_configs(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ConfigOp::Noop,
 			ConfigOp::Noop,
 			ConfigOp::Remove,
@@ -4809,8 +4915,11 @@ fn capped_stakers_works() {
 			ConfigOp::Noop,
 			ConfigOp::Noop,
 		));
-		assert_ok!(Staking::nominate(Origin::signed(last_nominator), vec![1]));
-		assert_ok!(Staking::validate(Origin::signed(last_validator), ValidatorPrefs::default()));
+		assert_ok!(Staking::nominate(RuntimeOrigin::signed(last_nominator), vec![1]));
+		assert_ok!(Staking::validate(
+			RuntimeOrigin::signed(last_validator),
+			ValidatorPrefs::default()
+		));
 	})
 }
 
@@ -4819,7 +4928,7 @@ fn min_commission_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// account 10 controls the stash from account 11
 		assert_ok!(Staking::validate(
-			Origin::signed(10),
+			RuntimeOrigin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 		));
 
@@ -4833,7 +4942,7 @@ fn min_commission_works() {
 		);
 
 		assert_ok!(Staking::set_staking_configs(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			ConfigOp::Remove,
 			ConfigOp::Remove,
 			ConfigOp::Remove,
@@ -4845,7 +4954,7 @@ fn min_commission_works() {
 		// can't make it less than 10 now
 		assert_noop!(
 			Staking::validate(
-				Origin::signed(10),
+				RuntimeOrigin::signed(10),
 				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 			),
 			Error::<Test>::CommissionTooLow
@@ -4853,12 +4962,12 @@ fn min_commission_works() {
 
 		// can only change to higher.
 		assert_ok!(Staking::validate(
-			Origin::signed(10),
+			RuntimeOrigin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(10), blocked: false }
 		));
 
 		assert_ok!(Staking::validate(
-			Origin::signed(10),
+			RuntimeOrigin::signed(10),
 			ValidatorPrefs { commission: Perbill::from_percent(15), blocked: false }
 		));
 	})
@@ -4941,7 +5050,7 @@ fn change_of_max_nominations() {
 			assert_eq!(Staking::electing_voters(None).unwrap().len(), 3 + 1);
 
 			// now one of them can revive themselves by re-nominating to a proper value.
-			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(71), vec![1]));
 			assert_eq!(
 				Nominators::<Test>::iter()
 					.map(|(k, n)| (k, n.targets.len()))
@@ -4952,7 +5061,7 @@ fn change_of_max_nominations() {
 			// or they can be chilled by any account.
 			assert!(Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
-			assert_ok!(Staking::chill_other(Origin::signed(70), 100));
+			assert_ok!(Staking::chill_other(RuntimeOrigin::signed(70), 100));
 			assert!(!Nominators::<Test>::contains_key(101));
 			assert!(Nominators::<Test>::get(101).is_none());
 		})
@@ -4976,7 +5085,7 @@ mod sorted_list_provider {
 			);
 
 			// when account 101 renominates
-			assert_ok!(Staking::nominate(Origin::signed(100), vec![41]));
+			assert_ok!(Staking::nominate(RuntimeOrigin::signed(100), vec![41]));
 
 			// then counts don't change
 			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
@@ -4999,7 +5108,7 @@ mod sorted_list_provider {
 			assert_eq!(<Test as Config>::VoterList::iter().collect::<Vec<_>>(), vec![11, 21, 31]);
 
 			// when account 11 re-validates
-			assert_ok!(Staking::validate(Origin::signed(10), Default::default()));
+			assert_ok!(Staking::validate(RuntimeOrigin::signed(10), Default::default()));
 
 			// then counts don't change
 			assert_eq!(<Test as Config>::VoterList::count(), pre_insert_voter_count);
@@ -5014,31 +5123,31 @@ fn force_apply_min_commission_works() {
 	let prefs = |c| ValidatorPrefs { commission: Perbill::from_percent(c), blocked: false };
 	let validators = || Validators::<Test>::iter().collect::<Vec<_>>();
 	ExtBuilder::default().build_and_execute(|| {
-		assert_ok!(Staking::validate(Origin::signed(30), prefs(10)));
-		assert_ok!(Staking::validate(Origin::signed(20), prefs(5)));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(30), prefs(10)));
+		assert_ok!(Staking::validate(RuntimeOrigin::signed(20), prefs(5)));
 
 		// Given
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
 		MinCommission::<Test>::set(Perbill::from_percent(5));
 
 		// When applying to a commission greater than min
-		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 31));
+		assert_ok!(Staking::force_apply_min_commission(RuntimeOrigin::signed(1), 31));
 		// Then the commission is not changed
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
 
 		// When applying to a commission that is equal to min
-		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 21));
+		assert_ok!(Staking::force_apply_min_commission(RuntimeOrigin::signed(1), 21));
 		// Then the commission is not changed
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
 
 		// When applying to a commission that is less than the min
-		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 11));
+		assert_ok!(Staking::force_apply_min_commission(RuntimeOrigin::signed(1), 11));
 		// Then the commission is bumped to the min
 		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
 
 		// When applying commission to a validator that doesn't exist then storage is not altered
 		assert_noop!(
-			Staking::force_apply_min_commission(Origin::signed(1), 420),
+			Staking::force_apply_min_commission(RuntimeOrigin::signed(1), 420),
 			Error::<Test>::NotStash
 		);
 	});

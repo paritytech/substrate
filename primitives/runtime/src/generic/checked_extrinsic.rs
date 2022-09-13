@@ -42,7 +42,7 @@ pub struct CheckedExtrinsic<AccountId, Call, Extra> {
 impl<AccountId, Call, Extra, Origin> traits::Applyable for CheckedExtrinsic<AccountId, Call, Extra>
 where
 	AccountId: Member + MaybeDisplay,
-	Call: Member + Dispatchable<Origin = Origin>,
+	Call: Member + Dispatchable<RuntimeOrigin = Origin>,
 	Extra: SignedExtension<AccountId = AccountId, Call = Call>,
 	Origin: From<Option<AccountId>>,
 {

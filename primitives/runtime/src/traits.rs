@@ -1018,7 +1018,7 @@ pub trait Dispatchable {
 	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
 	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
 	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
-	type Origin;
+	type RuntimeOrigin;
 	/// ...
 	type Config;
 	/// An opaque set of information attached to the transaction. This could be constructed anywhere
@@ -1029,7 +1029,8 @@ pub trait Dispatchable {
 	/// with information about a `Dispatchable` that is ownly known post dispatch.
 	type PostInfo: Eq + PartialEq + Clone + Copy + Encode + Decode + Printable;
 	/// Actually dispatch this call and return the result of it.
-	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo>;
+	fn dispatch(self, origin: Self::RuntimeOrigin)
+		-> crate::DispatchResultWithInfo<Self::PostInfo>;
 }
 
 /// Shortcut to reference the `Info` type of a `Dispatchable`.
@@ -1038,11 +1039,14 @@ pub type DispatchInfoOf<T> = <T as Dispatchable>::Info;
 pub type PostDispatchInfoOf<T> = <T as Dispatchable>::PostInfo;
 
 impl Dispatchable for () {
-	type Origin = ();
+	type RuntimeOrigin = ();
 	type Config = ();
 	type Info = ();
 	type PostInfo = ();
-	fn dispatch(self, _origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> crate::DispatchResultWithInfo<Self::PostInfo> {
 		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
