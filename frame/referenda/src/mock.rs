@@ -305,7 +305,7 @@ pub fn set_balance_proposal(value: u64) -> Vec<u8> {
 }
 
 pub fn set_balance_proposal_bounded(value: u64) -> BoundedCallOf<Test, ()> {
-	let c = Call::Balances(pallet_balances::Call::set_balance {
+	let c = RuntimeCall::Balances(pallet_balances::Call::set_balance {
 		who: 42,
 		new_free: value,
 		new_reserved: 0,

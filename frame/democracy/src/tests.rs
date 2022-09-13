@@ -110,7 +110,7 @@ parameter_types! {
 }
 
 impl pallet_preimage::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<u64>;
@@ -164,7 +164,7 @@ impl SortedMembers<u64> for OneToFive {
 }
 
 impl Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = pallet_balances::Pallet<Self>;
 	type EnactmentPeriod = ConstU64<2>;
 	type LaunchPeriod = ConstU64<2>;
@@ -220,7 +220,7 @@ fn params_should_work() {
 
 fn set_balance_proposal(value: u64) -> BoundedCallOf<Test> {
 	let inner = pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 };
-	let outer = Call::Balances(inner);
+	let outer = RuntimeCall::Balances(inner);
 	Preimage::bound(outer).unwrap()
 }
 
