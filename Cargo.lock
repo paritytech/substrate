@@ -927,9 +927,9 @@ dependencies = [
 
 [[package]]
 name = "cid"
-version = "0.8.4"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a52cffa791ce5cf490ac3b2d6df970dc04f931b04e727be3c3e220e17164dfc4"
+checksum = "f6ed9c8b2d17acb8110c46f1da5bf4a696d745e1474a16db0cd2b49cd0249bf2"
 dependencies = [
  "core2",
  "multibase",
@@ -3591,8 +3591,8 @@ dependencies = [
  "libp2p-request-response",
  "libp2p-swarm",
  "log",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "rand 0.8.5",
 ]
 
@@ -3618,8 +3618,8 @@ dependencies = [
  "multistream-select",
  "parking_lot 0.12.1",
  "pin-project",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "rand 0.8.5",
  "ring",
  "rw-stream-sink",
@@ -3669,8 +3669,8 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "rand 0.7.3",
  "smallvec",
 ]
@@ -3693,8 +3693,8 @@ dependencies = [
  "libp2p-swarm",
  "log",
  "prometheus-client",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "rand 0.7.3",
  "regex",
  "sha2 0.10.2",
@@ -3716,8 +3716,8 @@ dependencies = [
  "libp2p-swarm",
  "log",
  "lru",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "prost-codec",
  "smallvec",
  "thiserror",
@@ -3741,8 +3741,8 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "rand 0.7.3",
  "sha2 0.10.2",
  "smallvec",
@@ -3819,8 +3819,8 @@ dependencies = [
  "lazy_static",
  "libp2p-core",
  "log",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "rand 0.8.5",
  "sha2 0.10.2",
  "snow",
@@ -3856,8 +3856,8 @@ dependencies = [
  "futures",
  "libp2p-core",
  "log",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "unsigned-varint",
  "void",
 ]
@@ -3892,8 +3892,8 @@ dependencies = [
  "libp2p-swarm",
  "log",
  "pin-project",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "prost-codec",
  "rand 0.8.5",
  "smallvec",
@@ -3916,8 +3916,8 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "rand 0.8.5",
  "sha2 0.10.2",
  "thiserror",
@@ -7061,7 +7061,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc03e116981ff7d8da8e5c220e374587b98d294af7ba7dd7fda761158f00086f"
 dependencies = [
  "bytes",
- "prost-derive",
+ "prost-derive 0.10.1",
+]
+
+[[package]]
+name = "prost"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "399c3c31cdec40583bb68f0b18403400d01ec4289c383aa047560439952c4dd7"
+dependencies = [
+ "bytes",
+ "prost-derive 0.11.0",
 ]
 
 [[package]]
@@ -7079,8 +7089,28 @@ dependencies = [
  "log",
  "multimap",
  "petgraph",
- "prost",
- "prost-types",
+ "prost 0.10.3",
+ "prost-types 0.10.1",
+ "regex",
+ "tempfile",
+ "which",
+]
+
+[[package]]
+name = "prost-build"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f835c582e6bd972ba8347313300219fed5bfa52caf175298d860b61ff6069bb"
+dependencies = [
+ "bytes",
+ "heck",
+ "itertools",
+ "lazy_static",
+ "log",
+ "multimap",
+ "petgraph",
+ "prost 0.11.0",
+ "prost-types 0.11.1",
  "regex",
  "tempfile",
  "which",
@@ -7094,7 +7124,7 @@ checksum = "00af1e92c33b4813cc79fda3f2dbf56af5169709be0202df730e9ebc3e4cd007"
 dependencies = [
  "asynchronous-codec",
  "bytes",
- "prost",
+ "prost 0.10.3",
  "thiserror",
  "unsigned-varint",
 ]
@@ -7113,13 +7143,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "prost-derive"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7345d5f0e08c0536d7ac7229952590239e77abf0a0100a1b1d890add6ea96364"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "prost-types"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d0a014229361011dc8e69c8a1ec6c2e8d0f2af7c91e3ea3f5b2170298461e68"
 dependencies = [
  "bytes",
- "prost",
+ "prost 0.10.3",
+]
+
+[[package]]
+name = "prost-types"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dfaa718ad76a44b3415e6c4d53b17c8f99160dcb3a99b10470fce8ad43f6e3e"
+dependencies = [
+ "bytes",
+ "prost 0.11.0",
 ]
 
 [[package]]
@@ -7728,8 +7781,8 @@ dependencies = [
  "libp2p",
  "log",
  "parity-scale-codec",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "quickcheck",
  "rand 0.7.3",
  "sc-client-api",
@@ -8384,8 +8437,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
- "prost",
- "prost-build",
+ "prost 0.10.3",
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
@@ -8411,8 +8463,33 @@ dependencies = [
  "tempfile",
  "thiserror",
  "unsigned-varint",
- "void",
  "zeroize",
+]
+
+[[package]]
+name = "sc-network-bitswap"
+version = "0.10.0-dev"
+dependencies = [
+ "cid",
+ "futures",
+ "libp2p",
+ "log",
+ "prost 0.11.0",
+ "prost-build 0.11.1",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-consensus",
+ "sc-network-common",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-core",
+ "sp-runtime",
+ "substrate-test-runtime",
+ "substrate-test-runtime-client",
+ "thiserror",
+ "tokio",
+ "unsigned-varint",
+ "void",
 ]
 
 [[package]]
@@ -8425,7 +8502,7 @@ dependencies = [
  "futures",
  "libp2p",
  "parity-scale-codec",
- "prost-build",
+ "prost-build 0.10.4",
  "sc-consensus",
  "sc-peerset",
  "serde",
@@ -8466,8 +8543,8 @@ dependencies = [
  "libp2p",
  "log",
  "parity-scale-codec",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "sc-client-api",
  "sc-network-common",
  "sc-peerset",
@@ -8488,8 +8565,8 @@ dependencies = [
  "log",
  "lru",
  "parity-scale-codec",
- "prost",
- "prost-build",
+ "prost 0.10.3",
+ "prost-build 0.10.4",
  "quickcheck",
  "sc-block-builder",
  "sc-client-api",
@@ -8712,6 +8789,7 @@ dependencies = [
  "sc-informant",
  "sc-keystore",
  "sc-network",
+ "sc-network-bitswap",
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",
