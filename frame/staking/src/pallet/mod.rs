@@ -125,16 +125,22 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominations: Get<u32>;
 
-		/// `HistoryDepth` is the number of eras to keep in history.
+		/// Number of eras to keep in history.
 		///
-		/// This used to be a storage value previously. If you are migrating
-		/// from storage value to config value, you should read this value from
-		/// storage and set the same value in configuration.
+		/// Information is kept for eras in `[current_era - history_depth;
+		/// current_era]`.
+		///
+		/// Must be more than the number of eras delayed by session otherwise.
+		/// I.e. active era must always be in history. I.e. `active_era >
+		/// current_era - history_depth` must be guaranteed.
+		///
+		/// If migrating an existing pallet from storage value to config value,
+		/// this should be set to same value or greater as in storage.
 		///
 		/// Note: `HistoryDepth` is used as the upper bound for the `BoundedVec`
 		/// item `StakingLedger.claimed_rewards`. Setting this value lower than
 		/// the existing value can lead to inconsistencies and will need to be
-		/// handled properly in migration.
+		/// handled properly in a migration.
 		#[pallet::constant]
 		type HistoryDepth: Get<u32>;
 
