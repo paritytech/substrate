@@ -58,7 +58,6 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_client_api::BlockBackend;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
@@ -138,7 +137,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
@@ -1290,7 +1289,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1323,7 +1322,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	type Output = ();
 
@@ -1964,7 +1963,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 }
 
@@ -1972,7 +1971,7 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -1980,7 +1979,7 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn blocks_processed(
 		&mut self,

@@ -37,7 +37,6 @@ use libp2p::{
 };
 use log::debug;
 
-use sc_client_api::BlockBackend;
 use sc_consensus::import_queue::{IncomingBlock, Origin};
 use sc_network_common::{
 	config::ProtocolId,
@@ -69,7 +68,7 @@ pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, R
 pub struct Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// All the substrate-specific protocols.
 	substrate: Protocol<B, Client>,
@@ -200,7 +199,7 @@ pub enum BehaviourOut<B: BlockT> {
 impl<B, Client> Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Builds a new `Behaviour`.
 	pub fn new(
@@ -336,7 +335,7 @@ fn reported_roles_to_observed_role(roles: Roles) -> ObservedRole {
 impl<B, Client> NetworkBehaviourEventProcess<CustomMessageOutcome<B>> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: CustomMessageOutcome<B>) {
 		match event {
@@ -445,7 +444,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<request_responses::Event> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: request_responses::Event) {
 		match event {
@@ -471,7 +470,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<peer_info::PeerInfoEvent> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, event: peer_info::PeerInfoEvent) {
 		let peer_info::PeerInfoEvent::Identified {
@@ -498,7 +497,7 @@ where
 impl<B, Client> NetworkBehaviourEventProcess<DiscoveryOut> for Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn inject_event(&mut self, out: DiscoveryOut) {
 		match out {
@@ -536,7 +535,7 @@ where
 impl<B, Client> Behaviour<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + BlockBackend<B> + 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn poll(
 		&mut self,
