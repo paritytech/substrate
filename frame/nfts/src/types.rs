@@ -29,7 +29,7 @@ pub(super) type DepositBalanceOf<T, I = ()> =
 pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
 pub(super) type ItemDetailsFor<T, I> =
-	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>, ApprovalsOf<T, I>>;
 pub(super) type ItemPrice<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 
@@ -84,11 +84,11 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 
 /// Information concerning the ownership of a single unique item.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
-pub struct ItemDetails<AccountId, DepositBalance> {
+pub struct ItemDetails<AccountId, DepositBalance, Approvals> {
 	/// The owner of this item.
 	pub(super) owner: AccountId,
 	/// The approved transferrer of this item, if one is set.
-	pub(super) approved: Option<AccountId>,
+	pub(super) approvals: Approvals,
 	/// Whether the item can be transferred or not.
 	pub(super) is_frozen: bool,
 	/// The amount held in the pallet's default account for this item. Free-hold items will have
