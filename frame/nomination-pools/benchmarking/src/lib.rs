@@ -490,7 +490,7 @@ frame_benchmarking::benchmarks! {
 		// Give the depositor some balance to bond
 		CurrencyOf::<T>::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
 
-		// Make sure no Pools exist aT a pre-condition for our verify checks
+		// Make sure no Pools exist at a pre-condition for our verify checks
 		assert_eq!(RewardPools::<T>::count(), 0);
 		assert_eq!(BondedPools::<T>::count(), 0);
 
