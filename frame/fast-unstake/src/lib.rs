@@ -293,7 +293,7 @@ pub mod pallet {
 						.max(<T as Config>::WeightInfo::on_idle_unstake())
 				};
 				let mut try_eras_to_check = eras_to_check_per_block;
-				while worse_weight(validator_count, try_eras_to_check).all_gt(remaining_weight) {
+				while worse_weight(validator_count, try_eras_to_check).any_gt(remaining_weight) {
 					try_eras_to_check.saturating_dec();
 					if try_eras_to_check.is_zero() {
 						log!(debug, "early existing because try_eras_to_check is zero");
