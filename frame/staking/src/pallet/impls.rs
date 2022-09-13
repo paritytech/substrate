@@ -1370,10 +1370,9 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
-	fn sanity_check() -> Result<(), &'static str> {
+	fn try_state() -> Result<(), &'static str> {
 		Ok(())
 	}
-
 	fn unsafe_clear() {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
