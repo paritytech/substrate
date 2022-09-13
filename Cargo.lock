@@ -8144,7 +8144,6 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
- "sp-timestamp",
  "substrate-test-runtime-client",
  "thiserror",
 ]

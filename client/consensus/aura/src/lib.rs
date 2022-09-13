@@ -578,6 +578,7 @@ mod tests {
 		traits::{Block as BlockT, Header as _},
 		Digest,
 	};
+	use sp_timestamp::Timestamp;
 	use std::{
 		task::Poll,
 		time::{Duration, Instant},
@@ -586,6 +587,8 @@ mod tests {
 		runtime::{Header, H256},
 		TestClient,
 	};
+
+	const SLOT_DURATION_MS: u64 = 1000;
 
 	type Error = sp_blockchain::Error;
 
@@ -627,8 +630,6 @@ mod tests {
 		}
 	}
 
-	const SLOT_DURATION: u64 = 1000;
-
 	type AuraVerifier = import_queue::AuraVerifier<
 		PeersFullClient,
 		AuthorityPair,
@@ -657,13 +658,13 @@ mod tests {
 			let client = client.as_client();
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION);
+			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION_MS);
 			import_queue::AuraVerifier::new(
 				client,
 				Box::new(|_, _| async {
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						sp_timestamp::current_timestamp(),
-						SlotDuration::from_millis(6000),
+						Timestamp::current(),
+						SlotDuration::from_millis(SLOT_DURATION_MS),
 					);
 					Ok((slot,))
 				}),
@@ -745,8 +746,8 @@ mod tests {
 					justification_sync_link: (),
 					create_inherent_data_providers: |_, _| async {
 						let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-							sp_timestamp::current_timestamp(),
-							SlotDuration::from_millis(6000),
+							Timestamp::current(),
+							SlotDuration::from_millis(SLOT_DURATION_MS),
 						);
 
 						Ok((slot,))
