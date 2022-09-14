@@ -456,6 +456,7 @@ dependencies = [
  "sc-finality-grandpa",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-network-gossip",
  "sc-network-test",
  "sc-utils",
@@ -7894,6 +7895,7 @@ dependencies = [
  "sc-client-db",
  "sc-keystore",
  "sc-network",
+ "sc-network-common",
  "sc-service",
  "sc-telemetry",
  "sc-tracing",
@@ -8508,7 +8510,9 @@ dependencies = [
  "bitflags",
  "bytes",
  "futures",
+ "futures-timer",
  "libp2p",
+ "linked_hash_set",
  "parity-scale-codec",
  "prost-build 0.10.4",
  "sc-consensus",
@@ -8519,6 +8523,7 @@ dependencies = [
  "sp-consensus",
  "sp-finality-grandpa",
  "sp-runtime",
+ "substrate-prometheus-endpoint",
  "thiserror",
 ]
 
@@ -8622,6 +8627,23 @@ dependencies = [
  "sp-tracing",
  "substrate-test-runtime",
  "substrate-test-runtime-client",
+]
+
+[[package]]
+name = "sc-network-transactions"
+version = "0.10.0-dev"
+dependencies = [
+ "futures",
+ "hex",
+ "libp2p",
+ "log",
+ "parity-scale-codec",
+ "pin-project",
+ "sc-network-common",
+ "sc-peerset",
+ "sp-consensus",
+ "sp-runtime",
+ "substrate-prometheus-endpoint",
 ]
 
 [[package]]
@@ -8801,6 +8823,7 @@ dependencies = [
  "sc-network-common",
  "sc-network-light",
  "sc-network-sync",
+ "sc-network-transactions",
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",
