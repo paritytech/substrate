@@ -1226,6 +1226,7 @@ impl<T: Config> schedule::v3::Named<T::BlockNumber, <T as Config>::RuntimeCall, 
 	}
 }
 
+/// Maps a pallet error to an `schedule::v3` error.  
 fn map_err_to_v3_err<T: Config>(err: DispatchError) -> DispatchError {
 	if err == DispatchError::from(Error::<T>::NotFound) {
 		DispatchError::Unavailable
