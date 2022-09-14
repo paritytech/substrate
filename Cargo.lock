@@ -4830,7 +4830,7 @@ dependencies = [
  "sc-finality-grandpa-rpc",
  "sc-rpc",
  "sc-rpc-api",
- "sc-rpc-spec",
+ "sc-rpc-spec-v2",
  "sc-sync-state-rpc",
  "sc-transaction-pool-api",
  "sp-api",
@@ -8758,7 +8758,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sc-rpc-spec"
+name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 dependencies = [
  "hex",
