@@ -899,7 +899,7 @@ where
 	let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(
 		network.clone(),
 		Arc::new(TransactionPoolAdapter { pool: transaction_pool, client: client.clone() }),
-		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
+		config.prometheus_config.as_ref().map(|config| &config.registry),
 	)?;
 	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
 
