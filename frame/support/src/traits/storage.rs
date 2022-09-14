@@ -117,10 +117,7 @@ impl WhitelistedStorageKeys for Tuple {
 			}
 		 )* );
 		// flatten BTreeMap down to a vec
-		let mut final_combined_keys: Vec<TrackedStorageKey> = Vec::new();
-		for storage_key in combined_keys.values() {
-			final_combined_keys.push(storage_key.clone());
-		}
+		combined_keys.values().collect::<Vec<_>>()
 		final_combined_keys
 	}
 }
