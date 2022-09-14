@@ -322,7 +322,7 @@ pub struct DatabaseSettings {
 /// Block pruning settings.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BlocksPruning {
-	/// Keep full block history, including Non-Finalized blocks.
+	/// Keep full block history, of every block that was ever imported.
 	KeepAll,
 	/// Keep full finalized block history.
 	KeepFinalized,
