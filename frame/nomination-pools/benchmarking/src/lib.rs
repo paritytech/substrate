@@ -25,7 +25,7 @@ mod mock;
 use frame_benchmarking::{account, frame_support::traits::Currency, vec, whitelist_account, Vec};
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
-use frame_system::RawOrigin as Origin;
+use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
