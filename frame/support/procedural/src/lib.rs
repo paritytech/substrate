@@ -38,7 +38,6 @@ mod tt_macro;
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
-use syn::{parse_macro_input, Ident};
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -585,11 +584,15 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
+mod kw {
+	syn::custom_keyword!(cached);
+}
+
 #[proc_macro_attribute]
 pub fn benchmarking(attr: TokenStream, item: TokenStream) -> TokenStream {
-	match parse_macro_input!(attr as Ident).to_string().as_str() {
-		"cached" => benchmarking_cached(item),
-		_ => panic!("only benchmarking(cached) is supported at this time"),
+	match syn::parse::<kw::cached>(attr) {
+		Ok(_) => benchmarking_cached(item),
+		Err(_) => panic!("only benchmarking(cached) is supported at this time"),
 	}
 }
 
