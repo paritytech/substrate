@@ -21,7 +21,7 @@
 
 use super::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::traits::{Currency, OnFinalize, OnInitialize};
+use frame_support::traits::{Currency, Get, OnFinalize, OnInitialize};
 use frame_system::{EventRecord, Pallet as System, RawOrigin};
 use sp_runtime::traits::{Bounded, One, Zero};
 use sp_std::*;
@@ -105,9 +105,9 @@ const PROOF: &[u8] = &hex_literal::hex!(
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	let events = System::<T>::events();
-	let system_event: <T as frame_system::Config>::Event = generic_event.into();
+	let system_event: <T as frame_system::Config>::RuntimeEvent = generic_event.into();
 	let EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
 }
@@ -126,7 +126,7 @@ pub fn run_to_block<T: Config>(n: T::BlockNumber) {
 
 benchmarks! {
 	store {
-		let l in 1 .. MaxTransactionSize::<T>::get();
+		let l in 1 .. T::MaxTransactionSize::get();
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 	}: _(RawOrigin::Signed(caller.clone()), vec![0u8; l as usize])
@@ -140,7 +140,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		TransactionStorage::<T>::store(
 			RawOrigin::Signed(caller.clone()).into(),
-			vec![0u8; MaxTransactionSize::<T>::get() as usize],
+			vec![0u8; T::MaxTransactionSize::get() as usize],
 		)?;
 		run_to_block::<T>(1u32.into());
 	}: _(RawOrigin::Signed(caller.clone()), T::BlockNumber::zero(), 0)
@@ -152,10 +152,10 @@ benchmarks! {
 		run_to_block::<T>(1u32.into());
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		for _ in 0 .. MaxBlockTransactions::<T>::get() {
+		for _ in 0 .. T::MaxBlockTransactions::get() {
 			TransactionStorage::<T>::store(
 				RawOrigin::Signed(caller.clone()).into(),
-				vec![0u8; MaxTransactionSize::<T>::get() as usize],
+				vec![0u8; T::MaxTransactionSize::get() as usize],
 			)?;
 		}
 		run_to_block::<T>(StoragePeriod::<T>::get() + T::BlockNumber::one());

@@ -118,14 +118,14 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type Call: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self, I>>;
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeCall: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self, I>>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
@@ -159,7 +159,8 @@ pub mod pallet {
 			+ Codec
 			+ Eq
 			+ Debug
-			+ TypeInfo;
+			+ TypeInfo
+			+ MaxEncodedLen;
 
 		// Constants
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
@@ -699,7 +700,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = (when + alarm_interval - One::one()) / alarm_interval * alarm_interval;
+		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
+			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
@@ -752,7 +754,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			None
 		};
 		let deciding_status = DecidingStatus { since: now, confirming };
-		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track);
+		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track)
+			.max(now.saturating_add(One::one()));
 		status.deciding = Some(deciding_status);
 		let branch =
 			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };

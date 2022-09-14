@@ -43,6 +43,7 @@ use crate::{AccountVote, Conviction, Vote};
 	MaxEncodedLen,
 )]
 #[scale_info(skip_type_params(Total))]
+#[codec(mel_bound(Votes: MaxEncodedLen))]
 pub struct Tally<Votes: Clone + PartialEq + Eq + Debug + TypeInfo + Codec, Total> {
 	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
 	pub ayes: Votes,
@@ -92,6 +93,9 @@ impl<
 		let ayes = approval.mul_ceil(support);
 		Self { ayes, nays: support - ayes, support, dummy: PhantomData }
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup(_: Class, _: Perbill) {}
 }
 
 impl<

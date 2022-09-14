@@ -1,0 +1,36 @@
+[package]
+name = "pallet-nomination-pools-test-staking"
+version = "1.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME nomination pools pallet tests with the staking pallet"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dev-dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
+scale-info = { version = "2.0.1", features = ["derive"] }
+
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-io = { version = "6.0.0", path = "../../../primitives/io" }
+sp-std = { version = "4.0.0", path = "../../../primitives/std" }
+sp-staking = { version = "4.0.0-dev", path = "../../../primitives/staking" }
+sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+
+frame-system = { version = "4.0.0-dev", path = "../../system" }
+frame-support = { version = "4.0.0-dev", path = "../../support" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../../election-provider-support" }
+
+pallet-timestamp = { version = "4.0.0-dev", path = "../../timestamp" }
+pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
+pallet-staking = { version = "4.0.0-dev", path = "../../staking" }
+pallet-bags-list = { version = "4.0.0-dev", path = "../../bags-list" }
+pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../../staking/reward-curve" }
+pallet-nomination-pools = { version = "1.0.0-dev", path = ".." }
+
+sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
+log = { version = "0.4.0" }

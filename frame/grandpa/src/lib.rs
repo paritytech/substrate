@@ -40,11 +40,11 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
+	dispatch::{DispatchResultWithPostInfo, Pays},
 	pallet_prelude::Get,
 	storage,
 	traits::{KeyOwnerProofSystem, OneSessionHandler},
-	weights::{Pays, Weight},
+	weights::Weight,
 	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
@@ -87,12 +87,9 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The event type of this module.
-		type Event: From<Event>
-			+ Into<<Self as frame_system::Config>::Event>
-			+ IsType<<Self as frame_system::Config>::Event>;
-
-		/// The function call.
-		type Call: From<Call<Self>>;
+		type RuntimeEvent: From<Event>
+			+ Into<<Self as frame_system::Config>::RuntimeEvent>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The proof of key ownership, used for validating equivocation reports
 		/// The proof must include the session index and validator count of the
@@ -231,12 +228,17 @@ pub mod pallet {
 			)
 		}
 
-		/// Note that the current authority set of the GRANDPA finality gadget has
-		/// stalled. This will trigger a forced authority set change at the beginning
-		/// of the next session, to be enacted `delay` blocks after that. The delay
-		/// should be high enough to safely assume that the block signalling the
-		/// forced change will not be re-orged (e.g. 1000 blocks). The GRANDPA voters
-		/// will start the new authority set using the given finalized block as base.
+		/// Note that the current authority set of the GRANDPA finality gadget has stalled.
+		///
+		/// This will trigger a forced authority set change at the beginning of the next session, to
+		/// be enacted `delay` blocks after that. The `delay` should be high enough to safely assume
+		/// that the block signalling the forced change will not be re-orged e.g. 1000 blocks.
+		/// The block production rate (which may be slowed down because of finality lagging) should
+		/// be taken into account when choosing the `delay`. The GRANDPA voters based on the new
+		/// authority will start voting on top of `best_finalized_block_number` for new finalized
+		/// blocks. `best_finalized_block_number` should be the highest of the latest finalized
+		/// block of all validators of the new authority set.
+		///
 		/// Only callable by root.
 		#[pallet::weight(T::WeightInfo::note_stalled())]
 		pub fn note_stalled(

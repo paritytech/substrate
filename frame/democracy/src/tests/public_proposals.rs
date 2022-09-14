@@ -96,11 +96,11 @@ fn invalid_seconds_upper_bound_should_not_work() {
 #[test]
 fn cancel_proposal_should_work() {
 	new_test_ext().execute_with(|| {
-		System::set_block_number(0);
 		assert_ok!(propose_set_balance_and_note(1, 2, 2));
 		assert_ok!(propose_set_balance_and_note(1, 4, 4));
 		assert_noop!(Democracy::cancel_proposal(Origin::signed(1), 0), BadOrigin);
 		assert_ok!(Democracy::cancel_proposal(Origin::root(), 0));
+		System::assert_last_event(crate::Event::ProposalCanceled { prop_index: 0 }.into());
 		assert_eq!(Democracy::backing_for(0), None);
 		assert_eq!(Democracy::backing_for(1), Some(4));
 	});
@@ -115,7 +115,7 @@ fn blacklisting_should_work() {
 		assert_ok!(propose_set_balance_and_note(1, 2, 2));
 		assert_ok!(propose_set_balance_and_note(1, 4, 4));
 
-		assert_noop!(Democracy::blacklist(Origin::signed(1), hash.clone(), None), BadOrigin);
+		assert_noop!(Democracy::blacklist(Origin::signed(1), hash, None), BadOrigin);
 		assert_ok!(Democracy::blacklist(Origin::root(), hash, None));
 
 		assert_eq!(Democracy::backing_for(0), None);

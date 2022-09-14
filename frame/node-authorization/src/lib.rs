@@ -47,8 +47,11 @@ pub mod weights;
 use frame_support::{traits::Defensive, BoundedBTreeSet};
 pub use pallet::*;
 use sp_core::OpaquePeerId as PeerId;
+use sp_runtime::traits::StaticLookup;
 use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 pub use weights::WeightInfo;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -64,7 +67,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The maximum number of well known nodes that are allowed to set
 		#[pallet::constant]
@@ -277,9 +280,10 @@ pub mod pallet {
 		pub fn add_well_known_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: T::AccountId,
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			T::AddOrigin::ensure_origin(origin)?;
+			let owner = T::Lookup::lookup(owner)?;
 			let node = BoundedPeerId::<T>::try_from(node)?;
 
 			let mut nodes = WellKnownNodes::<T>::get();
@@ -421,9 +425,10 @@ pub mod pallet {
 		pub fn transfer_node(
 			origin: OriginFor<T>,
 			node: PeerId,
-			owner: T::AccountId,
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
+			let owner = T::Lookup::lookup(owner)?;
 
 			let node = BoundedPeerId::<T>::try_from(node)?;
 			let pre_owner = Owners::<T>::get(&node).ok_or(Error::<T>::NotClaimed)?;

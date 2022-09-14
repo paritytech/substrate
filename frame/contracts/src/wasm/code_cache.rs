@@ -42,6 +42,7 @@ use frame_support::{
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
+use sp_std::vec;
 
 /// Put the instrumented module in storage.
 ///
@@ -96,7 +97,7 @@ where
 			<PristineCode<T>>::insert(&code_hash, orig_code);
 			<OwnerInfoOf<T>>::insert(&code_hash, owner_info);
 			*existing = Some(module);
-			<Pallet<T>>::deposit_event(Event::CodeStored { code_hash });
+			<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeStored { code_hash });
 			Ok(())
 		},
 	})
@@ -133,7 +134,10 @@ pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), Dispa
 }
 
 /// Try to remove code together with all associated information.
-pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
+pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
 		if let Some(owner_info) = existing {
 			ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
@@ -142,7 +146,7 @@ pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> D
 			*existing = None;
 			<PristineCode<T>>::remove(&code_hash);
 			<CodeStorage<T>>::remove(&code_hash);
-			<Pallet<T>>::deposit_event(Event::CodeRemoved { code_hash });
+			<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });
 			Ok(())
 		} else {
 			Err(<Error<T>>::CodeNotFound.into())
@@ -215,17 +219,19 @@ impl<T: Config> Token<T> for CodeToken {
 		use self::CodeToken::*;
 		// In case of `Load` we already covered the general costs of
 		// calling the storage but still need to account for the actual size of the
-		// contract code. This is why we substract `T::*::(0)`. We need to do this at this
+		// contract code. This is why we subtract `T::*::(0)`. We need to do this at this
 		// point because when charging the general weight for calling the contract we not know the
 		// size of the contract.
-		match *self {
+		let ref_time_weight = match *self {
 			Reinstrument(len) => T::WeightInfo::reinstrument(len),
 			Load(len) => {
 				let computation = T::WeightInfo::call_with_code_per_byte(len)
 					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
-				let bandwith = T::ContractAccessWeight::get().saturating_mul(len.into());
-				computation.max(bandwith)
+				let bandwidth = T::ContractAccessWeight::get().saturating_mul(len as u64);
+				computation.max(bandwidth)
 			},
-		}
+		};
+
+		ref_time_weight
 	}
 }

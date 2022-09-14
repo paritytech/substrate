@@ -1,0 +1,5 @@
+error: If there are no generics, the prefix is only allowed to be an identifier.
+ --> tests/storage_alias_ui/checks_for_valid_storage_type.rs:2:27
+  |
+2 | type Ident = StorageValue<hello::World, u32>;
+  |                           ^^^^^^^^^^^^

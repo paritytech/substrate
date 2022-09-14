@@ -15,12 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use self::test_utils::hash;
 use crate::{
 	chain_extension::{
-		ChainExtension, Environment, Ext, InitState, Result as ExtensionResult, RetVal,
-		ReturnFlags, SysConfig, UncheckedFrom,
+		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
+		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig, UncheckedFrom,
 	},
-	exec::Frame,
+	exec::{FixSizedKey, Frame},
 	storage::Storage,
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
@@ -31,14 +32,14 @@ use assert_matches::assert_matches;
 use codec::Encode;
 use frame_support::{
 	assert_err, assert_err_ignore_postinfo, assert_noop, assert_ok,
-	dispatch::DispatchErrorWithPostInfo,
+	dispatch::{DispatchClass, DispatchErrorWithPostInfo, PostDispatchInfo},
 	parameter_types,
 	storage::child,
 	traits::{
 		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, OnIdle, OnInitialize,
 		ReservableCurrency,
 	},
-	weights::{constants::WEIGHT_PER_SECOND, DispatchClass, PostDispatchInfo, Weight},
+	weights::{constants::WEIGHT_PER_SECOND, Weight},
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
@@ -50,7 +51,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, Convert, Hash, IdentityLookup},
 	AccountId32,
 };
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
 use crate as pallet_contracts;
 
@@ -74,8 +75,9 @@ frame_support::construct_runtime!(
 
 #[macro_use]
 pub mod test_utils {
-	use super::{Balances, Test};
+	use super::{Balances, Hash, SysConfig, Test};
 	use crate::{exec::AccountIdOf, storage::Storage, CodeHash, Config, ContractInfoOf, Nonce};
+	use codec::Encode;
 	use frame_support::traits::Currency;
 
 	pub fn place_contract(address: &AccountIdOf<Test>, code_hash: CodeHash<Test>) {
@@ -95,6 +97,9 @@ pub mod test_utils {
 	pub fn get_balance(who: &AccountIdOf<Test>) -> u64 {
 		Balances::free_balance(who)
 	}
+	pub fn hash<S: Encode>(s: &S) -> <<Test as SysConfig>::Hashing as Hash>::Output {
+		<<Test as SysConfig>::Hashing as Hash>::hash_of(s)
+	}
 	macro_rules! assert_return_code {
 		( $x:expr , $y:expr $(,)? ) => {{
 			assert_eq!(u32::from_le_bytes($x.data[..].try_into().unwrap()), $y as u32);
@@ -108,27 +113,39 @@ pub mod test_utils {
 	}
 }
 
-thread_local! {
-	static TEST_EXTENSION: RefCell<TestExtension> = Default::default();
+parameter_types! {
+	static TestExtensionTestValue: TestExtension = Default::default();
 }
 
+#[derive(Clone)]
 pub struct TestExtension {
 	enabled: bool,
 	last_seen_buffer: Vec<u8>,
 	last_seen_inputs: (u32, u32, u32, u32),
 }
 
+#[derive(Default)]
+pub struct RevertingExtension;
+
+#[derive(Default)]
+pub struct DisabledExtension;
+
+#[derive(Default)]
+pub struct TempStorageExtension {
+	storage: u32,
+}
+
 impl TestExtension {
 	fn disable() {
-		TEST_EXTENSION.with(|e| e.borrow_mut().enabled = false)
+		TestExtensionTestValue::mutate(|e| e.enabled = false)
 	}
 
 	fn last_seen_buffer() -> Vec<u8> {
-		TEST_EXTENSION.with(|e| e.borrow().last_seen_buffer.clone())
+		TestExtensionTestValue::get().last_seen_buffer.clone()
 	}
 
 	fn last_seen_inputs() -> (u32, u32, u32, u32) {
-		TEST_EXTENSION.with(|e| e.borrow().last_seen_inputs.clone())
+		TestExtensionTestValue::get().last_seen_inputs
 	}
 }
 
@@ -139,48 +156,120 @@ impl Default for TestExtension {
 }
 
 impl ChainExtension<Test> for TestExtension {
-	fn call<E>(func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	fn call<E>(&mut self, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
 	where
 		E: Ext<T = Test>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
+		let func_id = env.func_id();
+		let id = env.ext_id() as u32 | func_id as u32;
 		match func_id {
 			0 => {
 				let mut env = env.buf_in_buf_out();
-				let input = env.read(2)?;
+				let input = env.read(8)?;
 				env.write(&input, false, None)?;
-				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
-				Ok(RetVal::Converging(func_id))
+				TestExtensionTestValue::mutate(|e| e.last_seen_buffer = input);
+				Ok(RetVal::Converging(id))
 			},
 			1 => {
 				let env = env.only_in();
-				TEST_EXTENSION.with(|e| {
-					e.borrow_mut().last_seen_inputs =
-						(env.val0(), env.val1(), env.val2(), env.val3())
+				TestExtensionTestValue::mutate(|e| {
+					e.last_seen_inputs = (env.val0(), env.val1(), env.val2(), env.val3())
 				});
-				Ok(RetVal::Converging(func_id))
+				Ok(RetVal::Converging(id))
 			},
 			2 => {
 				let mut env = env.buf_in_buf_out();
-				let weight = env.read(2)?[1].into();
+				let weight = Weight::from_ref_time(env.read(5)?[4].into());
 				env.charge_weight(weight)?;
-				Ok(RetVal::Converging(func_id))
+				Ok(RetVal::Converging(id))
 			},
 			3 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
 			_ => {
-				panic!("Passed unknown func_id to test chain extension: {}", func_id);
+				panic!("Passed unknown id to test chain extension: {}", func_id);
 			},
 		}
 	}
 
 	fn enabled() -> bool {
-		TEST_EXTENSION.with(|e| e.borrow().enabled)
+		TestExtensionTestValue::get().enabled
 	}
+}
+
+impl RegisteredChainExtension<Test> for TestExtension {
+	const ID: u16 = 0;
+}
+
+impl ChainExtension<Test> for RevertingExtension {
+	fn call<E>(&mut self, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		E: Ext<T = Test>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![0x4B, 0x1D] })
+	}
+
+	fn enabled() -> bool {
+		TestExtensionTestValue::get().enabled
+	}
+}
+
+impl RegisteredChainExtension<Test> for RevertingExtension {
+	const ID: u16 = 1;
+}
+
+impl ChainExtension<Test> for DisabledExtension {
+	fn call<E>(&mut self, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		E: Ext<T = Test>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		panic!("Disabled chain extensions are never called")
+	}
+
+	fn enabled() -> bool {
+		false
+	}
+}
+
+impl RegisteredChainExtension<Test> for DisabledExtension {
+	const ID: u16 = 2;
+}
+
+impl ChainExtension<Test> for TempStorageExtension {
+	fn call<E>(&mut self, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		E: Ext<T = Test>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		let func_id = env.func_id();
+		match func_id {
+			0 => self.storage = 42,
+			1 => assert_eq!(self.storage, 42, "Storage is preserved inside the same call."),
+			2 => {
+				assert_eq!(self.storage, 0, "Storage is different for different calls.");
+				self.storage = 99;
+			},
+			3 => assert_eq!(self.storage, 99, "Storage is preserved inside the same call."),
+			_ => {
+				panic!("Passed unknown id to test chain extension: {}", func_id);
+			},
+		}
+		Ok(RetVal::Converging(0))
+	}
+
+	fn enabled() -> bool {
+		TestExtensionTestValue::get().enabled
+	}
+}
+
+impl RegisteredChainExtension<Test> for TempStorageExtension {
+	const ID: u16 = 3;
 }
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
 	pub static ExistentialDeposit: u64 = 1;
 }
 impl frame_system::Config for Test {
@@ -192,12 +281,12 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = AccountId32;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -215,7 +304,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -229,8 +318,8 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 impl pallet_utility::Config for Test {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type PalletsOrigin = OriginCaller;
 	type WeightInfo = ();
 }
@@ -248,42 +337,58 @@ parameter_types! {
 
 impl Convert<Weight, BalanceOf<Self>> for Test {
 	fn convert(w: Weight) -> BalanceOf<Self> {
-		w
+		w.ref_time()
 	}
 }
 
 /// A filter whose filter function can be swapped at runtime.
 pub struct TestFilter;
 
-thread_local! {
-	static CALL_FILTER: RefCell<fn(&Call) -> bool> = RefCell::new(|_| true);
+#[derive(Clone)]
+pub struct Filters {
+	filter: fn(&RuntimeCall) -> bool,
+}
+
+impl Default for Filters {
+	fn default() -> Self {
+		Filters { filter: (|_| true) }
+	}
+}
+
+parameter_types! {
+	static CallFilter: Filters = Default::default();
 }
 
 impl TestFilter {
-	pub fn set_filter(filter: fn(&Call) -> bool) {
-		CALL_FILTER.with(|fltr| *fltr.borrow_mut() = filter);
+	pub fn set_filter(filter: fn(&RuntimeCall) -> bool) {
+		CallFilter::mutate(|fltr| fltr.filter = filter);
 	}
 }
 
-impl Contains<Call> for TestFilter {
-	fn contains(call: &Call) -> bool {
-		CALL_FILTER.with(|fltr| fltr.borrow()(call))
+impl Contains<RuntimeCall> for TestFilter {
+	fn contains(call: &RuntimeCall) -> bool {
+		(CallFilter::get().filter)(call)
 	}
+}
+
+parameter_types! {
+	pub const DeletionWeightLimit: Weight = Weight::from_ref_time(500_000_000_000);
 }
 
 impl Config for Test {
 	type Time = Timestamp;
 	type Randomness = Randomness;
 	type Currency = Balances;
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type CallFilter = TestFilter;
 	type CallStack = [Frame<Self>; 31];
 	type WeightPrice = Self;
 	type WeightInfo = ();
-	type ChainExtension = TestExtension;
+	type ChainExtension =
+		(TestExtension, DisabledExtension, RevertingExtension, TempStorageExtension);
 	type DeletionQueueDepth = ConstU32<1024>;
-	type DeletionWeightLimit = ConstU64<500_000_000_000>;
+	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
@@ -291,6 +396,7 @@ impl Config for Test {
 	type ContractAccessWeight = DefaultContractAccessWeight<BlockWeights>;
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type RelaxedMaxCodeLen = ConstU32<{ 256 * 1024 }>;
+	type MaxStorageKeyLen = ConstU32<128>;
 }
 
 pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
@@ -298,7 +404,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = 100_000_000_000;
+pub const GAS_LIMIT: Weight = Weight::from_ref_time(100_000_000_000);
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -349,6 +455,29 @@ where
 fn initialize_block(number: u64) {
 	System::reset_events();
 	System::initialize(&number, &[0u8; 32].into(), &Default::default());
+}
+
+struct ExtensionInput<'a> {
+	extension_id: u16,
+	func_id: u16,
+	extra: &'a [u8],
+}
+
+impl<'a> ExtensionInput<'a> {
+	fn to_vec(&self) -> Vec<u8> {
+		((self.extension_id as u32) << 16 | (self.func_id as u32))
+			.to_le_bytes()
+			.iter()
+			.chain(self.extra)
+			.cloned()
+			.collect()
+	}
+}
+
+impl<'a> From<ExtensionInput<'a>> for Vec<u8> {
+	fn from(input: ExtensionInput) -> Vec<u8> {
+		input.to_vec()
+	}
 }
 
 // Perform a call to a plain account.
@@ -407,12 +536,14 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: min_balance,
 					}),
@@ -420,7 +551,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: min_balance,
@@ -429,7 +560,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: min_balance,
 					}),
@@ -437,7 +568,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: value,
@@ -446,7 +577,7 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::ContractEmitted {
+					event: RuntimeEvent::Contracts(crate::Event::ContractEmitted {
 						contract: addr.clone(),
 						data: vec![1, 2, 3, 4]
 					}),
@@ -454,11 +585,11 @@ fn instantiate_and_call_and_deposit_event() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Instantiated {
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone()
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -533,7 +664,7 @@ fn run_out_of_gas() {
 				Origin::signed(ALICE),
 				addr, // newly created account
 				0,
-				1_000_000_000_000,
+				Weight::from_ref_time(1_000_000_000_000),
 				None,
 				vec![],
 			),
@@ -699,14 +830,14 @@ fn deploy_and_call_other_contract() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount {
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
 						account: callee_addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: callee_addr.clone(),
 						free_balance: min_balance,
 					}),
@@ -714,7 +845,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: callee_addr.clone(),
 						amount: min_balance,
@@ -723,7 +854,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: callee_addr.clone(),
 						amount: min_balance,
 					}),
@@ -731,7 +862,7 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: caller_addr.clone(),
 						to: callee_addr.clone(),
 						amount: 32768, // hard coded in wasm
@@ -740,20 +871,36 @@ fn deploy_and_call_other_contract() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Instantiated {
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: caller_addr.clone(),
 						contract: callee_addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&caller_addr), hash(&callee_addr)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: caller_addr.clone(),
 						to: callee_addr.clone(),
 						amount: 32768,
 					}),
 					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: caller_addr.clone(),
+						contract: callee_addr.clone(),
+					}),
+					topics: vec![hash(&caller_addr), hash(&callee_addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: caller_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&caller_addr)],
 				},
 			]
 		);
@@ -948,7 +1095,7 @@ fn cannot_self_destruct_by_refund_after_slash() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Slashed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Slashed {
 						who: addr.clone(),
 						amount: 90,
 					}),
@@ -956,7 +1103,15 @@ fn cannot_self_destruct_by_refund_after_slash() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::ReserveRepatriated {
 						from: addr.clone(),
 						to: ALICE,
 						amount: 10,
@@ -1048,7 +1203,7 @@ fn self_destruct_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: addr.clone(),
 						to: DJANGO,
 						amount: 100_000,
@@ -1057,22 +1212,30 @@ fn self_destruct_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Terminated {
+					event: RuntimeEvent::Contracts(crate::Event::Terminated {
 						contract: addr.clone(),
 						beneficiary: DJANGO
 					}),
-					topics: vec![],
+					topics: vec![hash(&addr), hash(&DJANGO)],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::KilledAccount {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::System(frame_system::Event::KilledAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
+					event: RuntimeEvent::Balances(pallet_balances::Event::ReserveRepatriated {
 						from: addr.clone(),
 						to: ALICE,
 						amount: 1_000,
@@ -1537,37 +1700,142 @@ fn chain_extension_works() {
 		),);
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
 
-		// The contract takes a up to 2 byte buffer where the first byte passed is used as
-		// as func_id to the chain extension which behaves differently based on the
-		// func_id.
-
 		// 0 = read input buffer and pass it through as output
+		let input: Vec<u8> = ExtensionInput { extension_id: 0, func_id: 0, extra: &[99] }.into();
 		let result =
-			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![0, 99], false);
-		let gas_consumed = result.gas_consumed;
-		assert_eq!(TestExtension::last_seen_buffer(), vec![0, 99]);
-		assert_eq!(result.result.unwrap().data, Bytes(vec![0, 99]));
+			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false);
+		assert_eq!(TestExtension::last_seen_buffer(), input);
+		assert_eq!(result.result.unwrap().data, Bytes(input));
 
 		// 1 = treat inputs as integer primitives and store the supplied integers
-		Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![1], false)
-			.result
-			.unwrap();
+		Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 1, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
 		// those values passed in the fixture
-		assert_eq!(TestExtension::last_seen_inputs(), (4, 1, 16, 12));
+		assert_eq!(TestExtension::last_seen_inputs(), (4, 4, 16, 12));
 
-		// 2 = charge some extra weight (amount supplied in second byte)
-		let result =
-			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![2, 42], false);
+		// 2 = charge some extra weight (amount supplied in the fifth byte)
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 2, extra: &[0] }.into(),
+			false,
+		);
+		assert_ok!(result.result);
+		let gas_consumed = result.gas_consumed;
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 2, extra: &[42] }.into(),
+			false,
+		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed, gas_consumed + 42);
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 2, extra: &[95] }.into(),
+			false,
+		);
+		assert_ok!(result.result);
+		assert_eq!(result.gas_consumed, gas_consumed + 95);
 
 		// 3 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
-		let result = Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![3], false)
-			.result
-			.unwrap();
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 3, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
 		assert_eq!(result.data, Bytes(vec![42, 99]));
+
+		// diverging to second chain extension that sets flags to 0x1 and returns a fixed buffer
+		// We set the MSB part to 1 (instead of 0) which routes the request into the second
+		// extension
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 1, func_id: 0, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
+		assert_eq!(result.flags, ReturnFlags::REVERT);
+		assert_eq!(result.data, Bytes(vec![0x4B, 0x1D]));
+
+		// Diverging to third chain extension that is disabled
+		// We set the MSB part to 2 (instead of 0) which routes the request into the third extension
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				ExtensionInput { extension_id: 2, func_id: 0, extra: &[] }.into(),
+			),
+			Error::<Test>::NoChainExtension,
+		);
 	});
+}
+
+#[test]
+fn chain_extension_temp_storage_works() {
+	let (code, hash) = compile_module::<Test>("chain_extension_temp_storage").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			code,
+			vec![],
+			vec![],
+		),);
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+
+		// Call func 0 and func 1 back to back.
+		let stop_recursion = 0u8;
+		let mut input: Vec<u8> = ExtensionInput { extension_id: 3, func_id: 0, extra: &[] }.into();
+		input.extend_from_slice(
+			ExtensionInput { extension_id: 3, func_id: 1, extra: &[stop_recursion] }
+				.to_vec()
+				.as_ref(),
+		);
+
+		assert_ok!(
+			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false)
+				.result
+		);
+	})
 }
 
 #[test]
@@ -1611,7 +1879,7 @@ fn lazy_removal_works() {
 		assert_matches!(child::get(trie, &[99]), Some(42));
 
 		// Run the lazy removal
-		Contracts::on_idle(System::block_number(), Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::MAX);
 
 		// Value should be gone now
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
@@ -1681,7 +1949,7 @@ fn lazy_batch_removal_works() {
 		}
 
 		// Run single lazy removal
-		Contracts::on_idle(System::block_number(), Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::MAX);
 
 		// The single lazy removal should have removed all queued tries
 		for trie in tries.iter() {
@@ -1696,7 +1964,7 @@ fn lazy_removal_partial_remove_works() {
 
 	// We create a contract with some extra keys above the weight limit
 	let extra_keys = 7u32;
-	let weight_limit = 5_000_000_000;
+	let weight_limit = Weight::from_ref_time(5_000_000_000);
 	let (_, max_keys) = Storage::<Test>::deletion_budget(1, weight_limit);
 	let vals: Vec<_> = (0..max_keys + extra_keys)
 		.map(|i| (blake2_256(&i.encode()), (i as u32), (i as u32).encode()))
@@ -1723,8 +1991,14 @@ fn lazy_removal_partial_remove_works() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				&val.0 as &FixSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1864,7 +2138,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 		assert_matches!(child::get::<i32>(trie, &[99]), Some(42));
 
 		// Run on_idle with max remaining weight, this should remove the value
-		Contracts::on_idle(System::block_number(), Weight::max_value());
+		Contracts::on_idle(System::block_number(), Weight::MAX);
 
 		// Value should be gone
 		assert_matches!(child::get::<i32>(trie, &[99]), None);
@@ -1875,7 +2149,7 @@ fn lazy_removal_does_no_run_on_low_remaining_weight() {
 fn lazy_removal_does_not_use_all_weight() {
 	let (code, hash) = compile_module::<Test>("self_destruct").unwrap();
 
-	let weight_limit = 5_000_000_000;
+	let weight_limit = Weight::from_ref_time(5_000_000_000);
 	let mut ext = ExtBuilder::default().existential_deposit(50).build();
 
 	let (trie, vals, weight_per_key) = ext.execute_with(|| {
@@ -1903,8 +2177,14 @@ fn lazy_removal_does_not_use_all_weight() {
 
 		// Put value into the contracts child trie
 		for val in &vals {
-			Storage::<Test>::write(&info.trie_id, &val.0, Some(val.2.clone()), None, false)
-				.unwrap();
+			Storage::<Test>::write(
+				&info.trie_id,
+				&val.0 as &FixSizedKey,
+				Some(val.2.clone()),
+				None,
+				false,
+			)
+			.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -1940,7 +2220,7 @@ fn lazy_removal_does_not_use_all_weight() {
 		let weight_used = Storage::<Test>::process_deletion_queue_batch(weight_limit);
 
 		// We have one less key in our trie than our weight limit suffices for
-		assert_eq!(weight_used, weight_limit - weight_per_key);
+		assert_eq!(weight_used, weight_limit - Weight::from_ref_time(weight_per_key));
 
 		// All the keys are removed
 		for val in vals {
@@ -2095,7 +2375,7 @@ fn reinstrument_does_charge() {
 		assert!(result2.gas_consumed > result1.gas_consumed);
 		assert_eq!(
 			result2.gas_consumed,
-			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len),
+			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
 		);
 	});
 }
@@ -2203,7 +2483,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 		let input: Vec<u8> = AsRef::<[u8]>::as_ref(&addr_callee)
 			.iter()
 			.cloned()
-			.chain((GAS_LIMIT / 5).to_le_bytes())
+			.chain((GAS_LIMIT / 5).ref_time().to_le_bytes())
 			.collect();
 
 		// Call in order to determine the gas that is required for this call
@@ -2227,7 +2507,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 				ALICE,
 				addr_caller,
 				0,
-				result.gas_required,
+				Weight::from_ref_time(result.gas_required),
 				Some(result.storage_deposit.charge_or_zero()),
 				input,
 				false,
@@ -2271,7 +2551,7 @@ fn gas_estimation_call_runtime() {
 
 		// Call something trivial with a huge gas limit so that we can observe the effects
 		// of pre-charging. This should create a difference between consumed and required.
-		let call = Call::Contracts(crate::Call::call {
+		let call = RuntimeCall::Contracts(crate::Call::call {
 			dest: addr_callee,
 			value: 0,
 			gas_limit: GAS_LIMIT / 3,
@@ -2297,7 +2577,7 @@ fn gas_estimation_call_runtime() {
 				ALICE,
 				addr_caller,
 				0,
-				result.gas_required,
+				Weight::from_ref_time(result.gas_required),
 				None,
 				call.encode(),
 				false,
@@ -2381,7 +2661,7 @@ fn upload_code_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2389,8 +2669,8 @@ fn upload_code_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2460,7 +2740,7 @@ fn remove_code_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2468,12 +2748,12 @@ fn remove_code_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Unreserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Unreserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2481,8 +2761,8 @@ fn remove_code_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeRemoved { code_hash }),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(crate::Event::CodeRemoved { code_hash }),
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2515,7 +2795,7 @@ fn remove_code_wrong_origin() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2523,8 +2803,8 @@ fn remove_code_wrong_origin() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
 				},
 			]
 		);
@@ -2616,12 +2896,14 @@ fn instantiate_with_zero_balance_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: min_balance,
 					}),
@@ -2629,7 +2911,7 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: min_balance,
@@ -2638,7 +2920,7 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: min_balance,
 					}),
@@ -2646,7 +2928,7 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2654,16 +2936,16 @@ fn instantiate_with_zero_balance_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Instantiated {
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -2707,12 +2989,14 @@ fn instantiate_with_below_existential_deposit_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: min_balance,
 					}),
@@ -2720,7 +3004,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: min_balance,
@@ -2729,7 +3013,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: min_balance,
 					}),
@@ -2737,7 +3021,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: 50,
@@ -2746,7 +3030,7 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: ALICE,
 						amount: 240,
 					}),
@@ -2754,16 +3038,16 @@ fn instantiate_with_below_existential_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::CodeStored { code_hash }),
-					topics: vec![],
+					event: RuntimeEvent::Contracts(crate::Event::CodeStored { code_hash }),
+					topics: vec![code_hash],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Contracts(crate::Event::Instantiated {
+					event: RuntimeEvent::Contracts(crate::Event::Instantiated {
 						deployer: ALICE,
 						contract: addr.clone(),
 					}),
-					topics: vec![],
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -2836,7 +3120,7 @@ fn storage_deposit_works() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: 42,
@@ -2845,7 +3129,15 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: charged0,
@@ -2854,7 +3146,7 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: charged0,
 					}),
@@ -2862,7 +3154,15 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: charged1,
@@ -2871,7 +3171,7 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Reserved {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Reserved {
 						who: addr.clone(),
 						amount: charged1,
 					}),
@@ -2879,7 +3179,15 @@ fn storage_deposit_works() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::ReserveRepatriated {
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Balances(pallet_balances::Event::ReserveRepatriated {
 						from: addr.clone(),
 						to: ALICE,
 						amount: refunded0,
@@ -2961,12 +3269,12 @@ fn set_code_extrinsic() {
 			System::events(),
 			vec![EventRecord {
 				phase: Phase::Initialization,
-				event: Event::Contracts(pallet_contracts::Event::ContractCodeUpdated {
-					contract: addr,
+				event: RuntimeEvent::Contracts(pallet_contracts::Event::ContractCodeUpdated {
+					contract: addr.clone(),
 					new_code_hash,
 					old_code_hash: code_hash,
 				}),
-				topics: vec![],
+				topics: vec![hash(&addr), new_code_hash, code_hash],
 			},]
 		);
 	});
@@ -2995,7 +3303,7 @@ fn call_after_killed_account_needs_funding() {
 
 		// Destroy the account of the contract by slashing.
 		// Slashing can actually happen if the contract takes part in staking.
-		// It is a corner case and we except the destruction of the account.
+		// It is a corner case and we accept the destruction of the account.
 		let _ = <Test as Config>::Currency::slash(
 			&addr,
 			<Test as Config>::Currency::total_balance(&addr),
@@ -3040,14 +3348,14 @@ fn call_after_killed_account_needs_funding() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::KilledAccount {
+					event: RuntimeEvent::System(frame_system::Event::KilledAccount {
 						account: addr.clone()
 					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Slashed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Slashed {
 						who: addr.clone(),
 						amount: min_balance + 700
 					}),
@@ -3055,12 +3363,22 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::System(frame_system::Event::NewAccount { account: addr.clone() }),
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::System(frame_system::Event::NewAccount {
+						account: addr.clone()
+					}),
 					topics: vec![],
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Endowed {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Endowed {
 						account: addr.clone(),
 						free_balance: min_balance
 					}),
@@ -3068,12 +3386,20 @@ fn call_after_killed_account_needs_funding() {
 				},
 				EventRecord {
 					phase: Phase::Initialization,
-					event: Event::Balances(pallet_balances::Event::Transfer {
+					event: RuntimeEvent::Balances(pallet_balances::Event::Transfer {
 						from: ALICE,
 						to: addr.clone(),
 						amount: min_balance
 					}),
 					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&addr)],
 				},
 			]
 		);
@@ -3223,6 +3549,8 @@ fn set_code_hash() {
 		// upload new code
 		assert_ok!(Contracts::upload_code(Origin::signed(ALICE), new_wasm.clone(), None));
 
+		System::reset_events();
+
 		// First call sets new code_hash and returns 1
 		let result = Contracts::bare_call(
 			ALICE,
@@ -3246,16 +3574,34 @@ fn set_code_hash() {
 
 		// Checking for the last event only
 		assert_eq!(
-			System::events().pop().unwrap(),
-			EventRecord {
-				phase: Phase::Initialization,
-				event: Event::Contracts(crate::Event::ContractCodeUpdated {
-					contract: contract_addr.clone(),
-					new_code_hash: new_code_hash.clone(),
-					old_code_hash: code_hash.clone(),
-				}),
-				topics: vec![],
-			},
+			&System::events(),
+			&[
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::ContractCodeUpdated {
+						contract: contract_addr.clone(),
+						new_code_hash,
+						old_code_hash: code_hash,
+					}),
+					topics: vec![hash(&contract_addr), new_code_hash, code_hash],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: contract_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&contract_addr)],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
+					event: RuntimeEvent::Contracts(crate::Event::Called {
+						caller: ALICE,
+						contract: contract_addr.clone(),
+					}),
+					topics: vec![hash(&ALICE), hash(&contract_addr)],
+				},
+			],
 		);
 	});
 }

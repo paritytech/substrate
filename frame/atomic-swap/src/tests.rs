@@ -30,7 +30,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -41,12 +41,12 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -65,14 +65,14 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 
 impl Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SwapAction = BalanceSwapAction<u64, Balances>;
 	type ProofLimit = ConstU32<1024>;
 }
@@ -102,7 +102,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::create_swap(
 			Origin::signed(A),
 			B,
-			hashed_proof.clone(),
+			hashed_proof,
 			BalanceSwapAction::new(50),
 			1000,
 		)
@@ -117,7 +117,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::create_swap(
 			Origin::signed(B),
 			A,
-			hashed_proof.clone(),
+			hashed_proof,
 			BalanceSwapAction::new(75),
 			1000,
 		)
