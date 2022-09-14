@@ -78,7 +78,7 @@ where
 			U::pre_dispatch(&self.function)?;
 			(None, None)
 		};
-		let res = self.function.dispatch(Origin::from(maybe_who));
+		let res = self.function.dispatch(RuntimeOrigin::from(maybe_who));
 		let post_info = match res {
 			Ok(info) => info,
 			Err(err) => err.post_info,
