@@ -102,7 +102,7 @@ mod out_events;
 mod tests;
 
 pub use libp2p::identity::{error::DecodingError, Keypair, PublicKey};
-use sc_network_common::service::{NetworkBlock, NetworkRequest, NetworkTransaction};
+use sc_network_common::service::{NetworkBlock, NetworkRequest};
 
 /// Substrate network service. Handles network IO and manages connectivity.
 pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
@@ -122,7 +122,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
-	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B, H>>,
+	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -1120,20 +1120,6 @@ where
 	}
 }
 
-impl<B, H> NetworkTransaction<H> for NetworkService<B, H>
-where
-	B: BlockT + 'static,
-	H: ExHashT,
-{
-	fn trigger_repropagate(&self) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransactions);
-	}
-
-	fn propagate_transaction(&self, hash: H) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PropagateTransaction(hash));
-	}
-}
-
 impl<B, H> NetworkBlock<B::Hash, NumberFor<B>> for NetworkService<B, H>
 where
 	B: BlockT + 'static,
@@ -1220,9 +1206,7 @@ impl<'a> NotificationSenderReadyT for NotificationSenderReady<'a> {
 /// Messages sent from the `NetworkService` to the `NetworkWorker`.
 ///
 /// Each entry corresponds to a method of `NetworkService`.
-enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
-	PropagateTransaction(H),
-	PropagateTransactions,
+enum ServiceToWorkerMsg<B: BlockT> {
 	RequestJustification(B::Hash, NumberFor<B>),
 	ClearJustificationRequests,
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
@@ -1280,7 +1264,7 @@ where
 	/// The import queue that was passed at initialization.
 	import_queue: Box<dyn ImportQueue<B>>,
 	/// Messages from the [`NetworkService`] that must be processed.
-	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B, H>>,
+	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B>>,
 	/// Senders for events that happen on the network.
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.
@@ -1348,8 +1332,6 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.clear_justification_requests(),
-				ServiceToWorkerMsg::PropagateTransaction(_) => {},
-				ServiceToWorkerMsg::PropagateTransactions => {},
 				ServiceToWorkerMsg::GetValue(key) =>
 					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>

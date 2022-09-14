@@ -157,7 +157,7 @@ impl TransactionsHandlerPrototype {
 	/// the behaviour of the handler while it's running.
 	///
 	/// Important: the transactions handler is initially disabled and doesn't gossip transactions.
-	/// You must call `TransactionsHandlerController::set_gossip_enabled` to enable it.
+	/// Gossiping is enabled when major syncing is done.
 	pub fn build<
 		B: BlockT + 'static,
 		H: ExHashT,

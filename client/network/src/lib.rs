@@ -267,7 +267,7 @@ pub use sc_network_common::{
 	service::{
 		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
 		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
-		NetworkTransaction, Signature, SigningError,
+		Signature, SigningError,
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},

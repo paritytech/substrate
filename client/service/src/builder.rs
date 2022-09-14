@@ -40,7 +40,7 @@ use sc_keystore::LocalKeystore;
 use sc_network::{config::SyncMode, NetworkService};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
-	service::{NetworkStateInfo, NetworkStatusProvider, NetworkTransaction},
+	service::{NetworkStateInfo, NetworkStatusProvider},
 	sync::warp::WarpSyncProvider,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -326,7 +326,6 @@ where
 pub trait SpawnTaskNetwork<Block: BlockT>:
 	sc_offchain::NetworkProvider
 	+ NetworkStateInfo
-	+ NetworkTransaction<Block::Hash>
 	+ NetworkStatusProvider<Block>
 	+ Send
 	+ Sync
@@ -339,7 +338,6 @@ where
 	Block: BlockT,
 	T: sc_offchain::NetworkProvider
 		+ NetworkStateInfo
-		+ NetworkTransaction<Block::Hash>
 		+ NetworkStatusProvider<Block>
 		+ Send
 		+ Sync
@@ -852,7 +850,7 @@ where
 		protocol_config
 	}));
 
-	let mut network_params = sc_network::config::Params {
+	let network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
@@ -887,10 +885,6 @@ where
 			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
-	network_params
-		.network_config
-		.extra_sets
-		.insert(0, transactions_handler_proto.set_config());
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
