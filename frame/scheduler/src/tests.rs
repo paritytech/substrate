@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::mock::{
-	logger, new_test_ext, root, run_to_block, signed, LoggerCall, RuntimeCall, Scheduler, Test, *,
+	logger, new_test_ext, root, run_to_block, LoggerCall, RuntimeCall, Scheduler, Test, *,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -972,136 +972,6 @@ fn migration_to_v4_works() {
 		assert_eq_uvec!(x, expected);
 
 		assert_eq!(Scheduler::current_storage_version(), 3);
-	});
-}
-
-#[test]
-#[allow(deprecated)]
-fn migration_v3_to_v4_works() {
-	new_test_ext().execute_with(|| {
-		// Call that will need to be bounded to a `Lookup`.
-		let large_call = RuntimeCall::System(frame_system::Call::remark { remark: vec![0; 1024] });
-		// Call that can be inlined.
-		let small_call = RuntimeCall::System(frame_system::Call::remark { remark: vec![0; 10] });
-		// Call that is already hashed that will be converted to `Legacy`.
-		let hashed_call = RuntimeCall::System(frame_system::Call::remark { remark: vec![0; 2048] });
-		let bound_hashed_call = Preimage::bound(hashed_call.clone()).unwrap();
-		assert!(bound_hashed_call.lookup_needed());
-
-		for i in 0..2u64 {
-			let k = i.twox_64_concat();
-			let old = vec![
-				Some(ScheduledV3Of::<Test> {
-					maybe_id: None,
-					priority: i as u8 + 10,
-					call: small_call.clone().into(),
-					maybe_periodic: None, // 1
-					origin: root(),
-					_phantom: PhantomData::<u64>::default(),
-				}),
-				None,
-				Some(ScheduledV3Of::<Test> {
-					maybe_id: Some([i as u8; 32]),
-					priority: 123,
-					call: large_call.clone().into(),
-					maybe_periodic: Some((4u64, 20)),
-					origin: signed(i),
-					_phantom: PhantomData::<u64>::default(),
-				}),
-				Some(ScheduledV3Of::<Test> {
-					maybe_id: Some([(255 - i as u8); 32]),
-					priority: 123,
-					call: MaybeHashed::Hash(bound_hashed_call.hash()),
-					maybe_periodic: Some((8u64, 10)),
-					origin: signed(i),
-					_phantom: PhantomData::<u64>::default(),
-				}),
-			];
-			frame_support::migration::put_storage_value(b"Scheduler", b"Agenda", &k, old);
-		}
-
-		Scheduler::migrate_v3_to_v4();
-
-		let mut x = Agenda::<Test>::iter().map(|x| (x.0, x.1.into_inner())).collect::<Vec<_>>();
-		x.sort_by_key(|x| x.0);
-
-		let bound_large_call = Preimage::bound(large_call).unwrap();
-		assert!(bound_large_call.lookup_needed());
-		let bound_small_call = Preimage::bound(small_call).unwrap();
-		assert!(!bound_small_call.lookup_needed());
-
-		let expected = vec![
-			(
-				0,
-				vec![
-					Some(ScheduledOf::<Test> {
-						maybe_id: None,
-						priority: 10,
-						call: bound_small_call.clone(),
-						maybe_periodic: None,
-						origin: root(),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-					None,
-					Some(ScheduledOf::<Test> {
-						maybe_id: Some(blake2_256(&[0u8; 32])),
-						priority: 123,
-						call: bound_large_call.clone(),
-						maybe_periodic: Some((4u64, 20)),
-						origin: signed(0),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-					Some(ScheduledOf::<Test> {
-						maybe_id: Some(blake2_256(&[255u8; 32])),
-						priority: 123,
-						call: Bounded::from_legacy_hash(bound_hashed_call.hash()),
-						maybe_periodic: Some((8u64, 10)),
-						origin: signed(0),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-				],
-			),
-			(
-				1,
-				vec![
-					Some(ScheduledOf::<Test> {
-						maybe_id: None,
-						priority: 11,
-						call: bound_small_call.clone(),
-						maybe_periodic: None,
-						origin: root(),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-					None,
-					Some(ScheduledOf::<Test> {
-						maybe_id: Some(blake2_256(&[1u8; 32])),
-						priority: 123,
-						call: bound_large_call.clone(),
-						maybe_periodic: Some((4u64, 20)),
-						origin: signed(1),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-					Some(ScheduledOf::<Test> {
-						maybe_id: Some(blake2_256(&[254u8; 32])),
-						priority: 123,
-						call: Bounded::from_legacy_hash(bound_hashed_call.hash()),
-						maybe_periodic: Some((8u64, 10)),
-						origin: signed(1),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-				],
-			),
-		];
-		for (outer, (i, j)) in x.iter().zip(expected.iter()).enumerate() {
-			assert_eq!(i.0, j.0);
-			for (inner, (x, y)) in i.1.iter().zip(j.1.iter()).enumerate() {
-				assert_eq!(x, y, "at index: outer {} inner {}", outer, inner);
-			}
-		}
-		assert_eq_uvec!(x, expected);
-
-		assert_eq!(Scheduler::current_storage_version(), 3);
-		assert_eq!(StorageVersion::get::<Scheduler>(), 4);
 	});
 }
 

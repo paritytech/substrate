@@ -52,6 +52,7 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migration;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -602,22 +603,6 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 		StorageVersion::new(4).put::<Self>();
 
 		weight + T::DbWeight::get().writes(2)
-	}
-
-	#[cfg(feature = "try-runtime")]
-	pub fn pre_migrate_to_v4() -> Result<(), &'static str> {
-		Ok(())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	pub fn post_migrate_to_v4() -> Result<(), &'static str> {
-		use frame_support::dispatch::GetStorageVersion;
-
-		assert!(Self::current_storage_version() == 3);
-		for k in Agenda::<T>::iter_keys() {
-			let _ = Agenda::<T>::try_get(k).map_err(|()| "Invalid item in Agenda")?;
-		}
-		Ok(())
 	}
 }
 
@@ -1226,7 +1211,7 @@ impl<T: Config> schedule::v3::Named<T::BlockNumber, <T as Config>::RuntimeCall, 
 	}
 }
 
-/// Maps a pallet error to an `schedule::v3` error.  
+/// Maps a pallet error to an `schedule::v3` error.
 fn map_err_to_v3_err<T: Config>(err: DispatchError) -> DispatchError {
 	if err == DispatchError::from(Error::<T>::NotFound) {
 		DispatchError::Unavailable
