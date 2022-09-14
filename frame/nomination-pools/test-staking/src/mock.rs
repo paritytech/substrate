@@ -18,7 +18,6 @@
 use frame_election_provider_support::VoteWeight;
 use frame_support::{
 	assert_ok,
-	instances::Instance1,
 	pallet_prelude::*,
 	parameter_types,
 	traits::{ConstU64, ConstU8},
