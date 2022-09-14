@@ -1737,7 +1737,7 @@ pub mod env {
 	#[prefixed_alias]
 	fn gas_left(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
-		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
+		let gas_left = &ctx.ext.gas_meter().gas_left().ref_time().encode();
 		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, gas_left, false, already_charged)?)
 	}
 
