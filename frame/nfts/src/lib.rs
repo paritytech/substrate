@@ -66,20 +66,18 @@ pub trait Incrementable {
 }
 
 macro_rules! impl_incrementable {
-	($type:ty) => {
-		impl Incrementable for $type {
-			fn increment(&self) -> Self {
-				self.saturating_add(1)
+	($($type:ty),+) => {
+		$(
+			impl Incrementable for $type {
+				fn increment(&self) -> Self {
+					self.saturating_add(1)
+				}
 			}
-		}
+		)+
 	};
 }
 
-impl_incrementable!(u8);
-impl_incrementable!(u16);
-impl_incrementable!(u32);
-impl_incrementable!(u64);
-impl_incrementable!(u128);
+impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 #[frame_support::pallet]
 pub mod pallet {
