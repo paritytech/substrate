@@ -46,7 +46,7 @@ pub mod v3 {
 				if agenda.len() > max_scheduled_per_block as usize {
 					log::error!(
 						target: TARGET,
-						"Would truncate agenda of block {} from {} items to {} items - abort.",
+						"Would truncate agenda of block {:?} from {} items to {} items - abort.",
 						block_number,
 						agenda.len(),
 						max_scheduled_per_block,
@@ -233,5 +233,9 @@ mod test {
 
 			assert_eq!(StorageVersion::get::<Scheduler>(), 4);
 		});
+	}
+
+	fn signed(i: u64) -> OriginCaller {
+		system::RawOrigin::Signed(i).into()
 	}
 }
