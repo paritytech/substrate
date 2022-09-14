@@ -75,7 +75,7 @@
 //! 			let who = ensure_signed(origin)?;
 //!
 //! 			let _ = <scored_pool::Pallet<T>>::submit_candidacy(
-//! 				T::RuntimeOrigin::from(Some(who.clone()).into())
+//! 				T::Origin::from(Some(who.clone()).into())
 //! 			);
 //! 			Ok(())
 //! 		}
