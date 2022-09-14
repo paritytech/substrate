@@ -9732,7 +9732,7 @@ version = "6.0.0"
 dependencies = [
  "base58",
  "bitflags",
- "blake2-rfc",
+ "blake2",
  "byteorder",
  "criterion",
  "dyn-clonable",
