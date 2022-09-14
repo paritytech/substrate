@@ -90,14 +90,14 @@ where
 				Ok(()) => {
 					debug!(
 						target: "beefy::sync",
-						"🥩 Handled BEEFY justification request from {}.", peer
+						"🥩 Handled BEEFY justification request from {:?}.", peer
 					)
 				},
 				Err(e) => {
 					// TODO: handle reputation changes here
 					debug!(
 						target: "beefy::sync",
-						"🥩 Failed to handle BEEFY justification request from {}: {}", peer, e,
+						"🥩 Failed to handle BEEFY justification request from {:?}: {}", peer, e,
 					)
 				},
 			}

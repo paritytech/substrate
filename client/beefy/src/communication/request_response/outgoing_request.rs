@@ -18,14 +18,15 @@
 
 //! Generating request logic for request/response protocol for syncing BEEFY justifications.
 
-use beefy_primitives::BeefyApi;
+use beefy_primitives::{crypto::AuthorityId, BeefyApi, ValidatorSet};
 use codec::Encode;
 use futures::{
 	channel::{oneshot, oneshot::Canceled},
 	future::Either,
 	stream::{FuturesUnordered, StreamExt},
 };
-use log::{debug, error};
+use log::{debug, error, warn};
+use parking_lot::Mutex;
 use sc_network::{PeerId, ProtocolName};
 use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
@@ -36,11 +37,12 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block, NumberFor},
 };
-use std::{result::Result, sync::Arc};
+use std::{collections::VecDeque, result::Result, sync::Arc};
 
 use crate::{
 	communication::request_response::{Error, JustificationRequest},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
+	KnownPeers,
 };
 
 /// Response type received from network.
@@ -50,13 +52,17 @@ type ResponseReceiver = oneshot::Receiver<Response>;
 
 enum State<B: Block> {
 	Idle,
-	AwaitingResponse(NumberFor<B>),
+	AwaitingResponse(PeerId, NumberFor<B>),
 }
 
 pub struct OnDemandJustificationsEngine<B: Block, N, R> {
 	network: N,
 	runtime: Arc<R>,
 	protocol_name: ProtocolName,
+
+	live_peers: Arc<Mutex<KnownPeers<B>>>,
+	peers_cache: VecDeque<PeerId>,
+
 	state: State<B>,
 	engine: FuturesUnordered<
 		Either<std::future::Pending<std::result::Result<Response, Canceled>>, ResponseReceiver>,
@@ -70,16 +76,47 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
-	pub fn new(network: N, runtime: Arc<R>, protocol_name: ProtocolName) -> Self {
+	pub fn new(
+		network: N,
+		runtime: Arc<R>,
+		protocol_name: ProtocolName,
+		live_peers: Arc<Mutex<KnownPeers<B>>>,
+	) -> Self {
 		let engine = FuturesUnordered::new();
 		engine.push(Either::Left(std::future::pending::<_>()));
-		Self { network, runtime, protocol_name, state: State::Idle, engine }
+		Self {
+			network,
+			runtime,
+			protocol_name,
+			live_peers,
+			peers_cache: VecDeque::new(),
+			state: State::Idle,
+			engine,
+		}
 	}
 
-	/// Start requesting justification for `block` number.
-	pub fn request(&mut self, block: NumberFor<B>) {
-		// TODO: do peer selection based on `known_peers`.
-		let peer = PeerId::random();
+	fn reset_state(&mut self) {
+		self.state = State::Idle;
+		self.engine = FuturesUnordered::new();
+		self.engine.push(Either::Left(std::future::pending::<_>()));
+	}
+
+	fn reset_peers_cache_for_block(&mut self, block: NumberFor<B>) {
+		self.peers_cache = self.live_peers.lock().peers_at_least_at_block(block);
+	}
+
+	pub fn try_next_peer(&mut self) -> Option<PeerId> {
+		let live = self.live_peers.lock();
+		while let Some(peer) = self.peers_cache.pop_front() {
+			if live.contains(&peer) {
+				return Some(peer)
+			}
+		}
+		None
+	}
+
+	fn request_from_peer(&mut self, peer: PeerId, block: NumberFor<B>) {
+		debug!(target: "beefy", "🥩 requesting justif #{:?} from peer {:?}", block, peer);
 
 		let payload = JustificationRequest::<B> { begin: block }.encode();
 
@@ -94,7 +131,74 @@ where
 		);
 
 		self.engine.push(Either::Right(rx));
-		self.state = State::AwaitingResponse(block);
+		self.state = State::AwaitingResponse(peer, block);
+	}
+
+	/// Start requesting justification for `block` number.
+	pub fn start_new_request(&mut self, block: NumberFor<B>) {
+		self.reset_state();
+		self.reset_peers_cache_for_block(block);
+
+		if let Some(peer) = self.try_next_peer() {
+			self.request_from_peer(peer, block);
+		} else {
+			// TODO: add some timeout mechanism to retry and not get stuck just because
+			// there was no connectivity when we first tried this.
+			debug!(target: "beefy", "🥩 No peers to request justif #{:?} from!", block);
+		}
+	}
+
+	/// Cancel any pending request for block numbers smaller or equal to `block`.
+	pub fn cancel_requests_older_than(&mut self, block: NumberFor<B>) {
+		match &self.state {
+			State::AwaitingResponse(_, number) if *number <= block => {
+				debug!(
+					target: "beefy",
+					"🥩 cancel pending request for block: {:?}",
+					number
+				);
+				self.reset_state();
+			},
+			_ => (),
+		}
+	}
+
+	fn process_response(
+		&mut self,
+		peer: PeerId,
+		block: NumberFor<B>,
+		validator_set: &ValidatorSet<AuthorityId>,
+		response: std::result::Result<Response, Canceled>,
+	) -> std::result::Result<BeefyVersionedFinalityProof<B>, Error> {
+		response
+			.map_err(|e| {
+				debug!(
+					target: "beefy",
+					"🥩 for on demand justification #{:?}, peer {:?} hung up: {:?}",
+					block, peer, e
+				);
+				Error::InvalidResponse
+			})?
+			.map_err(|e| {
+				debug!(
+					target: "beefy",
+					"🥩 for on demand justification #{:?}, peer {:?} hung up: {:?}",
+					block, peer, e
+				);
+				Error::InvalidResponse
+			})
+			.and_then(|encoded| {
+				decode_and_verify_finality_proof::<B>(&encoded[..], block, &validator_set).map_err(
+					|e| {
+						debug!(
+							target: "beefy",
+							"🥩 for on demand justification #{:?}, peer {:?} responded with invalid proof: {:?}",
+							block, peer, e
+						);
+						Error::InvalidResponse
+					},
+				)
+			})
 	}
 
 	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B>> {
@@ -102,93 +206,56 @@ where
 		// This "blocks" until:
 		//  - we have a [ResponseReceiver] added to the engine, and
 		//  - we also get a [Response] on it.
-		let resp = self.engine.next().await;
+		let resp = self
+			.engine
+			.next()
+			.await
+			.expect("Engine will never end because of inner `Pending` future, qed.");
 
-		let resp = resp.expect("Engine will never end because of inner `Pending` future, qed.");
-		let number = match self.state {
-			State::AwaitingResponse(block) => block,
+		let (peer, block) = match self.state {
+			State::AwaitingResponse(peer, block) => (peer, block),
 			// Programming error to have active [ResponseReceiver]s in the engine with no pending
-			// requests.
+			// requests. Just log an error for now.
 			State::Idle => {
 				error!(
 					target: "beefy",
-					"🥩 unexpected response received: {:?}",
+					"🥩 unexpected response received in 'Idle' state: {:?}",
 					resp
 				);
+				self.reset_state();
 				return None
 			},
 		};
 
-		let resp = match resp {
-			Ok(resp) => resp,
-			Err(e) => {
-				debug!(
-					target: "beefy",
-					"🥩 on demand justification (block {:?}) peer hung up: {:?}",
-					number, e
-				);
-				self.request(number);
-				return None
-			},
-		};
-
-		let encoded = match resp {
-			Ok(encoded) => encoded,
-			Err(e) => {
-				error!(
-					target: "beefy",
-					"🥩 on demand justification (block {:?}) peer responded with error: {:?}",
-					number, e
-				);
-				return None
-			},
-		};
-
-		match self.process_response(encoded, number) {
-			Ok(proof) => Some(proof),
-			Err(e) => {
-				debug!(
-					target: "beefy",
-					"🥩 on demand justification (block {:?}) invalid proof: {:?}",
-					number, e
-				);
-				self.request(number);
-				None
-			},
-		}
-	}
-
-	fn process_response(
-		&mut self,
-		encoded: Vec<u8>,
-		number: NumberFor<B>,
-	) -> Result<BeefyVersionedFinalityProof<B>, Error> {
-		let block_id = BlockId::number(number);
+		let block_id = BlockId::number(block);
 		let validator_set = self
 			.runtime
 			.runtime_api()
 			.validator_set(&block_id)
-			.map_err(Error::RuntimeApi)?
-			.ok_or_else(|| Error::Pallet)?;
+			.map_err(|e| {
+				error!(target: "beefy", "🥩 Runtime API error {:?} in on-demand justif engine.", e);
+				e
+			})
+			.ok()?
+			.or_else(|| {
+				error!(target: "beefy", "🥩 BEEFY pallet not available for block {:?}.", block);
+				None
+			})?;
 
-		let proof = decode_and_verify_finality_proof::<B>(&encoded[..], number, &validator_set);
-		proof.map_err(|_| Error::TodoError)
-	}
-
-	/// Cancel any pending request for block numbers smaller or equal to `latest_block`.
-	pub fn cancel_requests_older_than(&mut self, latest_block: NumberFor<B>) {
-		match &self.state {
-			State::AwaitingResponse(block) if *block <= latest_block => {
-				debug!(
-					target: "beefy",
-					"🥩 cancel pending request for block: {:?}",
-					block
-				);
-				self.state = State::Idle;
-				self.engine = FuturesUnordered::new();
-				self.engine.push(Either::Left(std::future::pending::<_>()));
-			},
-			_ => (),
-		}
+		self.process_response(peer, block, &validator_set, resp)
+			.map_err(|_| {
+				// No valid justification received, try next peer in our set.
+				if let Some(peer) = self.try_next_peer() {
+					self.request_from_peer(peer, block);
+				} else {
+					warn!(target: "beefy", "🥩 ran out of peers to request justif #{:?} from", block);
+				}
+			})
+			.map(|proof| {
+				// Good proof received, go back to 'Idle'.
+				self.reset_state();
+				proof
+			})
+			.ok()
 	}
 }

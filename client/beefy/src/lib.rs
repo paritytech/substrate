@@ -236,6 +236,7 @@ where
 		network.clone(),
 		runtime.clone(),
 		justifications_protocol_name,
+		known_peers.clone(),
 	);
 
 	let metrics =

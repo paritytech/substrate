@@ -386,7 +386,7 @@ where
 					self.init_session_at(new_validator_set, *header.number());
 					// TODO (issue #12093): when adding SYNC protocol,
 					// fire up a request for justification for this mandatory block here.
-					self.on_demand_justifications.request(*header.number());
+					self.on_demand_justifications.start_new_request(*header.number());
 				}
 			}
 		}
@@ -1039,6 +1039,7 @@ pub(crate) mod tests {
 			network.clone(),
 			api.clone(),
 			"/beefy/justifs/1".into(),
+			known_peers.clone(),
 		);
 		let worker_params = crate::worker::WorkerParams {
 			client: peer.client().as_client(),

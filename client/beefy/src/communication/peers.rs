@@ -20,7 +20,7 @@
 
 use sc_network::PeerId;
 use sp_runtime::traits::{Block, NumberFor, Zero};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 struct PeerData<B: Block> {
 	last_voted_on: NumberFor<B>,
@@ -57,5 +57,19 @@ impl<B: Block> KnownPeers<B> {
 	/// Remove connected `peer`.
 	pub fn remove(&mut self, peer: &PeerId) {
 		self.live.remove(peer);
+	}
+
+	/// Return _filtered and cloned_ list of peers that have voted on `block` or higher.
+	pub fn peers_at_least_at_block(&self, block: NumberFor<B>) -> VecDeque<PeerId> {
+		self.live
+			.iter()
+			.filter_map(|(k, v)| if v.last_voted_on >= block { Some(k) } else { None })
+			.cloned()
+			.collect()
+	}
+
+	/// Answer whether `peer` is part of `KnownPeers` set.
+	pub fn contains(&self, peer: &PeerId) -> bool {
+		self.live.contains_key(peer)
 	}
 }
