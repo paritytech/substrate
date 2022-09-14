@@ -21,7 +21,7 @@
 
 use codec::Encode;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{storage, traits::Get, weights::DispatchClass};
+use frame_support::{dispatch::DispatchClass, storage, traits::Get};
 use frame_system::{Call, Pallet as System, RawOrigin};
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::Hash;

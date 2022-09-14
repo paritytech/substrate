@@ -26,7 +26,7 @@ use futures::prelude::*;
 use kitchensink_runtime::RuntimeApi;
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
-use sc_client_api::{BlockBackend, ExecutorProvider};
+use sc_client_api::BlockBackend;
 use sc_consensus_babe::{self, SlotProportion};
 use sc_executor::NativeElseWasmExecutor;
 use sc_network::NetworkService;
@@ -227,7 +227,6 @@ pub fn new_partial(
 		},
 		&task_manager.spawn_essential_handle(),
 		config.prometheus_registry(),
-		sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone()),
 		telemetry.as_ref().map(|x| x.handle()),
 	)?;
 
@@ -422,9 +421,6 @@ pub fn new_full_base(
 			telemetry.as_ref().map(|x| x.handle()),
 		);
 
-		let can_author_with =
-			sp_consensus::CanAuthorWithNativeVersion::new(client.executor().clone());
-
 		let client_clone = client.clone();
 		let slot_duration = babe_link.config().slot_duration();
 		let babe_config = sc_consensus_babe::BabeParams {
@@ -463,7 +459,6 @@ pub fn new_full_base(
 			force_authoring,
 			backoff_authoring_blocks,
 			babe_link,
-			can_author_with,
 			block_proposal_slot_portion: SlotProportion::new(0.5),
 			max_block_proposal_slot_portion: None,
 			telemetry: telemetry.as_ref().map(|x| x.handle()),
