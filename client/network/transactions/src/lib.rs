@@ -364,7 +364,7 @@ where
 	fn on_transactions(&mut self, who: PeerId, transactions: Transactions<B::Extrinsic>) {
 		// Accept transactions only when node is not major syncing
 		if self.service.is_major_syncing() {
-			trace!(target: "sync", "{} Ignoring transactions while disabled", who);
+			trace!(target: "sync", "{} Ignoring transactions while major syncing", who);
 			return
 		}
 
