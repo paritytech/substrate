@@ -421,10 +421,6 @@ pub mod pallet {
 		MaxSupplyAlreadySet,
 		/// The provided max supply is less to the amount of items a collection already has.
 		MaxSupplyTooSmall,
-		/// The `CollectionId` in `NextCollectionId` is not being used.
-		///
-		/// This means that you can directly proceed to call `create`.
-		NextIdNotUsed,
 		/// The given item ID is unknown.
 		UnknownItem,
 		/// Item is not for sale.
