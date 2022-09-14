@@ -29,7 +29,7 @@ pub mod v11 {
 	#[cfg(feature = "try-runtime")]
 	use sp_io::hashing::twox_128;
 
-	pub struct MigrateToV11<T, P, N>(sp_std::marker::PhantomData<T, P, N>);
+	pub struct MigrateToV11<T, P, N>(sp_std::marker::PhantomData<(T, P, N)>);
 	impl<T: Config, P: GetStorageVersion + PalletInfoAccess, N: Get<&'static str>> OnRuntimeUpgrade
 		for MigrateToV11<T, P, N>
 	{
