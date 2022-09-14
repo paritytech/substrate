@@ -225,11 +225,8 @@ where
 			params.protocol_id.clone(),
 			&params.fork_id,
 			&params.network_config,
-			iter::once(Vec::new())
-				.chain(
-					(0..params.network_config.extra_sets.len().saturating_sub(1))
-						.map(|_| default_notif_handshake_message.clone()),
-				)
+			(0..params.network_config.extra_sets.len())
+				.map(|_| default_notif_handshake_message.clone())
 				.collect(),
 			params.metrics_registry.as_ref(),
 			params.chain_sync,

@@ -892,8 +892,6 @@ where
 		.extra_sets
 		.insert(0, transactions_handler_proto.set_config());
 
-	info!("extra sets", network_params .network_config .extra_sets);
-
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
