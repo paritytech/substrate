@@ -27,10 +27,6 @@ pub struct ChainSpec {
 	/// The name of the chain.
 	name: String,
 	/// The hexadecimal encoded hash of the genesis block.
-	///
-	/// # Note
-	///
-	/// This can be empty, or prefixed with "0x".
 	genesis_hash: String,
 	/// Chain properties.
 	properties: Properties,
@@ -43,11 +39,7 @@ impl ChainSpec {
 		genesis_hash: Hash,
 		properties: Properties,
 	) -> Self {
-		let genesis_hash = if genesis_hash.as_ref().is_empty() {
-			"".into()
-		} else {
-			format!("0x{}", hex::encode(genesis_hash))
-		};
+		let genesis_hash = format!("0x{}", hex::encode(genesis_hash));
 
 		Self { name, properties, genesis_hash }
 	}
