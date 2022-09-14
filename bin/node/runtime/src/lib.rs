@@ -91,7 +91,7 @@ pub use sp_runtime::BuildStorage;
 pub mod impls;
 #[cfg(not(feature = "runtime-benchmarks"))]
 use impls::AllianceIdentityVerifier;
-use impls::{AllianceProposalProvider, Author, CollectionId, CreditToBlockAuthor};
+use impls::{AllianceProposalProvider, Author, CreditToBlockAuthor};
 
 /// Constant values used within the runtime.
 pub mod constants;
@@ -1478,7 +1478,7 @@ impl pallet_uniques::Config for Runtime {
 
 impl pallet_nfts::Config for Runtime {
 	type Event = Event;
-	type CollectionId = CollectionId;
+	type CollectionId = u32;
 	type ItemId = u32;
 	type Currency = Balances;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;

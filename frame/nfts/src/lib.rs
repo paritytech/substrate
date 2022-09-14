@@ -65,6 +65,22 @@ pub trait Incrementable {
 	fn increment(&self) -> Self;
 }
 
+macro_rules! impl_incrementable {
+	($type:ty) => {
+		impl Incrementable for $type {
+			fn increment(&self) -> Self {
+				self.saturating_add(1)
+			}
+		}
+	};
+}
+
+impl_incrementable!(u8);
+impl_incrementable!(u16);
+impl_incrementable!(u32);
+impl_incrementable!(u64);
+impl_incrementable!(u128);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;

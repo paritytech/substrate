@@ -29,7 +29,6 @@ use frame_support::{
 };
 use pallet_alliance::{IdentityVerifier, ProposalIndex, ProposalProvider};
 use pallet_asset_tx_payment::HandleCredit;
-use pallet_nfts::Incrementable;
 use sp_std::prelude::*;
 
 pub struct Author;
@@ -112,14 +111,6 @@ impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
 
 	fn proposal_of(proposal_hash: Hash) -> Option<Call> {
 		AllianceMotion::proposal_of(proposal_hash)
-	}
-}
-
-#[derive(Default, Clone, Debug, TypeInfo, Encode, Decode, Copy, MaxEncodedLen, PartialEq, Eq)]
-pub struct CollectionId(u32);
-impl Incrementable for CollectionId {
-	fn increment(&self) -> Self {
-		CollectionId(self.0.saturating_add(1))
 	}
 }
 

@@ -84,12 +84,6 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-impl Incrementable for u32 {
-	fn increment(&self) -> Self {
-		self.saturating_add(1)
-	}
-}
-
 impl Config for Test {
 	type Event = Event;
 	type CollectionId = u32;
