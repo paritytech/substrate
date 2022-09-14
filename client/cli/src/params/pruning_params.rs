@@ -33,6 +33,7 @@ pub struct PruningParams {
 	/// Specify the number of finalized blocks to keep in the database.
 	///
 	/// Default is to keep all of finalized blocks.
+	/// 0 keep all blocks.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
 	#[clap(alias = "keep-blocks", long, value_name = "COUNT")]
@@ -46,7 +47,7 @@ impl PruningParams {
 			.as_ref()
 			.map(|s| match s.as_str() {
 				"archive" => Ok(PruningMode::ArchiveAll),
-				"final" => Ok(PruningMode::ArchiveCanonical),
+				"archive-canonical" => Ok(PruningMode::ArchiveCanonical),
 				bc => bc
 					.parse()
 					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))
