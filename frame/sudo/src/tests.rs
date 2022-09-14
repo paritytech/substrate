@@ -20,7 +20,7 @@
 use super::*;
 use frame_support::{assert_noop, assert_ok, weights::Weight};
 use mock::{
-	new_test_ext, Logger, LoggerCall, RuntimeOrigin, RuntimeCall, RuntimeEvent as TestEvent, Sudo,
+	new_test_ext, Logger, LoggerCall, RuntimeCall, RuntimeEvent as TestEvent, RuntimeOrigin, Sudo,
 	SudoCall, System, Test,
 };
 
