@@ -30,7 +30,7 @@ mod utils;
 pub mod baseline;
 
 #[cfg(feature = "std")]
-pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector, RegressionModel};
+pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector};
 #[doc(hidden)]
 pub use frame_support;
 #[doc(hidden)]
