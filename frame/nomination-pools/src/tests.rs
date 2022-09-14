@@ -5043,7 +5043,7 @@ mod fuzz_test {
 	const REWARD_AGENT_ACCOUNT: AccountId = 42;
 
 	/// Grab random accounts, either known ones, or new ones.
-	fn random_signed_origin<R: Rng>(rng: &mut R) -> (Origin, AccountId) {
+	fn random_signed_origin<R: Rng>(rng: &mut R) -> (RuntimeOrigin, AccountId) {
 		let count = PoolMembers::<T>::count();
 		if rng.gen::<bool>() && count > 0 {
 			// take an existing account.
@@ -5081,7 +5081,7 @@ mod fuzz_test {
 		BondedPools::<T>::iter_keys().collect::<Vec<_>>().choose(&mut rng).map(|x| *x)
 	}
 
-	fn random_call<R: Rng>(mut rng: &mut R) -> (crate::pallet::Call<T>, Origin) {
+	fn random_call<R: Rng>(mut rng: &mut R) -> (crate::pallet::Call<T>, RuntimeOrigin) {
 		let op = rng.gen::<usize>();
 		let mut op_count =
 			<crate::pallet::Call<T> as frame_support::dispatch::GetCallName>::get_call_names()

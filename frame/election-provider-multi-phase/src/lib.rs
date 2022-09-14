@@ -1828,7 +1828,7 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, raw_solution, roll_to, AccountId, ExtBuilder, MockWeightInfo,
-			MockedWeightInfo, MultiPhase, Origin, Runtime, SignedMaxSubmissions, System,
+			MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin, SignedMaxSubmissions, System,
 			TargetIndex, Targets,
 		},
 		Phase,

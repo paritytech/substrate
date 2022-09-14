@@ -20,8 +20,8 @@
 use super::*;
 use frame_support::{assert_noop, assert_ok, bounded_vec, traits::Currency};
 use mock::{
-	new_test_ext, run_to_block, Balances, BalancesCall, MaxFriends, Origin, Recovery, RecoveryCall,
-	RuntimeCall, Test,
+	new_test_ext, run_to_block, Balances, BalancesCall, MaxFriends, Recovery, RecoveryCall,
+	RuntimeCall, RuntimeOrigin, Test,
 };
 use sp_runtime::traits::BadOrigin;
 

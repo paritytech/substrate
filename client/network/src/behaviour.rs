@@ -37,7 +37,7 @@ use libp2p::{
 };
 use log::debug;
 
-use sc_consensus::import_queue::{IncomingBlock, Origin};
+use sc_consensus::import_queue::{IncomingBlock, RuntimeOrigin};
 use sc_network_common::{
 	config::ProtocolId,
 	protocol::{

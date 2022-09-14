@@ -3500,7 +3500,7 @@ mod weight_tests {
 	use sp_weights::RuntimeDbWeight;
 
 	pub trait Config: 'static {
-		type Origin;
+		type RuntimeOrigin;
 		type Balance;
 		type BlockNumber;
 		type DbWeight: Get<RuntimeDbWeight>;
@@ -3517,7 +3517,7 @@ mod weight_tests {
 	}
 
 	impl Config for TraitImpl {
-		type Origin = u32;
+		type RuntimeOrigin = u32;
 		type BlockNumber = u32;
 		type Balance = u32;
 		type DbWeight = DbWeight;
@@ -3525,7 +3525,7 @@ mod weight_tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {
 			// no arguments, fixed weight
 			#[weight = 1000]
 			fn f00(_origin) { unimplemented!(); }

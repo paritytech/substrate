@@ -148,7 +148,7 @@ mod benchmarks {
 	crate::benchmarks! {
 		where_clause {
 			where
-				crate::tests::Origin: From<RawOrigin<<T as frame_system::Config>::AccountId>>,
+				crate::tests::RuntimeOrigin: From<RawOrigin<<T as frame_system::Config>::AccountId>>,
 		}
 
 		set_value {

@@ -529,7 +529,7 @@ mod tests {
 	use crate::{
 		mock::{
 			balances, raw_solution, roll_to, Balances, ExtBuilder, MockedWeightInfo, MultiPhase,
-			Origin, Runtime, SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
+			Runtime, RuntimeOrigin, SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
 		},
 		Error, Perbill, Phase,
 	};

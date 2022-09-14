@@ -76,7 +76,7 @@ fn test_pub(n: u8) -> sp_core::sr25519::Public {
 	sp_core::sr25519::Public::from_raw([n; 32])
 }
 
-fn test_origin(n: u8) -> Origin {
+fn test_origin(n: u8) -> RuntimeOrigin {
 	RuntimeOrigin::signed(test_pub(n))
 }
 

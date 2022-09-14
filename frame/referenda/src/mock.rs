@@ -148,7 +148,7 @@ impl SortedMembers<u64> for OneToFive {
 pub struct TestTracksInfo;
 impl TracksInfo<u64, u64> for TestTracksInfo {
 	type Id = u8;
-	type RuntimeOrigin = <Origin as OriginTrait>::PalletsOrigin;
+	type RuntimeOrigin = <RuntimeOrigin as OriginTrait>::PalletsOrigin;
 	fn tracks() -> &'static [(Self::Id, TrackInfo<u64, u64>)] {
 		static DATA: [(u8, TrackInfo<u64, u64>); 2] = [
 			(

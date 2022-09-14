@@ -98,20 +98,20 @@ parameter_types! {
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 }
 pub struct TestSpendOrigin;
-impl frame_support::traits::EnsureOrigin<Origin> for TestSpendOrigin {
+impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
 	type Success = u64;
-	fn try_origin(o: Origin) -> Result<Self::Success, Origin> {
-		Result::<frame_system::RawOrigin<_>, Origin>::from(o).and_then(|o| match o {
+	fn try_origin(o: RuntimeOrigin) -> Result<Self::Success, RuntimeOrigin> {
+		Result::<frame_system::RawOrigin<_>, RuntimeOrigin>::from(o).and_then(|o| match o {
 			frame_system::RawOrigin::Root => Ok(u64::max_value()),
 			frame_system::RawOrigin::Signed(10) => Ok(5),
 			frame_system::RawOrigin::Signed(11) => Ok(10),
 			frame_system::RawOrigin::Signed(12) => Ok(20),
 			frame_system::RawOrigin::Signed(13) => Ok(50),
-			r => Err(Origin::from(r)),
+			r => Err(RuntimeOrigin::from(r)),
 		})
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<Origin, ()> {
+	fn try_successful_origin() -> Result<RuntimeOrigin, ()> {
 		Ok(RuntimeOrigin::root())
 	}
 }

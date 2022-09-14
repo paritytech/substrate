@@ -20,8 +20,8 @@
 use super::*;
 use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 use mock::{
-	new_test_ext, run_to_block, Balances, BalancesCall, Lottery, Origin, RuntimeCall, SystemCall,
-	Test,
+	new_test_ext, run_to_block, Balances, BalancesCall, Lottery, RuntimeCall, RuntimeOrigin,
+	SystemCall, Test,
 };
 use pallet_balances::Error as BalancesError;
 use sp_runtime::traits::BadOrigin;

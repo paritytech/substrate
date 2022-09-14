@@ -1486,11 +1486,11 @@ mod tests {
 		ensure_members_has_approval_stake();
 	}
 
-	fn submit_candidacy(origin: Origin) -> sp_runtime::DispatchResult {
+	fn submit_candidacy(origin: RuntimeOrigin) -> sp_runtime::DispatchResult {
 		Elections::submit_candidacy(origin, Elections::candidates().len() as u32)
 	}
 
-	fn vote(origin: Origin, votes: Vec<u64>, stake: u64) -> DispatchResultWithPostInfo {
+	fn vote(origin: RuntimeOrigin, votes: Vec<u64>, stake: u64) -> DispatchResultWithPostInfo {
 		// historical note: helper function was created in a period of time in which the API of vote
 		// call was changing. Currently it is a wrapper for the original call and does not do much.
 		// Nonetheless, totally harmless.

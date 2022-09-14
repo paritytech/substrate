@@ -568,7 +568,7 @@ fn retire_works() {
 	});
 }
 
-fn assert_powerless(user: Origin) {
+fn assert_powerless(user: RuntimeOrigin) {
 	//vote / veto with a valid propsal
 	let cid = test_cid();
 	let (proposal, _, _) = make_kick_member_proposal(42);

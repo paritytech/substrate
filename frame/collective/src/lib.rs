@@ -245,7 +245,7 @@ pub mod pallet {
 
 	/// Origin for the collective pallet.
 	#[pallet::origin]
-	pub type RuntimeOrigin<T, I = ()> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
+	pub type Origin<T, I = ()> = RawOrigin<<T as frame_system::Config>::AccountId, I>;
 
 	/// The hashes of the active proposals.
 	#[pallet::storage]
