@@ -434,7 +434,7 @@ pub mod pallet {
 			call: Box<CallOrHashOf<T>>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Config>::Origin::from(origin);
+			let origin = <T as Config>::RuntimeOrigin::from(origin);
 			Self::do_schedule(
 				DispatchTime::At(when),
 				maybe_periodic,
@@ -449,7 +449,7 @@ pub mod pallet {
 		#[pallet::weight(<T as Config>::WeightInfo::cancel(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel(origin: OriginFor<T>, when: T::BlockNumber, index: u32) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Config>::Origin::from(origin);
+			let origin = <T as Config>::RuntimeOrigin::from(origin);
 			Self::do_cancel(Some(origin.caller().clone()), (when, index))?;
 			Ok(())
 		}
@@ -465,7 +465,7 @@ pub mod pallet {
 			call: Box<CallOrHashOf<T>>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Config>::Origin::from(origin);
+			let origin = <T as Config>::RuntimeOrigin::from(origin);
 			Self::do_schedule_named(
 				id,
 				DispatchTime::At(when),
@@ -481,7 +481,7 @@ pub mod pallet {
 		#[pallet::weight(<T as Config>::WeightInfo::cancel_named(T::MaxScheduledPerBlock::get()))]
 		pub fn cancel_named(origin: OriginFor<T>, id: Vec<u8>) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Config>::Origin::from(origin);
+			let origin = <T as Config>::RuntimeOrigin::from(origin);
 			Self::do_cancel_named(Some(origin.caller().clone()), id)?;
 			Ok(())
 		}
@@ -500,7 +500,7 @@ pub mod pallet {
 			call: Box<CallOrHashOf<T>>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Config>::Origin::from(origin);
+			let origin = <T as Config>::RuntimeOrigin::from(origin);
 			Self::do_schedule(
 				DispatchTime::After(after),
 				maybe_periodic,
@@ -526,7 +526,7 @@ pub mod pallet {
 			call: Box<CallOrHashOf<T>>,
 		) -> DispatchResult {
 			T::ScheduleOrigin::ensure_origin(origin.clone())?;
-			let origin = <T as Config>::Origin::from(origin);
+			let origin = <T as Config>::RuntimeOrigin::from(origin);
 			Self::do_schedule_named(
 				id,
 				DispatchTime::After(after),

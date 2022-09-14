@@ -189,7 +189,7 @@ pub mod pallet {
 		type Tracks: TracksInfo<
 			BalanceOf<Self, I>,
 			Self::BlockNumber,
-			Origin = <Self::RuntimeOrigin as OriginTrait>::PalletsOrigin,
+			RuntimeOrigin = <Self::RuntimeOrigin as OriginTrait>::PalletsOrigin,
 		>;
 	}
 
