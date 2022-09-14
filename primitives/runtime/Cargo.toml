@@ -41,7 +41,6 @@ sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]
-bench = []
 runtime-benchmarks = []
 default = ["std"]
 std = [

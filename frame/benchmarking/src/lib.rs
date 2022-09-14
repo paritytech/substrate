@@ -975,6 +975,8 @@ macro_rules! impl_benchmark {
 		( $( $name_extra:ident ),* )
 		( $( $name_skip_meta:ident ),* )
 	) => {
+		// We only need to implement benchmarks for the runtime-benchmarks feature or testing.
+		#[cfg(any(feature = "runtime-benchmarks", test))]
 		impl<T: Config $(<$instance>, $instance: $instance_bound )? >
 			$crate::Benchmarking for Pallet<T $(, $instance)? >
 			where T: frame_system::Config, $( $where_clause )*
