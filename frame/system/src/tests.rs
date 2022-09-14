@@ -29,7 +29,7 @@ use sp_runtime::{
 
 #[test]
 fn origin_works() {
-	let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
+	let o = RuntimeOrigin::from(RawOrigin::<u64>::Signed(1u64));
 	let x: Result<RawOrigin<u64>, RuntimeOrigin> = o.into();
 	assert_eq!(x.unwrap(), RawOrigin::<u64>::Signed(1u64));
 }

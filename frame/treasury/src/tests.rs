@@ -107,7 +107,7 @@ impl frame_support::traits::EnsureOrigin<RuntimeOrigin> for TestSpendOrigin {
 			frame_system::RawOrigin::Signed(11) => Ok(10),
 			frame_system::RawOrigin::Signed(12) => Ok(20),
 			frame_system::RawOrigin::Signed(13) => Ok(50),
-			r => Err(Origin::from(r)),
+			r => Err(RuntimeOrigin::from(r)),
 		})
 	}
 	#[cfg(feature = "runtime-benchmarks")]

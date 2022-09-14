@@ -184,20 +184,20 @@ fn origin_default_filter() {
 	assert_eq!(RuntimeOrigin::none().filter_call(&rejected_call), false);
 	assert_eq!(RuntimeOrigin::signed(0).filter_call(&accepted_call), true);
 	assert_eq!(RuntimeOrigin::signed(0).filter_call(&rejected_call), false);
-	assert_eq!(Origin::from(Some(0)).filter_call(&accepted_call), true);
-	assert_eq!(Origin::from(Some(0)).filter_call(&rejected_call), false);
-	assert_eq!(Origin::from(None).filter_call(&accepted_call), true);
-	assert_eq!(Origin::from(None).filter_call(&rejected_call), false);
-	assert_eq!(Origin::from(nested::module::Origin).filter_call(&accepted_call), true);
-	assert_eq!(Origin::from(nested::module::Origin).filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::from(Some(0)).filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::from(Some(0)).filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::from(None).filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::from(None).filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::from(nested::module::Origin).filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::from(nested::module::Origin).filter_call(&rejected_call), false);
 
-	let mut origin = Origin::from(Some(0));
+	let mut origin = RuntimeOrigin::from(Some(0));
 	origin.add_filter(|c| matches!(c, RuntimeCall::Module(_)));
 	assert_eq!(origin.filter_call(&accepted_call), false);
 	assert_eq!(origin.filter_call(&rejected_call), false);
 
 	// Now test for root origin and filters:
-	let mut origin = Origin::from(Some(0));
+	let mut origin = RuntimeOrigin::from(Some(0));
 	origin.set_caller_from(RuntimeOrigin::root());
 	assert!(matches!(origin.caller, OriginCaller::system(system::RawOrigin::Root)));
 
@@ -205,7 +205,7 @@ fn origin_default_filter() {
 	assert_eq!(origin.filter_call(&accepted_call), true);
 	assert_eq!(origin.filter_call(&rejected_call), true);
 
-	origin.set_caller_from(Origin::from(Some(0)));
+	origin.set_caller_from(RuntimeOrigin::from(Some(0)));
 
 	// Back to another signed origin, the filtered are now effective again
 	assert_eq!(origin.filter_call(&accepted_call), true);
