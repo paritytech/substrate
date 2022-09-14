@@ -926,3 +926,24 @@ fn add_epoch_configurations_migration_works() {
 		assert_eq!(PendingEpochConfigChange::<Test>::get(), Some(next_config_descriptor));
 	});
 }
+
+#[test]
+fn generate_equivocation_report_blob() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(3);
+
+	let offending_authority_index = 0;
+	let offending_authority_pair = &pairs[0];
+
+	ext.execute_with(|| {
+		start_era(1);
+
+		let equivocation_proof = generate_equivocation_proof(
+			offending_authority_index,
+			offending_authority_pair,
+			CurrentSlot::<Test>::get() + 1,
+		);
+
+		println!("equivocation_proof: {:?}", equivocation_proof);
+		println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
+	});
+}

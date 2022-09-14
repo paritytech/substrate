@@ -17,6 +17,7 @@
 
 //! Benchmarks for the nomination pools coupled with the staking and bags list pallets.
 
+#![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
