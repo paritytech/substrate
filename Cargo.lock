@@ -4731,7 +4731,6 @@ dependencies = [
  "pallet-elections-phragmen",
  "pallet-erc20",
  "pallet-erc721",
- "pallet-gilt",
  "pallet-grandpa",
  "pallet-identity",
  "pallet-im-online",

@@ -326,7 +326,6 @@ pub fn testnet_genesis(
 			max_members: 999,
 		},
 		pallet_vesting: Default::default(),
-		pallet_gilt: Default::default(),
 	}
 }
 

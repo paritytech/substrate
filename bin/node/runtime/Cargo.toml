@@ -59,7 +59,6 @@ pallet-contracts-rpc-runtime-api = { version = "3.0.0", default-features = false
 pallet-democracy = { version = "3.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-multi-phase" }
 pallet-elections-phragmen = { version = "3.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
-pallet-gilt = { version = "3.0.0", default-features = false, path = "../../../frame/gilt" }
 pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "3.0.0", default-features = false, path = "../../../frame/indices" }
@@ -114,7 +113,6 @@ std = [
 	"pallet-democracy/std",
 	"pallet-elections-phragmen/std",
 	"frame-executive/std",
-	"pallet-gilt/std",
 	"pallet-cere-ddc/std",
 	"pallet-chainbridge/std",
 	"pallet-erc721/std",
@@ -178,7 +176,6 @@ runtime-benchmarks = [
 	"pallet-contracts/runtime-benchmarks",
 	"pallet-democracy/runtime-benchmarks",
 	"pallet-elections-phragmen/runtime-benchmarks",
-	"pallet-gilt/runtime-benchmarks",
 	"pallet-grandpa/runtime-benchmarks",
 	"pallet-identity/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
@@ -234,5 +231,4 @@ try-runtime = [
 	"pallet-society/try-runtime",
 	"pallet-recovery/try-runtime",
 	"pallet-vesting/try-runtime",
-	"pallet-gilt/try-runtime",
 ]

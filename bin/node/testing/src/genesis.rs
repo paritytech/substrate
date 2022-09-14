@@ -122,6 +122,5 @@ pub fn config_endowed(
 			max_members: 999,
 		},
 		pallet_vesting: Default::default(),
-		pallet_gilt: Default::default(),
 	}
 }
