@@ -266,8 +266,8 @@ pub use sc_network_common::{
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
-		Signature, SigningError,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
+		SigningError,
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},

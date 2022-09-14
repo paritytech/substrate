@@ -850,7 +850,7 @@ where
 		protocol_config
 	}));
 
-	let network_params = sc_network::config::Params {
+	let mut network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
@@ -885,6 +885,10 @@ where
 			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
+	network_params
+		.network_config
+		.extra_sets
+		.insert(0, transactions_handler_proto.set_config());
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
