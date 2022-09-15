@@ -42,6 +42,7 @@ pub trait Currency {}
 // Test for:
 // * No default instance
 // * Origin, Inherent, Event
+#[allow(deprecated)]
 mod module1 {
 	use super::*;
 	use sp_std::ops::Add;
@@ -149,6 +150,7 @@ mod module1 {
 // Test for:
 // * default instance
 // * use of no_genesis_config_phantom_data
+#[allow(deprecated)]
 mod module2 {
 	use super::*;
 
@@ -217,6 +219,7 @@ mod module2 {
 
 // Test for:
 // * Depends on multiple instances of a module with instances
+#[allow(deprecated)]
 mod module3 {
 	use super::*;
 

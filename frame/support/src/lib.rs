@@ -28,6 +28,7 @@
 // of this crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![allow(deprecated)]
 
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;

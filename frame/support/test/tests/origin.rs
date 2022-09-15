@@ -27,6 +27,7 @@ use sp_runtime::{generic, traits::BlakeTwo256};
 
 mod system;
 
+#[allow(deprecated)]
 mod nested {
 	use super::*;
 
@@ -73,6 +74,7 @@ mod nested {
 	}
 }
 
+#[allow(deprecated)]
 pub mod module {
 	use super::*;
 

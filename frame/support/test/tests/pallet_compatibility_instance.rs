@@ -18,6 +18,7 @@
 // Old macros don't support the flag `no-metadata-docs` so the result differs when the feature is
 // activated.
 #![cfg(not(feature = "no-metadata-docs"))]
+#![allow(deprecated)]
 
 use frame_support::traits::{ConstU32, ConstU64};
 

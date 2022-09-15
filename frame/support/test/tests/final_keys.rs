@@ -24,6 +24,7 @@ use sp_io::{
 	TestExternalities,
 };
 
+#[allow(deprecated)]
 mod no_instance {
 	pub trait Config: frame_support_test::Config {}
 
@@ -48,6 +49,7 @@ mod no_instance {
 	}
 }
 
+#[allow(deprecated)]
 mod instance {
 	pub trait Config<I = DefaultInstance>: frame_support_test::Config {}
 

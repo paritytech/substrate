@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(deprecated)]
+
 pub trait Config: frame_support_test::Config {}
 
 frame_support::decl_module! {

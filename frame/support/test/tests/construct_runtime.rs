@@ -20,6 +20,7 @@
 //! * integrity test is generated
 
 #![recursion_limit = "128"]
+#![allow(deprecated)]
 
 use codec::MaxEncodedLen;
 use frame_support::{

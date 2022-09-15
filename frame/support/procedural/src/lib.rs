@@ -287,6 +287,7 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 /// 	trait Store for ...
 /// }
 /// ```
+#[deprecated = "Please use new pallet attribute macro `#[pallet::storage]` to declare storage types"]
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)

@@ -100,6 +100,7 @@
 /// );
 /// # fn main() {}
 /// ```
+#[deprecated = "Please use new pallet attribute macro `#[pallet::event]` to declare event types"]
 #[macro_export]
 macro_rules! decl_event {
 	(

@@ -18,6 +18,7 @@
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod tests {
 	use frame_support::metadata::*;
 	use sp_io::TestExternalities;
@@ -613,6 +614,7 @@ mod tests {
 
 #[cfg(test)]
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod test2 {
 	pub trait Config: frame_support_test::Config {}
 
@@ -691,6 +693,7 @@ mod test2 {
 
 #[cfg(test)]
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod test3 {
 	pub trait Config: frame_support_test::Config {}
 
@@ -719,6 +722,7 @@ mod test3 {
 
 #[cfg(test)]
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod test_append_and_len {
 	use codec::{Decode, Encode};
 	use sp_io::TestExternalities;

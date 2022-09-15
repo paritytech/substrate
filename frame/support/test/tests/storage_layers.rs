@@ -55,6 +55,7 @@ pub mod pallet {
 	}
 }
 
+#[allow(deprecated)]
 pub mod decl_pallet {
 	pub trait Config: frame_system::Config {}
 
