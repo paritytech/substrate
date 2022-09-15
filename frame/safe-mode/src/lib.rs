@@ -50,7 +50,7 @@ pub mod pallet {
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
-		/// Contains all calls that can be dispatched when the safe-mode is enabled.
+		/// Contains all calls that can be dispatched even when the safe-mode is enabled.
 		///
 		/// The `SafeMode` pallet is always included and does not need to be added here.
 		type SafeModeFilter: Contains<Self::Call>;
@@ -61,20 +61,39 @@ pub mod pallet {
 		/// How long the safe-mode will stay active when enabled with [`Pallet::enable`].
 		#[pallet::constant]
 		type EnableDuration: Get<Self::BlockNumber>;
-		/// How much the safe-mode can be extended by each [`Pallet::extend`] call.
+
+		/// For how many blocks the safe-mode can be extended by each [`Pallet::extend`] call.
 		///
 		/// This does not impose a hard limit as the safe-mode can be extended multiple times.
 		#[pallet::constant]
 		type ExtendDuration: Get<Self::BlockNumber>;
 
+		/// The amount that will be reserved upon calling [`Pallet::enable`].
+		///
+		/// `None` disables the possibility of permissionlessly enabling the safe-mode.
 		#[pallet::constant]
 		type EnableStakeAmount: Get<Option<BalanceOf<Self>>>;
+
+		/// The amount that will be reserved upon calling [`Pallet::extend`].
+		///
+		/// `None` disables the possibility of permissionlessly extending the safe-mode.
 		#[pallet::constant]
 		type ExtendStakeAmount: Get<Option<BalanceOf<Self>>>;
 
-		type EnableOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
-		type ExtendOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
-		type DisableOrigin: EnsureOrigin<Self::Origin>;
+		/// The origin that can call [`Pallet::force_enable`].
+		///
+		/// The `Success` value is the number of blocks that this origin can enter into safe-mode.
+		type ForceEnableOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
+
+		/// The origin that can call [`Pallet::force_extend`].
+		///
+		/// The `Success` value is the number of blocks that this origin can extend the safe-mode.
+		type ForceExtendOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
+
+		/// The origin that can call [`Pallet::force_disable`].
+		type ForceDisableOrigin: EnsureOrigin<Self::Origin>;
+
+		/// The origin that can call [`Pallet::repay_stake`] and [`Pallet::slash_stake`].
 		type RepayOrigin: EnsureOrigin<Self::Origin>;
 
 		// Weight information for extrinsics in this pallet.
@@ -83,10 +102,10 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The safe-mode is (already) enabled.
+		/// The safe-mode is (already or still) enabled.
 		IsEnabled,
 
-		/// The safe-mode is (already) disabled.
+		/// The safe-mode is (already or still) disabled.
 		IsDisabled,
 
 		/// A value that is required for the extrinsic was not configured.
@@ -99,10 +118,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The safe-mode was enabled until inclusively this \[block number\].
+		/// The safe-mode was enabled until inclusively this \[block\].
 		Enabled(T::BlockNumber),
 
-		/// The safe-mode was extended until inclusively this \[block number\].
+		/// The safe-mode was extended until inclusively this \[block\].
 		Extended(T::BlockNumber),
 
 		/// The safe-mode was disabled for a specific \[reason\].
@@ -118,10 +137,10 @@ pub mod pallet {
 	/// The reason why the safe-mode was disabled.
 	#[derive(Copy, Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 	pub enum DisableReason {
-		/// The safe-mode was automatically disabled after `EnableDuration` had passed.
+		/// The safe-mode was automatically disabled after its duration ran out.
 		Timeout,
 
-		/// The safe-mode was forcefully disabled by the [`Config::DisableOrigin`] origin.
+		/// The safe-mode was forcefully disabled by [`Pallet::force_disable`].
 		Force,
 	}
 
@@ -184,11 +203,11 @@ pub mod pallet {
 			Self::do_enable(Some(who), T::EnableDuration::get())
 		}
 
-		/// Enable the safe-mode by force for [`Config::EnableDuration`] blocks.
+		/// Enable the safe-mode by force for a per-origin configured number of blocks.
 		///
-		/// Can only be called by the [`Config::EnableOrigin`] origin.
 		/// Errors if the safe-mode is already enabled.
 		/// Emits an [`Event::Enabled`] event on success.
+		/// Can only be called by the [`Config::EnableOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn force_enable(origin: OriginFor<T>) -> DispatchResult {
 			let duration = T::EnableOrigin::ensure_origin(origin)?;
@@ -208,7 +227,7 @@ pub mod pallet {
 			Self::do_extend(Some(who), T::ExtendDuration::get())
 		}
 
-		/// Extend the safe-mode by force for [`Config::ExtendDuration`] blocks.
+		/// Extend the safe-mode by force a per-origin configured number of blocks.
 		///
 		/// Errors if the safe-mode is disabled.
 		/// Can only be called by the [`Config::ExtendOrigin`] origin.
@@ -235,6 +254,7 @@ pub mod pallet {
 		///
 		/// Errors if the safe-mode is already enabled.
 		/// Emits a [`Event::StakeRepaid`] event on success.
+		/// Can only be called by the [`Config::RepayOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn repay_stake(
 			origin: OriginFor<T>,
@@ -250,6 +270,7 @@ pub mod pallet {
 		///
 		/// Errors if the safe-mode is already enabled.
 		/// Emits a [`Event::StakeSlashed`] event on success.
+		/// Can only be called by the [`Config::RepayOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn slash_stake(
 			origin: OriginFor<T>,
@@ -356,7 +377,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Return whether this call is allowed to be dispatched.
-	pub fn can_dispatch(call: &T::Call) -> bool
+	pub fn is_allowed(call: &T::Call) -> bool
 	where
 		T::Call: GetCallMetadata,
 	{
@@ -380,6 +401,6 @@ where
 {
 	/// Return whether this call is allowed to be dispatched.
 	fn contains(call: &T::Call) -> bool {
-		Pallet::<T>::can_dispatch(call)
+		Pallet::<T>::is_allowed(call)
 	}
 }

@@ -235,7 +235,7 @@ runtime-benchmarks = [
 	"pallet-remark/runtime-benchmarks",
 	"pallet-tx-pause/runtime-benchmarks",
 	"pallet-safe-mode/runtime-benchmarks",
-	"pallet-session-benchmarking",
+	"pallet-session-benchmarking/runtime-benchmarks",
 	"pallet-society/runtime-benchmarks",
 	"pallet-staking/runtime-benchmarks",
 	"pallet-state-trie-migration/runtime-benchmarks",
@@ -247,7 +247,7 @@ runtime-benchmarks = [
 	"pallet-uniques/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",
 	"pallet-whitelist/runtime-benchmarks",
-	"frame-system-benchmarking",
+	"frame-system-benchmarking/runtime-benchmarks",
 	"hex-literal",
 ]
 try-runtime = [
