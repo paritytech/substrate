@@ -50,7 +50,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -58,7 +58,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -75,7 +75,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -92,7 +92,7 @@ ord_parameter_types! {
 }
 
 impl pallet_gilt::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type AdminOrigin = frame_system::EnsureSignedBy<One, Self::AccountId>;

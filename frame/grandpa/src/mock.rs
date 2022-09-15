@@ -82,13 +82,13 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -103,10 +103,10 @@ impl frame_system::Config for Test {
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
 where
-	Call: From<C>,
+	RuntimeCall: From<C>,
 {
-	type OverarchingCall = Call;
-	type Extrinsic = TestXt<Call, ()>;
+	type OverarchingCall = RuntimeCall;
+	type Extrinsic = TestXt<RuntimeCall, ()>;
 }
 
 parameter_types! {
@@ -116,7 +116,7 @@ parameter_types! {
 
 /// Custom `SessionHandler` since we use `TestSessionKeys` as `Keys`.
 impl pallet_session::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ValidatorId = u64;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
@@ -145,7 +145,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u128;
 	type DustRemoval = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -188,7 +188,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type Slash = ();
@@ -213,7 +213,7 @@ impl pallet_staking::Config for Test {
 }
 
 impl pallet_offences::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 }
@@ -224,8 +224,7 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
 
 	type KeyOwnerProofSystem = Historical;
 

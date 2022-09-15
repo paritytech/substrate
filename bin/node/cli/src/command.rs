@@ -119,6 +119,12 @@ pub fn run() -> Result<()> {
 						let partial = new_partial(&config)?;
 						cmd.run(partial.client)
 					},
+					#[cfg(not(feature = "runtime-benchmarks"))]
+					BenchmarkCmd::Storage(_) => Err(
+						"Storage benchmarking can be enabled with `--features runtime-benchmarks`."
+							.into(),
+					),
+					#[cfg(feature = "runtime-benchmarks")]
 					BenchmarkCmd::Storage(cmd) => {
 						// ensure that we keep the task manager alive
 						let partial = new_partial(&config)?;

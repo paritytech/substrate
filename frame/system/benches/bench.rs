@@ -37,7 +37,7 @@ mod module {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::event]
@@ -79,13 +79,13 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -99,7 +99,7 @@ impl frame_system::Config for Runtime {
 }
 
 impl module::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {

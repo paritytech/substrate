@@ -19,10 +19,6 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-// to allow benchmarking
-#![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")]
-extern crate test;
 
 #[doc(hidden)]
 pub use codec;
@@ -36,6 +32,8 @@ pub use sp_std;
 
 #[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
+pub use sp_arithmetic::traits::Saturating;
 
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
@@ -825,7 +823,24 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			($x >= $crate::Saturating::saturating_sub($y, $error)) &&
+				($x <= $crate::Saturating::saturating_add($y, $error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
+
+/// Same as [`assert_eq_error_rate`], but intended to be used with floating point number, or
+/// generally those who do not have over/underflow potentials.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_error_rate_float {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
+		assert!(
+			($x >= $y - $error) && ($x <= $y + $error),
 			"{:?} != {:?} (with error rate {:?})",
 			$x,
 			$y,
