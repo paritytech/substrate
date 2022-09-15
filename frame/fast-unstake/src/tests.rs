@@ -389,8 +389,8 @@ mod on_idle {
 			next_block(true);
 
 			// confirm Head / Queue items remaining
-			assert_eq!(Head::<T>::get(), None);
 			assert_eq!(Queue::<T>::count(), 1);
+			assert_eq!(Head::<T>::get(), None);
 
 			// process on idle and check eras for next Queue item
 			next_block(true);

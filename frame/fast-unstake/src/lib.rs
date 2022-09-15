@@ -190,7 +190,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_idle(_: T::BlockNumber, remaining_weight: Weight) -> Weight {
-			Self::process_head(remaining_weight)
+			if remaining_weight.any_lt(T::DbWeight::get().reads(2)) {
+				return Weight::from_ref_time(0)
+			}
+
+			Self::do_on_idle(remaining_weight)
 		}
 	}
 
@@ -269,9 +273,9 @@ pub mod pallet {
 		///
 		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
 		#[pallet::weight(<T as Config>::WeightInfo::control())]
-		pub fn control(origin: OriginFor<T>, eras_to_check: EraIndex) -> DispatchResult {
+		pub fn control(origin: OriginFor<T>, unchecked_eras_to_check: EraIndex) -> DispatchResult {
 			let _ = T::ControlOrigin::ensure_origin(origin)?;
-			ErasToCheckPerBlock::<T>::put(eras_to_check);
+			ErasToCheckPerBlock::<T>::put(unchecked_eras_to_check);
 			Ok(())
 		}
 	}
@@ -285,10 +289,9 @@ pub mod pallet {
 		///
 		/// 1. We assume this is only ever called once per `on_idle`. This is because we know that
 		/// in all use cases, even a single nominator cannot be unbonded in a single call. Multiple
-		/// calls to this function are thus not needed. 2. We will only mark a staker
-		#[cfg_attr(feature = "runtime-benchmarks", allow(unused_variables))]
-		pub(crate) fn process_head(remaining_weight: Weight) -> Weight {
-			let eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
+		/// calls to this function are thus not needed. 2. We will only mark a staker.
+		pub(crate) fn do_on_idle(remaining_weight: Weight) -> Weight {
+			let mut eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
 				return T::DbWeight::get().reads(1)
 			}
@@ -299,23 +302,17 @@ pub mod pallet {
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
-			let final_eras_to_check = {
-				let worse_weight = |v, u| {
-					<T as Config>::WeightInfo::on_idle_check(v * u)
-						.max(<T as Config>::WeightInfo::on_idle_unstake())
-				};
-				let mut try_eras_to_check = eras_to_check_per_block;
-				while worse_weight(validator_count, try_eras_to_check).any_gt(remaining_weight) {
-					try_eras_to_check.saturating_dec();
-					if try_eras_to_check.is_zero() {
-						log!(debug, "early existing because try_eras_to_check is zero");
-						return T::DbWeight::get().reads(1)
-					}
-				}
-
-				drop(eras_to_check_per_block);
-				try_eras_to_check
+			let worse_weight = |v, u| {
+				<T as Config>::WeightInfo::on_idle_check(v * u)
+					.max(<T as Config>::WeightInfo::on_idle_unstake())
 			};
+			while worse_weight(validator_count, eras_to_check_per_block).any_gt(remaining_weight) {
+				eras_to_check_per_block.saturating_dec();
+				if eras_to_check_per_block.is_zero() {
+					log!(debug, "early existing because eras_to_check_per_block is zero");
+					return T::DbWeight::get().reads(2)
+				}
+			}
 
 			if <T as pallet_staking::Config>::ElectionProvider::ongoing() {
 				// NOTE: we assume `ongoing` does not consume any weight.
@@ -327,8 +324,8 @@ pub mod pallet {
 
 			let UnstakeRequest { stash, mut checked, maybe_pool_id } = match Head::<T>::take()
 				.or_else(|| {
+					// NOTE: there is no order guarantees in `Queue`.
 					Queue::<T>::drain()
-						.take(1)
 						.map(|(stash, maybe_pool_id)| UnstakeRequest {
 							stash,
 							maybe_pool_id,
@@ -345,17 +342,19 @@ pub mod pallet {
 
 			log!(
 				debug,
-				"checking {:?}, final_eras_to_check = {:?}, remaining_weight = {:?}",
+				"checking {:?}, eras_to_check_per_block = {:?}, remaining_weight = {:?}",
 				stash,
-				final_eras_to_check,
+				eras_to_check_per_block,
 				remaining_weight
 			);
 
 			// the range that we're allowed to check in this round.
 			let current_era = pallet_staking::CurrentEra::<T>::get().unwrap_or_default();
-			let eras_to_check = {
-				let bonding_duration = <T as pallet_staking::Config>::BondingDuration::get();
-
+			let bonding_duration = <T as pallet_staking::Config>::BondingDuration::get();
+			// prune all the old eras that we don't care about. This will help us keep the bound
+			// of `checked`.
+			checked.retain(|e| *e >= current_era.saturating_sub(bonding_duration));
+			let unchecked_eras_to_check = {
 				// get the last available `bonding_duration` eras up to current era in reverse
 				// order.
 				let total_check_range = (current_era.saturating_sub(bonding_duration)..=
@@ -368,22 +367,23 @@ pub mod pallet {
 					total_check_range
 				);
 
-				// prune all the old eras that we don't care about. This will help us keep the bound
-				// of `checked`.
-				checked.retain(|e| *e >= current_era.saturating_sub(bonding_duration));
-
 				// remove eras that have already been checked, take a maximum of
-				// final_eras_to_check.
+				// eras_to_check_per_block.
 				total_check_range
 					.into_iter()
 					.filter(|e| !checked.contains(e))
-					.take(final_eras_to_check as usize)
+					.take(eras_to_check_per_block as usize)
 					.collect::<Vec<_>>()
 			};
 
-			log!(debug, "{} eras to check: {:?}", eras_to_check.len(), eras_to_check);
+			log!(
+				debug,
+				"{} eras to check: {:?}",
+				unchecked_eras_to_check.len(),
+				unchecked_eras_to_check
+			);
 
-			if eras_to_check.is_empty() {
+			if unchecked_eras_to_check.is_empty() {
 				// `stash` is not exposed in any era now -- we can let go of them now.
 				let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
 
@@ -427,13 +427,13 @@ pub mod pallet {
 					maybe_pool_id,
 					result
 				);
-				Self::deposit_event(Event::<T>::Unstaked { stash, maybe_pool_id, result });
 
+				Self::deposit_event(Event::<T>::Unstaked { stash, maybe_pool_id, result });
 				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
 				// eras remaining to be checked.
 				let mut eras_checked = 0u32;
-				let is_exposed = eras_to_check.iter().any(|e| {
+				let is_exposed = unchecked_eras_to_check.iter().any(|e| {
 					eras_checked.saturating_inc();
 					Self::is_exposed_in_era(&stash, e)
 				});
@@ -444,7 +444,7 @@ pub mod pallet {
 					eras_checked,
 					is_exposed,
 					validator_count,
-					eras_to_check.len()
+					unchecked_eras_to_check.len()
 				);
 
 				// NOTE: you can be extremely unlucky and get slashed here: You are not exposed in
@@ -464,21 +464,24 @@ pub mod pallet {
 					Self::deposit_event(Event::<T>::Slashed { stash, amount });
 				} else {
 					// Not exposed in these eras.
-					match checked.try_extend(eras_to_check.clone().into_iter()) {
+					match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
 						Ok(_) => {
 							Head::<T>::put(UnstakeRequest {
 								stash: stash.clone(),
 								checked,
 								maybe_pool_id,
 							});
-							Self::deposit_event(Event::<T>::Checked { stash, eras: eras_to_check });
+							Self::deposit_event(Event::<T>::Checked {
+								stash,
+								eras: unchecked_eras_to_check,
+							});
 						},
 						Err(_) => {
 							// don't put the head back in -- there is an internal error in the
 							// pallet.
 							frame_support::defensive!("`checked is pruned via retain above`");
-							Self::deposit_event(Event::<T>::InternalError);
 							ErasToCheckPerBlock::<T>::put(0);
+							Self::deposit_event(Event::<T>::InternalError);
 						},
 					}
 				}
@@ -487,10 +490,10 @@ pub mod pallet {
 			}
 		}
 
-		/// Checks whether an account `who` has been exposed in an era.
-		fn is_exposed_in_era(who: &T::AccountId, era: &EraIndex) -> bool {
+		/// Checks whether an account `staker` has been exposed in an era.
+		fn is_exposed_in_era(staker: &T::AccountId, era: &EraIndex) -> bool {
 			pallet_staking::ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
-				validator == *who || exposures.others.iter().any(|i| i.who == *who)
+				validator == *staker || exposures.others.iter().any(|i| i.who == *staker)
 			})
 		}
 	}
