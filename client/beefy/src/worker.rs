@@ -24,11 +24,11 @@ use std::{
 };
 
 use codec::{Codec, Decode, Encode};
-use futures::{FutureExt, StreamExt};
+use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
-use sc_client_api::{Backend, FinalityNotification, HeaderBackend};
+use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
 use sc_network_common::{
 	protocol::event::Event as NetEvent,
 	service::{NetworkEventStream, NetworkRequest},
@@ -744,12 +744,11 @@ where
 
 	/// Wait for BEEFY runtime pallet to be available.
 	/// Should be called only once during worker initialization.
-	async fn wait_for_runtime_pallet(&mut self) {
+	async fn wait_for_runtime_pallet(&mut self, finality: &mut Fuse<FinalityNotifications<B>>) {
 		let mut gossip_engine = &mut self.gossip_engine;
-		let mut finality_stream = self.client.finality_notification_stream().fuse();
 		loop {
 			futures::select! {
-				notif = finality_stream.next() => {
+				notif = finality.next() => {
 					let notif = match notif {
 						Some(notif) => notif,
 						None => break
@@ -783,12 +782,14 @@ where
 	pub(crate) async fn run(mut self) {
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block_header.number());
 		let mut block_import_justif = self.links.from_block_import_justif_stream.subscribe().fuse();
+		// Subscribe to finality notifications before waiting for runtime pallet and reuse stream,
+		// so we process notifications for all finalized blocks after pallet is available.
+		let mut finality_notifications = self.client.finality_notification_stream().fuse();
 
-		self.wait_for_runtime_pallet().await;
+		self.wait_for_runtime_pallet(&mut finality_notifications).await;
 		trace!(target: "beefy", "🥩 BEEFY pallet available, starting voter.");
 
 		let mut network_events = self.network.event_stream("network-gossip").fuse();
-		let mut finality_notifications = self.client.finality_notification_stream().fuse();
 		let mut votes = Box::pin(
 			self.gossip_engine
 				.messages_for(topic::<B>())
