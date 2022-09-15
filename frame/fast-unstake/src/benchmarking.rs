@@ -22,7 +22,7 @@
 use crate::{types::*, Pallet as FastUnstake, *};
 use frame_benchmarking::{benchmarks, whitelist_account};
 use frame_support::{
-	assert_ok,
+	assert_ok, bounded_vec,
 	traits::{Currency, EnsureOrigin, Get, Hooks},
 };
 use frame_system::RawOrigin;
@@ -143,7 +143,7 @@ benchmarks! {
 		on_idle_full_block::<T>();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked: vec![0], maybe_pool_id: Some(pool_id) })
+			Some(UnstakeRequest { stash: who.clone(), checked: bounded_vec![0], maybe_pool_id: Some(pool_id) })
 		);
 	}
 	: {
@@ -182,7 +182,7 @@ benchmarks! {
 		on_idle_full_block::<T>();
 	}
 	verify {
-		let checked = (1..=u).rev().collect::<Vec<EraIndex>>();
+		let checked: frame_support::BoundedVec<_, _> = (1..=u).rev().collect::<Vec<EraIndex>>().try_into().unwrap();
 		assert_eq!(
 			Head::<T>::get(),
 			Some(UnstakeRequest { stash: who.clone(), checked, maybe_pool_id: None })

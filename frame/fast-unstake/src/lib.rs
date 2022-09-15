@@ -95,6 +95,16 @@ pub mod pallet {
 	use sp_std::{prelude::*, vec::Vec};
 	use weights::WeightInfo;
 
+	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
+	#[codec(mel_bound(T: Config))]
+	#[scale_info(skip_type_params(T))]
+	pub struct MaxChecked<T: Config>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> frame_support::traits::Get<u32> for MaxChecked<T> {
+		fn get() -> u32 {
+			<T as pallet_staking::Config>::BondingDuration::get() + 1
+		}
+	}
+
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
@@ -124,8 +134,8 @@ pub mod pallet {
 
 	/// The current "head of the queue" being unstaked.
 	#[pallet::storage]
-	#[pallet::unbounded]
-	pub type Head<T: Config> = StorageValue<_, UnstakeRequest<T::AccountId>, OptionQuery>;
+	pub type Head<T: Config> =
+		StorageValue<_, UnstakeRequest<T::AccountId, MaxChecked<T>>, OptionQuery>;
 
 	/// The map of all accounts wishing to be unstaked.
 	///
@@ -156,6 +166,8 @@ pub mod pallet {
 		/// Some internal error happened while migrating stash. They are removed as head as a
 		/// consequence.
 		Errored { stash: T::AccountId },
+		/// An internal error happened. Operations will be paused now.
+		InternalError,
 	}
 
 	#[pallet::error]
@@ -356,6 +368,10 @@ pub mod pallet {
 					total_check_range
 				);
 
+				// prune all the old eras that we don't care about. This will help us keep the bound
+				// of `checked`.
+				checked.retain(|e| *e >= current_era.saturating_sub(bonding_duration));
+
 				// remove eras that have already been checked, take a maximum of
 				// final_eras_to_check.
 				total_check_range
@@ -447,10 +463,24 @@ pub mod pallet {
 					log!(info, "slashed {:?} by {:?}", stash, amount);
 					Self::deposit_event(Event::<T>::Slashed { stash, amount });
 				} else {
-					// Not exposed in these two eras.
-					checked.extend(eras_to_check.clone());
-					Head::<T>::put(UnstakeRequest { stash: stash.clone(), checked, maybe_pool_id });
-					Self::deposit_event(Event::<T>::Checked { stash, eras: eras_to_check });
+					// Not exposed in these eras.
+					match checked.try_extend(eras_to_check.clone().into_iter()) {
+						Ok(_) => {
+							Head::<T>::put(UnstakeRequest {
+								stash: stash.clone(),
+								checked,
+								maybe_pool_id,
+							});
+							Self::deposit_event(Event::<T>::Checked { stash, eras: eras_to_check });
+						},
+						Err(_) => {
+							// don't put the head back in -- there is an internal error in the
+							// pallet.
+							frame_support::defensive!("`checked is pruned via retain above`");
+							Self::deposit_event(Event::<T>::InternalError);
+							ErasToCheckPerBlock::<T>::put(0);
+						},
+					}
 				}
 
 				<T as Config>::WeightInfo::on_idle_check(validator_count * eras_checked)

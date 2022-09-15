@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::{mock::*, types::*, weights::WeightInfo, Event};
-use frame_support::{assert_noop, assert_ok, pallet_prelude::*, traits::Currency};
+use frame_support::{assert_noop, assert_ok, bounded_vec, pallet_prelude::*, traits::Currency};
 use pallet_nomination_pools::{BondedPools, LastPoolId, RewardPools};
 use pallet_staking::{CurrentEra, IndividualExposure, RewardDestination};
 
@@ -80,7 +80,11 @@ fn cannot_register_if_in_queue() {
 fn cannot_register_if_head() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Insert some Head item for stash
-		Head::<T>::put(UnstakeRequest { stash: 1.clone(), checked: vec![], maybe_pool_id: None });
+		Head::<T>::put(UnstakeRequest {
+			stash: 1.clone(),
+			checked: bounded_vec![],
+			maybe_pool_id: None,
+		});
 		// Controller attempts to regsiter
 		assert_noop!(
 			FastUnstake::register_fast_unstake(Origin::signed(2), Some(1_u32)),
@@ -138,7 +142,11 @@ fn cannot_deregister_already_head() {
 		// Controller attempts to register, should fail
 		assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(2), Some(1_u32)));
 		// Insert some Head item for stash.
-		Head::<T>::put(UnstakeRequest { stash: 1.clone(), checked: vec![], maybe_pool_id: None });
+		Head::<T>::put(UnstakeRequest {
+			stash: 1.clone(),
+			checked: bounded_vec![],
+			maybe_pool_id: None,
+		});
 		// Controller attempts to deregister
 		assert_noop!(FastUnstake::deregister(Origin::signed(2)), Error::<T>::AlreadyHead);
 	});
@@ -210,7 +218,7 @@ mod on_idle {
 			);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: Some(1) })
 			);
 
 			// when: another 1 era.
@@ -222,11 +230,15 @@ mod on_idle {
 			// then:
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checked { stash: 1, eras: vec![2] }]
+				vec![Event::Checked { stash: 1, eras: bounded_vec![2] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2],
+					maybe_pool_id: Some(1)
+				})
 			);
 
 			// when: then 5 eras, we only need 2 more.
@@ -250,7 +262,7 @@ mod on_idle {
 				Head::<T>::get(),
 				Some(UnstakeRequest {
 					stash: 1,
-					checked: vec![3, 2, 1, 0],
+					checked: bounded_vec![3, 2, 1, 0],
 					maybe_pool_id: Some(1)
 				})
 			);
@@ -266,7 +278,7 @@ mod on_idle {
 				Head::<T>::get(),
 				Some(UnstakeRequest {
 					stash: 1,
-					checked: vec![3, 2, 1, 0],
+					checked: bounded_vec![3, 2, 1, 0],
 					maybe_pool_id: Some(1)
 				})
 			);
@@ -314,7 +326,11 @@ mod on_idle {
 			// then
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2, 1, 0], maybe_pool_id: None })
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0],
+					maybe_pool_id: None
+				})
 			);
 			assert_eq!(Queue::<T>::count(), 4);
 
@@ -331,7 +347,11 @@ mod on_idle {
 			// then
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 5, checked: vec![3, 2, 1, 0], maybe_pool_id: None }),
+				Some(UnstakeRequest {
+					stash: 5,
+					checked: bounded_vec![3, 2, 1, 0],
+					maybe_pool_id: None
+				}),
 			);
 			assert_eq!(Queue::<T>::count(), 3);
 
@@ -416,7 +436,11 @@ mod on_idle {
 			// assert head item present
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2, 1, 0], maybe_pool_id: None })
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0],
+					maybe_pool_id: None
+				})
 			);
 
 			next_block(true);
@@ -454,7 +478,7 @@ mod on_idle {
 				Head::<T>::get(),
 				Some(UnstakeRequest {
 					stash: 1,
-					checked: vec![3, 2, 1, 0],
+					checked: bounded_vec![3, 2, 1, 0],
 					maybe_pool_id: Some(0)
 				})
 			);
@@ -502,7 +526,7 @@ mod on_idle {
 				Head::<T>::get(),
 				Some(UnstakeRequest {
 					stash: 1,
-					checked: vec![3, 2, 1, 0],
+					checked: bounded_vec![3, 2, 1, 0],
 					maybe_pool_id: Some(1)
 				})
 			);
@@ -542,21 +566,7 @@ mod on_idle {
 			// assert head item present
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3], maybe_pool_id: Some(1) })
-			);
-
-			next_block(true);
-
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2], maybe_pool_id: Some(1) })
-			);
-
-			next_block(true);
-
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2, 1], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: Some(1) })
 			);
 
 			next_block(true);
@@ -565,7 +575,29 @@ mod on_idle {
 				Head::<T>::get(),
 				Some(UnstakeRequest {
 					stash: 1,
-					checked: vec![3, 2, 1, 0],
+					checked: bounded_vec![3, 2],
+					maybe_pool_id: Some(1)
+				})
+			);
+
+			next_block(true);
+
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2, 1],
+					maybe_pool_id: Some(1)
+				})
+			);
+
+			next_block(true);
+
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0],
 					maybe_pool_id: Some(1)
 				})
 			);
@@ -590,6 +622,86 @@ mod on_idle {
 	}
 
 	#[test]
+	fn old_checked_era_pruned() {
+		// the only scenario where checked era pruning (checked.retain) comes handy is a follows:
+		// the whole vector is full and at capacity and in the next call we are ready to unstake,
+		// but then a new era happens.
+		ExtBuilder::default().build_and_execute(|| {
+			// given
+			ErasToCheckPerBlock::<T>::put(1);
+			CurrentEra::<T>::put(BondingDuration::get());
+
+			// register for fast unstake
+			assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(2), None));
+			assert_eq!(Queue::<T>::get(1), Some(None));
+
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: None })
+			);
+
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2], maybe_pool_id: None })
+			);
+
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2, 1],
+					maybe_pool_id: None
+				})
+			);
+
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0],
+					maybe_pool_id: None
+				})
+			);
+
+			// when: a new era happens right before one is free.
+			CurrentEra::<T>::put(CurrentEra::<T>::get().unwrap() + 1);
+			ExtBuilder::register_stakers_for_era(CurrentEra::<T>::get().unwrap());
+
+			// then
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stash: 1,
+					// note era 0 is pruned to keep the vector length sane.
+					checked: bounded_vec![3, 2, 1, 4],
+					maybe_pool_id: None
+				})
+			);
+
+			next_block(true);
+			assert_eq!(Head::<T>::get(), None);
+
+			assert_eq!(
+				fast_unstake_events_since_last_call(),
+				vec![
+					Event::Checked { stash: 1, eras: vec![3] },
+					Event::Checked { stash: 1, eras: vec![2] },
+					Event::Checked { stash: 1, eras: vec![1] },
+					Event::Checked { stash: 1, eras: vec![0] },
+					Event::Checked { stash: 1, eras: vec![4] },
+					Event::Unstaked { stash: 1, maybe_pool_id: None, result: Ok(()) }
+				]
+			);
+			assert_unstaked(&1);
+		});
+	}
+
+	#[test]
 	fn unstake_paused_mid_election() {
 		ExtBuilder::default().build_and_execute(|| {
 			// give: put 1 era per block
@@ -603,13 +715,17 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: Some(1) })
 			);
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2],
+					maybe_pool_id: Some(1)
+				})
 			);
 
 			// when
@@ -619,13 +735,21 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2],
+					maybe_pool_id: Some(1)
+				})
 			);
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2],
+					maybe_pool_id: Some(1)
+				})
 			);
 
 			// then we register a new era.
@@ -637,7 +761,11 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3, 2, 4], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest {
+					stash: 1,
+					checked: bounded_vec![3, 2, 4],
+					maybe_pool_id: Some(1)
+				})
 			);
 
 			// progress to end
@@ -646,7 +774,7 @@ mod on_idle {
 				Head::<T>::get(),
 				Some(UnstakeRequest {
 					stash: 1,
-					checked: vec![3, 2, 4, 1],
+					checked: bounded_vec![3, 2, 4, 1],
 					maybe_pool_id: Some(1)
 				})
 			);
@@ -699,12 +827,20 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: exposed, checked: vec![3], maybe_pool_id: None })
+				Some(UnstakeRequest {
+					stash: exposed,
+					checked: bounded_vec![3],
+					maybe_pool_id: None
+				})
 			);
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: exposed, checked: vec![3, 2], maybe_pool_id: None })
+				Some(UnstakeRequest {
+					stash: exposed,
+					checked: bounded_vec![3, 2],
+					maybe_pool_id: None
+				})
 			);
 			next_block(true);
 			assert_eq!(Head::<T>::get(), None);
@@ -751,7 +887,11 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: exposed, checked: vec![3, 2], maybe_pool_id: None })
+				Some(UnstakeRequest {
+					stash: exposed,
+					checked: bounded_vec![3, 2],
+					maybe_pool_id: None
+				})
 			);
 			next_block(true);
 			assert_eq!(Head::<T>::get(), None);
@@ -812,7 +952,11 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 42, checked: vec![3, 2, 1, 0], maybe_pool_id: None })
+				Some(UnstakeRequest {
+					stash: 42,
+					checked: bounded_vec![3, 2, 1, 0],
+					maybe_pool_id: None
+				})
 			);
 			next_block(true);
 			assert_eq!(Head::<T>::get(), None);
@@ -877,7 +1021,7 @@ mod signed_extension {
 
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: vec![3], maybe_pool_id: None })
+				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: None })
 			);
 
 			// then

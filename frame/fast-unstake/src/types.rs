@@ -18,16 +18,16 @@
 //! Types used in the Fast Unstake pallet.
 
 use crate::*;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::{Currency, IsSubType},
-	RuntimeDebugNoBound,
+	traits::{Currency, Get, IsSubType},
+	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use pallet_nomination_pools::PoolId;
 use scale_info::TypeInfo;
 use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
 use sp_staking::EraIndex;
-use sp_std::{prelude::*, vec::Vec};
+use sp_std::{fmt::Debug, prelude::*};
 
 pub type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
@@ -35,13 +35,13 @@ pub type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
 
 /// An unstake request.
 #[derive(
-	Encode, Decode, Eq, PartialEq, Clone, scale_info::TypeInfo, frame_support::RuntimeDebug,
+	Encode, Decode, EqNoBound, PartialEqNoBound, Clone, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen,
 )]
-pub struct UnstakeRequest<AccountId> {
+pub struct UnstakeRequest<AccountId: Eq + PartialEq + Debug, MaxChecked: Get<u32>> {
 	/// Their stash account.
 	pub(crate) stash: AccountId,
 	/// The list of eras for which they have been checked.
-	pub(crate) checked: Vec<EraIndex>,
+	pub(crate) checked: BoundedVec<EraIndex, MaxChecked>,
 	/// The pool they wish to join, if any.
 	pub(crate) maybe_pool_id: Option<PoolId>,
 }
