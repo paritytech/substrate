@@ -1482,7 +1482,7 @@ impl pallet_uniques::Config for Runtime {
 }
 
 impl pallet_nfts::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
 	type ItemId = u32;
 	type Currency = Balances;
