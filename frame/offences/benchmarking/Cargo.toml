@@ -23,13 +23,9 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../b
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../balances" }
 pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../grandpa" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../im-online" }
-pallet-offences = { version = "4.0.0-dev", default-features = false, features = [
-	"runtime-benchmarks",
-], path = "../../offences" }
+pallet-offences = { version = "4.0.0-dev", default-features = false, path = "../../offences" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../session" }
-pallet-staking = { version = "4.0.0-dev", default-features = false, features = [
-	"runtime-benchmarks",
-], path = "../../staking" }
+pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
@@ -59,4 +55,8 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"sp-std/std",
+]
+
+runtime-benchmarks = [
+	"pallet-staking/runtime-benchmarks",
 ]

@@ -36,6 +36,8 @@ sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true,
 default = ["std"]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "hex-literal"]
 std = [
+	"log/std",
+	"frame-benchmarking?/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",

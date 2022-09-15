@@ -69,7 +69,7 @@ std = [
 	"sp-io/std",
 	"sp-std/std",
 	"sp-sandbox/std",
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
 	"wasm-instrument/std",
