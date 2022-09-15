@@ -31,7 +31,7 @@ fn generates_event() {
 		assert_ok!(Remark::<Test>::store(RawOrigin::Signed(caller).into(), data.clone(),));
 		let events = System::events();
 		// this one we create as we expect it
-		let system_event: <Test as frame_system::Config>::Event = Event::Stored {
+		let system_event: <Test as frame_system::Config>::RuntimeEvent = Event::Stored {
 			content_hash: sp_io::hashing::blake2_256(&data).into(),
 			sender: caller,
 		}

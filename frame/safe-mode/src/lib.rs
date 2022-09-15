@@ -48,12 +48,12 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Contains all calls that can be dispatched even when the safe-mode is enabled.
 		///
 		/// The `SafeMode` pallet is always included and does not need to be added here.
-		type SafeModeFilter: Contains<Self::Call>;
+		type SafeModeFilter: Contains<Self::RuntimeCall>;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -207,10 +207,10 @@ pub mod pallet {
 		///
 		/// Errors if the safe-mode is already enabled.
 		/// Emits an [`Event::Enabled`] event on success.
-		/// Can only be called by the [`Config::EnableOrigin`] origin.
+		/// Can only be called by the [`Config::ForceEnableOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn force_enable(origin: OriginFor<T>) -> DispatchResult {
-			let duration = T::EnableOrigin::ensure_origin(origin)?;
+			let duration = T::ForceEnableOrigin::ensure_origin(origin)?;
 
 			Self::do_enable(None, duration)
 		}
@@ -230,10 +230,10 @@ pub mod pallet {
 		/// Extend the safe-mode by force a per-origin configured number of blocks.
 		///
 		/// Errors if the safe-mode is disabled.
-		/// Can only be called by the [`Config::ExtendOrigin`] origin.
+		/// Can only be called by the [`Config::ForceExtendOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn force_extend(origin: OriginFor<T>) -> DispatchResult {
-			let duration = T::ExtendOrigin::ensure_origin(origin)?;
+			let duration = T::ForceExtendOrigin::ensure_origin(origin)?;
 
 			Self::do_extend(None, duration)
 		}
@@ -242,10 +242,10 @@ pub mod pallet {
 		///
 		/// Will be automatically called after the safe-mode period ran out.
 		/// Errors if the safe-mode is disabled.
-		/// Can only be called by the [`Config::DisableOrigin`] origin.
+		/// Can only be called by the [`Config::ForceDisableOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn force_disable(origin: OriginFor<T>) -> DispatchResult {
-			T::DisableOrigin::ensure_origin(origin.clone())?;
+			T::ForceDisableOrigin::ensure_origin(origin.clone())?;
 
 			Self::do_disable(DisableReason::Force)
 		}
@@ -377,9 +377,9 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Return whether this call is allowed to be dispatched.
-	pub fn is_allowed(call: &T::Call) -> bool
+	pub fn is_allowed(call: &T::RuntimeCall) -> bool
 	where
-		T::Call: GetCallMetadata,
+		T::RuntimeCall: GetCallMetadata,
 	{
 		let CallMetadata { pallet_name, .. } = call.get_call_metadata();
 		// The `SafeMode` pallet can always be dispatched.
@@ -395,12 +395,12 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: pallet::Config> Contains<T::Call> for Pallet<T>
+impl<T: pallet::Config> Contains<T::RuntimeCall> for Pallet<T>
 where
-	T::Call: GetCallMetadata,
+	T::RuntimeCall: GetCallMetadata,
 {
 	/// Return whether this call is allowed to be dispatched.
-	fn contains(call: &T::Call) -> bool {
+	fn contains(call: &T::RuntimeCall) -> bool {
 		Pallet::<T>::is_allowed(call)
 	}
 }

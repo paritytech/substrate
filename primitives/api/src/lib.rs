@@ -83,8 +83,6 @@ use sp_core::OpaqueMetadata;
 pub use sp_core::{offchain, ExecutionContext};
 #[doc(hidden)]
 #[cfg(feature = "std")]
-pub use sp_core::{NativeOrEncoded, NeverNativeValue};
-#[cfg(feature = "std")]
 pub use sp_runtime::StateVersion;
 #[doc(hidden)]
 pub use sp_runtime::{
@@ -102,14 +100,12 @@ pub use sp_state_machine::{
 	backend::AsTrieBackend, Backend as StateBackend, InMemoryBackend, OverlayedChanges,
 	StorageProof, TrieBackend, TrieBackendBuilder,
 };
-#[cfg(feature = "std")]
-use sp_std::result;
 #[doc(hidden)]
 pub use sp_std::{mem, slice};
 #[doc(hidden)]
 pub use sp_version::{create_apis_vec, ApiId, ApisVec, RuntimeVersion};
 #[cfg(feature = "std")]
-use std::{cell::RefCell, panic::UnwindSafe};
+use std::cell::RefCell;
 
 /// Maximum nesting level for extrinsics.
 pub const MAX_EXTRINSIC_DEPTH: u32 = 256;
@@ -590,16 +586,11 @@ pub trait ApiExt<Block: BlockT> {
 
 /// Parameters for [`CallApiAt::call_api_at`].
 #[cfg(feature = "std")]
-pub struct CallApiAtParams<'a, Block: BlockT, NC, Backend: StateBackend<HashFor<Block>>> {
+pub struct CallApiAtParams<'a, Block: BlockT, Backend: StateBackend<HashFor<Block>>> {
 	/// The block id that determines the state that should be setup when calling the function.
 	pub at: &'a BlockId<Block>,
 	/// The name of the function that should be called.
 	pub function: &'static str,
-	/// An optional native call that calls the `function`. This is an optimization to call into a
-	/// native runtime without requiring to encode/decode the parameters. The native runtime can
-	/// still be called when this value is `None`, we then just fallback to encoding/decoding the
-	/// parameters.
-	pub native_call: Option<NC>,
 	/// The encoded arguments of the function.
 	pub arguments: Vec<u8>,
 	/// The overlayed changes that are on top of the state.
@@ -620,13 +611,10 @@ pub trait CallApiAt<Block: BlockT> {
 
 	/// Calls the given api function with the given encoded arguments at the given block and returns
 	/// the encoded result.
-	fn call_api_at<
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, ApiError> + UnwindSafe,
-	>(
+	fn call_api_at(
 		&self,
-		params: CallApiAtParams<Block, NC, Self::StateBackend>,
-	) -> Result<NativeOrEncoded<R>, ApiError>;
+		params: CallApiAtParams<Block, Self::StateBackend>,
+	) -> Result<Vec<u8>, ApiError>;
 
 	/// Returns the runtime version at the given block.
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, ApiError>;

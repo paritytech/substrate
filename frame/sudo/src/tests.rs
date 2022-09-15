@@ -20,8 +20,8 @@
 use super::*;
 use frame_support::{assert_noop, assert_ok, weights::Weight};
 use mock::{
-	new_test_ext, Call, Event as TestEvent, Logger, LoggerCall, Origin, Sudo, SudoCall, System,
-	Test,
+	new_test_ext, Logger, LoggerCall, Origin, RuntimeCall, RuntimeEvent as TestEvent, Sudo,
+	SudoCall, System, Test,
 };
 
 #[test]
@@ -39,7 +39,7 @@ fn sudo_basics() {
 	// Configure a default test environment and set the root `key` to 1.
 	new_test_ext(1).execute_with(|| {
 		// A privileged function should work when `sudo` is passed the root `key` as `origin`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
 			weight: Weight::from_ref_time(1_000),
 		}));
@@ -47,7 +47,7 @@ fn sudo_basics() {
 		assert_eq!(Logger::i32_log(), vec![42i32]);
 
 		// A privileged function should not work when `sudo` is passed a non-root `key` as `origin`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
 			weight: Weight::from_ref_time(1_000),
 		}));
@@ -62,7 +62,7 @@ fn sudo_emits_events_correctly() {
 		System::set_block_number(1);
 
 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
 			weight: Weight::from_ref_time(1),
 		}));
@@ -75,7 +75,7 @@ fn sudo_emits_events_correctly() {
 fn sudo_unchecked_weight_basics() {
 	new_test_ext(1).execute_with(|| {
 		// A privileged function should work when `sudo` is passed the root `key` as origin.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
 			weight: Weight::from_ref_time(1_000),
 		}));
@@ -87,7 +87,7 @@ fn sudo_unchecked_weight_basics() {
 		assert_eq!(Logger::i32_log(), vec![42i32]);
 
 		// A privileged function should not work when called with a non-root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
 			weight: Weight::from_ref_time(1_000),
 		}));
@@ -99,7 +99,7 @@ fn sudo_unchecked_weight_basics() {
 		assert_eq!(Logger::i32_log(), vec![42i32]);
 
 		// Controls the dispatched weight.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
 			weight: Weight::from_ref_time(1),
 		}));
@@ -117,7 +117,7 @@ fn sudo_unchecked_weight_emits_events_correctly() {
 		System::set_block_number(1);
 
 		// Should emit event to indicate success when called with the root `key` and `call` is `Ok`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
 			weight: Weight::from_ref_time(1),
 		}));
@@ -164,7 +164,7 @@ fn set_key_emits_events_correctly() {
 fn sudo_as_basics() {
 	new_test_ext(1).execute_with(|| {
 		// A privileged function will not work when passed to `sudo_as`.
-		let call = Box::new(Call::Logger(LoggerCall::privileged_i32_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::privileged_i32_log {
 			i: 42,
 			weight: Weight::from_ref_time(1_000),
 		}));
@@ -173,14 +173,14 @@ fn sudo_as_basics() {
 		assert!(Logger::account_log().is_empty());
 
 		// A non-privileged function should not work when called with a non-root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::non_privileged_log {
 			i: 42,
 			weight: Weight::from_ref_time(1),
 		}));
 		assert_noop!(Sudo::sudo_as(Origin::signed(3), 2, call), Error::<Test>::RequireSudo);
 
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::non_privileged_log {
 			i: 42,
 			weight: Weight::from_ref_time(1),
 		}));
@@ -198,7 +198,7 @@ fn sudo_as_emits_events_correctly() {
 		System::set_block_number(1);
 
 		// A non-privileged function will work when passed to `sudo_as` with the root `key`.
-		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::non_privileged_log {
 			i: 42,
 			weight: Weight::from_ref_time(1),
 		}));
