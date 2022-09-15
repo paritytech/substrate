@@ -1,20 +1,24 @@
-# Substrate &middot; [![GitHub license](https://img.shields.io/badge/license-GPL3%2FApache2-blue)](#LICENSE) [![GitLab Status](https://gitlab.parity.io/parity/substrate/badges/master/pipeline.svg)](https://gitlab.parity.io/parity/substrate/pipelines) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](docs/CONTRIBUTING.adoc) [![Matrix](https://img.shields.io/matrix/substrate-technical:matrix.org)](https://matrix.to/#/#substrate-technical:matrix.org)
-
+# Substrate &middot; [![GitHub license](https://img.shields.io/badge/license-GPL3%2FApache2-blue)](#LICENSE) [![GitLab Status](https://gitlab.parity.io/parity/substrate/badges/master/pipeline.svg)](https://gitlab.parity.io/parity/substrate/pipelines) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](docs/CONTRIBUTING.adoc) [![Stack Exchange](https://img.shields.io/badge/Substrate-Community%20&%20Support-24CC85?logo=stackexchange)](https://substrate.stackexchange.com/)
 <p align="center">
   <img src="/docs/media/sub.gif">
 </p>
 
 Substrate is a next-generation framework for blockchain innovation 🚀.
 
-## Trying it out
+## Getting Started
 
-Simply go to [docs.substrate.io](https://docs.substrate.io) and follow the
-[installation](https://docs.substrate.io/main-docs/install/) instructions. You can
-also try out one of the [tutorials](https://docs.substrate.io/tutorials/).
+Head to [docs.substrate.io](https://docs.substrate.io) and follow the [installation](https://docs.substrate.io/install/) instructions.
+Then try out one of the [tutorials](https://docs.substrate.io/tutorials/).
+
+## Community & Support
+
+Join the highly active and supportive community on the [Susbstrate Stack Exchange](https://substrate.stackexchange.com/) to ask questions about use and problems you run into using this software.
+Please do report bugs and [isssues here](https://github.com/paritytech/substrate/issues) for anything you suspect requires action in the source. 
 
 ## Contributions & Code of Conduct
 
-Please follow the contributions guidelines as outlined in [`docs/CONTRIBUTING.adoc`](docs/CONTRIBUTING.adoc). In all communications and contributions, this project follows the [Contributor Covenant Code of Conduct](docs/CODE_OF_CONDUCT.md).
+Please follow the contributions guidelines as outlined in [`docs/CONTRIBUTING.adoc`](docs/CONTRIBUTING.adoc).
+In all communications and contributions, this project follows the [Contributor Covenant Code of Conduct](docs/CODE_OF_CONDUCT.md).
 
 ## Security
 

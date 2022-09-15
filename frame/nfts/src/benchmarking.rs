@@ -363,9 +363,10 @@ benchmarks_instance_pallet! {
 		let (item, ..) = mint_item::<T, I>(0);
 		let delegate: T::AccountId = account("delegate", 0, SEED);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item, delegate_lookup)
+		let deadline = T::BlockNumber::max_value();
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, delegate_lookup, Some(deadline))
 	verify {
-		assert_last_event::<T, I>(Event::ApprovedTransfer { collection, item, owner: caller, delegate }.into());
+		assert_last_event::<T, I>(Event::ApprovedTransfer { collection, item, owner: caller, delegate, deadline: Some(deadline) }.into());
 	}
 
 	cancel_approval {
@@ -374,10 +375,24 @@ benchmarks_instance_pallet! {
 		let delegate: T::AccountId = account("delegate", 0, SEED);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 		let origin = SystemOrigin::Signed(caller.clone()).into();
-		Nfts::<T, I>::approve_transfer(origin, collection, item, delegate_lookup.clone())?;
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item, Some(delegate_lookup))
+		let deadline = T::BlockNumber::max_value();
+		Nfts::<T, I>::approve_transfer(origin, collection, item, delegate_lookup.clone(), Some(deadline))?;
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, delegate_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::ApprovalCancelled { collection, item, owner: caller, delegate }.into());
+	}
+
+	clear_all_transfer_approvals {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let delegate: T::AccountId = account("delegate", 0, SEED);
+		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
+		let origin = SystemOrigin::Signed(caller.clone()).into();
+		let deadline = T::BlockNumber::max_value();
+		Nfts::<T, I>::approve_transfer(origin, collection, item, delegate_lookup.clone(), Some(deadline))?;
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item)
+	verify {
+		assert_last_event::<T, I>(Event::AllApprovalsCancelled {collection, item, owner: caller}.into());
 	}
 
 	set_accept_ownership {

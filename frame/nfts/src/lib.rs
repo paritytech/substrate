@@ -46,7 +46,7 @@ use frame_support::{
 	traits::{
 		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 	},
-	transactional,
+	transactional, BoundedBTreeMap,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -59,7 +59,7 @@ pub use pallet::*;
 pub use types::*;
 pub use weights::WeightInfo;
 
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
 pub trait Incrementable {
 	fn increment(&self) -> Self;
@@ -167,6 +167,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ValueLimit: Get<u32>;
 
+		/// The maximum approvals an item could have.
+		#[pallet::constant]
+		type ApprovalsLimit: Get<u32>;
+
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
 		type Helper: BenchmarkHelper<Self::CollectionId, Self::ItemId>;
@@ -174,6 +178,12 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
+
+	pub type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
+		<T as SystemConfig>::AccountId,
+		Option<<T as SystemConfig>::BlockNumber>,
+		<T as Config<I>>::ApprovalsLimit,
+	>;
 
 	#[pallet::storage]
 	#[pallet::storage_prefix = "Class"]
@@ -227,7 +237,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		ItemDetails<T::AccountId, DepositBalanceOf<T, I>>,
+		ItemDetails<T::AccountId, DepositBalanceOf<T, I>, ApprovalsOf<T, I>>,
 		OptionQuery,
 	>;
 
@@ -335,6 +345,7 @@ pub mod pallet {
 			item: T::ItemId,
 			owner: T::AccountId,
 			delegate: T::AccountId,
+			deadline: Option<<T as SystemConfig>::BlockNumber>,
 		},
 		/// An approval for a `delegate` account to transfer the `item` of an item
 		/// `collection` was cancelled by its `owner`.
@@ -344,6 +355,8 @@ pub mod pallet {
 			owner: T::AccountId,
 			delegate: T::AccountId,
 		},
+		/// All approvals of an item got cancelled.
+		AllApprovalsCancelled { collection: T::CollectionId, item: T::ItemId, owner: T::AccountId },
 		/// A `collection` has had its attributes changed by the `Force` origin.
 		ItemStatusChanged { collection: T::CollectionId },
 		/// New metadata has been set for a `collection`.
@@ -411,6 +424,8 @@ pub mod pallet {
 		UnknownCollection,
 		/// The item ID has already been used for an item.
 		AlreadyExists,
+		/// The approval had a deadline that expired, so the approval isn't valid anymore.
+		ApprovalExpired,
 		/// The owner turned out to be different to what was expected.
 		WrongOwner,
 		/// Invalid witness data given.
@@ -419,10 +434,10 @@ pub mod pallet {
 		InUse,
 		/// The item or collection is frozen.
 		Frozen,
+		/// The provided account is not a delegate.
+		NotDelegate,
 		/// The delegate turned out to be different to what was expected.
 		WrongDelegate,
-		/// There is no delegate approved.
-		NoDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
 		/// The named owner has not signed ownership of the collection is acceptable.
@@ -441,6 +456,8 @@ pub mod pallet {
 		NotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
+		/// The item has reached its approval limit.
+		ReachedApprovalLimit,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -653,8 +670,12 @@ pub mod pallet {
 
 			Self::do_transfer(collection, item, dest, |collection_details, details| {
 				if details.owner != origin && collection_details.admin != origin {
-					let approved = details.approved.take().map_or(false, |i| i == origin);
-					ensure!(approved, Error::<T, I>::NoPermission);
+					let deadline =
+						details.approvals.get(&origin).ok_or(Error::<T, I>::NoPermission)?;
+					if let Some(d) = deadline {
+						let block_number = frame_system::Pallet::<T>::block_number();
+						ensure!(block_number <= *d, Error::<T, I>::ApprovalExpired);
+					}
 				}
 				Ok(())
 			})
@@ -935,6 +956,8 @@ pub mod pallet {
 		/// - `collection`: The collection of the item to be approved for delegated transfer.
 		/// - `item`: The item of the item to be approved for delegated transfer.
 		/// - `delegate`: The account to delegate permission to transfer the item.
+		/// - `maybe_deadline`: Optional deadline for the approval. Specified by providing the
+		/// 	number of blocks after which the approval will expire
 		///
 		/// Emits `ApprovedTransfer` on success.
 		///
@@ -945,6 +968,7 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
+			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -962,21 +986,27 @@ pub mod pallet {
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
-			details.approved = Some(delegate);
+			let now = frame_system::Pallet::<T>::block_number();
+			let deadline = maybe_deadline.map(|d| d.saturating_add(now));
+
+			details
+				.approvals
+				.try_insert(delegate.clone(), deadline)
+				.map_err(|_| Error::<T, I>::ReachedApprovalLimit)?;
 			Item::<T, I>::insert(&collection, &item, &details);
 
-			let delegate = details.approved.expect("set as Some above; qed");
 			Self::deposit_event(Event::ApprovedTransfer {
 				collection,
 				item,
 				owner: details.owner,
 				delegate,
+				deadline,
 			});
 
 			Ok(())
 		}
 
-		/// Cancel the prior approval for the transfer of an item by a delegate.
+		/// Cancel one of the transfer approvals for a specific item.
 		///
 		/// Origin must be either:
 		/// - the `Force` origin;
@@ -985,9 +1015,8 @@ pub mod pallet {
 		///
 		/// Arguments:
 		/// - `collection`: The collection of the item of whose approval will be cancelled.
-		/// - `item`: The item of the item of whose approval will be cancelled.
-		/// - `maybe_check_delegate`: If `Some` will ensure that the given account is the one to
-		///   which permission of transfer is delegated.
+		/// - `item`: The item of the collection of whose approval will be cancelled.
+		/// - `delegate`: The account that is going to loose their approval.
 		///
 		/// Emits `ApprovalCancelled` on success.
 		///
@@ -997,7 +1026,67 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			maybe_check_delegate: Option<AccountIdLookupOf<T>>,
+			delegate: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
+
+			let delegate = T::Lookup::lookup(delegate)?;
+
+			let collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+			let mut details =
+				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
+
+			let maybe_deadline =
+				details.approvals.get(&delegate).ok_or(Error::<T, I>::NotDelegate)?;
+
+			let is_past_deadline = if let Some(deadline) = maybe_deadline {
+				let now = frame_system::Pallet::<T>::block_number();
+				now > *deadline
+			} else {
+				false
+			};
+
+			if !is_past_deadline {
+				if let Some(check) = maybe_check {
+					let permitted = check == collection_details.admin || check == details.owner;
+					ensure!(permitted, Error::<T, I>::NoPermission);
+				}
+			}
+
+			details.approvals.remove(&delegate);
+			Item::<T, I>::insert(&collection, &item, &details);
+			Self::deposit_event(Event::ApprovalCancelled {
+				collection,
+				item,
+				owner: details.owner,
+				delegate,
+			});
+
+			Ok(())
+		}
+
+		/// Cancel all the approvals of a specific item.
+		///
+		/// Origin must be either:
+		/// - the `Force` origin;
+		/// - `Signed` with the signer being the Admin of the `collection`;
+		/// - `Signed` with the signer being the Owner of the `item`;
+		///
+		/// Arguments:
+		/// - `collection`: The collection of the item of whose approvals will be cleared.
+		/// - `item`: The item of the collection of whose approvals will be cleared.
+		///
+		/// Emits `AllApprovalsCancelled` on success.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::clear_all_transfer_approvals())]
+		pub fn clear_all_transfer_approvals(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1011,18 +1100,13 @@ pub mod pallet {
 				let permitted = check == collection_details.admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
-			let maybe_check_delegate = maybe_check_delegate.map(T::Lookup::lookup).transpose()?;
-			let old = details.approved.take().ok_or(Error::<T, I>::NoDelegate)?;
-			if let Some(check_delegate) = maybe_check_delegate {
-				ensure!(check_delegate == old, Error::<T, I>::WrongDelegate);
-			}
 
+			details.approvals.clear();
 			Item::<T, I>::insert(&collection, &item, &details);
-			Self::deposit_event(Event::ApprovalCancelled {
+			Self::deposit_event(Event::AllApprovalsCancelled {
 				collection,
 				item,
 				owner: details.owner,
-				delegate: old,
 			});
 
 			Ok(())

@@ -47,9 +47,7 @@ use sc_telemetry::TelemetryHandle;
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_blockchain::{HeaderBackend, Result as CResult};
-use sp_consensus::{
-	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
-};
+use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_slots::Slot;
 use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
@@ -108,7 +106,7 @@ fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&A
 }
 
 /// Parameters of [`start_aura`].
-pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
+pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS> {
 	/// The duration of a slot.
 	pub slot_duration: SlotDuration,
 	/// The client to interact with the chain.
@@ -131,8 +129,6 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 	pub backoff_authoring_blocks: Option<BS>,
 	/// The keystore used by the node.
 	pub keystore: SyncCryptoStorePtr,
-	/// Can we author a block with this node?
-	pub can_author_with: CAW,
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -147,7 +143,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
+pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, Error>(
 	StartAuraParams {
 		slot_duration,
 		client,
@@ -160,11 +156,10 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
-		can_author_with,
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		telemetry,
-	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW>,
+	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error>
 where
 	P: Pair + Send + Sync,
@@ -182,7 +177,6 @@ where
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
-	CAW: CanAuthorWith<B> + Send,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
@@ -205,7 +199,6 @@ where
 		SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
-		can_author_with,
 	))
 }
 
@@ -568,9 +561,7 @@ mod tests {
 	use sc_keystore::LocalKeystore;
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
-	use sp_consensus::{
-		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
-	};
+	use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
 	use sp_keyring::sr25519::Keyring;
@@ -633,7 +624,6 @@ mod tests {
 	type AuraVerifier = import_queue::AuraVerifier<
 		PeersFullClient,
 		AuthorityPair,
-		AlwaysCanAuthor,
 		Box<
 			dyn CreateInherentDataProviders<
 				TestBlock,
@@ -670,7 +660,6 @@ mod tests {
 
 					Ok((timestamp, slot))
 				}),
-				AlwaysCanAuthor,
 				CheckForEquivocation::Yes,
 				None,
 			)
@@ -738,7 +727,7 @@ mod tests {
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
 			aura_futures.push(
-				start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
+				start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
 					slot_duration,
 					block_import: client.clone(),
 					select_chain,
@@ -760,7 +749,6 @@ mod tests {
 						BackoffAuthoringOnFinalizedHeadLagging::default(),
 					),
 					keystore,
-					can_author_with: sp_consensus::AlwaysCanAuthor,
 					block_proposal_slot_portion: SlotProportion::new(0.5),
 					max_block_proposal_slot_portion: None,
 					telemetry: None,
