@@ -40,8 +40,8 @@ pub struct Weight {
 	/// The weight of computational time used based on some reference hardware.
 	ref_time: u64,
 	#[codec(compact)]
-	/// The weight of storage space used.
-	storage_size: u64,
+	/// The weight of storage space used by proof of validity.
+	proof_size: u64,
 }
 
 impl Weight {
@@ -52,8 +52,8 @@ impl Weight {
 	}
 
 	/// Set the storage size part of the weight.
-	pub const fn set_storage_size(mut self, c: u64) -> Self {
-		self.storage_size = c;
+	pub const fn set_proof_size(mut self, c: u64) -> Self {
+		self.proof_size = c;
 		self
 	}
 
@@ -63,8 +63,8 @@ impl Weight {
 	}
 
 	/// Return the storage size part of the weight.
-	pub const fn storage_size(&self) -> u64 {
-		self.storage_size
+	pub const fn proof_size(&self) -> u64 {
+		self.proof_size
 	}
 
 	/// Return a mutable reference to the reference time part of the weight.
@@ -73,17 +73,17 @@ impl Weight {
 	}
 
 	/// Return a mutable reference to the storage size part of the weight.
-	pub fn storage_size_mut(&mut self) -> &mut u64 {
-		&mut self.storage_size
+	pub fn proof_size_mut(&mut self) -> &mut u64 {
+		&mut self.proof_size
 	}
 
-	pub const MAX: Self = Self { ref_time: u64::MAX, storage_size: u64::MAX };
+	pub const MAX: Self = Self { ref_time: u64::MAX, proof_size: u64::MAX };
 
 	/// Get the conservative min of `self` and `other` weight.
 	pub fn min(&self, other: Self) -> Self {
 		Self {
 			ref_time: self.ref_time.min(other.ref_time),
-			storage_size: self.storage_size.min(other.storage_size),
+			proof_size: self.proof_size.min(other.proof_size),
 		}
 	}
 
@@ -91,14 +91,14 @@ impl Weight {
 	pub fn max(&self, other: Self) -> Self {
 		Self {
 			ref_time: self.ref_time.max(other.ref_time),
-			storage_size: self.storage_size.max(other.storage_size),
+			proof_size: self.proof_size.max(other.proof_size),
 		}
 	}
 
 	/// Try to add some `other` weight while upholding the `limit`.
 	pub fn try_add(&self, other: &Self, limit: &Self) -> Option<Self> {
 		let total = self.checked_add(other)?;
-		if total.ref_time > limit.ref_time || total.storage_size > limit.storage_size {
+		if total.ref_time > limit.ref_time || total.proof_size > limit.proof_size {
 			None
 		} else {
 			Some(total)
@@ -107,17 +107,17 @@ impl Weight {
 
 	/// Construct [`Weight`] with reference time weight and 0 storage size weight.
 	pub const fn from_ref_time(ref_time: u64) -> Self {
-		Self { ref_time, storage_size: 0 }
+		Self { ref_time, proof_size: 0 }
 	}
 
 	/// Construct [`Weight`] with storage size weight and 0 reference time weight.
-	pub const fn from_storage_size(storage_size: u64) -> Self {
-		Self { ref_time: 0, storage_size }
+	pub const fn from_proof_size(proof_size: u64) -> Self {
+		Self { ref_time: 0, proof_size }
 	}
 
 	/// Construct [`Weight`] with weight components, namely reference time and storage size weights.
-	pub const fn from_components(ref_time: u64, storage_size: u64) -> Self {
-		Self { ref_time, storage_size }
+	pub const fn from_components(ref_time: u64, proof_size: u64) -> Self {
+		Self { ref_time, proof_size }
 	} 
 
 	/// Saturating [`Weight`] addition. Computes `self + rhs`, saturating at the numeric bounds of
@@ -125,7 +125,7 @@ impl Weight {
 	pub const fn saturating_add(self, rhs: Self) -> Self {
 		Self {
 			ref_time: self.ref_time.saturating_add(rhs.ref_time),
-			storage_size: self.storage_size.saturating_add(rhs.storage_size),
+			proof_size: self.proof_size.saturating_add(rhs.proof_size),
 		}
 	}
 
@@ -134,7 +134,7 @@ impl Weight {
 	pub const fn saturating_sub(self, rhs: Self) -> Self {
 		Self {
 			ref_time: self.ref_time.saturating_sub(rhs.ref_time),
-			storage_size: self.storage_size.saturating_sub(rhs.storage_size),
+			proof_size: self.proof_size.saturating_sub(rhs.proof_size),
 		}
 	}
 
@@ -143,7 +143,7 @@ impl Weight {
 	pub const fn saturating_mul(self, scalar: u64) -> Self {
 		Self {
 			ref_time: self.ref_time.saturating_mul(scalar),
-			storage_size: self.storage_size.saturating_mul(scalar),
+			proof_size: self.proof_size.saturating_mul(scalar),
 		}
 	}
 
@@ -152,7 +152,7 @@ impl Weight {
 	pub const fn saturating_div(self, scalar: u64) -> Self {
 		Self {
 			ref_time: self.ref_time.saturating_div(scalar),
-			storage_size: self.storage_size.saturating_div(scalar),
+			proof_size: self.proof_size.saturating_div(scalar),
 		}
 	}
 
@@ -161,7 +161,7 @@ impl Weight {
 	pub const fn saturating_pow(self, exp: u32) -> Self {
 		Self {
 			ref_time: self.ref_time.saturating_pow(exp),
-			storage_size: self.storage_size.saturating_pow(exp),
+			proof_size: self.proof_size.saturating_pow(exp),
 		}
 	}
 
@@ -176,11 +176,11 @@ impl Weight {
 			Some(t) => t,
 			None => return None,
 		};
-		let storage_size = match self.storage_size.checked_add(rhs.storage_size) {
+		let proof_size = match self.proof_size.checked_add(rhs.proof_size) {
 			Some(s) => s,
 			None => return None,
 		};
-		Some(Self { ref_time, storage_size })
+		Some(Self { ref_time, proof_size })
 	}
 
 	/// Checked [`Weight`] subtraction. Computes `self - rhs`, returning `None` if overflow
@@ -190,11 +190,11 @@ impl Weight {
 			Some(t) => t,
 			None => return None,
 		};
-		let storage_size = match self.storage_size.checked_sub(rhs.storage_size) {
+		let proof_size = match self.proof_size.checked_sub(rhs.proof_size) {
 			Some(s) => s,
 			None => return None,
 		};
-		Some(Self { ref_time, storage_size })
+		Some(Self { ref_time, proof_size })
 	}
 
 	/// Checked [`Weight`] scalar multiplication. Computes `self.field * scalar` for each field,
@@ -204,11 +204,11 @@ impl Weight {
 			Some(t) => t,
 			None => return None,
 		};
-		let storage_size = match self.storage_size.checked_mul(scalar) {
+		let proof_size = match self.proof_size.checked_mul(scalar) {
 			Some(s) => s,
 			None => return None,
 		};
-		Some(Self { ref_time, storage_size })
+		Some(Self { ref_time, proof_size })
 	}
 
 	/// Checked [`Weight`] scalar division. Computes `self.field / scalar` for each field, returning
@@ -218,70 +218,70 @@ impl Weight {
 			Some(t) => t,
 			None => return None,
 		};
-		let storage_size = match self.storage_size.checked_div(scalar) {
+		let proof_size = match self.proof_size.checked_div(scalar) {
 			Some(s) => s,
 			None => return None,
 		};
-		Some(Self { ref_time, storage_size })
+		Some(Self { ref_time, proof_size })
 	}
 
 	/// Return a [`Weight`] where all fields are zero.
 	pub const fn zero() -> Self {
-		Self { ref_time: 0, storage_size: 0 }
+		Self { ref_time: 0, proof_size: 0 }
 	}
 
 	/// Returns true if any of `self`'s constituent weights is strictly greater than that of the
 	/// `other`'s, otherwise returns false.
 	pub const fn any_gt(self, other: Self) -> bool {
-		self.ref_time > other.ref_time || self.storage_size > other.storage_size
+		self.ref_time > other.ref_time || self.proof_size > other.proof_size
 	}
 
 	/// Returns true if all of `self`'s constituent weights is strictly greater than that of the
 	/// `other`'s, otherwise returns false.
 	pub const fn all_gt(self, other: Self) -> bool {
-		self.ref_time > other.ref_time && self.storage_size > other.storage_size
+		self.ref_time > other.ref_time && self.proof_size > other.proof_size
 	}
 
 	/// Returns true if any of `self`'s constituent weights is strictly less than that of the
 	/// `other`'s, otherwise returns false.
 	pub const fn any_lt(self, other: Self) -> bool {
-		self.ref_time < other.ref_time || self.storage_size < other.storage_size
+		self.ref_time < other.ref_time || self.proof_size < other.proof_size
 	}
 
 	/// Returns true if all of `self`'s constituent weights is strictly less than that of the
 	/// `other`'s, otherwise returns false.
 	pub const fn all_lt(self, other: Self) -> bool {
-		self.ref_time < other.ref_time && self.storage_size < other.storage_size
+		self.ref_time < other.ref_time && self.proof_size < other.proof_size
 	}
 
 	/// Returns true if any of `self`'s constituent weights is greater than or equal to that of the
 	/// `other`'s, otherwise returns false.
 	pub const fn any_gte(self, other: Self) -> bool {
-		self.ref_time >= other.ref_time || self.storage_size >= other.storage_size
+		self.ref_time >= other.ref_time || self.proof_size >= other.proof_size
 	}
 
 	/// Returns true if all of `self`'s constituent weights is greater than or equal to that of the
 	/// `other`'s, otherwise returns false.
 	pub const fn all_gte(self, other: Self) -> bool {
-		self.ref_time >= other.ref_time && self.storage_size >= other.storage_size
+		self.ref_time >= other.ref_time && self.proof_size >= other.proof_size
 	}
 
 	/// Returns true if any of `self`'s constituent weights is less than or equal to that of the
 	/// `other`'s, otherwise returns false.
 	pub const fn any_lte(self, other: Self) -> bool {
-		self.ref_time <= other.ref_time || self.storage_size <= other.storage_size
+		self.ref_time <= other.ref_time || self.proof_size <= other.proof_size
 	}
 
 	/// Returns true if all of `self`'s constituent weights is less than or equal to that of the
 	/// `other`'s, otherwise returns false.
 	pub const fn all_lte(self, other: Self) -> bool {
-		self.ref_time <= other.ref_time && self.storage_size <= other.storage_size
+		self.ref_time <= other.ref_time && self.proof_size <= other.proof_size
 	}
 
 	/// Returns true if any of `self`'s constituent weights is equal to that of the `other`'s,
 	/// otherwise returns false.
 	pub const fn any_eq(self, other: Self) -> bool {
-		self.ref_time == other.ref_time || self.storage_size == other.storage_size
+		self.ref_time == other.ref_time || self.proof_size == other.proof_size
 	}
 
 	// NOTE: `all_eq` does not exist, as it's simply the `eq` method from the `PartialEq` trait.
@@ -302,7 +302,7 @@ impl Add for Weight {
 	fn add(self, rhs: Self) -> Self {
 		Self {
 			ref_time: self.ref_time + rhs.ref_time,
-			storage_size: self.storage_size + rhs.storage_size,
+			proof_size: self.proof_size + rhs.proof_size,
 		}
 	}
 }
@@ -312,7 +312,7 @@ impl Sub for Weight {
 	fn sub(self, rhs: Self) -> Self {
 		Self {
 			ref_time: self.ref_time - rhs.ref_time,
-			storage_size: self.storage_size - rhs.storage_size,
+			proof_size: self.proof_size - rhs.proof_size,
 		}
 	}
 }
@@ -325,7 +325,7 @@ where
 	fn mul(self, b: T) -> Self {
 		Self {
 			ref_time: b * self.ref_time,
-			storage_size: b * self.storage_size,
+			proof_size: b * self.proof_size,
 		}
 	}
 }
@@ -338,7 +338,7 @@ macro_rules! weight_mul_per_impl {
 				fn mul(self, b: Weight) -> Weight {
 					Weight {
 						ref_time: self * b.ref_time,
-						storage_size: self * b.storage_size,
+						proof_size: self * b.proof_size,
 					}
 				}
 			}
@@ -361,7 +361,7 @@ macro_rules! weight_mul_primitive_impl {
 				fn mul(self, b: Weight) -> Weight {
 					Weight {
 						ref_time: u64::from(self) * b.ref_time,
-						storage_size: u64::from(self) * b.storage_size,
+						proof_size: u64::from(self) * b.proof_size,
 					}
 				}
 			}
@@ -377,7 +377,7 @@ where
 {
 	type Output = Self;
 	fn div(self, b: T) -> Self {
-		Self { ref_time: self.ref_time / b, storage_size: self.storage_size / b }
+		Self { ref_time: self.ref_time / b, proof_size: self.proof_size / b }
 	}
 }
 
@@ -395,7 +395,7 @@ impl CheckedSub for Weight {
 
 impl core::fmt::Display for Weight {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "Weight(ref_time: {}, storage_size: {})", self.ref_time, self.storage_size)
+		write!(f, "Weight(ref_time: {}, proof_size: {})", self.ref_time, self.proof_size)
 	}
 }
 
@@ -412,7 +412,7 @@ impl AddAssign for Weight {
 	fn add_assign(&mut self, other: Self) {
 		*self = Self {
 			ref_time: self.ref_time + other.ref_time,
-			storage_size: self.storage_size + other.storage_size,
+			proof_size: self.proof_size + other.proof_size,
 		};
 	}
 }
@@ -421,7 +421,7 @@ impl SubAssign for Weight {
 	fn sub_assign(&mut self, other: Self) {
 		*self = Self {
 			ref_time: self.ref_time - other.ref_time,
-			storage_size: self.storage_size - other.storage_size,
+			proof_size: self.proof_size - other.proof_size,
 		};
 	}
 }
