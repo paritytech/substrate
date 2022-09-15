@@ -6152,6 +6152,7 @@ dependencies = [
 name = "pallet-safe-mode"
 version = "4.0.0-dev"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
