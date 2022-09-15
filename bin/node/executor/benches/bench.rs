@@ -19,8 +19,8 @@ use codec::{Decode, Encode};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use frame_support::Hashable;
 use kitchensink_runtime::{
-	constants::currency::*, Block, BuildStorage, Call, CheckedExtrinsic, GenesisConfig, Header,
-	UncheckedExtrinsic,
+	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, GenesisConfig, Header,
+	RuntimeCall, UncheckedExtrinsic,
 };
 use node_executor::ExecutorDispatch;
 use node_primitives::{BlockNumber, Hash};
@@ -141,11 +141,11 @@ fn test_blocks(
 	let mut test_ext = new_test_ext(genesis_config);
 	let mut block1_extrinsics = vec![CheckedExtrinsic {
 		signed: None,
-		function: Call::Timestamp(pallet_timestamp::Call::set { now: 0 }),
+		function: RuntimeCall::Timestamp(pallet_timestamp::Call::set { now: 0 }),
 	}];
 	block1_extrinsics.extend((0..20).map(|i| CheckedExtrinsic {
 		signed: Some((alice(), signed_extra(i, 0))),
-		function: Call::Balances(pallet_balances::Call::transfer {
+		function: RuntimeCall::Balances(pallet_balances::Call::transfer {
 			dest: bob().into(),
 			value: 1 * DOLLARS,
 		}),
