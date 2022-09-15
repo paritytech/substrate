@@ -461,6 +461,9 @@ impl<T: Config> Ext<T> for ReservingExt {
 						"Failed to transfer storage deposit {:?} from origin {:?} to contract {:?}: {:?}",
 						amount, origin, contract, err,
 					);
+					if cfg!(debug_assertions) {
+						panic!("Unable to collect storage deposit. This is a bug.");
+					}
 				}
 			},
 			// For `Refund(_)` no error happen because the initial value transfer from the
@@ -490,6 +493,9 @@ impl<T: Config> Ext<T> for ReservingExt {
 						"Failed to repatriate storage deposit {:?} from contract {:?} to origin {:?}: {:?}",
 						amount, contract, origin, result,
 					);
+					if cfg!(debug_assertions) {
+						panic!("Unable to refund storage deposit. This is a bug.");
+					}
 				}
 			},
 		};

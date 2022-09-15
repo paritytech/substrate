@@ -3747,6 +3747,27 @@ fn storage_deposit_limit_is_enforced_late() {
 			<Error<Test>>::StorageDepositLimitExhausted,
 		);
 
+		let _ = Balances::make_free_balance_be(&ALICE, 1_000);
+
+		// Send more than the sender has balance.
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr_caller.clone(),
+				0,
+				GAS_LIMIT,
+				Some(codec::Compact(50)),
+				1_200u32
+					.to_le_bytes()
+					.as_ref()
+					.iter()
+					.chain(<_ as AsRef<[u8]>>::as_ref(&addr_callee))
+					.cloned()
+					.collect(),
+			),
+			<Error<Test>>::StorageDepositLimitExhausted,
+		);
+
 		// Same as above but allow for the additional balance.
 		assert_ok!(Contracts::call(
 			Origin::signed(ALICE),
