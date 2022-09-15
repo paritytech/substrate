@@ -40,6 +40,8 @@ use proc_macro2::Group;
 use quote::ToTokens;
 use syn::{spanned::Spanned, AttrStyle};
 
+use self::storage::StorageDef;
+
 /// Parsed definition of a pallet.
 pub struct Def {
 	/// The module items.
@@ -64,6 +66,25 @@ pub struct Def {
 }
 
 impl Def {
+	fn mark_benchmarking_cached_calls(storage_def: &mut StorageDef, item: &mut syn::Item) {
+		if let syn::Item::Type(typ) = item {
+			for attr in typ.attrs.as_slice() {
+				if attr.style == AttrStyle::Outer {
+					if let Some(seg) = attr.path.segments.last() {
+						if let Ok(_) = syn::parse2::<keyword::benchmarking>(seg.to_token_stream()) {
+							if let Ok(group) = syn::parse2::<Group>(attr.tokens.clone()) {
+								if let Ok(_) = syn::parse2::<keyword::cached>(group.stream()) {
+									storage_def.benchmarking_cached = true;
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
 		let frame_system = generate_crate_access_2018("frame-system")?;
 		let frame_support = generate_crate_access_2018("frame-support")?;
@@ -127,27 +148,7 @@ impl Def {
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
 				Some(PalletAttr::Storage(span)) => {
 					let mut storage_def = storage::StorageDef::try_from(span, index, item)?;
-					// check for #[benchmarking(cached)] calls
-					if let syn::Item::Type(typ) = item {
-						for attr in typ.attrs.as_slice() {
-							if attr.style == AttrStyle::Outer {
-								if let Some(seg) = attr.path.segments.last() {
-									if let Ok(_) =
-										syn::parse2::<keyword::benchmarking>(seg.to_token_stream())
-									{
-										if let Ok(group) = syn::parse2::<Group>(attr.tokens.clone())
-										{
-											if let Ok(_) =
-												syn::parse2::<keyword::cached>(group.stream())
-											{
-												storage_def.benchmarking_cached = true;
-											}
-										}
-									}
-								}
-							}
-						}
-					}
+					Self::mark_benchmarking_cached_calls(&mut storage_def, item);
 					storages.push(storage_def);
 				},
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
