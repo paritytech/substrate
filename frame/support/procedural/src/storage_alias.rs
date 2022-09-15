@@ -29,7 +29,7 @@ use syn::{
 };
 
 /// Represents a path that only consists of [`Ident`] separated by `::`.
-pub struct SimplePath {
+struct SimplePath {
 	leading_colon: Option<Token![::]>,
 	segments: Punctuated<Ident, Token![::]>,
 }
@@ -65,7 +65,7 @@ impl ToTokens for SimplePath {
 
 /// Represents generics which only support [`Ident`] separated by commas as you would pass it to a
 /// type.
-pub struct TypeGenerics {
+struct TypeGenerics {
 	lt_token: Token![<],
 	params: Punctuated<Ident, token::Comma>,
 	gt_token: Token![>],
@@ -97,9 +97,9 @@ impl ToTokens for TypeGenerics {
 }
 
 /// Represents generics which only support [`TypeParam`] separated by commas.
-pub struct SimpleGenerics {
+struct SimpleGenerics {
 	lt_token: Token![<],
-	pub params: Punctuated<TypeParam, token::Comma>,
+	params: Punctuated<TypeParam, token::Comma>,
 	gt_token: Token![>],
 }
 
@@ -141,7 +141,7 @@ mod storage_types {
 }
 
 /// The supported storage types
-pub enum StorageType {
+enum StorageType {
 	Value {
 		_kw: storage_types::StorageValue,
 		_lt_token: Token![<],
@@ -406,15 +406,15 @@ impl Parse for StorageType {
 }
 
 /// The input expected by this macro.
-pub struct Input {
-	pub attributes: Vec<Attribute>,
-	pub visibility: Visibility,
+struct Input {
+	attributes: Vec<Attribute>,
+	visibility: Visibility,
 	_type: Token![type],
-	pub storage_name: Ident,
-	pub storage_generics: Option<SimpleGenerics>,
-	pub where_clause: Option<WhereClause>,
+	storage_name: Ident,
+	storage_generics: Option<SimpleGenerics>,
+	where_clause: Option<WhereClause>,
 	_equal: Token![=],
-	pub storage_type: StorageType,
+	storage_type: StorageType,
 	_semicolon: Token![;],
 }
 
