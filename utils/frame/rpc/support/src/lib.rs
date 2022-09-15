@@ -34,33 +34,73 @@ use sp_storage::{StorageData, StorageKey};
 /// # use jsonrpsee::core::Error as RpcError;
 /// # use jsonrpsee::ws_client::WsClientBuilder;
 /// # use codec::Encode;
-/// # use frame_support::{decl_storage, decl_module};
+/// # use frame_support::traits::StorageInstance;
 /// # use substrate_frame_rpc_support::StorageQuery;
-/// # use frame_system::Config;
 /// # use sc_rpc_api::state::StateApiClient;
 /// #
 /// # // Hash would normally be <TestRuntime as frame_system::Config>::Hash, but we don't have
 /// # // frame_system::Config implemented for TestRuntime. Here we just pretend.
 /// # type Hash = ();
 /// #
-/// #
 /// # struct TestRuntime;
-/// #
-/// # decl_module! {
-/// 	#     pub struct Module<T: Config> for enum Call where origin: T::Origin {}
-/// # }
 /// #
 /// pub type Loc = (i64, i64, i64);
 /// pub type Block = u8;
 ///
 /// // Note that all fields are marked pub.
-/// decl_storage! {
-///     trait Store for Module<T: Config> as TestRuntime {
-///         pub LastActionId: u64;
-///         pub Voxels: map hasher(blake2_128_concat) Loc => Block;
-///         pub Actions: map hasher(blake2_128_concat) u64 => Loc;
-///         pub Prefab: double_map hasher(blake2_128_concat) u128, hasher(blake2_128_concat) (i8, i8, i8) => Block;
-///     }
+/// pub use self::pallet::*;
+///
+/// #[frame_support::pallet]
+/// mod pallet {
+/// 	use super::*;
+/// 	use frame_support::pallet_prelude::*;
+///
+/// 	#[pallet::pallet]
+/// 	#[pallet::generate_store(pub(super) trait Store)]
+/// 	pub struct Pallet<T>(PhantomData<T>);
+///
+/// 	#[pallet::config]
+/// 	pub trait Config: frame_system::Config {}
+///
+/// 	pub struct LastActionIdPrefix;
+/// 	impl StorageInstance for LastActionIdPrefix {
+/// 		fn pallet_prefix() -> &'static str {
+/// 			"TestRuntime"
+/// 		}
+/// 		const STORAGE_PREFIX: &'static str = "LastActionId";
+/// 	}
+/// 	pub type LastActionId = StorageValue<LastActionIdPrefix, u64, ValueQuery>;
+///
+/// 	pub struct VoxelsPrefix;
+/// 	impl StorageInstance for VoxelsPrefix {
+/// 		fn pallet_prefix() -> &'static str {
+/// 			"TestRuntime"
+/// 		}
+/// 		const STORAGE_PREFIX: &'static str = "Voxels";
+/// 	}
+/// 	pub type Voxels = StorageMap<VoxelsPrefix, Blake2_128Concat, Loc, Block>;
+///
+/// 	pub struct ActionsPrefix;
+/// 	impl StorageInstance for ActionsPrefix {
+/// 		fn pallet_prefix() -> &'static str {
+/// 			"TestRuntime"
+/// 		}
+/// 		const STORAGE_PREFIX: &'static str = "Actions";
+/// 	}
+/// 	pub type Actions = StorageMap<ActionsPrefix, Blake2_128Concat, u64, Loc>;
+///
+/// 	pub struct PrefabPrefix;
+/// 	impl StorageInstance for PrefabPrefix {
+/// 		fn pallet_prefix() -> &'static str {
+/// 			"TestRuntime"
+/// 		}
+/// 		const STORAGE_PREFIX: &'static str = "Prefab";
+/// 	}
+/// 	pub type Prefab = StorageDoubleMap<
+/// 		PrefabPrefix,
+/// 		Blake2_128Concat, u128,
+/// 		Blake2_128Concat, (i8, i8, i8), Block
+/// 	>;
 /// }
 ///
 /// #[tokio::main]

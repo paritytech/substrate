@@ -22,8 +22,7 @@ use crate::{
 	AccountId, AuthorityId, Block, BlockNumber, Digest, Extrinsic, Header, Transfer, H256 as Hash,
 };
 use codec::{Decode, Encode, KeyedVec};
-use frame_support::{decl_module, decl_storage, storage};
-use frame_system::Config;
+use frame_support::{storage, traits::StorageInstance};
 use sp_core::storage::well_known_keys;
 use sp_io::{hashing::blake2_256, storage::root as storage_root, trie};
 use sp_runtime::{
@@ -39,19 +38,94 @@ use sp_std::prelude::*;
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {}
-}
+pub use self::pallet::*;
 
-decl_storage! {
-	trait Store for Module<T: Config> as TestRuntime {
-		ExtrinsicData: map hasher(blake2_128_concat) u32 => Vec<u8>;
-		// The current block number being processed. Set by `execute_block`.
-		Number get(fn number): Option<BlockNumber>;
-		ParentHash get(fn parent_hash): Hash;
-		NewAuthorities get(fn new_authorities): Option<Vec<AuthorityId>>;
-		StorageDigest get(fn storage_digest): Option<Digest>;
-		Authorities get(fn authorities) config(): Vec<AuthorityId>;
+#[frame_support::pallet]
+mod pallet {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T>(PhantomData<T>);
+
+	#[pallet::config]
+	pub trait Config: frame_system::Config {}
+
+	pub struct ExtrinsicDataPrefix;
+	impl StorageInstance for ExtrinsicDataPrefix {
+		fn pallet_prefix() -> &'static str {
+			"TestRuntime"
+		}
+		const STORAGE_PREFIX: &'static str = "ExtrinsicData";
+	}
+	pub type ExtrinsicData =
+		StorageMap<ExtrinsicDataPrefix, Blake2_128Concat, u32, Vec<u8>, ValueQuery>;
+
+	// The current block number being processed. Set by `execute_block`.
+	pub struct NumberPrefix;
+	impl StorageInstance for NumberPrefix {
+		fn pallet_prefix() -> &'static str {
+			"TestRuntime"
+		}
+		const STORAGE_PREFIX: &'static str = "Number";
+	}
+	pub type Number = StorageValue<NumberPrefix, BlockNumber, OptionQuery>;
+
+	pub struct ParentHashPrefix;
+	impl StorageInstance for ParentHashPrefix {
+		fn pallet_prefix() -> &'static str {
+			"TestRuntime"
+		}
+		const STORAGE_PREFIX: &'static str = "ParentHash";
+	}
+	pub type ParentHash = StorageValue<ParentHashPrefix, Hash, ValueQuery>;
+
+	pub struct NewAuthoritiesPrefix;
+	impl StorageInstance for NewAuthoritiesPrefix {
+		fn pallet_prefix() -> &'static str {
+			"TestRuntime"
+		}
+		const STORAGE_PREFIX: &'static str = "NewAuthorities";
+	}
+	pub type NewAuthorities = StorageValue<NewAuthoritiesPrefix, Vec<AuthorityId>, OptionQuery>;
+
+	pub struct StorageDigestPrefix;
+	impl StorageInstance for StorageDigestPrefix {
+		fn pallet_prefix() -> &'static str {
+			"TestRuntime"
+		}
+		const STORAGE_PREFIX: &'static str = "StorageDigest";
+	}
+	pub type StorageDigest = StorageValue<StorageDigestPrefix, Digest, OptionQuery>;
+
+	pub struct AuthoritiesPrefix;
+	impl StorageInstance for AuthoritiesPrefix {
+		fn pallet_prefix() -> &'static str {
+			"TestRuntime"
+		}
+		const STORAGE_PREFIX: &'static str = "Authorities";
+	}
+	pub type Authorities = StorageValue<AuthoritiesPrefix, Vec<AuthorityId>, ValueQuery>;
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub authorities: Vec<AuthorityId>,
+		pub marker: PhantomData<T>,
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { authorities: Default::default(), marker: Default::default() }
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			Authorities::put(self.authorities.clone());
+		}
 	}
 }
 
@@ -124,8 +198,8 @@ fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) -> Heade
 		header.state_root = new_header.state_root;
 	} else {
 		info_expect_equal_hash(&new_header.state_root, &header.state_root);
-		assert!(
-			new_header.state_root == header.state_root,
+		assert_eq!(
+			new_header.state_root, header.state_root,
 			"Storage root must match that calculated.",
 		);
 	}
@@ -134,8 +208,8 @@ fn execute_block_with_state_root_handler(block: &mut Block, mode: Mode) -> Heade
 		header.extrinsics_root = new_header.extrinsics_root;
 	} else {
 		info_expect_equal_hash(&new_header.extrinsics_root, &header.extrinsics_root);
-		assert!(
-			new_header.extrinsics_root == header.extrinsics_root,
+		assert_eq!(
+			new_header.extrinsics_root, header.extrinsics_root,
 			"Transaction trie root must be valid.",
 		);
 	}

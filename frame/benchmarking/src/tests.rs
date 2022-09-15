@@ -36,7 +36,7 @@ mod pallet_test {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -46,21 +46,21 @@ mod pallet_test {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn heartbeat_after)]
+	#[pallet::getter(fn value)]
 	pub(crate) type Value<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
 		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
-			let _sender = frame_system::ensure_signed(origin)?;
+			let _sender = ensure_signed(origin)?;
 			Value::<T>::put(n);
 			Ok(())
 		}
 
 		#[pallet::weight(0)]
 		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
-			let _sender = frame_system::ensure_none(origin)?;
+			let _sender = ensure_none(origin)?;
 			Ok(())
 		}
 
