@@ -117,7 +117,6 @@ impl WhitelistedStorageKeys for Tuple {
 			}
 		 )* );
 		// flatten BTreeMap down to a vec
-		combined_keys.values().collect::<Vec<_>>()
-		final_combined_keys
+		combined_keys.values().map(|e| e.clone()).collect::<Vec<_>>()
 	}
 }
