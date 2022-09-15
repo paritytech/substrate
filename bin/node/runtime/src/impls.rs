@@ -115,13 +115,6 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 	}
 }
 
-#[cfg(feature = "runtime-benchmarks")]
-impl From<u32> for CollectionId {
-	fn from(id: u32) -> Self {
-		CollectionId(id)
-	}
-}
-
 #[cfg(test)]
 mod multiplier_tests {
 	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
