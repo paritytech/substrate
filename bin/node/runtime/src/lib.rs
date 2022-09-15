@@ -238,6 +238,7 @@ impl pallet_safe_mode::Config for Runtime {
 	type RepayOrigin = EnsureRoot<AccountId>;
 	type EnableStakeAmount = EnableStakeAmount;
 	type ExtendStakeAmount = ExtendStakeAmount;
+	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }
 
 impl frame_system::Config for Runtime {

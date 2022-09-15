@@ -23,7 +23,7 @@ mod benchmarking;
 pub mod mock;
 #[cfg(test)]
 mod tests;
-// pub mod weights;
+pub mod weights;
 
 use frame_support::{
 	pallet_prelude::*,
@@ -31,12 +31,14 @@ use frame_support::{
 		CallMetadata, Contains, Currency, Defensive, GetCallMetadata, PalletInfoAccess,
 		ReservableCurrency,
 	},
+	weights::Weight,
 };
 use frame_system::pallet_prelude::*;
 use sp_runtime::traits::Saturating;
 use sp_std::{convert::TryInto, prelude::*};
 
 pub use pallet::*;
+pub use weights::*;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -82,7 +84,7 @@ pub mod pallet {
 		type RepayOrigin: EnsureOrigin<Self::Origin>;
 
 		// Weight information for extrinsics in this pallet.
-		//type WeightInfo: WeightInfo;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -183,7 +185,8 @@ pub mod pallet {
 		/// Reserves `EnableStakeAmount` from the caller's account.
 		/// Errors if the safe-mode is already enabled.
 		/// Can be permanently disabled by configuring `EnableStakeAmount` to `None`.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::enable())]
+		// #[pallet::weight(0)]
 		pub fn enable(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
