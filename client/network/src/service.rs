@@ -1523,16 +1523,16 @@ where
 					request,
 					pending_response,
 				})) => {
-					match self
+					match this
 						.network_service
 						.behaviour()
 						.user_protocol()
 						.encode_block_request(&request)
 					{
 						Ok(data) => {
-							self.network_service.behaviour().send_request(
+							this.network_service.behaviour_mut().send_request(
 								&target,
-								&self.block_request_protocol_name,
+								&this.block_request_protocol_name,
 								data,
 								pending_response,
 								IfDisconnected::ImmediateError,
@@ -1552,16 +1552,16 @@ where
 					request,
 					pending_response,
 				})) => {
-					match self
+					match this
 						.network_service
 						.behaviour()
 						.user_protocol()
 						.encode_state_request(&request)
 					{
 						Ok(data) => {
-							self.network_service.behaviour().send_request(
+							this.network_service.behaviour_mut().send_request(
 								&target,
-								&self.state_request_protocol_name,
+								&this.state_request_protocol_name,
 								data,
 								pending_response,
 								IfDisconnected::ImmediateError,
@@ -1580,8 +1580,8 @@ where
 					target,
 					request,
 					pending_response,
-				})) => match self.warp_sync_protocol_name {
-					Some(name) => self.network_service.behaviour().send_request(
+				})) => match &this.warp_sync_protocol_name {
+					Some(name) => this.network_service.behaviour_mut().send_request(
 						&target,
 						&name,
 						request.encode(),
@@ -1676,7 +1676,7 @@ where
 					changes,
 				})) =>
 					for change in changes {
-						self.network_service.behaviour().user_protocol().report_peer(peer, change);
+						this.network_service.behaviour().user_protocol().report_peer(peer, change);
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
 					peer_id,
@@ -1698,19 +1698,19 @@ where
 						listen_addrs.truncate(30);
 					}
 					for addr in listen_addrs {
-						self.network_service
-							.behaviour()
+						this.network_service
+							.behaviour_mut()
 							.add_self_reported_address(&peer_id, &protocols, addr);
 					}
-					self.network_service
-						.behaviour()
-						.user_protocol()
+					this.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
 						.add_default_set_discovered_nodes(iter::once(peer_id));
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id))) => {
-					self.network_service
-						.behaviour()
-						.user_protocol()
+					this.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
 						.add_default_set_discovered_nodes(iter::once(peer_id));
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
