@@ -11578,9 +11578,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-instrument"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bca81f5279342b38b17d9acbf007a46ddeb73144e2bd5f0a21bfa9fc5d4ab3e"
+checksum = "aa1dafb3e60065305741e83db35c6c2584bb3725b692b5b66148a38d72ace6cd"
 dependencies = [
  "parity-wasm 0.45.0",
 ]
