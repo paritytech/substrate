@@ -350,7 +350,7 @@ pub(super) struct VoteMessage<Block: BlockT> {
 	/// The voter set ID this message is from.
 	pub(super) set_id: SetId,
 	/// The message itself.
-	pub(super) message: SignedMessage<Block>,
+	pub(super) message: SignedMessage<Block::Header>,
 }
 
 /// Network level commit message with topic information.
@@ -361,7 +361,7 @@ pub(super) struct FullCommitMessage<Block: BlockT> {
 	/// The voter set ID this message is from.
 	pub(super) set_id: SetId,
 	/// The compact commit message.
-	pub(super) message: CompactCommit<Block>,
+	pub(super) message: CompactCommit<Block::Header>,
 }
 
 /// V1 neighbor packet. Neighbor packets are sent from nodes to their peers
@@ -406,7 +406,7 @@ pub(super) struct FullCatchUpMessage<Block: BlockT> {
 	/// The voter set ID this message is from.
 	pub(super) set_id: SetId,
 	/// The compact commit message.
-	pub(super) message: CatchUp<Block>,
+	pub(super) message: CatchUp<Block::Header>,
 }
 
 /// Misbehavior that peers can perform.
@@ -1071,7 +1071,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		let (base_hash, base_number) = last_completed_round.base;
 
-		let catch_up = CatchUp::<Block> {
+		let catch_up = CatchUp::<Block::Header> {
 			round_number: last_completed_round.number,
 			prevotes,
 			precommits,
@@ -1651,8 +1651,8 @@ mod tests {
 	use crate::communication;
 	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
-	use sc_network_test::Block;
 	use sp_core::{crypto::UncheckedFrom, H256};
+	use substrate_test_runtime_client::runtime::{Block, Header};
 
 	// some random config (not really needed)
 	fn config() -> crate::Config {
@@ -1856,7 +1856,7 @@ mod tests {
 			&VoteMessage {
 				round: Round(1),
 				set_id: SetId(set_id),
-				message: SignedMessage::<Block> {
+				message: SignedMessage::<Header> {
 					message: finality_grandpa::Message::Prevote(finality_grandpa::Prevote {
 						target_hash: Default::default(),
 						target_number: 10,
@@ -1872,7 +1872,7 @@ mod tests {
 			&VoteMessage {
 				round: Round(1),
 				set_id: SetId(set_id),
-				message: SignedMessage::<Block> {
+				message: SignedMessage::<Header> {
 					message: finality_grandpa::Message::Prevote(finality_grandpa::Prevote {
 						target_hash: Default::default(),
 						target_number: 10,
@@ -1943,7 +1943,7 @@ mod tests {
 				votes: Default::default(),
 			});
 
-			let mut current_rounds = environment::CurrentRounds::new();
+			let mut current_rounds = environment::CurrentRounds::<Block>::new();
 			current_rounds.insert(3, environment::HasVoted::No);
 
 			let set_state =

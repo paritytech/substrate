@@ -270,7 +270,7 @@ mod tests {
 		},
 		gas::GasMeter,
 		storage::WriteOutcome,
-		tests::{Call, Test, ALICE, BOB},
+		tests::{RuntimeCall, Test, ALICE, BOB},
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
@@ -329,7 +329,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
-		runtime_calls: RefCell<Vec<Call>>,
+		runtime_calls: RefCell<Vec<RuntimeCall>>,
 		schedule: Schedule<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
@@ -522,7 +522,10 @@ mod tests {
 			self.debug_buffer.extend(msg.as_bytes());
 			true
 		}
-		fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
+		fn call_runtime(
+			&self,
+			call: <Self::T as Config>::RuntimeCall,
+		) -> DispatchResultWithPostInfo {
 			self.runtime_calls.borrow_mut().push(call);
 			Ok(Default::default())
 		}
@@ -919,7 +922,7 @@ mod tests {
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "seal_contains_storage" (func $seal_contains_storage (param i32 i32) (result i32)))
+	(import "__unstable__" "contains_storage" (func $contains_storage (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 
@@ -937,7 +940,7 @@ mod tests {
 		)
 		;; Call seal_clear_storage and save what it returns at 0
 		(i32.store (i32.const 0)
-			(call $seal_contains_storage
+			(call $contains_storage
 				(i32.const 8)			;; key_ptr
 				(i32.load (i32.const 4))	;; key_len
 			)
@@ -1545,8 +1548,8 @@ mod tests {
 
 		let gas_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		assert!(gas_left < gas_limit, "gas_left must be less than initial");
-		assert!(gas_left > actual_left, "gas_left must be greater than final");
+		assert!(gas_left.all_lt(gas_limit), "gas_left must be less than initial");
+		assert!(gas_left.all_gt(actual_left), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1670,9 +1673,51 @@ mod tests {
 )
 "#;
 
+	const CODE_TIMESTAMP_NOW_UNPREFIXED: &str = r#"
+(module
+	(import "seal0" "now" (func $now (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; This stores the block timestamp in the buffer
+		(call $now (i32.const 0) (i32.const 32))
+
+		;; assert len == 8
+		(call $assert
+			(i32.eq
+				(i32.load (i32.const 32))
+				(i32.const 8)
+			)
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 1111.
+		(call $assert
+			(i64.eq
+				(i64.load (i32.const 0))
+				(i64.const 1111)
+			)
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
 	#[test]
 	fn now() {
 		assert_ok!(execute(CODE_TIMESTAMP_NOW, vec![], MockExt::default()));
+		assert_ok!(execute(CODE_TIMESTAMP_NOW_UNPREFIXED, vec![], MockExt::default()));
 	}
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
@@ -1901,7 +1946,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left() > Weight::zero());
+		assert!(mock_ext.gas_meter.gas_left().all_gt(Weight::zero()));
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
@@ -2211,7 +2256,7 @@ mod tests {
 	#[cfg(feature = "unstable-interface")]
 	const CODE_CALL_RUNTIME: &str = r#"
 (module
-	(import "__unstable__" "seal_call_runtime" (func $seal_call_runtime (param i32 i32) (result i32)))
+	(import "__unstable__" "call_runtime" (func $call_runtime (param i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -2228,7 +2273,7 @@ mod tests {
 		)
 		;; Just use the call passed as input and store result to memory
 		(i32.store (i32.const 0)
-			(call $seal_call_runtime
+			(call $call_runtime
 				(i32.const 4)				;; Pointer where the call is stored
 				(i32.load (i32.const 0))	;; Size of the call
 			)
@@ -2247,7 +2292,8 @@ mod tests {
 	#[test]
 	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
-		let call = Call::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
+		let call =
+			RuntimeCall::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
 		assert_eq!(*ext.runtime_calls.borrow(), vec![call]);
@@ -2340,7 +2386,7 @@ mod tests {
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "set_storage" (func $set_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer
@@ -2357,7 +2403,7 @@ mod tests {
 		)
 		;; Store the passed value to the passed key and store result to memory
 		(i32.store (i32.const 168)
-			(call $seal_set_storage
+			(call $set_storage
 				(i32.const 8)				;; key_ptr
 				(i32.load (i32.const 4))		;; key_len
 				(i32.add				;; value_ptr = 8 + key_len
@@ -2411,7 +2457,7 @@ mod tests {
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "get_storage" (func $get_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
@@ -2432,7 +2478,7 @@ mod tests {
 		)
 		;; Load a storage value and result of this call into the output buffer
 		(i32.store (i32.const 168)
-			(call $seal_get_storage
+			(call $get_storage
 				(i32.const 12)			;; key_ptr
 				(i32.load (i32.const 8))	;; key_len
 				(i32.const 172)			;; Pointer to the output buffer
@@ -2505,7 +2551,7 @@ mod tests {
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_clear_storage" (func $seal_clear_storage (param i32 i32) (result i32)))
+	(import "__unstable__" "clear_storage" (func $clear_storage (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of input buffer
@@ -2522,7 +2568,7 @@ mod tests {
 		)
 		;; Call seal_clear_storage and save what it returns at 0
 		(i32.store (i32.const 0)
-			(call $seal_clear_storage
+			(call $clear_storage
 				(i32.const 8)			;; key_ptr
 				(i32.load (i32.const 4))	;; key_len
 			)
@@ -2591,7 +2637,7 @@ mod tests {
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "seal_take_storage" (func $seal_take_storage (param i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "take_storage" (func $take_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
@@ -2613,7 +2659,7 @@ mod tests {
 
 		;; Load a storage value and result of this call into the output buffer
 		(i32.store (i32.const 168)
-			(call $seal_take_storage
+			(call $take_storage
 				(i32.const 12)			;; key_ptr
 				(i32.load (i32.const 8))	;; key_len
 				(i32.const 172)			;; Pointer to the output buffer

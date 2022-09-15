@@ -191,7 +191,7 @@ where
 			"state is for completed round; completed rounds must have a prevote ghost; qed.",
 		);
 
-		let mut current_rounds = CurrentRounds::new();
+		let mut current_rounds = CurrentRounds::<Block>::new();
 		current_rounds.insert(last_round_number + 1, HasVoted::No);
 
 		let set_state = VoterSetState::Live {
@@ -255,7 +255,7 @@ where
 				let base = set_state.prevote_ghost
 					.expect("state is for completed round; completed rounds must have a prevote ghost; qed.");
 
-				let mut current_rounds = CurrentRounds::new();
+				let mut current_rounds = CurrentRounds::<Block>::new();
 				current_rounds.insert(last_round_number + 1, HasVoted::No);
 
 				VoterSetState::Live {
@@ -500,7 +500,7 @@ mod test {
 	use super::*;
 	use sp_core::{crypto::UncheckedFrom, H256};
 	use sp_finality_grandpa::AuthorityId;
-	use substrate_test_runtime_client;
+	use substrate_test_runtime_client::{self, runtime::Block};
 
 	fn dummy_id() -> AuthorityId {
 		AuthorityId::unchecked_from([1; 32])
@@ -574,7 +574,7 @@ mod test {
 			.unwrap(),
 		);
 
-		let mut current_rounds = CurrentRounds::new();
+		let mut current_rounds = CurrentRounds::<Block>::new();
 		current_rounds.insert(round_number + 1, HasVoted::No);
 
 		assert_eq!(
@@ -667,7 +667,7 @@ mod test {
 			.unwrap(),
 		);
 
-		let mut current_rounds = CurrentRounds::new();
+		let mut current_rounds = CurrentRounds::<Block>::new();
 		current_rounds.insert(round_number + 1, HasVoted::No);
 
 		assert_eq!(

@@ -66,4 +66,5 @@ to update the Alliance's rule and make announcements.
 
 #### Root Calls
 
-- `force_set_members` - Set the members via chain governance.
+- `init_members` - Initialize the Alliance, onboard founders, fellows, and allies.
+- `disband` - Disband the Alliance, remove all active members and unreserve deposits.
