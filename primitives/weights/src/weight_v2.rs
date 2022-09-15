@@ -98,7 +98,7 @@ impl Weight {
 	/// Try to add some `other` weight while upholding the `limit`.
 	pub fn try_add(&self, other: &Self, limit: &Self) -> Option<Self> {
 		let total = self.checked_add(other)?;
-		if total.ref_time > limit.ref_time || total.proof_size > limit.proof_size {
+		if total.any_gt(limit) {
 			None
 		} else {
 			Some(total)
