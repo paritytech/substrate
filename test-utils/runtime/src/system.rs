@@ -109,20 +109,13 @@ mod pallet {
 	pub type Authorities = StorageValue<AuthoritiesPrefix, Vec<AuthorityId>, ValueQuery>;
 
 	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> {
+	#[cfg_attr(feature = "std", derive(Default))]
+	pub struct GenesisConfig {
 		pub authorities: Vec<AuthorityId>,
-		pub marker: PhantomData<T>,
-	}
-
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> {
-		fn default() -> Self {
-			Self { authorities: Default::default(), marker: Default::default() }
-		}
 	}
 
 	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
 			Authorities::put(self.authorities.clone());
 		}

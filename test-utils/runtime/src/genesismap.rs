@@ -81,13 +81,11 @@ impl GenesisConfig {
 		// Assimilate the system genesis config.
 		let mut storage =
 			Storage { top: map, children_default: self.extra_storage.children_default.clone() };
-		let config = system::GenesisConfig::<Runtime> {
-			authorities: self.authorities.clone(),
-			marker: Default::default(),
-		};
-		config
-			.assimilate_storage(&mut storage)
-			.expect("Adding `system::GensisConfig` to the genesis");
+		<system::GenesisConfig as GenesisBuild<Runtime>>::assimilate_storage(
+			&system::GenesisConfig { authorities: self.authorities.clone() },
+			&mut storage,
+		)
+		.expect("Adding `system::GensisConfig` to the genesis");
 
 		storage
 	}
