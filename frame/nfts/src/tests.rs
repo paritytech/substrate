@@ -80,7 +80,7 @@ fn events() -> Vec<Event<Test>> {
 	let result = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let mock::Event::Nfts(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let mock::RuntimeEvent::Nfts(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 
 	System::reset_events();
@@ -933,7 +933,7 @@ fn buy_item_should_work() {
 			// freeze collection
 			assert_ok!(Nfts::freeze_collection(Origin::signed(user_1), collection_id));
 
-			let buy_item_call = mock::Call::Nfts(crate::Call::<Test>::buy_item {
+			let buy_item_call = mock::RuntimeCall::Nfts(crate::Call::<Test>::buy_item {
 				collection: collection_id,
 				item: item_3,
 				bid_price: price_1,
@@ -945,7 +945,7 @@ fn buy_item_should_work() {
 			// freeze item
 			assert_ok!(Nfts::freeze(Origin::signed(user_1), collection_id, item_3));
 
-			let buy_item_call = mock::Call::Nfts(crate::Call::<Test>::buy_item {
+			let buy_item_call = mock::RuntimeCall::Nfts(crate::Call::<Test>::buy_item {
 				collection: collection_id,
 				item: item_3,
 				bid_price: price_1,
