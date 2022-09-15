@@ -601,7 +601,7 @@ fn cancel_approval_works() {
 #[test]
 fn approving_multiple_accounts_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Nfts::force_create(Origin::root(), 1, true));
 		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
 
 		let current_block = 1;
@@ -620,7 +620,7 @@ fn approving_multiple_accounts_works() {
 #[test]
 fn approvals_limit_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Nfts::force_create(Origin::root(), 1, true));
 		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
 
 		for i in 3..13 {
@@ -640,7 +640,7 @@ fn approval_deadline_works() {
 		System::set_block_number(0);
 		assert!(System::block_number().is_zero());
 
-		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Nfts::force_create(Origin::root(), 1, true));
 		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
 
 		// the approval expires after the 2nd block.
@@ -714,7 +714,7 @@ fn cancel_approval_works_with_force() {
 #[test]
 fn clear_all_transfer_approvals_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, true));
+		assert_ok!(Nfts::force_create(Origin::root(), 1, true));
 		assert_ok!(Nfts::mint(Origin::signed(1), 0, 42, 2));
 
 		assert_ok!(Nfts::approve_transfer(Origin::signed(2), 0, 42, 3, None));
