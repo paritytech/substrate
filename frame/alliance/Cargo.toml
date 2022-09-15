@@ -41,6 +41,8 @@ pallet-collective = { version = "4.0.0-dev", path = "../collective" }
 [features]
 default = ["std"]
 std = [
+	"pallet-collective?/std",
+	"frame-benchmarking?/std",
 	"log/std",
 	"codec/std",
 	"scale-info/std",
@@ -55,7 +57,7 @@ std = [
 runtime-benchmarks = [
 	"hex",
 	"sha2",
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
