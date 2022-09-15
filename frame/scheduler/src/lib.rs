@@ -60,12 +60,12 @@ pub mod weights;
 
 use codec::{Codec, Decode, Encode};
 use frame_support::{
-	dispatch::{DispatchError, DispatchResult, Dispatchable, Parameter},
+	dispatch::{DispatchError, DispatchResult, Dispatchable, GetDispatchInfo, Parameter},
 	traits::{
 		schedule::{self, DispatchTime, MaybeHashed},
 		EnsureOrigin, Get, IsType, OriginTrait, PalletInfoAccess, PrivilegeCmp, StorageVersion,
 	},
-	weights::{GetDispatchInfo, Weight},
+	weights::Weight,
 };
 use frame_system::{self as system, ensure_signed};
 pub use pallet::*;

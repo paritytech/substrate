@@ -79,6 +79,8 @@ bench = false
 [features]
 default = ["std"]
 std = [
+	"parity-util-mem/std",
+	"merlin?/std",
 	"full_crypto",
 	"log/std",
 	"thiserror",
