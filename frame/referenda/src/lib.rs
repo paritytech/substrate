@@ -114,18 +114,22 @@ pub use sp_std::vec::Vec;
 #[macro_export]
 macro_rules! impl_tracksinfo_get {
 	($tracksinfo:ty, $balance:ty, $blocknumber:ty) => {
-		impl $crate::Get<$crate::Vec<(
-			<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::Id,
-			$crate::TrackInfo<$balance, $blocknumber>
-		)>> for $tracksinfo {
+		impl
+			$crate::Get<
+				$crate::Vec<(
+					<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::Id,
+					$crate::TrackInfo<$balance, $blocknumber>,
+				)>,
+			> for $tracksinfo
+		{
 			fn get() -> $crate::Vec<(
 				<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::Id,
-				$crate::TrackInfo<$balance, $blocknumber>
+				$crate::TrackInfo<$balance, $blocknumber>,
 			)> {
 				<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::tracks().to_vec()
 			}
 		}
-	}
+	};
 }
 
 const ASSEMBLY_ID: LockIdentifier = *b"assembly";
@@ -205,14 +209,16 @@ pub mod pallet {
 		// The other stuff.
 		/// Information concerning the different referendum tracks.
 		#[pallet::constant]
-		type Tracks: Get<Vec<(
-			<Self::Tracks as TracksInfo<BalanceOf<Self, I>, Self::BlockNumber>>::Id,
-			TrackInfo<BalanceOf<Self, I>, Self::BlockNumber>
-		)>> + TracksInfo<
-			BalanceOf<Self, I>,
-			Self::BlockNumber,
-			Origin = <Self::Origin as OriginTrait>::PalletsOrigin,
-		>;
+		type Tracks: Get<
+				Vec<(
+					<Self::Tracks as TracksInfo<BalanceOf<Self, I>, Self::BlockNumber>>::Id,
+					TrackInfo<BalanceOf<Self, I>, Self::BlockNumber>,
+				)>,
+			> + TracksInfo<
+				BalanceOf<Self, I>,
+				Self::BlockNumber,
+				Origin = <Self::Origin as OriginTrait>::PalletsOrigin,
+			>;
 	}
 
 	/// The next free referendum index, aka the number of referenda started so far.
