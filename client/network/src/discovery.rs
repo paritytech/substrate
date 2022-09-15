@@ -47,6 +47,7 @@
 //! of a node's address, you must call `add_self_reported_address`.
 
 use crate::utils::LruHashSet;
+use bytes::Bytes;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -199,7 +200,7 @@ impl DiscoveryConfig {
 				let proto_name = protocol_name_from_protocol_id(&protocol_id);
 
 				let mut config = KademliaConfig::default();
-				config.set_protocol_name(proto_name);
+				config.set_protocol_names(std::iter::once(proto_name.into()).collect());
 				// By default Kademlia attempts to insert all peers into its routing table once a
 				// dialing attempt succeeds. In order to control which peer is added, disable the
 				// auto-insertion and instead add peers manually.
@@ -321,7 +322,7 @@ impl DiscoveryBehaviour {
 	pub fn add_self_reported_address(
 		&mut self,
 		peer_id: &PeerId,
-		supported_protocols: impl Iterator<Item = impl AsRef<[u8]>>,
+		supported_protocols: &[impl AsRef<[u8]>],
 		addr: Multiaddr,
 	) {
 		if !self.allow_non_globals_in_dht && !self.can_add_to_dht(&addr) {
@@ -330,16 +331,25 @@ impl DiscoveryBehaviour {
 		}
 
 		let mut added = false;
-		for protocol in supported_protocols {
-			for kademlia in self.kademlias.values_mut() {
-				if protocol.as_ref() == kademlia.protocol_name() {
-					trace!(
-						target: "sub-libp2p",
-						"Adding self-reported address {} from {} to Kademlia DHT {}.",
-						addr, peer_id, String::from_utf8_lossy(kademlia.protocol_name()),
-					);
-					kademlia.add_address(peer_id, addr.clone());
-					added = true;
+		for kademlia in self.kademlias.values_mut() {
+			let kad_protocols: Vec<_> = kademlia
+				.protocol_names()
+				.iter()
+				.map(AsRef::as_ref)
+				.map(Bytes::copy_from_slice)
+				.collect();
+			'kad: for kad_protocol in kad_protocols {
+				for supported_protocol in supported_protocols {
+					if supported_protocol.as_ref() == kad_protocol {
+						trace!(
+							target: "sub-libp2p",
+							"Adding self-reported address {} from {} to Kademlia DHT {}.",
+							addr, peer_id, String::from_utf8_lossy(&kad_protocol),
+						);
+						kademlia.add_address(peer_id, addr.clone());
+						added = true;
+						break 'kad
+					}
 				}
 			}
 		}
@@ -1101,8 +1111,7 @@ mod tests {
 												.behaviour_mut()
 												.add_self_reported_address(
 													&other,
-													[protocol_name_from_protocol_id(&protocol_id)]
-														.iter(),
+													&[protocol_name_from_protocol_id(&protocol_id)],
 													addr,
 												);
 
@@ -1157,7 +1166,7 @@ mod tests {
 		// Add remote peer with unsupported protocol.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			[protocol_name_from_protocol_id(&unsupported_protocol_id)].iter(),
+			&[protocol_name_from_protocol_id(&unsupported_protocol_id)],
 			remote_addr.clone(),
 		);
 
@@ -1174,7 +1183,7 @@ mod tests {
 		// Add remote peer with supported protocol.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			[protocol_name_from_protocol_id(&supported_protocol_id)].iter(),
+			&[protocol_name_from_protocol_id(&supported_protocol_id)],
 			remote_addr.clone(),
 		);
 
@@ -1213,7 +1222,7 @@ mod tests {
 		// Add remote peer with `protocol_a` only.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			[protocol_name_from_protocol_id(&protocol_a)].iter(),
+			&[protocol_name_from_protocol_id(&protocol_a)],
 			remote_addr.clone(),
 		);
 

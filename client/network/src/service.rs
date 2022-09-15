@@ -46,10 +46,10 @@ use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
+	identify::IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
-	identify::IdentifyInfo,
 	swarm::{
 		AddressScore, ConnectionError, ConnectionLimits, DialError, NetworkBehaviour,
 		PendingConnectionError, Swarm, SwarmBuilder, SwarmEvent,
@@ -283,6 +283,11 @@ where
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
+		let block_request_protocol_name = params.block_request_protocol_config.name.clone();
+		let state_request_protocol_name = params.state_request_protocol_config.name.clone();
+		let warp_sync_protocol_name =
+			params.warp_sync_protocol_config.as_ref().map(|c| c.name.clone());
+
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
 			let user_agent = format!(
@@ -481,9 +486,9 @@ where
 			tx_handler_controller,
 			metrics,
 			boot_node_ids,
-			block_request_protocol_name: params.block_request_protocol_config.name,
-			state_request_protocol_name: params.state_request_protocol_config.name,
-			warp_sync_protocol_name: params.warp_sync_protocol_config.map(|c| c.name),
+			block_request_protocol_name,
+			state_request_protocol_name,
+			warp_sync_protocol_name,
 		})
 	}
 
@@ -1693,11 +1698,9 @@ where
 						listen_addrs.truncate(30);
 					}
 					for addr in listen_addrs {
-						self.network_service.behaviour().add_self_reported_address(
-							&peer_id,
-							protocols.iter(),
-							addr,
-						);
+						self.network_service
+							.behaviour()
+							.add_self_reported_address(&peer_id, &protocols, addr);
 					}
 					self.network_service
 						.behaviour()

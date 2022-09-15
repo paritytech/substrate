@@ -49,10 +49,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{
-	collections::HashSet,
-	time::Duration,
-};
+use std::{collections::HashSet, time::Duration};
 
 pub use crate::request_responses::{InboundFailure, OutboundFailure, RequestId, ResponseFailure};
 
@@ -326,9 +323,9 @@ where
 	/// Add a self-reported address of a remote peer to the k-buckets of the supported
 	/// DHTs (`supported_protocols`).
 	pub fn add_self_reported_address(
-		&self,
+		&mut self,
 		peer_id: &PeerId,
-		supported_protocols: impl Iterator<Item = impl AsRef<[u8]>>,
+		supported_protocols: &[impl AsRef<[u8]>],
 		addr: Multiaddr,
 	) {
 		self.discovery.add_self_reported_address(peer_id, supported_protocols, addr);
