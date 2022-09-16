@@ -127,15 +127,17 @@ type BalanceOf<T> = <<T as Config>::OnChargeTransaction as OnChargeTransaction<T
 ///
 /// More info can be found at:
 /// <https://research.web3.foundation/en/latest/polkadot/overview/2-token-economics.html>
-pub struct TargetedFeeAdjustment<T, S, V, M>(sp_std::marker::PhantomData<(T, S, V, M)>);
+pub struct TargetedFeeAdjustment<T, S, V, M, Max>(sp_std::marker::PhantomData<(T, S, V, M, Max)>);
 
 /// Something that can convert the current multiplier to the next one.
 pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
-	/// Minimum multiplier
+	/// Minimum multiplier. Any outcome of the `convert` function should be more than this.
 	fn min() -> Multiplier;
-	/// Target block saturation level
+	/// Maximum multiplier. Any outcome of the `convert` function should be less than this.
+	fn max() -> Multiplier;
+	/// Target block saturation level. The `convert` function could possibly update itself based on this target.
 	fn target() -> Perquintill;
-	/// Variability factor
+	/// Variability factor. The `convert function` could possible tune its speed of update based on this.
 	fn variability() -> Multiplier;
 }
 
@@ -143,6 +145,10 @@ impl MultiplierUpdate for () {
 	fn min() -> Multiplier {
 		Default::default()
 	}
+	fn max() -> Multiplier {
+		todo!()
+	}
+
 	fn target() -> Perquintill {
 		Default::default()
 	}
@@ -151,15 +157,19 @@ impl MultiplierUpdate for () {
 	}
 }
 
-impl<T, S, V, M> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M>
+impl<T, S, V, M,Max> MultiplierUpdate for TargetedFeeAdjustment<T, S, V, M,Max>
 where
 	T: frame_system::Config,
 	S: Get<Perquintill>,
 	V: Get<Multiplier>,
 	M: Get<Multiplier>,
+	Max: Get<Multiplier>,
 {
 	fn min() -> Multiplier {
 		M::get()
+	}
+	fn max() -> Multiplier {
+		Max::get()
 	}
 	fn target() -> Perquintill {
 		S::get()
@@ -169,12 +179,13 @@ where
 	}
 }
 
-impl<T, S, V, M> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M>
+impl<T, S, V, M, Max> Convert<Multiplier, Multiplier> for TargetedFeeAdjustment<T, S, V, M, Max>
 where
 	T: frame_system::Config,
 	S: Get<Perquintill>,
 	V: Get<Multiplier>,
 	M: Get<Multiplier>,
+	Max: Get<Multiplier>,
 {
 	fn convert(previous: Multiplier) -> Multiplier {
 		// Defensive only. The multiplier in storage should always be at most positive. Nonetheless
@@ -217,7 +228,13 @@ where
 
 		if positive {
 			let excess = first_term.saturating_add(second_term).saturating_mul(previous);
-			previous.saturating_add(excess).max(min_multiplier)
+			let next_multiplier = previous.saturating_add(excess).max(min_multiplier);
+			let max_multiplier = Max::get();
+			if next_multiplier > max_multiplier {
+				Max::get()
+			}else{
+				next_multiplier
+			}
 		} else {
 			// Defensive-only: first_term > second_term. Safe subtraction.
 			let negative = first_term.saturating_sub(second_term).saturating_mul(previous);
@@ -227,11 +244,14 @@ where
 }
 
 /// A struct to make the fee multiplier a constant
-pub struct ConstFeeMultiplier<M: Get<Multiplier>>(sp_std::marker::PhantomData<M>);
+pub struct ConstFeeMultiplier<M: Get<Multiplier>,Max:Get<Multiplier>>(sp_std::marker::PhantomData<(M,Max)>);
 
-impl<M: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M> {
+impl<M: Get<Multiplier>,Max: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M,Max> {
 	fn min() -> Multiplier {
 		M::get()
+	}
+	fn max() -> Multiplier {
+		Max::get()
 	}
 	fn target() -> Perquintill {
 		Default::default()
@@ -241,9 +261,10 @@ impl<M: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M> {
 	}
 }
 
-impl<M> Convert<Multiplier, Multiplier> for ConstFeeMultiplier<M>
+impl<M,Max> Convert<Multiplier, Multiplier> for ConstFeeMultiplier<M,Max>
 where
 	M: Get<Multiplier>,
+	Max: Get<Multiplier>,
 {
 	fn convert(_previous: Multiplier) -> Multiplier {
 		Self::min()

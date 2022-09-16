@@ -254,6 +254,7 @@ impl pallet_balances::Config for Runtime {
 
 parameter_types! {
 	pub FeeMultiplier: Multiplier = Multiplier::one();
+	pub MaxMultiplier: Multiplier = <Multiplier as sp_runtime::traits::Bounded>::max_value();
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -262,7 +263,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<Balance>;
 	type LengthToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
+	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier,MaxMultiplier>;
 }
 
 impl pallet_sudo::Config for Runtime {
