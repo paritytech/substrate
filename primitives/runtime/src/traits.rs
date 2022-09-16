@@ -95,6 +95,46 @@ impl IdentifyAccount for sp_core::ecdsa::Public {
 }
 
 /// Means of signature verification.
+///
+/// Accepts custom hashing fn for the message and custom convertor fn for the signer.
+pub trait CustomVerify<
+	MsgHash: Hash,
+	AccountId: PartialEq,
+	SignerToAccountId: Convert<Self::Signer, AccountId>,
+>
+{
+	/// Type of the signer.
+	type Signer: IdentifyAccount;
+
+	/// Verify a signature.
+	///
+	/// Return `true` if signature is valid for the value.
+	fn custom_verify<L: Lazy<[u8]>>(&self, msg: L, signer: &AccountId) -> bool;
+}
+
+impl<
+		MsgHash: Hash,
+		AccountId: PartialEq,
+		SignerToAccountId: Convert<sp_core::ecdsa::Public, AccountId>,
+	> CustomVerify<MsgHash, AccountId, SignerToAccountId> for sp_core::ecdsa::Signature
+where
+	<MsgHash as Hash>::Output: Into<[u8; 32]>,
+{
+	type Signer = sp_core::ecdsa::Public;
+
+	fn custom_verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId) -> bool {
+		use sp_application_crypto::ByteArray;
+		let msg_hash = <MsgHash as Hash>::hash(msg.get()).into();
+		match sp_io::crypto::secp256k1_ecdsa_recover_compressed(self.as_ref(), &msg_hash)
+			.map(|raw_pubkey| sp_core::ecdsa::Public::from_slice(raw_pubkey.as_ref()))
+		{
+			Ok(Ok(pubkey)) => signer == &SignerToAccountId::convert(pubkey),
+			_ => false,
+		}
+	}
+}
+
+/// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
 	type Signer: IdentifyAccount;
@@ -126,14 +166,8 @@ impl Verify for sp_core::sr25519::Signature {
 
 impl Verify for sp_core::ecdsa::Signature {
 	type Signer = sp_core::ecdsa::Public;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &sp_core::ecdsa::Public) -> bool {
-		match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
-			self.as_ref(),
-			&sp_io::hashing::blake2_256(msg.get()),
-		) {
-			Ok(pubkey) => signer.as_ref() == &pubkey[..],
-			_ => false,
-		}
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &sp_core::ecdsa::Public) -> bool {
+		CustomVerify::<BlakeTwo256, _, Identity>::custom_verify(self, msg, signer)
 	}
 }
 
@@ -2015,7 +2049,6 @@ mod tests {
 		let signature = pair.sign(&msg);
 		assert!(ecdsa::Pair::verify(&signature, msg, &pair.public()));
 
-		assert!(signature.verify(msg, &pair.public()));
 		assert!(signature.verify(msg, &pair.public()));
 	}
 }
