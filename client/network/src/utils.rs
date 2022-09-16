@@ -59,6 +59,11 @@ impl<T: Hash + Eq> LruHashSet<T> {
 		}
 		false
 	}
+
+	/// Removes an element from the set if it is present.
+	pub fn remove(&mut self, e: &T) -> bool {
+		self.set.remove(e)
+	}
 }
 
 #[cfg(test)]

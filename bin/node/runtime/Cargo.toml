@@ -15,7 +15,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 # third-party dependencies
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-serde = { version = "1.0.102", optional = true }
 static_assertions = "1.1.0"
 hex-literal = { version = "0.3.1", optional = true }
 log = { version = "0.4.14", default-features = false }
@@ -58,7 +57,7 @@ pallet-contracts-primitives = { version = "3.0.0", default-features = false, pat
 pallet-contracts-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
 pallet-democracy = { version = "3.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-multi-phase" }
-pallet-elections-phragmen = { version = "3.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
+pallet-elections-phragmen = { version = "4.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
 pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "3.0.0", default-features = false, path = "../../../frame/indices" }
@@ -133,7 +132,6 @@ std = [
 	"sp-io/std",
 	"pallet-randomness-collective-flip/std",
 	"sp-std/std",
-	"serde",
 	"pallet-session/std",
 	"sp-api/std",
 	"sp-runtime/std",
@@ -180,6 +178,7 @@ runtime-benchmarks = [
 	"pallet-identity/runtime-benchmarks",
 	"pallet-im-online/runtime-benchmarks",
 	"pallet-indices/runtime-benchmarks",
+	"pallet-membership/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",

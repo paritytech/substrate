@@ -31,7 +31,7 @@ use sc_finality_grandpa::SharedAuthoritySet;
 
 mod proof;
 
-pub use proof::{AuthoritySetChangeProof, WarpSyncProof};
+pub use proof::{WarpSyncFragment, WarpSyncProof};
 
 /// Generates the appropriate [`RequestResponseConfig`] for a given chain configuration.
 pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBlock> + 'static>(
@@ -66,7 +66,7 @@ pub fn generate_request_response_config(protocol_id: ProtocolId) -> RequestRespo
 	RequestResponseConfig {
 		name: generate_protocol_name(protocol_id).into(),
 		max_request_size: 32,
-		max_response_size: 16 * 1024 * 1024,
+		max_response_size: proof::MAX_WARP_SYNC_PROOF_SIZE as u64,
 		request_timeout: Duration::from_secs(10),
 		inbound_queue: None,
 	}
@@ -120,14 +120,14 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 	fn handle_request(
 		&self,
 		payload: Vec<u8>,
-		pending_response: oneshot::Sender<OutgoingResponse>
+		pending_response: oneshot::Sender<OutgoingResponse>,
 	) -> Result<(), HandleRequestError>
 		where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 	{
 		let request = Request::<TBlock>::decode(&mut &payload[..])?;
 
 		let proof = WarpSyncProof::generate(
-			self.backend.blockchain(),
+			&*self.backend,
 			request.begin,
 			&self.authority_set.authority_set_changes(),
 		)?;
@@ -135,6 +135,7 @@ impl<TBlock: BlockT, TBackend: Backend<TBlock>> GrandpaWarpSyncRequestHandler<TB
 		pending_response.send(OutgoingResponse {
 			result: Ok(proof.encode()),
 			reputation_changes: Vec::new(),
+			sent_feedback: None,
 		}).map_err(|_| HandleRequestError::SendResponse)
 	}
 

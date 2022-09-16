@@ -18,7 +18,6 @@ pallet-authorship = { version = "3.0.0", default-features = false, path = "../au
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
-serde = { version = "1.0.101", optional = true }
 sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "3.0.0", default-features = false, path = "../../primitives/staking" }
@@ -39,7 +38,6 @@ std = [
 	"codec/std",
 	"sp-core/std",
 	"sp-std/std",
-	"serde",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-staking/std",

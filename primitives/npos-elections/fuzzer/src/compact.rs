@@ -4,7 +4,11 @@ use sp_npos_elections::sp_arithmetic::Percent;
 use sp_runtime::codec::{Encode, Error};
 
 fn main() {
-	generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<u32, u32, Percent>(16));
+	generate_solution_type!(#[compact] pub struct InnerTestSolutionCompact::<
+		VoterIndex = u32,
+		TargetIndex = u32,
+		Accuracy = Percent,
+	>(16));
 	loop {
 		fuzz!(|fuzzer_data: &[u8]| {
 			let result_decoded: Result<InnerTestSolutionCompact, Error> =

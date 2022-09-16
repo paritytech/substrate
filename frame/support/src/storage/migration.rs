@@ -34,11 +34,14 @@ pub struct StorageIterator<T> {
 
 impl<T> StorageIterator<T> {
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	#[deprecated(note="Please use the storage_iter or storage_iter_with_suffix functions instead")]
 	pub fn new(module: &[u8], item: &[u8]) -> Self {
+		#[allow(deprecated)]
 		Self::with_suffix(module, item, &[][..])
 	}
 
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	#[deprecated(note="Please use the storage_iter or storage_iter_with_suffix functions instead")]
 	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
 		let mut prefix = Vec::new();
 		prefix.extend_from_slice(&Twox128::hash(module));
@@ -92,11 +95,14 @@ pub struct StorageKeyIterator<K, T, H: ReversibleStorageHasher> {
 
 impl<K, T, H: ReversibleStorageHasher> StorageKeyIterator<K, T, H> {
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	#[deprecated(note="Please use the storage_key_iter or storage_key_iter_with_suffix functions instead")]
 	pub fn new(module: &[u8], item: &[u8]) -> Self {
+		#[allow(deprecated)]
 		Self::with_suffix(module, item, &[][..])
 	}
 
 	/// Construct iterator to iterate over map items in `module` for the map called `item`.
+	#[deprecated(note="Please use the storage_key_iter or storage_key_iter_with_suffix functions instead")]
 	pub fn with_suffix(module: &[u8], item: &[u8], suffix: &[u8]) -> Self {
 		let mut prefix = Vec::new();
 		prefix.extend_from_slice(&Twox128::hash(module));
@@ -146,6 +152,58 @@ impl<K: Decode + Sized, T: Decode + Sized, H: ReversibleStorageHasher> Iterator
 			}
 		}
 	}
+}
+
+/// Construct iterator to iterate over map items in `module` for the map called `item`.
+pub fn storage_iter<T: Decode + Sized>(module: &[u8], item: &[u8]) -> PrefixIterator<(Vec<u8>, T)> {
+	storage_iter_with_suffix(module, item, &[][..])
+}
+
+/// Construct iterator to iterate over map items in `module` for the map called `item`.
+pub fn storage_iter_with_suffix<T: Decode + Sized>(
+	module: &[u8],
+	item: &[u8],
+	suffix: &[u8],
+) -> PrefixIterator<(Vec<u8>, T)> {
+	let mut prefix = Vec::new();
+	prefix.extend_from_slice(&Twox128::hash(module));
+	prefix.extend_from_slice(&Twox128::hash(item));
+	prefix.extend_from_slice(suffix);
+	let previous_key = prefix.clone();
+	let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
+		let value = T::decode(&mut &raw_value[..])?;
+		Ok((raw_key_without_prefix.to_vec(), value))
+	};
+
+	PrefixIterator { prefix, previous_key, drain: false, closure }
+}
+
+/// Construct iterator to iterate over map items in `module` for the map called `item`.
+pub fn storage_key_iter<K: Decode + Sized, T: Decode + Sized, H: ReversibleStorageHasher>(
+	module: &[u8],
+	item: &[u8],
+) -> PrefixIterator<(K, T)> {
+	storage_key_iter_with_suffix::<K, T, H>(module, item, &[][..])
+}
+
+/// Construct iterator to iterate over map items in `module` for the map called `item`.
+pub fn storage_key_iter_with_suffix<K: Decode + Sized, T: Decode + Sized, H: ReversibleStorageHasher>(
+	module: &[u8],
+	item: &[u8],
+	suffix: &[u8],
+) -> PrefixIterator<(K, T)> {
+	let mut prefix = Vec::new();
+	prefix.extend_from_slice(&Twox128::hash(module));
+	prefix.extend_from_slice(&Twox128::hash(item));
+	prefix.extend_from_slice(suffix);
+	let previous_key = prefix.clone();
+	let closure = |raw_key_without_prefix: &[u8], raw_value: &[u8]| {
+		let mut key_material = H::reverse(raw_key_without_prefix);
+		let key = K::decode(&mut key_material)?;
+		let value = T::decode(&mut &raw_value[..])?;
+		Ok((key, value))
+	};
+	PrefixIterator { prefix, previous_key, drain: false, closure }
 }
 
 /// Get a particular value in storage by the `module`, the map's `item` name and the key `hash`.
@@ -294,7 +352,13 @@ mod tests {
 		hash::StorageHasher,
 	};
 	use sp_io::TestExternalities;
-	use super::{move_prefix, move_pallet, move_storage_from_pallet};
+	use super::{
+		move_prefix,
+		move_pallet,
+		move_storage_from_pallet,
+		storage_iter,
+		storage_key_iter,
+	};
 
 	struct OldPalletStorageValuePrefix;
 	impl frame_support::traits::StorageInstance for OldPalletStorageValuePrefix {
@@ -385,5 +449,32 @@ mod tests {
 			assert_eq!(NewStorageValue::get(), Some(3));
 			assert_eq!(NewStorageMap::iter().collect::<Vec<_>>(), vec![(1, 2), (3, 4)]);
 		})
+	}
+
+	#[test]
+	fn test_storage_iter() {
+		TestExternalities::new_empty().execute_with(|| {
+			OldStorageValue::put(3);
+			OldStorageMap::insert(1, 2);
+			OldStorageMap::insert(3, 4);
+
+			assert_eq!(
+				storage_key_iter::<i32, i32, Twox64Concat>(b"my_old_pallet", b"foo_map").collect::<Vec<_>>(),
+				vec![(1, 2), (3, 4)],
+			);
+
+			assert_eq!(
+				storage_iter(b"my_old_pallet", b"foo_map").drain().map(|t| t.1).collect::<Vec<i32>>(),
+				vec![2, 4],
+			);
+			assert_eq!(OldStorageMap::iter().collect::<Vec<_>>(), vec![]);
+
+			// Empty because storage iterator skips over the entry under the first key
+			assert_eq!(
+				storage_iter::<i32>(b"my_old_pallet", b"foo_value").drain().next(),
+				None
+			);
+			assert_eq!(OldStorageValue::get(), Some(3));
+		});
 	}
 }

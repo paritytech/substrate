@@ -46,6 +46,8 @@ pub enum MinerError {
 	PreDispatchChecksFailed,
 	/// The solution generated from the miner is not feasible.
 	Feasibility(FeasibilityError),
+	/// There are no more voters to remove to trim the solution.
+	NoMoreVoters,
 }
 
 impl From<sp_npos_elections::Error> for MinerError {
@@ -168,13 +170,22 @@ impl<T: Config> Pallet<T> {
 			size,
 			T::MinerMaxWeight::get(),
 		);
+
 		log!(
 			debug,
-			"miner: current compact solution voters = {}, maximum_allowed = {}",
+			"initial solution voters = {}, snapshot = {:?}, maximum_allowed(capped) = {}",
 			compact.voter_count(),
+			size,
 			maximum_allowed_voters,
 		);
-		let compact = Self::trim_compact(maximum_allowed_voters, compact, &voter_index)?;
+
+		// trim length and weight
+		let compact = Self::trim_compact_weight(maximum_allowed_voters, compact, &voter_index)?;
+		let compact = Self::trim_compact_length(
+			T::MinerMaxLength::get(),
+			compact,
+			&voter_index,
+		)?;
 
 		// re-calc score.
 		let winners = sp_npos_elections::to_without_backing(winners);
@@ -217,7 +228,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Indeed, the score must be computed **after** this step. If this step reduces the score too
 	/// much or remove a winner, then the solution must be discarded **after** this step.
-	pub fn trim_compact<FN>(
+	pub fn trim_compact_weight<FN>(
 		maximum_allowed_voters: u32,
 		mut compact: CompactOf<T>,
 		voter_index: FN,
@@ -252,13 +263,59 @@ impl<T: Config> Pallet<T> {
 					}
 				}
 
+				log!(debug, "removed {} voter to meet the max weight limit.", to_remove);
 				Ok(compact)
 			}
 			_ => {
 				// nada, return as-is
+				log!(debug, "didn't remove any voter for weight limits.");
 				Ok(compact)
 			}
 		}
+	}
+
+	/// Greedily reduce the size of the solution to fit into the block w.r.t length.
+	///
+	/// The length of the solution is largely a function of the number of voters. The number of
+	/// winners cannot be changed. Thus, to reduce the solution size, we need to strip voters.
+	///
+	/// Note that this solution is already computed, and winners are elected based on the merit of
+	/// the total stake in the system. Nevertheless, some of the voters may be removed here.
+	///
+	/// Sometimes, removing a voter can cause a validator to also be implicitly removed, if
+	/// that voter was the only backer of that winner. In such cases, this solution is invalid, which
+	/// will be caught prior to submission.
+	///
+	/// The score must be computed **after** this step. If this step reduces the score too much,
+	/// then the solution must be discarded.
+	pub fn trim_compact_length(
+		max_allowed_length: u32,
+		mut compact: CompactOf<T>,
+		voter_index: impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>>,
+	) -> Result<CompactOf<T>, MinerError> {
+		// short-circuit to avoid getting the voters if possible
+		// this involves a redundant encoding, but that should hopefully be relatively cheap
+		if (compact.encoded_size().saturated_into::<u32>()) <= max_allowed_length {
+			return Ok(compact);
+		}
+
+		// grab all voters and sort them by least stake.
+		let RoundSnapshot { voters, .. } =
+			Self::snapshot().ok_or(MinerError::SnapshotUnAvailable)?;
+		let mut voters_sorted = voters
+			.into_iter()
+			.map(|(who, stake, _)| (who.clone(), stake))
+			.collect::<Vec<_>>();
+		voters_sorted.sort_by_key(|(_, y)| *y);
+		voters_sorted.reverse();
+
+		while compact.encoded_size() > max_allowed_length.saturated_into() {
+			let (smallest_stake_voter, _) = voters_sorted.pop().ok_or(MinerError::NoMoreVoters)?;
+			let index = voter_index(&smallest_stake_voter).ok_or(MinerError::SnapshotUnAvailable)?;
+			compact.remove_voter(index);
+		}
+
+		Ok(compact)
 	}
 
 	/// Find the maximum `len` that a compact can have in order to fit into the block weight.
@@ -298,6 +355,7 @@ impl<T: Config> Pallet<T> {
 		// First binary-search the right amount of voters
 		let mut step = voters / 2;
 		let mut current_weight = weight_with(voters);
+
 		while step > 0 {
 			match next_voters(current_weight, voters, step) {
 				// proceed with the binary search
@@ -324,13 +382,14 @@ impl<T: Config> Pallet<T> {
 			voters -= 1;
 		}
 
+		let final_decision = voters.min(size.voters);
 		debug_assert!(
-			weight_with(voters.min(size.voters)) <= max_weight,
+			weight_with(final_decision) <= max_weight,
 			"weight_with({}) <= {}",
-			voters.min(size.voters),
+			final_decision,
 			max_weight,
 		);
-		voters.min(size.voters)
+		final_decision
 	}
 
 	/// Checks if an execution of the offchain worker is permitted at the given block number, or
@@ -498,6 +557,7 @@ mod tests {
 		Call, *,
 	};
 	use frame_support::{dispatch::Dispatchable, traits::OffchainWorker};
+	use helpers::voter_index_fn_linear;
 	use mock::Call as OuterCall;
 	use frame_election_provider_support::Assignment;
 	use sp_runtime::{traits::ValidateUnsigned, PerU16};
@@ -642,7 +702,7 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Invalid unsigned submission must produce invalid block and \
 	                           deprive validator from their authoring reward.: \
-	                           DispatchError::Module { index: 2, error: 1, message: \
+	                           Module { index: 2, error: 1, message: \
 	                           Some(\"PreDispatchWrongWinnerCount\") }")]
 	fn unfeasible_solution_panics() {
 		ExtBuilder::default().build_and_execute(|| {
@@ -824,20 +884,20 @@ mod tests {
 			assert!(MultiPhase::try_acquire_offchain_lock(25).is_ok());
 
 			// next block: rejected.
-			assert!(MultiPhase::try_acquire_offchain_lock(26).is_err());
+			assert_noop!(MultiPhase::try_acquire_offchain_lock(26), "recently executed.");
 
 			// allowed after `OFFCHAIN_REPEAT`
 			assert!(MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT).into()).is_ok());
 
 			// a fork like situation: re-execute last 3.
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 3).into()).is_err()
+			assert_noop!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 3).into()), "fork."
 			);
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 2).into()).is_err()
+			assert_noop!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 2).into()), "fork."
 			);
-			assert!(
-				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 1).into()).is_err()
+			assert_noop!(
+				MultiPhase::try_acquire_offchain_lock((26 + OFFCHAIN_REPEAT - 1).into()), "fork."
 			);
 		})
 	}
@@ -880,5 +940,117 @@ mod tests {
 			let call = extrinsic.call;
 			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned(_, _))));
 		})
+	}
+
+	#[test]
+	fn trim_compact_length_does_not_modify_when_short_enough() {
+		let mut ext = ExtBuilder::default().build();
+		ext.execute_with(|| {
+			roll_to(25);
+
+			// given
+			let RoundSnapshot { voters, ..} = MultiPhase::snapshot().unwrap();
+			let RawSolution { mut compact, .. } = raw_solution();
+			let encoded_len = compact.encode().len() as u32;
+			let compact_clone = compact.clone();
+
+			// when
+			assert!(encoded_len < <Runtime as Config>::MinerMaxLength::get());
+
+			// then
+			compact = MultiPhase::trim_compact_length(
+				encoded_len,
+				compact,
+				voter_index_fn_linear::<Runtime>(&voters),
+			).unwrap();
+			assert_eq!(compact, compact_clone);
+		});
+	}
+
+	#[test]
+	fn trim_compact_length_modifies_when_too_long() {
+		let mut ext = ExtBuilder::default().build();
+		ext.execute_with(|| {
+			roll_to(25);
+
+			let RoundSnapshot { voters, ..} =
+				MultiPhase::snapshot().unwrap();
+
+			let RawSolution { mut compact, .. } = raw_solution();
+			let encoded_len = compact.encoded_size() as u32;
+			let compact_clone = compact.clone();
+
+			compact = MultiPhase::trim_compact_length(
+				encoded_len - 1,
+				compact,
+				voter_index_fn_linear::<Runtime>(&voters),
+			).unwrap();
+
+			assert_ne!(compact, compact_clone);
+			assert!((compact.encoded_size() as u32) < encoded_len);
+		});
+	}
+
+	#[test]
+	fn trim_compact_length_trims_lowest_stake() {
+		let mut ext = ExtBuilder::default().build();
+		ext.execute_with(|| {
+			roll_to(25);
+
+			let RoundSnapshot { voters, ..} =
+				MultiPhase::snapshot().unwrap();
+
+			let RawSolution { mut compact, .. } = raw_solution();
+			let encoded_len = compact.encoded_size() as u32;
+			let voter_count = compact.voter_count();
+			let min_stake_voter = voters.iter()
+				.map(|(id, weight, _)| (weight, id))
+				.min()
+				.map(|(_, id)| id)
+				.unwrap();
+
+
+			compact = MultiPhase::trim_compact_length(
+				encoded_len - 1,
+				compact,
+				voter_index_fn_linear::<Runtime>(&voters),
+			).unwrap();
+
+			assert_eq!(compact.voter_count(), voter_count - 1, "we must have removed exactly 1 voter");
+
+			let assignments = compact.into_assignment(
+				|voter| Some(voter as AccountId),
+				|target| Some(target as AccountId),
+			).unwrap();
+			assert!(
+				assignments.iter()
+					.all(|Assignment{ who, ..}| who != min_stake_voter),
+				"min_stake_voter must no longer be in the set of voters",
+			);
+		});
+	}
+
+	// all the other solution-generation functions end up delegating to `mine_solution`, so if we
+	// demonstrate that `mine_solution` solutions are all trimmed to an acceptable length, then
+	// we know that higher-level functions will all also have short-enough solutions.
+	#[test]
+	fn mine_solution_solutions_always_within_acceptable_length() {
+		let mut ext = ExtBuilder::default().build();
+		ext.execute_with(|| {
+			roll_to(25);
+
+			// how long would the default solution be?
+			let solution = MultiPhase::mine_solution(0).unwrap();
+			let max_length = <Runtime as Config>::MinerMaxLength::get();
+			let solution_size = solution.0.compact.encoded_size();
+			assert!(solution_size <= max_length as usize);
+
+			// now set the max size to less than the actual size and regenerate
+			<Runtime as Config>::MinerMaxLength::set(solution_size as u32 - 1);
+			let solution = MultiPhase::mine_solution(0).unwrap();
+			let max_length = <Runtime as Config>::MinerMaxLength::get();
+			let solution_size = solution.0.compact.encoded_size();
+			assert!(solution_size <= max_length as usize);
+		});
 	}
 }

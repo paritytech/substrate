@@ -20,7 +20,6 @@ frame-system = { version = "3.0.0", default-features = false, path = "../system"
 pallet-authorship = { version = "3.0.0", default-features = false, path = "../authorship" }
 pallet-session = { version = "3.0.0", default-features = false, path = "../session" }
 pallet-timestamp = { version = "3.0.0", default-features = false, path = "../timestamp" }
-serde = { version = "1.0.101", optional = true }
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-babe = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/babe" }
 sp-consensus-vrf = { version = "0.9.0", default-features = false, path = "../../primitives/consensus/vrf" }
@@ -49,7 +48,6 @@ std = [
 	"pallet-authorship/std",
 	"pallet-session/std",
 	"pallet-timestamp/std",
-	"serde",
 	"sp-application-crypto/std",
 	"sp-consensus-babe/std",
 	"sp-consensus-vrf/std",

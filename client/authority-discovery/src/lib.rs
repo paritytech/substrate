@@ -53,10 +53,23 @@ pub struct WorkerConfig {
 	///
 	/// By default this is set to 1 hour.
 	pub max_publish_interval: Duration,
+	/// Interval at which the keystore is queried. If the keys have changed, unconditionally
+	/// re-publish its addresses on the DHT.
+	///
+	/// By default this is set to 1 minute.
+	pub keystore_refresh_interval: Duration,
 	/// The maximum interval in which the node will query the DHT for new entries.
 	///
 	/// By default this is set to 10 minutes.
 	pub max_query_interval: Duration,
+
+	/// If `false`, the node won't publish on the DHT multiaddresses that contain non-global
+	/// IP addresses (such as 10.0.0.1).
+	///
+	/// Recommended: `false` for live chains, and `true` for local chains or for testing.
+	///
+	/// Defaults to `true` to avoid the surprise factor.
+	pub publish_non_global_ips: bool,
 }
 
 impl Default for WorkerConfig {
@@ -67,6 +80,7 @@ impl Default for WorkerConfig {
 			// not depend on the republishing process, thus publishing own external addresses should
 			// happen on an interval < 36h.
 			max_publish_interval: Duration::from_secs(1 * 60 * 60),
+			keystore_refresh_interval: Duration::from_secs(60),
 			// External addresses of remote authorities can change at any given point in time. The
 			// interval on which to trigger new queries for the current and next authorities is a trade
 			// off between efficiency and performance.
@@ -75,6 +89,7 @@ impl Default for WorkerConfig {
 			// comparing `authority_discovery_authority_addresses_requested_total` and
 			// `authority_discovery_dht_event_received`.
 			max_query_interval: Duration::from_secs(10 * 60),
+			publish_non_global_ips: true,
 		}
 	}
 }

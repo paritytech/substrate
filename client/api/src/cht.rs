@@ -218,12 +218,9 @@ pub fn for_each_cht_group<Header, I, F, P>(
 	let mut current_cht_num = None;
 	let mut current_cht_blocks = Vec::new();
 	for block in blocks {
-		let new_cht_num = match block_to_cht_number(cht_size, block) {
-			Some(new_cht_num) => new_cht_num,
-			None => return Err(ClientError::Backend(format!(
-				"Cannot compute CHT root for the block #{}", block)).into()
-			),
-		};
+		let new_cht_num = block_to_cht_number(cht_size, block).ok_or_else(|| ClientError::Backend(format!(
+				"Cannot compute CHT root for the block #{}", block))
+			)?;
 
 		let advance_to_next_cht = current_cht_num.is_some() && current_cht_num != Some(new_cht_num);
 		if advance_to_next_cht {

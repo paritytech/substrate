@@ -120,6 +120,7 @@ impl<T: Config> SignedExtension for CheckNonce<T> where
 mod tests {
 	use super::*;
 	use crate::mock::{Test, new_test_ext, CALL};
+	use frame_support::{assert_noop, assert_ok};
 
 	#[test]
 	fn signed_ext_check_nonce_works() {
@@ -134,14 +135,23 @@ mod tests {
 			let info = DispatchInfo::default();
 			let len = 0_usize;
 			// stale
-			assert!(CheckNonce::<Test>(0).validate(&1, CALL, &info, len).is_err());
-			assert!(CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len).is_err());
+			assert_noop!(
+				CheckNonce::<Test>(0).validate(&1, CALL, &info, len),
+				InvalidTransaction::Stale
+			);
+			assert_noop!(
+				CheckNonce::<Test>(0).pre_dispatch(&1, CALL, &info, len),
+				InvalidTransaction::Stale
+			);
 			// correct
-			assert!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len).is_ok());
-			assert!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len).is_ok());
+			assert_ok!(CheckNonce::<Test>(1).validate(&1, CALL, &info, len));
+			assert_ok!(CheckNonce::<Test>(1).pre_dispatch(&1, CALL, &info, len));
 			// future
-			assert!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len).is_ok());
-			assert!(CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len).is_err());
+			assert_ok!(CheckNonce::<Test>(5).validate(&1, CALL, &info, len));
+			assert_noop!(
+				CheckNonce::<Test>(5).pre_dispatch(&1, CALL, &info, len),
+				InvalidTransaction::Future
+			);
 		})
 	}
 }

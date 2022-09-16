@@ -290,7 +290,7 @@ use codec::{HasCompact, Encode, Decode};
 use frame_support::{
 	decl_module, decl_event, decl_storage, ensure, decl_error,
 	weights::{
-		Weight,
+		Weight, WithPostDispatchInfo,
 		constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS},
 	},
 	storage::IterableStorageMap,
@@ -313,8 +313,6 @@ use sp_staking::{
 	SessionIndex,
 	offence::{OnOffenceHandler, OffenceDetails, Offence, ReportOffence, OffenceError},
 };
-#[cfg(feature = "std")]
-use sp_runtime::{Serialize, Deserialize};
 use frame_system::{
 	self as system, ensure_signed, ensure_root,
 	offchain::SendTransactionTypes,
@@ -380,7 +378,7 @@ pub struct EraRewardPoints<AccountId: Ord> {
 
 /// Indicates the initial status of the staker.
 #[derive(RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum StakerStatus<AccountId> {
 	/// Chilling.
 	Idle,
@@ -793,7 +791,7 @@ pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
 
 /// Mode of era-forcing.
 #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum Forcing {
 	/// Not forcing anything - just let whatever happen.
 	NotForcing,
@@ -1036,30 +1034,15 @@ pub mod migrations {
 
 	pub mod v6 {
 		use super::*;
-		use frame_support::{traits::Get, weights::Weight, pallet_prelude::*};
-
-		macro_rules! generate_storage_types {
-			($name:ident => Value<$value:ty>) => {
-				paste::paste! {
-					struct [<$name Instance>];
-					impl frame_support::traits::StorageInstance for [<$name Instance>] {
-						fn pallet_prefix() -> &'static str {
-							"Staking"
-						}
-						const STORAGE_PREFIX: &'static str = stringify!($name);
-					}
-					type $name = StorageValue<[<$name Instance>], $value, ValueQuery>;
-				}
-			}
-		}
+		use frame_support::{traits::Get, weights::Weight, generate_storage_alias};
 
 		// NOTE: value type doesn't matter, we just set it to () here.
-		generate_storage_types!(SnapshotValidators => Value<()>);
-		generate_storage_types!(SnapshotNominators => Value<()>);
-		generate_storage_types!(QueuedElected => Value<()>);
-		generate_storage_types!(QueuedScore => Value<()>);
-		generate_storage_types!(EraElectionStatus => Value<()>);
-		generate_storage_types!(IsCurrentSessionFinal => Value<()>);
+		generate_storage_alias!(Staking, SnapshotValidators => Value<()>);
+		generate_storage_alias!(Staking, SnapshotNominators => Value<()>);
+		generate_storage_alias!(Staking, QueuedElected => Value<()>);
+		generate_storage_alias!(Staking, QueuedScore => Value<()>);
+		generate_storage_alias!(Staking, EraElectionStatus => Value<()>);
+		generate_storage_alias!(Staking, IsCurrentSessionFinal => Value<()>);
 
 		/// check to execute prior to migration.
 		pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
@@ -1203,6 +1186,11 @@ decl_module! {
 			} else {
 				T::DbWeight::get().reads(1)
 			}
+		}
+
+		fn on_initialize(_now: T::BlockNumber) -> Weight {
+			// just return the weight of the on_finalize.
+			T::DbWeight::get().reads(1)
 		}
 
 		fn on_finalize() {
@@ -1803,7 +1791,7 @@ decl_module! {
 		///   Paying even a dead controller is cheaper weight-wise. We don't do any refunds here.
 		/// # </weight>
 		#[weight = T::WeightInfo::payout_stakers_alive_staked(T::MaxNominatorRewardedPerValidator::get())]
-		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
+		fn payout_stakers(origin, validator_stash: T::AccountId, era: EraIndex) -> DispatchResultWithPostInfo {
 			ensure_signed(origin)?;
 			Self::do_payout_stakers(validator_stash, era)
 		}
@@ -1967,24 +1955,35 @@ impl<T: Config> Module<T> {
 		})
 	}
 
-	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResult {
+	fn do_payout_stakers(validator_stash: T::AccountId, era: EraIndex) -> DispatchResultWithPostInfo {
 		// Validate input data
-		let current_era = CurrentEra::get().ok_or(Error::<T>::InvalidEraToReward)?;
-		ensure!(era <= current_era, Error::<T>::InvalidEraToReward);
+		let current_era = CurrentEra::get().ok_or(
+			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		)?;
 		let history_depth = Self::history_depth();
-		ensure!(era >= current_era.saturating_sub(history_depth), Error::<T>::InvalidEraToReward);
+		ensure!(
+			era <= current_era && era >= current_era.saturating_sub(history_depth),
+			Error::<T>::InvalidEraToReward.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		);
 
 		// Note: if era has no reward to be claimed, era may be future. better not to update
 		// `ledger.claimed_rewards` in this case.
 		let era_payout = <ErasValidatorReward<T>>::get(&era)
-			.ok_or_else(|| Error::<T>::InvalidEraToReward)?;
+			.ok_or_else(||
+				Error::<T>::InvalidEraToReward
+					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			)?;
 
-		let controller = Self::bonded(&validator_stash).ok_or(Error::<T>::NotStash)?;
+		let controller = Self::bonded(&validator_stash).ok_or(
+			Error::<T>::NotStash.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+		)?;
 		let mut ledger = <Ledger<T>>::get(&controller).ok_or_else(|| Error::<T>::NotController)?;
 
 		ledger.claimed_rewards.retain(|&x| x >= current_era.saturating_sub(history_depth));
 		match ledger.claimed_rewards.binary_search(&era) {
-			Ok(_) => Err(Error::<T>::AlreadyClaimed)?,
+			Ok(_) => Err(
+				Error::<T>::AlreadyClaimed.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
+			)?,
 			Err(pos) => ledger.claimed_rewards.insert(pos, era),
 		}
 
@@ -2008,7 +2007,9 @@ impl<T: Config> Module<T> {
 			.unwrap_or_else(|| Zero::zero());
 
 		// Nothing to do if they have no reward points.
-		if validator_reward_points.is_zero() { return Ok(())}
+		if validator_reward_points.is_zero() {
+			return Ok(Some(T::WeightInfo::payout_stakers_alive_staked(0)).into())
+		}
 
 		// This is the fraction of the total reward that the validator and the
 		// nominators will get.
@@ -2041,6 +2042,10 @@ impl<T: Config> Module<T> {
 			Self::deposit_event(RawEvent::Reward(ledger.stash, imbalance.peek()));
 		}
 
+		// Track the number of payout ops to nominators. Note: `WeightInfo::payout_stakers_alive_staked`
+		// always assumes at least a validator is paid out, so we do not need to count their payout op.
+		let mut nominator_payout_count: u32 = 0;
+
 		// Lets now calculate how this is split to the nominators.
 		// Reward only the clipped exposures. Note this is not necessarily sorted.
 		for nominator in exposure.others.iter() {
@@ -2052,11 +2057,14 @@ impl<T: Config> Module<T> {
 			let nominator_reward: BalanceOf<T> = nominator_exposure_part * validator_leftover_payout;
 			// We can now make nominator payout:
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
+				// Note: this logic does not count payouts for `RewardDestination::None`.
+				nominator_payout_count += 1;
 				Self::deposit_event(RawEvent::Reward(nominator.who.clone(), imbalance.peek()));
 			}
 		}
 
-		Ok(())
+		debug_assert!(nominator_payout_count <= T::MaxNominatorRewardedPerValidator::get());
+		Ok(Some(T::WeightInfo::payout_stakers_alive_staked(nominator_payout_count)).into())
 	}
 
 	/// Update the ledger for a controller.
@@ -2728,11 +2736,8 @@ impl<T: Config> Convert<T::AccountId, Option<Exposure<T::AccountId, BalanceOf<T>
 	for ExposureOf<T>
 {
 	fn convert(validator: T::AccountId) -> Option<Exposure<T::AccountId, BalanceOf<T>>> {
-		if let Some(active_era) = <Module<T>>::active_era() {
-			Some(<Module<T>>::eras_stakers(active_era.index, &validator))
-		} else {
-			None
-		}
+		<Module<T>>::active_era()
+			.map(|active_era| <Module<T>>::eras_stakers(active_era.index, &validator))
 	}
 }
 

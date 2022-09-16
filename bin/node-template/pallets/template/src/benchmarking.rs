@@ -5,7 +5,7 @@ use super::*;
 use frame_system::RawOrigin;
 use frame_benchmarking::{benchmarks, whitelisted_caller, impl_benchmark_test_suite};
 #[allow(unused)]
-use crate::Module as Template;
+use crate::Pallet as Template;
 
 benchmarks! {
 	do_something {

@@ -218,6 +218,7 @@ pub fn new_full_base(
 	} = new_partial(&config)?;
 
 	let shared_voter_state = rpc_setup;
+	let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
 
 	config.network.extra_sets.push(grandpa::grandpa_peers_set_config());
 
@@ -320,7 +321,11 @@ pub fn new_full_base(
 				Event::Dht(e) => Some(e),
 				_ => None,
 			}});
-		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service(
+		let (authority_discovery_worker, _service) = sc_authority_discovery::new_worker_and_service_with_config(
+			sc_authority_discovery::WorkerConfig {
+				publish_non_global_ips: auth_disc_publish_non_global_ips,
+				..Default::default()
+			},
 			client.clone(),
 			network.clone(),
 			Box::pin(dht_event_stream),
@@ -534,7 +539,7 @@ pub fn new_light(
 
 #[cfg(test)]
 mod tests {
-	use std::{sync::Arc, borrow::Cow, any::Any, convert::TryInto};
+	use std::{sync::Arc, borrow::Cow, convert::TryInto};
 	use sc_consensus_babe::{CompatibleDigestItem, BabeIntermediate, INTERMEDIATE_KEY};
 	use sc_consensus_epochs::descendent_query;
 	use sp_consensus::{
@@ -638,27 +643,34 @@ mod tests {
 					None,
 				);
 
-				let epoch_descriptor = babe_link.epoch_changes().lock().epoch_descriptor_for_child_of(
-					descendent_query(&*service.client()),
-					&parent_hash,
-					parent_number,
-					slot.into(),
-				).unwrap().unwrap();
-
 				let mut digest = Digest::<H256>::default();
 
 				// even though there's only one authority some slots might be empty,
 				// so we must keep trying the next slots until we can claim one.
-				let babe_pre_digest = loop {
-					inherent_data.replace_data(sp_timestamp::INHERENT_IDENTIFIER, &(slot * SLOT_DURATION));
-					if let Some(babe_pre_digest) = sc_consensus_babe::test_helpers::claim_slot(
+				let (babe_pre_digest, epoch_descriptor) = loop {
+					inherent_data.replace_data(
+						sp_timestamp::INHERENT_IDENTIFIER,
+						&(slot * SLOT_DURATION),
+					);
+
+					let epoch_descriptor = babe_link.epoch_changes().shared_data().epoch_descriptor_for_child_of(
+						descendent_query(&*service.client()),
+						&parent_hash,
+						parent_number,
 						slot.into(),
-						&parent_header,
-						&*service.client(),
-						keystore.clone(),
-						&babe_link,
-					) {
-						break babe_pre_digest;
+					).unwrap().unwrap();
+
+					let epoch = babe_link.epoch_changes().shared_data().epoch_data(
+						&epoch_descriptor,
+						|slot| sc_consensus_babe::Epoch::genesis(&babe_link.config(), slot),
+					).unwrap();
+
+					if let Some(babe_pre_digest) = sc_consensus_babe::authorship::claim_slot(
+						slot.into(),
+						&epoch,
+						&keystore,
+					).map(|(digest, _)| digest) {
+						break (babe_pre_digest, epoch_descriptor)
 					}
 
 					slot += 1;
@@ -672,6 +684,7 @@ mod tests {
 						inherent_data,
 						digest,
 						std::time::Duration::from_secs(1),
+						None,
 					).await
 				}).expect("Error making test block").block;
 
@@ -696,11 +709,11 @@ mod tests {
 				params.body = Some(new_body);
 				params.intermediates.insert(
 					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<dyn Any>,
+					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
 				);
 				params.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 
-				block_import.import_block(params, Default::default())
+				futures::executor::block_on(block_import.import_block(params, Default::default()))
 					.expect("error importing test block");
 			},
 			|service, _| {

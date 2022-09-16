@@ -158,7 +158,7 @@ impl<B: BlockNumberProvider> Clone for BlockAndTimeDeadline<B> {
 	fn clone(&self) -> Self {
 		Self {
 			block_number: self.block_number.clone(),
-			timestamp: self.timestamp.clone(),
+			timestamp: self.timestamp,
 		}
 	}
 }
@@ -202,7 +202,7 @@ impl<B: BlockNumberProvider> Default for BlockAndTime<B> {
 impl<B: BlockNumberProvider> Clone for BlockAndTime<B> {
 	fn clone(&self) -> Self {
 		Self {
-			expiration_block_number_offset: self.expiration_block_number_offset.clone(),
+			expiration_block_number_offset: self.expiration_block_number_offset,
 			expiration_duration: self.expiration_duration,
 			_phantom: core::marker::PhantomData::<B>,
 		}
@@ -386,7 +386,7 @@ impl<'a> StorageLock<'a, Time> {
 		Self {
 			value_ref: StorageValueRef::<'a>::persistent(key),
 			lockable: Time {
-				expiration_duration: expiration_duration,
+				expiration_duration,
 			},
 		}
 	}

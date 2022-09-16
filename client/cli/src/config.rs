@@ -159,6 +159,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		&self,
 		chain_spec: &Box<dyn ChainSpec>,
 		is_dev: bool,
+		is_validator: bool,
 		net_config_dir: PathBuf,
 		client_id: &str,
 		node_name: &str,
@@ -169,6 +170,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			network_params.network_config(
 				chain_spec,
 				is_dev,
+				is_validator,
 				Some(net_config_dir),
 				client_id,
 				node_name,
@@ -501,6 +503,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			network: self.network_config(
 				&chain_spec,
 				is_dev,
+				is_validator,
 				net_config_dir,
 				client_id.as_str(),
 				self.node_name()?.as_str(),

@@ -26,12 +26,13 @@ use substrate_test_runtime_client::{self, prelude::*};
 use substrate_test_runtime_client::runtime::{Block, Hash};
 use sp_runtime::generic::BlockId;
 use sc_block_builder::BlockBuilderProvider;
+use futures::executor::block_on;
 use super::*;
 
 fn prepare_good_block() -> (TestClient, Hash, u64, PeerId, IncomingBlock<Block>) {
 	let mut client = substrate_test_runtime_client::new();
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-	client.import(BlockOrigin::File, block).unwrap();
+	block_on(client.import(BlockOrigin::File, block)).unwrap();
 
 	let (hash, number) = (client.block_hash(1).unwrap().unwrap(), 1);
 	let header = client.header(&BlockId::Number(1)).unwrap();
@@ -55,12 +56,12 @@ fn import_single_good_block_works() {
 	let mut expected_aux = ImportedAux::default();
 	expected_aux.is_new_best = true;
 
-	match import_single_block(
+	match block_on(import_single_block(
 		&mut substrate_test_runtime_client::new(),
 		BlockOrigin::File,
 		block,
 		&mut PassThroughVerifier::new(true)
-	) {
+	)) {
 		Ok(BlockImportResult::ImportedUnknown(ref num, ref aux, ref org))
 			if *num == number && *aux == expected_aux && *org == Some(peer_id) => {}
 		r @ _ => panic!("{:?}", r)
@@ -70,12 +71,12 @@ fn import_single_good_block_works() {
 #[test]
 fn import_single_good_known_block_is_ignored() {
 	let (mut client, _hash, number, _, block) = prepare_good_block();
-	match import_single_block(
+	match block_on(import_single_block(
 		&mut client,
 		BlockOrigin::File,
 		block,
 		&mut PassThroughVerifier::new(true)
-	) {
+	)) {
 		Ok(BlockImportResult::ImportedKnown(ref n, _)) if *n == number => {}
 		_ => panic!()
 	}
@@ -85,12 +86,12 @@ fn import_single_good_known_block_is_ignored() {
 fn import_single_good_block_without_header_fails() {
 	let (_, _, _, peer_id, mut block) = prepare_good_block();
 	block.header = None;
-	match import_single_block(
+	match block_on(import_single_block(
 		&mut substrate_test_runtime_client::new(),
 		BlockOrigin::File,
 		block,
 		&mut PassThroughVerifier::new(true)
-	) {
+	)) {
 		Err(BlockImportError::IncompleteHeader(ref org)) if *org == Some(peer_id) => {}
 		_ => panic!()
 	}

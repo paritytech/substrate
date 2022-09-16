@@ -381,11 +381,11 @@ impl Default for ElectionCompute {
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
 pub struct RawSolution<C> {
 	/// Compact election edges.
-	compact: C,
+	pub compact: C,
 	/// The _claimed_ score of the solution.
-	score: ElectionScore,
+	pub score: ElectionScore,
 	/// The round at which this solution should be submitted.
-	round: u32,
+	pub round: u32,
 }
 
 impl<C: Default> Default for RawSolution<C> {
@@ -402,13 +402,13 @@ pub struct ReadySolution<A> {
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	supports: Supports<A>,
+	pub supports: Supports<A>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
-	score: ElectionScore,
+	pub score: ElectionScore,
 	/// How this election was computed.
-	compute: ElectionCompute,
+	pub compute: ElectionCompute,
 }
 
 /// A snapshot of all the data that is needed for en entire round. They are provided by
@@ -432,10 +432,10 @@ pub struct RoundSnapshot<A> {
 pub struct SolutionOrSnapshotSize {
 	/// The length of voters.
 	#[codec(compact)]
-	voters: u32,
+	pub voters: u32,
 	/// The length of targets.
 	#[codec(compact)]
-	targets: u32,
+	pub targets: u32,
 }
 
 /// Internal errors of the pallet.
@@ -534,11 +534,18 @@ pub mod pallet {
 		/// Maximum number of iteration of balancing that will be executed in the embedded miner of
 		/// the pallet.
 		type MinerMaxIterations: Get<u32>;
+
 		/// Maximum weight that the miner should consume.
 		///
 		/// The miner will ensure that the total weight of the unsigned solution will not exceed
-		/// this values, based on [`WeightInfo::submit_unsigned`].
+		/// this value, based on [`WeightInfo::submit_unsigned`].
 		type MinerMaxWeight: Get<Weight>;
+
+		/// Maximum length (bytes) that the mined solution should consume.
+		///
+		/// The miner will ensure that the total length of the unsigned solution will not exceed
+		/// this value.
+		type MinerMaxLength: Get<u32>;
 
 		/// Something that will provide the election data.
 		type DataProvider: ElectionDataProvider<Self::AccountId, Self::BlockNumber>;
@@ -1411,7 +1418,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_signed());
 
-			let _ = MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1434,7 +1441,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_off());
 
 			// this module is now only capable of doing on-chain backup.
-			let _ = MultiPhase::elect().unwrap();
+			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 		});

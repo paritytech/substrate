@@ -63,21 +63,25 @@ mod benchmarking;
 
 pub mod weights;
 
-#[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
 use sp_std::prelude::*;
-use frame_support::{decl_module, decl_storage, decl_event, ensure, print, decl_error};
-use frame_support::traits::{
-	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::{KeepAlive},
-	ReservableCurrency, WithdrawReasons
+use frame_support::{
+	decl_module, decl_storage, decl_event, ensure, print, decl_error,
+	PalletId, BoundedVec, bounded_vec::TryAppendValue,
 };
-use sp_runtime::{Permill, ModuleId, RuntimeDebug, traits::{
-	Zero, StaticLookup, AccountIdConversion, Saturating
-}};
+use frame_support::traits::{
+	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,
+	ReservableCurrency, WithdrawReasons,
+};
+use sp_runtime::{
+	Permill, RuntimeDebug,
+	traits::{
+		Zero, StaticLookup, AccountIdConversion, Saturating
+	}
+};
 use frame_support::weights::{Weight, DispatchClass};
-use frame_support::traits::{EnsureOrigin};
+use frame_support::traits::EnsureOrigin;
 use codec::{Encode, Decode};
-use frame_system::{ensure_signed};
+use frame_system::ensure_signed;
 pub use weights::WeightInfo;
 
 pub type BalanceOf<T, I=DefaultInstance> =
@@ -89,7 +93,7 @@ pub type NegativeImbalanceOf<T, I=DefaultInstance> =
 
 pub trait Config<I=DefaultInstance>: frame_system::Config {
 	/// The treasury's module id, used for deriving its sovereign account ID.
-	type ModuleId: Get<ModuleId>;
+	type PalletId: Get<PalletId>;
 
 	/// The staking balance.
 	type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
@@ -127,6 +131,9 @@ pub trait Config<I=DefaultInstance>: frame_system::Config {
 
 	/// Runtime hooks to external pallet using treasury to compute spend funds.
 	type SpendFunds: SpendFunds<Self, I>;
+
+	/// The maximum number of approvals that can wait in the spending queue.
+	type MaxApprovals: Get<u32>;
 }
 
 /// A trait to allow the Treasury Pallet to spend it's funds for other purposes.
@@ -155,7 +162,7 @@ pub trait SpendFunds<T: Config<I>, I=DefaultInstance> {
 pub type ProposalIndex = u32;
 
 /// A spending proposal.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Proposal<AccountId, Balance> {
 	/// The account proposing it.
@@ -179,7 +186,7 @@ decl_storage! {
 			=> Option<Proposal<T::AccountId, BalanceOf<T, I>>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
-		pub Approvals get(fn approvals): Vec<ProposalIndex>;
+		pub Approvals get(fn approvals): BoundedVec<ProposalIndex, T::MaxApprovals>;
 	}
 	add_extra_genesis {
 		build(|_config| {
@@ -187,10 +194,7 @@ decl_storage! {
 			let account_id = <Module<T, I>>::account_id();
 			let min = T::Currency::minimum_balance();
 			if T::Currency::free_balance(&account_id) < min {
-				let _ = T::Currency::make_free_balance_be(
-					&account_id,
-					min,
-				);
+				let _ = T::Currency::make_free_balance_be(&account_id, min);
 			}
 		});
 	}
@@ -227,6 +231,8 @@ decl_error! {
 		InsufficientProposersBalance,
 		/// No proposal or bounty at that index.
 		InvalidIndex,
+		/// Too many approvals in the queue.
+		TooManyApprovals,
 	}
 }
 
@@ -249,7 +255,7 @@ decl_module! {
 		const Burn: Permill = T::Burn::get();
 
 		/// The treasury's module id, used for deriving its sovereign account ID.
-		const ModuleId: ModuleId = T::ModuleId::get();
+		const PalletId: PalletId = T::PalletId::get();
 
 		type Error = Error<T, I>;
 
@@ -315,12 +321,12 @@ decl_module! {
 		/// - DbReads: `Proposals`, `Approvals`
 		/// - DbWrite: `Approvals`
 		/// # </weight>
-		#[weight = (T::WeightInfo::approve_proposal(), DispatchClass::Operational)]
+		#[weight = (T::WeightInfo::approve_proposal(T::MaxApprovals::get()), DispatchClass::Operational)]
 		pub fn approve_proposal(origin, #[compact] proposal_id: ProposalIndex) {
 			T::ApproveOrigin::ensure_origin(origin)?;
 
 			ensure!(<Proposals<T, I>>::contains_key(proposal_id), Error::<T, I>::InvalidIndex);
-			Approvals::<I>::append(proposal_id);
+			Approvals::<T, I>::try_append(proposal_id).map_err(|_| Error::<T, I>::TooManyApprovals)?;
 		}
 
 		/// # <weight>
@@ -349,7 +355,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::ModuleId::get().into_account()
+		T::PalletId::get().into_account()
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.
@@ -367,7 +373,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 
 		let mut missed_any = false;
 		let mut imbalance = <PositiveImbalanceOf<T, I>>::zero();
-		let proposals_len = Approvals::<I>::mutate(|v| {
+		let proposals_len = Approvals::<T, I>::mutate(|v| {
 			let proposals_approvals_len = v.len() as u32;
 			v.retain(|&index| {
 				// Should always be true, but shouldn't panic if false or we're screwed.

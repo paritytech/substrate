@@ -330,10 +330,7 @@ impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H, Number> for RootsStorage<'a
 			self.prev_roots.get(&Number::unique_saturated_from(block)).cloned()
 		} else {
 			let index: Option<usize> = block.checked_sub(&self.roots.0).and_then(|index| index.checked_into());
-			match index {
-				Some(index) => self.roots.1.get(index as usize).cloned(),
-				None => None,
-			}
+			index.and_then(|index| self.roots.1.get(index as usize).cloned())
 		};
 
 		Ok(root.map(|root| {

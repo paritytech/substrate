@@ -20,10 +20,21 @@ use futures::{Sink, SinkExt};
 use std::fmt;
 use std::io::Write;
 use log::LevelFilter;
+use sc_service::{BasePath, ChainSpec, Configuration, TaskExecutor, DatabaseConfig, KeepBlocks, TransactionStorageMode};
+use sp_keyring::sr25519::Keyring::Alice;
+use sc_network::{multiaddr, config::{NetworkConfiguration, TransportConfig, Role}};
+use sc_informant::OutputFormat;
+use sc_service::config::KeystoreConfig;
+use sc_executor::WasmExecutionMethod;
+use sc_client_api::execution_extensions::ExecutionStrategies;
 
 /// Base db path gotten from env
-pub fn base_path() -> Option<String> {
-	std::env::var("DB_BASE_PATH").ok()
+pub fn base_path() -> BasePath {
+	if let Some(base) = std::env::var("DB_BASE_PATH").ok() {
+		BasePath::new(base)
+	} else {
+		BasePath::new_temp_dir().expect("couldn't create a temp dir")
+	}
 }
 
 /// Builds the global logger.
@@ -53,4 +64,87 @@ where
 		builder.filter_module(module, level);
 	}
 	let _ = builder.is_test(true).try_init();
+}
+
+/// Produces a default configuration object, suitable for use with most set ups.
+pub fn default_config(task_executor: TaskExecutor, mut chain_spec: Box<dyn ChainSpec>) -> Configuration {
+	let base_path = base_path();
+	let root_path = base_path.path().to_path_buf().join("chains").join(chain_spec.id());
+
+	let storage = chain_spec
+		.as_storage_builder()
+		.build_storage()
+		.expect("could not build storage");
+
+	chain_spec.set_storage(storage);
+	let key_seed = Alice.to_seed();
+
+	let mut network_config = NetworkConfiguration::new(
+		format!("Test Node for: {}", key_seed),
+		"network/test/0.1",
+		Default::default(),
+		None,
+	);
+	let informant_output_format = OutputFormat { enable_color: false };
+	network_config.allow_non_globals_in_dht = true;
+
+	network_config
+		.listen_addresses
+		.push(multiaddr::Protocol::Memory(0).into());
+
+	network_config.transport = TransportConfig::MemoryOnly;
+
+	Configuration {
+		impl_name: "test-node".to_string(),
+		impl_version: "0.1".to_string(),
+		role: Role::Authority,
+		task_executor: task_executor.into(),
+		transaction_pool: Default::default(),
+		network: network_config,
+		keystore: KeystoreConfig::Path {
+			path: root_path.join("key"),
+			password: None,
+		},
+		database: DatabaseConfig::RocksDb {
+			path: root_path.join("db"),
+			cache_size: 128,
+		},
+		state_cache_size: 16777216,
+		state_cache_child_ratio: None,
+		chain_spec,
+		wasm_method: WasmExecutionMethod::Interpreted,
+		execution_strategies: ExecutionStrategies {
+			syncing: sc_client_api::ExecutionStrategy::AlwaysWasm,
+			importing: sc_client_api::ExecutionStrategy::AlwaysWasm,
+			block_construction: sc_client_api::ExecutionStrategy::AlwaysWasm,
+			offchain_worker: sc_client_api::ExecutionStrategy::AlwaysWasm,
+			other: sc_client_api::ExecutionStrategy::AlwaysWasm,
+		},
+		rpc_http: None,
+		rpc_ws: None,
+		rpc_ipc: None,
+		rpc_ws_max_connections: None,
+		rpc_cors: None,
+		rpc_methods: Default::default(),
+		prometheus_config: None,
+		telemetry_endpoints: None,
+		telemetry_external_transport: None,
+		default_heap_pages: None,
+		offchain_worker: Default::default(),
+		force_authoring: false,
+		disable_grandpa: false,
+		dev_key_seed: Some(key_seed),
+		tracing_targets: None,
+		tracing_receiver: Default::default(),
+		max_runtime_instances: 8,
+		announce_block: true,
+		base_path: Some(base_path),
+		wasm_runtime_overrides: None,
+		informant_output_format,
+		disable_log_reloading: false,
+		keystore_remote: None,
+		keep_blocks: KeepBlocks::All,
+		state_pruning: Default::default(),
+		transaction_storage: TransactionStorageMode::BlockBody,
+	}
 }

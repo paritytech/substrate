@@ -207,10 +207,7 @@ where
 		let call_data = account.encode();
 		let future_best_header = future_best_header
 			.and_then(move |maybe_best_header| ready(
-				match maybe_best_header {
-					Some(best_header) => Ok(best_header),
-					None => Err(ClientError::UnknownBlock(format!("{}", best_hash))),
-				}
+				maybe_best_header.ok_or_else(|| { ClientError::UnknownBlock(format!("{}", best_hash)) })
 			));
 		let future_nonce = future_best_header.and_then(move |best_header|
 			fetcher.remote_call(RemoteCallRequest {

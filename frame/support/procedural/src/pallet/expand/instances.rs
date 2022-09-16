@@ -17,14 +17,15 @@
 
 use proc_macro2::Span;
 use crate::pallet::Def;
+use crate::NUMBER_OF_INSTANCE;
 
 /// * Provide inherent instance to be used by construct_runtime
-/// * Provide Instance0 .. Instance16 for instantiable pallet
+/// * Provide Instance1 ..= Instance16 for instantiable pallet
 pub fn expand_instances(def: &mut Def) -> proc_macro2::TokenStream {
 	let frame_support = &def.frame_support;
 	let inherent_ident = syn::Ident::new(crate::INHERENT_INSTANCE_NAME, Span::call_site());
 	let instances = if def.config.has_instance {
-		(0..16).map(|i| syn::Ident::new(&format!("Instance{}", i), Span::call_site())).collect()
+		(1..=NUMBER_OF_INSTANCE).map(|i| syn::Ident::new(&format!("Instance{}", i), Span::call_site())).collect()
 	} else {
 		vec![]
 	};

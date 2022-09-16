@@ -156,7 +156,7 @@ pub trait Config: frame_system::Config {
 	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 
 	/// Identifier for the elections pallet's lock
-	type ModuleId: Get<LockIdentifier>;
+	type PalletId: Get<LockIdentifier>;
 
 	/// The currency that people are electing with.
 	type Currency:
@@ -391,7 +391,7 @@ decl_module! {
 		/// The chunk size of the approval vector.
 		const APPROVAL_SET_SIZE: u32 = APPROVAL_SET_SIZE as u32;
 
-		const ModuleId: LockIdentifier = T::ModuleId::get();
+		const PalletId: LockIdentifier = T::PalletId::get();
 
 		fn deposit_event() = default;
 
@@ -491,7 +491,7 @@ decl_module! {
 			);
 
 			T::Currency::remove_lock(
-				T::ModuleId::get(),
+				T::PalletId::get(),
 				if valid { &who } else { &reporter }
 			);
 
@@ -529,7 +529,7 @@ decl_module! {
 
 			Self::remove_voter(&who, index);
 			T::Currency::unreserve(&who, T::VotingBond::get());
-			T::Currency::remove_lock(T::ModuleId::get(), &who);
+			T::Currency::remove_lock(T::PalletId::get(), &who);
 		}
 
 		/// Submit oneself for candidacy.
@@ -890,7 +890,7 @@ impl<T: Config> Module<T> {
 		}
 
 		T::Currency::set_lock(
-			T::ModuleId::get(),
+			T::PalletId::get(),
 			&who,
 			locked_balance,
 			WithdrawReasons::all(),

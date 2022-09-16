@@ -1967,23 +1967,23 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
-							let base_weight = $weight;
-							let weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
-								&base_weight,
+							let __pallet_base_weight = $weight;
+							let __pallet_weight = <dyn $crate::dispatch::WeighData<( $( & $param, )* )>>::weigh_data(
+								&__pallet_base_weight,
 								($( $param_name, )*)
 							);
-							let class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
-								&base_weight,
+							let __pallet_class = <dyn $crate::dispatch::ClassifyDispatch<( $( & $param, )* )>>::classify_dispatch(
+								&__pallet_base_weight,
 								($( $param_name, )*)
 							);
-							let pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
-								&base_weight,
+							let __pallet_pays_fee = <dyn $crate::dispatch::PaysFee<( $( & $param, )* )>>::pays_fee(
+								&__pallet_base_weight,
 								($( $param_name, )*)
 							);
 							$crate::dispatch::DispatchInfo {
-								weight,
-								class,
-								pays_fee,
+								weight: __pallet_weight,
+								class: __pallet_class,
+								pays_fee: __pallet_pays_fee,
 							}
 						},
 					)*

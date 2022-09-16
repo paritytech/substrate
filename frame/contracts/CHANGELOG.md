@@ -20,6 +20,8 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 
 ### Added
 
+- Add new `instantiate` RPC that allows clients to dry-run contract instantiation.
+
 - Make storage and fields of `Schedule` private to the crate.
 [1](https://github.com/paritytech/substrate/pull/8359)
 

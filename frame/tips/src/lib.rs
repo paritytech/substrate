@@ -68,7 +68,7 @@ use frame_support::traits::{
 use sp_runtime::{ Percent, RuntimeDebug, traits::{
 	Zero, AccountIdConversion, Hash, BadOrigin
 }};
-use frame_support::traits::{Contains, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
+use frame_support::traits::{SortedMembers, ContainsLengthBound, OnUnbalanced, EnsureOrigin};
 use codec::{Encode, Decode};
 use frame_system::{self as system, ensure_signed};
 pub use weights::WeightInfo;
@@ -86,7 +86,7 @@ pub trait Config: frame_system::Config + pallet_treasury::Config {
 	/// Origin from which tippers must come.
 	///
 	/// `ContainsLengthBound::max_len` must be cost free (i.e. no storage read or heavy operation).
-	type Tippers: Contains<Self::AccountId> + ContainsLengthBound;
+	type Tippers: SortedMembers<Self::AccountId> + ContainsLengthBound;
 
 	/// The period for which a tip remains open after is has achieved threshold tippers.
 	type TipCountdown: Get<Self::BlockNumber>;
@@ -195,7 +195,6 @@ decl_module! {
 		for enum Call
 		where origin: T::Origin
 	{
-
 		/// The period for which a tip remains open after is has achieved threshold tippers.
 		const TipCountdown: T::BlockNumber = T::TipCountdown::get();
 
@@ -445,7 +444,7 @@ impl<T: Config> Module<T> {
 	/// This actually does computation. If you need to keep using it, then make sure you cache the
 	/// value and only call this once.
 	pub fn account_id() -> T::AccountId {
-		T::ModuleId::get().into_account()
+		T::PalletId::get().into_account()
 	}
 
 	/// Given a mutable reference to an `OpenTip`, insert the tip into it and check whether it
@@ -550,13 +549,13 @@ impl<T: Config> Module<T> {
 			tips: Vec<(AccountId, Balance)>,
 		}
 
-		use frame_support::{Twox64Concat, migration::StorageKeyIterator};
+		use frame_support::{Twox64Concat, migration::storage_key_iter};
 
-		for (hash, old_tip) in StorageKeyIterator::<
+		for (hash, old_tip) in storage_key_iter::<
 			T::Hash,
 			OldOpenTip<T::AccountId, BalanceOf<T>, T::BlockNumber, T::Hash>,
 			Twox64Concat,
-		>::new(b"Treasury", b"Tips").drain()
+		>(b"Treasury", b"Tips").drain()
 		{
 
 			let (finder, deposit, finders_fee) = match old_tip.finder {

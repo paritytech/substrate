@@ -42,6 +42,16 @@ pub use sp_storage::TrackedStorageKey;
 #[doc(hidden)]
 pub use log;
 
+/// Whitelist the given account.
+#[macro_export]
+macro_rules! whitelist {
+	($acc:ident) => {
+		frame_benchmarking::benchmarking::add_to_whitelist(
+			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+		);
+	};
+}
+
 /// Construct pallet benchmarks for weighing dispatchables.
 ///
 /// Works around the idea of complexity parameters, named by a single letter (which is usually
@@ -764,12 +774,21 @@ macro_rules! impl_benchmark {
 								"Start Benchmark: {:?}", c
 							);
 
+							let start_pov = $crate::benchmarking::proof_size();
 							let start_extrinsic = $crate::benchmarking::current_time();
 
 							closure_to_benchmark()?;
 
 							let finish_extrinsic = $crate::benchmarking::current_time();
-							let elapsed_extrinsic = finish_extrinsic - start_extrinsic;
+							let end_pov = $crate::benchmarking::proof_size();
+
+							// Calculate the diff caused by the benchmark.
+							let elapsed_extrinsic = finish_extrinsic.saturating_sub(start_extrinsic);
+							let diff_pov = match (start_pov, end_pov) {
+								(Some(start), Some(end)) => end.saturating_sub(start),
+								_ => Default::default(),
+							};
+
 							// Commit the changes to get proper write count
 							$crate::benchmarking::commit_db();
 							$crate::log::trace!(
@@ -796,6 +815,7 @@ macro_rules! impl_benchmark {
 								repeat_reads: read_write_count.1,
 								writes: read_write_count.2,
 								repeat_writes: read_write_count.3,
+								proof_size: diff_pov,
 							});
 						}
 

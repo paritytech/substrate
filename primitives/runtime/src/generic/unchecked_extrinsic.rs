@@ -70,7 +70,7 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 		signature: Signature,
 		extra: Extra
 	) -> Self {
-		UncheckedExtrinsic {
+		Self {
 			signature: Some((signed, signature, extra)),
 			function,
 		}
@@ -78,7 +78,7 @@ impl<Address, Call, Signature, Extra: SignedExtension>
 
 	/// New instance of an unsigned extrinsic aka "inherent".
 	pub fn new_unsigned(function: Call) -> Self {
-		UncheckedExtrinsic {
+		Self {
 			signature: None,
 			function,
 		}
@@ -102,9 +102,9 @@ impl<Address, Call, Signature, Extra: SignedExtension> Extrinsic
 
 	fn new(function: Call, signed_data: Option<Self::SignaturePayload>) -> Option<Self> {
 		Some(if let Some((address, signature, extra)) = signed_data {
-			UncheckedExtrinsic::new_signed(function, address, signature, extra)
+			Self::new_signed(function, address, signature, extra)
 		} else {
-			UncheckedExtrinsic::new_unsigned(function)
+			Self::new_unsigned(function)
 		})
 	}
 }
@@ -238,7 +238,7 @@ where
 			return Err("Invalid transaction version".into());
 		}
 
-		Ok(UncheckedExtrinsic {
+		Ok(Self {
 			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
 		})
@@ -327,7 +327,7 @@ where
 	Extra: SignedExtension,
 {
 	fn from(extrinsic: UncheckedExtrinsic<Address, Call, Signature, Extra>) -> Self {
-		OpaqueExtrinsic::from_bytes(extrinsic.encode().as_slice())
+		Self::from_bytes(extrinsic.encode().as_slice())
 			.expect(
 				"both OpaqueExtrinsic and UncheckedExtrinsic have encoding that is compatible with \
 				raw Vec<u8> encoding; qed"

@@ -35,7 +35,6 @@ use std::{
 };
 
 use futures::prelude::*;
-use parking_lot::Mutex;
 use log::{debug, trace};
 
 use codec::{Encode, Decode, Codec};
@@ -272,7 +271,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, BS, Error>(
 {
 	AuraWorker {
 		client,
-		block_import: Arc::new(Mutex::new(block_import)),
+		block_import,
 		env: proposer_factory,
 		keystore,
 		sync_oracle,
@@ -286,7 +285,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, BS, Error>(
 
 struct AuraWorker<C, E, I, P, SO, BS> {
 	client: Arc<C>,
-	block_import: Arc<Mutex<I>>,
+	block_import: I,
 	env: E,
 	keystore: SyncCryptoStorePtr,
 	sync_oracle: SO,
@@ -326,8 +325,8 @@ where
 		"aura"
 	}
 
-	fn block_import(&self) -> Arc<Mutex<Self::BlockImport>> {
-		self.block_import.clone()
+	fn block_import(&mut self) -> &mut Self::BlockImport {
+		&mut self.block_import
 	}
 
 	fn epoch_data(
@@ -581,6 +580,7 @@ mod tests {
 	use super::*;
 	use sp_consensus::{
 		NoNetwork as DummyOracle, Proposal, AlwaysCanAuthor, DisableProofRecording,
+		import_queue::BoxJustificationImport,
 	};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
@@ -629,6 +629,7 @@ mod tests {
 			_: InherentData,
 			digests: DigestFor<TestBlock>,
 			_: Duration,
+			_: Option<usize>,
 		) -> Self::Proposal {
 			let r = self.1.new_block(digests).unwrap().build().map_err(|e| e.into());
 
@@ -642,13 +643,17 @@ mod tests {
 
 	const SLOT_DURATION: u64 = 1000;
 
+	type AuraVerifier = import_queue::AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
+	type AuraPeer = Peer<(), PeersClient>;
+
 	pub struct AuraTestNet {
-		peers: Vec<Peer<()>>,
+		peers: Vec<AuraPeer>,
 	}
 
 	impl TestNetFactory for AuraTestNet {
-		type Verifier = import_queue::AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
+		type Verifier = AuraVerifier;
 		type PeerData = ();
+		type BlockImport = PeersClient;
 
 		/// Create new test network with peers and given config.
 		fn from_config(_config: &ProtocolConfig) -> Self {
@@ -682,14 +687,22 @@ mod tests {
 			}
 		}
 
-		fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData> {
+		fn make_block_import(&self, client: PeersClient) -> (
+			BlockImportAdapter<Self::BlockImport>,
+			Option<BoxJustificationImport<Block>>,
+			Self::PeerData,
+		) {
+			(client.as_block_import(), None, ())
+		}
+
+		fn peer(&mut self, i: usize) -> &mut AuraPeer {
 			&mut self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Peer<Self::PeerData>> {
+		fn peers(&self) -> &Vec<AuraPeer> {
 			&self.peers
 		}
-		fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData>>)>(&mut self, closure: F) {
+		fn mut_peers<F: FnOnce(&mut Vec<AuraPeer>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 	}
@@ -805,7 +818,7 @@ mod tests {
 
 		let worker = AuraWorker {
 			client: client.clone(),
-			block_import: Arc::new(Mutex::new(client)),
+			block_import: client,
 			env: environ,
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
@@ -854,7 +867,7 @@ mod tests {
 
 		let mut worker = AuraWorker {
 			client: client.clone(),
-			block_import: Arc::new(Mutex::new(client.clone())),
+			block_import: client.clone(),
 			env: environ,
 			keystore: keystore.into(),
 			sync_oracle: DummyOracle.clone(),
@@ -875,6 +888,7 @@ mod tests {
 				ends_at: Instant::now() + Duration::from_secs(100),
 				inherent_data: InherentData::new(),
 				duration: Duration::from_millis(1000),
+				block_size_limit: None,
 			},
 		)).unwrap();
 

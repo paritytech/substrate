@@ -477,6 +477,24 @@
 			"decimals": [12],
 			"standardAccount": "*25519",
 			"website": "https://crust.network"
+		},
+		{
+			"prefix": 69,
+			"network": "sora",
+			"displayName": "SORA Network",
+			"symbols": ["XOR"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://sora.org"
+		},
+		{
+			"prefix": 252,
+			"network": "social-network",
+			"displayName": "Social Network",
+			"symbols": ["NET"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://social.network"
 		}
 	]
 }

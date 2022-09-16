@@ -167,6 +167,7 @@ fn construct_runtime_parsed(definition: RuntimeDefinition) -> Result<TokenStream
 	let metadata = decl_runtime_metadata(&name, pallets.iter(), &scrate, &unchecked_extrinsic);
 	let outer_config = decl_outer_config(&name, pallets.iter(), &scrate);
 	let inherent = decl_outer_inherent(
+		&name,
 		&block,
 		&unchecked_extrinsic,
 		pallets.iter(),
@@ -235,6 +236,7 @@ fn decl_validate_unsigned<'a>(
 }
 
 fn decl_outer_inherent<'a>(
+	runtime: &'a Ident,
 	block: &'a syn::TypePath,
 	unchecked_extrinsic: &'a syn::TypePath,
 	pallet_declarations: impl Iterator<Item = &'a Pallet>,
@@ -251,7 +253,8 @@ fn decl_outer_inherent<'a>(
 		#scrate::impl_outer_inherent!(
 			impl Inherents where
 				Block = #block,
-				UncheckedExtrinsic = #unchecked_extrinsic
+				UncheckedExtrinsic = #unchecked_extrinsic,
+				Runtime = #runtime,
 			{
 				#(#pallets_tokens)*
 			}

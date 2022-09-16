@@ -20,27 +20,57 @@
 
 use crate::host::HostState;
 use crate::imports::{Imports, resolve_imports};
-use crate::instance_wrapper::{ModuleWrapper, InstanceWrapper, GlobalsSnapshot, EntryPoint};
+use crate::instance_wrapper::{InstanceWrapper, EntryPoint};
 use crate::state_holder;
 
-use std::rc::Rc;
+use std::{path::PathBuf, rc::Rc};
 use std::sync::Arc;
 use std::path::Path;
 use sc_executor_common::{
 	error::{Result, WasmError},
+	runtime_blob::{DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob},
 	wasm_runtime::{WasmModule, WasmInstance, InvokeMethod},
 };
 use sp_allocator::FreeingBumpHeapAllocator;
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{Function, Pointer, WordSize, Value};
-use wasmtime::{Config, Engine, Store};
+use wasmtime::{Engine, Store};
+
+enum Strategy {
+	FastInstanceReuse {
+		instance_wrapper: Rc<InstanceWrapper>,
+		globals_snapshot: GlobalsSnapshot<wasmtime::Global>,
+		data_segments_snapshot: Arc<DataSegmentsSnapshot>,
+		heap_base: u32,
+	},
+	RecreateInstance(InstanceCreator),
+}
+
+struct InstanceCreator {
+	store: Store,
+	module: Arc<wasmtime::Module>,
+	imports: Arc<Imports>,
+	heap_pages: u32,
+}
+
+impl InstanceCreator {
+	fn instantiate(&self) -> Result<InstanceWrapper> {
+		InstanceWrapper::new(&self.store, &*self.module, &*self.imports, self.heap_pages)
+	}
+}
+
+/// Data required for creating instances with the fast instance reuse strategy.
+struct InstanceSnapshotData {
+	mutable_globals: ExposedMutableGlobalsSet,
+	data_segments_snapshot: Arc<DataSegmentsSnapshot>,
+}
 
 /// A `WasmModule` implementation using wasmtime to compile the runtime module to machine code
 /// and execute the compiled code.
 pub struct WasmtimeRuntime {
-	module_wrapper: Arc<ModuleWrapper>,
-	heap_pages: u32,
-	allow_missing_func_imports: bool,
+	module: Arc<wasmtime::Module>,
+	snapshot_data: Option<InstanceSnapshotData>,
+	config: Config,
 	host_functions: Vec<&'static dyn Function>,
 	engine: Engine,
 }
@@ -51,41 +81,52 @@ impl WasmModule for WasmtimeRuntime {
 
 		// Scan all imports, find the matching host functions, and create stubs that adapt arguments
 		// and results.
+		//
+		// NOTE: Attentive reader may notice that this could've been moved in `WasmModule` creation.
+		//       However, I am not sure if that's a good idea since it would be pushing our luck further
+		//       by assuming that `Store` not only `Send` but also `Sync`.
 		let imports = resolve_imports(
 			&store,
-			self.module_wrapper.module(),
+			&self.module,
 			&self.host_functions,
-			self.heap_pages,
-			self.allow_missing_func_imports,
+			self.config.heap_pages,
+			self.config.allow_missing_func_imports,
 		)?;
 
-		let instance_wrapper =
-			InstanceWrapper::new(&store, &self.module_wrapper, &imports, self.heap_pages)?;
-		let heap_base = instance_wrapper.extract_heap_base()?;
-		let globals_snapshot = GlobalsSnapshot::take(&instance_wrapper)?;
+		let strategy = if let Some(ref snapshot_data) = self.snapshot_data {
+			let instance_wrapper =
+				InstanceWrapper::new(&store, &self.module, &imports, self.config.heap_pages)?;
+			let heap_base = instance_wrapper.extract_heap_base()?;
 
-		Ok(Box::new(WasmtimeInstance {
-			store,
-			instance_wrapper: Rc::new(instance_wrapper),
-			module_wrapper: Arc::clone(&self.module_wrapper),
-			imports,
-			globals_snapshot,
-			heap_pages: self.heap_pages,
-			heap_base,
-		}))
+			// This function panics if the instance was created from a runtime blob different from which
+			// the mutable globals were collected. Here, it is easy to see that there is only a single
+			// runtime blob and thus it's the same that was used for both creating the instance and
+			// collecting the mutable globals.
+			let globals_snapshot = GlobalsSnapshot::take(&snapshot_data.mutable_globals, &instance_wrapper);
+
+			Strategy::FastInstanceReuse {
+				instance_wrapper: Rc::new(instance_wrapper),
+				globals_snapshot,
+				data_segments_snapshot: snapshot_data.data_segments_snapshot.clone(),
+				heap_base,
+			}
+		} else {
+			Strategy::RecreateInstance(InstanceCreator {
+				imports: Arc::new(imports),
+				module: self.module.clone(),
+				store,
+				heap_pages: self.config.heap_pages,
+			})
+		};
+
+		Ok(Box::new(WasmtimeInstance { strategy }))
 	}
 }
 
 /// A `WasmInstance` implementation that reuses compiled module and spawns instances
 /// to execute the compiled code.
 pub struct WasmtimeInstance {
-	store: Store,
-	module_wrapper: Arc<ModuleWrapper>,
-	instance_wrapper: Rc<InstanceWrapper>,
-	globals_snapshot: GlobalsSnapshot,
-	imports: Imports,
-	heap_pages: u32,
-	heap_base: u32,
+	strategy: Strategy,
 }
 
 // This is safe because `WasmtimeInstance` does not leak reference to `self.imports`
@@ -94,29 +135,43 @@ unsafe impl Send for WasmtimeInstance {}
 
 impl WasmInstance for WasmtimeInstance {
 	fn call(&self, method: InvokeMethod, data: &[u8]) -> Result<Vec<u8>> {
-		let entrypoint = self.instance_wrapper.resolve_entrypoint(method)?;
-		let allocator = FreeingBumpHeapAllocator::new(self.heap_base);
+		match &self.strategy {
+			Strategy::FastInstanceReuse {
+				instance_wrapper,
+				globals_snapshot,
+				data_segments_snapshot,
+				heap_base,
+			} => {
+				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
-		self.module_wrapper
-			.data_segments_snapshot()
-			.apply(|offset, contents| {
-				self.instance_wrapper
-					.write_memory_from(Pointer::new(offset), contents)
-			})?;
+				data_segments_snapshot.apply(|offset, contents| {
+					instance_wrapper.write_memory_from(Pointer::new(offset), contents)
+				})?;
+				globals_snapshot.apply(&**instance_wrapper);
+				let allocator = FreeingBumpHeapAllocator::new(*heap_base);
 
-		self.globals_snapshot.apply(&*self.instance_wrapper)?;
+				perform_call(data, Rc::clone(&instance_wrapper), entrypoint, allocator)
+			}
+			Strategy::RecreateInstance(instance_creator) => {
+				let instance_wrapper = instance_creator.instantiate()?;
+				let heap_base = instance_wrapper.extract_heap_base()?;
+				let entrypoint = instance_wrapper.resolve_entrypoint(method)?;
 
-		perform_call(
-			data,
-			Rc::clone(&self.instance_wrapper),
-			entrypoint,
-			allocator,
-		)
+				let allocator = FreeingBumpHeapAllocator::new(heap_base);
+				perform_call(data, Rc::new(instance_wrapper), entrypoint, allocator)
+			}
+		}
 	}
 
 	fn get_global_const(&self, name: &str) -> Result<Option<Value>> {
-		let instance = InstanceWrapper::new(&self.store, &self.module_wrapper, &self.imports, self.heap_pages)?;
-		instance.get_global_val(name)
+		match &self.strategy {
+			Strategy::FastInstanceReuse {
+				instance_wrapper, ..
+			} => instance_wrapper.get_global_val(name),
+			Strategy::RecreateInstance(instance_creator) => {
+				instance_creator.instantiate()?.get_global_val(name)
+			}
+		}
 	}
 }
 
@@ -125,7 +180,7 @@ impl WasmInstance for WasmtimeInstance {
 /// In case of an error the caching will not be enabled.
 fn setup_wasmtime_caching(
 	cache_path: &Path,
-	config: &mut Config,
+	config: &mut wasmtime::Config,
 ) -> std::result::Result<(), String> {
 	use std::fs;
 
@@ -158,22 +213,99 @@ directory = \"{cache_dir}\"
 	Ok(())
 }
 
+fn common_config() -> wasmtime::Config {
+	let mut config = wasmtime::Config::new();
+	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
+	config
+}
+
+pub struct Semantics {
+	/// Enabling this will lead to some optimization shenanigans that make calling [`WasmInstance`]
+	/// extermely fast.
+	///
+	/// Primarily this is achieved by not recreating the instance for each call and performing a
+	/// bare minimum clean up: reapplying the data segments and restoring the values for global
+	/// variables. The vast majority of the linear memory is not restored, meaning that effects
+	/// of previous executions on the same [`WasmInstance`] can be observed there.
+	///
+	/// This is not a problem for a standard substrate runtime execution because it's up to the
+	/// runtime itself to make sure that it doesn't involve any non-determinism.
+	///
+	/// Since this feature depends on instrumentation, it can be set only if [`CodeSupplyMode::Verbatim`]
+	/// is used.
+	pub fast_instance_reuse: bool,
+
+	/// The WebAssembly standard defines a call/value stack but it doesn't say anything about its
+	/// size except that it has to be finite. The implementations are free to choose their own notion
+	/// of limit: some may count the number of calls or values, others would rely on the host machine
+	/// stack and trap on reaching a guard page.
+	///
+	/// This obviously is a source of non-determinism during execution. This feature can be used
+	/// to instrument the code so that it will count the depth of execution in some deterministic
+	/// way (the machine stack limit should be so high that the deterministic limit always triggers
+	/// first).
+	///
+	/// See [here][stack_height] for more details of the instrumentation
+	///
+	/// Since this feature depends on instrumentation, it can be set only if [`CodeSupplyMode::Verbatim`]
+	/// is used.
+	///
+	/// [stack_height]: https://github.com/paritytech/wasm-utils/blob/d9432baf/src/stack_height/mod.rs#L1-L50
+	pub stack_depth_metering: bool,
+	// Other things like nan canonicalization can be added here.
+}
+
+pub struct Config {
+	/// The number of wasm pages to be mounted after instantiation.
+	pub heap_pages: u32,
+
+	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
+	/// othewise, the instantiation fails. If this option is set to `true`, then this behavior is
+	/// overriden and imports that are requested by the module and not provided by the host functions
+	/// will be resolved using stubs. These stubs will trap upon a call.
+	pub allow_missing_func_imports: bool,
+
+	/// A directory in which wasmtime can store its compiled artifacts cache.
+	pub cache_path: Option<PathBuf>,
+
+	/// Tuning of various semantics of the wasmtime executor.
+	pub semantics: Semantics,
+}
+
+pub enum CodeSupplyMode<'a> {
+	/// The runtime is instantiated using the given runtime blob.
+	Verbatim {
+		// Rationale to take the `RuntimeBlob` here is so that the client will be able to reuse
+		// the blob e.g. if they did a prevalidation. If they didn't they can pass a `RuntimeBlob`
+		// instance and it will be used anyway in most cases, because we are going to do at least
+		// some instrumentations for both anticipated paths: substrate execution and PVF execution.
+		//
+		// Should there raise a need in performing no instrumentation and the client doesn't need
+		// to do any checks, then we can provide a `Cow` like semantics here: if we need the blob and
+		//  the user got `RuntimeBlob` then extract it, or otherwise create it from the given
+		// bytecode.
+		blob: RuntimeBlob,
+	},
+
+	/// The code is supplied in a form of a compiled artifact.
+	///
+	/// This assumes that the code is already prepared for execution and the same `Config` was used.
+	Artifact { compiled_artifact: &'a [u8] },
+}
+
 /// Create a new `WasmtimeRuntime` given the code. This function performs translation from Wasm to
 /// machine code, which can be computationally heavy.
 ///
 /// The `cache_path` designates where this executor implementation can put compiled artifacts.
 pub fn create_runtime(
-	code: &[u8],
-	heap_pages: u64,
+	code_supply_mode: CodeSupplyMode<'_>,
+	config: Config,
 	host_functions: Vec<&'static dyn Function>,
-	allow_missing_func_imports: bool,
-	cache_path: Option<&Path>,
 ) -> std::result::Result<WasmtimeRuntime, WasmError> {
 	// Create the engine, store and finally the module from the given code.
-	let mut config = Config::new();
-	config.cranelift_opt_level(wasmtime::OptLevel::SpeedAndSize);
-	if let Some(cache_path) = cache_path {
-		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut config) {
+	let mut wasmtime_config = common_config();
+	if let Some(ref cache_path) = config.cache_path {
+		if let Err(reason) = setup_wasmtime_caching(cache_path, &mut wasmtime_config) {
 			log::warn!(
 				"failed to setup wasmtime cache. Performance may degrade significantly: {}.",
 				reason,
@@ -181,17 +313,74 @@ pub fn create_runtime(
 		}
 	}
 
-	let engine = Engine::new(&config);
-	let module_wrapper = ModuleWrapper::new(&engine, code)
-		.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
+	let engine = Engine::new(&wasmtime_config);
+
+	let (module, snapshot_data) = match code_supply_mode {
+		CodeSupplyMode::Verbatim { mut blob } => {
+			instrument(&mut blob, &config.semantics);
+
+			if config.semantics.fast_instance_reuse {
+				let data_segments_snapshot = DataSegmentsSnapshot::take(&blob).map_err(|e| {
+					WasmError::Other(format!("cannot take data segments snapshot: {}", e))
+				})?;
+				let data_segments_snapshot = Arc::new(data_segments_snapshot);
+
+				let mutable_globals = ExposedMutableGlobalsSet::collect(&blob);
+
+				let module = wasmtime::Module::new(&engine, &blob.serialize())
+					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
+
+				(module, Some(InstanceSnapshotData {
+					data_segments_snapshot,
+					mutable_globals,
+				}))
+			} else {
+				let module = wasmtime::Module::new(&engine, &blob.serialize())
+					.map_err(|e| WasmError::Other(format!("cannot create module: {}", e)))?;
+				(module, None)
+			}
+		}
+		CodeSupplyMode::Artifact { compiled_artifact } => {
+			let module = wasmtime::Module::deserialize(&engine, compiled_artifact)
+				.map_err(|e| WasmError::Other(format!("cannot deserialize module: {}", e)))?;
+
+			(module, None)
+		}
+	};
 
 	Ok(WasmtimeRuntime {
-		module_wrapper: Arc::new(module_wrapper),
-		heap_pages: heap_pages as u32,
-		allow_missing_func_imports,
+		module: Arc::new(module),
+		snapshot_data,
+		config,
 		host_functions,
 		engine,
 	})
+}
+
+fn instrument(blob: &mut RuntimeBlob, semantics: &Semantics) {
+	if semantics.fast_instance_reuse {
+		blob.expose_mutable_globals();
+	}
+
+	if semantics.stack_depth_metering {
+		// TODO: implement deterministic stack metering https://github.com/paritytech/substrate/issues/8393
+	}
+}
+
+/// Takes a [`RuntimeBlob`] and precompiles it returning the serialized result of compilation. It
+/// can then be used for calling [`create_runtime`] avoiding long compilation times.
+pub fn prepare_runtime_artifact(
+	mut blob: RuntimeBlob,
+	semantics: &Semantics,
+) -> std::result::Result<Vec<u8>, WasmError> {
+	instrument(&mut blob, semantics);
+
+	let engine = Engine::new(&common_config());
+	let module = wasmtime::Module::new(&engine, &blob.serialize())
+		.map_err(|e| WasmError::Other(format!("cannot compile module: {}", e)))?;
+	module
+		.serialize()
+		.map_err(|e| WasmError::Other(format!("cannot serialize module: {}", e)))
 }
 
 fn perform_call(

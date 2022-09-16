@@ -92,6 +92,7 @@ impl frame_system::Config for Test {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test

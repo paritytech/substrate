@@ -391,9 +391,8 @@ fn start_rpc_servers<
 ) -> Result<Box<dyn std::any::Any + Send + Sync>, error::Error> {
 	fn maybe_start_server<T, F>(address: Option<SocketAddr>, mut start: F) -> Result<Option<T>, io::Error>
 		where F: FnMut(&SocketAddr) -> Result<T, io::Error>,
-	{
-		Ok(match address {
-			Some(mut address) => Some(start(&address)
+		{
+			address.map(|mut address| start(&address)
 				.or_else(|e| match e.kind() {
 					io::ErrorKind::AddrInUse |
 					io::ErrorKind::PermissionDenied => {
@@ -402,10 +401,9 @@ fn start_rpc_servers<
 						start(&address)
 					},
 					_ => Err(e),
-				})?),
-			None => None,
-		})
-	}
+				}
+			) ).transpose()
+		}
 
 	fn deny_unsafe(addr: &SocketAddr, methods: &RpcMethods) -> sc_rpc::DenyUnsafe {
 		let is_exposed_addr = !addr.ip().is_loopback();

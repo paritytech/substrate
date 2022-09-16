@@ -503,10 +503,8 @@ fn read_tries_meta<Block: BlockT>(
 	meta_column: u32,
 ) -> ClientResult<ChangesTriesMeta<Block>> {
 	match db.get(meta_column, meta_keys::CHANGES_TRIES_META) {
-		Some(h) => match Decode::decode(&mut &h[..]) {
-			Ok(h) => Ok(h),
-			Err(err) => Err(ClientError::Backend(format!("Error decoding changes tries metadata: {}", err))),
-		},
+		Some(h) => Decode::decode(&mut &h[..])
+			.map_err(|err| ClientError::Backend(format!("Error decoding changes tries metadata: {}", err))),
 		None => Ok(ChangesTriesMeta {
 			oldest_digest_range: None,
 			oldest_pruned_digest_range_end: Zero::zero(),

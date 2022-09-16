@@ -985,7 +985,7 @@ fn import_notification_to_pool_maintain_works() {
 	let mut block_builder = client.new_block(Default::default()).unwrap();
 	block_builder.push(xt).unwrap();
 	let block = block_builder.build().unwrap().block;
-	client.import(BlockOrigin::Own, block).unwrap();
+	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 	// Get the notification of the block import and maintain the pool with it,
 	// Now, the pool should not contain any transactions.

@@ -97,6 +97,10 @@ pub struct BenchmarkCmd {
 	#[structopt(long)]
 	pub extra: bool,
 
+	/// Estimate PoV size.
+	#[structopt(long)]
+	pub record_proof: bool,
+
 	#[allow(missing_docs)]
 	#[structopt(flatten)]
 	pub shared_params: sc_cli::SharedParams,

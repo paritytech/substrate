@@ -12,7 +12,6 @@ description = "FRAME pallet for node authorization"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
@@ -25,7 +24,6 @@ log = { version = "0.4.14", default-features = false }
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",

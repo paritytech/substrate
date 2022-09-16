@@ -72,36 +72,33 @@ impl Era {
 		let quantize_factor = (period >> 12).max(1);
 		let quantized_phase = phase / quantize_factor * quantize_factor;
 
-		Era::Mortal(period, quantized_phase)
+		Self::Mortal(period, quantized_phase)
 	}
 
 	/// Create an "immortal" transaction.
 	pub fn immortal() -> Self {
-		Era::Immortal
+		Self::Immortal
 	}
 
 	/// `true` if this is an immortal transaction.
 	pub fn is_immortal(&self) -> bool {
-		match self {
-			Era::Immortal => true,
-			_ => false,
-		}
+		matches!(self, Self::Immortal)
 	}
 
 	/// Get the block number of the start of the era whose properties this object
 	/// describes that `current` belongs to.
 	pub fn birth(self, current: u64) -> u64 {
 		match self {
-			Era::Immortal => 0,
-			Era::Mortal(period, phase) => (current.max(phase) - phase) / period * period + phase,
+			Self::Immortal => 0,
+			Self::Mortal(period, phase) => (current.max(phase) - phase) / period * period + phase,
 		}
 	}
 
 	/// Get the block number of the first block at which the era has ended.
 	pub fn death(self, current: u64) -> u64 {
 		match self {
-			Era::Immortal => u64::max_value(),
-			Era::Mortal(period, _) => self.birth(current) + period,
+			Self::Immortal => u64::max_value(),
+			Self::Mortal(period, _) => self.birth(current) + period,
 		}
 	}
 }
@@ -109,8 +106,8 @@ impl Era {
 impl Encode for Era {
 	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		match self {
-			Era::Immortal => output.push_byte(0),
-			Era::Mortal(period, phase) => {
+			Self::Immortal => output.push_byte(0),
+			Self::Mortal(period, phase) => {
 				let quantize_factor = (*period as u64 >> 12).max(1);
 				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 | ((phase / quantize_factor) << 4) as u16;
 				encoded.encode_to(output);
@@ -125,14 +122,14 @@ impl Decode for Era {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
 		let first = input.read_byte()?;
 		if first == 0 {
-			Ok(Era::Immortal)
+			Ok(Self::Immortal)
 		} else {
 			let encoded = first as u64 + ((input.read_byte()? as u64) << 8);
 			let period = 2 << (encoded % (1 << 4));
 			let quantize_factor = (period >> 12).max(1);
 			let phase = (encoded >> 4) * quantize_factor;
 			if period >= 4 && phase < period {
-				Ok(Era::Mortal(period, phase))
+				Ok(Self::Mortal(period, phase))
 			} else {
 				Err("Invalid period and phase".into())
 			}

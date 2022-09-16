@@ -43,6 +43,8 @@ pub struct EventFormat<T = SystemTime> {
 	pub display_thread_name: bool,
 	/// Enable ANSI terminal colors for formatted output.
 	pub enable_color: bool,
+	/// Duplicate INFO, WARN and ERROR messages to stdout.
+	pub dup_to_stdout: bool,
 }
 
 impl<T> EventFormat<T>
@@ -123,7 +125,19 @@ where
 		writer: &mut dyn fmt::Write,
 		event: &Event,
 	) -> fmt::Result {
-		self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)
+		if self.dup_to_stdout && (
+			event.metadata().level() == &Level::INFO ||
+			event.metadata().level() == &Level::WARN ||
+			event.metadata().level() == &Level::ERROR
+		) {
+			let mut out = String::new();
+			self.format_event_custom(CustomFmtContext::FmtContext(ctx), &mut out, event)?;
+			writer.write_str(&out)?;
+			print!("{}", out);
+			Ok(())
+		} else {
+			self.format_event_custom(CustomFmtContext::FmtContext(ctx), writer, event)
+		}
 	}
 }
 

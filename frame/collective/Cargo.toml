@@ -13,7 +13,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
@@ -34,7 +33,6 @@ std = [
 	"codec/std",
 	"sp-core/std",
 	"sp-std/std",
-	"serde",
 	"sp-io/std",
 	"frame-support/std",
 	"sp-runtime/std",

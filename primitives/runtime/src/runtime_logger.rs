@@ -40,22 +40,15 @@ impl RuntimeLogger {
 		static LOGGER: RuntimeLogger = RuntimeLogger;
 		let _ = log::set_logger(&LOGGER);
 
-		// Set max level to `TRACE` to ensure we propagate
-		// all log entries to the native side that will do the
-		// final filtering on what should be printed.
-		//
-		// If we don't set any level, logging is disabled
-		// completly.
-		log::set_max_level(log::LevelFilter::Trace);
+		// Use the same max log level as used by the host.
+		log::set_max_level(sp_io::logging::max_level().into());
 	}
 }
 
 impl log::Log for RuntimeLogger {
-	fn enabled(&self, _metadata: &log::Metadata) -> bool {
-		// to avoid calling to host twice, we pass everything
-		// and let the host decide what to print.
-		// If someone is initializing the logger they should
-		// know what they are doing.
+	fn enabled(&self, _: &log::Metadata) -> bool {
+		// The final filtering is done by the host. This is not perfect, as we would still call into
+		// the host for log lines that will be thrown away.
 		true
 	}
 
@@ -81,11 +74,13 @@ mod tests {
 		TestClientBuilder, runtime::TestAPI,
 	};
 	use sp_api::{ProvideRuntimeApi, BlockId};
+	use std::{env, str::FromStr};
 
 	#[test]
-	fn ensure_runtime_logger_works() {
-		if std::env::var("RUN_TEST").is_ok() {
+	fn ensure_runtime_logger_respects_host_max_log_level() {
+		if env::var("RUN_TEST").is_ok() {
 			sp_tracing::try_init_simple();
+			log::set_max_level(log::LevelFilter::from_str(&env::var("RUST_LOG").unwrap()).unwrap());
 
 			let client = TestClientBuilder::new()
 				.set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
@@ -93,16 +88,18 @@ mod tests {
 			let block_id = BlockId::Number(0);
 			runtime_api.do_trace_log(&block_id).expect("Logging should not fail");
 		} else {
-			let executable = std::env::current_exe().unwrap();
-			let output = std::process::Command::new(executable)
-				.env("RUN_TEST", "1")
-				.env("RUST_LOG", "trace")
-				.args(&["--nocapture", "ensure_runtime_logger_works"])
-				.output()
-				.unwrap();
+			for (level, should_print) in &[("trace", true), ("info", false)] {
+				let executable = std::env::current_exe().unwrap();
+				let output = std::process::Command::new(executable)
+					.env("RUN_TEST", "1")
+					.env("RUST_LOG", level)
+					.args(&["--nocapture", "ensure_runtime_logger_respects_host_max_log_level"])
+					.output()
+					.unwrap();
 
-			let output = dbg!(String::from_utf8(output.stderr).unwrap());
-			assert!(output.contains("Hey I'm runtime"));
+				let output = String::from_utf8(output.stderr).unwrap();
+				assert!(output.contains("Hey I'm runtime") == *should_print);
+			}
 		}
 	}
 }

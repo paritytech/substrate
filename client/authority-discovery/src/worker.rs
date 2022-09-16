@@ -25,11 +25,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::channel::mpsc;
-use futures::{FutureExt, Stream, StreamExt, stream::Fuse};
+use futures::{future, FutureExt, Stream, StreamExt, stream::Fuse};
 
 use addr_cache::AddrCache;
 use async_trait::async_trait;
 use codec::Decode;
+use ip_network::IpNetwork;
 use libp2p::{core::multiaddr, multihash::{Multihash, Hasher}};
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{Counter, CounterVec, Gauge, Opts, U64, register};
@@ -44,7 +45,7 @@ use sc_network::{
 	PeerId,
 };
 use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId, AuthoritySignature, AuthorityPair};
-use sp_core::crypto::{key_types, Pair};
+use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
 use sp_runtime::{traits::Block as BlockT, generic::BlockId};
 use sp_api::ProvideRuntimeApi;
@@ -109,6 +110,15 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 
 	/// Interval to be proactive, publishing own addresses.
 	publish_interval: ExpIncInterval,
+	/// Pro-actively publish our own addresses at this interval, if the keys in the keystore
+	/// have changed.
+	publish_if_changed_interval: ExpIncInterval,
+	/// List of keys onto which addresses have been published at the latest publication.
+	/// Used to check whether they have changed.
+	latest_published_keys: HashSet<CryptoTypePublicPair>,
+	/// Same value as in the configuration.
+	publish_non_global_ips: bool,
+
 	/// Interval at which to request addresses of authorities, refilling the pending lookups queue.
 	query_interval: ExpIncInterval,
 
@@ -160,6 +170,13 @@ where
 			config.max_query_interval,
 		);
 
+		// An `ExpIncInterval` is overkill here because the interval is constant, but consistency
+		// is more simple.
+		let publish_if_changed_interval = ExpIncInterval::new(
+			config.keystore_refresh_interval,
+			config.keystore_refresh_interval
+		);
+
 		let addr_cache = AddrCache::new();
 
 		let metrics = match prometheus_registry {
@@ -181,6 +198,9 @@ where
 			network,
 			dht_event_rx,
 			publish_interval,
+			publish_if_changed_interval,
+			latest_published_keys: HashSet::new(),
+			publish_non_global_ips: config.publish_non_global_ips,
 			query_interval,
 			pending_lookups: Vec::new(),
 			in_flight_lookups: HashMap::new(),
@@ -212,8 +232,11 @@ where
 					self.process_message_from_service(msg);
 				},
 				// Publish own addresses.
-				_ = self.publish_interval.next().fuse() => {
-					if let Err(e) = self.publish_ext_addresses().await {
+				only_if_changed = future::select(
+					self.publish_interval.next().map(|_| false),
+					self.publish_if_changed_interval.next().map(|_| true)
+				).map(|e| e.factor_first().0).fuse() => {
+					if let Err(e) = self.publish_ext_addresses(only_if_changed).await {
 						error!(
 							target: LOG_TARGET,
 							"Failed to publish external addresses: {:?}", e,
@@ -248,10 +271,24 @@ where
 		}
 	}
 
-	fn addresses_to_publish(&self) -> impl ExactSizeIterator<Item = Multiaddr> {
+	fn addresses_to_publish(&self) -> impl Iterator<Item = Multiaddr> {
 		let peer_id: Multihash = self.network.local_peer_id().into();
+		let publish_non_global_ips = self.publish_non_global_ips;
 		self.network.external_addresses()
 			.into_iter()
+			.filter(move |a| {
+				if publish_non_global_ips {
+					return true;
+				}
+
+				a.iter().all(|p| match p {
+					// The `ip_network` library is used because its `is_global()` method is stable,
+					// while `is_global()` in the standard library currently isn't.
+					multiaddr::Protocol::Ip4(ip) if !IpNetwork::from(ip).is_global() => false,
+					multiaddr::Protocol::Ip6(ip) if !IpNetwork::from(ip).is_global() => false,
+					_ => true,
+				})
+			})
 			.map(move |a| {
 				if a.iter().any(|p| matches!(p, multiaddr::Protocol::P2p(_))) {
 					a
@@ -262,13 +299,25 @@ where
 	}
 
 	/// Publish own public addresses.
-	async fn publish_ext_addresses(&mut self) -> Result<()> {
+	///
+	/// If `only_if_changed` is true, the function has no effect if the list of keys to publish
+	/// is equal to `self.latest_published_keys`.
+	async fn publish_ext_addresses(&mut self, only_if_changed: bool) -> Result<()> {
 		let key_store = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store,
 			Role::Discover => return Ok(()),
 		};
 
-		let addresses = self.addresses_to_publish();
+		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
+			key_store.clone(),
+			self.client.as_ref(),
+		).await?.into_iter().map(Into::into).collect::<HashSet<_>>();
+
+		if only_if_changed && keys == self.latest_published_keys {
+			return Ok(())
+		}
+
+		let addresses = self.addresses_to_publish().map(|a| a.to_vec()).collect::<Vec<_>>();
 
 		if let Some(metrics) = &self.metrics {
 			metrics.publish.inc();
@@ -278,22 +327,18 @@ where
 		}
 
 		let mut serialized_addresses = vec![];
-		schema::AuthorityAddresses { addresses: addresses.map(|a| a.to_vec()).collect() }
+		schema::AuthorityAddresses { addresses }
 			.encode(&mut serialized_addresses)
 			.map_err(Error::EncodingProto)?;
 
-		let keys = Worker::<Client, Network, Block, DhtEventStream>::get_own_public_keys_within_authority_set(
-			key_store.clone(),
-			self.client.as_ref(),
-		).await?.into_iter().map(Into::into).collect::<Vec<_>>();
-
+		let keys_vec = keys.iter().cloned().collect::<Vec<_>>();
 		let signatures = key_store.sign_with_all(
 			key_types::AUTHORITY_DISCOVERY,
-			keys.clone(),
+			keys_vec.clone(),
 			serialized_addresses.as_slice(),
 		).await.map_err(|_| Error::Signing)?;
 
-		for (sign_result, key) in signatures.into_iter().zip(keys) {
+		for (sign_result, key) in signatures.into_iter().zip(keys_vec.iter()) {
 			let mut signed_addresses = vec![];
 
 			// Verify that all signatures exist for all provided keys.
@@ -312,6 +357,8 @@ where
 				signed_addresses,
 			);
 		}
+
+		self.latest_published_keys = keys;
 
 		Ok(())
 	}

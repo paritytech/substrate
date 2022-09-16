@@ -17,9 +17,9 @@
 
 //! Proving state machine backend.
 
-use std::{sync::Arc, collections::HashMap};
+use std::{sync::Arc, collections::{HashMap, hash_map::Entry}};
 use parking_lot::RwLock;
-use codec::{Decode, Codec};
+use codec::{Decode, Codec, Encode};
 use log::debug;
 use hash_db::{Hasher, HashDB, EMPTY_PREFIX, Prefix};
 use sp_trie::{
@@ -109,9 +109,69 @@ impl<'a, S, H> ProvingBackendRecorder<'a, S, H>
 	}
 }
 
-/// Global proof recorder, act as a layer over a hash db for recording queried
-/// data.
-pub type ProofRecorder<H> = Arc<RwLock<HashMap<<H as Hasher>::Out, Option<DBValue>>>>;
+#[derive(Default)]
+struct ProofRecorderInner<Hash> {
+	/// All the records that we have stored so far.
+	records: HashMap<Hash, Option<DBValue>>,
+	/// The encoded size of all recorded values.
+	encoded_size: usize,
+}
+
+/// Global proof recorder, act as a layer over a hash db for recording queried data.
+#[derive(Clone, Default)]
+pub struct ProofRecorder<Hash> {
+	inner: Arc<RwLock<ProofRecorderInner<Hash>>>,
+}
+
+impl<Hash: std::hash::Hash + Eq> ProofRecorder<Hash> {
+	/// Record the given `key` => `val` combination.
+	pub fn record(&self, key: Hash, val: Option<DBValue>) {
+		let mut inner = self.inner.write();
+		let encoded_size = if let Entry::Vacant(entry) = inner.records.entry(key) {
+			let encoded_size = val.as_ref().map(Encode::encoded_size).unwrap_or(0);
+
+			entry.insert(val);
+			encoded_size
+		} else {
+			0
+		};
+
+		inner.encoded_size += encoded_size;
+	}
+
+	/// Returns the value at the given `key`.
+	pub fn get(&self, key: &Hash) -> Option<Option<DBValue>> {
+		self.inner.read().records.get(key).cloned()
+	}
+
+	/// Returns the estimated encoded size of the proof.
+	///
+	/// The estimation is maybe bigger (by in maximum 4 bytes), but never smaller than the actual
+	/// encoded proof.
+	pub fn estimate_encoded_size(&self) -> usize {
+		let inner = self.inner.read();
+		inner.encoded_size
+			+ codec::Compact(inner.records.len() as u32).encoded_size()
+	}
+
+	/// Convert into a [`StorageProof`].
+	pub fn to_storage_proof(&self) -> StorageProof {
+		let trie_nodes = self.inner.read()
+			.records
+			.iter()
+			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
+			.collect();
+
+		StorageProof::new(trie_nodes)
+	}
+
+	/// Reset the internal state.
+	pub fn reset(&self) {
+		let mut inner = self.inner.write();
+		inner.records.clear();
+		inner.encoded_size = 0;
+	}
+}
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -122,7 +182,7 @@ pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> (
 /// Trie backend storage with its proof recorder.
 pub struct ProofRecorderBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	backend: &'a S,
-	proof_recorder: ProofRecorder<H>,
+	proof_recorder: ProofRecorder<H::Out>,
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
@@ -137,7 +197,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 	/// Create new proving backend with the given recorder.
 	pub fn new_with_recorder(
 		backend: &'a TrieBackend<S, H>,
-		proof_recorder: ProofRecorder<H>,
+		proof_recorder: ProofRecorder<H::Out>,
 	) -> Self {
 		let essence = backend.essence();
 		let root = essence.root().clone();
@@ -150,12 +210,7 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H>
 
 	/// Extracting the gathered unordered proof.
 	pub fn extract_proof(&self) -> StorageProof {
-		let trie_nodes = self.0.essence().backend_storage().proof_recorder
-			.read()
-			.iter()
-			.filter_map(|(_k, v)| v.as_ref().map(|v| v.to_vec()))
-			.collect();
-		StorageProof::new(trie_nodes)
+		self.0.essence().backend_storage().proof_recorder.to_storage_proof()
 	}
 }
 
@@ -165,11 +220,12 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> TrieBackendStorage<H>
 	type Overlay = S::Overlay;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
-		if let Some(v) = self.proof_recorder.read().get(key) {
-			return Ok(v.clone());
+		if let Some(v) = self.proof_recorder.get(key) {
+			return Ok(v);
 		}
-		let backend_value =  self.backend.get(key, prefix)?;
-		self.proof_recorder.write().insert(key.clone(), backend_value.clone());
+
+		let backend_value = self.backend.get(key, prefix)?;
+		self.proof_recorder.record(key.clone(), backend_value.clone());
 		Ok(backend_value)
 	}
 }
@@ -343,8 +399,8 @@ mod tests {
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
-		let (trie_root, mut trie_mdb) = trie_backend.storage_root(::std::iter::empty());
-		let (proving_root, mut proving_mdb) = proving_backend.storage_root(::std::iter::empty());
+		let (trie_root, mut trie_mdb) = trie_backend.storage_root(std::iter::empty());
+		let (proving_root, mut proving_mdb) = proving_backend.storage_root(std::iter::empty());
 		assert_eq!(trie_root, proving_root);
 		assert_eq!(trie_mdb.drain(), proving_mdb.drain());
 	}
@@ -405,7 +461,7 @@ mod tests {
 		));
 
 		let trie = in_memory.as_trie_backend().unwrap();
-		let trie_root = trie.storage_root(::std::iter::empty()).0;
+		let trie_root = trie.storage_root(std::iter::empty()).0;
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(
 			trie.storage(&[i]).unwrap().unwrap(),
@@ -439,5 +495,36 @@ mod tests {
 			proof_check.child_storage(child_info_1, &[64]).unwrap().unwrap(),
 			vec![64]
 		);
+	}
+
+	#[test]
+	fn storage_proof_encoded_size_estimation_works() {
+		let trie_backend = test_trie();
+		let backend = test_proving(&trie_backend);
+
+		let check_estimation = |backend: &ProvingBackend<'_, PrefixedMemoryDB<BlakeTwo256>, BlakeTwo256>| {
+			let storage_proof = backend.extract_proof();
+			let estimation = backend.0.essence()
+				.backend_storage()
+				.proof_recorder
+				.estimate_encoded_size();
+
+			assert_eq!(storage_proof.encoded_size(), estimation);
+		};
+
+		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
+		check_estimation(&backend);
+
+		assert_eq!(backend.storage(b"value1").unwrap(), Some(vec![42]));
+		check_estimation(&backend);
+
+		assert_eq!(backend.storage(b"value2").unwrap(), Some(vec![24]));
+		check_estimation(&backend);
+
+		assert!(backend.storage(b"doesnotexist").unwrap().is_none());
+		check_estimation(&backend);
+
+		assert!(backend.storage(b"doesnotexist2").unwrap().is_none());
+		check_estimation(&backend);
 	}
 }

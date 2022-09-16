@@ -38,6 +38,7 @@ pub enum BenchmarkSelector {
 	StorageRootTime,
 	Reads,
 	Writes,
+	ProofSize,
 }
 
 #[derive(Debug)]
@@ -86,6 +87,7 @@ impl Analysis {
 				BenchmarkSelector::StorageRootTime => result.storage_root_time,
 				BenchmarkSelector::Reads => result.reads.into(),
 				BenchmarkSelector::Writes => result.writes.into(),
+				BenchmarkSelector::ProofSize => result.proof_size.into(),
 			}
 		).collect();
 
@@ -126,6 +128,7 @@ impl Analysis {
 						BenchmarkSelector::StorageRootTime => result.storage_root_time,
 						BenchmarkSelector::Reads => result.reads.into(),
 						BenchmarkSelector::Writes => result.writes.into(),
+						BenchmarkSelector::ProofSize => result.proof_size.into(),
 					};
 					(result.components[i].1, data)
 				})
@@ -190,6 +193,7 @@ impl Analysis {
 					BenchmarkSelector::StorageRootTime => result.storage_root_time,
 					BenchmarkSelector::Reads => result.reads.into(),
 					BenchmarkSelector::Writes => result.writes.into(),
+					BenchmarkSelector::ProofSize => result.proof_size.into(),
 				})
 		}
 
@@ -370,6 +374,7 @@ mod tests {
 			repeat_reads: 0,
 			writes,
 			repeat_writes: 0,
+			proof_size: 0,
 		}
 	}
 

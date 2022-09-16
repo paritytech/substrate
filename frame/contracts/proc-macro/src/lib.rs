@@ -117,17 +117,17 @@ fn format_weight(field: &Ident) -> TokenStream {
 		&if self.#field > 1_000_000_000 {
 			format!(
 				"{:.1?} ms",
-				Fixed::saturating_from_rational(self.#field, 1_000_000_000).to_fraction()
+				Fixed::saturating_from_rational(self.#field, 1_000_000_000).to_float()
 			)
 		} else if self.#field > 1_000_000 {
 			format!(
 				"{:.1?} µs",
-				Fixed::saturating_from_rational(self.#field, 1_000_000).to_fraction()
+				Fixed::saturating_from_rational(self.#field, 1_000_000).to_float()
 			)
 		} else if self.#field > 1_000 {
 			format!(
 				"{:.1?} ns",
-				Fixed::saturating_from_rational(self.#field, 1_000).to_fraction()
+				Fixed::saturating_from_rational(self.#field, 1_000).to_float()
 			)
 		} else {
 			format!("{} ps", self.#field)

@@ -53,6 +53,7 @@ merlin = "2.0"
 pdqselect = "0.1.0"
 derive_more = "0.99.2"
 retain_mut = "0.1.2"
+async-trait = "0.1.42"
 
 [dev-dependencies]
 sp-keyring = { version = "3.0.0", path = "../../../primitives/keyring" }
@@ -65,6 +66,3 @@ substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils
 sc-block-builder = { version = "0.9.0", path = "../../block-builder" }
 rand_chacha = "0.2.2"
 tempfile = "3.1.0"
-
-[features]
-test-helpers = []

@@ -14,7 +14,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 static_assertions = "1.1.0"
-serde = { version = "1.0.101", optional = true }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.14", default-features = false }
 
@@ -48,7 +47,6 @@ frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
 	"log/std",
 

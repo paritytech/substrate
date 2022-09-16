@@ -135,6 +135,8 @@ pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	block_id: BlockId<Block>,
 	parent_hash: Block::Hash,
 	backend: &'a B,
+	/// The estimated size of the block header.
+	estimated_header_size: usize,
 }
 
 impl<'a, Block, A, B> BlockBuilder<'a, Block, A, B>
@@ -165,6 +167,8 @@ where
 			inherent_digests,
 		);
 
+		let estimated_header_size = header.encoded_size();
+
 		let mut api = api.runtime_api();
 
 		if record_proof.yes() {
@@ -183,6 +187,7 @@ where
 			api,
 			block_id,
 			backend,
+			estimated_header_size,
 		})
 	}
 
@@ -269,6 +274,20 @@ where
 				inherent_data
 			))
 		}).map_err(|e| Error::Application(Box::new(e)))
+	}
+
+	/// Estimate the size of the block in the current state.
+	///
+	/// If `include_proof` is `true`, the estimated size of the storage proof will be added
+	/// to the estimation.
+	pub fn estimate_block_size(&self, include_proof: bool) -> usize {
+		let size = self.estimated_header_size + self.extrinsics.encoded_size();
+
+		if include_proof {
+			size + self.api.proof_recorder().map(|pr| pr.estimate_encoded_size()).unwrap_or(0)
+		} else {
+			size
+		}
 	}
 }
 

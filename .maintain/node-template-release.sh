@@ -10,7 +10,7 @@ if [ "$#" -ne 1 ]; then
   exit 1
 fi
 
-PATH_TO_ARCHIVE=$(pwd)/$1
+PATH_TO_ARCHIVE=$1
 cd $PROJECT_ROOT/.maintain/node-template-release
 
 cargo run $PROJECT_ROOT/bin/node-template $PATH_TO_ARCHIVE

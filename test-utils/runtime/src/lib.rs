@@ -190,7 +190,7 @@ impl BlindCheckable for Extrinsic {
 					Err(InvalidTransaction::BadProof.into())
 				}
 			},
-			Extrinsic::IncludeData(_) => Err(InvalidTransaction::BadProof.into()),
+			Extrinsic::IncludeData(v) => Ok(Extrinsic::IncludeData(v)),
 			Extrinsic::StorageChange(key, value) => Ok(Extrinsic::StorageChange(key, value)),
 			Extrinsic::ChangesTrieConfigUpdate(new_config) =>
 				Ok(Extrinsic::ChangesTrieConfigUpdate(new_config)),
@@ -515,6 +515,7 @@ impl frame_system::Config for Runtime {
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
+	type OnSetCode = ();
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -1018,7 +1019,7 @@ cfg_if! {
 				}
 
 				fn do_trace_log() {
-					log::error!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
+					log::trace!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
 				}
 			}
 
@@ -1261,7 +1262,7 @@ mod tests {
 			(BlockId::Hash(hash), block)
 		};
 
-		client.import(BlockOrigin::Own, block).unwrap();
+		futures::executor::block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
 		// Allocation of 1024k while having ~2048k should succeed.
 		let ret = client.runtime_api().vec_with_capacity(&new_block_id, 1048576);

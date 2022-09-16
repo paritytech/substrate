@@ -129,9 +129,9 @@ fn blacklisting_should_work() {
 		fast_forward_to(2);
 
 		let hash = set_balance_proposal_hash(4);
-		assert!(Democracy::referendum_status(0).is_ok());
+		assert_ok!(Democracy::referendum_status(0));
 		assert_ok!(Democracy::blacklist(Origin::root(), hash, Some(0)));
-		assert!(Democracy::referendum_status(0).is_err());
+		assert_noop!(Democracy::referendum_status(0), Error::<Test>::ReferendumInvalid);
 	});
 }
 

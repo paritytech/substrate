@@ -77,10 +77,8 @@ impl<T: FullCodec, G: StorageValue<T>> storage::StorageValue<T> for G {
 		let key = Self::storage_value_final_key();
 
 		// attempt to get the length directly.
-		let maybe_old = match unhashed::get_raw(&key) {
-			Some(old_data) => Some(O::decode(&mut &old_data[..]).map_err(|_| ())?),
-			None => None,
-		};
+		let maybe_old = unhashed::get_raw(&key)
+			.map(|old_data| O::decode(&mut &old_data[..]).map_err(|_| ())).transpose()?;
 		let maybe_new = f(maybe_old);
 		if let Some(new) = maybe_new.as_ref() {
 			new.using_encoded(|d| unhashed::put_raw(&key, d));
