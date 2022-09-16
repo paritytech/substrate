@@ -583,7 +583,3 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 		.unwrap_or_else(|r| r.into_compile_error())
 		.into()
 }
-
-mod kw {
-	syn::custom_keyword!(cached);
-}
