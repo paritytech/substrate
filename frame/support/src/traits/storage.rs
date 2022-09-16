@@ -115,6 +115,6 @@ impl WhitelistedStorageKeys for Tuple {
 				combined_keys.insert(storage_key);
 			}
 		 )* );
-		combined_keys.iter().cloned().collect::<Vec<_>>()
+		combined_keys.into_iter().collect::<Vec<_>>()
 	}
 }
