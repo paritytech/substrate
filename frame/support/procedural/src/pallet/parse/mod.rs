@@ -385,8 +385,6 @@ mod keyword {
 	syn::custom_keyword!(generate_store);
 	syn::custom_keyword!(Store);
 	syn::custom_keyword!(extra_constants);
-	syn::custom_keyword!(cached);
-	syn::custom_keyword!(benchmarking);
 }
 
 /// Parse attributes for item in pallet module
