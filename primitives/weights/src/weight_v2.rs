@@ -23,16 +23,7 @@ use sp_debug_derive::RuntimeDebug;
 use super::*;
 
 #[derive(
-	Encode,
-	Decode,
-	MaxEncodedLen,
-	TypeInfo,
-	Eq,
-	PartialEq,
-	Copy,
-	Clone,
-	RuntimeDebug,
-	Default,
+	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Weight {
@@ -118,7 +109,7 @@ impl Weight {
 	/// Construct [`Weight`] with weight components, namely reference time and storage size weights.
 	pub const fn from_components(ref_time: u64, proof_size: u64) -> Self {
 		Self { ref_time, proof_size }
-	} 
+	}
 
 	/// Saturating [`Weight`] addition. Computes `self + rhs`, saturating at the numeric bounds of
 	/// all fields instead of overflowing.
@@ -323,10 +314,7 @@ where
 {
 	type Output = Self;
 	fn mul(self, b: T) -> Self {
-		Self {
-			ref_time: b * self.ref_time,
-			proof_size: b * self.proof_size,
-		}
+		Self { ref_time: b * self.ref_time, proof_size: b * self.proof_size }
 	}
 }
 
