@@ -35,6 +35,7 @@ pub struct StateSync<B: BlockT, Client> {
 	target_block: B::Hash,
 	target_header: B::Header,
 	target_root: B::Hash,
+	target_body: Option<Vec<B::Extrinsic>>,
 	last_key: SmallVec<[Vec<u8>; 2]>,
 	state: HashMap<Vec<u8>, (Vec<(Vec<u8>, Vec<u8>)>, Vec<Vec<u8>>)>,
 	complete: bool,
@@ -46,7 +47,7 @@ pub struct StateSync<B: BlockT, Client> {
 /// Import state chunk result.
 pub enum ImportResult<B: BlockT> {
 	/// State is complete and ready for import.
-	Import(B::Hash, B::Header, ImportedState<B>),
+	Import(B::Hash, B::Header, ImportedState<B>, Option<Vec<B::Extrinsic>>),
 	/// Continue downloading.
 	Continue,
 	/// Bad state chunk.
@@ -59,12 +60,18 @@ where
 	Client: ProofProvider<B> + Send + Sync + 'static,
 {
 	///  Create a new instance.
-	pub fn new(client: Arc<Client>, target: B::Header, skip_proof: bool) -> Self {
+	pub fn new(
+		client: Arc<Client>,
+		target_header: B::Header,
+		target_body: Option<Vec<B::Extrinsic>>,
+		skip_proof: bool,
+	) -> Self {
 		Self {
 			client,
-			target_block: target.hash(),
-			target_root: *target.state_root(),
-			target_header: target,
+			target_block: target_header.hash(),
+			target_root: *target_header.state_root(),
+			target_header,
+			target_body,
 			last_key: SmallVec::default(),
 			state: HashMap::default(),
 			complete: false,
@@ -213,6 +220,7 @@ where
 					block: self.target_block,
 					state: std::mem::take(&mut self.state).into(),
 				},
+				self.target_body.clone(),
 			)
 		} else {
 			ImportResult::Continue

@@ -80,6 +80,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
+use warp::TargetBlockImportResult;
 
 mod extra_requests;
 
@@ -315,6 +316,8 @@ pub enum PeerSyncState<B: BlockT> {
 	DownloadingState,
 	/// Downloading warp proof.
 	DownloadingWarpProof,
+	/// Downloading warp sync target block.
+	DownloadingWarpTarget,
 	/// Actively downloading block history after warp sync.
 	DownloadingGap(NumberFor<B>),
 }
@@ -824,7 +827,7 @@ where
 				// Only one pending state request is allowed.
 				return None
 			}
-			if let Some(request) = sync.next_warp_poof_request() {
+			if let Some(request) = sync.next_warp_proof_request() {
 				let mut targets: Vec<_> = self.peers.values().map(|p| p.best_number).collect();
 				if !targets.is_empty() {
 					targets.sort();
@@ -1031,6 +1034,40 @@ where
 							Vec::new()
 						}
 					},
+					PeerSyncState::DownloadingWarpTarget => {
+						peer.state = PeerSyncState::Available;
+						if let Some(warp_sync) = &mut self.warp_sync {
+							if blocks.len() == 1 {
+								validate_blocks::<B>(&blocks, who, Some(request))?;
+								match warp_sync.import_target_block(
+									blocks.pop().expect("`blocks` len checked above."),
+								) {
+									TargetBlockImportResult::Success =>
+										return Ok(OnBlockData::Continue),
+									TargetBlockImportResult::BadResponse =>
+										return Err(BadPeer(*who, rep::VERIFICATION_FAIL)),
+								}
+							} else if blocks.is_empty() {
+								debug!(target: "sync", "Empty block response from {}", who);
+								return Err(BadPeer(*who, rep::NO_BLOCK))
+							} else {
+								debug!(
+									target: "sync",
+									"Too many blocks ({}) in warp target block response from {}",
+									blocks.len(),
+									who,
+								);
+								return Err(BadPeer(*who, rep::NOT_REQUESTED))
+							}
+						} else {
+							debug!(
+								target: "sync",
+								"Logic error: we think we are downloading warp target block from {}, but no warp sync is happening.",
+								who,
+							);
+							return Ok(OnBlockData::Continue)
+						}
+					},
 					PeerSyncState::Available |
 					PeerSyncState::DownloadingJustification(..) |
 					PeerSyncState::DownloadingState |
@@ -1112,12 +1149,12 @@ where
 		};
 
 		match import_result {
-			state::ImportResult::Import(hash, header, state) => {
+			state::ImportResult::Import(hash, header, state, body) => {
 				let origin = BlockOrigin::NetworkInitialSync;
 				let block = IncomingBlock {
 					hash,
 					header: Some(header),
-					body: None,
+					body,
 					indexed_body: None,
 					justifications: None,
 					origin: None,
@@ -1400,7 +1437,7 @@ where
 							hash,
 						);
 						self.state_sync =
-							Some(StateSync::new(self.client.clone(), header, *skip_proofs));
+							Some(StateSync::new(self.client.clone(), header, None, *skip_proofs));
 						self.allowed_requests.set_all();
 					}
 				}
