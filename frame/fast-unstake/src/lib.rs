@@ -19,7 +19,7 @@
 //!
 //! If a nominator is not exposed in any `ErasStakers` (i.e. "has not actively backed any
 //! validators in the last `BondingDuration` days"), then they can register themselves in this
-//! pallet, unstake faster than needing to wait an entire bonding duration, and potentially move
+//! pallet, unstake faster than having to wait an entire bonding duration, and potentially move
 //! into a nomination pool.
 //!
 //! Appearing in the exposure of a validator means being exposed equal to that validator from the
