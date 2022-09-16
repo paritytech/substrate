@@ -47,7 +47,7 @@ impl AsRef<[u8]> for StorageKey {
 }
 
 /// Storage key with read/write tracking information.
-#[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode, PartialOrd)]
+#[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]
 pub struct TrackedStorageKey {
 	pub key: Vec<u8>,
 	pub reads: u32,
@@ -90,6 +90,12 @@ impl TrackedStorageKey {
 impl Ord for TrackedStorageKey {
 	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
 		self.key.cmp(&other.key)
+	}
+}
+
+impl PartialOrd for TrackedStorageKey {
+	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+		self.key.partial_cmp(&other.key)
 	}
 }
 
