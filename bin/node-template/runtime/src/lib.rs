@@ -15,7 +15,8 @@ use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
-		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
+		AccountIdLookup, BlakeTwo256, Block as BlockT, Bounded, IdentifyAccount, NumberFor, One,
+		Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature,
@@ -253,7 +254,8 @@ impl pallet_balances::Config for Runtime {
 }
 
 parameter_types! {
-	pub FeeMultiplier: Multiplier = Multiplier::one();
+	pub FeeMultiplierMin: Multiplier = Multiplier::one();
+	pub FeeMultiplierMax: Multiplier = Bounded::max_value();
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -262,7 +264,7 @@ impl pallet_transaction_payment::Config for Runtime {
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<Balance>;
 	type LengthToFee = IdentityFee<Balance>;
-	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplier>;
+	type FeeMultiplierUpdate = ConstFeeMultiplier<FeeMultiplierMin, FeeMultiplierMax>;
 }
 
 impl pallet_sudo::Config for Runtime {
