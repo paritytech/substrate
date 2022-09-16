@@ -42,7 +42,7 @@ fn register_offchain_ext(ext: &mut sp_io::TestExternalities) {
 fn new_block() -> Weight {
 	let number = frame_system::Pallet::<Test>::block_number() + 1;
 	let hash = H256::repeat_byte(number as u8);
-	LEAF_DATA.with(|r| r.borrow_mut().a = number);
+	LeafDataTestValue::mutate(|r| r.a = number);
 
 	frame_system::Pallet::<Test>::reset_events();
 	frame_system::Pallet::<Test>::initialize(&number, &hash, &Default::default());

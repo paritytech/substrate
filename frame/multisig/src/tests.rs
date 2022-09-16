@@ -60,12 +60,12 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -83,7 +83,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -91,19 +91,19 @@ impl pallet_balances::Config for Test {
 }
 
 pub struct TestBaseCallFilter;
-impl Contains<Call> for TestBaseCallFilter {
-	fn contains(c: &Call) -> bool {
+impl Contains<RuntimeCall> for TestBaseCallFilter {
+	fn contains(c: &RuntimeCall) -> bool {
 		match *c {
-			Call::Balances(_) => true,
+			RuntimeCall::Balances(_) => true,
 			// Needed for benchmarking
-			Call::System(frame_system::Call::remark { .. }) => true,
+			RuntimeCall::System(frame_system::Call::remark { .. }) => true,
 			_ => false,
 		}
 	}
 }
 impl Config for Test {
-	type Event = Event;
-	type Call = Call;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type Currency = Balances;
 	type DepositBase = ConstU64<1>;
 	type DepositFactor = ConstU64<1>;
@@ -614,7 +614,7 @@ fn multisig_1_of_3_works() {
 #[test]
 fn multisig_filters() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::System(frame_system::Call::set_code { code: vec![] }));
+		let call = Box::new(RuntimeCall::System(frame_system::Call::set_code { code: vec![] }));
 		assert_noop!(
 			Multisig::as_multi_threshold_1(Origin::signed(1), vec![2], call.clone()),
 			DispatchError::from(frame_system::Error::<Test>::CallFiltered),

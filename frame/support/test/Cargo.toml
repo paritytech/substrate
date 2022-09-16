@@ -47,9 +47,10 @@ std = [
 	"sp-version/std",
 ]
 try-runtime = ["frame-support/try-runtime"]
-# WARNING: CI only execute pallet test with this feature,
-# if the feature intended to be used outside, CI and this message need to be updated.
-conditional-storage = []
+# WARNING:
+# Only CI runs with this feature enabled. This feature is for testing stuff related to the FRAME macros
+# in conjunction with rust features.
+frame-feature-testing = []
 # Disable ui tests
 disable-ui-tests = []
 no-metadata-docs = ["frame-support/no-metadata-docs"]

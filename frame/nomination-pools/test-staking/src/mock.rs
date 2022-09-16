@@ -46,13 +46,13 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -81,7 +81,7 @@ impl pallet_balances::Config for Runtime {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -111,7 +111,7 @@ impl pallet_staking::Config for Runtime {
 	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = ();
@@ -138,7 +138,7 @@ parameter_types! {
 }
 
 impl pallet_bags_list::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
 	type ScoreProvider = Staking;
@@ -165,7 +165,7 @@ parameter_types! {
 }
 
 impl pallet_nomination_pools::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
@@ -248,7 +248,7 @@ pub(crate) fn pool_events_since_last_call() -> Vec<pallet_nomination_pools::Even
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Pools(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Pools(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = ObservedEventsPools::get();
 	ObservedEventsPools::set(events.len());
@@ -259,7 +259,7 @@ pub(crate) fn staking_events_since_last_call() -> Vec<pallet_staking::Event<Runt
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
 		.collect::<Vec<_>>();
 	let already_seen = ObservedEventsStaking::get();
 	ObservedEventsStaking::set(events.len());

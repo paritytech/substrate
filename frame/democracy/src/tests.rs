@@ -69,9 +69,9 @@ frame_support::construct_runtime!(
 
 // Test that a fitlered call can be dispatched.
 pub struct BaseFilter;
-impl Contains<Call> for BaseFilter {
-	fn contains(call: &Call) -> bool {
-		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance { .. }))
+impl Contains<RuntimeCall> for BaseFilter {
+	fn contains(call: &RuntimeCall) -> bool {
+		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
 
@@ -87,13 +87,13 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -110,7 +110,7 @@ parameter_types! {
 }
 
 impl pallet_preimage::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<u64>;
@@ -119,10 +119,10 @@ impl pallet_preimage::Config for Test {
 }
 
 impl pallet_scheduler::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;
@@ -136,7 +136,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -164,7 +164,7 @@ impl SortedMembers<u64> for OneToFive {
 }
 
 impl Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = pallet_balances::Pallet<Self>;
 	type EnactmentPeriod = ConstU64<2>;
 	type LaunchPeriod = ConstU64<2>;
@@ -220,7 +220,7 @@ fn params_should_work() {
 
 fn set_balance_proposal(value: u64) -> BoundedCallOf<Test> {
 	let inner = pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 };
-	let outer = Call::Balances(inner);
+	let outer = RuntimeCall::Balances(inner);
 	Preimage::bound(outer).unwrap()
 }
 

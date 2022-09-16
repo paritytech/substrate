@@ -53,7 +53,8 @@ pub mod weights;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{
-		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo,
+		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, GetDispatchInfo,
+		PostDispatchInfo,
 	},
 	ensure,
 	traits::{Currency, Get, ReservableCurrency},
@@ -115,10 +116,10 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Parameter
+		type RuntimeCall: Parameter
 			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
@@ -260,7 +261,7 @@ pub mod pallet {
 		pub fn as_multi_threshold_1(
 			origin: OriginFor<T>,
 			other_signatories: Vec<T::AccountId>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let max_sigs = T::MaxSignatories::get() as usize;
@@ -548,7 +549,10 @@ impl<T: Config> Pallet<T> {
 			// We only bother fetching/decoding call if we know that we're ready to execute.
 			if let Some(call) = maybe_call.filter(|_| approvals >= threshold) {
 				// verify weight
-				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::MaxWeightTooLow);
+				ensure!(
+					call.get_dispatch_info().weight.all_lte(max_weight),
+					Error::<T>::MaxWeightTooLow
+				);
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.

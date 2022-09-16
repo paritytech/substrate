@@ -19,7 +19,7 @@
 
 use super::*;
 use crate::mock::{
-	logger, new_test_ext, root, run_to_block, signed, Call, LoggerCall, Scheduler, Test, *,
+	logger, new_test_ext, root, run_to_block, LoggerCall, RuntimeCall, Scheduler, Test, *,
 };
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
@@ -32,7 +32,8 @@ use substrate_test_utils::assert_eq_uvec;
 #[test]
 fn basic_scheduling_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
@@ -53,7 +54,8 @@ fn basic_scheduling_works() {
 #[test]
 fn scheduling_with_preimages_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
 		let hashed = Preimage::pick(hash, len);
@@ -75,7 +77,8 @@ fn scheduling_with_preimages_works() {
 fn schedule_after_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(2);
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		// This will schedule the call 3 blocks after the next block... so block 3 + 3 = 6
 		assert_ok!(Scheduler::do_schedule(
@@ -98,7 +101,8 @@ fn schedule_after_works() {
 fn schedule_after_zero_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(2);
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::After(0),
@@ -124,7 +128,7 @@ fn periodic_scheduling_works() {
 			Some((3, 3)),
 			127,
 			root(),
-			Preimage::bound(Call::Logger(logger::Call::log {
+			Preimage::bound(RuntimeCall::Logger(logger::Call::log {
 				i: 42,
 				weight: Weight::from_ref_time(10)
 			}))
@@ -150,7 +154,8 @@ fn periodic_scheduling_works() {
 #[test]
 fn reschedule_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule(
@@ -188,7 +193,8 @@ fn reschedule_works() {
 #[test]
 fn reschedule_named_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule_named(
@@ -227,7 +233,8 @@ fn reschedule_named_works() {
 #[test]
 fn reschedule_named_perodic_works() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		assert!(!<Test as frame_system::Config>::BaseCallFilter::contains(&call));
 		assert_eq!(
 			Scheduler::do_schedule_named(
@@ -283,7 +290,7 @@ fn cancel_named_scheduling_works_with_normal_cancel() {
 			None,
 			127,
 			root(),
-			Preimage::bound(Call::Logger(LoggerCall::log {
+			Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 				i: 69,
 				weight: Weight::from_ref_time(10),
 			}))
@@ -295,7 +302,7 @@ fn cancel_named_scheduling_works_with_normal_cancel() {
 			None,
 			127,
 			root(),
-			Preimage::bound(Call::Logger(LoggerCall::log {
+			Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 				i: 42,
 				weight: Weight::from_ref_time(10),
 			}))
@@ -321,7 +328,7 @@ fn cancel_named_periodic_scheduling_works() {
 			Some((3, 3)),
 			127,
 			root(),
-			Preimage::bound(Call::Logger(LoggerCall::log {
+			Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 				i: 42,
 				weight: Weight::from_ref_time(10),
 			}))
@@ -335,7 +342,7 @@ fn cancel_named_periodic_scheduling_works() {
 			None,
 			127,
 			root(),
-			Preimage::bound(Call::Logger(LoggerCall::log {
+			Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 				i: 69,
 				weight: Weight::from_ref_time(10)
 			}))
@@ -349,7 +356,7 @@ fn cancel_named_periodic_scheduling_works() {
 			None,
 			127,
 			root(),
-			Preimage::bound(Call::Logger(LoggerCall::log {
+			Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 				i: 69,
 				weight: Weight::from_ref_time(10),
 			}))
@@ -371,7 +378,7 @@ fn cancel_named_periodic_scheduling_works() {
 fn scheduler_respects_weight_limits() {
 	let max_weight: Weight = <Test as Config>::MaximumWeight::get();
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: max_weight / 3 * 2 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: max_weight / 3 * 2 });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -379,7 +386,7 @@ fn scheduler_respects_weight_limits() {
 			root(),
 			Preimage::bound(call).unwrap(),
 		));
-		let call = Call::Logger(LoggerCall::log { i: 69, weight: max_weight / 3 * 2 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 69, weight: max_weight / 3 * 2 });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -400,7 +407,7 @@ fn scheduler_respects_weight_limits() {
 fn scheduler_does_not_delete_permanently_overweight_call() {
 	let max_weight: Weight = <Test as Config>::MaximumWeight::get();
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: max_weight * 2 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: max_weight * 2 });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -428,7 +435,7 @@ fn scheduler_handles_periodic_failure() {
 	let max_per_block = <Test as Config>::MaxScheduledPerBlock::get();
 
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: (max_weight / 3) * 2 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: (max_weight / 3) * 2 });
 		let bound = Preimage::bound(call).unwrap();
 
 		assert_ok!(Scheduler::do_schedule(
@@ -469,7 +476,7 @@ fn scheduler_handles_periodic_unavailable_preimage() {
 	let max_weight: Weight = <Test as Config>::MaximumWeight::get();
 
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: (max_weight / 3) * 2 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: (max_weight / 3) * 2 });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
 		let bound = Preimage::pick(hash, len);
@@ -502,7 +509,7 @@ fn scheduler_handles_periodic_unavailable_preimage() {
 fn scheduler_respects_priority_ordering() {
 	let max_weight: Weight = <Test as Config>::MaximumWeight::get();
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: max_weight / 3 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: max_weight / 3 });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -510,7 +517,7 @@ fn scheduler_respects_priority_ordering() {
 			root(),
 			Preimage::bound(call).unwrap(),
 		));
-		let call = Call::Logger(LoggerCall::log { i: 69, weight: max_weight / 3 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 69, weight: max_weight / 3 });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -527,7 +534,7 @@ fn scheduler_respects_priority_ordering() {
 fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 	new_test_ext().execute_with(|| {
 		let max_weight: Weight = <Test as Config>::MaximumWeight::get();
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: max_weight / 5 * 2 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: max_weight / 5 * 2 });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -535,7 +542,7 @@ fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 			root(),
 			Preimage::bound(call).unwrap(),
 		));
-		let call = Call::Logger(LoggerCall::log { i: 69, weight: max_weight / 5 * 2 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 69, weight: max_weight / 5 * 2 });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -543,7 +550,7 @@ fn scheduler_respects_priority_ordering_with_soft_deadlines() {
 			root(),
 			Preimage::bound(call).unwrap(),
 		));
-		let call = Call::Logger(LoggerCall::log { i: 2600, weight: max_weight / 5 * 4 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 2600, weight: max_weight / 5 * 4 });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
@@ -567,8 +574,10 @@ fn on_initialize_weight_is_correct() {
 		let call_weight = Weight::from_ref_time(25);
 
 		// Named
-		let call =
-			Call::Logger(LoggerCall::log { i: 3, weight: call_weight + Weight::from_ref_time(1) });
+		let call = RuntimeCall::Logger(LoggerCall::log {
+			i: 3,
+			weight: call_weight + Weight::from_ref_time(1),
+		});
 		assert_ok!(Scheduler::do_schedule_named(
 			[1u8; 32],
 			DispatchTime::At(3),
@@ -577,8 +586,10 @@ fn on_initialize_weight_is_correct() {
 			root(),
 			Preimage::bound(call).unwrap(),
 		));
-		let call =
-			Call::Logger(LoggerCall::log { i: 42, weight: call_weight + Weight::from_ref_time(2) });
+		let call = RuntimeCall::Logger(LoggerCall::log {
+			i: 42,
+			weight: call_weight + Weight::from_ref_time(2),
+		});
 		// Anon Periodic
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(2),
@@ -587,8 +598,10 @@ fn on_initialize_weight_is_correct() {
 			root(),
 			Preimage::bound(call).unwrap(),
 		));
-		let call =
-			Call::Logger(LoggerCall::log { i: 69, weight: call_weight + Weight::from_ref_time(3) });
+		let call = RuntimeCall::Logger(LoggerCall::log {
+			i: 69,
+			weight: call_weight + Weight::from_ref_time(3),
+		});
 		// Anon
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(2),
@@ -598,7 +611,7 @@ fn on_initialize_weight_is_correct() {
 			Preimage::bound(call).unwrap(),
 		));
 		// Named Periodic
-		let call = Call::Logger(LoggerCall::log {
+		let call = RuntimeCall::Logger(LoggerCall::log {
 			i: 2600,
 			weight: call_weight + Weight::from_ref_time(4),
 		});
@@ -665,10 +678,14 @@ fn on_initialize_weight_is_correct() {
 #[test]
 fn root_calls_works() {
 	new_test_ext().execute_with(|| {
-		let call =
-			Box::new(Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(10) }));
-		let call2 =
-			Box::new(Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) }));
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 69,
+			weight: Weight::from_ref_time(10),
+		}));
+		let call2 = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 42,
+			weight: Weight::from_ref_time(10),
+		}));
 		assert_ok!(Scheduler::schedule_named(Origin::root(), [1u8; 32], 4, None, 127, call,));
 		assert_ok!(Scheduler::schedule(Origin::root(), 4, None, 127, call2));
 		run_to_block(3);
@@ -688,12 +705,18 @@ fn fails_to_schedule_task_in_the_past() {
 	new_test_ext().execute_with(|| {
 		run_to_block(3);
 
-		let call1 =
-			Box::new(Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(10) }));
-		let call2 =
-			Box::new(Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) }));
-		let call3 =
-			Box::new(Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) }));
+		let call1 = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 69,
+			weight: Weight::from_ref_time(10),
+		}));
+		let call2 = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 42,
+			weight: Weight::from_ref_time(10),
+		}));
+		let call3 = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 42,
+			weight: Weight::from_ref_time(10),
+		}));
 
 		assert_noop!(
 			Scheduler::schedule_named(Origin::root(), [1u8; 32], 2, None, 127, call1),
@@ -715,10 +738,14 @@ fn fails_to_schedule_task_in_the_past() {
 #[test]
 fn should_use_origin() {
 	new_test_ext().execute_with(|| {
-		let call =
-			Box::new(Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(10) }));
-		let call2 =
-			Box::new(Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) }));
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 69,
+			weight: Weight::from_ref_time(10),
+		}));
+		let call2 = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 42,
+			weight: Weight::from_ref_time(10),
+		}));
 		assert_ok!(Scheduler::schedule_named(
 			system::RawOrigin::Signed(1).into(),
 			[1u8; 32],
@@ -743,10 +770,14 @@ fn should_use_origin() {
 #[test]
 fn should_check_origin() {
 	new_test_ext().execute_with(|| {
-		let call =
-			Box::new(Call::Logger(LoggerCall::log { i: 69, weight: Weight::from_ref_time(10) }));
-		let call2 =
-			Box::new(Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) }));
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 69,
+			weight: Weight::from_ref_time(10),
+		}));
+		let call2 = Box::new(RuntimeCall::Logger(LoggerCall::log {
+			i: 42,
+			weight: Weight::from_ref_time(10),
+		}));
 		assert_noop!(
 			Scheduler::schedule_named(
 				system::RawOrigin::Signed(2).into(),
@@ -768,11 +799,11 @@ fn should_check_origin() {
 #[test]
 fn should_check_origin_for_cancel() {
 	new_test_ext().execute_with(|| {
-		let call = Box::new(Call::Logger(LoggerCall::log_without_filter {
+		let call = Box::new(RuntimeCall::Logger(LoggerCall::log_without_filter {
 			i: 69,
 			weight: Weight::from_ref_time(10),
 		}));
-		let call2 = Box::new(Call::Logger(LoggerCall::log_without_filter {
+		let call2 = Box::new(RuntimeCall::Logger(LoggerCall::log_without_filter {
 			i: 42,
 			weight: Weight::from_ref_time(10),
 		}));
@@ -816,7 +847,7 @@ fn migration_to_v4_works() {
 				Some(ScheduledV1 {
 					maybe_id: None,
 					priority: i as u8 + 10,
-					call: Call::Logger(LoggerCall::log {
+					call: RuntimeCall::Logger(LoggerCall::log {
 						i: 96,
 						weight: Weight::from_ref_time(100),
 					}),
@@ -826,7 +857,7 @@ fn migration_to_v4_works() {
 				Some(ScheduledV1 {
 					maybe_id: Some(b"test".to_vec()),
 					priority: 123,
-					call: Call::Logger(LoggerCall::log {
+					call: RuntimeCall::Logger(LoggerCall::log {
 						i: 69,
 						weight: Weight::from_ref_time(10),
 					}),
@@ -847,7 +878,7 @@ fn migration_to_v4_works() {
 					Some(ScheduledOf::<Test> {
 						maybe_id: None,
 						priority: 10,
-						call: Preimage::bound(Call::Logger(LoggerCall::log {
+						call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 							i: 96,
 							weight: Weight::from_ref_time(100),
 						}))
@@ -860,7 +891,7 @@ fn migration_to_v4_works() {
 					Some(ScheduledOf::<Test> {
 						maybe_id: Some(blake2_256(&b"test"[..])),
 						priority: 123,
-						call: Preimage::bound(Call::Logger(LoggerCall::log {
+						call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 							i: 69,
 							weight: Weight::from_ref_time(10),
 						}))
@@ -877,7 +908,7 @@ fn migration_to_v4_works() {
 					Some(ScheduledOf::<Test> {
 						maybe_id: None,
 						priority: 11,
-						call: Preimage::bound(Call::Logger(LoggerCall::log {
+						call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 							i: 96,
 							weight: Weight::from_ref_time(100),
 						}))
@@ -890,7 +921,7 @@ fn migration_to_v4_works() {
 					Some(ScheduledOf::<Test> {
 						maybe_id: Some(blake2_256(&b"test"[..])),
 						priority: 123,
-						call: Preimage::bound(Call::Logger(LoggerCall::log {
+						call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 							i: 69,
 							weight: Weight::from_ref_time(10),
 						}))
@@ -907,7 +938,7 @@ fn migration_to_v4_works() {
 					Some(ScheduledOf::<Test> {
 						maybe_id: None,
 						priority: 12,
-						call: Preimage::bound(Call::Logger(LoggerCall::log {
+						call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 							i: 96,
 							weight: Weight::from_ref_time(100),
 						}))
@@ -920,7 +951,7 @@ fn migration_to_v4_works() {
 					Some(ScheduledOf::<Test> {
 						maybe_id: Some(blake2_256(&b"test"[..])),
 						priority: 123,
-						call: Preimage::bound(Call::Logger(LoggerCall::log {
+						call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 							i: 69,
 							weight: Weight::from_ref_time(10),
 						}))
@@ -945,145 +976,15 @@ fn migration_to_v4_works() {
 }
 
 #[test]
-#[allow(deprecated)]
-fn migration_v3_to_v4_works() {
-	new_test_ext().execute_with(|| {
-		// Call that will need to be bounded to a `Lookup`.
-		let large_call = Call::System(frame_system::Call::remark { remark: vec![0; 1024] });
-		// Call that can be inlined.
-		let small_call = Call::System(frame_system::Call::remark { remark: vec![0; 10] });
-		// Call that is already hashed that will be converted to `Legacy`.
-		let hashed_call = Call::System(frame_system::Call::remark { remark: vec![0; 2048] });
-		let bound_hashed_call = Preimage::bound(hashed_call.clone()).unwrap();
-		assert!(bound_hashed_call.lookup_needed());
-
-		for i in 0..2u64 {
-			let k = i.twox_64_concat();
-			let old = vec![
-				Some(ScheduledV3Of::<Test> {
-					maybe_id: None,
-					priority: i as u8 + 10,
-					call: small_call.clone().into(),
-					maybe_periodic: None, // 1
-					origin: root(),
-					_phantom: PhantomData::<u64>::default(),
-				}),
-				None,
-				Some(ScheduledV3Of::<Test> {
-					maybe_id: Some([i as u8; 32]),
-					priority: 123,
-					call: large_call.clone().into(),
-					maybe_periodic: Some((4u64, 20)),
-					origin: signed(i),
-					_phantom: PhantomData::<u64>::default(),
-				}),
-				Some(ScheduledV3Of::<Test> {
-					maybe_id: Some([(255 - i as u8); 32]),
-					priority: 123,
-					call: MaybeHashed::Hash(bound_hashed_call.hash()),
-					maybe_periodic: Some((8u64, 10)),
-					origin: signed(i),
-					_phantom: PhantomData::<u64>::default(),
-				}),
-			];
-			frame_support::migration::put_storage_value(b"Scheduler", b"Agenda", &k, old);
-		}
-
-		Scheduler::migrate_v3_to_v4();
-
-		let mut x = Agenda::<Test>::iter().map(|x| (x.0, x.1.into_inner())).collect::<Vec<_>>();
-		x.sort_by_key(|x| x.0);
-
-		let bound_large_call = Preimage::bound(large_call).unwrap();
-		assert!(bound_large_call.lookup_needed());
-		let bound_small_call = Preimage::bound(small_call).unwrap();
-		assert!(!bound_small_call.lookup_needed());
-
-		let expected = vec![
-			(
-				0,
-				vec![
-					Some(ScheduledOf::<Test> {
-						maybe_id: None,
-						priority: 10,
-						call: bound_small_call.clone(),
-						maybe_periodic: None,
-						origin: root(),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-					None,
-					Some(ScheduledOf::<Test> {
-						maybe_id: Some(blake2_256(&[0u8; 32])),
-						priority: 123,
-						call: bound_large_call.clone(),
-						maybe_periodic: Some((4u64, 20)),
-						origin: signed(0),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-					Some(ScheduledOf::<Test> {
-						maybe_id: Some(blake2_256(&[255u8; 32])),
-						priority: 123,
-						call: Bounded::from_legacy_hash(bound_hashed_call.hash()),
-						maybe_periodic: Some((8u64, 10)),
-						origin: signed(0),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-				],
-			),
-			(
-				1,
-				vec![
-					Some(ScheduledOf::<Test> {
-						maybe_id: None,
-						priority: 11,
-						call: bound_small_call.clone(),
-						maybe_periodic: None,
-						origin: root(),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-					None,
-					Some(ScheduledOf::<Test> {
-						maybe_id: Some(blake2_256(&[1u8; 32])),
-						priority: 123,
-						call: bound_large_call.clone(),
-						maybe_periodic: Some((4u64, 20)),
-						origin: signed(1),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-					Some(ScheduledOf::<Test> {
-						maybe_id: Some(blake2_256(&[254u8; 32])),
-						priority: 123,
-						call: Bounded::from_legacy_hash(bound_hashed_call.hash()),
-						maybe_periodic: Some((8u64, 10)),
-						origin: signed(1),
-						_phantom: PhantomData::<u64>::default(),
-					}),
-				],
-			),
-		];
-		for (outer, (i, j)) in x.iter().zip(expected.iter()).enumerate() {
-			assert_eq!(i.0, j.0);
-			for (inner, (x, y)) in i.1.iter().zip(j.1.iter()).enumerate() {
-				assert_eq!(x, y, "at index: outer {} inner {}", outer, inner);
-			}
-		}
-		assert_eq_uvec!(x, expected);
-
-		assert_eq!(Scheduler::current_storage_version(), 3);
-		assert_eq!(StorageVersion::get::<Scheduler>(), 4);
-	});
-}
-
-#[test]
 fn test_migrate_origin() {
 	new_test_ext().execute_with(|| {
 		for i in 0..3u64 {
 			let k = i.twox_64_concat();
-			let old: Vec<Option<Scheduled<Bounded<Call>, u64, u32, u64>>> = vec![
+			let old: Vec<Option<Scheduled<Bounded<RuntimeCall>, u64, u32, u64>>> = vec![
 				Some(Scheduled {
 					maybe_id: None,
 					priority: i as u8 + 10,
-					call: Preimage::bound(Call::Logger(LoggerCall::log {
+					call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 						i: 96,
 						weight: Weight::from_ref_time(100),
 					}))
@@ -1097,7 +998,7 @@ fn test_migrate_origin() {
 					maybe_id: Some(blake2_256(&b"test"[..])),
 					priority: 123,
 					origin: 2u32,
-					call: Preimage::bound(Call::Logger(LoggerCall::log {
+					call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 						i: 69,
 						weight: Weight::from_ref_time(10),
 					}))
@@ -1130,7 +1031,7 @@ fn test_migrate_origin() {
 						Some(ScheduledOf::<Test> {
 							maybe_id: None,
 							priority: 10,
-							call: Preimage::bound(Call::Logger(LoggerCall::log {
+							call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 								i: 96,
 								weight: Weight::from_ref_time(100)
 							}))
@@ -1143,7 +1044,7 @@ fn test_migrate_origin() {
 						Some(Scheduled {
 							maybe_id: Some(blake2_256(&b"test"[..])),
 							priority: 123,
-							call: Preimage::bound(Call::Logger(LoggerCall::log {
+							call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 								i: 69,
 								weight: Weight::from_ref_time(10)
 							}))
@@ -1160,7 +1061,7 @@ fn test_migrate_origin() {
 						Some(Scheduled {
 							maybe_id: None,
 							priority: 11,
-							call: Preimage::bound(Call::Logger(LoggerCall::log {
+							call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 								i: 96,
 								weight: Weight::from_ref_time(100)
 							}))
@@ -1173,7 +1074,7 @@ fn test_migrate_origin() {
 						Some(Scheduled {
 							maybe_id: Some(blake2_256(&b"test"[..])),
 							priority: 123,
-							call: Preimage::bound(Call::Logger(LoggerCall::log {
+							call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 								i: 69,
 								weight: Weight::from_ref_time(10)
 							}))
@@ -1190,7 +1091,7 @@ fn test_migrate_origin() {
 						Some(Scheduled {
 							maybe_id: None,
 							priority: 12,
-							call: Preimage::bound(Call::Logger(LoggerCall::log {
+							call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 								i: 96,
 								weight: Weight::from_ref_time(100)
 							}))
@@ -1203,7 +1104,7 @@ fn test_migrate_origin() {
 						Some(Scheduled {
 							maybe_id: Some(blake2_256(&b"test"[..])),
 							priority: 123,
-							call: Preimage::bound(Call::Logger(LoggerCall::log {
+							call: Preimage::bound(RuntimeCall::Logger(LoggerCall::log {
 								i: 69,
 								weight: Weight::from_ref_time(10)
 							}))
@@ -1222,7 +1123,8 @@ fn test_migrate_origin() {
 #[test]
 fn postponed_named_task_cannot_be_rescheduled() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
 		let hashed = Preimage::pick(hash, len);
@@ -1288,7 +1190,8 @@ fn postponed_named_task_cannot_be_rescheduled() {
 fn scheduler_v3_anon_basic_works() {
 	use frame_support::traits::schedule::v3::Anon;
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 
 		// Schedule a call.
 		let _address = <Scheduler as Anon<_, _, _>>::schedule(
@@ -1316,7 +1219,8 @@ fn scheduler_v3_anon_basic_works() {
 fn scheduler_v3_anon_cancel_works() {
 	use frame_support::traits::schedule::v3::Anon;
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 
 		// Schedule a call.
@@ -1342,7 +1246,8 @@ fn scheduler_v3_anon_cancel_works() {
 fn scheduler_v3_anon_reschedule_works() {
 	use frame_support::traits::schedule::v3::Anon;
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 
 		// Schedule a call.
 		let address = <Scheduler as Anon<_, _, _>>::schedule(
@@ -1390,7 +1295,8 @@ fn scheduler_v3_anon_reschedule_works() {
 fn scheduler_v3_anon_schedule_does_not_resuse_addr() {
 	use frame_support::traits::schedule::v3::Anon;
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 
 		// Schedule both calls.
 		let addr_1 = <Scheduler as Anon<_, _, _>>::schedule(
@@ -1421,7 +1327,8 @@ fn scheduler_v3_anon_schedule_does_not_resuse_addr() {
 fn scheduler_v3_anon_next_schedule_time_works() {
 	use frame_support::traits::schedule::v3::Anon;
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 
 		// Schedule a call.
@@ -1457,7 +1364,8 @@ fn scheduler_v3_anon_next_schedule_time_works() {
 fn scheduler_v3_anon_reschedule_and_next_schedule_time_work() {
 	use frame_support::traits::schedule::v3::Anon;
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 
 		// Schedule a call.
@@ -1498,7 +1406,8 @@ fn scheduler_v3_anon_schedule_agenda_overflows() {
 	let max: u32 = <Test as Config>::MaxScheduledPerBlock::get();
 
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 
 		// Schedule the maximal number allowed per block.
@@ -1533,7 +1442,8 @@ fn scheduler_v3_anon_cancel_and_schedule_fills_holes() {
 	assert!(max > 3, "This test only makes sense for MaxScheduledPerBlock > 3");
 
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 		let mut addrs = Vec::<_>::default();
 
@@ -1581,7 +1491,8 @@ fn scheduler_v3_anon_reschedule_fills_holes() {
 	assert!(max > 3, "pre-condition: This test only makes sense for MaxScheduledPerBlock > 3");
 
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 		let mut addrs = Vec::<_>::default();
 
@@ -1627,7 +1538,8 @@ fn scheduler_v3_anon_reschedule_does_not_resuse_addr_if_agenda_not_full() {
 	assert!(max > 1, "This test only makes sense for MaxScheduledPerBlock > 1");
 
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 
 		// Schedule both calls.
 		let addr_1 = <Scheduler as Anon<_, _, _>>::schedule(
@@ -1662,7 +1574,8 @@ fn scheduler_v3_named_basic_works() {
 	use frame_support::traits::schedule::v3::Named;
 
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let name = [1u8; 32];
 
 		// Schedule a call.
@@ -1693,7 +1606,8 @@ fn scheduler_v3_named_basic_works() {
 fn scheduler_v3_named_cancel_named_works() {
 	use frame_support::traits::schedule::v3::Named;
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 		let name = [1u8; 32];
 
@@ -1722,7 +1636,8 @@ fn scheduler_v3_named_cancel_named_works() {
 fn scheduler_v3_named_cancel_without_name_works() {
 	use frame_support::traits::schedule::v3::{Anon, Named};
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 		let name = [1u8; 32];
 
@@ -1751,7 +1666,8 @@ fn scheduler_v3_named_cancel_without_name_works() {
 fn scheduler_v3_named_reschedule_named_works() {
 	use frame_support::traits::schedule::v3::{Anon, Named};
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let name = [1u8; 32];
 
 		// Schedule a call.
@@ -1809,7 +1725,8 @@ fn scheduler_v3_named_reschedule_named_works() {
 fn scheduler_v3_named_next_schedule_time_works() {
 	use frame_support::traits::schedule::v3::{Anon, Named};
 	new_test_ext().execute_with(|| {
-		let call = Call::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
+		let call =
+			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(10) });
 		let bound = Preimage::bound(call).unwrap();
 		let name = [1u8; 32];
 

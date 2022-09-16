@@ -31,7 +31,7 @@ use sp_runtime::traits::Bounded as ArithBounded;
 const SEED: u32 = 0;
 
 #[allow(dead_code)]
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -41,9 +41,9 @@ fn funded_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T
 	caller
 }
 
-fn dummy_call<T: Config<I>, I: 'static>() -> Bounded<<T as Config<I>>::Call> {
+fn dummy_call<T: Config<I>, I: 'static>() -> Bounded<<T as Config<I>>::RuntimeCall> {
 	let inner = frame_system::Call::remark { remark: vec![] };
-	let call = <T as Config<I>>::Call::from(inner);
+	let call = <T as Config<I>>::RuntimeCall::from(inner);
 	T::Preimages::bound(call).unwrap()
 }
 

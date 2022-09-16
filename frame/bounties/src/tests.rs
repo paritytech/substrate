@@ -21,7 +21,6 @@
 
 use super::*;
 use crate as pallet_bounties;
-use std::cell::RefCell;
 
 use frame_support::{
 	assert_noop, assert_ok,
@@ -72,13 +71,13 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -96,14 +95,11 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
-}
-thread_local! {
-	static TEN_TO_FOURTEEN: RefCell<Vec<u128>> = RefCell::new(vec![10,11,12,13,14]);
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
@@ -117,7 +113,7 @@ impl pallet_treasury::Config for Test {
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ConstU64<1>;
@@ -136,7 +132,7 @@ impl pallet_treasury::Config<Instance1> for Test {
 	type Currency = pallet_balances::Pallet<Test>;
 	type ApproveOrigin = frame_system::EnsureRoot<u128>;
 	type RejectOrigin = frame_system::EnsureRoot<u128>;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
 	type ProposalBondMinimum = ConstU64<1>;
@@ -159,7 +155,7 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<20>;
@@ -174,7 +170,7 @@ impl Config for Test {
 }
 
 impl Config<Instance1> for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BountyDepositBase = ConstU64<80>;
 	type BountyDepositPayoutDelay = ConstU64<3>;
 	type BountyUpdatePeriod = ConstU64<20>;
@@ -208,7 +204,7 @@ fn last_event() -> BountiesEvent<Test> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Bounties(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Bounties(inner) = e { Some(inner) } else { None })
 		.last()
 		.unwrap()
 }

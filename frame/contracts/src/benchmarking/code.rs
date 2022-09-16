@@ -195,7 +195,7 @@ where
 		for func in def.imported_functions {
 			let sig = builder::signature()
 				.with_params(func.params)
-				.with_results(func.return_type.into_iter().collect())
+				.with_results(func.return_type)
 				.build_sig();
 			let sig = contract.push_signature(sig);
 			contract = contract
@@ -254,9 +254,9 @@ where
 			code = inject_stack_metering::<T>(code);
 		}
 
-		let code = code.to_bytes().unwrap();
+		let code = code.into_bytes().unwrap();
 		let hash = T::Hashing::hash(&code);
-		Self { code, hash, memory: def.memory }
+		Self { code: code.into(), hash, memory: def.memory }
 	}
 }
 
@@ -285,11 +285,11 @@ where
 			.find_map(|e| if let External::Memory(mem) = e.external() { Some(mem) } else { None })
 			.unwrap()
 			.limits();
-		let code = module.to_bytes().unwrap();
+		let code = module.into_bytes().unwrap();
 		let hash = T::Hashing::hash(&code);
 		let memory =
 			ImportedMemory { min_pages: limits.initial(), max_pages: limits.maximum().unwrap() };
-		Self { code, hash, memory: Some(memory) }
+		Self { code: code.into(), hash, memory: Some(memory) }
 	}
 
 	/// Creates a wasm module with an empty `call` and `deploy` function and nothing else.

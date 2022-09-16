@@ -22,7 +22,7 @@
 use crate::{
 	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
 };
-use frame_support::{traits::Get, weights::DispatchClass};
+use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
@@ -214,13 +214,13 @@ mod tests {
 		type Origin = Origin;
 		type Index = AccountId;
 		type BlockNumber = BlockNumber;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::testing::Header;
-		type Event = ();
+		type RuntimeEvent = ();
 		type BlockHashCount = ();
 		type DbWeight = ();
 		type BlockLength = ();

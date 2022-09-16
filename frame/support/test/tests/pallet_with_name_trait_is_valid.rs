@@ -18,7 +18,7 @@
 pub trait Trait: frame_system::Config {
 	type Balance: frame_support::dispatch::Parameter;
 	/// The overarching event type.
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+	type RuntimeEvent: From<Event<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
 }
 
 frame_support::decl_storage! {
@@ -108,7 +108,7 @@ mod tests {
 	type TestHeader = sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>;
 	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
 		<Runtime as frame_system::Config>::AccountId,
-		<Runtime as frame_system::Config>::Call,
+		<Runtime as frame_system::Config>::RuntimeCall,
 		(),
 		SignedExtra,
 	>;
@@ -130,12 +130,12 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = TestHeader;
-		type Event = ();
+		type RuntimeEvent = ();
 		type BlockHashCount = ConstU64<250>;
 		type DbWeight = ();
 		type BlockWeights = ();
@@ -153,6 +153,6 @@ mod tests {
 
 	impl pallet_test::Trait for Runtime {
 		type Balance = u32;
-		type Event = ();
+		type RuntimeEvent = ();
 	}
 }

@@ -79,7 +79,7 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 impl frame_system::Config for Runtime {
 	type BlockWeights = ();
@@ -89,13 +89,13 @@ impl frame_system::Config for Runtime {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -255,11 +255,11 @@ fn storage_layer_commit_then_rollback() {
 fn storage_layer_in_pallet_call() {
 	TestExternalities::default().execute_with(|| {
 		use sp_runtime::traits::Dispatchable;
-		let call1 = Call::MyPallet(pallet::Call::set_value { value: 2 });
+		let call1 = RuntimeCall::MyPallet(pallet::Call::set_value { value: 2 });
 		assert_ok!(call1.dispatch(Origin::signed(0)));
 		assert_eq!(Value::<Runtime>::get(), 2);
 
-		let call2 = Call::MyPallet(pallet::Call::set_value { value: 1 });
+		let call2 = RuntimeCall::MyPallet(pallet::Call::set_value { value: 1 });
 		assert_noop!(call2.dispatch(Origin::signed(0)), Error::<Runtime>::Revert);
 	});
 }
@@ -270,11 +270,11 @@ fn storage_layer_in_decl_pallet_call() {
 		use frame_support::StorageValue;
 		use sp_runtime::traits::Dispatchable;
 
-		let call1 = Call::DeclPallet(decl_pallet::Call::set_value { value: 2 });
+		let call1 = RuntimeCall::DeclPallet(decl_pallet::Call::set_value { value: 2 });
 		assert_ok!(call1.dispatch(Origin::signed(0)));
 		assert_eq!(decl_pallet::DeclValue::get(), 2);
 
-		let call2 = Call::DeclPallet(decl_pallet::Call::set_value { value: 1 });
+		let call2 = RuntimeCall::DeclPallet(decl_pallet::Call::set_value { value: 1 });
 		assert_noop!(call2.dispatch(Origin::signed(0)), "Revert!");
 		// Calling the function directly also works with storage layers.
 		assert_noop!(decl_pallet::Module::<Runtime>::set_value(Origin::signed(1), 1), "Revert!");

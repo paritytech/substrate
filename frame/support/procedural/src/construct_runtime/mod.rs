@@ -156,10 +156,7 @@ use parse::{
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use std::{
-	collections::{HashMap, HashSet},
-	str::FromStr,
-};
+use std::{collections::HashSet, str::FromStr};
 use syn::{Ident, Result};
 
 /// The fixed name of the system pallet.
@@ -324,11 +321,15 @@ fn decl_all_pallets<'a>(
 	features: &HashSet<&str>,
 ) -> TokenStream2 {
 	let mut types = TokenStream2::new();
-	let mut names_by_feature = features
+
+	// Every feature set to the pallet names that should be included by this feature set.
+	let mut features_to_names = features
 		.iter()
+		.map(|f| *f)
 		.powerset()
-		.map(|feat| (feat, Vec::new()))
-		.collect::<HashMap<_, _>>();
+		.map(|feat| (HashSet::from_iter(feat), Vec::new()))
+		.collect::<Vec<(HashSet<_>, Vec<_>)>>();
+
 	for pallet_declaration in pallet_declarations {
 		let type_name = &pallet_declaration.name;
 		let pallet = &pallet_declaration.path;
@@ -346,21 +347,22 @@ fn decl_all_pallets<'a>(
 		types.extend(type_decl);
 
 		if pallet_declaration.cfg_pattern.is_empty() {
-			for names in names_by_feature.values_mut() {
+			for (_, names) in features_to_names.iter_mut() {
 				names.push(&pallet_declaration.name);
 			}
 		} else {
-			for (feature_set, names) in &mut names_by_feature {
+			for (feature_set, names) in &mut features_to_names {
 				// Rust tidbit: if we have multiple `#[cfg]` feature on the same item, then the
 				// predicates listed in all `#[cfg]` attributes are effectively joined by `and()`,
 				// meaning that all of them must match in order to activate the item
 				let is_feature_active = pallet_declaration.cfg_pattern.iter().all(|expr| {
 					expr.eval(|pred| match pred {
-						Predicate::Feature(f) => feature_set.contains(&f),
-						Predicate::Test => feature_set.contains(&&"test"),
+						Predicate::Feature(f) => feature_set.contains(f),
+						Predicate::Test => feature_set.contains(&"test"),
 						_ => false,
 					})
 				});
+
 				if is_feature_active {
 					names.push(&pallet_declaration.name);
 				}
@@ -368,11 +370,34 @@ fn decl_all_pallets<'a>(
 		}
 	}
 
-	let all_pallets_without_system = names_by_feature.iter().map(|(feature_set, names)| {
-		let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
-		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
-		let feature_set = feature_set.into_iter();
-		let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
+	// All possible features. This will be used below for the empty feature set.
+	let mut all_features = features_to_names
+		.iter()
+		.flat_map(|f| f.0.iter().cloned())
+		.collect::<HashSet<_>>();
+	let attribute_to_names = features_to_names
+		.into_iter()
+		.map(|(mut features, names)| {
+			// If this is the empty feature set, it needs to be changed to negate all available
+			// features. So, we ensure that there is some type declared when all features are not
+			// enabled.
+			if features.is_empty() {
+				let test_cfg = all_features.remove("test").then_some(quote!(test)).into_iter();
+				let features = all_features.iter();
+				let attr = quote!(#[cfg(all( #(not(#test_cfg)),* #(not(feature = #features)),* ))]);
+
+				(attr, names)
+			} else {
+				let test_cfg = features.remove("test").then_some(quote!(test)).into_iter();
+				let features = features.iter();
+				let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #features),* ))]);
+
+				(attr, names)
+			}
+		})
+		.collect::<Vec<_>>();
+
+	let all_pallets_without_system = attribute_to_names.iter().map(|(attr, names)| {
 		let names = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME);
 		quote! {
 			#attr
@@ -382,11 +407,7 @@ fn decl_all_pallets<'a>(
 		}
 	});
 
-	let all_pallets_with_system = names_by_feature.iter().map(|(feature_set, names)| {
-		let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
-		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
-		let feature_set = feature_set.into_iter();
-		let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
+	let all_pallets_with_system = attribute_to_names.iter().map(|(attr, names)| {
 		quote! {
 			#attr
 			/// All pallets included in the runtime as a nested tuple of types.
@@ -394,28 +415,19 @@ fn decl_all_pallets<'a>(
 		}
 	});
 
-	let all_pallets_without_system_reversed =
-		names_by_feature.iter().map(|(feature_set, names)| {
-			let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
-			let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
-			let feature_set = feature_set.into_iter();
-			let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-			let names = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME).rev();
-			quote! {
-				#attr
-				/// All pallets included in the runtime as a nested tuple of types in reversed order.
-				/// Excludes the System pallet.
-				#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
-				`AllPalletWithSystem or AllPalletsWithoutSystem`")]
-				pub type AllPalletsWithoutSystemReversed = ( #(#names,)* );
-			}
-		});
+	let all_pallets_without_system_reversed = attribute_to_names.iter().map(|(attr, names)| {
+		let names = names.iter().filter(|n| **n != SYSTEM_PALLET_NAME).rev();
+		quote! {
+			#attr
+			/// All pallets included in the runtime as a nested tuple of types in reversed order.
+			/// Excludes the System pallet.
+			#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+			`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+			pub type AllPalletsWithoutSystemReversed = ( #(#names,)* );
+		}
+	});
 
-	let all_pallets_with_system_reversed = names_by_feature.iter().map(|(feature_set, names)| {
-		let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
-		let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
-		let feature_set = feature_set.into_iter();
-		let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
+	let all_pallets_with_system_reversed = attribute_to_names.iter().map(|(attr, names)| {
 		let names = names.iter().rev();
 		quote! {
 			#attr
@@ -426,35 +438,19 @@ fn decl_all_pallets<'a>(
 		}
 	});
 
-	let system_pallet =
-		match names_by_feature[&Vec::new()].iter().find(|n| **n == SYSTEM_PALLET_NAME) {
-			Some(name) => name,
-			None =>
-				return syn::Error::new(
-					proc_macro2::Span::call_site(),
-					"`System` pallet declaration is missing. \
-						 Please add this line: `System: frame_system,`",
-				)
-				.into_compile_error(),
-		};
-
-	let all_pallets_reversed_with_system_first =
-		names_by_feature.iter().map(|(feature_set, names)| {
-			let mut feature_set = feature_set.iter().collect::<HashSet<_>>();
-			let test_cfg = feature_set.remove(&&&"test").then_some(quote!(test)).into_iter();
-			let feature_set = feature_set.into_iter();
-			let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #feature_set),* ))]);
-			let names = std::iter::once(system_pallet)
-				.chain(names.iter().rev().filter(|n| **n != SYSTEM_PALLET_NAME));
-			quote! {
-				#attr
-				/// All pallets included in the runtime as a nested tuple of types in reversed order.
-				/// With the system pallet first.
-				#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
-				`AllPalletWithSystem or AllPalletsWithoutSystem`")]
-				pub type AllPalletsReversedWithSystemFirst = ( #(#names,)* );
-			}
-		});
+	let all_pallets_reversed_with_system_first = attribute_to_names.iter().map(|(attr, names)| {
+		let system = quote::format_ident!("{}", SYSTEM_PALLET_NAME);
+		let names = std::iter::once(&system)
+			.chain(names.iter().rev().filter(|n| **n != SYSTEM_PALLET_NAME).cloned());
+		quote! {
+			#attr
+			/// All pallets included in the runtime as a nested tuple of types in reversed order.
+			/// With the system pallet first.
+			#[deprecated(note = "Using reverse pallet orders is deprecated. use only \
+			`AllPalletWithSystem or AllPalletsWithoutSystem`")]
+			pub type AllPalletsReversedWithSystemFirst = ( #(#names,)* );
+		}
+	});
 
 	quote!(
 		#types

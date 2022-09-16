@@ -79,12 +79,13 @@ fn make_task<T: Config>(
 	Scheduled { maybe_id, priority, call, maybe_periodic, origin, _phantom: PhantomData }
 }
 
-fn bounded<T: Config>(len: u32) -> Option<Bounded<<T as Config>::Call>> {
-	let call = <<T as Config>::Call>::from(SystemCall::remark { remark: vec![0; len as usize] });
+fn bounded<T: Config>(len: u32) -> Option<Bounded<<T as Config>::RuntimeCall>> {
+	let call =
+		<<T as Config>::RuntimeCall>::from(SystemCall::remark { remark: vec![0; len as usize] });
 	T::Preimages::bound(call).ok()
 }
 
-fn make_call<T: Config>(maybe_lookup_len: Option<u32>) -> Bounded<<T as Config>::Call> {
+fn make_call<T: Config>(maybe_lookup_len: Option<u32>) -> Bounded<<T as Config>::RuntimeCall> {
 	let bound = BoundedInline::bound() as u32;
 	let mut len = match maybe_lookup_len {
 		Some(len) => len.min(T::Preimages::MAX_LENGTH as u32 - 2).max(bound) - 3,
