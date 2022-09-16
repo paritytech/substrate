@@ -364,6 +364,8 @@ pub trait ElectionProvider {
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
+	type MaxWinners: Get<u32>;
+
 	/// The data provider of the election.
 	type DataProvider: ElectionDataProvider<
 		AccountId = Self::AccountId,
@@ -377,7 +379,7 @@ pub trait ElectionProvider {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
+	fn elect() -> Result<Vec<(Self::AccountId, Support<Self::AccountId>), Self::MaxWinners>, Self::Error>;
 }
 
 /// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure an election needs to

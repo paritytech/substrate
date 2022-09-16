@@ -225,6 +225,8 @@ impl<
 
 /// A trait for managing creation of new validator set.
 pub trait SessionManager<ValidatorId> {
+	type MaxActiveValidators: Get<u32>;
+
 	/// Plan a new session, and optionally provide the new validator set.
 	///
 	/// Even if the validator-set is the same as before, if any underlying economic conditions have
@@ -238,7 +240,7 @@ pub trait SessionManager<ValidatorId> {
 	///
 	/// `new_session(session)` is guaranteed to be called before `end_session(session-1)`. In other
 	/// words, a new session must always be planned before an ongoing one can be finished.
-	fn new_session(new_index: SessionIndex) -> Option<Vec<ValidatorId>>;
+	fn new_session(new_index: SessionIndex) -> Option<BoundedVec<ValidatorId>, Self::MaxActiveValidators>;
 	/// Same as `new_session`, but it this should only be called at genesis.
 	///
 	/// The session manager might decide to treat this in a different way. Default impl is simply
