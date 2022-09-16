@@ -42,7 +42,7 @@
 //! Once queued, a staker wishing to unbond can perform no further action in pallet-staking. This is
 //! to prevent them from accidentally exposing themselves behind a validator etc.
 //!
-//! Once processed, if successful, no additional fees for the checking process is taken, and the
+//! Once processed, if successful, no additional fee for the checking process is taken, and the
 //! staker is instantly unbonded. Optionally, if the have asked to join a pool, their *entire* stake
 //! is joined into their pool of choice.
 //!
