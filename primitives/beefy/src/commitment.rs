@@ -314,7 +314,7 @@ use sp_core::{keccak_256, Pair};
 	use super::*;
 	use codec::Decode;
 
-	use crate::{crypto, KEY_TYPE, bls_crypto::{Signature as BLSSignature}};
+	use crate::{ecdsa_crypto, KEY_TYPE, bls_crypto::{Signature as BLSSignature}};
 	use bls_like::{Keypair, SignedMessage as BLSSignedMessage, Signed, pop::SignatureAggregatorAssumingPoP, BLS377, SerializableToBytes};	
 
 	type TestCommitment = Commitment<u128>;
@@ -322,16 +322,16 @@ use sp_core::{keccak_256, Pair};
         ///types for bls-less commitment
 
 	type TestSignedCommitment =
-		SignedCommitment<u128, crypto::Signature>;
+		SignedCommitment<u128, ecdsa_crypto::Signature>;
 	type TestVersionedFinalityProof =
-	VersionedFinalityProof<u128, crypto::Signature>;
+	VersionedFinalityProof<u128, ecdsa_crypto::Signature>;
 
 	///types for commitment supporting aggregatable bls signature
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
 	struct BLSAggregatableSignature(BLSSignature);
 
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-	struct ECDSABLSSignaturePair (crypto::Signature, BLSSignature); 
+	struct ECDSABLSSignaturePair (ecdsa_crypto::Signature, BLSSignature); 
 
 	type TestBLSSignedCommitment =
 		SignedCommitment<u128, ECDSABLSSignaturePair>;
@@ -339,7 +339,7 @@ use sp_core::{keccak_256, Pair};
 	VersionedFinalityProof<u128, ECDSABLSSignaturePair>;
 	
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
-	fn mock_ecdsa_signatures() -> (crypto::Signature, crypto::Signature) {
+	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();

@@ -60,7 +60,7 @@ pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::Ke
 ///
 /// The current underlying crypto scheme used is ECDSA. This can be changed,
 /// without affecting code restricted against the above listed crypto types.
-pub mod crypto { //TODO rename → to ecdsa_crypto
+pub mod ecdsa_crypto {
 	use sp_application_crypto::{app_crypto, ecdsa};
 	app_crypto!(ecdsa, crate::KEY_TYPE);
 
@@ -167,10 +167,10 @@ pub struct VoteMessage<Number, Id, Signature> {
 
 sp_api::decl_runtime_apis! {
 	/// API necessary for BEEFY voters.
-	pub trait BeefyApi
+	pub trait BeefyApi<AuthorityId> where AuthorityId: Encode + Decode
 	{
 		/// Return the current active BEEFY validator set
-		fn validator_set() -> Option<ValidatorSet<crypto::AuthorityId>>;
+		fn validator_set() -> Option<ValidatorSet<AuthorityId>>;
 	}
 }
 
