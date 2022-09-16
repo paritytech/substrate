@@ -322,7 +322,7 @@ where
 
 	/// Add a self-reported address of a remote peer to the k-buckets of the supported
 	/// DHTs (`supported_protocols`).
-	pub fn add_self_reported_address(
+	pub fn add_self_reported_address_to_dht(
 		&mut self,
 		peer_id: &PeerId,
 		supported_protocols: &[impl AsRef<[u8]>],

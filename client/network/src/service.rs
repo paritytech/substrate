@@ -1700,7 +1700,7 @@ where
 					for addr in listen_addrs {
 						this.network_service
 							.behaviour_mut()
-							.add_self_reported_address(&peer_id, &protocols, addr);
+							.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
 					}
 					this.network_service
 						.behaviour_mut()

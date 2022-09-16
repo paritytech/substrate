@@ -338,7 +338,7 @@ impl DiscoveryBehaviour {
 				.map(AsRef::as_ref)
 				.map(Bytes::copy_from_slice)
 				.collect();
-			'kad: for kad_protocol in kad_protocols {
+			'outer: for kad_protocol in kad_protocols {
 				for supported_protocol in supported_protocols {
 					if supported_protocol.as_ref() == kad_protocol {
 						trace!(
@@ -348,7 +348,7 @@ impl DiscoveryBehaviour {
 						);
 						kademlia.add_address(peer_id, addr.clone());
 						added = true;
-						break 'kad
+						break 'outer
 					}
 				}
 			}
