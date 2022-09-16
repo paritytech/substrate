@@ -322,7 +322,6 @@ mod tests {
 	use sp_core::{
 		map,
 		traits::{CodeExecutor, RuntimeCode},
-		NeverNativeValue,
 	};
 	use sp_io::{hashing::twox_128, TestExternalities};
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
@@ -406,14 +405,7 @@ mod tests {
 			};
 
 			executor()
-				.call::<NeverNativeValue, fn() -> _>(
-					&mut ext,
-					&runtime_code,
-					"Core_execute_block",
-					&b.encode(),
-					false,
-					None,
-				)
+				.call(&mut ext, &runtime_code, "Core_execute_block", &b.encode(), false)
 				.0
 				.unwrap();
 		})
@@ -515,14 +507,7 @@ mod tests {
 			};
 
 			executor()
-				.call::<NeverNativeValue, fn() -> _>(
-					&mut ext,
-					&runtime_code,
-					"Core_execute_block",
-					&b.encode(),
-					false,
-					None,
-				)
+				.call(&mut ext, &runtime_code, "Core_execute_block", &b.encode(), false)
 				.0
 				.unwrap();
 		})

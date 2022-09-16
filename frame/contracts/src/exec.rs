@@ -282,7 +282,7 @@ pub trait Ext: sealing::Sealed {
 	fn append_debug_buffer(&mut self, msg: &str) -> bool;
 
 	/// Call some dispatchable and return the result.
-	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo;
+	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo;
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
@@ -1314,7 +1314,7 @@ where
 		}
 	}
 
-	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
+	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo {
 		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
 		origin.add_filter(T::CallFilter::contains);
 		call.dispatch(origin)
@@ -1379,7 +1379,8 @@ mod tests {
 		storage::Storage,
 		tests::{
 			test_utils::{get_balance, hash, place_contract, set_balance},
-			Call, Event as MetaEvent, ExtBuilder, Test, TestFilter, ALICE, BOB, CHARLIE, GAS_LIMIT,
+			ExtBuilder, RuntimeCall, RuntimeEvent as MetaEvent, Test, TestFilter, ALICE, BOB,
+			CHARLIE, GAS_LIMIT,
 		},
 		Error,
 	};
@@ -2584,7 +2585,7 @@ mod tests {
 	#[test]
 	fn call_runtime_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			let call = Call::System(frame_system::Call::remark_with_event {
+			let call = RuntimeCall::System(frame_system::Call::remark_with_event {
 				remark: b"Hello World".to_vec(),
 			});
 			ctx.ext.call_runtime(call).unwrap();
@@ -2645,10 +2646,11 @@ mod tests {
 
 			// remark should still be allowed
 			let allowed_call =
-				Call::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
+				RuntimeCall::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
 
 			// transfers are disallowed by the `TestFiler` (see below)
-			let forbidden_call = Call::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
+			let forbidden_call =
+				RuntimeCall::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
 
 			// simple cases: direct call
 			assert_err!(
@@ -2657,7 +2659,7 @@ mod tests {
 			);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
-			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch {
+			assert_ok!(ctx.ext.call_runtime(RuntimeCall::Utility(UtilCall::batch {
 				calls: vec![allowed_call.clone(), forbidden_call, allowed_call]
 			})),);
 
@@ -2668,7 +2670,7 @@ mod tests {
 		});
 
 		TestFilter::set_filter(|call| match call {
-			Call::Balances(pallet_balances::Call::transfer { .. }) => false,
+			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => false,
 			_ => true,
 		});
 

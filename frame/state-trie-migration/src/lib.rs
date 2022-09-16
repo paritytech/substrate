@@ -452,7 +452,7 @@ pub mod pallet {
 		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency provider type.
 		type Currency: Currency<Self::AccountId>;
@@ -964,7 +964,7 @@ mod benchmarks {
 			);
 
 			frame_system::Pallet::<T>::assert_last_event(
-				<T as Config>::Event::from(crate::Event::Slashed {
+				<T as Config>::RuntimeEvent::from(crate::Event::Slashed {
 					who: caller.clone(),
 					amount: T::SignedDepositBase::get()
 						.saturating_add(T::SignedDepositPerItem::get().saturating_mul(1u32.into())),
@@ -1085,7 +1085,7 @@ mod mock {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type Origin = Origin;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Index = u64;
 		type BlockNumber = u32;
 		type Hash = H256;
@@ -1093,7 +1093,7 @@ mod mock {
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::generic::Header<Self::BlockNumber, BlakeTwo256>;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU32<250>;
 		type DbWeight = ();
 		type Version = ();
@@ -1115,7 +1115,7 @@ mod mock {
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -1153,7 +1153,7 @@ mod mock {
 	}
 
 	impl pallet_state_trie_migration::Config for Test {
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type ControlOrigin = EnsureRoot<u64>;
 		type Currency = Balances;
 		type MaxKeyLen = MigrationMaxKeyLen;

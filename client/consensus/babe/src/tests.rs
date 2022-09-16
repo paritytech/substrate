@@ -31,7 +31,7 @@ use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_keystore::LocalKeystore;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
-use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
+use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityPair, Slot,
@@ -235,7 +235,6 @@ pub struct TestVerifier {
 		TestBlock,
 		PeersFullClient,
 		TestSelectChain,
-		AlwaysCanAuthor,
 		Box<
 			dyn CreateInherentDataProviders<
 				TestBlock,
@@ -332,7 +331,6 @@ impl TestNetFactory for BabeTestNet {
 				}),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
-				can_author_with: AlwaysCanAuthor,
 				telemetry: None,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
@@ -447,7 +445,6 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				babe_link: data.link.clone(),
 				keystore,
-				can_author_with: sp_consensus::AlwaysCanAuthor,
 				justification_sync_link: (),
 				block_proposal_slot_portion: SlotProportion::new(0.5),
 				max_block_proposal_slot_portion: None,
