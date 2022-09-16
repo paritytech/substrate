@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A pallet that's designed to ONLY do:
+//! A pallet that's designed to JUST do the following:
 //!
 //! If a nominator is not exposed at all in any `ErasStakers` (i.e. "has not actively backed any
 //! validators in the last `BondingDuration` days"), then they can register themselves in this
