@@ -43,7 +43,7 @@
 //! to prevent them from accidentally exposing themselves behind a validator etc.
 //!
 //! Once processed, if successful, no additional fee for the checking process is taken, and the
-//! staker is instantly unbonded. Optionally, if the have asked to join a pool, their *entire* stake
+//! staker is instantly unbonded. Optionally, if they have asked to join a pool, their *entire* stake
 //! is joined into their pool of choice.
 //!
 //! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
