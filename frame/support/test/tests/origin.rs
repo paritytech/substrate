@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Origin tests for construct_runtime macro
+//! RuntimeOrigin tests for construct_runtime macro
 
 #![recursion_limit = "128"]
 
