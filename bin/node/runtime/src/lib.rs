@@ -2145,11 +2145,9 @@ impl_runtime_apis! {
 			use frame_support::traits::WhitelistedStorageKeys;
 			let mut whitelist: Vec<TrackedStorageKey> = AllPalletsWithSystem::whitelisted_storage_keys();
 
-			// Treasury Account (manually whitelist this for now since no
-			// accessible storage definition we can attach the
-			// pallet::whitelist_storage attr macro to)
-			// TODO: figure out a workaround for this that doesn't involve
-			// manually hard-coding
+			// Treasury Account
+			// TODO: this is manual for now, someday we might be able to use a
+			// macro for this particular key
 			let treasury_key = frame_system::Account::<Runtime>::hashed_key_for(Treasury::account_id());
 			whitelist.push(treasury_key.to_vec().into());
 
