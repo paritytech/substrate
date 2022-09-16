@@ -29,7 +29,6 @@ frame-benchmarking = { version = "3.0.0", default-features = false, path = "../b
 [features]
 default = ["std"]
 std = [
-	"serde",
 	"codec/std",
 	"sp-runtime/std",
 	"frame-benchmarking/std",
