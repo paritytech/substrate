@@ -34,24 +34,62 @@ use sp_storage::{StorageData, StorageKey};
 /// # use jsonrpsee::core::Error as RpcError;
 /// # use jsonrpsee::ws_client::WsClientBuilder;
 /// # use codec::Encode;
-/// # use frame_support::traits::StorageInstance;
+/// # use frame_support::{construct_runtime, traits::ConstU32};
 /// # use substrate_frame_rpc_support::StorageQuery;
 /// # use sc_rpc_api::state::StateApiClient;
+/// # use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header};
 /// #
-/// # // Hash would normally be <TestRuntime as frame_system::Config>::Hash, but we don't have
-/// # // frame_system::Config implemented for TestRuntime. Here we just pretend.
-/// # type Hash = ();
+/// # construct_runtime!(
+/// # 	pub enum TestRuntime where
+/// # 		Block = frame_system::mocking::MockBlock<TestRuntime>,
+/// # 		NodeBlock = frame_system::mocking::MockBlock<TestRuntime>,
+/// # 		UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<TestRuntime>,
+/// # 	{
+/// # 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+/// # 		Test: pallet_test::{Pallet, Storage},
+/// # 	}
+/// # );
 /// #
-/// # struct TestRuntime;
+/// # type Hash = sp_core::H256;
 /// #
+/// # impl frame_system::Config for TestRuntime {
+/// # 	type BaseCallFilter = ();
+/// # 	type BlockWeights = ();
+/// # 	type BlockLength = ();
+/// # 	type Origin = Origin;
+/// # 	type RuntimeCall = RuntimeCall;
+/// # 	type Index = u64;
+/// # 	type BlockNumber = u64;
+/// # 	type Hash = Hash;
+/// # 	type Hashing = BlakeTwo256;
+/// # 	type AccountId = u64;
+/// # 	type Lookup = IdentityLookup<Self::AccountId>;
+/// # 	type Header = Header;
+/// # 	type RuntimeEvent = RuntimeEvent;
+/// # 	type BlockHashCount = ();
+/// # 	type DbWeight = ();
+/// # 	type Version = ();
+/// # 	type PalletInfo = PalletInfo;
+/// # 	type AccountData = ();
+/// # 	type OnNewAccount = ();
+/// # 	type OnKilledAccount = ();
+/// # 	type SystemWeightInfo = ();
+/// # 	type SS58Prefix = ();
+/// # 	type OnSetCode = ();
+/// # 	type MaxConsumers = ConstU32<16>;
+/// # }
+/// #
+/// # impl pallet_test::Config for TestRuntime {}
+/// #
+///
 /// pub type Loc = (i64, i64, i64);
 /// pub type Block = u8;
 ///
 /// // Note that all fields are marked pub.
-/// pub use self::pallet::*;
+/// pub use self::pallet_test::*;
 ///
 /// #[frame_support::pallet]
-/// mod pallet {
+/// mod pallet_test {
 /// 	use super::*;
 /// 	use frame_support::pallet_prelude::*;
 ///
@@ -62,42 +100,18 @@ use sp_storage::{StorageData, StorageKey};
 /// 	#[pallet::config]
 /// 	pub trait Config: frame_system::Config {}
 ///
-/// 	pub struct LastActionIdPrefix;
-/// 	impl StorageInstance for LastActionIdPrefix {
-/// 		fn pallet_prefix() -> &'static str {
-/// 			"TestRuntime"
-/// 		}
-/// 		const STORAGE_PREFIX: &'static str = "LastActionId";
-/// 	}
-/// 	pub type LastActionId = StorageValue<LastActionIdPrefix, u64, ValueQuery>;
+/// 	#[pallet::storage]
+/// 	pub type LastActionId<T> = StorageValue<_, u64, ValueQuery>;
 ///
-/// 	pub struct VoxelsPrefix;
-/// 	impl StorageInstance for VoxelsPrefix {
-/// 		fn pallet_prefix() -> &'static str {
-/// 			"TestRuntime"
-/// 		}
-/// 		const STORAGE_PREFIX: &'static str = "Voxels";
-/// 	}
-/// 	pub type Voxels = StorageMap<VoxelsPrefix, Blake2_128Concat, Loc, Block>;
+/// 	#[pallet::storage]
+/// 	pub type Voxels<T> = StorageMap<_, Blake2_128Concat, Loc, Block>;
 ///
-/// 	pub struct ActionsPrefix;
-/// 	impl StorageInstance for ActionsPrefix {
-/// 		fn pallet_prefix() -> &'static str {
-/// 			"TestRuntime"
-/// 		}
-/// 		const STORAGE_PREFIX: &'static str = "Actions";
-/// 	}
-/// 	pub type Actions = StorageMap<ActionsPrefix, Blake2_128Concat, u64, Loc>;
+/// 	#[pallet::storage]
+/// 	pub type Actions<T> = StorageMap<_, Blake2_128Concat, u64, Loc>;
 ///
-/// 	pub struct PrefabPrefix;
-/// 	impl StorageInstance for PrefabPrefix {
-/// 		fn pallet_prefix() -> &'static str {
-/// 			"TestRuntime"
-/// 		}
-/// 		const STORAGE_PREFIX: &'static str = "Prefab";
-/// 	}
-/// 	pub type Prefab = StorageDoubleMap<
-/// 		PrefabPrefix,
+/// 	#[pallet::storage]
+/// 	pub type Prefab<T> = StorageDoubleMap<
+/// 		_,
 /// 		Blake2_128Concat, u128,
 /// 		Blake2_128Concat, (i8, i8, i8), Block
 /// 	>;
@@ -107,17 +121,17 @@ use sp_storage::{StorageData, StorageKey};
 /// async fn main() -> Result<(), RpcError> {
 ///     let cl = WsClientBuilder::default().build("ws://[::1]:9944").await?;
 ///
-///     let q = StorageQuery::value::<LastActionId>();
+///     let q = StorageQuery::value::<LastActionId<TestRuntime>>();
 ///     let hash = None::<Hash>;
 ///     let _: Option<u64> = q.get(&cl, hash).await?;
 ///
-///     let q = StorageQuery::map::<Voxels, _>((0, 0, 0));
+///     let q = StorageQuery::map::<Voxels<TestRuntime>, _>((0, 0, 0));
 ///     let _: Option<Block> = q.get(&cl, hash).await?;
 ///
-///     let q = StorageQuery::map::<Actions, _>(12);
+///     let q = StorageQuery::map::<Actions<TestRuntime>, _>(12);
 ///     let _: Option<Loc> = q.get(&cl, hash).await?;
 ///
-///     let q = StorageQuery::double_map::<Prefab, _, _>(3, (0, 0, 0));
+///     let q = StorageQuery::double_map::<Prefab<TestRuntime>, _, _>(3, (0, 0, 0));
 ///     let _: Option<Block> = q.get(&cl, hash).await?;
 ///
 ///     Ok(())

@@ -10516,6 +10516,8 @@ dependencies = [
  "sc-rpc-api",
  "scale-info",
  "serde",
+ "sp-core",
+ "sp-runtime",
  "sp-storage",
  "tokio",
 ]
