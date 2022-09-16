@@ -132,9 +132,7 @@ impl DeriveJunction {
 		let mut cc: [u8; JUNCTION_ID_LEN] = Default::default();
 		index.using_encoded(|data| {
 			if data.len() > JUNCTION_ID_LEN {
-				let hash_result = blake2_rfc::blake2b::blake2b(JUNCTION_ID_LEN, &[], data);
-				let hash = hash_result.as_bytes();
-				cc.copy_from_slice(hash);
+				cc.copy_from_slice(&sp_core_hashing::blake2_256(data));
 			} else {
 				cc[0..data.len()].copy_from_slice(data);
 			}
@@ -292,7 +290,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		}
 
 		let hash = ss58hash(&data[0..body_len + prefix_len]);
-		let checksum = &hash.as_bytes()[0..CHECKSUM_LEN];
+		let checksum = &hash[0..CHECKSUM_LEN];
 		if data[body_len + prefix_len..body_len + prefix_len + CHECKSUM_LEN] != *checksum {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum)
@@ -333,7 +331,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		};
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
-		v.extend(&r.as_bytes()[0..2]);
+		v.extend(&r[0..2]);
 		v.to_base58()
 	}
 
@@ -366,11 +364,13 @@ pub trait Derive: Sized {
 const PREFIX: &[u8] = b"SS58PRE";
 
 #[cfg(feature = "std")]
-fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
-	let mut context = blake2_rfc::blake2b::Blake2b::new(64);
-	context.update(PREFIX);
-	context.update(data);
-	context.finalize()
+fn ss58hash(data: &[u8]) -> Vec<u8> {
+	use blake2::{Blake2b512, Digest};
+
+	let mut ctx = Blake2b512::new();
+	ctx.update(PREFIX);
+	ctx.update(data);
+	ctx.finalize().to_vec()
 }
 
 /// Default prefix number
@@ -1312,6 +1312,14 @@ mod tests {
 			})
 		);
 		assert_eq!(
+			TestPair::from_string("hello world/0123456789012345678901234567890123456789", None),
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::soft("0123456789012345678901234567890123456789")]
+			})
+		);
+		assert_eq!(
 			TestPair::from_string("hello world//1", None),
 			Ok(TestPair::Standard {
 				phrase: "hello world".to_owned(),
@@ -1325,6 +1333,14 @@ mod tests {
 				phrase: "hello world".to_owned(),
 				password: None,
 				path: vec![DeriveJunction::hard("DOT")]
+			})
+		);
+		assert_eq!(
+			TestPair::from_string("hello world//0123456789012345678901234567890123456789", None),
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::hard("0123456789012345678901234567890123456789")]
 			})
 		);
 		assert_eq!(

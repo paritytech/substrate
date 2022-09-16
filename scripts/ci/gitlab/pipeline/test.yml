@@ -83,14 +83,14 @@ cargo-check-benches:
     - echo "___Running benchmarks___";
     - case ${CI_NODE_INDEX} in
         1)
-          SKIP_WASM_BUILD=1 time cargo +nightly check --benches --all;
-          cargo run --release -p node-bench -- ::trie::read::small --json
+          SKIP_WASM_BUILD=1 time cargo +nightly check --locked --benches --all;
+          cargo run --locked --release -p node-bench -- ::trie::read::small --json
             | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::trie::read::small.json;
           echo "___Uploading cache for rusty-cachier___";
           rusty-cachier cache upload
           ;;
         2)
-          cargo run --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
+          cargo run --locked --release -p node-bench -- ::node::import::native::sr25519::transfer_keep_alive::paritydb::small --json
             | tee ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/::node::import::native::sr25519::transfer_keep_alive::paritydb::small.json
           ;;
         esac
@@ -140,7 +140,7 @@ cargo-check-subkey:
   script:
     - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
-    - SKIP_WASM_BUILD=1 time cargo check --release
+    - SKIP_WASM_BUILD=1 time cargo check --locked --release
     - rusty-cachier cache upload
 
 cargo-check-try-runtime:
@@ -154,7 +154,7 @@ cargo-check-try-runtime:
     - .test-refs
   script:
     - rusty-cachier snapshot create
-    - time cargo check --features try-runtime
+    - time cargo check --locked --features try-runtime
     - rusty-cachier cache upload
 
 cargo-check-wasmer-sandbox:
@@ -168,7 +168,7 @@ cargo-check-wasmer-sandbox:
     - .test-refs
   script:
     - rusty-cachier snapshot create
-    - time cargo check --features wasmer-sandbox
+    - time cargo check --locked --features wasmer-sandbox
     - rusty-cachier cache upload
 
 test-deterministic-wasm:
@@ -187,13 +187,13 @@ test-deterministic-wasm:
   script:
     - rusty-cachier snapshot create
     # build runtime
-    - cargo build --verbose --release -p kitchensink-runtime
+    - cargo build --locked --verbose --release -p kitchensink-runtime
     # make checksum
     - sha256sum $CARGO_TARGET_DIR/release/wbuild/kitchensink-runtime/target/wasm32-unknown-unknown/release/kitchensink_runtime.wasm > checksum.sha256
     # clean up
     - rm -rf $CARGO_TARGET_DIR/release/wbuild
     # build again
-    - cargo build --verbose --release -p kitchensink-runtime
+    - cargo build --locked --verbose --release -p kitchensink-runtime
     # confirm checksum
     - sha256sum -c ./checksum.sha256
     # clean up again, don't put release binaries into the cache
@@ -251,7 +251,7 @@ test-frame-support:
     RUN_UI_TESTS:                  1
   script:
     - rusty-cachier snapshot create
-    - time cargo test -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
+    - time cargo test --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - rusty-cachier cache upload
 
@@ -295,7 +295,7 @@ quick-benchmarks:
     WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
   script:
     - rusty-cachier snapshot create
-    - time cargo run --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
+    - time cargo run --locked --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
     - rusty-cachier cache upload
 
 test-frame-examples-compile-to-wasm:
@@ -314,9 +314,9 @@ test-frame-examples-compile-to-wasm:
   script:
     - rusty-cachier snapshot create
     - cd ./frame/examples/offchain-worker/
-    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
+    - cargo +nightly build --locked --target=wasm32-unknown-unknown --no-default-features
     - cd ../basic
-    - cargo +nightly build --target=wasm32-unknown-unknown --no-default-features
+    - cargo +nightly build --locked --target=wasm32-unknown-unknown --no-default-features
     - rusty-cachier cache upload
 
 test-linux-stable-int:
@@ -358,8 +358,8 @@ check-tracing:
   script:
     - rusty-cachier snapshot create
     # with-tracing must be explicitly activated, we run a test to ensure this works as expected in both cases
-    - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
-    - time cargo +nightly test --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
+    - time cargo +nightly test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features
+    - time cargo +nightly test --locked --manifest-path ./primitives/tracing/Cargo.toml --no-default-features --features=with-tracing
     - rusty-cachier cache upload
 
 # more information about this job can be found here:
@@ -383,9 +383,9 @@ test-full-crypto-feature:
   script:
     - rusty-cachier snapshot create
     - cd primitives/core/
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - time cargo +nightly build --locked --verbose --no-default-features --features full_crypto
     - cd ../application-crypto
-    - time cargo +nightly build --verbose --no-default-features --features full_crypto
+    - time cargo +nightly build --locked --verbose --no-default-features --features full_crypto
     - rusty-cachier cache upload
 
 test-wasmer-sandbox:
@@ -399,7 +399,7 @@ test-wasmer-sandbox:
   script:
     - rusty-cachier snapshot create
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
-    - time cargo nextest run --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
+    - time cargo nextest run --locked --release --features runtime-benchmarks,wasmer-sandbox,disable-ui-tests --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
     - if [ ${CI_NODE_INDEX} == 1 ]; then rusty-cachier cache upload; fi
 
 cargo-check-macos:
@@ -408,7 +408,7 @@ cargo-check-macos:
   before_script:
     - !reference [.rust-info-script, script]
   script:
-    - SKIP_WASM_BUILD=1 time cargo check --release
+    - SKIP_WASM_BUILD=1 time cargo check --locked --release
   tags:
     - osx
 
@@ -424,5 +424,5 @@ check-rustdoc:
     RUSTDOCFLAGS:                  "-Dwarnings"
   script:
     - rusty-cachier snapshot create
-    - time cargo +nightly doc --workspace --all-features --verbose --no-deps
+    - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
     - rusty-cachier cache upload
