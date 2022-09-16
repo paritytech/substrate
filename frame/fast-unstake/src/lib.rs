@@ -28,7 +28,7 @@
 //! Nominator" role explained in the
 //! [February Staking Update](https://polkadot.network/blog/staking-update-february-2022/).
 //!
-//! This pallet works of the basis of `on_idle`, meaning that it provides no guarantee about when it
+//! This pallet works off the basis of `on_idle`, meaning that it provides no guarantee about when it
 //! will succeed, if at all. Moreover, the queue implementation is unordered. In case of congestion,
 //! no FIFO ordering is provided.
 //!
