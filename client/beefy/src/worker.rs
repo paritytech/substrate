@@ -121,6 +121,17 @@ impl<B: Block> VoterOracle<B> {
 		}
 	}
 
+	/// Return current pending mandatory block, if any.
+	pub fn mandatory_pending(&self) -> Option<NumberFor<B>> {
+		self.sessions.front().and_then(|round| {
+			if round.mandatory_done() {
+				None
+			} else {
+				Some(round.session_start())
+			}
+		})
+	}
+
 	/// Return `(A, B)` tuple representing inclusive [A, B] interval of votes to accept.
 	pub fn accepted_interval(
 		&self,
@@ -384,9 +395,6 @@ where
 			{
 				if let Some(new_validator_set) = find_authorities_change::<B>(&header) {
 					self.init_session_at(new_validator_set, *header.number());
-					// TODO (issue #12093): when adding SYNC protocol,
-					// fire up a request for justification for this mandatory block here.
-					self.on_demand_justifications.start_new_request(*header.number());
 				}
 			}
 		}
@@ -870,6 +878,12 @@ where
 
 			// Don't bother voting during major sync.
 			if !self.network.is_major_syncing() {
+				// If the current target is a mandatory block,
+				// make sure there's also an on-demand justification request out for it.
+				if let Some(block) = self.voting_oracle.mandatory_pending() {
+					// This only starts new request if there isn't already an active one.
+					self.on_demand_justifications.request(block);
+				}
 				// There were external events, 'state' is changed, author a vote if needed/possible.
 				if let Err(err) = self.try_to_vote() {
 					debug!(target: "beefy", "🥩 {}", err);

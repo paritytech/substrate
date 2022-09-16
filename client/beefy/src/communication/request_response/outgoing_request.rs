@@ -134,17 +134,19 @@ where
 		self.state = State::AwaitingResponse(peer, block);
 	}
 
-	/// Start requesting justification for `block` number.
-	pub fn start_new_request(&mut self, block: NumberFor<B>) {
-		self.reset_state();
+	/// If no other request is in progress, start new justification request for `block`.
+	pub fn request(&mut self, block: NumberFor<B>) {
+		// ignore new requests while there's already one pending
+		match &self.state {
+			State::AwaitingResponse(_, _) => return,
+			State::Idle => (),
+		}
 		self.reset_peers_cache_for_block(block);
 
+		// Start the requests engine - each unsuccessful received response will automatically
+		// trigger a new request to the next peer in the `peers_cache` until there are none left.
 		if let Some(peer) = self.try_next_peer() {
 			self.request_from_peer(peer, block);
-		} else {
-			// TODO: add some timeout mechanism to retry and not get stuck just because
-			// there was no connectivity when we first tried this.
-			debug!(target: "beefy", "🥩 No peers to request justif #{:?} from!", block);
 		}
 	}
 
@@ -154,7 +156,7 @@ where
 			State::AwaitingResponse(_, number) if *number <= block => {
 				debug!(
 					target: "beefy",
-					"🥩 cancel pending request for block: {:?}",
+					"🥩 cancel pending request for justification #{:?}",
 					number
 				);
 				self.reset_state();
@@ -226,6 +228,10 @@ where
 				return None
 			},
 		};
+		// We received the awaited response. All response processing success and error cases
+		// ultimately move the engine in `Idle` state, so just do it now to make things simple
+		// and make sure we don't miss any error short-circuit.
+		self.reset_state();
 
 		let block_id = BlockId::number(block);
 		let validator_set = self
@@ -250,11 +256,6 @@ where
 				} else {
 					warn!(target: "beefy", "🥩 ran out of peers to request justif #{:?} from", block);
 				}
-			})
-			.map(|proof| {
-				// Good proof received, go back to 'Idle'.
-				self.reset_state();
-				proof
 			})
 			.ok()
 	}
