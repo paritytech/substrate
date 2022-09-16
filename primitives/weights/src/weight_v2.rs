@@ -15,16 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Compact, Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_arithmetic::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use sp_debug_derive::RuntimeDebug;
 
 use super::*;
 
-#[derive(
-	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
-)]
+#[derive(Encode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Weight {
 	#[codec(compact)]
@@ -33,6 +31,40 @@ pub struct Weight {
 	#[codec(compact)]
 	/// The weight of storage space used by proof of validity.
 	proof_size: u64,
+}
+
+// Custom Decode implementation for the purposes of migrating from 1D weights.
+impl Decode for Weight {
+	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+		let compact_ref_time = match Compact::<u64>::decode(input) {
+			Ok(r) => r,
+			Err(_) => {
+				// Try decoding it in the old way where we only had a non-compact ref time weight
+				let ref_time = u64::decode(input)
+					.map_err(|e| e.chain("Could not decode `Weight::ref_time`"))?;
+				return Ok(Self { ref_time, proof_size: 0 })
+			},
+		};
+		let compact_proof_size = Compact::<u64>::decode(input)
+			.map_err(|e| e.chain("Could not decode `Weight::proof_size`"))?;
+		Ok(Self { ref_time: compact_ref_time.0, proof_size: compact_proof_size.0 })
+	}
+}
+
+impl CompactAs for Weight {
+	type As = (Compact<u64>, Compact<u64>);
+	fn encode_as(&self) -> &(Compact<u64>, Compact<u64>) {
+		&(Compact(self.ref_time), Compact(self.proof_size))
+	}
+	fn decode_from((r, s): (Compact<u64>, Compact<u64>)) -> Result<Weight, codec::Error> {
+		Ok(Weight { ref_time: r.0, proof_size: s.0 })
+	}
+}
+
+impl From<Compact<Weight>> for Weight {
+	fn from(x: Compact<Weight>) -> Weight {
+		x.0
+	}
 }
 
 impl Weight {
