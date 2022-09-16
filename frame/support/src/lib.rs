@@ -1861,8 +1861,7 @@ pub mod pallet_prelude {
 /// benchmarking.
 ///
 /// This attribute should only be attached to storages that are known to be
-/// read/used in every block. This will result in a more efficient read pattern
-/// for the value and a more accurate benchmarking weight.
+/// read/used in every block. This will result in a more accurate benchmarking weight.
 ///
 /// ### Example
 /// ```ignore
