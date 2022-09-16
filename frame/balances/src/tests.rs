@@ -756,6 +756,54 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn emit_events_with_changing_locks() {
+			<$ext_builder>::default()
+				.build()
+				.execute_with(|| {
+					let _ = Balances::deposit_creating(&1, 100);
+					System::reset_events();
+
+					// Locks: [10/MISC]
+					Balances::set_lock(*b"LOCK_000", &1, 10, WithdrawReasons::TRANSFER);
+					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 10, reason: Reasons::Misc }) ]);
+
+					// Locks: [10/MISC, 11/MISC]
+					Balances::set_lock(*b"LOCK_001", &1, 11, WithdrawReasons::TRANSFER);
+					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 1, reason: Reasons::Misc }) ]);
+
+					// Locks: [10/MISC, 11/MISC, 11/FEE]
+					Balances::set_lock(*b"LOCK_002", &1, 11, WithdrawReasons::TRANSACTION_PAYMENT);
+					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 11, reason: Reasons::Fee }) ]);
+
+					// Locks: [10/MISC, 11/MISC, 11/FEE, 12/FEE]
+					Balances::set_lock(*b"LOCK_003", &1, 12, WithdrawReasons::TRANSACTION_PAYMENT);
+					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 1, reason: Reasons::Fee }) ]);
+
+					// Locks: [10/MISC, 9/MISC, 11/FEE, 12/FEE]
+					Balances::set_lock(*b"LOCK_001", &1, 9, WithdrawReasons::TRANSFER);
+					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 1, reason: Reasons::Misc }) ]);
+
+					// Locks: [10/MISC, 9/MISC, 11/FEE, 10/FEE]
+					Balances::set_lock(*b"LOCK_003", &1, 10, WithdrawReasons::TRANSACTION_PAYMENT);
+					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 1, reason: Reasons::Fee }) ]);
+
+					// Locks: [20/MISC+FEE, 9/MISC, 11/FEE, 10/FEE]
+					Balances::set_lock(*b"LOCK_000", &1, 20, WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TRANSFER);
+					assert_eq!(events(), [
+						RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 10, reason: Reasons::Misc }),
+						RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 9, reason: Reasons::Fee })
+					]);
+
+					// Locks: [0/MISC+FEE, 9/MISC, 11/FEE, 10/FEE]
+					Balances::remove_lock(*b"LOCK_000", &1);
+					assert_eq!(events(), [
+						RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 11, reason: Reasons::Misc }),
+						RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 9, reason: Reasons::Fee })
+					]);
+				});
+		}
+
+		#[test]
 		fn emit_events_with_existential_deposit() {
 			<$ext_builder>::default()
 				.existential_deposit(100)
