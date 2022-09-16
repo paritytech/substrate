@@ -568,12 +568,3 @@ fn generate_storage_instance(
 
 	Ok(StorageInstance { name, code })
 }
-
-pub fn validate_storage_item(item: proc_macro::TokenStream) -> Result<()> {
-	// re-use storage_alias's Input parser since it is accessible
-	// and valid for all storage item declarations
-	match syn::parse2::<Input>(item.clone().into()) {
-		Ok(_) => Ok(()),
-		Err(e) => Err(e),
-	}
-}

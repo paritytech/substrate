@@ -38,7 +38,6 @@ mod tt_macro;
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
-use storage_alias::validate_storage_item;
 
 thread_local! {
 	/// A global counter, can be used to generate a relatively unique identifier.
@@ -587,20 +586,4 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 
 mod kw {
 	syn::custom_keyword!(cached);
-}
-
-#[proc_macro_attribute]
-pub fn benchmarking(attr: TokenStream, item: TokenStream) -> TokenStream {
-	match syn::parse::<kw::cached>(attr) {
-		Err(_) =>
-			quote::quote!(compile_error!("only benchmarking(cached) is supported at this time"))
-				.into(),
-		Ok(_) => match validate_storage_item(item.clone()) {
-			Err(_) => quote::quote!(compile_error!(
-				"benchmarking(cached) can only be attached to valid storage type declarations"
-			))
-			.into(),
-			Ok(_) => item,
-		},
-	}
 }

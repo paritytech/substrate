@@ -2147,7 +2147,7 @@ impl_runtime_apis! {
 
 			// Treasury Account (manually whitelist this for now since no
 			// accessible storage definition we can attach the
-			// benchmarking(cached) attr macro to)
+			// pallet::whitelist_storage attr macro to)
 			// TODO: figure out a workaround for this that doesn't involve
 			// manually hard-coding
 			let treasury_key = frame_system::Account::<Runtime>::hashed_key_for(Treasury::account_id());

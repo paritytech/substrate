@@ -196,7 +196,7 @@ impl<MaxNormal: Get<u32>, MaxOverflow: Get<u32>> ConsumerLimits for (MaxNormal, 
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::{self as frame_system, pallet_prelude::*, *};
-	use frame_support::{benchmarking, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
 	use sp_runtime::DispatchErrorWithPostInfo;
 
 	/// System configuration trait. Implemented by runtime.
@@ -562,7 +562,7 @@ pub mod pallet {
 
 	/// The current weight for the block.
 	#[pallet::storage]
-	#[benchmarking(cached)]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_weight)]
 	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
 
@@ -585,7 +585,7 @@ pub mod pallet {
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
-	#[benchmarking(cached)]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_number)]
 	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
@@ -608,14 +608,14 @@ pub mod pallet {
 	/// Events have a large in-memory size. Box the events to not go out-of-memory
 	/// just in case someone still reads them from within the runtime.
 	#[pallet::storage]
-	#[benchmarking(cached)]
+	#[pallet::whitelist_storage]
 	#[pallet::unbounded]
 	pub(super) type Events<T: Config> =
 		StorageValue<_, Vec<Box<EventRecord<T::Event, T::Hash>>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
-	#[benchmarking(cached)]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn event_count)]
 	pub(super) type EventCount<T: Config> = StorageValue<_, EventIndex, ValueQuery>;
 
@@ -651,7 +651,7 @@ pub mod pallet {
 
 	/// The execution phase of the block.
 	#[pallet::storage]
-	#[benchmarking(cached)]
+	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
 	#[cfg_attr(feature = "std", derive(Default))]
