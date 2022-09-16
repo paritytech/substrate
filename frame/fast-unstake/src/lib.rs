@@ -39,7 +39,7 @@
 //! Once queued, but not being actively processed, stakers can withdraw their request via
 //! [`Call::deregister`].
 //!
-//! Once queued, a staker wishing to unbond can perform to further action in pallet-staking. This is
+//! Once queued, a staker wishing to unbond can perform no further action in pallet-staking. This is
 //! to prevent them from accidentally exposing themselves behind a validator etc.
 //!
 //! Once processed, if successful, no additional fees for the checking process is taken, and the
