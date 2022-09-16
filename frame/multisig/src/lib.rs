@@ -56,7 +56,7 @@ use frame_support::{
 		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo,
 	},
 	ensure,
-	traits::{Currency, Get, ReservableCurrency, WrapperKeepOpaque},
+	traits::{Currency, Get, ReservableCurrency},
 	weights::{GetDispatchInfo, Weight},
 	RuntimeDebug,
 };
@@ -592,7 +592,8 @@ impl<T: Config> Pallet<T> {
 					Err(Error::<T>::AlreadyApproved)?
 				}
 
-				let final_weight = T::WeightInfo::as_multi_approve(other_signatories_len as u32, call_len as u32);
+				let final_weight =
+					T::WeightInfo::as_multi_approve(other_signatories_len as u32, call_len as u32);
 				// Call is not made, so the actual weight does not include call
 				Ok(Some(final_weight).into())
 			}
@@ -602,6 +603,8 @@ impl<T: Config> Pallet<T> {
 
 			// Just start the operation by recording it in storage.
 			let deposit = T::DepositBase::get() + T::DepositFactor::get() * threshold.into();
+
+			T::Currency::reserve(&who, deposit)?;
 
 			<Multisigs<T>>::insert(
 				&id,
@@ -615,7 +618,8 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::deposit_event(Event::NewMultisig { approving: who, multisig: id, call_hash });
 
-			let final_weight = T::WeightInfo::as_multi_create(other_signatories_len as u32, call_len as u32);
+			let final_weight =
+				T::WeightInfo::as_multi_create(other_signatories_len as u32, call_len as u32);
 			// Call is not made, so the actual weight does not include call
 			Ok(Some(final_weight).into())
 		}
