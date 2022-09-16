@@ -30,7 +30,7 @@
 //!
 //! This pallet works of the basis of `on_idle`, meaning that it provides no guarantee about when it
 //! will succeed, if at all. Moreover, the queue implementation is unordered. In case of congestion,
-//! not FIFO ordering is provided.
+//! no FIFO ordering is provided.
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
 //! [`Call::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them in
