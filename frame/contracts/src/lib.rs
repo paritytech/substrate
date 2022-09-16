@@ -1050,7 +1050,7 @@ where
 		};
 		let schedule = T::Schedule::get();
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-			origin,
+			origin.clone(),
 			dest,
 			&mut gas_meter,
 			&mut storage_meter,
@@ -1059,7 +1059,11 @@ where
 			data,
 			debug_message,
 		);
-		InternalCallOutput { result, gas_meter, storage_deposit: storage_meter.into_deposit() }
+		InternalCallOutput {
+			result,
+			gas_meter,
+			storage_deposit: storage_meter.into_deposit(&origin),
+		}
 	}
 
 	/// Internal function that does the actual instantiation.
@@ -1103,7 +1107,7 @@ where
 				value.saturating_add(extra_deposit),
 			)?;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin,
+				origin.clone(),
 				executable,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -1114,17 +1118,23 @@ where
 				debug_message,
 			);
 			storage_deposit = storage_meter
-				.into_deposit()
+				.into_deposit(&origin)
 				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
 		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
 	}
 
+	/// Deposit a pallet contracts event. Handles the conversion to the overarching event type.
 	fn deposit_event(topics: Vec<T::Hash>, event: Event<T>) {
 		<frame_system::Pallet<T>>::deposit_event_indexed(
 			&topics,
 			<T as Config>::RuntimeEvent::from(event).into(),
 		)
+	}
+
+	/// Return the existential deposit of [`Config::Currency`].
+	fn min_balance() -> BalanceOf<T> {
+		<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance()
 	}
 }

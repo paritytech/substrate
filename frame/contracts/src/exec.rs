@@ -920,12 +920,7 @@ where
 			// it was invalidated.
 			frame.contract_info.load(account_id);
 			let mut contract = frame.contract_info.into_contract();
-			prev.nested_storage.absorb(
-				frame.nested_storage,
-				&self.origin,
-				account_id,
-				contract.as_mut(),
-			);
+			prev.nested_storage.absorb(frame.nested_storage, account_id, contract.as_mut());
 
 			// In case the contract wasn't terminated we need to persist changes made to it.
 			if let Some(contract) = contract {
@@ -963,7 +958,6 @@ where
 			let mut contract = self.first_frame.contract_info.as_contract();
 			self.storage_meter.absorb(
 				mem::take(&mut self.first_frame.nested_storage),
-				&self.origin,
 				&self.first_frame.account_id,
 				contract.as_deref_mut(),
 			);
