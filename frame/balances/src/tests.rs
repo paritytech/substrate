@@ -765,41 +765,89 @@ macro_rules! decl_tests {
 
 					// Locks: [10/MISC]
 					Balances::set_lock(*b"LOCK_000", &1, 10, WithdrawReasons::TRANSFER);
-					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 10, reason: Reasons::Misc }) ]);
+					assert_eq!(
+						events(),
+						[ RuntimeEvent::Balances(
+							crate::Event::Locked { who: 1, amount: 10, reason: Reasons::Misc }
+						)]
+					);
 
 					// Locks: [10/MISC, 11/MISC]
 					Balances::set_lock(*b"LOCK_001", &1, 11, WithdrawReasons::TRANSFER);
-					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 1, reason: Reasons::Misc }) ]);
+					assert_eq!(
+						events(),
+						[ RuntimeEvent::Balances(
+							crate::Event::Locked { who: 1, amount: 1, reason: Reasons::Misc }
+						)]
+					);
 
 					// Locks: [10/MISC, 11/MISC, 11/FEE]
 					Balances::set_lock(*b"LOCK_002", &1, 11, WithdrawReasons::TRANSACTION_PAYMENT);
-					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 11, reason: Reasons::Fee }) ]);
+					assert_eq!(
+						events(),
+						[ RuntimeEvent::Balances(
+							crate::Event::Locked { who: 1, amount: 11, reason: Reasons::Fee }
+						)]
+					);
 
 					// Locks: [10/MISC, 11/MISC, 11/FEE, 12/FEE]
 					Balances::set_lock(*b"LOCK_003", &1, 12, WithdrawReasons::TRANSACTION_PAYMENT);
-					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 1, reason: Reasons::Fee }) ]);
+					assert_eq!(events(),
+						[ RuntimeEvent::Balances(
+							crate::Event::Locked { who: 1, amount: 1, reason: Reasons::Fee }
+						)]
+					);
 
 					// Locks: [10/MISC, 9/MISC, 11/FEE, 12/FEE]
 					Balances::set_lock(*b"LOCK_001", &1, 9, WithdrawReasons::TRANSFER);
-					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 1, reason: Reasons::Misc }) ]);
+					assert_eq!(
+						events(),
+						[ RuntimeEvent::Balances(
+							crate::Event::Unlocked { who: 1, amount: 1, reason: Reasons::Misc }
+						)]
+					);
 
 					// Locks: [10/MISC, 9/MISC, 11/FEE, 10/FEE]
 					Balances::set_lock(*b"LOCK_003", &1, 10, WithdrawReasons::TRANSACTION_PAYMENT);
-					assert_eq!(events(), [ RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 1, reason: Reasons::Fee }) ]);
+					assert_eq!(
+						events(),
+						[ RuntimeEvent::Balances(
+							crate::Event::Unlocked { who: 1, amount: 1, reason: Reasons::Fee }
+						)]
+					);
 
 					// Locks: [20/MISC+FEE, 9/MISC, 11/FEE, 10/FEE]
-					Balances::set_lock(*b"LOCK_000", &1, 20, WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TRANSFER);
-					assert_eq!(events(), [
-						RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 10, reason: Reasons::Misc }),
-						RuntimeEvent::Balances(crate::Event::Locked { who: 1, amount: 9, reason: Reasons::Fee })
-					]);
+					Balances::set_lock(
+						*b"LOCK_000",
+						&1,
+						20,
+						WithdrawReasons::TRANSACTION_PAYMENT | WithdrawReasons::TRANSFER
+					);
+					assert_eq!(
+						events(),
+						[
+							RuntimeEvent::Balances(
+								crate::Event::Locked { who: 1, amount: 10, reason: Reasons::Misc }
+							),
+							RuntimeEvent::Balances(
+								crate::Event::Locked { who: 1, amount: 9, reason: Reasons::Fee }
+							),
+						]
+					);
 
 					// Locks: [0/MISC+FEE, 9/MISC, 11/FEE, 10/FEE]
 					Balances::remove_lock(*b"LOCK_000", &1);
-					assert_eq!(events(), [
-						RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 11, reason: Reasons::Misc }),
-						RuntimeEvent::Balances(crate::Event::Unlocked { who: 1, amount: 9, reason: Reasons::Fee })
-					]);
+					assert_eq!(
+						events(),
+						[
+							RuntimeEvent::Balances(
+								crate::Event::Unlocked { who: 1, amount: 11, reason: Reasons::Misc }
+							),
+							RuntimeEvent::Balances(
+								crate::Event::Unlocked { who: 1, amount: 9, reason: Reasons::Fee }
+							),
+						]
+					);
 				});
 		}
 
