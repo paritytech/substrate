@@ -58,7 +58,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -284,12 +284,12 @@ mod tests {
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -307,7 +307,7 @@ mod tests {
 		type MaxReserves = ();
 		type ReserveIdentifier = [u8; 8];
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = System;
@@ -318,7 +318,7 @@ mod tests {
 		pub const One: u64 = 1;
 	}
 	impl Config for Test {
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
 		type ReservationFee = ConstU64<2>;
 		type Slashed = ();

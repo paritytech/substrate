@@ -22,12 +22,13 @@ use frame_election_provider_support::{
 	Support, VoteWeight, VoterOf,
 };
 use frame_support::{
+	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
 		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
-	weights::{Weight, WithPostDispatchInfo},
+	weights::Weight,
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
@@ -1303,7 +1304,7 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 		Self::weight_of(who)
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz"))]
 	fn set_score_of(who: &T::AccountId, weight: Self::Score) {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
@@ -1398,6 +1399,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 		Nominators::<T>::remove_all();
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn score_update_worst_case(_who: &T::AccountId, _is_increase: bool) -> Self::Score {
+		unimplemented!()
 	}
 }
 
