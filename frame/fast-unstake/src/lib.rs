@@ -247,7 +247,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Deregister oneself from the fast-unstake (and possibly joining a pool).
+		/// Deregister oneself from the fast-unstake (also cancels joining the pool if that was supplied on `register_fast_unstake` .
 		///
 		/// This is useful if one is registered, they are still waiting, and they change their mind.
 		///
