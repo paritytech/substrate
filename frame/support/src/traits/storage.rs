@@ -109,14 +109,12 @@ pub trait WhitelistedStorageKeys {
 impl WhitelistedStorageKeys for Tuple {
 	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey> {
 		// de-duplicate the storage keys
-		// use BTreeMap so the resulting list of keys is unique
 		let mut combined_keys: BTreeSet<TrackedStorageKey> = BTreeSet::new();
 		for_tuples!( #(
 			for storage_key in Tuple::whitelisted_storage_keys() {
 				combined_keys.insert(storage_key);
 			}
 		 )* );
-		// flatten BTreeMap down to a vec
 		combined_keys.iter().cloned().collect::<Vec<_>>()
 	}
 }
