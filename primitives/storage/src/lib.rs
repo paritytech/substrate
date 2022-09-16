@@ -47,8 +47,7 @@ impl AsRef<[u8]> for StorageKey {
 }
 
 /// Storage key with read/write tracking information.
-#[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Hash, PartialOrd, Ord))]
+#[derive(PartialEq, Eq, RuntimeDebug, Clone, Encode, Decode, PartialOrd)]
 pub struct TrackedStorageKey {
 	pub key: Vec<u8>,
 	pub reads: u32,
@@ -86,6 +85,18 @@ impl TrackedStorageKey {
 	pub fn whitelist(&mut self) {
 		self.whitelisted = true;
 	}
+}
+
+impl Ord for TrackedStorageKey {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.key.cmp(&other.key)
+    }
+}
+
+impl sp_std::hash::Hash for TrackedStorageKey {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
+    }
 }
 
 // Easily convert a key to a `TrackedStorageKey` that has been whitelisted.
