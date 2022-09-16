@@ -86,19 +86,19 @@ mod tests {
 	use super::*;
 	use codec::Decode;
 
-	use crate::{crypto, known_payload_ids, Payload, KEY_TYPE, bls_crypto::{Signature as BLSSignature}};
+	use crate::{ecdsa_crypto, known_payload_ids, Payload, KEY_TYPE, bls_crypto::{Signature as BLSSignature}};
 	use bls_like::{pop::SignatureAggregatorAssumingPoP, Signed, EngineBLS, BLS377, SerializableToBytes};	
 
 	type TestCommitment = Commitment<u128>;
 
 	///types for ecdsa signed commitment
 	type TestSignedCommitment =
-		SignedCommitment<u128, crypto::Signature>;
+		SignedCommitment<u128, ecdsa_crypto::Signature>;
 	type TestSignedCommitmentWitness =
-		SignedCommitmentWitness<u128, Vec<Option<crypto::Signature>>>;
+		SignedCommitmentWitness<u128, Vec<Option<ecdsa_crypto::Signature>>>;
 
 	#[derive(Clone, Debug, PartialEq, codec::Encode, codec::Decode)]
-	struct ECDSABLSSignaturePair (crypto::Signature, BLSSignature); 
+	struct ECDSABLSSignaturePair (ecdsa_crypto::Signature, BLSSignature); 
 
 	///types for commitment containing  bls signature along side ecdsa signature
 	type TestBLSSignedCommitment =
@@ -107,7 +107,7 @@ mod tests {
 		SignedCommitmentWitness<u128, [u8; BLS377::SIGNATURE_SERIALIZED_SIZE]>;
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
-	fn mock_ecdsa_signatures() -> (crypto::Signature, crypto::Signature) {
+	fn mock_ecdsa_signatures() -> (ecdsa_crypto::Signature, ecdsa_crypto::Signature) {
 		let store: SyncCryptoStorePtr = KeyStore::new().into();
 
 		let alice = sp_core::ecdsa::Pair::from_string("//Alice", None).unwrap();
@@ -183,7 +183,7 @@ mod tests {
 		let signed = ecdsa_signed_commitment();
 
 		// when
-		let (witness, signatures) = TestSignedCommitmentWitness::from_signed::<_,_,Vec<Option<crypto::Signature>>>(
+		let (witness, signatures) = TestSignedCommitmentWitness::from_signed::<_,_,Vec<Option<ecdsa_crypto::Signature>>>(
 			signed,
 			|sigs| {
 				sigs.to_vec()
@@ -218,9 +218,9 @@ mod tests {
 	fn should_encode_and_decode_witness() {
 		// given
 		let signed = ecdsa_signed_commitment();
-		let (witness, _) = TestSignedCommitmentWitness::from_signed::<_,_,Vec<Option<crypto::Signature>>>(
+		let (witness, _) = TestSignedCommitmentWitness::from_signed::<_,_,Vec<Option<ecdsa_crypto::Signature>>>(
 			signed,
-			|sigs: &[std::option::Option<crypto::Signature>]| {
+			|sigs: &[std::option::Option<ecdsa_crypto::Signature>]| {
 				sigs.to_vec()
 			},
 		);
