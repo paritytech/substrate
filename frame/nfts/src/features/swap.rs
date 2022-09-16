@@ -34,17 +34,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let item = Item::<T, I>::get(&collection_id, &item_id).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(item.owner == sender, Error::<T, I>::NoPermission);
 
-		Item::<T, I>::get(&desired_collection_id, &desired_item_id).ok_or(Error::<T, I>::UnknownItem)?;
+		Item::<T, I>::get(&desired_collection_id, &desired_item_id)
+			.ok_or(Error::<T, I>::UnknownItem)?;
 
 		let now = frame_system::Pallet::<T>::block_number();
 		let deadline = maybe_duration.map(|d| d.saturating_add(now));
 
-		PendingSwapOf::<T, I>::insert(&collection_id, &item_id, PendingSwap {
-			desired_collection: desired_collection_id,
-			desired_item: desired_item_id,
-			price: maybe_price,
-			deadline,
-		});
+		PendingSwapOf::<T, I>::insert(
+			&collection_id,
+			&item_id,
+			PendingSwap {
+				desired_collection: desired_collection_id,
+				desired_item: desired_item_id,
+				price: maybe_price,
+				deadline,
+			},
+		);
 
 		Self::deposit_event(Event::SwapCreated {
 			collection: collection_id,
@@ -64,7 +69,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		item_id: T::ItemId,
 	) -> DispatchResult {
 		let item = Item::<T, I>::get(&collection_id, &item_id).ok_or(Error::<T, I>::UnknownItem)?;
-		let swap = PendingSwapOf::<T, I>::get(&collection_id, &item_id).ok_or(Error::<T, I>::UnknownSwap)?;
+		let swap = PendingSwapOf::<T, I>::get(&collection_id, &item_id)
+			.ok_or(Error::<T, I>::UnknownSwap)?;
 
 		let is_past_deadline = if let Some(deadline) = swap.deadline {
 			let now = frame_system::Pallet::<T>::block_number();
@@ -99,9 +105,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		receive_item_id: T::ItemId,
 		maybe_receive_amount: Option<ItemPrice<T, I>>,
 	) -> DispatchResult {
-		let send_item = Item::<T, I>::get(&send_collection_id, &send_item_id).ok_or(Error::<T, I>::UnknownItem)?;
-		let receive_item = Item::<T, I>::get(&receive_collection_id, &receive_item_id).ok_or(Error::<T, I>::UnknownItem)?;
-		let swap = PendingSwapOf::<T, I>::get(&receive_collection_id, &receive_item_id).ok_or(Error::<T, I>::UnknownSwap)?;
+		let send_item = Item::<T, I>::get(&send_collection_id, &send_item_id)
+			.ok_or(Error::<T, I>::UnknownItem)?;
+		let receive_item = Item::<T, I>::get(&receive_collection_id, &receive_item_id)
+			.ok_or(Error::<T, I>::UnknownItem)?;
+		let swap = PendingSwapOf::<T, I>::get(&receive_collection_id, &receive_item_id)
+			.ok_or(Error::<T, I>::UnknownSwap)?;
 
 		ensure!(send_item.owner == sender, Error::<T, I>::NoPermission);
 		ensure!(swap.desired_collection == send_collection_id, Error::<T, I>::UnknownSwap);
@@ -114,16 +123,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 
 		if let Some(amount) = swap.price {
-			T::Currency::transfer(
-				&receive_item.owner,
-				&send_item.owner,
-				amount,
-				KeepAlive,
-			)?;
+			T::Currency::transfer(&receive_item.owner, &send_item.owner, amount, KeepAlive)?;
 		}
 
-		Self::do_transfer(send_collection_id, send_item_id, receive_item.owner.clone(), |_, _| Ok(()))?;
-		Self::do_transfer(receive_collection_id, receive_item_id, send_item.owner.clone(), |_, _| Ok(()))?;
+		Self::do_transfer(send_collection_id, send_item_id, receive_item.owner.clone(), |_, _| {
+			Ok(())
+		})?;
+		Self::do_transfer(
+			receive_collection_id,
+			receive_item_id,
+			send_item.owner.clone(),
+			|_, _| Ok(()),
+		)?;
 
 		Self::deposit_event(Event::SwapClaimed {
 			send_collection: send_collection_id,

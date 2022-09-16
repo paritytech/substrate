@@ -35,10 +35,10 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+mod features;
 mod functions;
 mod impl_nonfungibles;
 mod types;
-mod features;
 
 pub mod weights;
 
@@ -1651,7 +1651,15 @@ pub mod pallet {
 			maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_create_swap(origin, collection, item, desired_collection, desired_item, maybe_price, maybe_duration)
+			Self::do_create_swap(
+				origin,
+				collection,
+				item,
+				desired_collection,
+				desired_item,
+				maybe_price,
+				maybe_duration,
+			)
 		}
 
 		/// Cancel an atomic swap.
@@ -1693,7 +1701,14 @@ pub mod pallet {
 			maybe_receive_amount: Option<ItemPrice<T, I>>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_claim_swap(origin, send_collection, send_item, receive_collection, receive_item, maybe_receive_amount)
+			Self::do_claim_swap(
+				origin,
+				send_collection,
+				send_item,
+				receive_collection,
+				receive_item,
+				maybe_receive_amount,
+			)
 		}
 	}
 }
