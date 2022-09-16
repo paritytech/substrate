@@ -17,7 +17,7 @@
 
 //! A pallet that's designed to JUST do the following:
 //!
-//! If a nominator is not exposed at all in any `ErasStakers` (i.e. "has not actively backed any
+//! If a nominator is not exposed in any `ErasStakers` (i.e. "has not actively backed any
 //! validators in the last `BondingDuration` days"), then they can register themselves in this
 //! pallet, unstake faster than needing to wait an entire bonding duration, and potentially move
 //! into a nomination pool.
