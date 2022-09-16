@@ -406,18 +406,19 @@ fn run_for(duration: Duration, net: &Arc<Mutex<BeefyTestNet>>, runtime: &mut Run
 
 pub(crate) fn get_beefy_streams(
 	net: &mut BeefyTestNet,
-	peers: &[BeefyKeyring],
+	// peer index and key
+	peers: impl Iterator<Item = (usize, BeefyKeyring)>,
 ) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block>>>)
 {
 	let mut best_block_streams = Vec::new();
 	let mut versioned_finality_proof_streams = Vec::new();
-	for peer_id in 0..peers.len() {
-		let beefy_rpc_links = net.peer(peer_id).data.beefy_rpc_links.lock().clone().unwrap();
+	peers.for_each(|(index, _)| {
+		let beefy_rpc_links = net.peer(index).data.beefy_rpc_links.lock().clone().unwrap();
 		let BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream } =
 			beefy_rpc_links;
 		best_block_streams.push(from_voter_best_beefy_stream.subscribe());
 		versioned_finality_proof_streams.push(from_voter_justif_stream.subscribe());
-	}
+	});
 	(best_block_streams, versioned_finality_proof_streams)
 }
 
@@ -495,18 +496,24 @@ fn streams_empty_after_timeout<T>(
 
 fn finalize_block_and_wait_for_beefy(
 	net: &Arc<Mutex<BeefyTestNet>>,
-	peers: &[BeefyKeyring],
+	// peer index and key
+	peers: impl Iterator<Item = (usize, BeefyKeyring)> + Clone,
 	runtime: &mut Runtime,
 	finalize_targets: &[u64],
 	expected_beefy: &[u64],
 ) {
-	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 
 	for block in finalize_targets {
 		let finalize = BlockId::number(*block);
-		for i in 0..peers.len() {
-			net.lock().peer(i).client().as_client().finalize_block(finalize, None).unwrap();
-		}
+		peers.clone().for_each(|(index, _)| {
+			net.lock()
+				.peer(index)
+				.client()
+				.as_client()
+				.finalize_block(finalize, None)
+				.unwrap();
+		})
 	}
 
 	if expected_beefy.is_empty() {
@@ -526,8 +533,8 @@ fn beefy_finalizing_blocks() {
 	sp_tracing::try_init_simple();
 
 	let mut runtime = Runtime::new().unwrap();
-	let peers = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
-	let validator_set = ValidatorSet::new(make_beefy_ids(peers), 0).unwrap();
+	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 10;
 	let min_block_delta = 4;
 
@@ -544,17 +551,18 @@ fn beefy_finalizing_blocks() {
 
 	// Minimum BEEFY block delta is 4.
 
+	let peers = peers.into_iter().enumerate();
 	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[5], &[1, 5]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[5], &[1, 5]);
 
 	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[10]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[10], &[10]);
 
 	// GRANDPA finalize #18 -> BEEFY finalize #14, then #18 (diff-power-of-two rule)
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[18], &[14, 18]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[18], &[14, 18]);
 
 	// GRANDPA finalize #20 -> BEEFY finalize #20 (mandatory)
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[20], &[20]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[20], &[20]);
 
 	// GRANDPA finalize #21 -> BEEFY finalize nothing (yet) because min delta is 4
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[21], &[]);
@@ -565,8 +573,8 @@ fn lagging_validators() {
 	sp_tracing::try_init_simple();
 
 	let mut runtime = Runtime::new().unwrap();
-	let peers = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
-	let validator_set = ValidatorSet::new(make_beefy_ids(peers), 0).unwrap();
+	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 30;
 	let min_block_delta = 1;
 
@@ -580,13 +588,20 @@ fn lagging_validators() {
 
 	let net = Arc::new(Mutex::new(net));
 
+	let peers = peers.into_iter().enumerate();
 	// finalize block #15 -> BEEFY should finalize #1 (mandatory) and #9, #13, #14, #15 from
 	// diff-power-of-two rule.
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[15], &[1, 9, 13, 14, 15]);
+	finalize_block_and_wait_for_beefy(
+		&net,
+		peers.clone(),
+		&mut runtime,
+		&[15],
+		&[1, 9, 13, 14, 15],
+	);
 
 	// Alice finalizes #25, Bob lags behind
 	let finalize = BlockId::number(25);
-	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
@@ -594,21 +609,21 @@ fn lagging_validators() {
 	streams_empty_after_timeout(versioned_finality_proof, &net, &mut runtime, None);
 
 	// Bob catches up and also finalizes #25
-	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// expected beefy finalizes block #17 from diff-power-of-two
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[23, 24, 25]);
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[23, 24, 25]);
 
 	// Both finalize #30 (mandatory session) and #32 -> BEEFY finalize #30 (mandatory), #31, #32
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[30, 32], &[30, 31, 32]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[30, 32], &[30, 31, 32]);
 
 	// Verify that session-boundary votes get buffered by client and only processed once
 	// session-boundary block is GRANDPA-finalized (this guarantees authenticity for the new session
 	// validator set).
 
 	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
-	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
+	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	let finalize = BlockId::number(60);
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
@@ -629,9 +644,8 @@ fn correct_beefy_payload() {
 	sp_tracing::try_init_simple();
 
 	let mut runtime = Runtime::new().unwrap();
-	let peers =
-		&[BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie, BeefyKeyring::Dave];
-	let validator_set = ValidatorSet::new(make_beefy_ids(peers), 0).unwrap();
+	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie, BeefyKeyring::Dave];
+	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 20;
 	let min_block_delta = 2;
 
@@ -651,15 +665,16 @@ fn correct_beefy_payload() {
 	let bad_peers = vec![(3, &BeefyKeyring::Dave, bad_api)];
 	runtime.spawn(initialize_beefy(&mut net, bad_peers, min_block_delta));
 
-	// push 10 blocks
+	// push 12 blocks
 	net.generate_blocks_and_sync(12, session_len, &validator_set, false);
 
 	let net = Arc::new(Mutex::new(net));
+	let peers = peers.into_iter().enumerate();
 	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
 	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[1, 9]);
 
 	let (best_blocks, versioned_finality_proof) =
-		get_beefy_streams(&mut net.lock(), &[BeefyKeyring::Alice]);
+		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
 
 	// now 2 good validators and 1 bad one are voting
 	net.lock()
@@ -688,7 +703,7 @@ fn correct_beefy_payload() {
 
 	// 3rd good validator catches up and votes as well
 	let (best_blocks, versioned_finality_proof) =
-		get_beefy_streams(&mut net.lock(), &[BeefyKeyring::Alice]);
+		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
 	net.lock()
 		.peer(2)
 		.client()
@@ -828,8 +843,8 @@ fn voter_initialization() {
 	// after waiting for BEEFY pallet availability.
 
 	let mut runtime = Runtime::new().unwrap();
-	let peers = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
-	let validator_set = ValidatorSet::new(make_beefy_ids(peers), 0).unwrap();
+	let peers = [BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let validator_set = ValidatorSet::new(make_beefy_ids(&peers), 0).unwrap();
 	let session_len = 5;
 	// Should vote on all mandatory blocks no matter the `min_block_delta`.
 	let min_block_delta = 10;
@@ -839,7 +854,7 @@ fn voter_initialization() {
 	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
-	// push 30 blocks
+	// push 26 blocks
 	net.generate_blocks_and_sync(26, session_len, &validator_set, false);
 	let net = Arc::new(Mutex::new(net));
 
@@ -848,9 +863,90 @@ fn voter_initialization() {
 	// Expect voters to pick up all of them and BEEFY-finalize the mandatory blocks of each session.
 	finalize_block_and_wait_for_beefy(
 		&net,
-		peers,
+		peers.into_iter().enumerate(),
 		&mut runtime,
 		&[1, 6, 10, 17, 24, 26],
 		&[1, 5, 10, 15, 20, 25],
 	);
+}
+
+#[test]
+fn on_demand_beefy_justification_sync() {
+	sp_tracing::try_init_simple();
+
+	let mut runtime = Runtime::new().unwrap();
+	let all_peers =
+		[BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie, BeefyKeyring::Dave];
+	let validator_set = ValidatorSet::new(make_beefy_ids(&all_peers), 0).unwrap();
+	let session_len = 5;
+	let min_block_delta = 5;
+
+	let mut net = BeefyTestNet::new(4);
+
+	// Alice, Bob, Charlie start first and make progress through voting.
+	let api = Arc::new(four_validators::TestApi {});
+	let fast_peers = [BeefyKeyring::Alice, BeefyKeyring::Bob, BeefyKeyring::Charlie];
+	let voting_peers =
+		fast_peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
+	runtime.spawn(initialize_beefy(&mut net, voting_peers, min_block_delta));
+
+	// Dave will start late and have to catch up using on-demand justification requests (since
+	// in this test there is no block import queue to automatically import justifications).
+	let dave = vec![(3, &BeefyKeyring::Dave, api)];
+	// Instantiate but don't run Dave, yet.
+	let dave_task = initialize_beefy(&mut net, dave, min_block_delta);
+	let dave_index = 3;
+
+	// push 30 blocks
+	net.generate_blocks_and_sync(30, session_len, &validator_set, false);
+
+	let fast_peers = fast_peers.into_iter().enumerate();
+	let net = Arc::new(Mutex::new(net));
+	// With 3 active voters and one inactive, consensus should happen and blocks BEEFY-finalized.
+	// Need to finalize at least one block in each session, choose randomly.
+	finalize_block_and_wait_for_beefy(
+		&net,
+		fast_peers.clone(),
+		&mut runtime,
+		&[1, 6, 10, 17, 24],
+		&[1, 5, 10, 15, 20],
+	);
+
+	// Spawn Dave, he's now way behind voting and can only catch up through on-demand justif sync.
+	runtime.spawn(dave_task);
+	// give Dave a chance to spawn and init.
+	run_for(Duration::from_millis(400), &net, &mut runtime);
+
+	let (dave_best_blocks, _) =
+		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
+	net.lock()
+		.peer(dave_index)
+		.client()
+		.as_client()
+		.finalize_block(BlockId::number(1), None)
+		.unwrap();
+	// Give Dave task some cpu cycles to process the finality notification,
+	run_for(Duration::from_millis(100), &net, &mut runtime);
+	// freshly spun up Dave now needs to listen for gossip to figure out the state of his peers.
+
+	// Have the other peers do some gossip so Dave finds out about their progress.
+	finalize_block_and_wait_for_beefy(&net, fast_peers, &mut runtime, &[25], &[25]);
+
+	// Now verify Dave successfully finalized #1 (through on-demand justification request).
+	wait_for_best_beefy_blocks(dave_best_blocks, &net, &mut runtime, &[1]);
+
+	// Give Dave all tasks some cpu cycles to burn through their events queues,
+	run_for(Duration::from_millis(100), &net, &mut runtime);
+	// then verify Dave catches up through on-demand justification requests.
+	finalize_block_and_wait_for_beefy(
+		&net,
+		[(dave_index, BeefyKeyring::Dave)].into_iter(),
+		&mut runtime,
+		&[6, 10, 17, 24, 26],
+		&[5, 10, 15, 20, 25],
+	);
+
+	let all_peers = all_peers.into_iter().enumerate();
+	// Now that Dave has caught up, sanity check voting works for all of them.
+	finalize_block_and_wait_for_beefy(&net, all_peers, &mut runtime, &[30], &[30]);
 }

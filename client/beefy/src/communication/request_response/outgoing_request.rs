@@ -116,7 +116,7 @@ where
 	}
 
 	fn request_from_peer(&mut self, peer: PeerId, block: NumberFor<B>) {
-		debug!(target: "beefy", "🥩 requesting justif #{:?} from peer {:?}", block, peer);
+		debug!(target: "beefy::sync", "🥩 requesting justif #{:?} from peer {:?}", block, peer);
 
 		let payload = JustificationRequest::<B> { begin: block }.encode();
 
@@ -147,6 +147,8 @@ where
 		// trigger a new request to the next peer in the `peers_cache` until there are none left.
 		if let Some(peer) = self.try_next_peer() {
 			self.request_from_peer(peer, block);
+		} else {
+			debug!(target: "beefy::sync", "🥩 no good peers to request justif #{:?} from", block);
 		}
 	}
 
@@ -155,7 +157,7 @@ where
 		match &self.state {
 			State::AwaitingResponse(_, number) if *number <= block => {
 				debug!(
-					target: "beefy",
+					target: "beefy::sync",
 					"🥩 cancel pending request for justification #{:?}",
 					number
 				);
@@ -175,7 +177,7 @@ where
 		response
 			.map_err(|e| {
 				debug!(
-					target: "beefy",
+					target: "beefy::sync",
 					"🥩 for on demand justification #{:?}, peer {:?} hung up: {:?}",
 					block, peer, e
 				);
@@ -183,8 +185,8 @@ where
 			})?
 			.map_err(|e| {
 				debug!(
-					target: "beefy",
-					"🥩 for on demand justification #{:?}, peer {:?} hung up: {:?}",
+					target: "beefy::sync",
+					"🥩 for on demand justification #{:?}, peer {:?} error: {:?}",
 					block, peer, e
 				);
 				Error::InvalidResponse
@@ -193,7 +195,7 @@ where
 				decode_and_verify_finality_proof::<B>(&encoded[..], block, &validator_set).map_err(
 					|e| {
 						debug!(
-							target: "beefy",
+							target: "beefy::sync",
 							"🥩 for on demand justification #{:?}, peer {:?} responded with invalid proof: {:?}",
 							block, peer, e
 						);
@@ -220,7 +222,7 @@ where
 			// requests. Just log an error for now.
 			State::Idle => {
 				error!(
-					target: "beefy",
+					target: "beefy::sync",
 					"🥩 unexpected response received in 'Idle' state: {:?}",
 					resp
 				);
@@ -239,12 +241,12 @@ where
 			.runtime_api()
 			.validator_set(&block_id)
 			.map_err(|e| {
-				error!(target: "beefy", "🥩 Runtime API error {:?} in on-demand justif engine.", e);
+				error!(target: "beefy::sync", "🥩 Runtime API error {:?} in on-demand justif engine.", e);
 				e
 			})
 			.ok()?
 			.or_else(|| {
-				error!(target: "beefy", "🥩 BEEFY pallet not available for block {:?}.", block);
+				error!(target: "beefy::sync", "🥩 BEEFY pallet not available for block {:?}.", block);
 				None
 			})?;
 
@@ -254,8 +256,16 @@ where
 				if let Some(peer) = self.try_next_peer() {
 					self.request_from_peer(peer, block);
 				} else {
-					warn!(target: "beefy", "🥩 ran out of peers to request justif #{:?} from", block);
+					warn!(target: "beefy::sync", "🥩 ran out of peers to request justif #{:?} from", block);
 				}
+			})
+			.map(|proof| {
+				debug!(
+					target: "beefy::sync",
+					"🥩 received valid on-demand justif #{:?} from {:?}",
+					block, peer
+				);
+				proof
 			})
 			.ok()
 	}

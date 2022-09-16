@@ -435,7 +435,10 @@ where
 		let block_num = signed_commitment.commitment.block_number;
 		let best_grandpa = *self.best_grandpa_block_header.number();
 		match self.voting_oracle.triage_round(block_num, best_grandpa)? {
-			RoundAction::Process => self.finalize(justification)?,
+			RoundAction::Process => {
+				debug!(target: "beefy", "🥩 Process justification for round: {:?}.", block_num);
+				self.finalize(justification)?
+			},
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
 				self.pending_justifications.entry(block_num).or_insert(justification);
@@ -876,7 +879,7 @@ where
 				debug!(target: "beefy", "🥩 {}", err);
 			}
 
-			// Don't bother voting during major sync.
+			// Don't bother voting or requesting justifications during major sync.
 			if !self.network.is_major_syncing() {
 				// If the current target is a mandatory block,
 				// make sure there's also an on-demand justification request out for it.
@@ -1341,13 +1344,15 @@ pub(crate) mod tests {
 
 	#[test]
 	fn should_finalize_correctly() {
-		let keys = &[Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
+		let keys = [Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
-		let (mut best_block_streams, mut finality_proofs) = get_beefy_streams(&mut net, keys);
+		let keys = keys.iter().cloned().enumerate();
+		let (mut best_block_streams, mut finality_proofs) =
+			get_beefy_streams(&mut net, keys.clone());
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		let mut finality_proof = finality_proofs.drain(..).next().unwrap();
 
@@ -1369,7 +1374,8 @@ pub(crate) mod tests {
 		}));
 
 		// unknown hash for block #1
-		let (mut best_block_streams, mut finality_proofs) = get_beefy_streams(&mut net, keys);
+		let (mut best_block_streams, mut finality_proofs) =
+			get_beefy_streams(&mut net, keys.clone());
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		let mut finality_proof = finality_proofs.drain(..).next().unwrap();
 		let justif = create_finality_proof(1);

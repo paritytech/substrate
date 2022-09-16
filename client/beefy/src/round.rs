@@ -33,7 +33,7 @@ use sp_runtime::traits::{Block, NumberFor};
 /// whether the local `self` validator has voted/signed.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct RoundTracker {
 	self_vote: bool,
 	votes: HashMap<Public, Signature>,
@@ -69,6 +69,7 @@ pub fn threshold(authorities: usize) -> usize {
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
+#[derive(Debug)]
 pub(crate) struct Rounds<Payload, B: Block> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
 	session_start: NumberFor<B>,
