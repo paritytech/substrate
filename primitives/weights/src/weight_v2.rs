@@ -52,12 +52,12 @@ impl Decode for Weight {
 }
 
 impl CompactAs for Weight {
-	type As = (Compact<u64>, Compact<u64>);
-	fn encode_as(&self) -> &(Compact<u64>, Compact<u64>) {
-		&(Compact(self.ref_time), Compact(self.proof_size))
+	type As = Weight;
+	fn encode_as(&self) -> &Weight {
+		self
 	}
-	fn decode_from((r, s): (Compact<u64>, Compact<u64>)) -> Result<Weight, codec::Error> {
-		Ok(Weight { ref_time: r.0, proof_size: s.0 })
+	fn decode_from(w: Weight) -> Result<Weight, codec::Error> {
+		Ok(w)
 	}
 }
 
