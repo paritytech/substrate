@@ -17,7 +17,7 @@
 
 //! Traits for encoding data related to pallet's storage items.
 
-use crate::sp_std::collections::btree_map::BTreeMap;
+use crate::sp_std::collections::btree_set::BTreeSet;
 use impl_trait_for_tuples::impl_for_tuples;
 pub use sp_core::storage::TrackedStorageKey;
 use sp_std::prelude::*;
@@ -110,13 +110,13 @@ impl WhitelistedStorageKeys for Tuple {
 	fn whitelisted_storage_keys() -> Vec<TrackedStorageKey> {
 		// de-duplicate the storage keys
 		// use BTreeMap so the resulting list of keys is unique
-		let mut combined_keys: BTreeMap<Vec<u8>, TrackedStorageKey> = BTreeMap::new();
+		let mut combined_keys: BTreeSet<TrackedStorageKey> = BTreeSet::new();
 		for_tuples!( #(
 			for storage_key in Tuple::whitelisted_storage_keys() {
-				combined_keys.insert(storage_key.key.clone(), storage_key);
+				combined_keys.insert(storage_key);
 			}
 		 )* );
 		// flatten BTreeMap down to a vec
-		combined_keys.values().cloned().collect::<Vec<_>>()
+		combined_keys.iter().cloned().collect::<Vec<_>>()
 	}
 }
