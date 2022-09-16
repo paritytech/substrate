@@ -88,15 +88,15 @@ impl TrackedStorageKey {
 }
 
 impl Ord for TrackedStorageKey {
-    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.key.cmp(&other.key)
-    }
+	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+		self.key.cmp(&other.key)
+	}
 }
 
 impl sp_std::hash::Hash for TrackedStorageKey {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.key.hash(state);
-    }
+	fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+		self.key.hash(state);
+	}
 }
 
 // Easily convert a key to a `TrackedStorageKey` that has been whitelisted.
