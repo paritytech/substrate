@@ -7,7 +7,7 @@ use frame_support::{
 	weights::{DispatchClass, ClassifyDispatch, WeighData, Weight, PaysFee, Pays, GetDispatchInfo},
 	ensure,
 	traits::{EnsureOrigin, Get},
-	Parameter,
+	Parameter, PalletId
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed, ensure_root};
@@ -20,14 +20,14 @@ use sp_runtime::{
 	transaction_validity::{
 		ValidTransaction, TransactionValidityError, InvalidTransaction, TransactionValidity,
 	},
-	ModuleId, RuntimeDebug,
+    RuntimeDebug,
 };
 
 mod mock;
 mod tests;
 
 const DEFAULT_RELAYER_THRESHOLD: u32 = 1;
-const MODULE_ID: ModuleId = ModuleId(*b"cb/bridg");
+const MODULE_ID: PalletId = PalletId(*b"cb/bridg");
 
 pub type ChainId = u8;
 pub type DepositNonce = u64;

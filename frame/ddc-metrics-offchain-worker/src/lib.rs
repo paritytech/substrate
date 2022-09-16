@@ -328,11 +328,11 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
             call_data,
         );
 
-        let mut data = match &contract_exec_result.exec_result {
+        let mut data = match &contract_exec_result.result {
             Ok(v) => &v.data[..],
             Err(exec_error) => {
                 // Return default value in case of error
-                warn!("[OCW] Error in call get_current_period_ms of smart contract. Return default value for period. Details: {:?}", exec_error.error);
+                warn!("[OCW] Error in call get_current_period_ms of smart contract. Return default value for period. Details: {:?}", exec_error);
                 return Ok(Self::get_start_of_day_ms());
             }
         };
@@ -566,12 +566,12 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
             call_data,
         );
 
-        let mut data = match &contract_exec_result.exec_result {
+        let mut data = match &contract_exec_result.result {
             Ok(v) => &v.data[..],
             Err(exec_error) => {
                 warn!(
                     "[OCW] Error in call get_all_ddc_nodes of smart contract. Error: {:?}",
-                    exec_error.error
+                    exec_error
                 );
                 return Ok(Vec::new());
             }
