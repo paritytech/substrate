@@ -183,6 +183,7 @@ pub struct StorageDef {
 	pub named_generics: Option<StorageGenerics>,
 	/// If the value stored in this storage is unbounded.
 	pub unbounded: bool,
+	/// Whether or not reads to this storage key will be ignored by benchmarking
 	pub whitelisted: bool,
 }
 
