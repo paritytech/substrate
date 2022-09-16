@@ -438,7 +438,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			data: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
@@ -494,7 +494,7 @@ pub mod pallet {
 		pub fn instantiate_with_code(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code: Vec<u8>,
 			data: Vec<u8>,
@@ -535,7 +535,7 @@ pub mod pallet {
 		pub fn instantiate(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-			#[pallet::compact] gas_limit: Weight,
+			gas_limit: Weight,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
 			code_hash: CodeHash<T>,
 			data: Vec<u8>,
