@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Compact, CompactAs, Decode, Encode, MaxEncodedLen};
+use codec::{Compact, Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_arithmetic::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use sp_debug_derive::RuntimeDebug;
@@ -48,22 +48,6 @@ impl Decode for Weight {
 		let compact_proof_size = Compact::<u64>::decode(input)
 			.map_err(|e| e.chain("Could not decode `Weight::proof_size`"))?;
 		Ok(Self { ref_time: compact_ref_time.0, proof_size: compact_proof_size.0 })
-	}
-}
-
-impl CompactAs for Weight {
-	type As = Weight;
-	fn encode_as(&self) -> &Weight {
-		self
-	}
-	fn decode_from(w: Weight) -> Result<Weight, codec::Error> {
-		Ok(w)
-	}
-}
-
-impl From<Compact<Weight>> for Weight {
-	fn from(x: Compact<Weight>) -> Weight {
-		x.0
 	}
 }
 
