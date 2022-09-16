@@ -1526,12 +1526,19 @@ impl<T: Config> StakingInterface for Pallet<T> {
 #[cfg(feature = "try-runtime")]
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
-		T::VoterList::iter().collect().all(|x| x.is_nominator());
+		ensure!(
+			T::VoterList::iter().all(|x| Self::is_nominator(&x)),
+			"VoterList contains non-nominators"
+		);
 		T::VoterList::try_state()?;
 		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;
 		Self::check_count()
+	}
+
+	fn is_nominator(who: &T::AccountId) -> bool {
+		<Nominators<T>>::contains_key(who)
 	}
 
 	fn check_count() -> Result<(), &'static str> {
