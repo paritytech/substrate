@@ -821,6 +821,22 @@ where
 			// The branches below only change 'state', actual voting happen afterwards,
 			// based on the new resulting 'state'.
 			futures::select_biased! {
+				// Use `select_biased!` to prioritize order below.
+				// Make sure to pump gossip engine.
+				_ = gossip_engine => {
+					error!(target: "beefy", "🥩 Gossip engine has terminated, closing worker.");
+					return;
+				},
+				// Keep track of connected peers.
+				net_event = network_events.next() => {
+					if let Some(net_event) = net_event {
+						self.handle_network_event(net_event);
+					} else {
+						error!(target: "beefy", "🥩 Network events stream terminated, closing worker.");
+						return;
+					}
+				},
+				// Process finality notifications first since these drive the voter.
 				notification = finality_notifications.next() => {
 					if let Some(notification) = notification {
 						self.handle_finality_notification(&notification);
@@ -829,6 +845,7 @@ where
 						return;
 					}
 				},
+				// Process incoming justifications as these can make some in-flight votes obsolete.
 				justif = block_import_justif.next() => {
 					if let Some(justif) = justif {
 						// Block import justifications have already been verified to be valid
@@ -841,7 +858,6 @@ where
 						return;
 					}
 				},
-				// TODO: join this stream's branch with the one above; how? .. ¯\_(ツ)_/¯
 				justif = self.on_demand_justifications.next().fuse() => {
 					if let Some(justif) = justif {
 						if let Err(err) = self.triage_incoming_justif(justif) {
@@ -849,6 +865,7 @@ where
 						}
 					}
 				},
+				// Finally process incoming votes.
 				vote = votes.next() => {
 					if let Some(vote) = vote {
 						// Votes have already been verified to be valid by the gossip validator.
@@ -860,18 +877,6 @@ where
 						return;
 					}
 				},
-				net_event = network_events.next() => {
-					if let Some(net_event) = net_event {
-						self.handle_network_event(net_event);
-					} else {
-						error!(target: "beefy", "🥩 Network events stream terminated, closing worker.");
-						return;
-					}
-				},
-				_ = gossip_engine => {
-					error!(target: "beefy", "🥩 Gossip engine has terminated, closing worker.");
-					return;
-				}
 			}
 
 			// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
