@@ -1322,7 +1322,7 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 
 /// A simple sorted list implementation that does not require any additional pallets. Note, this
 /// does not provide validators in sorted order. If you desire nominators in a sorted order take
-/// a look at [`pallet-bags-list].
+/// a look at [`pallet-bags-list`].
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
 impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	type Score = BalanceOf<T>;
