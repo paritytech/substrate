@@ -2150,7 +2150,8 @@ impl_runtime_apis! {
 			// benchmarking(cached) attr macro to)
 			// TODO: figure out a workaround for this that doesn't involve
 			// manually hard-coding
-			whitelist.push(hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7b99d880ec681799c0cf30e8886371da95ecffd7b6c0f78751baa9d281e0bfa3a6d6f646c70792f74727372790000000000000000000000000000000000000000").to_vec().into());
+			let treasury_key = frame_system::Account::<Runtime>::hashed_key_for(Treasury::account_id());
+			whitelist.push(treasury_key.to_vec().into());
 
 			let mut batches = Vec::<BenchmarkBatch>::new();
 			let params = (&config, &whitelist);
