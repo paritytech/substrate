@@ -458,5 +458,68 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
+	create_swap {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item1, ..) = mint_item::<T, I>(0);
+		let (item2, ..) = mint_item::<T, I>(1);
+		let price = ItemPrice::<T, I>::from(100u32);
+		let duration = T::BlockNumber::max_value();
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, item2, Some(price), Some(duration))
+	verify {
+		assert_last_event::<T, I>(Event::SwapCreated {
+			collection,
+			item: item1,
+			desired_collection: collection,
+			desired_item: item2,
+			price: Some(price),
+			deadline: Some(duration),
+		}.into());
+	}
+
+	cancel_swap {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item1, ..) = mint_item::<T, I>(0);
+		let (item2, ..) = mint_item::<T, I>(1);
+		let price = ItemPrice::<T, I>::from(100u32);
+		let duration = T::BlockNumber::max_value();
+		let origin = SystemOrigin::Signed(caller.clone()).into();
+		Nfts::<T, I>::create_swap(origin, collection, item1, collection, item2, Some(price), Some(duration))?;
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item1)
+	verify {
+		assert_last_event::<T, I>(Event::SwapCancelled {
+			collection,
+			item: item1,
+			desired_collection: collection,
+			desired_item: item2,
+			price: Some(price),
+			deadline: Some(duration),
+		}.into());
+	}
+
+	claim_swap {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item1, ..) = mint_item::<T, I>(0);
+		let (item2, ..) = mint_item::<T, I>(1);
+		let price = ItemPrice::<T, I>::from(100u32);
+		let duration = T::BlockNumber::max_value();
+		let user2: T::AccountId = account("user2", 0, SEED);
+		let user2_lookup = T::Lookup::unlookup(user2.clone());
+		let origin = SystemOrigin::Signed(caller.clone());
+		Nfts::<T, I>::transfer(origin.clone().into(), collection, item1, user2_lookup)?;
+		Nfts::<T, I>::create_swap(origin.clone().into(), collection, item1, collection, item2, Some(price), Some(duration))?;
+	}: _(SystemOrigin::Signed(user2.clone()), collection, item2, collection, item1, Some(price.clone()))
+	verify {
+		assert_last_event::<T, I>(Event::SwapClaimed {
+			send_collection: collection,
+			send_item: item2,
+			send_item_owner: user2,
+			receive_collection: collection,
+			receive_item: item1,
+			receive_item_owner: caller,
+			price: Some(price),
+			deadline: Some(duration),
+		}.into());
+	}
+
 	impl_benchmark_test_suite!(Nfts, crate::mock::new_test_ext(), crate::mock::Test);
 }

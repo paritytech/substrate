@@ -954,3 +954,211 @@ fn buy_item_should_work() {
 		}
 	});
 }
+
+#[test]
+fn create_cancel_swap_should_work() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		let user_id = 1;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+		let price = 1;
+		let duration = 2;
+		let expect_deadline = 3;
+
+		assert_ok!(Nfts::force_create(Origin::root(), collection_id, user_id, true));
+
+		assert_ok!(Nfts::mint(Origin::signed(user_id), collection_id, item_1, user_id));
+		assert_ok!(Nfts::mint(Origin::signed(user_id), collection_id, item_2, user_id));
+
+		assert_ok!(Nfts::create_swap(
+			Origin::signed(user_id),
+			collection_id,
+			item_1,
+			collection_id,
+			item_2,
+			Some(price),
+			Some(duration),
+		));
+
+		let swap = PendingSwapOf::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(swap.desired_collection, collection_id);
+		assert_eq!(swap.desired_item, item_2);
+		assert_eq!(swap.price, Some(price));
+		assert_eq!(swap.deadline, Some(expect_deadline));
+
+		assert!(events().contains(&Event::<Test>::SwapCreated {
+			collection: collection_id,
+			item: item_1,
+			desired_collection: collection_id,
+			desired_item: item_2,
+			price: Some(price),
+			deadline: Some(expect_deadline),
+		}));
+
+		// validate we can cancel the swap
+		assert_ok!(Nfts::cancel_swap(Origin::signed(user_id), collection_id, item_1));
+		assert!(events().contains(&Event::<Test>::SwapCancelled {
+			collection: collection_id,
+			item: item_1,
+			desired_collection: collection_id,
+			desired_item: item_2,
+			price: Some(price),
+			deadline: Some(expect_deadline),
+		}));
+		assert!(!PendingSwapOf::<Test>::contains_key(collection_id, item_1));
+
+		// validate anyone can cancel the expired swap
+		assert_ok!(Nfts::create_swap(
+			Origin::signed(user_id),
+			collection_id,
+			item_1,
+			collection_id,
+			item_2,
+			Some(price),
+			Some(duration),
+		));
+		assert_noop!(
+			Nfts::cancel_swap(Origin::signed(user_id + 1), collection_id, item_1),
+			Error::<Test>::NoPermission
+		);
+		System::set_block_number(expect_deadline + 1);
+		assert_ok!(Nfts::cancel_swap(Origin::signed(user_id + 1), collection_id, item_1));
+	});
+}
+
+#[test]
+fn claim_swap_should_work() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		let user_1 = 1;
+		let user_2 = 2;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+		let item_3 = 3;
+		let item_4 = 4;
+		let item_5 = 5;
+		let price = 100;
+		let duration = 2;
+		let initial_balance = 1000;
+		let deadline = 1 + duration;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+
+		assert_ok!(Nfts::force_create(Origin::root(), collection_id, user_1, true));
+
+		assert_ok!(Nfts::mint(Origin::signed(user_1), collection_id, item_1, user_1));
+		assert_ok!(Nfts::mint(Origin::signed(user_1), collection_id, item_2, user_2));
+		assert_ok!(Nfts::mint(Origin::signed(user_1), collection_id, item_3, user_2));
+		assert_ok!(Nfts::mint(Origin::signed(user_1), collection_id, item_4, user_1));
+		assert_ok!(Nfts::mint(Origin::signed(user_1), collection_id, item_5, user_2));
+
+		assert_ok!(Nfts::create_swap(
+			Origin::signed(user_1),
+			collection_id,
+			item_1,
+			collection_id,
+			item_2,
+			Some(price),
+			Some(duration),
+		));
+
+		// validate the deadline
+		System::set_block_number(5);
+		assert_noop!(
+			Nfts::claim_swap(
+				Origin::signed(user_2),
+				collection_id,
+				item_2,
+				collection_id,
+				item_1,
+				Some(price),
+			),
+			Error::<Test>::DeadlineExpired
+		);
+		System::set_block_number(1);
+
+		// validate edge cases
+		assert_noop!(
+			Nfts::claim_swap(
+				Origin::signed(user_2),
+				collection_id,
+				item_2,
+				collection_id,
+				item_4, // no swap was created for that asset
+				Some(price),
+			),
+			Error::<Test>::UnknownSwap
+		);
+		assert_noop!(
+			Nfts::claim_swap(
+				Origin::signed(user_2),
+				collection_id,
+				item_4, // not my item
+				collection_id,
+				item_1,
+				Some(price),
+			),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			Nfts::claim_swap(
+				Origin::signed(user_2),
+				collection_id,
+				item_5, // my item, but not the one another part wants
+				collection_id,
+				item_1,
+				Some(price),
+			),
+			Error::<Test>::UnknownSwap
+		);
+		assert_noop!(
+			Nfts::claim_swap(
+				Origin::signed(user_2),
+				collection_id,
+				item_2,
+				collection_id,
+				item_1,
+				Some(price + 1) // wrong price
+			),
+			Error::<Test>::UnknownSwap
+		);
+
+		assert_ok!(Nfts::claim_swap(
+			Origin::signed(user_2),
+			collection_id,
+			item_2,
+			collection_id,
+			item_1,
+			Some(price),
+		));
+
+		// validate the new owner
+		let item = Item::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(item.owner, user_2);
+		let item = Item::<Test>::get(collection_id, item_2).unwrap();
+		assert_eq!(item.owner, user_1);
+
+		// validate the balances
+		assert_eq!(Balances::total_balance(&user_1), initial_balance - price);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance + price);
+
+		// ensure we reset the swap
+		assert!(!PendingSwapOf::<Test>::contains_key(collection_id, item_1));
+
+		// validate the event
+		assert!(events().contains(&Event::<Test>::SwapClaimed {
+			send_collection: collection_id,
+			send_item: item_2,
+			send_item_owner: user_2,
+			receive_collection: collection_id,
+			receive_item: item_1,
+			receive_item_owner: user_1,
+			price: Some(price),
+			deadline: Some(deadline),
+		}));
+	});
+}

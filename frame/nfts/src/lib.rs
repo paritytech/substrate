@@ -38,6 +38,7 @@ mod tests;
 mod functions;
 mod impl_nonfungibles;
 mod types;
+mod features;
 
 pub mod weights;
 
@@ -277,6 +278,18 @@ pub mod pallet {
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
 
+	#[pallet::storage]
+	/// Handles all the pending swaps.
+	pub(super) type PendingSwapOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		Blake2_128Concat,
+		T::ItemId,
+		PendingSwap<T::CollectionId, T::ItemId, ItemPrice<T, I>, <T as SystemConfig>::BlockNumber>,
+		OptionQuery,
+	>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -388,6 +401,35 @@ pub mod pallet {
 			seller: T::AccountId,
 			buyer: T::AccountId,
 		},
+		/// An `item` swap intent was created.
+		SwapCreated {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			desired_collection: T::CollectionId,
+			desired_item: T::ItemId,
+			price: Option<ItemPrice<T, I>>,
+			deadline: Option<<T as SystemConfig>::BlockNumber>,
+		},
+		/// The swap was cancelled.
+		SwapCancelled {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			desired_collection: T::CollectionId,
+			desired_item: T::ItemId,
+			price: Option<ItemPrice<T, I>>,
+			deadline: Option<<T as SystemConfig>::BlockNumber>,
+		},
+		/// The swap has been claimed.
+		SwapClaimed {
+			send_collection: T::CollectionId,
+			send_item: T::ItemId,
+			send_item_owner: T::AccountId,
+			receive_collection: T::CollectionId,
+			receive_item: T::ItemId,
+			receive_item_owner: T::AccountId,
+			price: Option<ItemPrice<T, I>>,
+			deadline: Option<<T as SystemConfig>::BlockNumber>,
+		},
 	}
 
 	#[pallet::error]
@@ -426,12 +468,16 @@ pub mod pallet {
 		MaxSupplyTooSmall,
 		/// The given item ID is unknown.
 		UnknownItem,
+		/// Swap doesn't exist.
+		UnknownSwap,
 		/// Item is not for sale.
 		NotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
 		/// The item has reached its approval limit.
 		ReachedApprovalLimit,
+		/// The deadline has already expired.
+		DeadlineExpired,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1576,6 +1622,78 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_buy_item(collection, item, origin, bid_price)
+		}
+
+		/// Register a new atomic swap, declaring an intention to send an `item` in exchange for
+		/// `desired_item` from origin to target on the current blockchain.
+		/// The target can execute the swap during the specified `duration` of blocks (if set).
+		/// Additionally, the price could be set for the desired `item`.
+		///
+		/// Origin must be Signed and must be an owner of the `item`.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item an owner wants to give.
+		/// - `desired_collection`: The collection of the desired item.
+		/// - `desired_item`: The desired item an owner wants to receive.
+		/// - `maybe_price`: The price an owner is willing to pay for the desired `item`.
+		/// - `maybe_duration`: Optional deadline for the swap. Specified by providing the
+		/// 	number of blocks after which the swap will expire.
+		///
+		/// Emits `SwapCreated` on success.
+		#[pallet::weight(T::WeightInfo::create_swap())]
+		pub fn create_swap(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			desired_collection: T::CollectionId,
+			desired_item: T::ItemId,
+			maybe_price: Option<ItemPrice<T, I>>,
+			maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_create_swap(origin, collection, item, desired_collection, desired_item, maybe_price, maybe_duration)
+		}
+
+		/// Cancel an atomic swap.
+		///
+		/// Origin must be Signed and must be an owner of the `item` if the deadline hasn't expired.
+		///
+		/// - `collection`: The collection of the item.
+		/// - `item`: The item an owner wants to give.
+		///
+		/// Emits `SwapCancelled` on success.
+		#[pallet::weight(T::WeightInfo::cancel_swap())]
+		pub fn cancel_swap(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_cancel_swap(origin, collection, item)
+		}
+
+		/// Claim an atomic swap.
+		///
+		/// Origin must be Signed and must be an owner of the `item`.
+		///
+		/// - `send_collection`: The collection of the item to be sent.
+		/// - `send_item`: The item to be sent.
+		/// - `receive_collection`: The collection of the item to be received.
+		/// - `receive_item`: The item to be received.
+		/// - `maybe_receive_amount`: An optional amount to be received.
+		///
+		/// Emits `SwapClaimed` on success.
+		#[pallet::weight(T::WeightInfo::claim_swap())]
+		pub fn claim_swap(
+			origin: OriginFor<T>,
+			send_collection: T::CollectionId,
+			send_item: T::ItemId,
+			receive_collection: T::CollectionId,
+			receive_item: T::ItemId,
+			maybe_receive_amount: Option<ItemPrice<T, I>>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_claim_swap(origin, send_collection, send_item, receive_collection, receive_item, maybe_receive_amount)
 		}
 	}
 }

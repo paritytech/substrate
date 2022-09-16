@@ -73,6 +73,9 @@ pub trait WeightInfo {
 	fn set_collection_max_supply() -> Weight;
 	fn set_price() -> Weight;
 	fn buy_item() -> Weight;
+	fn create_swap() -> Weight;
+	fn cancel_swap() -> Weight;
+	fn claim_swap() -> Weight;
 }
 
 /// Weights for pallet_nfts using the Substrate node and recommended hardware.
@@ -294,6 +297,27 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Nfts Class (r:1 w:0)
 	// Storage: Nfts Account (r:0 w:2)
 	fn buy_item() -> Weight {
+		Weight::from_ref_time(47_967_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	// Storage: Nfts Asset (r:1 w:0)
+	// Storage: Nfts PendingSwapOf (r:0 w:1)
+	fn create_swap() -> Weight {
+		Weight::from_ref_time(47_967_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	// Storage: Nfts Asset (r:1 w:0)
+	// Storage: Nfts PendingSwapOf (r:0 w:1)
+	fn cancel_swap() -> Weight {
+		Weight::from_ref_time(47_967_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
+	// Storage: Nfts Asset (r:1 w:0)
+	// Storage: Nfts PendingSwapOf (r:0 w:1)
+	fn claim_swap() -> Weight {
 		Weight::from_ref_time(47_967_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(3 as u64))
 			.saturating_add(T::DbWeight::get().writes(4 as u64))
@@ -521,5 +545,26 @@ impl WeightInfo for () {
 		Weight::from_ref_time(47_967_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(3 as u64))
 			.saturating_add(RocksDbWeight::get().writes(4 as u64))
+	}
+	// Storage: Nfts Asset (r:1 w:0)
+	// Storage: Nfts PendingSwapOf (r:0 w:1)
+	fn create_swap() -> Weight {
+		Weight::from_ref_time(24_745_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+	}
+	// Storage: Nfts Asset (r:1 w:0)
+	// Storage: Nfts PendingSwapOf (r:0 w:1)
+	fn cancel_swap() -> Weight {
+		Weight::from_ref_time(24_745_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+	}
+	// Storage: Nfts Asset (r:1 w:0)
+	// Storage: Nfts PendingSwapOf (r:0 w:1)
+	fn claim_swap() -> Weight {
+		Weight::from_ref_time(24_745_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 }
