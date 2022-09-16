@@ -478,6 +478,10 @@ pub mod pallet {
 		Withdraw { who: T::AccountId, amount: T::Balance },
 		/// Some amount was removed from the account (e.g. for misbehavior).
 		Slashed { who: T::AccountId, amount: T::Balance },
+		/// Some free balance was locked out from specific operations.
+		Locked { who: T::AccountId, amount: T::Balance, reason: Reasons },
+		/// Some balance that was locked out from specific operations was freed.
+		Unlocked { who: T::AccountId, amount: T::Balance, reason: Reasons },
 	}
 
 	#[pallet::error]
@@ -952,10 +956,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				A runtime configuration adjustment may be needed."
 			);
 		}
+
+		let mut prev_misc_frozen = Zero::zero();
+		let mut prev_fee_frozen = Zero::zero();
+		let mut after_misc_frozen = Zero::zero();
+		let mut after_fee_frozen = Zero::zero();
 		// No way this can fail since we do not alter the existential balances.
 		let res = Self::mutate_account(who, |b| {
+			prev_misc_frozen = b.misc_frozen;
+			prev_fee_frozen = b.fee_frozen;
 			b.misc_frozen = Zero::zero();
 			b.fee_frozen = Zero::zero();
+
 			for l in locks.iter() {
 				if l.reasons == Reasons::All || l.reasons == Reasons::Misc {
 					b.misc_frozen = b.misc_frozen.max(l.amount);
@@ -964,6 +976,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					b.fee_frozen = b.fee_frozen.max(l.amount);
 				}
 			}
+
+			after_misc_frozen = b.misc_frozen;
+			after_fee_frozen = b.fee_frozen;
 		});
 		debug_assert!(res.is_ok());
 
@@ -988,6 +1003,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				);
 			}
 		}
+
+		let deposit_lock_event = |prev: T::Balance, after: T::Balance, reason: Reasons| {
+			if prev < after {
+				let amount = after - prev;
+				Self::deposit_event(Event::Locked { who: who.clone(), amount, reason });
+			} else if prev > after {
+				let amount = prev - after;
+				Self::deposit_event(Event::Unlocked { who: who.clone(), amount, reason });
+			}
+		};
+
+		deposit_lock_event(prev_misc_frozen, after_misc_frozen, Reasons::Misc);
+		deposit_lock_event(prev_fee_frozen, after_fee_frozen, Reasons::Fee);
 	}
 
 	/// Move the reserved balance of one account into the balance of another, according to `status`.
