@@ -62,7 +62,7 @@ pub type BoxBlockImport<B, Transaction> =
 pub type BoxJustificationImport<B> =
 	Box<dyn JustificationImport<B, Error = ConsensusError> + Send + Sync>;
 
-/// Maps to the Origin used by the network.
+/// Maps to the RuntimeOrigin used by the network.
 pub type RuntimeOrigin = libp2p::PeerId;
 
 /// Block data used by the queue.
