@@ -2580,3 +2580,110 @@ pub mod pallet_prelude {
 /// 	```
 /// * use the newest nightly possible.
 pub use frame_support_procedural::pallet;
+
+use sp_std::vec::Vec;
+
+pub trait StreamRead {
+	type Iterator: sp_std::iter::Iterator;
+
+	fn stream(key: Vec<u8>) -> Self::Iterator;
+}
+
+pub struct StreamReadVec<T> {
+	marker: sp_std::marker::PhantomData<T>,
+	input: StorageInput,
+	length: u32,
+	read: u32,
+}
+
+impl<T> StreamReadVec<T> {
+	pub fn new(key: Vec<u8>) -> Result<Self, codec::Error> {
+		let mut input = StorageInput::new(key)?;
+		let length = if input.exists { codec::Compact::<u32>::decode(&mut input)?.0 } else { 0 };
+
+		Ok(Self { marker: sp_std::marker::PhantomData, input, length, read: 0 })
+	}
+}
+
+impl<T: codec::Decode> sp_std::iter::Iterator for StreamReadVec<T> {
+	type Item = T;
+
+	fn next(&mut self) -> Option<T> {
+		if self.read >= self.length {
+			None
+		} else {
+			self.read += 1;
+
+			codec::Decode::decode(&mut self.input).ok()
+		}
+	}
+}
+
+impl<T: codec::Decode> StreamRead for Vec<T> {
+	type Iterator = StreamReadVec<T>;
+
+	fn stream(key: Vec<u8>) -> Self::Iterator {
+		StreamReadVec::new(key).unwrap()
+	}
+}
+
+pub struct StorageInput {
+	key: Vec<u8>,
+	offset: u32,
+	total_length: u32,
+	exists: bool,
+	buffer: Vec<u8>,
+	buffer_pos: usize,
+}
+
+impl StorageInput {
+	pub fn new(key: Vec<u8>) -> Result<Self, codec::Error> {
+		let (total_length, exists) = if let Some(len) = sp_io::storage::read(&key, &mut [], 0) {
+			(len, true)
+		} else {
+			(0, false)
+		};
+
+		Ok(Self { total_length, offset: 0, key, exists, buffer: Vec::with_capacity(2048), buffer_pos: 0 })
+	}
+
+	fn fill_buffer(&mut self) {
+		self.buffer.copy_within(self.buffer_pos.., 0);
+		unsafe {
+			self.buffer.set_len(self.buffer.capacity());
+		}
+
+		if let Some(read) =
+			sp_io::storage::read(&self.key, &mut self.buffer[self.buffer_pos..], self.offset)
+		{
+			unsafe {
+				self.buffer.set_len(sp_std::cmp::min(
+					self.buffer_pos + read as usize,
+					self.buffer.len() - self.buffer_pos,
+				));
+			}
+
+			self.offset += read;
+			self.buffer_pos = 0;
+		}
+	}
+}
+
+impl codec::Input for StorageInput {
+	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
+		Ok(Some(self.total_length.saturating_sub(self.offset) as usize))
+	}
+
+	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		if into.len() > self.buffer.capacity() {
+			unimplemented!()
+		} else if self.buffer_pos + into.len() > self.buffer.len() {
+			self.fill_buffer();
+		}
+
+		let end = self.buffer_pos + into.len();
+		into[..].copy_from_slice(&self.buffer[self.buffer_pos..end]);
+
+		Ok(())
+	}
+}
