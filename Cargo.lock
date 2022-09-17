@@ -593,9 +593,9 @@ dependencies = [
 
 [[package]]
 name = "blake2"
-version = "0.10.2"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b94ba84325db59637ffc528bbe8c7f86c02c57cff5c0e2b9b00f9a851f42f309"
+checksum = "b9cf849ee05b2ee5fba5e36f97ff8ec2533916700fc0758d40d92136a42f3388"
 dependencies = [
  "digest 0.10.3",
 ]
@@ -9751,7 +9751,7 @@ version = "6.0.0"
 dependencies = [
  "base58",
  "bitflags",
- "blake2-rfc",
+ "blake2",
  "byteorder",
  "criterion",
  "dyn-clonable",
@@ -11580,9 +11580,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-instrument"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bca81f5279342b38b17d9acbf007a46ddeb73144e2bd5f0a21bfa9fc5d4ab3e"
+checksum = "aa1dafb3e60065305741e83db35c6c2584bb3725b692b5b66148a38d72ace6cd"
 dependencies = [
  "parity-wasm 0.45.0",
 ]

@@ -618,11 +618,11 @@ benchmarks! {
 			imported_functions: vec![ImportedFunction {
 				module: "seal0",
 				name: "gas",
-				params: vec![ValueType::I32],
+				params: vec![ValueType::I64],
 				return_type: None,
 			}],
 			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
-				Instruction::I32Const(42),
+				Instruction::I64Const(42),
 				Instruction::Call(0),
 			])),
 			.. Default::default()
