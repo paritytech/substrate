@@ -19,10 +19,11 @@
 //! and depositing logs.
 
 use crate::{
-	AccountId, AuthorityId, Block, BlockNumber, Digest, Extrinsic, Header, Transfer, H256 as Hash,
+	AccountId, AuthorityId, Block, BlockNumber, Digest, Extrinsic, Header, Runtime, Transfer,
+	H256 as Hash,
 };
 use codec::{Decode, Encode, KeyedVec};
-use frame_support::{storage, traits::StorageInstance};
+use frame_support::storage;
 use sp_core::storage::well_known_keys;
 use sp_io::{hashing::blake2_256, storage::root as storage_root, trie};
 use sp_runtime::{
@@ -47,66 +48,30 @@ mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
-	pub struct ExtrinsicDataPrefix;
-	impl StorageInstance for ExtrinsicDataPrefix {
-		fn pallet_prefix() -> &'static str {
-			"TestRuntime"
-		}
-		const STORAGE_PREFIX: &'static str = "ExtrinsicData";
-	}
-	pub type ExtrinsicData =
-		StorageMap<ExtrinsicDataPrefix, Blake2_128Concat, u32, Vec<u8>, ValueQuery>;
+	#[pallet::storage]
+	pub type ExtrinsicData<T> = StorageMap<_, Blake2_128Concat, u32, Vec<u8>, ValueQuery>;
 
 	// The current block number being processed. Set by `execute_block`.
-	pub struct NumberPrefix;
-	impl StorageInstance for NumberPrefix {
-		fn pallet_prefix() -> &'static str {
-			"TestRuntime"
-		}
-		const STORAGE_PREFIX: &'static str = "Number";
-	}
-	pub type Number = StorageValue<NumberPrefix, BlockNumber, OptionQuery>;
+	#[pallet::storage]
+	pub type Number<T> = StorageValue<_, BlockNumber, OptionQuery>;
 
-	pub struct ParentHashPrefix;
-	impl StorageInstance for ParentHashPrefix {
-		fn pallet_prefix() -> &'static str {
-			"TestRuntime"
-		}
-		const STORAGE_PREFIX: &'static str = "ParentHash";
-	}
-	pub type ParentHash = StorageValue<ParentHashPrefix, Hash, ValueQuery>;
+	#[pallet::storage]
+	pub type ParentHash<T> = StorageValue<_, Hash, ValueQuery>;
 
-	pub struct NewAuthoritiesPrefix;
-	impl StorageInstance for NewAuthoritiesPrefix {
-		fn pallet_prefix() -> &'static str {
-			"TestRuntime"
-		}
-		const STORAGE_PREFIX: &'static str = "NewAuthorities";
-	}
-	pub type NewAuthorities = StorageValue<NewAuthoritiesPrefix, Vec<AuthorityId>, OptionQuery>;
+	#[pallet::storage]
+	pub type NewAuthorities<T> = StorageValue<_, Vec<AuthorityId>, OptionQuery>;
 
-	pub struct StorageDigestPrefix;
-	impl StorageInstance for StorageDigestPrefix {
-		fn pallet_prefix() -> &'static str {
-			"TestRuntime"
-		}
-		const STORAGE_PREFIX: &'static str = "StorageDigest";
-	}
-	pub type StorageDigest = StorageValue<StorageDigestPrefix, Digest, OptionQuery>;
+	#[pallet::storage]
+	pub type StorageDigest<T> = StorageValue<_, Digest, OptionQuery>;
 
-	pub struct AuthoritiesPrefix;
-	impl StorageInstance for AuthoritiesPrefix {
-		fn pallet_prefix() -> &'static str {
-			"TestRuntime"
-		}
-		const STORAGE_PREFIX: &'static str = "Authorities";
-	}
-	pub type Authorities = StorageValue<AuthoritiesPrefix, Vec<AuthorityId>, ValueQuery>;
+	#[pallet::storage]
+	pub type Authorities<T> = StorageValue<_, Vec<AuthorityId>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -117,7 +82,7 @@ mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			Authorities::put(self.authorities.clone());
+			<Authorities<T>>::put(self.authorities.clone());
 		}
 	}
 }
@@ -136,9 +101,9 @@ pub fn nonce_of(who: AccountId) -> u64 {
 
 pub fn initialize_block(header: &Header) {
 	// populate environment.
-	<Number>::put(&header.number);
-	<ParentHash>::put(&header.parent_hash);
-	<StorageDigest>::put(header.digest());
+	<Number<Runtime>>::put(&header.number);
+	<ParentHash<Runtime>>::put(&header.parent_hash);
+	<StorageDigest<Runtime>>::put(header.digest());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 
 	// try to read something that depends on current header digest
@@ -149,15 +114,15 @@ pub fn initialize_block(header: &Header) {
 }
 
 pub fn authorities() -> Vec<AuthorityId> {
-	Authorities::get()
+	<Authorities<Runtime>>::get()
 }
 
 pub fn get_block_number() -> Option<BlockNumber> {
-	Number::get()
+	<Number<Runtime>>::get()
 }
 
 pub fn take_block_number() -> Option<BlockNumber> {
-	Number::take()
+	<Number<Runtime>>::take()
 }
 
 #[derive(Copy, Clone)]
@@ -254,7 +219,7 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 	let extrinsic_index: u32 =
 		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
 	let result = execute_transaction_backend(&utx, extrinsic_index);
-	ExtrinsicData::insert(extrinsic_index, utx.encode());
+	<ExtrinsicData<Runtime>>::insert(extrinsic_index, utx.encode());
 	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
 	result
 }
@@ -263,13 +228,14 @@ pub fn execute_transaction(utx: Extrinsic) -> ApplyExtrinsicResult {
 pub fn finalize_block() -> Header {
 	use sp_core::storage::StateVersion;
 	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
-	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
+	let txs: Vec<_> = (0..extrinsic_index).map(<ExtrinsicData<Runtime>>::take).collect();
 	let extrinsics_root = trie::blake2_256_ordered_root(txs, StateVersion::V0);
-	let number = <Number>::take().expect("Number is set by `initialize_block`");
-	let parent_hash = <ParentHash>::take();
-	let mut digest = <StorageDigest>::take().expect("StorageDigest is set by `initialize_block`");
+	let number = <Number<Runtime>>::take().expect("Number is set by `initialize_block`");
+	let parent_hash = <ParentHash<Runtime>>::take();
+	let mut digest =
+		<StorageDigest<Runtime>>::take().expect("StorageDigest is set by `initialize_block`");
 
-	let o_new_authorities = <NewAuthorities>::take();
+	let o_new_authorities = <NewAuthorities<Runtime>>::take();
 
 	// This MUST come after all changes to storage are done. Otherwise we will fail the
 	// “Storage root does not match that calculated” assertion.
@@ -347,7 +313,7 @@ fn execute_store(data: Vec<u8>) -> ApplyExtrinsicResult {
 }
 
 fn execute_new_authorities_backend(new_authorities: &[AuthorityId]) -> ApplyExtrinsicResult {
-	NewAuthorities::put(new_authorities.to_vec());
+	<NewAuthorities<Runtime>>::put(new_authorities.to_vec());
 	Ok(Ok(()))
 }
 
