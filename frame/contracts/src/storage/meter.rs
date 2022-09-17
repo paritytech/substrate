@@ -34,7 +34,7 @@ use sp_runtime::{
 	traits::{Saturating, Zero},
 	FixedPointNumber, FixedU128,
 };
-use sp_std::marker::PhantomData;
+use sp_std::{marker::PhantomData, vec::Vec};
 
 /// Deposit that uses the native currency's balance type.
 pub type DepositOf<T> = Deposit<BalanceOf<T>>;
