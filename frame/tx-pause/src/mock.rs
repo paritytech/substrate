@@ -77,17 +77,28 @@ impl pallet_balances::Config for Test {
 parameter_types! {
 	pub const PauseOrigin: u64 = 1;
 	pub const UnpauseOrigin: u64 = 2;
-  pub const MaxNameLen: u32 = 30;
+  pub const MaxNameLen: u32 = 50;
   pub const PauseTooLongNames: bool = false;
 }
 
+// pub struct MockUnpausablePallets;
+// impl Contains<BoundedVec<u8,MaxNameLen>> for MockUnpausablePallets {
+// 	fn contains(bounded_vec: &BoundedVec<u8,MaxNameLen>) -> bool {
+// 		bounded_vec. 
+// 		todo!() // What does this need to be to properly impl contains?
+// 	}
+// }
+
 pub struct MockUnpausablePallets;
-impl Contains<BoundedVec<u8,MaxNameLen>> for MockUnpausablePallets {
-	fn contains(_vec: &BoundedVec<u8,MaxNameLen>) -> bool {
-		todo!() // What does this need to be to properly impl contains?
+impl Contains<PalletNameOf<Test>> for MockUnpausablePallets {
+	fn contains(pallet: &PalletNameOf<Test>) -> bool {
+		match pallet {
+			<TxPause as PalletInfoAccess>::name() => true,
+			b"unpausable_pallet" => true,
+			_ => false,
+		}
 	}
 }
-
 // Required impl to use some <Configured Origin>::get() in tests
 impl SortedMembers<u64> for PauseOrigin {
 	fn sorted_members() -> Vec<u64> {
@@ -137,13 +148,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.assimilate_storage(&mut t)
 	.unwrap();
 
-	// TODO requires a GenesisConfig impl
-	// GenesisBuild::<Test>::assimilate_storage(
-	// 	&pallet_tx_pause::GenesisConfig {
-	// 	},
-	// 	&mut t,
-	// )
-	// .unwrap();
+	GenesisBuild::<Test>::assimilate_storage(
+		&pallet_tx_pause::GenesisConfig {
+			paused: vec![],
+			_phantom: Default::default(),
+		},
+		&mut t,
+	)
+	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| {
