@@ -423,3 +423,21 @@ impl SubAssign for Weight {
 		};
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn compact_weight_v1_can_be_decoded_as_v2() {
+		type WeightV1 = u64;
+
+		let weight_v1: WeightV1 = 12345;
+		let compact_weight_v1 = Compact(weight_v1);
+		let encoded = compact_weight_v1.encode();
+
+		// Decode as weight v2
+		let decoded: Weight = Decode::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(decoded, Weight { ref_time: weight_v1, proof_size: 0 });
+	}
+}
