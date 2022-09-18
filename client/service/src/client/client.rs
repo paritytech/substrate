@@ -357,7 +357,7 @@ where
 			let genesis_storage =
 				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
 			let genesis_state_version =
-				Self::resolve_state_version_from_wasm(&genesis_storage, &executor)?;
+				resolve_state_version_from_wasm::<Block, _>(&genesis_storage, &executor)?;
 			let mut op = backend.begin_operation()?;
 			let state_root =
 				op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
@@ -631,7 +631,7 @@ where
 						// This is use by fast sync for runtime version to be resolvable from
 						// changes.
 						let state_version =
-							Self::resolve_state_version_from_wasm(&storage, &self.executor)?;
+							resolve_state_version_from_wasm::<Block, _>(&storage, &self.executor)?;
 						let state_root = operation.op.reset_storage(storage, state_version)?;
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
@@ -1095,34 +1095,38 @@ where
 		trace!("Collected {} uncles", uncles.len());
 		Ok(uncles)
 	}
+}
 
-	fn resolve_state_version_from_wasm(
-		storage: &Storage,
-		executor: &E,
-	) -> sp_blockchain::Result<StateVersion> {
-		if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
-			let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
+/// Return the genesis state version given the genesis storage and executor.
+pub fn resolve_state_version_from_wasm<Block, E>(
+	storage: &Storage,
+	executor: &E,
+) -> sp_blockchain::Result<StateVersion>
+where
+	Block: BlockT,
+	E: RuntimeVersionOf,
+{
+	if let Some(wasm) = storage.top.get(well_known_keys::CODE) {
+		let mut ext = sp_state_machine::BasicExternalities::new_empty(); // just to read runtime version.
 
-			let code_fetcher = sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
-			let runtime_code = sp_core::traits::RuntimeCode {
-				code_fetcher: &code_fetcher,
-				heap_pages: None,
-				hash: {
-					use std::hash::{Hash, Hasher};
-					let mut state = DefaultHasher::new();
-					wasm.hash(&mut state);
-					state.finish().to_le_bytes().to_vec()
-				},
-			};
-			let runtime_version =
-				RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
-					.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))?;
-			Ok(runtime_version.state_version())
-		} else {
-			Err(sp_blockchain::Error::VersionInvalid(
-				"Runtime missing from initial storage, could not read state version.".to_string(),
-			))
-		}
+		let code_fetcher = sp_core::traits::WrappedRuntimeCode(wasm.as_slice().into());
+		let runtime_code = sp_core::traits::RuntimeCode {
+			code_fetcher: &code_fetcher,
+			heap_pages: None,
+			hash: {
+				use std::hash::{Hash, Hasher};
+				let mut state = DefaultHasher::new();
+				wasm.hash(&mut state);
+				state.finish().to_le_bytes().to_vec()
+			},
+		};
+		let runtime_version = RuntimeVersionOf::runtime_version(executor, &mut ext, &runtime_code)
+			.map_err(|e| sp_blockchain::Error::VersionInvalid(e.to_string()))?;
+		Ok(runtime_version.state_version())
+	} else {
+		Err(sp_blockchain::Error::VersionInvalid(
+			"Runtime missing from initial storage, could not read state version.".to_string(),
+		))
 	}
 }
 

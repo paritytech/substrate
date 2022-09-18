@@ -58,7 +58,7 @@ pub use self::{
 		new_full_parts, spawn_tasks, BuildNetworkParams, KeystoreContainer, NetworkStarter,
 		SpawnTasksParams, TFullBackend, TFullCallExecutor, TFullClient,
 	},
-	client::{ClientConfig, LocalCallExecutor},
+	client::{resolve_state_version_from_wasm, ClientConfig, LocalCallExecutor},
 	error::Error,
 };
 pub use config::{

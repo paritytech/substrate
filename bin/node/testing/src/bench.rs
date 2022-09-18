@@ -397,16 +397,19 @@ impl BenchDb {
 		let task_executor = TaskExecutor::new();
 
 		let backend = sc_service::new_db_backend(db_config).expect("Should not fail");
+		let executor = NativeElseWasmExecutor::new(
+			WasmExecutionMethod::Compiled {
+				instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
+			},
+			None,
+			8,
+			2,
+		);
+		let client_config = sc_service::ClientConfig::default();
+
 		let client = sc_service::new_client(
 			backend.clone(),
-			NativeElseWasmExecutor::new(
-				WasmExecutionMethod::Compiled {
-					instantiation_strategy: WasmtimeInstantiationStrategy::PoolingCopyOnWrite,
-				},
-				None,
-				8,
-				2,
-			),
+			executor,
 			&keyring.generate_genesis(),
 			None,
 			None,
@@ -414,7 +417,7 @@ impl BenchDb {
 			Box::new(task_executor.clone()),
 			None,
 			None,
-			Default::default(),
+			client_config,
 		)
 		.expect("Should not fail");
 
