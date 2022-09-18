@@ -373,23 +373,18 @@ mod tests {
 		.expect("Creates genesis block builder");
 
 		// client is used for the convenience of creating and inserting the genesis block.
-		let _client = crate::client::new_with_backend::<
-			_,
-			_,
-			runtime::Block,
-			_,
-			runtime::RuntimeApi,
-		>(
-			backend.clone(),
-			executor.clone(),
-			genesis_block_builder,
-			None,
-			Box::new(TaskExecutor::new()),
-			None,
-			None,
-			Default::default(),
-		)
-		.expect("Creates a client");
+		let _client =
+			crate::client::new_with_backend::<_, _, runtime::Block, _, runtime::RuntimeApi>(
+				backend.clone(),
+				executor.clone(),
+				genesis_block_builder,
+				None,
+				Box::new(TaskExecutor::new()),
+				None,
+				None,
+				Default::default(),
+			)
+			.expect("Creates a client");
 
 		let call_executor = LocalCallExecutor {
 			backend: backend.clone(),
