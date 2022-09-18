@@ -374,13 +374,8 @@ where
 			} else {
 				NewBlockState::Normal
 			};
-			op.set_block_data(
-				genesis_block.deconstruct().0,
-				Some(vec![]),
-				None,
-				None,
-				block_state,
-			)?;
+			let (header, body) = genesis_block.deconstruct();
+			op.set_block_data(header, Some(body), None, None, block_state)?;
 			backend.commit_operation(op)?;
 		}
 
