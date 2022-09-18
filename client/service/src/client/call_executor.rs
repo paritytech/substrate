@@ -373,7 +373,7 @@ mod tests {
 		.expect("Creates genesis block builder");
 
 		// client is used for the convenience of creating and inserting the genesis block.
-		let _client = substrate_test_runtime_client::client::new_with_backend::<
+		let _client = crate::client::new_with_backend::<
 			_,
 			_,
 			runtime::Block,
