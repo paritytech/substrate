@@ -1527,7 +1527,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
 		ensure!(
-			T::VoterList::iter().all(|x| Self::is_nominator(&x)),
+			T::VoterList::iter().all(|x| <Nominators<T>>::contains_key(&x)),
 			"VoterList contains non-nominators"
 		);
 		T::VoterList::try_state()?;
@@ -1535,10 +1535,6 @@ impl<T: Config> Pallet<T> {
 		Self::check_exposures()?;
 		Self::check_ledgers()?;
 		Self::check_count()
-	}
-
-	fn is_nominator(who: &T::AccountId) -> bool {
-		<Nominators<T>>::contains_key(who)
 	}
 
 	fn check_count() -> Result<(), &'static str> {
