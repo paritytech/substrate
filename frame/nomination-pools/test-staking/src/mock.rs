@@ -126,7 +126,8 @@ impl pallet_staking::Config for Runtime {
 	type ElectionProvider =
 		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking)>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type VoterList = pallet_bags_list::Pallet<Self>;
+	type VoterList = VoterList;
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type OnStakerSlash = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
@@ -137,7 +138,8 @@ parameter_types! {
 	pub static BagThresholds: &'static [VoteWeight] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 }
 
-impl pallet_bags_list::Config for Runtime {
+type VoterBagsListInstance = pallet_bags_list::Instance1;
+impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
@@ -193,7 +195,7 @@ frame_support::construct_runtime!(
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
+		VoterList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<T>},
 	}
 );
