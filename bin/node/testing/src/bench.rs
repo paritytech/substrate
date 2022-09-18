@@ -406,11 +406,18 @@ impl BenchDb {
 			2,
 		);
 		let client_config = sc_service::ClientConfig::default();
+		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+			&keyring.generate_genesis(),
+			client_config.no_genesis,
+			backend.clone(),
+			executor.clone(),
+		)
+		.expect("Failed to create genesis block builder");
 
 		let client = sc_service::new_client(
 			backend.clone(),
 			executor,
-			&keyring.generate_genesis(),
+			genesis_block_builder,
 			None,
 			None,
 			ExecutionExtensions::new(profile.into_execution_strategies(), None, None),

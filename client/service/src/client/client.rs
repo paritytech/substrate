@@ -20,7 +20,7 @@
 
 use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
-	genesis,
+	genesis::BuildGenesisBlock,
 };
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
@@ -69,7 +69,7 @@ use sp_runtime::{
 	traits::{
 		Block as BlockT, HashFor, Header as HeaderT, NumberFor, One, SaturatedConversion, Zero,
 	},
-	BuildStorage, Digest, Justification, Justifications, StateVersion,
+	Digest, Justification, Justifications, StateVersion,
 };
 use sp_state_machine::{
 	prove_child_read, prove_range_read_with_child_with_size, prove_read,
@@ -155,9 +155,10 @@ enum PrepareStorageChangesResult<B: backend::Backend<Block>, Block: BlockT> {
 
 /// Create an instance of in-memory client.
 #[cfg(feature = "test-helpers")]
-pub fn new_in_mem<E, Block, S, RA>(
+pub fn new_in_mem<E, Block, G, RA>(
+	backend: Arc<in_mem::Backend<Block>>,
 	executor: E,
-	genesis_storage: &S,
+	genesis_block_builder: G,
 	keystore: Option<SyncCryptoStorePtr>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
@@ -168,13 +169,16 @@ pub fn new_in_mem<E, Block, S, RA>(
 >
 where
 	E: CodeExecutor + RuntimeVersionOf,
-	S: BuildStorage,
 	Block: BlockT,
+	G: BuildGenesisBlock<
+			Block,
+			BlockImportOperation = <in_mem::Backend<Block> as backend::Backend<Block>>::BlockImportOperation,
+		>,
 {
 	new_with_backend(
-		Arc::new(in_mem::Backend::new()),
+		backend,
 		executor,
-		genesis_storage,
+		genesis_block_builder,
 		keystore,
 		spawn_handle,
 		prometheus_registry,
@@ -214,10 +218,10 @@ impl<Block: BlockT> Default for ClientConfig<Block> {
 /// Create a client with the explicitly provided backend.
 /// This is useful for testing backend implementations.
 #[cfg(feature = "test-helpers")]
-pub fn new_with_backend<B, E, Block, S, RA>(
+pub fn new_with_backend<B, E, Block, G, RA>(
 	backend: Arc<B>,
 	executor: E,
-	build_genesis_storage: &S,
+	genesis_block_builder: G,
 	keystore: Option<SyncCryptoStorePtr>,
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
@@ -226,7 +230,10 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 ) -> sp_blockchain::Result<Client<B, LocalCallExecutor<Block, B, E>, Block, RA>>
 where
 	E: CodeExecutor + RuntimeVersionOf,
-	S: BuildStorage,
+	G: BuildGenesisBlock<
+		Block,
+		BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
+	>,
 	Block: BlockT,
 	B: backend::LocalBackend<Block> + 'static,
 {
@@ -240,7 +247,7 @@ where
 	Client::new(
 		backend,
 		call_executor,
-		build_genesis_storage,
+		genesis_block_builder,
 		Default::default(),
 		Default::default(),
 		extensions,
@@ -341,27 +348,26 @@ where
 	Block::Header: Clone,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
-	pub fn new(
+	pub fn new<G>(
 		backend: Arc<B>,
 		executor: E,
-		build_genesis_storage: &dyn BuildStorage,
+		genesis_block_builder: G,
 		fork_blocks: ForkBlocks<Block>,
 		bad_blocks: BadBlocks<Block>,
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
 		telemetry: Option<TelemetryHandle>,
 		config: ClientConfig<Block>,
-	) -> sp_blockchain::Result<Self> {
+	) -> sp_blockchain::Result<Self>
+	where
+		G: BuildGenesisBlock<
+			Block,
+			BlockImportOperation = <B as backend::Backend<Block>>::BlockImportOperation,
+		>,
+	{
 		let info = backend.blockchain().info();
 		if info.finalized_state.is_none() {
-			let genesis_storage =
-				build_genesis_storage.build_storage().map_err(sp_blockchain::Error::Storage)?;
-			let genesis_state_version =
-				resolve_state_version_from_wasm::<Block, _>(&genesis_storage, &executor)?;
-			let mut op = backend.begin_operation()?;
-			let state_root =
-				op.set_genesis_state(genesis_storage, !config.no_genesis, genesis_state_version)?;
-			let genesis_block = genesis::construct_genesis_block::<Block>(state_root);
+			let (genesis_block, mut op) = genesis_block_builder.build_genesis_block()?;
 			info!(
 				"🔨 Initializing Genesis block/state (state: {}, header-hash: {})",
 				genesis_block.header().state_root(),

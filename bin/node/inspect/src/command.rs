@@ -44,7 +44,22 @@ impl InspectCmd {
 			config.runtime_cache_size,
 		);
 
-		let client = new_full_client::<B, RA, _>(&config, None, executor)?;
+		let backend = sc_service::new_db_backend(config.db_config())?;
+
+		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
+			config.chain_spec.as_storage_builder(),
+			!config.no_genesis(),
+			backend.clone(),
+			executor.clone(),
+		)?;
+
+		let client = new_full_client::<B, RA, _, _>(
+			&config,
+			None,
+			executor,
+			backend,
+			genesis_block_builder,
+		)?;
 		let inspect = Inspector::<B>::new(client);
 
 		match &self.command {
