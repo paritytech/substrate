@@ -626,7 +626,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: Weight,
+			proposal_weight_bound: Weight,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
