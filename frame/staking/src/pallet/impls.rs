@@ -1377,6 +1377,11 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn score_update_worst_case(_who: &T::AccountId, _is_increase: bool) -> Self::Score {
+		unimplemented!()
+	}
 }
 
 /// A simple voter list implementation that does not require any additional pallets. Note, this
