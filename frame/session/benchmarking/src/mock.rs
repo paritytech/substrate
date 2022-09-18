@@ -175,6 +175,7 @@ impl pallet_staking::Config for Test {
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
