@@ -109,4 +109,4 @@ pub use voting::{
 #[cfg(feature = "try-runtime")]
 mod try_runtime;
 #[cfg(feature = "try-runtime")]
-pub use try_runtime::{OnRuntimeUpgradeHelpersExt, Select as TryStateSelect, TryState};
+pub use try_runtime::{Select as TryStateSelect, TryState};
