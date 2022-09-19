@@ -207,7 +207,10 @@ pub struct BlockWeights {
 
 impl Default for BlockWeights {
 	fn default() -> Self {
-		Self::with_sensible_defaults(constants::WEIGHT_PER_SECOND + constants::MAX_PROOF_SIZE_WEIGHT, DEFAULT_NORMAL_RATIO)
+		Self::with_sensible_defaults(
+			constants::WEIGHT_PER_SECOND + constants::MAX_PROOF_SIZE_WEIGHT,
+			DEFAULT_NORMAL_RATIO,
+		)
 	}
 }
 
