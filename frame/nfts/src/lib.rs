@@ -63,6 +63,7 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 
 pub trait Incrementable {
 	fn increment(&self) -> Self;
+	fn initial_value() -> Self;
 }
 
 macro_rules! impl_incrementable {
@@ -71,6 +72,10 @@ macro_rules! impl_incrementable {
 			impl Incrementable for $type {
 				fn increment(&self) -> Self {
 					self.saturating_add(1)
+				}
+
+				fn initial_value() -> Self {
+					0
 				}
 			}
 		)+
@@ -112,7 +117,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the collection of item.
-		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Default + Incrementable;
+		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Incrementable;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
@@ -300,7 +305,7 @@ pub mod pallet {
 	/// Stores the `CollectionId` that is going to be used for the next collection.
 	/// This gets incremented by 1 whenever a new collection is created.
 	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, T::CollectionId, ValueQuery>;
+		StorageValue<_, T::CollectionId, OptionQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -492,7 +497,8 @@ pub mod pallet {
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(origin: OriginFor<T>, admin: AccountIdLookupOf<T>) -> DispatchResult {
-			let collection = NextCollectionId::<T, I>::get();
+			let collection =
+				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
 
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
@@ -532,7 +538,8 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			let collection = NextCollectionId::<T, I>::get();
+			let collection =
+				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
 
 			Self::do_create_collection(
 				collection,

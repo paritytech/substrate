@@ -97,7 +97,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let next_id = collection.increment();
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
-		NextCollectionId::<T, I>::set(next_id);
+		NextCollectionId::<T, I>::set(Some(next_id));
 
 		Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
 		Self::deposit_event(event);
@@ -292,11 +292,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn set_next_id(id: T::CollectionId) {
-		NextCollectionId::<T, I>::set(id);
+		NextCollectionId::<T, I>::set(Some(id));
 	}
 
 	#[cfg(test)]
 	pub fn get_next_id() -> T::CollectionId {
-		NextCollectionId::<T, I>::get()
+		NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value())
 	}
 }
