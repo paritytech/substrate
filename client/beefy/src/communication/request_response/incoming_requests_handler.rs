@@ -17,16 +17,102 @@
 //! Helper for handling (i.e. answering) BEEFY justifications requests from a remote peer.
 
 use beefy_primitives::BEEFY_ENGINE_ID;
+use codec::Decode;
+use futures::{
+	channel::{mpsc, oneshot},
+	StreamExt,
+};
 use log::{debug, trace};
 use sc_client_api::BlockBackend;
-use sc_network::{config as netconfig, config::RequestResponseConfig};
+use sc_network::{config as netconfig, config::RequestResponseConfig, PeerId, ReputationChange};
 use sc_network_common::protocol::ProtocolName;
 use sp_runtime::{generic::BlockId, traits::Block};
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::communication::request_response::{
-	justif_protocol_config, Error, IncomingRequest, IncomingRequestReceiver,
+	on_demand_justifications_protocol_config, Error, JustificationRequest,
 };
+
+/// A request coming in, including a sender for sending responses.
+#[derive(Debug)]
+pub(crate) struct IncomingRequest<B: Block> {
+	/// `PeerId` of sending peer.
+	pub peer: PeerId,
+	/// The sent request.
+	pub payload: JustificationRequest<B>,
+	/// Sender for sending response back.
+	pub pending_response: oneshot::Sender<netconfig::OutgoingResponse>,
+}
+
+impl<B: Block> IncomingRequest<B> {
+	/// Create new `IncomingRequest`.
+	pub fn new(
+		peer: PeerId,
+		payload: JustificationRequest<B>,
+		pending_response: oneshot::Sender<netconfig::OutgoingResponse>,
+	) -> Self {
+		Self { peer, payload, pending_response }
+	}
+
+	/// Try building from raw network request.
+	///
+	/// This function will fail if the request cannot be decoded and will apply passed in
+	/// reputation changes in that case.
+	///
+	/// Params:
+	/// 	- The raw request to decode
+	/// 	- Reputation changes to apply for the peer in case decoding fails.
+	pub fn try_from_raw(
+		raw: netconfig::IncomingRequest,
+		reputation_changes: Vec<ReputationChange>,
+	) -> Result<Self, Error> {
+		let netconfig::IncomingRequest { payload, peer, pending_response } = raw;
+		let payload = match JustificationRequest::decode(&mut payload.as_ref()) {
+			Ok(payload) => payload,
+			Err(err) => {
+				let response = netconfig::OutgoingResponse {
+					result: Err(()),
+					reputation_changes,
+					sent_feedback: None,
+				};
+				if let Err(_) = pending_response.send(response) {
+					return Err(Error::DecodingErrorNoReputationChange(peer, err))
+				}
+				return Err(Error::DecodingError(peer, err))
+			},
+		};
+		Ok(Self::new(peer, payload, pending_response))
+	}
+}
+
+/// Receiver for incoming BEEFY justifications requests.
+///
+/// Takes care of decoding and handling of invalid encoded requests.
+pub(crate) struct IncomingRequestReceiver {
+	raw: mpsc::Receiver<netconfig::IncomingRequest>,
+}
+
+impl IncomingRequestReceiver {
+	pub fn new(inner: mpsc::Receiver<netconfig::IncomingRequest>) -> Self {
+		Self { raw: inner }
+	}
+
+	/// Try to receive the next incoming request.
+	///
+	/// Any received request will be decoded, on decoding errors the provided reputation changes
+	/// will be applied and an error will be reported.
+	pub async fn recv<B, F>(&mut self, reputation_changes: F) -> Result<IncomingRequest<B>, Error>
+	where
+		B: Block,
+		F: FnOnce() -> Vec<ReputationChange>,
+	{
+		let req = match self.raw.next().await {
+			None => return Err(Error::RequestChannelExhausted),
+			Some(raw) => IncomingRequest::<B>::try_from_raw(raw, reputation_changes())?,
+		};
+		Ok(req)
+	}
+}
 
 /// Handler for incoming BEEFY justifications requests from a remote peer.
 pub struct BeefyJustifsRequestHandler<B, Client> {
@@ -43,21 +129,23 @@ where
 {
 	/// Create a new [`BeefyJustifsRequestHandler`].
 	pub fn new(fork_id: Option<&str>, client: Arc<Client>) -> (Self, RequestResponseConfig) {
-		let genesis_hash = client
+		let genesis = client
 			.block_hash(0u32.into())
 			.ok()
 			.flatten()
 			.expect("Genesis block exists; qed");
-		let (request_receiver, config) = justif_protocol_config(genesis_hash, fork_id);
+		let (request_receiver, config) = on_demand_justifications_protocol_config(genesis, fork_id);
 		let justif_protocol_name = config.name.clone();
 
 		(Self { request_receiver, justif_protocol_name, client, _block: PhantomData }, config)
 	}
 
+	/// Network request-response protocol name used by this handler.
 	pub fn protocol_name(&self) -> ProtocolName {
 		self.justif_protocol_name.clone()
 	}
 
+	// Sends back justification response if justification found in client backend.
 	async fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
 		// TODO: validate `request.begin` and change peer reputation for invalid requests.
 

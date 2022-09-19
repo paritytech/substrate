@@ -53,8 +53,7 @@ use crate::{
 		},
 		peers::KnownPeers,
 		request_response::{
-			incoming_handler::BeefyJustifsRequestHandler,
-			outgoing_request::OnDemandJustificationsEngine,
+			outgoing_requests_engine::OnDemandJustificationsEngine, BeefyJustifsRequestHandler,
 		},
 	},
 	import::BeefyBlockImport,

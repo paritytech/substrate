@@ -55,7 +55,7 @@ use beefy_primitives::{
 use crate::{
 	communication::{
 		gossip::{topic, GossipValidator},
-		request_response::outgoing_request::OnDemandJustificationsEngine,
+		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
 	},
 	error::Error,
 	justification::BeefyVersionedFinalityProof,

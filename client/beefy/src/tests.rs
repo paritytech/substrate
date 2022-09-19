@@ -62,7 +62,7 @@ use substrate_test_runtime_client::{runtime::Header, ClientExt};
 use crate::{
 	beefy_block_import_and_links,
 	communication::request_response::{
-		incoming_handler::BeefyJustifsRequestHandler, justif_protocol_config,
+		on_demand_justifications_protocol_config, BeefyJustifsRequestHandler,
 	},
 	gossip_protocol_name,
 	justification::*,
@@ -117,7 +117,7 @@ impl BeefyTestNet {
 		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority) };
 
 		for i in 0..n_authority {
-			let (rx, cfg) = justif_protocol_config(GENESIS_HASH, None);
+			let (rx, cfg) = on_demand_justifications_protocol_config(GENESIS_HASH, None);
 			let justif_protocol_name = cfg.name.clone();
 
 			net.add_authority_peer(vec![cfg]);

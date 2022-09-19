@@ -18,20 +18,20 @@
 
 //! Request/response protocol for syncing BEEFY justifications.
 
-pub mod incoming_handler;
-pub(crate) mod outgoing_request;
+mod incoming_requests_handler;
+pub(crate) mod outgoing_requests_engine;
 
-use futures::{
-	channel::{mpsc, oneshot},
-	StreamExt,
-};
+pub use incoming_requests_handler::BeefyJustifsRequestHandler;
+
+use futures::channel::mpsc;
 use std::time::Duration;
 
 use codec::{Decode, Encode, Error as CodecError};
-use sc_network::{config as netconfig, config::RequestResponseConfig, PeerId, ReputationChange};
+use sc_network::{config::RequestResponseConfig, PeerId};
 use sp_runtime::traits::{Block, NumberFor};
 
 use crate::communication::beefy_protocol_name::justifications_protocol_name;
+use incoming_requests_handler::IncomingRequestReceiver;
 
 // 10 seems reasonable, considering justifs are explicitly requested only
 // for mandatory blocks, by nodes that are syncing/catching-up.
@@ -44,14 +44,16 @@ const JUSTIF_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 ///
 /// Returns a receiver for messages received on this protocol and the requested
 /// `ProtocolConfig`.
-pub(crate) fn justif_protocol_config<Hash: AsRef<[u8]>>(
+///
+/// Consider using [`BeefyJustifsRequestHandler`] instead of this low-level function.
+pub(crate) fn on_demand_justifications_protocol_config<Hash: AsRef<[u8]>>(
 	genesis_hash: Hash,
 	fork_id: Option<&str>,
 ) -> (IncomingRequestReceiver, RequestResponseConfig) {
 	let name = justifications_protocol_name(genesis_hash, fork_id);
 	let fallback_names = vec![];
 	let (tx, rx) = mpsc::channel(JUSTIF_CHANNEL_SIZE);
-	let rx = IncomingRequestReceiver { raw: rx };
+	let rx = IncomingRequestReceiver::new(rx);
 	let cfg = RequestResponseConfig {
 		name,
 		fallback_names,
@@ -69,83 +71,6 @@ pub(crate) fn justif_protocol_config<Hash: AsRef<[u8]>>(
 pub struct JustificationRequest<B: Block> {
 	/// Start collecting proofs from this block.
 	pub begin: NumberFor<B>,
-}
-
-/// A request coming in, including a sender for sending responses.
-#[derive(Debug)]
-pub(crate) struct IncomingRequest<B: Block> {
-	/// `PeerId` of sending peer.
-	pub peer: PeerId,
-	/// The sent request.
-	pub payload: JustificationRequest<B>,
-	/// Sender for sending response back.
-	pub pending_response: oneshot::Sender<netconfig::OutgoingResponse>,
-}
-
-impl<B: Block> IncomingRequest<B> {
-	/// Create new `IncomingRequest`.
-	pub fn new(
-		peer: PeerId,
-		payload: JustificationRequest<B>,
-		pending_response: oneshot::Sender<netconfig::OutgoingResponse>,
-	) -> Self {
-		Self { peer, payload, pending_response }
-	}
-
-	/// Try building from raw network request.
-	///
-	/// This function will fail if the request cannot be decoded and will apply passed in
-	/// reputation changes in that case.
-	///
-	/// Params:
-	/// 		- The raw request to decode
-	/// 		- Reputation changes to apply for the peer in case decoding fails.
-	fn try_from_raw(
-		raw: netconfig::IncomingRequest,
-		reputation_changes: Vec<ReputationChange>,
-	) -> std::result::Result<Self, Error> {
-		let netconfig::IncomingRequest { payload, peer, pending_response } = raw;
-		let payload = match JustificationRequest::decode(&mut payload.as_ref()) {
-			Ok(payload) => payload,
-			Err(err) => {
-				let response = netconfig::OutgoingResponse {
-					result: Err(()),
-					reputation_changes,
-					sent_feedback: None,
-				};
-				if let Err(_) = pending_response.send(response) {
-					return Err(Error::DecodingErrorNoReputationChange(peer, err))
-				}
-				return Err(Error::DecodingError(peer, err))
-			},
-		};
-		Ok(Self::new(peer, payload, pending_response))
-	}
-}
-
-/// Receiver for incoming BEEFY justifications requests.
-///
-/// Takes care of decoding and handling of invalid encoded requests.
-pub(crate) struct IncomingRequestReceiver {
-	raw: mpsc::Receiver<netconfig::IncomingRequest>,
-}
-
-impl IncomingRequestReceiver {
-	/// Try to receive the next incoming request.
-	///
-	/// Any received request will be decoded, on decoding errors the provided reputation changes
-	/// will be applied and an error will be reported.
-	pub async fn recv<B, F>(&mut self, reputation_changes: F) -> Result<IncomingRequest<B>>
-	where
-		B: Block,
-		F: FnOnce() -> Vec<ReputationChange>,
-	{
-		let req = match self.raw.next().await {
-			None => return Err(Error::RequestChannelExhausted),
-			Some(raw) => IncomingRequest::<B>::try_from_raw(raw, reputation_changes())?,
-		};
-		Ok(req)
-	}
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -174,6 +99,3 @@ pub enum Error {
 	#[error("Received invalid response.")]
 	InvalidResponse,
 }
-
-/// General result based on above `Error`.
-pub type Result<T> = std::result::Result<T, Error>;
