@@ -132,20 +132,20 @@
 //! added, given the right flag:
 //!
 //! ```ignore
+//! 
 //! #[cfg(feature = try-runtime)]
-//! fn pre_upgrade() -> Result<(), &'static str> {}
+//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
 //! #[cfg(feature = try-runtime)]
-//! fn post_upgrade() -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
-//! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
-//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
-//! will not want to mutate any of the storage that is to be migrated.
+//! and after the migration. Moreover, `pre_upgrade` can return a `Vec<u8>` that contains arbitrary
+//! encoded data (usually some pre-upgrade state) which will be passed to `post_upgrade` after
+//! upgrading and used for post checking.
 //!
 //! #### Logging
 //!

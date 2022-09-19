@@ -287,10 +287,15 @@ where
 	///
 	/// This should only be used for testing.
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		// ensure both `pre_upgrade` and `post_upgrade` won't change the storage root
+		let state = {
+			let _guard = frame_support::StorageNoopGuard::default();
+			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap()
+		};
 		let weight = Self::execute_on_runtime_upgrade();
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
-
+		let _guard = frame_support::StorageNoopGuard::default();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(state)
+			.unwrap();
 		Ok(weight)
 	}
 }
