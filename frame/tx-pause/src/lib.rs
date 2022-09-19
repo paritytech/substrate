@@ -23,6 +23,7 @@ mod benchmarking;
 pub mod mock;
 #[cfg(test)]
 mod tests;
+pub mod weights;
 
 use frame_support::{
 	pallet_prelude::*,
@@ -32,6 +33,7 @@ use frame_system::pallet_prelude::*;
 use sp_std::{convert::TryInto, prelude::*};
 
 pub use pallet::*;
+pub use weights::*;
 
 pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 pub type FunctionNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
@@ -77,7 +79,7 @@ pub mod pallet {
 		type PauseTooLongNames: Get<bool>;
 
 		// Weight information for extrinsics in this pallet.
-		//type WeightInfo: WeightInfo;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -139,7 +141,7 @@ pub mod pallet {
 		///
 		/// Can only be called by [`Config::PauseOrigin`].
 		/// Emits an [`Event::CallPaused`] event on success.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::pause_call())]
 		pub fn pause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
@@ -158,7 +160,7 @@ pub mod pallet {
 		///
 		/// Can only be called by [`Config::UnpauseOrigin`].
 		/// Emits an [`Event::CallUnpaused`] event on success.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::unpause_call())]
 		pub fn unpause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,

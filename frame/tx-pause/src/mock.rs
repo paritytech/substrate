@@ -161,11 +161,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-#[cfg(feature = "runtime-benchmarks")]
-pub fn new_bench_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
-}
-
 pub fn next_block() {
 	TxPause::on_finalize(System::block_number());
 	Balances::on_finalize(System::block_number());
