@@ -179,13 +179,6 @@ pub mod v3 {
 	}
 }
 
-trait Migratable {
-	type From: Get<StorageVersion>;
-	type To: Get<StorageVersion>;
-
-	fn migrate(&self) -> Weight;
-}
-
 #[cfg(test)]
 #[cfg(feature = "try-runtime")]
 mod test {
