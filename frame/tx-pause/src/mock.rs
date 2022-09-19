@@ -86,19 +86,12 @@ parameter_types! {
 
 pub struct MockUnpausablePallets;
 
-impl MockUnpausablePallets {
-	pub fn get() -> Vec<PalletNameOf<Test>> {
-		vec![
-			// b"TxPause".to_vec().try_into().unwrap(), // Explicitly covered in the pallet logic,
-			// not needed.
-			b"UnpausablePallet".to_vec().try_into().unwrap(),
-		]
-	}
-}
-
 impl Contains<PalletNameOf<Test>> for MockUnpausablePallets {
 	fn contains(pallet: &PalletNameOf<Test>) -> bool {
-		MockUnpausablePallets::get().iter().any(|i| i == pallet)
+		let unpausables: Vec<PalletNameOf<Test>> =
+			vec![b"UnpausablePallet".to_vec().try_into().unwrap()];
+
+		unpausables.iter().any(|i| i == pallet)
 	}
 }
 // Required impl to use some <Configured Origin>::get() in tests
