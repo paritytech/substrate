@@ -64,22 +64,22 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 		let version = StorageVersion::get::<Pallet<T>>();
 
 		if version < 7 {
-			return Ok(())
+			return Ok(vec![])
 		}
 
 		if version < 8 {
 			v8::pre_upgrade::<T>()?;
 		}
 
-		Ok(())
+		Ok(vec![])
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		let version = StorageVersion::get::<Pallet<T>>();
 
 		if version < 7 {
