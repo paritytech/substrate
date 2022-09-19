@@ -300,10 +300,7 @@ impl<N, S> From<SignedCommitment<N, S>> for VersionedFinalityProof<N, S> {
 }
 
 #[cfg(test)]
-mod test_data;
-#[cfg(test)]
 mod tests {
-
 	use sp_core::{keccak_256, Pair};
 	use sp_keystore::{testing::KeyStore, SyncCryptoStore, SyncCryptoStorePtr};
 
@@ -315,6 +312,8 @@ mod tests {
 	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
 	type TestVersionedFinalityProof = VersionedFinalityProof<u128, crypto::Signature>;
+
+	const LARGE_RAW_COMMITMENT: &[u8] = include_bytes!("../test-res/large-raw-commitment");
 
 	// The mock signatures are equivalent to the ones produced by the BEEFY keystore
 	fn mock_signatures() -> (crypto::Signature, crypto::Signature) {
@@ -485,6 +484,6 @@ mod tests {
 
 		// then
 		assert_eq!(decoded, Ok(signed));
-		assert_eq!(encoded, array_bytes::hex2bytes_unchecked(test_data::LARGE_RAW_COMMITMENT));
+		assert_eq!(encoded, LARGE_RAW_COMMITMENT);
 	}
 }
