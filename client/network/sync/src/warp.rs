@@ -24,7 +24,7 @@ use crate::{
 };
 use sc_client_api::ProofProvider;
 use sc_network_common::sync::{
-	message::BlockData,
+	message::{BlockAttributes, BlockData, BlockRequest, Direction, FromBlock},
 	warp::{
 		EncodedProof, VerificationResult, WarpProofRequest, WarpSyncPhase, WarpSyncProgress,
 		WarpSyncProvider,
@@ -175,6 +175,25 @@ where
 		match &self.phase {
 			Phase::WarpProof { last_hash, .. } => Some(WarpProofRequest { begin: *last_hash }),
 			Phase::TargetBlock(_) => None,
+			Phase::State(_) => None,
+		}
+	}
+
+	/// Produce next target block request.
+	pub fn next_target_block_request(&self) -> Option<(NumberFor<B>, BlockRequest<B>)> {
+		match &self.phase {
+			Phase::WarpProof { .. } => None,
+			Phase::TargetBlock(header) => {
+				let request = BlockRequest::<B> {
+					id: 0,
+					fields: BlockAttributes::HEADER | BlockAttributes::BODY,
+					from: FromBlock::Hash(header.hash()),
+					to: Some(header.hash()),
+					direction: Direction::Ascending,
+					max: Some(1),
+				};
+				Some((*header.number(), request))
+			},
 			Phase::State(_) => None,
 		}
 	}

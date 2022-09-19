@@ -662,10 +662,11 @@ where
 	}
 
 	fn block_requests(&mut self) -> Box<dyn Iterator<Item = (&PeerId, BlockRequest<B>)> + '_> {
-		if self.allowed_requests.is_empty() ||
-			self.state_sync.is_some() ||
-			self.mode == SyncMode::Warp
-		{
+		if self.mode == SyncMode::Warp {
+			return Box::new(std::iter::once(self.warp_target_block_request()).flatten())
+		}
+
+		if self.allowed_requests.is_empty() || self.state_sync.is_some() {
 			return Box::new(std::iter::empty())
 		}
 
@@ -2199,6 +2200,33 @@ where
 				}
 			})
 			.collect()
+	}
+
+	/// Generate block request for downloading of the target block body during warp sync.
+	fn warp_target_block_request(&mut self) -> Option<(&PeerId, BlockRequest<B>)> {
+		if let Some(sync) = &self.warp_sync {
+			if self.allowed_requests.is_empty() ||
+				sync.is_complete() ||
+				self.peers
+					.iter()
+					.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpTarget)
+			{
+				// Only one pending warp target block request is allowed.
+				return None
+			}
+			if let Some((target_number, request)) = sync.next_target_block_request() {
+				// Find a random peer that has a block with the target number.
+				for (id, peer) in self.peers.iter_mut() {
+					if peer.state.is_available() && peer.best_number >= target_number {
+						trace!(target: "sync", "New warp target block request for {}", id);
+						peer.state = PeerSyncState::DownloadingWarpTarget;
+						self.allowed_requests.clear();
+						return Some((id, request))
+					}
+				}
+			}
+		}
+		None
 	}
 }
 
