@@ -254,7 +254,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Sized {
 		type Proposal: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self>>;
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
@@ -1765,7 +1765,7 @@ impl<T: Config> Pallet<T> {
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
-		let mut weight = 0;
+		let mut weight = Weight::zero();
 
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();

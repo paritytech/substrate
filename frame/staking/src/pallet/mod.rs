@@ -33,7 +33,7 @@ use sp_runtime::{
 	Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::{cmp::max, prelude::*};
+use sp_std::prelude::*;
 
 mod impls;
 
@@ -129,7 +129,7 @@ pub mod pallet {
 		type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for the unbalanced reduction when slashing a staker.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -184,7 +184,35 @@ pub mod pallet {
 		///
 		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
 		/// also reported as one independent vote.
+		///
+		/// To keep the load off the chain as much as possible, changes made to the staked amount
+		/// via rewards and slashes are not reported and thus need to be manually fixed by the
+		/// staker. In case of `bags-list`, this always means using `rebag` and `putInFrontOf`.
+		///
+		/// Invariant: what comes out of this list will always be a nominator.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
+
+		/// WIP: This is a noop as of now, the actual business logic that's described below is going
+		/// to be introduced in a follow-up PR.
+		///
+		/// Something that provides a best-effort sorted list of targets aka electable validators,
+		/// used for NPoS election.
+		///
+		/// The changes to the approval stake of each validator are reported to this. This means any
+		/// change to:
+		/// 1. The stake of any validator or nominator.
+		/// 2. The targets of any nominator
+		/// 3. The role of any staker (e.g. validator -> chilled, nominator -> validator, etc)
+		///
+		/// Unlike `VoterList`, the values in this list are always kept up to date with reward and
+		/// slash as well, and thus represent the accurate approval stake of all account being
+		/// nominated by nominators.
+		///
+		/// Note that while at the time of nomination, all targets are checked to be real
+		/// validators, they can chill at any point, and their approval stakes will still be
+		/// recorded. This implies that what comes out of iterating this list MIGHT NOT BE AN ACTIVE
+		/// VALIDATOR.
+		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
 		/// determines how many unique eras a staker may be unbonding in.
@@ -744,6 +772,11 @@ pub mod pallet {
 				);
 			}
 		}
+
+		#[cfg(feature = "try-runtime")]
+		fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state(n)
+		}
 	}
 
 	#[pallet::call]
@@ -856,7 +889,6 @@ pub mod pallet {
 				if T::VoterList::contains(&stash) {
 					let _ =
 						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
-					debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
 				}
 
 				Self::deposit_event(Event::<T>::Bonded(stash, extra));
@@ -1567,10 +1599,10 @@ pub mod pallet {
 		/// to kick people under the new limits, `chill_other` should be called.
 		// We assume the worst case for this call is either: all items are set or all items are
 		// removed.
-		#[pallet::weight(max(
-			T::WeightInfo::set_staking_configs_all_set(),
-			T::WeightInfo::set_staking_configs_all_remove()
-		))]
+		#[pallet::weight(
+			T::WeightInfo::set_staking_configs_all_set()
+				.max(T::WeightInfo::set_staking_configs_all_remove())
+		)]
 		pub fn set_staking_configs(
 			origin: OriginFor<T>,
 			min_nominator_bond: ConfigOp<BalanceOf<T>>,

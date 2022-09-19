@@ -195,7 +195,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the elections-phragmen pallet's lock
 		#[pallet::constant]
@@ -279,7 +279,7 @@ pub mod pallet {
 			if !term_duration.is_zero() && (n % term_duration).is_zero() {
 				Self::do_phragmen()
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}
@@ -363,7 +363,7 @@ pub mod pallet {
 			T::Currency::set_lock(T::PalletId::get(), &who, locked_stake, WithdrawReasons::all());
 
 			Voting::<T>::insert(&who, Voter { votes, deposit: new_deposit, stake: locked_stake });
-			Ok(None.into())
+			Ok(None::<Weight>.into())
 		}
 
 		/// Remove `origin` as a voter.
@@ -372,11 +372,11 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be signed and be a voter.
 		#[pallet::weight(T::WeightInfo::remove_voter())]
-		pub fn remove_voter(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn remove_voter(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(Self::is_voter(&who), Error::<T>::MustBeVoter);
 			Self::do_remove_voter(&who);
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Submit oneself for candidacy. A fixed amount of deposit is recorded.
@@ -398,7 +398,7 @@ pub mod pallet {
 		pub fn submit_candidacy(
 			origin: OriginFor<T>,
 			#[pallet::compact] candidate_count: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
@@ -417,7 +417,7 @@ pub mod pallet {
 				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
 
 			<Candidates<T>>::mutate(|c| c.insert(index, (who, T::CandidacyBond::get())));
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Renounce one's intention to be a candidate for the next election round. 3 potential
@@ -443,10 +443,7 @@ pub mod pallet {
 			Renouncing::Member => T::WeightInfo::renounce_candidacy_members(),
 			Renouncing::RunnerUp => T::WeightInfo::renounce_candidacy_runners_up(),
 		})]
-		pub fn renounce_candidacy(
-			origin: OriginFor<T>,
-			renouncing: Renouncing,
-		) -> DispatchResultWithPostInfo {
+		pub fn renounce_candidacy(origin: OriginFor<T>, renouncing: Renouncing) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			match renouncing {
 				Renouncing::Member => {
@@ -482,7 +479,7 @@ pub mod pallet {
 					})?;
 				},
 			};
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Remove a particular member from the set. This is effective immediately and the bond of
@@ -513,7 +510,7 @@ pub mod pallet {
 			who: AccountIdLookupOf<T>,
 			slash_bond: bool,
 			rerun_election: bool,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			let who = T::Lookup::lookup(who)?;
 
@@ -525,7 +522,7 @@ pub mod pallet {
 			}
 
 			// no refund needed.
-			Ok(None.into())
+			Ok(())
 		}
 
 		/// Clean all voters who are defunct (i.e. they do not serve any purpose at all). The
@@ -543,13 +540,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			_num_voters: u32,
 			_num_defunct: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let _ = ensure_root(origin)?;
 			<Voting<T>>::iter()
 				.filter(|(_, x)| Self::is_defunct_voter(&x.votes))
 				.for_each(|(dv, _)| Self::do_remove_voter(&dv));
 
-			Ok(None.into())
+			Ok(())
 		}
 	}
 
@@ -1177,7 +1174,7 @@ mod tests {
 
 	parameter_types! {
 		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(1024);
+			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 	}
 
 	impl frame_system::Config for Test {
@@ -1188,13 +1185,13 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -1209,7 +1206,7 @@ mod tests {
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = frame_system::Pallet<Test>;
@@ -1282,7 +1279,7 @@ mod tests {
 
 	impl Config for Test {
 		type PalletId = ElectionsPhragmenPalletId;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
 		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 		type ChangeMembers = TestChangeMembers;
@@ -1301,7 +1298,8 @@ mod tests {
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type UncheckedExtrinsic =
+		sp_runtime::generic::UncheckedExtrinsic<u32, u64, RuntimeCall, ()>;
 
 	frame_support::construct_runtime!(
 		pub enum Test where
@@ -1488,7 +1486,7 @@ mod tests {
 		ensure_members_has_approval_stake();
 	}
 
-	fn submit_candidacy(origin: Origin) -> DispatchResultWithPostInfo {
+	fn submit_candidacy(origin: Origin) -> sp_runtime::DispatchResult {
 		Elections::submit_candidacy(origin, Elections::candidates().len() as u32)
 	}
 
@@ -2204,7 +2202,7 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(Event::Elections(super::Event::EmptyTerm));
+			System::assert_last_event(RuntimeEvent::Elections(super::Event::EmptyTerm));
 		})
 	}
 
@@ -2220,7 +2218,7 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
 				new_members: vec![(4, 35), (5, 45)],
 			}));
 
@@ -2233,7 +2231,7 @@ mod tests {
 			System::set_block_number(10);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
 				new_members: vec![],
 			}));
 
@@ -2305,7 +2303,7 @@ mod tests {
 			assert_eq!(Elections::election_rounds(), 1);
 			assert!(members_ids().is_empty());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
 				new_members: vec![],
 			}));
 		});
@@ -2613,7 +2611,7 @@ mod tests {
 			// 5 is an outgoing loser. will also get slashed.
 			assert_eq!(balances(&5), (45, 2));
 
-			System::assert_has_event(Event::Elections(super::Event::NewTerm {
+			System::assert_has_event(RuntimeEvent::Elections(super::Event::NewTerm {
 				new_members: vec![(4, 35), (5, 45)],
 			}));
 		})

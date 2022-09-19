@@ -17,21 +17,17 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes::WasmSubstitutes};
-use codec::{Decode, Encode};
 use sc_client_api::{backend, call_executor::CallExecutor, HeaderBackend};
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
-use sp_core::{
-	traits::{CodeExecutor, RuntimeCode, SpawnNamed},
-	NativeOrEncoded, NeverNativeValue,
-};
+use sp_core::traits::{CodeExecutor, RuntimeCode, SpawnNamed};
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
 	backend::AsTrieBackend, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
 	StateMachine, StorageProof,
 };
-use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -162,7 +158,7 @@ where
 			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
 		})?;
 
-		let return_data = StateMachine::new(
+		let mut sm = StateMachine::new(
 			&state,
 			&mut changes,
 			&self.executor,
@@ -172,22 +168,17 @@ where
 			&runtime_code,
 			self.spawn_handle.clone(),
 		)
-		.set_parent_hash(at_hash)
-		.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-			strategy.get_manager(),
-			None,
-		)?;
+		.set_parent_hash(at_hash);
 
-		Ok(return_data.into_encoded())
+		sm.execute_using_consensus_failure_handler(strategy.get_manager())
+			.map_err(Into::into)
 	}
 
 	fn contextual_call<
 		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
+			Result<Vec<u8>, Self::Error>,
+			Result<Vec<u8>, Self::Error>,
+		) -> Result<Vec<u8>, Self::Error>,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -196,10 +187,9 @@ where
 		changes: &RefCell<OverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		execution_manager: ExecutionManager<EM>,
-		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error>
+	) -> Result<Vec<u8>, sp_blockchain::Error>
 	where
 		ExecutionManager<EM>: Clone,
 	{
@@ -242,10 +232,7 @@ where
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(
-					execution_manager,
-					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
-				)
+				state_machine.execute_using_consensus_failure_handler(execution_manager)
 			},
 			None => {
 				let mut state_machine = StateMachine::new(
@@ -260,10 +247,7 @@ where
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(
-					execution_manager,
-					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
-				)
+				state_machine.execute_using_consensus_failure_handler(execution_manager)
 			},
 		}
 		.map_err(Into::into)

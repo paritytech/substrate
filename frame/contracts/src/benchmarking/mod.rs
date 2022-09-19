@@ -618,11 +618,11 @@ benchmarks! {
 			imported_functions: vec![ImportedFunction {
 				module: "seal0",
 				name: "gas",
-				params: vec![ValueType::I32],
+				params: vec![ValueType::I64],
 				return_type: None,
 			}],
 			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
-				Instruction::I32Const(42),
+				Instruction::I64Const(42),
 				Instruction::Call(0),
 			])),
 			.. Default::default()
@@ -920,7 +920,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_set_storage",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -968,7 +968,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_set_storage",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1016,7 +1016,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_set_storage",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1068,7 +1068,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_clear_storage",
+				name: "clear_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1115,7 +1115,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_clear_storage",
+				name: "clear_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1163,7 +1163,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_get_storage",
+				name: "get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1217,7 +1217,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_get_storage",
+				name: "get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1272,7 +1272,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_contains_storage",
+				name: "contains_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1319,7 +1319,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_contains_storage",
+				name: "contains_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1367,7 +1367,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_take_storage",
+				name: "take_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1421,7 +1421,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_take_storage",
+				name: "take_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -2853,8 +2853,8 @@ benchmarks! {
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
 			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
-				weight_limit / weight_per_key,
-				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key,
+				weight_limit / weight_per_key.ref_time(),
+				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key.ref_time(),
 			);
 		}
 		#[cfg(not(feature = "std"))]

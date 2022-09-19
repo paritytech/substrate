@@ -513,15 +513,13 @@ pub trait SortedListProvider<AccountId> {
 	/// unbounded amount of storage accesses.
 	fn unsafe_clear();
 
-	/// Sanity check internal state of list. Only meant for debug compilation.
-	fn sanity_check() -> Result<(), &'static str>;
+	/// Check internal state of list. Only meant for debugging.
+	fn try_state() -> Result<(), &'static str>;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
-		Self::Score::max_value()
-	}
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score;
 }
 
 /// Something that can provide the `Score` of an account. Similar to [`ElectionProvider`] and
@@ -533,8 +531,8 @@ pub trait ScoreProvider<AccountId> {
 	/// Get the current `Score` of `who`.
 	fn score(who: &AccountId) -> Self::Score;
 
-	/// For tests and benchmarks, set the `score`.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	/// For tests, benchmarks and fuzzing, set the `score`.
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
 	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }
 

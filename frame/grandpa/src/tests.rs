@@ -25,8 +25,8 @@ use codec::Encode;
 use fg_primitives::ScheduledChange;
 use frame_support::{
 	assert_err, assert_noop, assert_ok,
+	dispatch::{GetDispatchInfo, Pays},
 	traits::{Currency, OnFinalize, OneSessionHandler},
-	weights::{GetDispatchInfo, Pays},
 };
 use frame_system::{EventRecord, Phase};
 use sp_core::H256;
@@ -823,7 +823,7 @@ fn report_equivocation_has_valid_weight() {
 		.map(<Test as Config>::WeightInfo::report_equivocation)
 		.collect::<Vec<_>>()
 		.windows(2)
-		.all(|w| w[0] < w[1]));
+		.all(|w| w[0].ref_time() < w[1].ref_time()));
 }
 
 #[test]
@@ -856,7 +856,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		.get_dispatch_info();
 
 		// it should have non-zero weight and the fee has to be paid.
-		assert!(info.weight > 0);
+		assert!(info.weight.all_gt(Weight::zero()));
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// report the equivocation.
