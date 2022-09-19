@@ -22,7 +22,7 @@ use frame_support::{
 	pallet_prelude::*,
 	storage::migration,
 	storage_alias,
-	traits::{Get, OnRuntimeUpgrade, ReservableCurrency},
+	traits::{Get, OnRuntimeUpgrade},
 	Identity, Twox64Concat,
 };
 use sp_runtime::traits::Saturating;
@@ -378,6 +378,7 @@ mod v8 {
 
 	#[cfg(feature = "try-runtime")]
 	pub fn pre_upgrade<T: Config>() -> Result<(), &'static str> {
+		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, OldContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
 			ensure!(reserved >= value.storage_deposit, "Reserved balance out of sync.");
@@ -387,6 +388,7 @@ mod v8 {
 
 	#[cfg(feature = "try-runtime")]
 	pub fn post_upgrade<T: Config>() -> Result<(), &'static str> {
+		use frame_support::traits::ReservableCurrency;
 		for (key, value) in ContractInfoOf::<T, ContractInfo<T>>::iter() {
 			let reserved = T::Currency::reserved_balance(&key);
 			let stored = value
