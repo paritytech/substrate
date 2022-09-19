@@ -33,7 +33,7 @@ runtime-benchmarks = [
 ]
 std = [
 	"codec/std",
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",

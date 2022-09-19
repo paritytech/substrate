@@ -1820,6 +1820,12 @@ impl Printable for bool {
 	}
 }
 
+impl Printable for sp_weights::Weight {
+	fn print(&self) {
+		self.ref_time().print()
+	}
+}
+
 impl Printable for () {
 	fn print(&self) {
 		"()".print()

@@ -21,9 +21,10 @@
 
 use crate::{self as pallet_balances, decl_tests, Config, Pallet};
 use frame_support::{
+	dispatch::DispatchInfo,
 	parameter_types,
 	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim},
-	weights::{DispatchInfo, IdentityFee, Weight},
+	weights::{IdentityFee, Weight},
 };
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
