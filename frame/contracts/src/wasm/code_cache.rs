@@ -39,6 +39,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{Get, ReservableCurrency},
+	WeakBoundedVec,
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
@@ -195,10 +196,15 @@ pub fn reinstrument<T: Config>(
 	let original_code =
 		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	let original_code_len = original_code.len();
-	prefab_module.code = prepare::reinstrument_contract::<T>(&original_code, schedule)
-		.map_err(|_| <Error<T>>::CodeRejected)?
-		.try_into()
-		.map_err(|_| <Error<T>>::CodeTooLarge)?;
+	// We need to allow contracts growing too big after re-instrumentation. Otherwise
+	// the contract can become inaccessible. The user has no influence over this size
+	// as the contract is already deployed and every change in size would be the result
+	// of changes in the instrumentation algorithm controlled by the chain authors.
+	prefab_module.code = WeakBoundedVec::force_from(
+		prepare::reinstrument_contract::<T>(&original_code, schedule)
+			.map_err(|_| <Error<T>>::CodeRejected)?,
+		Some("Contract exceeds limit after re-instrumentation."),
+	);
 	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
 	<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
 	Ok(original_code_len as u32)
