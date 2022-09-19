@@ -38,6 +38,8 @@ pub use log;
 #[doc(hidden)]
 pub use paste;
 #[doc(hidden)]
+pub use sp_core::defer;
+#[doc(hidden)]
 pub use sp_io::storage::root as storage_root;
 #[doc(hidden)]
 pub use sp_runtime::traits::Zero;
@@ -545,7 +547,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
-		$name:ident { $( $code:tt )* }: _ ( $origin:expr $( , $arg:expr )* )
+		$name:ident { $( $code:tt )* }: _ $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
@@ -555,7 +557,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
-			$name { $( $code )* }: _ ( $origin $( , $arg )* )
+			$name { $( $code )* }: _ $(<$origin_type>)? ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
 		}
@@ -568,7 +570,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
-		$name:ident { $( $code:tt )* }: $dispatch:ident ( $origin:expr $( , $arg:expr )* )
+		$name:ident { $( $code:tt )* }: $dispatch:ident $(<$origin_type:ty>)? ( $origin:expr $( , $arg:expr )* )
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter! {
@@ -578,7 +580,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
-			$name { $( $code )* }: $dispatch ( $origin $( , $arg )* )
+			$name { $( $code )* }: $dispatch $(<$origin_type>)? ( $origin $( , $arg )* )
 			verify { }
 			$( $rest )*
 		}
@@ -591,7 +593,7 @@ macro_rules! benchmarks_iter {
 		( $( $names:tt )* )
 		( $( $names_extra:tt )* )
 		( $( $names_skip_meta:tt )* )
-		$name:ident { $( $code:tt )* }: $eval:block
+		$name:ident { $( $code:tt )* }: $(<$origin_type:ty>)? $eval:block
 		$( $rest:tt )*
 	) => {
 		$crate::benchmarks_iter!(
@@ -601,7 +603,7 @@ macro_rules! benchmarks_iter {
 			( $( $names )* )
 			( $( $names_extra )* )
 			( $( $names_skip_meta )* )
-			$name { $( $code )* }: $eval
+			$name { $( $code )* }: $(<$origin_type>)? $eval
 			verify { }
 			$( $rest )*
 		);
@@ -615,7 +617,7 @@ macro_rules! to_origin {
 		$origin.into()
 	};
 	($origin:expr, $origin_type:ty) => {
-		<T::Origin as From<$origin_type>>::from($origin)
+		<<T as frame_system::Config>::Origin as From<$origin_type>>::from($origin)
 	};
 }
 
@@ -1033,6 +1035,9 @@ macro_rules! impl_benchmark {
 
 				// Always do at least one internal repeat...
 				for _ in 0 .. internal_repeats.max(1) {
+					// Always reset the state after the benchmark.
+					$crate::defer!($crate::benchmarking::wipe_db());
+
 					// Set up the externalities environment for the setup we want to
 					// benchmark.
 					let closure_to_benchmark = <
@@ -1110,9 +1115,6 @@ macro_rules! impl_benchmark {
 						proof_size: diff_pov,
 						keys: read_and_written_keys,
 					});
-
-					// Wipe the DB back to the genesis state.
-					$crate::benchmarking::wipe_db();
 				}
 
 				return Ok(results);
@@ -1151,6 +1153,8 @@ macro_rules! impl_benchmark {
 // This creates a unit test for one benchmark of the main benchmark macro.
 // It runs the benchmark using the `high` and `low` value for each component
 // and ensure that everything completes successfully.
+// Instances each component with six values which can be controlled with the
+// env variable `VALUES_PER_COMPONENT`.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! impl_benchmark_test {
@@ -1175,6 +1179,9 @@ macro_rules! impl_benchmark_test {
 					let execute_benchmark = |
 						c: $crate::Vec<($crate::BenchmarkParameter, u32)>
 					| -> Result<(), $crate::BenchmarkError> {
+						// Always reset the state after the benchmark.
+						$crate::defer!($crate::benchmarking::wipe_db());
+
 						// Set up the benchmark, return execution + verification function.
 						let closure_to_verify = <
 							SelectedBenchmark as $crate::BenchmarkingSetup<T, _>
@@ -1186,27 +1193,48 @@ macro_rules! impl_benchmark_test {
 						}
 
 						// Run execution + verification
-						closure_to_verify()?;
-
-						// Reset the state
-						$crate::benchmarking::wipe_db();
-
-						Ok(())
+						closure_to_verify()
 					};
 
 					if components.is_empty() {
 						execute_benchmark(Default::default())?;
 					} else {
-						for (name, low, high) in components.iter() {
-							// Test only the low and high value, assuming values in the middle
-							// won't break
-							for component_value in $crate::vec![low, high] {
+						let num_values: u32 = if let Ok(ev) = std::env::var("VALUES_PER_COMPONENT") {
+							ev.parse().map_err(|_| {
+								$crate::BenchmarkError::Stop(
+									"Could not parse env var `VALUES_PER_COMPONENT` as u32."
+								)
+							})?
+						} else {
+							6
+						};
+
+						if num_values < 2 {
+							return Err("`VALUES_PER_COMPONENT` must be at least 2".into());
+						}
+
+						for (name, low, high) in components.clone().into_iter() {
+							// Test the lowest, highest (if its different from the lowest)
+							// and up to num_values-2 more equidistant values in between.
+							// For 0..10 and num_values=6 this would mean: [0, 2, 4, 6, 8, 10]
+
+							let mut values = $crate::vec![low];
+							let diff = (high - low).min(num_values - 1);
+							let slope = (high - low) as f32 / diff as f32;
+
+							for i in 1..=diff {
+								let value = ((low as f32 + slope * i as f32) as u32)
+												.clamp(low, high);
+								values.push(value);
+							}
+
+							for component_value in values {
 								// Select the max value for all the other components.
 								let c: $crate::Vec<($crate::BenchmarkParameter, u32)> = components
 									.iter()
 									.map(|(n, _, h)|
-										if n == name {
-											(*n, *component_value)
+										if *n == name {
+											(*n, component_value)
 										} else {
 											(*n, *h)
 										}

@@ -26,6 +26,7 @@ use frame_support::{
 		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait, Polling,
 		PreimageRecipient, SortedMembers,
 	},
+	weights::Weight,
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
@@ -61,8 +62,9 @@ impl Contains<Call> for BaseFilter {
 }
 
 parameter_types! {
+	pub MaxWeight: Weight = Weight::from_ref_time(2_000_000_000_000);
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1_000_000);
+		frame_system::limits::BlockWeights::simple_max(MaxWeight::get());
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
@@ -104,7 +106,7 @@ impl pallet_scheduler::Config for Test {
 	type Origin = Origin;
 	type PalletsOrigin = OriginCaller;
 	type Call = Call;
-	type MaximumWeight = ConstU64<2_000_000_000_000>;
+	type MaximumWeight = MaxWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;
 	type WeightInfo = ();
@@ -289,6 +291,9 @@ impl<Class> VoteTally<u32, Class> for Tally {
 		let nays = ((ayes as u64) * 1_000_000_000u64 / approval.deconstruct() as u64) as u32 - ayes;
 		Self { ayes, nays }
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn setup(_: Class, _: Perbill) {}
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
