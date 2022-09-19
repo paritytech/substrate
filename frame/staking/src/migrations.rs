@@ -34,7 +34,7 @@ pub mod v11 {
 		for MigrateToV11<T, P, N>
 	{
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == crate::Releases::V10_0_0,
 				"must upgrade linearly"
@@ -46,7 +46,7 @@ pub mod v11 {
 				"no data for the old pallet name has been detected"
 			);
 
-			Ok(())
+			Ok(Default::default())
 		}
 
 		/// Migrate the entire storage of this pallet to a new prefix.
