@@ -21,7 +21,7 @@ use crate::{
 	Network, Validator,
 };
 
-use sc_network_common::protocol::event::Event;
+use sc_network_common::protocol::{event::Event, ProtocolName};
 use sc_peerset::ReputationChange;
 
 use futures::{
@@ -33,7 +33,6 @@ use log::trace;
 use prometheus_endpoint::Registry;
 use sp_runtime::traits::Block as BlockT;
 use std::{
-	borrow::Cow,
 	collections::{HashMap, VecDeque},
 	pin::Pin,
 	sync::Arc,
@@ -46,7 +45,7 @@ pub struct GossipEngine<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
 	periodic_maintenance_interval: futures_timer::Delay,
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 
 	/// Incoming events from the network.
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
@@ -78,7 +77,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		network: N,
-		protocol: impl Into<Cow<'static, str>>,
+		protocol: impl Into<ProtocolName>,
 		validator: Arc<dyn Validator<B>>,
 		metrics_registry: Option<&Registry>,
 	) -> Self
@@ -329,7 +328,6 @@ mod tests {
 		traits::{Block as BlockT, NumberFor},
 	};
 	use std::{
-		borrow::Cow,
 		collections::HashSet,
 		sync::{Arc, Mutex},
 	};
@@ -360,7 +358,7 @@ mod tests {
 
 		fn report_peer(&self, _who: PeerId, _cost_benefit: ReputationChange) {}
 
-		fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {
+		fn disconnect_peer(&self, _who: PeerId, _protocol: ProtocolName) {
 			unimplemented!();
 		}
 
@@ -382,7 +380,7 @@ mod tests {
 
 		fn set_reserved_peers(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
@@ -390,28 +388,23 @@ mod tests {
 
 		fn add_peers_to_reserved_set(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(
-			&self,
-			_protocol: Cow<'static, str>,
-			_peers: Vec<PeerId>,
-		) {
-		}
+		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
 
 		fn add_to_peers_set(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
 		}
 
-		fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 
@@ -430,19 +423,14 @@ mod tests {
 	}
 
 	impl NetworkNotification for TestNetwork {
-		fn write_notification(
-			&self,
-			_target: PeerId,
-			_protocol: Cow<'static, str>,
-			_message: Vec<u8>,
-		) {
+		fn write_notification(&self, _target: PeerId, _protocol: ProtocolName, _message: Vec<u8>) {
 			unimplemented!();
 		}
 
 		fn notification_sender(
 			&self,
 			_target: PeerId,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 		) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 			unimplemented!();
 		}
@@ -505,7 +493,7 @@ mod tests {
 	#[test]
 	fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
 		let topic = H256::default();
-		let protocol = Cow::Borrowed("/my_protocol");
+		let protocol = ProtocolName::from("/my_protocol");
 		let remote_peer = PeerId::random();
 		let network = TestNetwork::default();
 
@@ -622,7 +610,7 @@ mod tests {
 		}
 
 		fn prop(channels: Vec<ChannelLengthAndTopic>, notifications: Vec<Vec<Message>>) {
-			let protocol = Cow::Borrowed("/my_protocol");
+			let protocol = ProtocolName::from("/my_protocol");
 			let remote_peer = PeerId::random();
 			let network = TestNetwork::default();
 

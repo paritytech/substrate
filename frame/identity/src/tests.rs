@@ -50,7 +50,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -60,12 +60,12 @@ impl frame_system::Config for Test {
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -81,7 +81,7 @@ impl frame_system::Config for Test {
 
 impl pallet_balances::Config for Test {
 	type Balance = u64;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -103,7 +103,7 @@ ord_parameter_types! {
 type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 type EnsureTwoOrRoot = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<Two, u64>>;
 impl pallet_identity::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type Slashed = ();
 	type BasicDeposit = ConstU64<10>;
@@ -279,27 +279,70 @@ fn registration_should_work() {
 fn uninvited_judgement_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
+			Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::Reasonable,
+				H256::random()
+			),
 			Error::<Test>::InvalidIndex
 		);
 
 		assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 		assert_noop!(
-			Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable),
+			Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::Reasonable,
+				H256::random()
+			),
 			Error::<Test>::InvalidTarget
 		);
 
 		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
 		assert_noop!(
-			Identity::provide_judgement(Origin::signed(10), 0, 10, Judgement::Reasonable),
+			Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::Reasonable,
+				H256::random()
+			),
+			Error::<Test>::JudgementForDifferentIdentity
+		);
+
+		let identity_hash = BlakeTwo256::hash_of(&ten());
+
+		assert_noop!(
+			Identity::provide_judgement(
+				Origin::signed(10),
+				0,
+				10,
+				Judgement::Reasonable,
+				identity_hash
+			),
 			Error::<Test>::InvalidIndex
 		);
 		assert_noop!(
-			Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::FeePaid(1)),
+			Identity::provide_judgement(
+				Origin::signed(3),
+				0,
+				10,
+				Judgement::FeePaid(1),
+				identity_hash
+			),
 			Error::<Test>::InvalidJudgement
 		);
 
-		assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(3),
+			0,
+			10,
+			Judgement::Reasonable,
+			identity_hash
+		));
 		assert_eq!(Identity::identity(10).unwrap().judgements, vec![(0, Judgement::Reasonable)]);
 	});
 }
@@ -309,7 +352,13 @@ fn clearing_judgement_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Identity::add_registrar(Origin::signed(1), 3));
 		assert_ok!(Identity::set_identity(Origin::signed(10), Box::new(ten())));
-		assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(3),
+			0,
+			10,
+			Judgement::Reasonable,
+			BlakeTwo256::hash_of(&ten())
+		));
 		assert_ok!(Identity::clear_identity(Origin::signed(10)));
 		assert_eq!(Identity::identity(10), None);
 	});
@@ -411,7 +460,13 @@ fn cancelling_requested_judgement_should_work() {
 		assert_eq!(Balances::free_balance(10), 90);
 		assert_noop!(Identity::cancel_request(Origin::signed(10), 0), Error::<Test>::NotFound);
 
-		assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Reasonable));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(3),
+			0,
+			10,
+			Judgement::Reasonable,
+			BlakeTwo256::hash_of(&ten())
+		));
 		assert_noop!(
 			Identity::cancel_request(Origin::signed(10), 0),
 			Error::<Test>::JudgementGiven
@@ -438,7 +493,13 @@ fn requesting_judgement_should_work() {
 			Identity::request_judgement(Origin::signed(10), 0, 10),
 			Error::<Test>::StickyJudgement
 		);
-		assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::Erroneous));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(3),
+			0,
+			10,
+			Judgement::Erroneous,
+			BlakeTwo256::hash_of(&ten())
+		));
 		// Registrar got their payment now.
 		assert_eq!(Balances::free_balance(3), 20);
 
@@ -453,7 +514,13 @@ fn requesting_judgement_should_work() {
 		assert_ok!(Identity::request_judgement(Origin::signed(10), 1, 10));
 
 		// Re-requesting after the judgement has been reduced works.
-		assert_ok!(Identity::provide_judgement(Origin::signed(3), 0, 10, Judgement::OutOfDate));
+		assert_ok!(Identity::provide_judgement(
+			Origin::signed(3),
+			0,
+			10,
+			Judgement::OutOfDate,
+			BlakeTwo256::hash_of(&ten())
+		));
 		assert_ok!(Identity::request_judgement(Origin::signed(10), 0, 10));
 	});
 }

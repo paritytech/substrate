@@ -48,6 +48,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
 		details.owner = dest;
+
+		// The approved accounts have to be reset to None, because otherwise pre-approve attack
+		// would be possible, where the owner can approve his second account before making the
+		// transaction and then claiming the item back.
+		details.approvals.clear();
+
 		Item::<T, I>::insert(&collection, &item, &details);
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 
@@ -168,7 +174,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let owner = owner.clone();
 				Account::<T, I>::insert((&owner, &collection, &item), ());
-				let details = ItemDetails { owner, approved: None, is_frozen: false, deposit };
+				let details = ItemDetails {
+					owner,
+					approvals: ApprovalsOf::<T, I>::default(),
+					is_frozen: false,
+					deposit,
+				};
 				Item::<T, I>::insert(&collection, &item, details);
 				Ok(())
 			},

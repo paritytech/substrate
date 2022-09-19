@@ -39,7 +39,7 @@ use cfg_if::cfg_if;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
-	weights::RuntimeDbWeight,
+	weights::{RuntimeDbWeight, Weight},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
@@ -455,7 +455,7 @@ impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
 }
 
 impl frame_support::traits::OriginTrait for Origin {
-	type Call = <Runtime as frame_system::Config>::Call;
+	type Call = <Runtime as frame_system::Config>::RuntimeCall;
 	type PalletsOrigin = Origin;
 	type AccountId = <Runtime as frame_system::Config>::AccountId;
 
@@ -501,9 +501,9 @@ impl frame_support::traits::OriginTrait for Origin {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct Event;
+pub struct RuntimeEvent;
 
-impl From<frame_system::Event<Runtime>> for Event {
+impl From<frame_system::Event<Runtime>> for RuntimeEvent {
 	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
@@ -577,7 +577,7 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75));
 }
 
 impl frame_system::Config for Runtime {
@@ -585,7 +585,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
-	type Call = Extrinsic;
+	type RuntimeCall = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -593,7 +593,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<2400>;
 	type DbWeight = ();
 	type Version = ();
@@ -849,12 +849,12 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
-					sp_consensus_babe::BabeGenesisConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-						genesis_authorities: system::authorities()
+						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
@@ -1123,12 +1123,12 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
-					sp_consensus_babe::BabeGenesisConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-						genesis_authorities: system::authorities()
+						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,

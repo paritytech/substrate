@@ -17,6 +17,7 @@
 
 //! Benchmarks for the nomination pools coupled with the staking and bags list pallets.
 
+#![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -41,8 +42,11 @@ type CurrencyOf<T> = <T as pallet_nomination_pools::Config>::Currency;
 const USER_SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
 
+type VoterBagsListInstance = pallet_bags_list::Instance1;
 pub trait Config:
-	pallet_nomination_pools::Config + pallet_staking::Config + pallet_bags_list::Config
+	pallet_nomination_pools::Config
+	+ pallet_staking::Config
+	+ pallet_bags_list::Config<VoterBagsListInstance>
 {
 }
 
@@ -201,11 +205,11 @@ impl<T: Config> ListScenario<T> {
 
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), amount, 1).unwrap();
 
-		// Sanity check that the vote weight is still the same as the original bonded
+		// check that the vote weight is still the same as the original bonded
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
 		assert_eq!(vote_to_balance::<T>(weight_of(&self.origin1)).unwrap(), original_bonded);
 
-		// Sanity check the member was added correctly
+		// check the member was added correctly
 		let member = PoolMembers::<T>::get(&joiner).unwrap();
 		assert_eq!(member.points, amount);
 		assert_eq!(member.pool_id, 1);

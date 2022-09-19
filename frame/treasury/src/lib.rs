@@ -155,7 +155,8 @@ pub mod pallet {
 		type RejectOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Handler for the unbalanced decrease when slashing for a rejected proposal or bounty.
 		type OnSlash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
@@ -319,7 +320,7 @@ pub mod pallet {
 			if (n % T::SpendPeriod::get()).is_zero() {
 				Self::spend_funds()
 			} else {
-				0
+				Weight::zero()
 			}
 		}
 	}
@@ -500,7 +501,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Spend some money! returns number of approvals before spend.
 	pub fn spend_funds() -> Weight {
-		let mut total_weight: Weight = Zero::zero();
+		let mut total_weight = Weight::zero();
 
 		let mut budget_remaining = Self::pot();
 		Self::deposit_event(Event::Spending { budget_remaining });

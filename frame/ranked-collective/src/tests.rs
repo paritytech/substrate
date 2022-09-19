@@ -22,6 +22,7 @@ use std::collections::BTreeMap;
 use frame_support::{
 	assert_noop, assert_ok,
 	error::BadOrigin,
+	pallet_prelude::Weight,
 	parameter_types,
 	traits::{ConstU16, ConstU32, ConstU64, EitherOf, Everything, MapSuccess, Polling},
 };
@@ -50,7 +51,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1_000_000);
+		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = Everything;
@@ -60,13 +61,13 @@ impl frame_system::Config for Test {
 	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -170,7 +171,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 
 impl Config for Test {
 	type WeightInfo = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type PromoteOrigin = EitherOf<
 		// Root can promote arbitrarily.
 		frame_system::EnsureRootWithSuccess<Self::AccountId, ConstU16<65535>>,

@@ -29,7 +29,6 @@ use serde::Serialize;
 use crate::{pallet::command::ComponentRange, shared::UnderscoreHelper, PalletCmd};
 use frame_benchmarking::{
 	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
-	RegressionModel,
 };
 use frame_support::traits::StorageInfo;
 use sp_core::hexdisplay::HexDisplay;
@@ -145,13 +144,15 @@ fn map_results(
 	Ok(all_benchmarks)
 }
 
-// Get an iterator of errors from a model. If the model is `None` all errors are zero.
-fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item = u128> + '_ {
-	let mut errors = model.as_ref().map(|m| m.se.regressor_values.iter());
-	std::iter::from_fn(move || match &mut errors {
-		Some(model) => model.next().map(|val| *val as u128),
-		_ => Some(0),
-	})
+// Get an iterator of errors.
+fn extract_errors(errors: &Option<Vec<u128>>) -> impl Iterator<Item = u128> + '_ {
+	errors
+		.as_ref()
+		.map(|e| e.as_slice())
+		.unwrap_or(&[])
+		.iter()
+		.copied()
+		.chain(std::iter::repeat(0))
 }
 
 // Analyze and return the relevant results for a given benchmark.
@@ -190,24 +191,20 @@ fn get_benchmark_data(
 		.slopes
 		.into_iter()
 		.zip(extrinsic_time.names.iter())
-		.zip(extract_errors(&extrinsic_time.model))
+		.zip(extract_errors(&extrinsic_time.errors))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
 				if !used_components.contains(&name) {
 					used_components.push(name);
 				}
-				used_extrinsic_time.push(ComponentSlope {
-					name: name.clone(),
-					slope: slope.saturating_mul(1000),
-					error: error.saturating_mul(1000),
-				});
+				used_extrinsic_time.push(ComponentSlope { name: name.clone(), slope, error });
 			}
 		});
 	reads
 		.slopes
 		.into_iter()
 		.zip(reads.names.iter())
-		.zip(extract_errors(&reads.model))
+		.zip(extract_errors(&reads.errors))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
 				if !used_components.contains(&name) {
@@ -220,7 +217,7 @@ fn get_benchmark_data(
 		.slopes
 		.into_iter()
 		.zip(writes.names.iter())
-		.zip(extract_errors(&writes.model))
+		.zip(extract_errors(&writes.errors))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
 				if !used_components.contains(&name) {
@@ -251,7 +248,7 @@ fn get_benchmark_data(
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
 		components,
-		base_weight: extrinsic_time.base.saturating_mul(1000),
+		base_weight: extrinsic_time.base,
 		base_reads: reads.base,
 		base_writes: writes.base,
 		component_weight: used_extrinsic_time,
