@@ -22,7 +22,7 @@ use frame_support::{
 	pallet_prelude::*,
 	storage::migration,
 	storage_alias,
-	traits::{Get, OnRuntimeUpgrade},
+	traits::{Get, OnRuntimeUpgrade, ReservableCurrency},
 	Identity, Twox64Concat,
 };
 use sp_runtime::traits::Saturating;
@@ -61,6 +61,36 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		}
 
 		weight
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		let version = StorageVersion::get::<Pallet<T>>();
+
+		if version < 7 {
+			return Ok(())
+		}
+
+		if version < 8 {
+			v8::pre_upgrade::<T>()?;
+		}
+
+		Ok(())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		let version = StorageVersion::get::<Pallet<T>>();
+
+		if version < 7 {
+			return Ok(())
+		}
+
+		if version < 8 {
+			v8::post_upgrade::<T>()?;
+		}
+
+		Ok(())
 	}
 }
 
@@ -298,17 +328,13 @@ mod v8 {
 	}
 
 	#[storage_alias]
-	type ContractInfoOf<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		<T as frame_system::Config>::AccountId,
-		ContractInfo<T>,
-	>;
+	type ContractInfoOf<T: Config, V> =
+		StorageMap<Pallet<T>, Twox64Concat, <T as frame_system::Config>::AccountId, V>;
 
 	pub fn migrate<T: Config>() -> Weight {
 		let mut weight = Weight::zero();
 
-		<ContractInfoOf<T>>::translate(|_key, old: OldContractInfo<T>| {
+		<ContractInfoOf<T, ContractInfo<T>>>::translate_values(|old: OldContractInfo<T>| {
 			// Count storage items of this contract
 			let mut storage_bytes = 0u32;
 			let mut storage_items = 0u32;
@@ -348,5 +374,41 @@ mod v8 {
 		});
 
 		weight
+	}
+
+	#[cfg(feature = "try-runtime")]
+	pub fn pre_upgrade<T: Config>() -> Result<(), &'static str> {
+		for (key, value) in ContractInfoOf::<T, OldContractInfo<T>>::iter() {
+			let reserved = T::Currency::reserved_balance(&key);
+			ensure!(reserved >= value.storage_deposit, "Reserved balance out of sync.");
+		}
+		Ok(())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	pub fn post_upgrade<T: Config>() -> Result<(), &'static str> {
+		for (key, value) in ContractInfoOf::<T, ContractInfo<T>>::iter() {
+			let reserved = T::Currency::reserved_balance(&key);
+			let stored = value
+				.storage_base_deposit
+				.saturating_add(value.storage_byte_deposit)
+				.saturating_add(value.storage_item_deposit);
+			ensure!(reserved >= stored, "Reserved balance out of sync.");
+
+			let mut storage_bytes = 0u32;
+			let mut storage_items = 0u32;
+			let mut key = Vec::new();
+			while let Some(next) = child::next_key(&value.trie_id, &key) {
+				key = next;
+				let mut val_out = [];
+				let len = child::read(&value.trie_id, &key, &mut val_out, 0)
+					.expect("The loop conditions checks for existence of the key; qed");
+				storage_bytes.saturating_accrue(len);
+				storage_items.saturating_accrue(1);
+			}
+			ensure!(storage_bytes == value.storage_bytes, "Storage bytes do not match.",);
+			ensure!(storage_items == value.storage_items, "Storage items do not match.",);
+		}
+		Ok(())
 	}
 }
