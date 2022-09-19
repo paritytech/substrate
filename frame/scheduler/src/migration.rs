@@ -25,8 +25,74 @@ use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
 
+pub mod v1 {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+
+	#[frame_support::storage_alias]
+	pub(crate) type Agenda<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::BlockNumber,
+		Vec<
+			Option<
+				ScheduledV1<<T as Config>::RuntimeCall, <T as frame_system::Config>::BlockNumber>,
+			>,
+		>,
+		ValueQuery,
+	>;
+
+	#[frame_support::storage_alias]
+	pub(crate) type Lookup<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		Vec<u8>,
+		TaskAddress<<T as frame_system::Config>::BlockNumber>,
+	>;
+}
+
+pub mod v2 {
+	use super::*;
+	use frame_support::pallet_prelude::*;
+
+	#[frame_support::storage_alias]
+	pub(crate) type Agenda<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::BlockNumber,
+		Vec<Option<ScheduledV2Of<T>>>,
+		ValueQuery,
+	>;
+
+	#[frame_support::storage_alias]
+	pub(crate) type Lookup<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		Vec<u8>,
+		TaskAddress<<T as frame_system::Config>::BlockNumber>,
+	>;
+}
+
 pub mod v3 {
 	use super::*;
+	use frame_support::pallet_prelude::*;
+
+	#[frame_support::storage_alias]
+	pub(crate) type Agenda<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		<T as frame_system::Config>::BlockNumber,
+		Vec<Option<ScheduledV3Of<T>>>,
+		ValueQuery,
+	>;
+
+	#[frame_support::storage_alias]
+	pub(crate) type Lookup<T: Config> = StorageMap<
+		Pallet<T>,
+		Twox64Concat,
+		Vec<u8>,
+		TaskAddress<<T as frame_system::Config>::BlockNumber>,
+	>;
 
 	/// Migrate the scheduler pallet from V3 to V4.
 	pub struct MigrateToV4<T>(sp_std::marker::PhantomData<T>);
@@ -36,22 +102,33 @@ pub mod v3 {
 		fn pre_upgrade() -> Result<(), &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 3, "Can only upgrade from version 3");
 
-			let agenda_count = Agenda::<T>::iter_keys().count() as u32;
-			log::info!(target: TARGET, "Will migrate {} agendas...", agenda_count);
-			Self::set_temp_storage(agenda_count, "old_agenda_count");
+			let agendas = Agenda::<T>::iter_keys().count() as u32;
+			let decodable_agendas = Agenda::<T>::iter_values().count() as u32;
+			if agendas != decodable_agendas {
+				// This is not necessarily an error, but can happen when there are Calls
+				// in an Agenda that are not valid anymore with the new runtime.
+				log::error!(
+					target: TARGET,
+					"Can only decode {} of {} agendas - others will be dropped",
+					decodable_agendas,
+					agendas
+				);
+			}
+			log::info!(target: TARGET, "Trying to migrate {} agendas...", decodable_agendas);
+			Self::set_temp_storage(decodable_agendas, "decodable_agendas");
 
 			// Check that no agenda overflows `MaxScheduledPerBlock`.
-			let max_scheduled_per_block = T::MaxScheduledPerBlock::get();
+			let max_scheduled_per_block = T::MaxScheduledPerBlock::get() as usize;
 			for (block_number, agenda) in Agenda::<T>::iter() {
-				if agenda.len() > max_scheduled_per_block as usize {
+				if agenda.iter().cloned().filter_map(|s| s).count() > max_scheduled_per_block {
 					log::error!(
 						target: TARGET,
-						"Would truncate agenda of block {:?} from {} items to {} items - abort.",
+						"Would truncate agenda of block {:?} from {} items to {} items.",
 						block_number,
 						agenda.len(),
 						max_scheduled_per_block,
 					);
-					return Err("Agenda overflow")
+					return Err("Agenda would overflow `MaxScheduledPerBlock`.")
 				}
 			}
 
@@ -77,17 +154,36 @@ pub mod v3 {
 		fn post_upgrade() -> Result<(), &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Must upgrade");
 
-			let new_agenda_count = Agenda::<T>::iter_keys().count() as u32;
-			let old_agenda_count: u32 = Self::get_temp_storage("old_agenda_count").unwrap();
-			assert_eq!(new_agenda_count, old_agenda_count, "Must migrate all agendas");
-
-			// Check that all values decode correctly.
-			for k in Agenda::<T>::iter_keys() {
-				assert!(Agenda::<T>::try_get(k).is_ok(), "Cannot decode Agenda");
+			// Check that everything decoded fine.
+			for k in crate::Agenda::<T>::iter_keys() {
+				assert!(crate::Agenda::<T>::try_get(k).is_ok(), "Cannot decode V4 Agenda");
 			}
+
+			let old_agendas: u32 = Self::get_temp_storage("decodable_agendas").unwrap();
+			let new_agendas = crate::Agenda::<T>::iter_keys().count() as u32;
+			if old_agendas != new_agendas {
+				// This is not necessarily an error, but can happen when there are Calls
+				// in an Agenda that are not valid anymore in the new runtime.
+				log::error!(
+					target: TARGET,
+					"Did not migrate all Agendas. Previous {}, Now {}",
+					old_agendas,
+					new_agendas,
+				);
+			} else {
+				log::info!(target: TARGET, "Migrated {} agendas.", new_agendas);
+			}
+
 			Ok(())
 		}
 	}
+}
+
+trait Migratable {
+	type From: Get<StorageVersion>;
+	type To: Get<StorageVersion>;
+
+	fn migrate(&self) -> Weight;
 }
 
 #[cfg(test)]
@@ -96,6 +192,7 @@ mod test {
 	use super::*;
 	use crate::mock::*;
 	use frame_support::Hashable;
+	use sp_std::borrow::Cow;
 	use substrate_test_utils::assert_eq_uvec;
 
 	#[test]
@@ -116,6 +213,9 @@ mod test {
 				RuntimeCall::System(frame_system::Call::remark { remark: vec![0; 2048] });
 			let bound_hashed_call = Preimage::bound(hashed_call.clone()).unwrap();
 			assert!(bound_hashed_call.lookup_needed());
+			// A Call by hash that will fail to decode becomes `None`.
+			let trash_data = vec![255u8; 1024];
+			let undecodable_hash = Preimage::note(Cow::Borrowed(&trash_data)).unwrap();
 
 			for i in 0..2u64 {
 				let k = i.twox_64_concat();
@@ -130,7 +230,7 @@ mod test {
 					}),
 					None,
 					Some(ScheduledV3Of::<Test> {
-						maybe_id: Some([i as u8; 32]),
+						maybe_id: Some(vec![i as u8; 32]),
 						priority: 123,
 						call: large_call.clone().into(),
 						maybe_periodic: Some((4u64, 20)),
@@ -138,11 +238,19 @@ mod test {
 						_phantom: PhantomData::<u64>::default(),
 					}),
 					Some(ScheduledV3Of::<Test> {
-						maybe_id: Some([(255 - i as u8); 32]),
+						maybe_id: Some(vec![255 - i as u8; 320]),
 						priority: 123,
 						call: MaybeHashed::Hash(bound_hashed_call.hash()),
 						maybe_periodic: Some((8u64, 10)),
 						origin: signed(i),
+						_phantom: PhantomData::<u64>::default(),
+					}),
+					Some(ScheduledV3Of::<Test> {
+						maybe_id: Some(vec![i as u8; 320]),
+						priority: 123,
+						call: MaybeHashed::Hash(undecodable_hash.clone()),
+						maybe_periodic: Some((4u64, 20)),
+						origin: root(),
 						_phantom: PhantomData::<u64>::default(),
 					}),
 				];
@@ -183,13 +291,14 @@ mod test {
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						Some(ScheduledOf::<Test> {
-							maybe_id: Some(blake2_256(&[255u8; 32])),
+							maybe_id: Some(blake2_256(&[255u8; 320])),
 							priority: 123,
 							call: Bounded::from_legacy_hash(bound_hashed_call.hash()),
 							maybe_periodic: Some((8u64, 10)),
 							origin: signed(0),
 							_phantom: PhantomData::<u64>::default(),
 						}),
+						None,
 					],
 				),
 				(
@@ -213,13 +322,14 @@ mod test {
 							_phantom: PhantomData::<u64>::default(),
 						}),
 						Some(ScheduledOf::<Test> {
-							maybe_id: Some(blake2_256(&[254u8; 32])),
+							maybe_id: Some(blake2_256(&[254u8; 320])),
 							priority: 123,
 							call: Bounded::from_legacy_hash(bound_hashed_call.hash()),
 							maybe_periodic: Some((8u64, 10)),
 							origin: signed(1),
 							_phantom: PhantomData::<u64>::default(),
 						}),
+						None,
 					],
 				),
 			];

@@ -980,7 +980,7 @@ fn test_migrate_origin() {
 	new_test_ext().execute_with(|| {
 		for i in 0..3u64 {
 			let k = i.twox_64_concat();
-			let old: Vec<Option<Scheduled<Bounded<RuntimeCall>, u64, u32, u64>>> = vec![
+			let old: Vec<Option<Scheduled<[u8; 32], Bounded<RuntimeCall>, u64, u32, u64>>> = vec![
 				Some(Scheduled {
 					maybe_id: None,
 					priority: i as u8 + 10,

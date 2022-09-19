@@ -103,9 +103,9 @@ struct ScheduledV1<Call, BlockNumber> {
 /// Information regarding an item to be executed in the future.
 #[cfg_attr(any(feature = "std", test), derive(PartialEq, Eq))]
 #[derive(Clone, RuntimeDebug, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub struct Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> {
+pub struct Scheduled<Name, Call, BlockNumber, PalletsOrigin, AccountId> {
 	/// The unique identity for this task, if there is one.
-	maybe_id: Option<[u8; 32]>,
+	maybe_id: Option<Name>,
 	/// This task's priority.
 	priority: schedule::Priority,
 	/// The call to be dispatched.
@@ -120,6 +120,7 @@ pub struct Scheduled<Call, BlockNumber, PalletsOrigin, AccountId> {
 use crate::{Scheduled as ScheduledV3, Scheduled as ScheduledV2};
 
 pub type ScheduledV2Of<T> = ScheduledV2<
+	Vec<u8>,
 	<T as Config>::RuntimeCall,
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
@@ -127,6 +128,7 @@ pub type ScheduledV2Of<T> = ScheduledV2<
 >;
 
 pub type ScheduledV3Of<T> = ScheduledV3<
+	Vec<u8>,
 	CallOrHashOf<T>,
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
@@ -134,6 +136,7 @@ pub type ScheduledV3Of<T> = ScheduledV3<
 >;
 
 pub type ScheduledOf<T> = Scheduled<
+	TaskName,
 	Bounded<<T as Config>::RuntimeCall>,
 	<T as frame_system::Config>::BlockNumber,
 	<T as Config>::PalletsOrigin,
@@ -180,7 +183,7 @@ impl<T: WeightInfo> MarginalWeightInfo for T {}
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{dispatch::PostDispatchInfo, pallet_prelude::*, storage_alias};
+	use frame_support::{dispatch::PostDispatchInfo, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
@@ -260,14 +263,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type Lookup<T: Config> =
 		StorageMap<_, Twox64Concat, TaskName, TaskAddress<T::BlockNumber>>;
-
-	#[storage_alias]
-	pub(crate) type LookupV1<T: Config> = StorageMap<
-		Pallet<T>,
-		Twox64Concat,
-		Vec<u8>,
-		TaskAddress<<T as frame_system::Config>::BlockNumber>,
-	>;
 
 	/// Events type.
 	#[pallet::event]
@@ -439,7 +434,20 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 	///
 	/// Returns the weight consumed by this migration.
 	pub fn migrate_v1_to_v4() -> Weight {
+		use migration::v1 as old;
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
+
+		// Delete all undecodable values.
+		// `StorageMap::translate` is not enough since it just skips them and leaves the keys in.
+		let keys = old::Agenda::<T>::iter_keys().collect::<Vec<_>>();
+		for key in keys {
+			weight.saturating_accrue(T::DbWeight::get().reads(1));
+			if let Err(_) = old::Agenda::<T>::try_get(&key) {
+				weight.saturating_accrue(T::DbWeight::get().writes(1));
+				old::Agenda::<T>::remove(&key);
+				log::warn!("Deleted undecodable agenda");
+			}
+		}
 
 		Agenda::<T>::translate::<
 			Vec<Option<ScheduledV1<<T as Config>::RuntimeCall, T::BlockNumber>>>,
@@ -454,7 +462,7 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 						schedule.and_then(|schedule| {
 							if let Some(id) = schedule.maybe_id.as_ref() {
 								let name = blake2_256(id);
-								if let Some(item) = LookupV1::<T>::take(id) {
+								if let Some(item) = old::Lookup::<T>::take(id) {
 									Lookup::<T>::insert(name, item);
 								}
 								weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
@@ -496,7 +504,20 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 	///
 	/// Returns the weight consumed by this migration.
 	pub fn migrate_v2_to_v4() -> Weight {
+		use migration::v2 as old;
 		let mut weight = T::DbWeight::get().reads_writes(1, 1);
+
+		// Delete all undecodable values.
+		// `StorageMap::translate` is not enough since it just skips them and leaves the keys in.
+		let keys = old::Agenda::<T>::iter_keys().collect::<Vec<_>>();
+		for key in keys {
+			weight.saturating_accrue(T::DbWeight::get().reads(1));
+			if let Err(_) = old::Agenda::<T>::try_get(&key) {
+				weight.saturating_accrue(T::DbWeight::get().writes(1));
+				old::Agenda::<T>::remove(&key);
+				log::warn!("Deleted undecodable agenda");
+			}
+		}
 
 		Agenda::<T>::translate::<Vec<Option<ScheduledV2Of<T>>>, _>(|_, agenda| {
 			Some(BoundedVec::truncate_from(
@@ -507,7 +528,7 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 						schedule.and_then(|schedule| {
 							if let Some(id) = schedule.maybe_id.as_ref() {
 								let name = blake2_256(id);
-								if let Some(item) = Lookup::<T>::take(id) {
+								if let Some(item) = old::Lookup::<T>::take(id) {
 									Lookup::<T>::insert(name, item);
 								}
 								weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
@@ -549,7 +570,20 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 	/// Returns the weight consumed by this migration.
 	#[allow(deprecated)]
 	pub fn migrate_v3_to_v4() -> Weight {
-		let mut weight = T::DbWeight::get().reads_writes(1, 1);
+		use migration::v3 as old;
+		let mut weight = T::DbWeight::get().reads_writes(2, 1);
+
+		// Delete all undecodable values.
+		// `StorageMap::translate` is not enough since it just skips them and leaves the keys in.
+		let blocks = old::Agenda::<T>::iter_keys().collect::<Vec<_>>();
+		for block in blocks {
+			weight.saturating_accrue(T::DbWeight::get().reads(1));
+			if let Err(_) = old::Agenda::<T>::try_get(&block) {
+				weight.saturating_accrue(T::DbWeight::get().writes(1));
+				old::Agenda::<T>::remove(&block);
+				log::warn!("Deleted undecodable agenda of block: {:?}", block);
+			}
+		}
 
 		Agenda::<T>::translate::<Vec<Option<ScheduledV3Of<T>>>, _>(|_, agenda| {
 			Some(BoundedVec::truncate_from(
@@ -560,14 +594,29 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 						schedule.and_then(|schedule| {
 							if let Some(id) = schedule.maybe_id.as_ref() {
 								let name = blake2_256(id);
-								if let Some(item) = Lookup::<T>::take(id) {
+								if let Some(item) = old::Lookup::<T>::take(id) {
 									Lookup::<T>::insert(name, item);
+									log::info!("Migrated name for id: {:?}", id);
+								} else {
+									log::error!("No name in Lookup for id: {:?}", &id);
 								}
 								weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
 							}
 
 							let call = match schedule.call {
-								MaybeHashed::Hash(h) => Bounded::from_legacy_hash(h),
+								MaybeHashed::Hash(h) => {
+									let bounded = Bounded::from_legacy_hash(h);
+									// Check that the call can be decoded in the new runtime.
+									if let Err(err) =
+										T::Preimages::peek::<<T as Config>::RuntimeCall>(&bounded)
+									{
+										log::error!("Dropping undecodable call {}: {:?}", &h, &err);
+										return None
+									}
+									weight.saturating_accrue(T::DbWeight::get().reads(1));
+									log::info!("Migrated call by hash, hash: {:?}", h);
+									bounded
+								},
 								MaybeHashed::Value(v) => {
 									let call = T::Preimages::bound(v).ok()?;
 									if call.lookup_needed() {
@@ -575,6 +624,7 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 											T::DbWeight::get().reads_writes(0, 1),
 										);
 									}
+									log::info!("Migrated call by value, hash: {:?}", call.hash());
 									call
 								},
 							};
@@ -613,6 +663,7 @@ impl<T: Config> Pallet<T> {
 			Vec<
 				Option<
 					Scheduled<
+						TaskName,
 						Bounded<<T as Config>::RuntimeCall>,
 						T::BlockNumber,
 						OldOrigin,
@@ -724,7 +775,7 @@ impl<T: Config> Pallet<T> {
 		let scheduled = Agenda::<T>::try_mutate(when, |agenda| {
 			agenda.get_mut(index as usize).map_or(
 				Ok(None),
-				|s| -> Result<Option<Scheduled<_, _, _, _>>, DispatchError> {
+				|s| -> Result<Option<Scheduled<_, _, _, _, _>>, DispatchError> {
 					if let (Some(ref o), Some(ref s)) = (origin, s.borrow()) {
 						if matches!(
 							T::OriginPrivilegeCmp::cmp_privilege(o, &s.origin),
