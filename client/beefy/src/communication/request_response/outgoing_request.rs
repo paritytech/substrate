@@ -102,7 +102,7 @@ where
 	}
 
 	fn reset_peers_cache_for_block(&mut self, block: NumberFor<B>) {
-		self.peers_cache = self.live_peers.lock().peers_at_least_at_block(block);
+		self.peers_cache = self.live_peers.lock().at_least_at_block(block);
 	}
 
 	pub fn try_next_peer(&mut self) -> Option<PeerId> {

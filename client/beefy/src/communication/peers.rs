@@ -60,7 +60,7 @@ impl<B: Block> KnownPeers<B> {
 	}
 
 	/// Return _filtered and cloned_ list of peers that have voted on `block` or higher.
-	pub fn peers_at_least_at_block(&self, block: NumberFor<B>) -> VecDeque<PeerId> {
+	pub fn at_least_at_block(&self, block: NumberFor<B>) -> VecDeque<PeerId> {
 		self.live
 			.iter()
 			.filter_map(|(k, v)| if v.last_voted_on >= block { Some(k) } else { None })
@@ -71,5 +71,58 @@ impl<B: Block> KnownPeers<B> {
 	/// Answer whether `peer` is part of `KnownPeers` set.
 	pub fn contains(&self, peer: &PeerId) -> bool {
 		self.live.contains_key(peer)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn should_track_known_peers_progress() {
+		let (alice, bob, charlie) = (PeerId::random(), PeerId::random(), PeerId::random());
+		let mut peers = KnownPeers::<sc_network_test::Block>::new();
+		assert!(peers.live.is_empty());
+
+		// Alice and Bob new connected peers.
+		peers.add_new(alice);
+		peers.add_new(bob);
+		// 'Tracked' Bob seen voting for 5.
+		peers.note_vote_for(bob, 5);
+		// Previously unseen Charlie now seen voting for 10.
+		peers.note_vote_for(charlie, 10);
+
+		assert_eq!(peers.live.len(), 3);
+		assert!(peers.contains(&alice));
+		assert!(peers.contains(&bob));
+		assert!(peers.contains(&charlie));
+
+		// Get peers at block >= 5
+		let at_5 = peers.at_least_at_block(5);
+		// Should be Bob and Charlie
+		assert_eq!(at_5.len(), 2);
+		assert!(at_5.contains(&bob));
+		assert!(at_5.contains(&charlie));
+
+		// 'Tracked' Alice seen voting for 10.
+		peers.note_vote_for(alice, 10);
+
+		// Get peers at block >= 9
+		let at_9 = peers.at_least_at_block(9);
+		// Should be Charlie and Alice
+		assert_eq!(at_9.len(), 2);
+		assert!(at_9.contains(&charlie));
+		assert!(at_9.contains(&alice));
+
+		// Remove Alice
+		peers.remove(&alice);
+		assert_eq!(peers.live.len(), 2);
+		assert!(!peers.contains(&alice));
+
+		// Get peers at block >= 9
+		let at_9 = peers.at_least_at_block(9);
+		// Now should be just Charlie
+		assert_eq!(at_9.len(), 1);
+		assert!(at_9.contains(&charlie));
 	}
 }
