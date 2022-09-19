@@ -568,7 +568,9 @@ impl pallet_staking::Config for Runtime {
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
-	type VoterList = BagsList;
+	type VoterList = VoterBagsList;
+	// This a placeholder, to be introduced in the next PR as an instance of bags-list
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type OnStakerSlash = NominationPools;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
@@ -724,12 +726,15 @@ parameter_types! {
 	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
 }
 
-impl pallet_bags_list::Config for Runtime {
+type VoterBagsListInstance = pallet_bags_list::Instance1;
+impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	/// The voter bags-list is loosely kept up to date, and the real source of truth for the score
+	/// of each node is the staking pallet.
 	type ScoreProvider = Staking;
-	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
+	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1637,7 +1642,7 @@ construct_runtime!(
 		Gilt: pallet_gilt,
 		Uniques: pallet_uniques,
 		TransactionStorage: pallet_transaction_storage,
-		BagsList: pallet_bags_list,
+		VoterBagsList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
@@ -1723,7 +1728,7 @@ mod benches {
 		[pallet_alliance, Alliance]
 		[pallet_assets, Assets]
 		[pallet_babe, Babe]
-		[pallet_bags_list, BagsList]
+		[pallet_bags_list, VoterBagsList]
 		[pallet_balances, Balances]
 		[pallet_bounties, Bounties]
 		[pallet_child_bounties, ChildBounties]
