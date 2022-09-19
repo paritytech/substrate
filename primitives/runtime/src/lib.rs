@@ -176,9 +176,8 @@ impl From<Justification> for Justifications {
 	}
 }
 
-use traits::{Lazy, Verify};
+use traits::{BlakeTwo256, Convert, CustomVerify, IdentifyAccount, Lazy, Verify};
 
-use crate::traits::IdentifyAccount;
 #[cfg(feature = "std")]
 pub use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -297,6 +296,13 @@ impl TryFrom<MultiSignature> for ecdsa::Signature {
 	}
 }
 
+struct EcdsaPublicToBlakeTwo256;
+impl Convert<ecdsa::Public, AccountId32> for EcdsaPublicToBlakeTwo256 {
+	fn convert(a: ecdsa::Public) -> AccountId32 {
+		sp_io::hashing::blake2_256(a.as_ref()).into()
+	}
+}
+
 /// Public key for any known crypto algorithm.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -333,7 +339,7 @@ impl traits::IdentifyAccount for MultiSigner {
 		match self {
 			Self::Ed25519(who) => <[u8; 32]>::from(who).into(),
 			Self::Sr25519(who) => <[u8; 32]>::from(who).into(),
-			Self::Ecdsa(who) => sp_io::hashing::blake2_256(who.as_ref()).into(),
+			Self::Ecdsa(who) => EcdsaPublicToBlakeTwo256::convert(who),
 		}
 	}
 }
@@ -402,7 +408,7 @@ impl std::fmt::Display for MultiSigner {
 
 impl Verify for MultiSignature {
 	type Signer = MultiSigner;
-	fn verify<L: Lazy<[u8]>>(&self, mut msg: L, signer: &AccountId32) -> bool {
+	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &AccountId32) -> bool {
 		match (self, signer) {
 			(Self::Ed25519(ref sig), who) => match ed25519::Public::from_slice(who.as_ref()) {
 				Ok(signer) => sig.verify(msg, &signer),
@@ -412,15 +418,10 @@ impl Verify for MultiSignature {
 				Ok(signer) => sig.verify(msg, &signer),
 				Err(()) => false,
 			},
-			(Self::Ecdsa(ref sig), who) => {
-				let m = sp_io::hashing::blake2_256(msg.get());
-				match sp_io::crypto::secp256k1_ecdsa_recover_compressed(sig.as_ref(), &m) {
-					Ok(pubkey) =>
-						&sp_io::hashing::blake2_256(pubkey.as_ref()) ==
-							<dyn AsRef<[u8; 32]>>::as_ref(who),
-					_ => false,
-				}
-			},
+			(Self::Ecdsa(ref sig), who) =>
+				CustomVerify::<BlakeTwo256, _, EcdsaPublicToBlakeTwo256>::custom_verify(
+					sig, msg, who,
+				),
 		}
 	}
 }
