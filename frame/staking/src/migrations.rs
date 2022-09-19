@@ -20,6 +20,59 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::OnRuntimeUpgrade;
 
+pub mod v12 {
+	use super::*;
+	use frame_support::{pallet_prelude::ValueQuery, storage_alias};
+
+	#[storage_alias]
+	type HistoryDepth<T: Config> = StorageValue<Pallet<T>, u32, ValueQuery>;
+
+	/// Clean up `HistoryDepth` from storage
+	///
+	/// We will be depending on the configurable value of `HistoryDepth` post
+	/// this release.
+	pub struct MigrateToV12<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV12<T> {
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == Releases::V11_0_0,
+				"Expected v11 before upgrading to v12"
+			);
+
+			frame_support::ensure!(
+				T::HistoryDepth::get() == HistoryDepth::<T>::get(),
+				"Provided value of HistoryDepth should be same as the existing storage value"
+			);
+
+			Ok(())
+		}
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			if StorageVersion::<T>::get() == Releases::V11_0_0 {
+				HistoryDepth::<T>::kill();
+				StorageVersion::<T>::put(Releases::V12_0_0);
+
+				log!(info, "v12 applied successfully");
+				T::DbWeight::get().reads_writes(1, 2)
+			} else {
+				log!(warn, "Skipping v12, should be removed");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == crate::Releases::V12_0_0,
+				"v12 not applied"
+			);
+			Ok(())
+		}
+	}
+}
+
 pub mod v11 {
 	use super::*;
 	use frame_support::{
@@ -78,21 +131,6 @@ pub mod v11 {
 				log!(warn, "v11::migrate should be removed.");
 				T::DbWeight::get().reads(1)
 			}
-
-			let old_pallet_prefix = twox_128(N::get().as_bytes());
-			frame_support::ensure!(
-				sp_io::storage::next_key(&old_pallet_prefix).is_none(),
-				"old pallet data hasn't been removed"
-			);
-
-			let new_pallet_name = <P as PalletInfoAccess>::name();
-			let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
-			frame_support::ensure!(
-				sp_io::storage::next_key(&new_pallet_prefix).is_some(),
-				"new pallet data hasn't been created"
-			);
-
-			Ok(())
 		}
 
 		#[cfg(feature = "try-runtime")]
