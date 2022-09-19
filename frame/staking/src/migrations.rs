@@ -20,6 +20,99 @@ use super::*;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::OnRuntimeUpgrade;
 
+pub mod v11 {
+	use super::*;
+	use frame_support::{
+		storage::migration::move_pallet,
+		traits::{GetStorageVersion, PalletInfoAccess},
+	};
+	#[cfg(feature = "try-runtime")]
+	use sp_io::hashing::twox_128;
+
+	pub struct MigrateToV11<T, P, N>(sp_std::marker::PhantomData<(T, P, N)>);
+	impl<T: Config, P: GetStorageVersion + PalletInfoAccess, N: Get<&'static str>> OnRuntimeUpgrade
+		for MigrateToV11<T, P, N>
+	{
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<(), &'static str> {
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == crate::Releases::V10_0_0,
+				"must upgrade linearly"
+			);
+			let old_pallet_prefix = twox_128(N::get().as_bytes());
+
+			frame_support::ensure!(
+				sp_io::storage::next_key(&old_pallet_prefix).is_some(),
+				"no data for the old pallet name has been detected"
+			);
+
+			Ok(())
+		}
+
+		/// Migrate the entire storage of this pallet to a new prefix.
+		///
+		/// This new prefix must be the same as the one set in construct_runtime. For safety, use
+		/// `PalletInfo` to get it, as:
+		/// `<Runtime as frame_system::Config>::PalletInfo::name::<VoterBagsList>`.
+		///
+		/// The migration will look into the storage version in order to avoid triggering a
+		/// migration on an up to date storage.
+		fn on_runtime_upgrade() -> Weight {
+			let old_pallet_name = N::get();
+			let new_pallet_name = <P as PalletInfoAccess>::name();
+
+			if StorageVersion::<T>::get() == Releases::V10_0_0 {
+				// bump version anyway, even if we don't need to move the prefix
+				StorageVersion::<T>::put(Releases::V11_0_0);
+				if new_pallet_name == old_pallet_name {
+					log!(
+						warn,
+						"new bags-list name is equal to the old one, only bumping the version"
+					);
+					return T::DbWeight::get().reads(1).saturating_add(T::DbWeight::get().writes(1))
+				}
+
+				move_pallet(old_pallet_name.as_bytes(), new_pallet_name.as_bytes());
+				<T as frame_system::Config>::BlockWeights::get().max_block
+			} else {
+				log!(warn, "v11::migrate should be removed.");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade() -> Result<(), &'static str> {
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == crate::Releases::V11_0_0,
+				"wrong version after the upgrade"
+			);
+
+			let old_pallet_name = N::get();
+			let new_pallet_name = <P as PalletInfoAccess>::name();
+
+			// skip storage prefix checks for the same pallet names
+			if new_pallet_name == old_pallet_name {
+				return Ok(())
+			}
+
+			let old_pallet_prefix = twox_128(N::get().as_bytes());
+			frame_support::ensure!(
+				sp_io::storage::next_key(&old_pallet_prefix).is_none(),
+				"old pallet data hasn't been removed"
+			);
+
+			let new_pallet_name = <P as PalletInfoAccess>::name();
+			let new_pallet_prefix = twox_128(new_pallet_name.as_bytes());
+			frame_support::ensure!(
+				sp_io::storage::next_key(&new_pallet_prefix).is_some(),
+				"new pallet data hasn't been created"
+			);
+
+			Ok(())
+		}
+	}
+}
+
 pub mod v10 {
 	use super::*;
 	use frame_support::storage_alias;

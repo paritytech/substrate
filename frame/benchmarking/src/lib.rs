@@ -30,7 +30,7 @@ mod utils;
 pub mod baseline;
 
 #[cfg(feature = "std")]
-pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector, RegressionModel};
+pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector};
 #[doc(hidden)]
 pub use frame_support;
 #[doc(hidden)]
@@ -86,12 +86,12 @@ macro_rules! whitelist {
 /// ```
 ///
 /// Note that due to parsing restrictions, if the `from` expression is not a single token (i.e. a
-/// literal or constant), then it must be parenthesised.
+/// literal or constant), then it must be parenthesized.
 ///
 /// The macro allows for a number of "arms", each representing an individual benchmark. Using the
 /// simple syntax, the associated dispatchable function maps 1:1 with the benchmark and the name of
 /// the benchmark is the same as that of the associated function. However, extended syntax allows
-/// for arbitrary expresions to be evaluated in a benchmark (including for example,
+/// for arbitrary expressions to be evaluated in a benchmark (including for example,
 /// `on_initialize`).
 ///
 /// Note that the ranges are *inclusive* on both sides. This is in contrast to ranges in Rust which
@@ -975,6 +975,8 @@ macro_rules! impl_benchmark {
 		( $( $name_extra:ident ),* )
 		( $( $name_skip_meta:ident ),* )
 	) => {
+		// We only need to implement benchmarks for the runtime-benchmarks feature or testing.
+		#[cfg(any(feature = "runtime-benchmarks", test))]
 		impl<T: Config $(<$instance>, $instance: $instance_bound )? >
 			$crate::Benchmarking for Pallet<T $(, $instance)? >
 			where T: frame_system::Config, $( $where_clause )*

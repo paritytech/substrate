@@ -38,15 +38,15 @@ macro_rules! decl_tests {
 		const ID_1: LockIdentifier = *b"1       ";
 		const ID_2: LockIdentifier = *b"2       ";
 
-		pub const CALL: &<$test as frame_system::Config>::Call =
-			&Call::Balances(pallet_balances::Call::transfer { dest: 0, value: 0 });
+		pub const CALL: &<$test as frame_system::Config>::RuntimeCall =
+			&RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 0, value: 0 });
 
 		/// create a transaction info struct from weight. Handy to avoid building the whole struct.
 		pub fn info_from_weight(w: Weight) -> DispatchInfo {
 			DispatchInfo { weight: w, ..Default::default() }
 		}
 
-		fn events() -> Vec<Event> {
+		fn events() -> Vec<RuntimeEvent> {
 			let evt = System::events().into_iter().map(|evt| evt.event).collect::<Vec<_>>();
 
 			System::reset_events();
@@ -314,7 +314,7 @@ macro_rules! decl_tests {
 			<$ext_builder>::default().monied(true).build().execute_with(|| {
 				assert_eq!(Balances::total_balance(&1), 10);
 				assert_ok!(Balances::deposit_into_existing(&1, 10).map(drop));
-				System::assert_last_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 10 }));
+				System::assert_last_event(RuntimeEvent::Balances(crate::Event::Deposit { who: 1, amount: 10 }));
 				assert_eq!(Balances::total_balance(&1), 20);
 				assert_eq!(<TotalIssuance<$test>>::get(), 120);
 			});
@@ -342,7 +342,7 @@ macro_rules! decl_tests {
 		fn balance_works() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 42);
-				System::assert_has_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 42 }));
+				System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit { who: 1, amount: 42 }));
 				assert_eq!(Balances::free_balance(1), 42);
 				assert_eq!(Balances::reserved_balance(1), 0);
 				assert_eq!(Balances::total_balance(&1), 42);
@@ -444,7 +444,7 @@ macro_rules! decl_tests {
 				let _ = Balances::withdraw(
 					&2, 11, WithdrawReasons::TRANSFER, ExistenceRequirement::KeepAlive
 				);
-				System::assert_last_event(Event::Balances(crate::Event::Withdraw { who: 2, amount: 11 }));
+				System::assert_last_event(RuntimeEvent::Balances(crate::Event::Withdraw { who: 2, amount: 11 }));
 				assert_eq!(Balances::free_balance(2), 100);
 				assert_eq!(<TotalIssuance<$test>>::get(), 100);
 			});
@@ -505,7 +505,7 @@ macro_rules! decl_tests {
 				assert_ok!(Balances::reserve(&1, 110));
 				assert_ok!(Balances::repatriate_reserved(&1, &2, 41, Status::Free), 0);
 				System::assert_last_event(
-					Event::Balances(crate::Event::ReserveRepatriated { from: 1, to: 2, amount: 41, destination_status: Status::Free })
+					RuntimeEvent::Balances(crate::Event::ReserveRepatriated { from: 1, to: 2, amount: 41, destination_status: Status::Free })
 				);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 0);
@@ -740,18 +740,18 @@ macro_rules! decl_tests {
 					System::set_block_number(2);
 					assert_ok!(Balances::reserve(&1, 10));
 
-					System::assert_last_event(Event::Balances(crate::Event::Reserved { who: 1, amount: 10 }));
+					System::assert_last_event(RuntimeEvent::Balances(crate::Event::Reserved { who: 1, amount: 10 }));
 
 					System::set_block_number(3);
 					assert!(Balances::unreserve(&1, 5).is_zero());
 
-					System::assert_last_event(Event::Balances(crate::Event::Unreserved { who: 1, amount: 5 }));
+					System::assert_last_event(RuntimeEvent::Balances(crate::Event::Unreserved { who: 1, amount: 5 }));
 
 					System::set_block_number(4);
 					assert_eq!(Balances::unreserve(&1, 6), 1);
 
 					// should only unreserve 5
-					System::assert_last_event(Event::Balances(crate::Event::Unreserved { who: 1, amount: 5 }));
+					System::assert_last_event(RuntimeEvent::Balances(crate::Event::Unreserved { who: 1, amount: 5 }));
 				});
 		}
 
@@ -766,9 +766,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::NewAccount { account: 1 }),
-							Event::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
-							Event::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
+							RuntimeEvent::System(system::Event::NewAccount { account: 1 }),
+							RuntimeEvent::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
+							RuntimeEvent::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
 						]
 					);
 
@@ -778,9 +778,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::KilledAccount { account: 1 }),
-							Event::Balances(crate::Event::DustLost { account: 1, amount: 99 }),
-							Event::Balances(crate::Event::Slashed { who: 1, amount: 1 }),
+							RuntimeEvent::System(system::Event::KilledAccount { account: 1 }),
+							RuntimeEvent::Balances(crate::Event::DustLost { account: 1, amount: 99 }),
+							RuntimeEvent::Balances(crate::Event::Slashed { who: 1, amount: 1 }),
 						]
 					);
 				});
@@ -797,9 +797,9 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::NewAccount { account: 1 }),
-							Event::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
-							Event::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
+							RuntimeEvent::System(system::Event::NewAccount { account: 1 }),
+							RuntimeEvent::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
+							RuntimeEvent::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
 						]
 					);
 
@@ -809,8 +809,8 @@ macro_rules! decl_tests {
 					assert_eq!(
 						events(),
 						[
-							Event::System(system::Event::KilledAccount { account: 1 }),
-							Event::Balances(crate::Event::Slashed { who: 1, amount: 100 }),
+							RuntimeEvent::System(system::Event::KilledAccount { account: 1 }),
+							RuntimeEvent::Balances(crate::Event::Slashed { who: 1, amount: 100 }),
 						]
 					);
 				});
@@ -830,7 +830,7 @@ macro_rules! decl_tests {
 					assert_eq!(Balances::slash(&1, 900), (NegativeImbalance::new(900), 0));
 					// Account is still alive
 					assert!(System::account_exists(&1));
-					System::assert_last_event(Event::Balances(crate::Event::Slashed { who: 1, amount: 900 }));
+					System::assert_last_event(RuntimeEvent::Balances(crate::Event::Slashed { who: 1, amount: 900 }));
 
 					// SCENARIO: Slash will kill account because not enough balance left.
 					assert_ok!(Balances::set_balance(Origin::root(), 1, 1_000, 0));

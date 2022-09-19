@@ -31,7 +31,7 @@ pub use sc_network_common::{
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
-use crate::{bitswap::Bitswap, ExHashT};
+use crate::ExHashT;
 
 use core::{fmt, iter};
 use futures::future;
@@ -78,9 +78,6 @@ where
 
 	/// Client that contains the blockchain.
 	pub chain: Arc<Client>,
-
-	/// Bitswap block request protocol implementation.
-	pub bitswap: Option<Bitswap<B>>,
 
 	/// Pool of transactions.
 	///
@@ -139,6 +136,9 @@ where
 
 	/// Optional warp sync protocol config.
 	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
+
+	/// Request response protocol configurations
+	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
 }
 
 /// Role of the local node.

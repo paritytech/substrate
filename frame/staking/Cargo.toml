@@ -43,7 +43,7 @@ sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elect
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
-pallet-bags-list = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../bags-list" }
+pallet-bags-list = { version = "4.0.0-dev", path = "../bags-list" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
@@ -52,6 +52,7 @@ rand_chacha = { version = "0.2" }
 [features]
 default = ["std"]
 std = [
+	"frame-benchmarking?/std",
 	"serde",
 	"codec/std",
 	"scale-info/std",
@@ -61,6 +62,7 @@ std = [
 	"sp-runtime/std",
 	"sp-staking/std",
 	"pallet-session/std",
+	"pallet-bags-list/std",
 	"frame-system/std",
 	"pallet-authorship/std",
 	"sp-application-crypto/std",
@@ -74,3 +76,7 @@ runtime-benchmarks = [
 	"sp-staking/runtime-benchmarks",
 ]
 try-runtime = ["frame-support/try-runtime"]
+fuzz = [
+	"pallet-bags-list/fuzz",
+	"frame-election-provider-support/fuzz",
+]

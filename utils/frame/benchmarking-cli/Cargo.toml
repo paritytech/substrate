@@ -59,6 +59,6 @@ sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
 gethostname = "0.2.3"
 
 [features]
-default = ["rocksdb", "runtime-benchmarks"]
+default = ["rocksdb"]
 runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
 rocksdb = ["sc-cli/rocksdb", "sc-client-db/rocksdb"]
