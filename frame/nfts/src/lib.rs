@@ -110,9 +110,9 @@ pub mod pallet {
 		/// Standard collection creation is only allowed if the origin attempting it and the
 		/// collection are in this set.
 		type CreateOrigin: EnsureOriginWithArg<
-			Success = Self::AccountId,
 			Self::Origin,
 			Self::CollectionId,
+			Success = Self::AccountId,
 		>;
 
 		/// Locker trait to enable Locking mechanism downstream.
