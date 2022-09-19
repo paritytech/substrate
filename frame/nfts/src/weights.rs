@@ -72,6 +72,7 @@ pub trait WeightInfo {
 	fn set_collection_max_supply() -> Weight;
 	fn set_price() -> Weight;
 	fn buy_item() -> Weight;
+	fn pay_tips(i: u32, ) -> Weight;
 }
 
 /// Weights for pallet_nfts using the Substrate node and recommended hardware.
@@ -290,6 +291,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(3 as Weight))
 			.saturating_add(T::DbWeight::get().writes(4 as Weight))
 	}
+	// Storage: Skipped Metadata (r:0 w:0)
+	/// The range of component `i` is `[1, 1000]`.
+	fn pay_tips(i: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((603_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+	}
 }
 
 // For backwards compatibility and tests
@@ -506,5 +515,13 @@ impl WeightInfo for () {
 		(45_272_000 as Weight)
 			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
 			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+	}
+	// Storage: Skipped Metadata (r:0 w:0)
+	/// The range of component `i` is `[1, 1000]`.
+	fn pay_tips(i: u32, ) -> Weight {
+		(0 as Weight)
+			// Standard Error: 1_000
+			.saturating_add((603_000 as Weight).saturating_mul(i as Weight))
+			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
 	}
 }

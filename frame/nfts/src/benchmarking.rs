@@ -443,5 +443,25 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
+	pay_tips {
+		let n in 0 .. T::MaxTips::get() as u32;
+		let tip = BalanceOf::<T, I>::from(100u32);
+		let caller: T::AccountId = whitelisted_caller();
+		let collection = T::Helper::collection(0);
+		let item = T::Helper::item(0);
+		let tips = vec![ItemTip(collection, item, caller, tip).into(); n as usize];
+	}: _(SystemOrigin::Signed(caller.clone()), tips)
+	verify {
+		if !n.is_zero() {
+			assert_last_event::<T, I>(Event::TipSent {
+				collection,
+				item,
+				sender: caller.clone(),
+				receiver: caller.clone(),
+				amount: tip,
+			}.into());
+		}
+	}
+
 	impl_benchmark_test_suite!(Nfts, crate::mock::new_test_ext(), crate::mock::Test);
 }

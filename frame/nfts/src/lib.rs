@@ -35,10 +35,10 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+mod features;
 mod functions;
 mod impl_nonfungibles;
 mod types;
-mod user_features;
 
 pub mod weights;
 
@@ -149,6 +149,10 @@ pub mod pallet {
 		/// The maximum length of an attribute value.
 		#[pallet::constant]
 		type ValueLimit: Get<u32>;
+
+		/// The max number of tips a user could send.
+		#[pallet::constant]
+		type MaxTips: Get<u32>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -424,6 +428,8 @@ pub mod pallet {
 		NotForSale,
 		/// The provided bid is too low.
 		BidTooLow,
+		/// Too many tips provided.
+		TooManyTips,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1510,10 +1516,11 @@ pub mod pallet {
 		/// - `tips`: Tips array.
 		///
 		/// Emits `TipSent` on every tip transfer.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::pay_tips(tips.len() as u32))]
 		#[transactional]
 		pub fn pay_tips(origin: OriginFor<T>, tips: Vec<ItemTip<T, I>>) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			ensure!(tips.len() <= T::MaxTips::get() as usize, Error::<T, I>::TooManyTips);
 			Self::do_pay_tips(origin, tips)
 		}
 	}

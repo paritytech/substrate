@@ -877,5 +877,13 @@ fn pay_tips_should_work() {
 			receiver: user_3,
 			amount: tip,
 		}));
+
+		assert_noop!(
+			Nfts::pay_tips(
+				Origin::signed(user_1),
+				vec![(collection_id, item_id, user_2, tip); 15 as usize]
+			),
+			Error::<Test>::TooManyTips
+		);
 	});
 }
