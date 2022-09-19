@@ -455,7 +455,7 @@ impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
 }
 
 impl frame_support::traits::OriginTrait for Origin {
-	type Call = <Runtime as frame_system::Config>::Call;
+	type Call = <Runtime as frame_system::Config>::RuntimeCall;
 	type PalletsOrigin = Origin;
 	type AccountId = <Runtime as frame_system::Config>::AccountId;
 
@@ -501,9 +501,9 @@ impl frame_support::traits::OriginTrait for Origin {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct Event;
+pub struct RuntimeEvent;
 
-impl From<frame_system::Event<Runtime>> for Event {
+impl From<frame_system::Event<Runtime>> for RuntimeEvent {
 	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
@@ -585,7 +585,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type Origin = Origin;
-	type Call = Extrinsic;
+	type RuntimeCall = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -593,7 +593,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<2400>;
 	type DbWeight = ();
 	type Version = ();
