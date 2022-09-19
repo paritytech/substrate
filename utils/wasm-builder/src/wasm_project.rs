@@ -669,7 +669,7 @@ fn compact_wasm_file(
 			"{}.compact.wasm",
 			wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone()),
 		));
-		wasm_opt::OptimizationOptions::new_opt_level_4()
+		wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
 			.zero_filled_memory(true)
 			.run(&wasm_file, Option::<&str>::None, &wasm_compact_file, Option::<&str>::None)
 			.expect("Failed to compact generated WASM binary.");
