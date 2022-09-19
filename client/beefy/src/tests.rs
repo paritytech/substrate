@@ -375,13 +375,9 @@ where
 			links: beefy_voter_links.unwrap(),
 			min_block_delta,
 			prometheus_registry: None,
+			on_demand_justifications_handler: on_demand_justif_handler,
 		};
-		let task = async move {
-			futures::join!(
-				crate::start_beefy_gadget::<_, _, _, _, _>(beefy_params),
-				on_demand_justif_handler.run()
-			);
-		};
+		let task = crate::start_beefy_gadget::<_, _, _, _, _>(beefy_params);
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&task);

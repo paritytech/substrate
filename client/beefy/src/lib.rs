@@ -52,7 +52,10 @@ use crate::{
 			BeefyVersionedFinalityProofStream,
 		},
 		peers::KnownPeers,
-		request_response::outgoing_request::OnDemandJustificationsEngine,
+		request_response::{
+			incoming_handler::BeefyJustifsRequestHandler,
+			outgoing_request::OnDemandJustificationsEngine,
+		},
 	},
 	import::BeefyBlockImport,
 };
@@ -194,6 +197,8 @@ where
 	pub prometheus_registry: Option<Registry>,
 	/// Links between the block importer, the background voter and the RPC layer.
 	pub links: BeefyVoterLinks<B>,
+	/// Handler for incoming BEEFY justifications requests from a remote peer.
+	pub on_demand_justifications_handler: BeefyJustifsRequestHandler<B, C>,
 }
 
 /// Start the BEEFY gadget.
@@ -217,6 +222,7 @@ where
 		min_block_delta,
 		prometheus_registry,
 		links,
+		on_demand_justifications_handler,
 	} = beefy_params;
 
 	let BeefyNetworkParams { network, gossip_protocol_name, justifications_protocol_name, .. } =
@@ -270,5 +276,5 @@ where
 
 	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
-	worker.run().await
+	futures::future::join(worker.run(), on_demand_justifications_handler.run()).await;
 }
