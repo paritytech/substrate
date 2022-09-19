@@ -51,6 +51,8 @@ pub mod constants {
 	pub const WEIGHT_PER_MILLIS: Weight = Weight::from_ref_time(1_000_000_000);
 	pub const WEIGHT_PER_MICROS: Weight = Weight::from_ref_time(1_000_000);
 	pub const WEIGHT_PER_NANOS: Weight = Weight::from_ref_time(1_000);
+
+	pub const MAX_PROOF_SIZE_WEIGHT: Weight = Weight::from_proof_size(u64::MAX);
 }
 
 /// The weight of database operations that the runtime can invoke.
