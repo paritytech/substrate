@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_tx_pause;
 
-use frame_support::{parameter_types, traits::{InsideBoth,SortedMembers, EitherOfDiverse, Everything}};
+use frame_support::{
+	parameter_types,
+	traits::{EitherOfDiverse, Everything, InsideBoth, SortedMembers},
+};
 use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
@@ -81,22 +84,21 @@ parameter_types! {
   pub const PauseTooLongNames: bool = false;
 }
 
-// pub struct MockUnpausablePallets;
-// impl Contains<BoundedVec<u8,MaxNameLen>> for MockUnpausablePallets {
-// 	fn contains(bounded_vec: &BoundedVec<u8,MaxNameLen>) -> bool {
-// 		bounded_vec. 
-// 		todo!() // What does this need to be to properly impl contains?
-// 	}
-// }
-
 pub struct MockUnpausablePallets;
+
+impl MockUnpausablePallets {
+	pub fn get() -> Vec<PalletNameOf<Test>> {
+		vec![
+			// b"TxPause".to_vec().try_into().unwrap(), // Explicitly covered in the pallet logic,
+			// not needed.
+			b"UnpausablePallet".to_vec().try_into().unwrap(),
+		]
+	}
+}
+
 impl Contains<PalletNameOf<Test>> for MockUnpausablePallets {
 	fn contains(pallet: &PalletNameOf<Test>) -> bool {
-		match pallet {
-			<TxPause as PalletInfoAccess>::name() => true,
-			b"unpausable_pallet" => true,
-			_ => false,
-		}
+		MockUnpausablePallets::get().iter().any(|i| i == pallet)
 	}
 }
 // Required impl to use some <Configured Origin>::get() in tests
@@ -117,11 +119,15 @@ impl SortedMembers<u64> for UnpauseOrigin {
 
 impl Config for Test {
 	type Event = Event;
-	type PauseOrigin = EitherOfDiverse<EnsureSignedBy<PauseOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-	type UnpauseOrigin = EitherOfDiverse<EnsureSignedBy<UnpauseOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-  type UnpausablePallets = MockUnpausablePallets;
-  type MaxNameLen = MaxNameLen;
-  type PauseTooLongNames = PauseTooLongNames;
+	type PauseOrigin =
+		EitherOfDiverse<EnsureSignedBy<PauseOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
+	type UnpauseOrigin = EitherOfDiverse<
+		EnsureSignedBy<UnpauseOrigin, Self::AccountId>,
+		EnsureRoot<Self::AccountId>,
+	>; // TODO should not need to explicitly define root in addition?
+	type UnpausablePallets = MockUnpausablePallets;
+	type MaxNameLen = MaxNameLen;
+	type PauseTooLongNames = PauseTooLongNames;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -143,16 +149,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(0,1234), (1, 5678), (2, 5678), (3, 5678), (4, 5678)], // The 0 account is NOT a special origin, the rest may be.
+		// The 0 account is NOT a special origin. The rest may be:
+		balances: vec![(0, 1234), (1, 5678), (2, 5678), (3, 5678), (4, 5678)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
 
 	GenesisBuild::<Test>::assimilate_storage(
-		&pallet_tx_pause::GenesisConfig {
-			paused: vec![],
-			_phantom: Default::default(),
-		},
+		&pallet_tx_pause::GenesisConfig { paused: vec![], _phantom: Default::default() },
 		&mut t,
 	)
 	.unwrap();
