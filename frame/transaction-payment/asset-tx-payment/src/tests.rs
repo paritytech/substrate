@@ -19,7 +19,6 @@ use crate as pallet_asset_tx_payment;
 use frame_support::{
 	assert_ok,
 	dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo},
-	pallet_prelude::*,
 	parameter_types,
 	traits::{
 		fungibles::Mutate, tokens::OneToOneBalanceConversion, ConstU32, ConstU64, ConstU8,
