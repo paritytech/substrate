@@ -376,61 +376,11 @@ impl InstanceWrapper {
 			return
 		}
 
-		cfg_if::cfg_if! {
-			if #[cfg(target_os = "linux")] {
-				use std::sync::Once;
-
-				unsafe {
-					let ptr = self.memory.data_ptr(&self.store);
-					let len = self.memory.data_size(&self.store);
-
-					// Linux handles MADV_DONTNEED reliably. The result is that the given area
-					// is unmapped and will be zeroed on the next pagefault.
-					if libc::madvise(ptr as _, len, libc::MADV_DONTNEED) != 0 {
-						static LOGGED: Once = Once::new();
-						LOGGED.call_once(|| {
-							log::warn!(
-								"madvise(MADV_DONTNEED) failed: {}",
-								std::io::Error::last_os_error(),
-							);
-						});
-					} else {
-						return;
-					}
-				}
-			} else if #[cfg(target_os = "macos")] {
-				use std::sync::Once;
-
-				unsafe {
-					let ptr = self.memory.data_ptr(&self.store);
-					let len = self.memory.data_size(&self.store);
-
-					// On MacOS we can simply overwrite memory mapping.
-					if libc::mmap(
-						ptr as _,
-						len,
-						libc::PROT_READ | libc::PROT_WRITE,
-						libc::MAP_FIXED | libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
-						-1,
-						0,
-					) == libc::MAP_FAILED {
-						static LOGGED: Once = Once::new();
-						LOGGED.call_once(|| {
-							log::warn!(
-								"Failed to decommit WASM instance memory through mmap: {}",
-								std::io::Error::last_os_error(),
-							);
-						});
-					} else {
-						return;
-					}
-				}
-			}
+		if !sc_executor_common::util::unmap_memory(self.memory.data(self.store.as_context())) {
+			// If we're on an unsupported OS or the memory couldn't have been
+			// decommited for some reason then just manually zero it out.
+			self.memory.data_mut(self.store.as_context_mut()).fill(0);
 		}
-
-		// If we're on an unsupported OS or the memory couldn't have been
-		// decommited for some reason then just manually zero it out.
-		self.memory.data_mut(self.store.as_context_mut()).fill(0);
 	}
 
 	pub(crate) fn store(&self) -> &Store {

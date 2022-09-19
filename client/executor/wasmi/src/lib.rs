@@ -20,27 +20,26 @@
 
 use std::{cell::RefCell, rc::Rc, str, sync::Arc};
 
-use log::{debug, error, trace};
-use sc_allocator::{FreeingBumpHeapAllocator, Memory as MemoryT};
-use wasmi::{
-	memory_units::Pages,
-	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
-	RuntimeValue::{self, I32, I64},
-	TableRef,
-};
 use codec::{Decode, Encode};
-use sc_allocator::AllocationStats;
+use log::{debug, error, trace};
+use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator, Memory as MemoryT};
 use sc_executor_common::{
 	error::{Error, MessageWithBacktrace, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
 	sandbox,
 	util::MemoryTransfer,
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{HeapPages, InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_sandbox::env as sandbox_env;
 use sp_wasm_interface::{
 	Function, FunctionContext, MemoryId, Pointer, Result as WResult, Sandbox, WordSize,
+};
+use wasmi::{
+	memory_units::Pages,
+	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
+	RuntimeValue::{self, I32, I64},
+	TableRef,
 };
 
 /// Wrapper around [`MemorRef`] that implements [`MemoryT`].
@@ -362,9 +361,7 @@ struct Resolver<'a> {
 	/// All the names of functions for that we did not provide a host function.
 	missing_functions: RefCell<Vec<String>>,
 	/// Will be used as initial and maximum size of the imported memory.
-	heap_pages: u32,
-	/// Optional maximum allowed heap pages.
-	max_heap_pages: Option<u32>,
+	heap_pages: HeapPages,
 	/// By default, runtimes should import memory and this is `Some(_)` after
 	/// resolving. However, to be backwards compatible, we also support memory
 	/// exported by the WASM blob (this will be `None` after resolving).
@@ -375,15 +372,13 @@ impl<'a> Resolver<'a> {
 	fn new(
 		host_functions: &'a [&'static dyn Function],
 		allow_missing_func_imports: bool,
-		heap_pages: u32,
-		max_heap_pages: Option<u32>,
+		heap_pages: HeapPages,
 	) -> Resolver<'a> {
 		Resolver {
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions: RefCell::new(Vec::new()),
 			heap_pages,
-			max_heap_pages,
 			import_memory: Default::default(),
 		}
 	}
@@ -436,24 +431,30 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 				Some(_) =>
 					Err(wasmi::Error::Instantiation("Memory can not be imported twice!".into())),
 				memory_ref @ None => {
+					match (self.heap_pages, memory_type.maximum()) {
+						(HeapPages::Max(max), Some(memory_max))
+							if max > memory_max - memory_type.initial() =>
+							return Err(wasmi::Error::Instantiation(format!(
+								"Heap pages ({}) is greater than imported memory maximum ({}).",
+								max,
+								memory_max - memory_type.initial(),
+							))),
+						(HeapPages::Dynamic, Some(_)) => {},
+						_ => {},
+					}
+
 					if memory_type
 						.maximum()
 						.map(|m| m.saturating_sub(memory_type.initial()))
-						.map(|m| self.heap_pages > m)
+						.and_then(|m| self.heap_pages.maximum().map(|hm| (m, hm)))
+						.map(|(m, hm)| hm > m)
 						.unwrap_or(false)
 					{
-						Err(wasmi::Error::Instantiation(format!(
-							"Heap pages ({}) is greater than imported memory maximum ({}).",
-							self.heap_pages,
-							memory_type
-								.maximum()
-								.map(|m| m.saturating_sub(memory_type.initial()))
-								.expect("Maximum is set, checked above; qed"),
-						)))
 					} else {
 						let memory = MemoryInstance::alloc(
 							Pages((memory_type.initial() + self.heap_pages) as usize),
-							Some(Pages((memory_type.initial() + self.heap_pages) as usize)),
+							// Some(Pages((memory_type.initial() + self.heap_pages) as usize)),
+							None,
 						)?;
 						*memory_ref = Some(memory.clone());
 						Ok(memory)
@@ -631,10 +632,8 @@ fn instantiate_module(
 	module: &Module,
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
-	max_heap_pages: Option<u32>,
 ) -> Result<(ModuleRef, Vec<String>, MemoryRef), Error> {
-	let resolver =
-		Resolver::new(host_functions, allow_missing_func_imports, heap_pages, max_heap_pages);
+	let resolver = Resolver::new(host_functions, allow_missing_func_imports, heap_pages);
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance =
 		ModuleInstance::new(module, &ImportsBuilder::new().with_resolver("env", &resolver))?;
@@ -775,7 +774,7 @@ impl WasmModule for WasmiRuntime {
 /// stores it in the instance.
 pub fn create_runtime(
 	blob: RuntimeBlob,
-	heap_pages: u32,
+	heap_pages: HeapPages,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
 	max_heap_pages: Option<u32>,
@@ -858,7 +857,7 @@ impl WasmiInstance {
 		// Third, restore the global variables to their initial values.
 		self.global_vals_snapshot.apply(&self.instance)?;
 
-		call_in_wasm_module(
+		let res = call_in_wasm_module(
 			&self.instance,
 			&self.memory,
 			method,
@@ -867,7 +866,15 @@ impl WasmiInstance {
 			self.allow_missing_func_imports,
 			self.missing_functions.clone(),
 			allocation_stats,
-		)
+		);
+
+		// Unmap the memory to let the OS reclaim it.
+		if !sc_executor_common::util::unmap_memory(&self.memory.direct_access().as_ref()) {
+			// If we couldn't unmap it, erase the memory.
+			let _ = self.memory.erase();
+		}
+
+		res
 	}
 }
 

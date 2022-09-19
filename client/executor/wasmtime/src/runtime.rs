@@ -30,7 +30,7 @@ use sc_executor_common::{
 	runtime_blob::{
 		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
 	},
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule, HeapPages},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
@@ -525,7 +525,7 @@ pub struct Semantics {
 
 	/// The number of extra WASM pages which will be allocated
 	/// on top of what is requested by the WASM blob itself.
-	pub extra_heap_pages: u64,
+	pub extra_heap_pages: HeapPages,
 
 	/// The total amount of memory in bytes an instance can request.
 	///

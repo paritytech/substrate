@@ -28,6 +28,8 @@ use self::smaps::Smaps;
 
 #[test]
 fn memory_consumption_interpreted() {
+	let _ = sp_tracing::try_init_simple();
+
 	if std::env::var("RUN_TEST").is_ok() {
 		memory_consumption(WasmExecutionMethod::Interpreted);
 	} else {
@@ -46,6 +48,8 @@ fn memory_consumption_interpreted() {
 #[test]
 #[cfg(feature = "wasmtime")]
 fn memory_consumption_compiled() {
+	let _ = sp_tracing::try_init_simple();
+
 	if std::env::var("RUN_TEST").is_ok() {
 		memory_consumption(WasmExecutionMethod::Compiled {
 			instantiation_strategy:

@@ -49,12 +49,14 @@ macro_rules! test_wasm_execution {
 		paste::item! {
 			#[test]
 			fn [<$method_name _interpreted>]() {
+				let _ = sp_tracing::try_init_simple();
 				$method_name(WasmExecutionMethod::Interpreted);
 			}
 
 			#[test]
 			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_recreate_instance_cow>]() {
+				let _ = sp_tracing::try_init_simple();
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstanceCopyOnWrite
 				});
@@ -63,6 +65,7 @@ macro_rules! test_wasm_execution {
 			#[test]
 			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_recreate_instance_vanilla>]() {
+				let _ = sp_tracing::try_init_simple();
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::RecreateInstance
 				});
@@ -71,6 +74,7 @@ macro_rules! test_wasm_execution {
 			#[test]
 			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_cow>]() {
+				let _ = sp_tracing::try_init_simple();
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::PoolingCopyOnWrite
 				});
@@ -79,6 +83,7 @@ macro_rules! test_wasm_execution {
 			#[test]
 			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_pooling_vanilla>]() {
+				let _ = sp_tracing::try_init_simple();
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::Pooling
 				});
@@ -87,6 +92,7 @@ macro_rules! test_wasm_execution {
 			#[test]
 			#[cfg(feature = "wasmtime")]
 			fn [<$method_name _compiled_legacy_instance_reuse>]() {
+				let _ = sp_tracing::try_init_simple();
 				$method_name(WasmExecutionMethod::Compiled {
 					instantiation_strategy: sc_executor_wasmtime::InstantiationStrategy::LegacyInstanceReuse
 				});

@@ -14,8 +14,11 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+cfg-if = "1.0"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 environmental = "1.1.3"
+libc = "0.2.121"
+log = "0.4.17"
 thiserror = "1.0.30"
 wasm-instrument = "0.3"
 wasmer = { version = "2.2", features = ["singlepass"], optional = true }

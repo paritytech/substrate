@@ -26,11 +26,7 @@ use std::ops::Range;
 /// Returns None if the end of the range would exceed some maximum offset.
 pub fn checked_range(offset: usize, len: usize, max: usize) -> Option<Range<usize>> {
 	let end = offset.checked_add(len)?;
-	if end <= max {
-		Some(offset..end)
-	} else {
-		None
-	}
+	(end <= max).then(|| offset..end)
 }
 
 /// Provides safe memory access interface using an external buffer
@@ -49,4 +45,59 @@ pub trait MemoryTransfer {
 	///
 	/// Returns an error if the write would go out of the memory bounds.
 	fn write_from(&self, dest_addr: Pointer<u8>, source: &[u8]) -> Result<()>;
+}
+
+/// Unmap the given `memory`.
+///
+/// It needs to be allocated using `mmap` otherwise unmapping fails.
+///
+/// Returns `true` when unmapping was successfull.
+pub fn unmap_memory(memory: &[u8]) -> bool {
+	cfg_if::cfg_if! {
+		if #[cfg(target_os = "linux")] {
+			use std::sync::Once;
+
+			unsafe {
+				// Linux handles MADV_DONTNEED reliably. The result is that the given area
+				// is unmapped and will be zeroed on the next pagefault.
+				if libc::madvise(memory.as_ptr() as _, memory.len(), libc::MADV_DONTNEED) != 0 {
+					static LOGGED: Once = Once::new();
+					LOGGED.call_once(|| {
+						log::warn!(
+							"madvise(MADV_DONTNEED) failed: {}",
+							std::io::Error::last_os_error(),
+						);
+					});
+				} else {
+					return true;
+				}
+			}
+		} else if #[cfg(target_os = "macos")] {
+			use std::sync::Once;
+
+			unsafe {
+				// On MacOS we can simply overwrite memory mapping.
+				if libc::mmap(
+					memory.as_ptr() as _,
+					memory.len(),
+					libc::PROT_READ | libc::PROT_WRITE,
+					libc::MAP_FIXED | libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+					-1,
+					0,
+				) == libc::MAP_FAILED {
+					static LOGGED: Once = Once::new();
+					LOGGED.call_once(|| {
+						log::warn!(
+							"Failed to decommit WASM instance memory through mmap: {}",
+							std::io::Error::last_os_error(),
+						);
+					});
+				} else {
+					return true;
+				}
+			}
+		}
+	}
+
+	false
 }

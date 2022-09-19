@@ -8268,6 +8268,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-tasks",
+ "sp-tracing",
  "sp-trie",
  "sp-version",
  "sp-wasm-interface",
@@ -8283,7 +8284,10 @@ dependencies = [
 name = "sc-executor-common"
 version = "0.10.0-dev"
 dependencies = [
+ "cfg-if 1.0.0",
  "environmental",
+ "libc",
+ "log",
  "parity-scale-codec",
  "sc-allocator",
  "sp-maybe-compressed-blob",
@@ -8299,6 +8303,7 @@ dependencies = [
 name = "sc-executor-wasmi"
 version = "0.10.0-dev"
 dependencies = [
+ "libc",
  "log",
  "parity-scale-codec",
  "sc-allocator",
@@ -8313,8 +8318,6 @@ dependencies = [
 name = "sc-executor-wasmtime"
 version = "0.10.0-dev"
 dependencies = [
- "cfg-if 1.0.0",
- "libc",
  "log",
  "once_cell",
  "parity-scale-codec",
@@ -11844,6 +11847,7 @@ dependencies = [
  "memory_units",
  "num-rational 0.4.0",
  "num-traits",
+ "region",
 ]
 
 [[package]]

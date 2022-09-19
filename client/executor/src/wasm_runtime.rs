@@ -27,7 +27,7 @@ use lru::LruCache;
 use parking_lot::Mutex;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{WasmInstance, WasmModule},
+	wasm_runtime::{WasmInstance, WasmModule, HeapPages},
 };
 use sp_core::traits::{Externalities, FetchRuntimeCode, RuntimeCode};
 use sp_version::RuntimeVersion;
@@ -291,7 +291,7 @@ impl RuntimeCache {
 /// Create a wasm runtime with the given `code`.
 pub fn create_wasm_runtime_with_code<H>(
 	wasm_method: WasmExecutionMethod,
-	heap_pages: u64,
+	heap_pages: HeapPages,
 	blob: RuntimeBlob,
 	allow_missing_func_imports: bool,
 	cache_path: Option<&Path>,
@@ -309,10 +309,9 @@ where
 
 			sc_executor_wasmi::create_runtime(
 				blob,
-				heap_pages as u32,
+				heap_pages,
 				H::host_functions(),
 				allow_missing_func_imports,
-				None,
 			)
 			.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) })
 		},
