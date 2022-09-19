@@ -35,11 +35,7 @@ use crate::{
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	ensure,
-	traits::Get,
-};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
@@ -134,12 +130,6 @@ where
 			schedule,
 			owner,
 		)?;
-		// When instrumenting a new code we apply a stricter limit than enforced by the
-		// `RelaxedCodeVec` in order to leave some headroom for reinstrumentation.
-		ensure!(
-			module.code.len() as u32 <= T::MaxCodeLen::get(),
-			(<Error<T>>::CodeTooLarge.into(), ""),
-		);
 		Ok(module)
 	}
 
@@ -280,7 +270,7 @@ mod tests {
 		},
 		gas::GasMeter,
 		storage::WriteOutcome,
-		tests::{Call, Test, ALICE, BOB},
+		tests::{RuntimeCall, Test, ALICE, BOB},
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
@@ -339,7 +329,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
-		runtime_calls: RefCell<Vec<Call>>,
+		runtime_calls: RefCell<Vec<RuntimeCall>>,
 		schedule: Schedule<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
@@ -532,7 +522,10 @@ mod tests {
 			self.debug_buffer.extend(msg.as_bytes());
 			true
 		}
-		fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
+		fn call_runtime(
+			&self,
+			call: <Self::T as Config>::RuntimeCall,
+		) -> DispatchResultWithPostInfo {
 			self.runtime_calls.borrow_mut().push(call);
 			Ok(Default::default())
 		}
@@ -2299,7 +2292,8 @@ mod tests {
 	#[test]
 	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
-		let call = Call::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
+		let call =
+			RuntimeCall::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
 		assert_eq!(*ext.runtime_calls.borrow(), vec![call]);

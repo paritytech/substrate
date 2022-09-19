@@ -17,6 +17,7 @@
 
 //! Benchmarks for the nomination pools coupled with the staking and bags list pallets.
 
+#![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(test)]
@@ -41,8 +42,11 @@ type CurrencyOf<T> = <T as pallet_nomination_pools::Config>::Currency;
 const USER_SEED: u32 = 0;
 const MAX_SPANS: u32 = 100;
 
+type VoterBagsListInstance = pallet_bags_list::Instance1;
 pub trait Config:
-	pallet_nomination_pools::Config + pallet_staking::Config + pallet_bags_list::Config
+	pallet_nomination_pools::Config
+	+ pallet_staking::Config
+	+ pallet_bags_list::Config<VoterBagsListInstance>
 {
 }
 
