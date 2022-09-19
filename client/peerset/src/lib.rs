@@ -379,6 +379,11 @@ impl Peerset {
 		}
 	}
 
+	/// Returns the list of reserved peers.
+	pub fn reserved_peers(&self, set_id: SetId) -> impl Iterator<Item = &PeerId> {
+		self.reserved_nodes[set_id.0].0.iter()
+	}
+
 	/// Adds a node to the given set. The peerset will, if possible and not already the case,
 	/// try to connect to it.
 	///

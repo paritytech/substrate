@@ -20,7 +20,7 @@ log = { version = "0.4.14", default-features = false }
 frame-support = { version = "3.0.0", default-features = false, path = "../support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../system" }
 
-sp-io ={ version = "3.0.0", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-npos-elections = { version = "3.0.0", default-features = false, path = "../../primitives/npos-elections" }
@@ -37,8 +37,9 @@ parking_lot = "0.11.0"
 rand = { version = "0.7.3" }
 hex-literal = "0.3.1"
 substrate-test-utils = { version = "3.0.0", path = "../../test-utils" }
+sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "3.0.0", path = "../../primitives/io" }
-sp-core = { version = "3.0.0", path = "../../primitives/core" }
+sp-npos-elections = { version = "3.0.0", default-features = false, features = [ "mocks" ], path = "../../primitives/npos-elections" }
 sp-tracing = { version = "3.0.0", path = "../../primitives/tracing" }
 frame-election-provider-support = { version = "3.0.0", features = ["runtime-benchmarks"], path = "../election-provider-support" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
@@ -64,5 +65,6 @@ std = [
 runtime-benchmarks = [
 	"frame-benchmarking",
 	"rand",
+	"sp-npos-elections/mocks",
 ]
 try-runtime = ["frame-support/try-runtime"]

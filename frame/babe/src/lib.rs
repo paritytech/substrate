@@ -401,10 +401,10 @@ pub mod pallet {
 		pub fn plan_config_change(
 			origin: OriginFor<T>,
 			config: NextConfigDescriptor,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			ensure_root(origin)?;
 			PendingEpochConfigChange::<T>::put(config);
-			Ok(().into())
+			Ok(())
 		}
 	}
 }

@@ -28,6 +28,7 @@ mod debug_no_bound;
 mod clone_no_bound;
 mod partial_eq_no_bound;
 mod default_no_bound;
+mod max_encoded_len;
 
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 use proc_macro::TokenStream;
@@ -432,3 +433,9 @@ pub fn crate_to_pallet_version(input: TokenStream) -> TokenStream {
 /// The number of module instances supported by the runtime, starting at index 1,
 /// and up to `NUMBER_OF_INSTANCE`.
 pub(crate) const NUMBER_OF_INSTANCE: u8 = 16;
+
+/// Derive `MaxEncodedLen`.
+#[proc_macro_derive(MaxEncodedLen)]
+pub fn derive_max_encoded_len(input: TokenStream) -> TokenStream {
+	max_encoded_len::derive_max_encoded_len(input)
+}

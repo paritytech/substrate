@@ -364,6 +364,17 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDbSync<Block
 		}
 	}
 
+	fn remove(&mut self, hash: &BlockHash) -> Option<CommitSet<Key>> {
+		match self.mode {
+			PruningMode::ArchiveAll => {
+				Some(CommitSet::default())
+			},
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				self.non_canonical.remove(hash)
+			},
+		}
+	}
+
 	fn pin(&mut self, hash: &BlockHash) -> Result<(), PinError> {
 		match self.mode {
 			PruningMode::ArchiveAll => Ok(()),
@@ -507,6 +518,12 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf> StateDb<BlockHash
 	/// For archive an empty commit set is returned.
 	pub fn revert_one(&self) -> Option<CommitSet<Key>> {
 		self.db.write().revert_one()
+	}
+
+	/// Remove specified non-canonical block.
+	/// Returns a database commit or `None` if not possible.
+	pub fn remove(&self, hash: &BlockHash) -> Option<CommitSet<Key>> {
+		self.db.write().remove(hash)
 	}
 
 	/// Returns last finalized block number.

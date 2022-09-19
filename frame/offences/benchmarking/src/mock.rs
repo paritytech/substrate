@@ -22,7 +22,7 @@
 use super::*;
 use frame_support::{
 	parameter_types,
-	weights::{Weight, constants::WEIGHT_PER_SECOND},
+	weights::constants::WEIGHT_PER_SECOND,
 };
 use frame_system as system;
 use sp_runtime::{
@@ -189,15 +189,10 @@ impl pallet_im_online::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub OffencesWeightSoftLimit: Weight = Perbill::from_percent(60) * BlockWeights::get().max_block;
-}
-
 impl pallet_offences::Config for Test {
 	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
-	type WeightSoftLimit = OffencesWeightSoftLimit;
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test where Call: From<T> {

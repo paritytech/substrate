@@ -29,7 +29,7 @@ use sp_runtime::traits::IdentifyAccount;
 use utils::print_from_uri;
 
 /// The `vanity` command
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 #[structopt(
 	name = "vanity",
 	about = "Generate a seed that provides a vanity address"

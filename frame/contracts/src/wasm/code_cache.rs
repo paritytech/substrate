@@ -137,7 +137,7 @@ where
 			// in the storage.
 			//
 			// We need to re-instrument the code with the latest schedule here.
-			gas_meter.charge(&(), InstrumentToken(prefab_module.original_code_len))?;
+			gas_meter.charge(InstrumentToken(prefab_module.original_code_len))?;
 			private::reinstrument(&mut prefab_module, schedule)?;
 		}
 	}
@@ -194,9 +194,7 @@ fn increment_64(refcount: &mut u64) {
 struct InstrumentToken(u32);
 
 impl<T: Config> Token<T> for InstrumentToken {
-	type Metadata = ();
-
-	fn calculate_amount(&self, _metadata: &Self::Metadata) -> Weight {
+	fn weight(&self) -> Weight {
 		T::WeightInfo::instrument(self.0 / 1024)
 	}
 }

@@ -22,7 +22,7 @@ use structopt::StructOpt;
 use crate::arg_enums::TracingReceiver;
 
 /// Shared parameters used by all `CoreParams`.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct SharedParams {
 	/// Specify the chain specification.
 	///

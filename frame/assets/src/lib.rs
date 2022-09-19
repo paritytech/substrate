@@ -140,7 +140,7 @@ pub use types::*;
 
 use sp_std::{prelude::*, borrow::Borrow};
 use sp_runtime::{
-	RuntimeDebug, TokenError, traits::{
+	RuntimeDebug, TokenError, ArithmeticError, traits::{
 		AtLeast32BitUnsigned, Zero, StaticLookup, Saturating, CheckedSub, CheckedAdd, Bounded,
 		StoredMapError,
 	}
@@ -326,8 +326,6 @@ pub mod pallet {
 		BadWitness,
 		/// Minimum balance should be non-zero.
 		MinBalanceZero,
-		/// A mint operation lead to an overflow.
-		Overflow,
 		/// No provider reference exists to allow a non-zero balance of a non-self-sufficient asset.
 		NoProvider,
 		/// Invalid metadata given.

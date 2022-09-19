@@ -364,9 +364,9 @@ checksum = "e91831deabf0d6d7ec49552e489aed63b7456a7a3c46cff62adad428110b0af0"
 
 [[package]]
 name = "async-trait"
-version = "0.1.47"
+version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e098e9c493fdf92832223594d9a164f96bdf17ba81a42aff86f85c76768726a"
+checksum = "36ea56748e10732c49404c153638a15ec3d6211ec5ff35d9bb20e13b93576adf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -749,7 +749,7 @@ dependencies = [
  "semver 0.11.0",
  "semver-parser 0.10.2",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
 ]
 
 [[package]]
@@ -1096,7 +1096,7 @@ dependencies = [
  "serde",
  "serde_cbor",
  "serde_derive",
- "serde_json 1.0.64",
+ "serde_json",
  "tinytemplate",
  "walkdir",
 ]
@@ -1891,7 +1891,6 @@ dependencies = [
  "rustversion",
  "serde",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-state-machine",
@@ -2068,7 +2067,7 @@ dependencies = [
  "parking_lot 0.9.0",
  "pin-project 0.4.27",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
 ]
 
 [[package]]
@@ -2344,7 +2343,7 @@ dependencies = [
  "pest_derive",
  "quick-error 2.0.0",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
 ]
 
 [[package]]
@@ -2821,7 +2820,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "log",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "url 1.7.2",
 ]
 
@@ -2835,7 +2834,7 @@ dependencies = [
  "log",
  "serde",
  "serde_derive",
- "serde_json 1.0.64",
+ "serde_json",
 ]
 
 [[package]]
@@ -2945,7 +2944,7 @@ dependencies = [
  "jsonrpsee-utils",
  "log",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "thiserror",
  "url 2.2.1",
 ]
@@ -2975,7 +2974,7 @@ dependencies = [
  "futures-util",
  "log",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "thiserror",
 ]
 
@@ -4076,7 +4075,7 @@ dependencies = [
  "sc-client-api",
  "sc-transaction-pool",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-consensus",
  "sp-core",
  "sp-inherents",
@@ -4101,7 +4100,7 @@ dependencies = [
  "node-cli",
  "sc-rpc-api",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -4150,6 +4149,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-epochs",
  "sc-consensus-slots",
+ "sc-consensus-uncles",
  "sc-finality-grandpa",
  "sc-finality-grandpa-warp-sync",
  "sc-keystore",
@@ -4162,9 +4162,10 @@ dependencies = [
  "sc-tracing",
  "sc-transaction-pool",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "soketto",
  "sp-authority-discovery",
+ "sp-authorship",
  "sp-consensus",
  "sp-consensus-babe",
  "sp-core",
@@ -4639,7 +4640,6 @@ dependencies = [
  "serde",
  "sp-authorship",
  "sp-core",
- "sp-inherents",
  "sp-io",
  "sp-runtime",
  "sp-std",
@@ -4777,6 +4777,7 @@ dependencies = [
  "rand 0.8.3",
  "rand_pcg 0.3.0",
  "serde",
+ "smallvec 1.6.1",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -4818,7 +4819,7 @@ dependencies = [
  "pallet-contracts-rpc-runtime-api",
  "parity-scale-codec",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-api",
  "sp-blockchain",
  "sp-core",
@@ -5181,7 +5182,7 @@ dependencies = [
  "pallet-mmr-primitives",
  "parity-scale-codec",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-api",
  "sp-blockchain",
  "sp-core",
@@ -5519,7 +5520,7 @@ dependencies = [
  "pallet-balances",
  "parity-scale-codec",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "smallvec 1.6.1",
  "sp-core",
  "sp-io",
@@ -6895,7 +6896,7 @@ dependencies = [
  "sc-client-api",
  "sc-network",
  "sc-peerset",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-api",
  "sp-authority-discovery",
  "sp-blockchain",
@@ -6962,7 +6963,7 @@ dependencies = [
  "sc-network",
  "sc-telemetry",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-chain-spec",
  "sp-consensus-babe",
  "sp-core",
@@ -7001,7 +7002,7 @@ dependencies = [
  "sc-telemetry",
  "sc-tracing",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-blockchain",
  "sp-core",
  "sp-keyring",
@@ -7212,7 +7213,7 @@ dependencies = [
  "sc-keystore",
  "sc-rpc-api",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-api",
  "sp-application-crypto",
  "sp-blockchain",
@@ -7297,7 +7298,6 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-runtime",
- "sp-timestamp",
  "substrate-prometheus-endpoint",
 ]
 
@@ -7308,6 +7308,7 @@ dependencies = [
  "async-trait",
  "futures 0.3.13",
  "futures-timer 3.0.2",
+ "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
  "sc-client-api",
@@ -7332,13 +7333,10 @@ dependencies = [
 name = "sc-consensus-uncles"
 version = "0.9.0"
 dependencies = [
- "log",
  "sc-client-api",
  "sp-authorship",
- "sp-consensus",
- "sp-core",
- "sp-inherents",
  "sp-runtime",
+ "thiserror",
 ]
 
 [[package]]
@@ -7457,7 +7455,7 @@ dependencies = [
  "sc-network-gossip",
  "sc-network-test",
  "sc-telemetry",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-api",
  "sp-application-crypto",
  "sp-arithmetic",
@@ -7499,7 +7497,7 @@ dependencies = [
  "sc-network-test",
  "sc-rpc",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -7564,7 +7562,7 @@ dependencies = [
  "merlin",
  "parking_lot 0.11.1",
  "rand 0.7.3",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-application-crypto",
  "sp-core",
  "sp-keystore",
@@ -7628,7 +7626,7 @@ dependencies = [
  "sc-client-api",
  "sc-peerset",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "smallvec 1.6.1",
  "sp-arithmetic",
  "sp-blockchain",
@@ -7742,7 +7740,7 @@ dependencies = [
  "libp2p",
  "log",
  "rand 0.7.3",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-utils",
  "wasm-timer",
 ]
@@ -7778,7 +7776,7 @@ dependencies = [
  "sc-rpc-api",
  "sc-tracing",
  "sc-transaction-pool",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-api",
  "sp-blockchain",
  "sp-chain-spec",
@@ -7790,6 +7788,7 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-state-machine",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-utils",
  "sp-version",
@@ -7811,11 +7810,12 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.11.1",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-chain-spec",
  "sp-core",
  "sp-rpc",
  "sp-runtime",
+ "sp-tracing",
  "sp-transaction-pool",
  "sp-version",
 ]
@@ -7832,7 +7832,7 @@ dependencies = [
  "jsonrpc-ws-server",
  "log",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-runtime",
  "substrate-prometheus-endpoint",
 ]
@@ -7984,7 +7984,7 @@ dependencies = [
  "sc-consensus-epochs",
  "sc-finality-grandpa",
  "sc-rpc-api",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-blockchain",
  "sp-runtime",
  "thiserror",
@@ -8002,7 +8002,7 @@ dependencies = [
  "pin-project 1.0.5",
  "rand 0.7.3",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "take_mut",
  "thiserror",
  "void",
@@ -8022,16 +8022,26 @@ dependencies = [
  "parking_lot 0.11.1",
  "regex",
  "rustc-hash",
+ "sc-client-api",
+ "sc-rpc-server",
+ "sc-telemetry",
  "sc-tracing-proc-macro",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-core",
+ "sp-rpc",
+ "sp-runtime",
+ "sp-storage",
  "sp-tracing",
  "thiserror",
  "tracing",
- "tracing-core",
  "tracing-log",
  "tracing-subscriber",
  "wasm-bindgen",
+ "wasm-timer",
  "web-sys",
 ]
 
@@ -8432,6 +8442,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c111b5bd5695e56cffe5129854aa230b39c93a305372fdbb2668ca2394eea9f8"
 
 [[package]]
+name = "slog"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8347046d4ebd943127157b94d63abb990fcf729dc4e9978927fdf4ac3c998d06"
+dependencies = [
+ "erased-serde",
+]
+
+[[package]]
 name = "smallvec"
 version = "0.6.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8595,7 +8614,7 @@ dependencies = [
  "primitive-types",
  "rand 0.7.3",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-debug-derive",
  "sp-std",
  "static_assertions",
@@ -8627,6 +8646,7 @@ dependencies = [
 name = "sp-authorship"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
  "parity-scale-codec",
  "sp-inherents",
  "sp-runtime",
@@ -8666,7 +8686,7 @@ name = "sp-chain-spec"
 version = "3.0.0"
 dependencies = [
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
 ]
 
 [[package]]
@@ -8700,6 +8720,7 @@ dependencies = [
 name = "sp-consensus-aura"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "parity-scale-codec",
  "sp-api",
  "sp-application-crypto",
@@ -8715,6 +8736,7 @@ dependencies = [
 name = "sp-consensus-babe"
 version = "0.9.0"
 dependencies = [
+ "async-trait",
  "merlin",
  "parity-scale-codec",
  "serde",
@@ -8794,7 +8816,7 @@ dependencies = [
  "schnorrkel",
  "secrecy",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sha2 0.9.3",
  "sp-debug-derive",
  "sp-externalities",
@@ -8858,9 +8880,12 @@ dependencies = [
 name = "sp-inherents"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
+ "futures 0.3.13",
+ "impl-trait-for-tuples",
  "parity-scale-codec",
- "parking_lot 0.11.1",
  "sp-core",
+ "sp-runtime",
  "sp-std",
  "thiserror",
 ]
@@ -8988,9 +9013,11 @@ dependencies = [
 name = "sp-rpc"
 version = "3.0.0"
 dependencies = [
+ "rustc-hash",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-core",
+ "tracing-core",
 ]
 
 [[package]]
@@ -9006,7 +9033,7 @@ dependencies = [
  "paste 1.0.4",
  "rand 0.7.3",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-api",
  "sp-application-crypto",
  "sp-arithmetic",
@@ -9108,7 +9135,7 @@ name = "sp-serializer"
 version = "3.0.0"
 dependencies = [
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
 ]
 
 [[package]]
@@ -9152,6 +9179,7 @@ dependencies = [
  "sp-std",
  "sp-trie",
  "thiserror",
+ "tracing",
  "trie-db",
  "trie-root",
 ]
@@ -9201,11 +9229,15 @@ dependencies = [
 name = "sp-timestamp"
 version = "3.0.0"
 dependencies = [
+ "async-trait",
+ "futures-timer 3.0.2",
+ "log",
  "parity-scale-codec",
  "sp-api",
  "sp-inherents",
  "sp-runtime",
  "sp-std",
+ "thiserror",
  "wasm-timer",
 ]
 
@@ -9213,8 +9245,13 @@ dependencies = [
 name = "sp-tracing"
 version = "3.0.0"
 dependencies = [
+ "erased-serde",
  "log",
  "parity-scale-codec",
+ "parking_lot 0.10.2",
+ "serde",
+ "serde_json",
+ "slog",
  "sp-std",
  "tracing",
  "tracing-core",
@@ -9385,7 +9422,7 @@ dependencies = [
 
 [[package]]
 name = "subkey"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "sc-cli",
  "structopt",
@@ -9520,7 +9557,7 @@ dependencies = [
  "sc-offchain",
  "sc-service",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
@@ -9821,6 +9858,7 @@ dependencies = [
  "sp-keyring",
  "sp-keystore",
  "sp-runtime",
+ "sp-timestamp",
  "test-runner",
 ]
 
@@ -9916,7 +9954,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
 dependencies = [
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
 ]
 
 [[package]]
@@ -10240,9 +10278,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-attributes"
-version = "0.1.13"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8a9bd1db7706f2373a190b0d067146caa39350c486f3d455b0e33b431f94c07"
+checksum = "c42e6fa53307c8a17e4ccd4dc81cf5ec38db9209f59b222210375b54ee40d1e2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10301,7 +10339,7 @@ dependencies = [
  "matchers",
  "regex",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "sharded-slab",
  "smallvec 1.6.1",
  "thread_local",
@@ -10445,7 +10483,7 @@ dependencies = [
  "glob",
  "lazy_static",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "termcolor",
  "toml",
 ]
@@ -10705,7 +10743,7 @@ checksum = "83240549659d187488f91f33c0f8547cbfef0b2088bc470c116d1d260ef623d9"
 dependencies = [
  "cfg-if 1.0.0",
  "serde",
- "serde_json 1.0.64",
+ "serde_json",
  "wasm-bindgen-macro",
 ]
 

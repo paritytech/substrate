@@ -27,7 +27,7 @@ use sc_client_api::{StorageProvider, UsageProvider};
 
 /// The `export-state` command used to export the state of a given block into
 /// a chain spec.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct ExportStateCmd {
 	/// Block hash or number.
 	#[structopt(value_name = "HASH or NUMBER")]

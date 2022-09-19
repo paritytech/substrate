@@ -33,6 +33,7 @@ futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.11"
 thiserror = "1.0.21"
+impl-trait-for-tuples = "0.2.1"
 async-trait = "0.1.42"
 
 [dev-dependencies]

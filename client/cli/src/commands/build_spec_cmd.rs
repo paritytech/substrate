@@ -27,7 +27,7 @@ use structopt::StructOpt;
 use std::io::Write;
 
 /// The `build-spec` command used to build a specification.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct BuildSpecCmd {
 	/// Force raw genesis storage output.
 	#[structopt(long = "raw")]

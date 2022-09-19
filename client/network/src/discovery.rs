@@ -71,7 +71,7 @@ use sp_core::hexdisplay::HexDisplay;
 /// Maximum number of known external addresses that we will cache.
 /// This only affects whether we will log whenever we (re-)discover
 /// a given address.
-const MAX_KNOWN_EXTERNAL_ADDRESSES: usize = 32;
+const MAX_KNOWN_EXTERNAL_ADDRESSES: usize = 64;
 
 /// `DiscoveryBehaviour` configuration.
 ///

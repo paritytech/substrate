@@ -21,7 +21,7 @@ use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
 	storage::{
 		StorageAppend, StorageDecodeLength,
-		bounded_vec::{BoundedVec, BoundedVecValue},
+		bounded_vec::BoundedVec,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
 	traits::{GetDefault, StorageInstance, Get},
@@ -67,7 +67,7 @@ where
 	Prefix: StorageInstance,
 	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
 	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static,
-	VecValue: BoundedVecValue,
+	VecValue: FullCodec,
 	VecBound: Get<u32>,
 {
 	/// Try and append the given item to the value in the storage.

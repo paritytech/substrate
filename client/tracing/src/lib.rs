@@ -29,6 +29,7 @@
 #![warn(missing_docs)]
 
 pub mod logging;
+pub mod block;
 
 use rustc_hash::FxHashMap;
 use std::fmt;
@@ -86,7 +87,7 @@ pub trait TraceHandler: Send + Sync {
 #[derive(Debug)]
 pub struct TraceEvent {
 	/// Name of the event.
-	pub name: &'static str,
+	pub name: String,
 	/// Target of the event.
 	pub target: String,
 	/// Level of the event.
@@ -123,13 +124,13 @@ pub struct SpanDatum {
 /// Holds associated values for a tracing span
 #[derive(Default, Clone, Debug)]
 pub struct Values {
-	/// HashMap of `bool` values
+	/// FxHashMap of `bool` values
 	pub bool_values: FxHashMap<String, bool>,
-	/// HashMap of `i64` values
+	/// FxHashMap of `i64` values
 	pub i64_values: FxHashMap<String, i64>,
-	/// HashMap of `u64` values
+	/// FxHashMap of `u64` values
 	pub u64_values: FxHashMap<String, u64>,
-	/// HashMap of `String` values
+	/// FxHashMap of `String` values
 	pub string_values: FxHashMap<String, String>,
 }
 
@@ -265,7 +266,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 			parent_id: attrs.parent().cloned().or_else(|| self.current_span.id()),
 			name: attrs.metadata().name().to_owned(),
 			target: attrs.metadata().target().to_owned(),
-			level: attrs.metadata().level().clone(),
+			level: *attrs.metadata().level(),
 			line: attrs.metadata().line().unwrap_or(0),
 			start_time: Instant::now(),
 			overall_time: ZERO_DURATION,
@@ -285,9 +286,9 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		let mut values = Values::default();
 		event.record(&mut values);
 		let trace_event = TraceEvent {
-			name: event.metadata().name(),
+			name: event.metadata().name().to_owned(),
 			target: event.metadata().target().to_owned(),
-			level: event.metadata().level().clone(),
+			level: *event.metadata().level(),
 			values,
 			parent_id: event.parent().cloned().or_else(|| self.current_span.id()),
 		};
@@ -304,7 +305,6 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 	}
 
 	fn on_exit(&self, span: &Id, _ctx: Context<S>) {
-		self.current_span.exit();
 		let end_time = Instant::now();
 		let span_datum = {
 			let mut span_data = self.span_data.lock();
@@ -312,6 +312,8 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		};
 
 		if let Some(mut span_datum) = span_datum {
+			// If `span_datum` is `None` we don't exit (we'd be exiting the parent span)
+			self.current_span.exit();
 			span_datum.overall_time += end_time - span_datum.start_time;
 			if span_datum.name == WASM_TRACE_IDENTIFIER {
 				span_datum.values.bool_values.insert("wasm".to_owned(), true);
@@ -330,9 +332,7 @@ impl<S: Subscriber> Layer<S> for ProfilingLayer {
 		};
 	}
 
-	fn on_close(&self, span: Id, ctx: Context<S>) {
-		self.on_exit(&span, ctx)
-	}
+	fn on_close(&self, _span: Id, _ctx: Context<S>) {}
 }
 
 /// TraceHandler for sending span data to the logger
@@ -382,6 +382,32 @@ impl TraceHandler for LogTraceHandler {
 			event.parent_id.map(|s| s.into_u64()),
 			event.values,
 		);
+	}
+}
+
+impl From<TraceEvent> for sp_rpc::tracing::Event {
+	fn from(trace_event: TraceEvent) -> Self {
+		let data = sp_rpc::tracing::Data {
+			string_values: trace_event.values.string_values
+		};
+		sp_rpc::tracing::Event {
+			target: trace_event.target,
+			data,
+			parent_id: trace_event.parent_id.map(|id| id.into_u64())
+		}
+	}
+}
+
+impl From<SpanDatum> for sp_rpc::tracing::Span {
+	fn from(span_datum: SpanDatum) -> Self {
+		let wasm = span_datum.values.bool_values.get("wasm").is_some();
+		sp_rpc::tracing::Span {
+			id: span_datum.id.into_u64(),
+			parent_id: span_datum.parent_id.map(|id| id.into_u64()),
+			name: span_datum.name,
+			target: span_datum.target,
+			wasm,
+		}
 	}
 }
 
@@ -555,7 +581,7 @@ mod tests {
 						break;
 					}
 				}
-				// gard2 and span2 dropped / exited
+				// guard2 and span2 dropped / exited
 			});
 
 			// wait for Event to be dispatched and stored

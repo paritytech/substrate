@@ -175,7 +175,7 @@ where
 	}
 
 	fn block_author() -> Option<T::AccountId> {
-		Some(<pallet_authorship::Module<T>>::author())
+		Some(<pallet_authorship::Pallet<T>>::author())
 	}
 }
 

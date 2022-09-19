@@ -31,7 +31,7 @@ use crate::error;
 use crate::OffchainWorkerEnabled;
 
 /// Offchain worker related parameters.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct OffchainWorkerParams {
 	/// Should execute offchain workers on every block.
 	///

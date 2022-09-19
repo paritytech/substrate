@@ -56,7 +56,7 @@
 
 use crate::{
 	Error,
-	wasm::{Runtime, RuntimeToken},
+	wasm::{Runtime, RuntimeCosts},
 };
 use codec::Decode;
 use frame_support::weights::Weight;
@@ -171,7 +171,7 @@ where
 	///
 	/// Weight is synonymous with gas in substrate.
 	pub fn charge_weight(&mut self, amount: Weight) -> Result<()> {
-		self.inner.runtime.charge_gas(RuntimeToken::ChainExtension(amount)).map(|_| ())
+		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount)).map(|_| ())
 	}
 
 	/// Grants access to the execution environment of the current contract call.
@@ -349,7 +349,7 @@ where
 			buffer,
 			allow_skip,
 			|len| {
-				weight_per_byte.map(|w| RuntimeToken::ChainExtension(w.saturating_mul(len.into())))
+				weight_per_byte.map(|w| RuntimeCosts::ChainExtension(w.saturating_mul(len.into())))
 			},
 		)
 	}

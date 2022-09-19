@@ -181,13 +181,13 @@ pub mod pallet {
 	pub enum InherentError {
 	}
 
-	impl sp_inherents::IsFatalError for InherentError {
+	impl frame_support::inherent::IsFatalError for InherentError {
 		fn is_fatal_error(&self) -> bool {
 			unimplemented!();
 		}
 	}
 
-	pub const INHERENT_IDENTIFIER: sp_inherents::InherentIdentifier = *b"testpall";
+	pub const INHERENT_IDENTIFIER: frame_support::inherent::InherentIdentifier = *b"testpall";
 }
 
 // Test that a instantiable pallet with a generic genesis_config is correctly handled

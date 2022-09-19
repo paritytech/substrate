@@ -188,7 +188,7 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							Event::SyncDisconnected { remote } => {
 								this.network.remove_set_reserved(remote, this.protocol.clone());
 							}
-							Event::NotificationStreamOpened { remote, protocol, role } => {
+							Event::NotificationStreamOpened { remote, protocol, role, .. } => {
 								if protocol != this.protocol {
 									continue;
 								}
@@ -416,6 +416,7 @@ mod tests {
 			Event::NotificationStreamOpened {
 				remote: remote_peer.clone(),
 				protocol: protocol.clone(),
+				negotiated_fallback: None,
 				role: ObservedRole::Authority,
 			}
 		).expect("Event stream is unbounded; qed.");
@@ -575,6 +576,7 @@ mod tests {
 				Event::NotificationStreamOpened {
 					remote: remote_peer.clone(),
 					protocol: protocol.clone(),
+					negotiated_fallback: None,
 					role: ObservedRole::Authority,
 				}
 			).expect("Event stream is unbounded; qed.");

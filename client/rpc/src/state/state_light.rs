@@ -474,6 +474,15 @@ impl<Block, F, Client> StateBackend<Block, Client> for LightState<Block, F, Clie
 	) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
+
+	fn trace_block(
+		&self,
+		_block: Block::Hash,
+		_targets: Option<String>,
+		_storage_keys: Option<String>,
+	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
+		Box::new(result(Err(client_err(ClientError::NotAvailableOnLightClient))))
+	}
 }
 
 impl<Block, F, Client> ChildStateBackend<Block, Client> for LightState<Block, F, Client>

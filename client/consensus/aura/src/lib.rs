@@ -31,7 +31,8 @@
 //! NOTE: Aura itself is designed to be generic over the crypto used.
 #![forbid(missing_docs, unsafe_code)]
 use std::{
-	sync::Arc, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin, convert::{TryFrom, TryInto},
+	sync::Arc, marker::PhantomData, hash::Hash, fmt::Debug, pin::Pin,
+	convert::{TryFrom, TryInto},
 };
 
 use futures::prelude::*;
@@ -41,7 +42,7 @@ use codec::{Encode, Decode, Codec};
 
 use sp_consensus::{
 	BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
-	BlockOrigin, Error as ConsensusError, SelectChain, SlotData,
+	BlockOrigin, Error as ConsensusError, SelectChain,
 };
 use sc_client_api::{backend::AuxStore, BlockOf};
 use sp_blockchain::{Result as CResult, well_known_cache_keys, ProvideCache, HeaderBackend};
@@ -52,10 +53,11 @@ use sp_runtime::traits::{Block as BlockT, Header, DigestItemFor, Zero, Member};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
 use sp_keystore::{SyncCryptoStorePtr, SyncCryptoStore};
-use sp_inherents::{InherentDataProviders, InherentData};
-use sp_timestamp::TimestampInherentData;
-use sc_consensus_slots::{SlotInfo, SlotCompatible, StorageChanges, BackoffAuthoringBlocksStrategy};
+use sp_inherents::CreateInherentDataProviders;
 use sc_telemetry::TelemetryHandle;
+use sc_consensus_slots::{
+	SlotInfo, BackoffAuthoringBlocksStrategy, InherentDataProviderExt, StorageChanges,
+};
 use sp_consensus_slots::Slot;
 
 mod import_queue;
@@ -64,7 +66,7 @@ pub use sp_consensus_aura::{
 	ConsensusLog, AuraApi, AURA_ENGINE_ID, digests::CompatibleDigestItem,
 	inherents::{
 		InherentType as AuraInherent,
-		AuraInherentData, INHERENT_IDENTIFIER, InherentDataProvider,
+		INHERENT_IDENTIFIER, InherentDataProvider,
 	},
 };
 pub use sp_consensus::SyncOracle;
@@ -103,24 +105,8 @@ fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&A
 	Some(current_author)
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-struct AuraSlotCompatible;
-
-impl SlotCompatible for AuraSlotCompatible {
-	fn extract_timestamp_and_slot(
-		&self,
-		data: &InherentData,
-	) -> Result<(sp_timestamp::Timestamp, AuraInherent, std::time::Duration), sp_consensus::Error> {
-		data.timestamp_inherent_data()
-			.and_then(|t| data.aura_inherent_data().map(|a| (t, a)))
-			.map_err(Into::into)
-			.map_err(sp_consensus::Error::InherentData)
-			.map(|(x, y)| (x, y, Default::default()))
-	}
-}
-
 /// Parameters of [`start_aura`].
-pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
+pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW, IDP> {
 	/// The duration of a slot.
 	pub slot_duration: SlotDuration,
 	/// The client to interact with the chain.
@@ -133,8 +119,8 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
 	pub proposer_factory: PF,
 	/// The sync oracle that can give us the current sync status.
 	pub sync_oracle: SO,
-	/// The inherent data providers to create the inherent data.
-	pub inherent_data_providers: InherentDataProviders,
+	/// Something that can create the inherent data providers.
+	pub create_inherent_data_providers: IDP,
 	/// Should we force the authoring of blocks?
 	pub force_authoring: bool,
 	/// The backoff strategy when we miss slots.
@@ -154,7 +140,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, BS, CAW> {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
+pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error, IDP>(
 	StartAuraParams {
 		slot_duration,
 		client,
@@ -162,14 +148,14 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		block_import,
 		proposer_factory,
 		sync_oracle,
-		inherent_data_providers,
+		create_inherent_data_providers,
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
 		can_author_with,
 		block_proposal_slot_portion,
 		telemetry,
-	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW>,
+	}: StartAuraParams<C, SC, I, PF, SO, BS, CAW, IDP>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error> where
 	B: BlockT,
 	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + AuxStore + HeaderBackend<B> + Send + Sync,
@@ -185,6 +171,8 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 	SO: SyncOracle + Send + Sync + Clone,
 	CAW: CanAuthorWith<B> + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + 'static,
+	IDP: CreateInherentDataProviders<B, ()> + Send,
+	IDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
 		client: client.clone(),
@@ -198,18 +186,12 @@ pub fn start_aura<P, B, C, SC, PF, I, SO, CAW, BS, Error>(
 		block_proposal_slot_portion,
 	});
 
-	register_aura_inherent_data_provider(
-		&inherent_data_providers,
-		slot_duration.slot_duration()
-	)?;
-
-	Ok(sc_consensus_slots::start_slot_worker::<_, _, _, _, _, AuraSlotCompatible, _, _>(
+	Ok(sc_consensus_slots::start_slot_worker(
 		slot_duration,
 		select_chain,
 		worker,
 		sync_oracle,
-		inherent_data_providers,
-		AuraSlotCompatible,
+		create_inherent_data_providers,
 		can_author_with,
 	))
 }
@@ -278,8 +260,8 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, BS, Error>(
 		force_authoring,
 		backoff_authoring_blocks,
 		telemetry,
-		_key_type: PhantomData::<P>,
 		block_proposal_slot_portion,
+		_key_type: PhantomData::<P>,
 	}
 }
 
@@ -452,8 +434,7 @@ where
 
 	fn proposing_remaining_duration(
 		&self,
-		head: &B::Header,
-		slot_info: &SlotInfo,
+		slot_info: &SlotInfo<B>,
 	) -> std::time::Duration {
 		let max_proposing = slot_info.duration.mul_f32(self.block_proposal_slot_portion.get());
 
@@ -464,11 +445,11 @@ where
 		let slot_remaining = std::cmp::min(slot_remaining, max_proposing);
 
 		// If parent is genesis block, we don't require any lenience factor.
-		if head.number().is_zero() {
+		if slot_info.chain_head.number().is_zero() {
 			return slot_remaining
 		}
 
-		let parent_slot = match find_pre_digest::<B, P::Signature>(head) {
+		let parent_slot = match find_pre_digest::<B, P::Signature>(&slot_info.chain_head) {
 			Err(_) => return slot_remaining,
 			Ok(d) => d,
 		};
@@ -509,15 +490,15 @@ enum Error<B: BlockT> {
 	SlotAuthorNotFound,
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
-	#[display(fmt = "Rejecting block too far in future")]
-	TooFarInFuture,
 	Client(sp_blockchain::Error),
-	DataProvider(String),
-	Runtime(String),
 	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
 	SlotMustIncrease(Slot, Slot),
 	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
 	ParentUnavailable(B::Hash, B::Hash),
+	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
+	UnknownInherentError(sp_inherents::InherentIdentifier),
+	#[display(fmt = "Inherent error: {}", _0)]
+	Inherent(sp_inherents::Error),
 }
 
 impl<B: BlockT> std::convert::From<Error<B>> for String {
@@ -543,21 +524,6 @@ fn find_pre_digest<B: BlockT, Signature: Codec>(header: &B::Header) -> Result<Sl
 	pre_digest.ok_or_else(|| aura_err(Error::NoDigestFound))
 }
 
-/// Register the aura inherent data provider, if not registered already.
-fn register_aura_inherent_data_provider(
-	inherent_data_providers: &InherentDataProviders,
-	slot_duration: std::time::Duration,
-) -> Result<(), sp_consensus::Error> {
-	if !inherent_data_providers.has_provider(&INHERENT_IDENTIFIER) {
-		inherent_data_providers
-			.register_provider(InherentDataProvider::new(slot_duration))
-			.map_err(Into::into)
-			.map_err(sp_consensus::Error::InherentData)
-	} else {
-		Ok(())
-	}
-}
-
 fn authorities<A, B, C>(client: &C, at: &BlockId<B>) -> Result<Vec<A>, ConsensusError> where
 	A: Codec + Debug,
 	B: BlockT,
@@ -580,7 +546,7 @@ mod tests {
 	use super::*;
 	use sp_consensus::{
 		NoNetwork as DummyOracle, Proposal, AlwaysCanAuthor, DisableProofRecording,
-		import_queue::BoxJustificationImport,
+		import_queue::BoxJustificationImport, SlotData,
 	};
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_runtime::traits::{Block as BlockT, DigestFor};
@@ -596,6 +562,8 @@ mod tests {
 	use substrate_test_runtime_client::{TestClient, runtime::{Header, H256}};
 	use sc_keystore::LocalKeystore;
 	use sp_application_crypto::key_types::AURA;
+	use sp_inherents::InherentData;
+	use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 
 	type Error = sp_blockchain::Error;
 
@@ -643,7 +611,16 @@ mod tests {
 
 	const SLOT_DURATION: u64 = 1000;
 
-	type AuraVerifier = import_queue::AuraVerifier<PeersFullClient, AuthorityPair, AlwaysCanAuthor>;
+	type AuraVerifier = import_queue::AuraVerifier<
+		PeersFullClient,
+		AuthorityPair,
+		AlwaysCanAuthor,
+		Box<dyn CreateInherentDataProviders<
+			TestBlock,
+			(),
+			InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider)
+		>>
+	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
 	pub struct AuraTestNet {
@@ -668,16 +645,19 @@ mod tests {
 			match client {
 				PeersClient::Full(client, _) => {
 					let slot_duration = slot_duration(&*client).expect("slot duration available");
-					let inherent_data_providers = InherentDataProviders::new();
-					register_aura_inherent_data_provider(
-						&inherent_data_providers,
-						slot_duration.slot_duration()
-					).expect("Registers aura inherent data provider");
 
 					assert_eq!(slot_duration.slot_duration().as_millis() as u64, SLOT_DURATION);
 					import_queue::AuraVerifier::new(
 						client,
-						inherent_data_providers,
+						Box::new(|_, _| async {
+							let timestamp = TimestampInherentDataProvider::from_system_time();
+							let slot = InherentDataProvider::from_timestamp_and_duration(
+								*timestamp,
+								Duration::from_secs(6),
+							);
+
+							Ok((timestamp, slot))
+						}),
 						AlwaysCanAuthor,
 						CheckForEquivocation::Yes,
 						None,
@@ -746,19 +726,22 @@ mod tests {
 
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			let inherent_data_providers = InherentDataProviders::new();
-			register_aura_inherent_data_provider(
-				&inherent_data_providers, slot_duration.slot_duration()
-			).expect("Registers aura inherent data provider");
-
-			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _>(StartAuraParams {
+			aura_futures.push(start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
 				slot_duration,
 				block_import: client.clone(),
 				select_chain,
 				client,
 				proposer_factory: environ,
 				sync_oracle: DummyOracle,
-				inherent_data_providers,
+				create_inherent_data_providers: |_, _| async {
+					let timestamp = TimestampInherentDataProvider::from_system_time();
+					let slot = InherentDataProvider::from_timestamp_and_duration(
+						*timestamp,
+						Duration::from_secs(6),
+					);
+
+					Ok((timestamp, slot))
+				},
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				keystore,
@@ -881,13 +864,13 @@ mod tests {
 		let head = client.header(&BlockId::Number(0)).unwrap().unwrap();
 
 		let res = futures::executor::block_on(worker.on_slot(
-			head,
 			SlotInfo {
 				slot: 0.into(),
 				timestamp: 0.into(),
 				ends_at: Instant::now() + Duration::from_secs(100),
 				inherent_data: InherentData::new(),
 				duration: Duration::from_millis(1000),
+				chain_head: head,
 				block_size_limit: None,
 			},
 		)).unwrap();

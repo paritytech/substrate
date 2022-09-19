@@ -25,7 +25,7 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 use structopt::StructOpt;
 
 /// The `check-block` command used to validate blocks.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, StructOpt, Clone)]
 pub struct CheckBlockCmd {
 	/// Block hash or number
 	#[structopt(value_name = "HASH or NUMBER")]

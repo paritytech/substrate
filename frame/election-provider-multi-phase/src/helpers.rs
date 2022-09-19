@@ -62,6 +62,18 @@ pub fn voter_index_fn<T: Config>(
 	}
 }
 
+/// Create a function that returns the index of a voter in the snapshot.
+///
+/// Same as [`voter_index_fn`] but the returned function owns all its necessary data; nothing is
+/// borrowed.
+pub fn voter_index_fn_owned<T: Config>(
+	cache: BTreeMap<T::AccountId, usize>,
+) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> {
+	move |who| {
+		cache.get(who).and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
+	}
+}
+
 /// Same as [`voter_index_fn`], but the returning index is converted into usize, if possible.
 ///
 /// ## Warning

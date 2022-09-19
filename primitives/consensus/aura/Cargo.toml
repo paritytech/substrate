@@ -22,6 +22,7 @@ sp-inherents = { version = "3.0.0", default-features = false, path = "../../inhe
 sp-timestamp = { version = "3.0.0", default-features = false, path = "../../timestamp" }
 sp-consensus-slots = { version = "0.9.0", default-features = false, path = "../slots" }
 sp-consensus = { version = "0.9.0", path = "../common", optional = true }
+async-trait = { version = "0.1.48", optional = true }
 
 [features]
 default = ["std"]
@@ -35,4 +36,5 @@ std = [
 	"sp-timestamp/std",
 	"sp-consensus-slots/std",
 	"sp-consensus",
+	"async-trait",
 ]

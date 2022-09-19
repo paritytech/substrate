@@ -19,6 +19,7 @@
 
 use num_traits::{Zero, One};
 use sp_std::{cmp::Ordering, ops, prelude::*, vec, cell::RefCell, convert::TryFrom};
+use codec::{Encode, Decode};
 
 // A sensible value for this would be half of the dword size of the host machine. Since the
 // runtime is compiled to 32bit webassembly, using 32 and 64 for single and double respectively
@@ -78,7 +79,7 @@ fn div_single(a: Double, b: Single) -> (Double, Single) {
 }
 
 /// Simple wrapper around an infinitely large integer, represented as limbs of [`Single`].
-#[derive(Clone, Default)]
+#[derive(Encode, Decode, Clone, Default)]
 pub struct BigUint {
 	/// digits (limbs) of this number (sorted as msb -> lsb).
 	pub(crate) digits: Vec<Single>,

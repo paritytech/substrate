@@ -24,7 +24,7 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{FixedPointNumber, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{ArithmeticError, FixedPointNumber, traits::{SignedExtension, BadOrigin}};
 		use frame_support::{
 			assert_noop, assert_storage_noop, assert_ok, assert_err, StorageValue,
 			traits::{
@@ -523,7 +523,7 @@ macro_rules! decl_tests {
 
 				assert_err!(
 					Balances::transfer(Some(1).into(), 2, u64::max_value()),
-					Error::<$test, _>::Overflow,
+					ArithmeticError::Overflow,
 				);
 
 				assert_eq!(Balances::free_balance(1), u64::max_value());

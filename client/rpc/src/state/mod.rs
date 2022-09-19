@@ -40,7 +40,9 @@ use self::error::{Error, FutureResult};
 
 pub use sc_rpc_api::state::*;
 pub use sc_rpc_api::child_state::*;
-use sc_client_api::{ExecutorProvider, StorageProvider, BlockchainEvents, Backend, ProofProvider};
+use sc_client_api::{
+	ExecutorProvider, StorageProvider, BlockchainEvents, Backend, BlockBackend, ProofProvider
+};
 use sp_blockchain::{HeaderMetadata, HeaderBackend};
 
 const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
@@ -165,6 +167,14 @@ pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
 		_meta: Option<crate::Metadata>,
 		id: SubscriptionId,
 	) -> RpcResult<bool>;
+
+	/// Trace storage changes for block
+	fn trace_block(
+		&self,
+		block: Block::Hash,
+		targets: Option<String>,
+		storage_keys: Option<String>,
+	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse>;
 }
 
 /// Create new state API that works on full node.
@@ -176,9 +186,10 @@ pub fn new_full<BE, Block: BlockT, Client>(
 	where
 		Block: BlockT + 'static,
 		BE: Backend<Block> + 'static,
-		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block> + HeaderBackend<Block>
+		Client: ExecutorProvider<Block> + StorageProvider<Block, BE> + ProofProvider<Block>
 			+ HeaderMetadata<Block, Error = sp_blockchain::Error> + BlockchainEvents<Block>
-			+ CallApiAt<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
+			+ CallApiAt<Block> + HeaderBackend<Block>
+			+ BlockBackend<Block> + ProvideRuntimeApi<Block> + Send + Sync + 'static,
 		Client::Api: Metadata<Block>,
 {
 	let child_backend = Box::new(
@@ -345,6 +356,23 @@ impl<Block, Client> StateApi<Block::Hash> for State<Block, Client>
 		id: SubscriptionId,
 	) -> RpcResult<bool> {
 		self.backend.unsubscribe_runtime_version(meta, id)
+	}
+
+	/// Re-execute the given block with the tracing targets given in `targets`
+	/// and capture all state changes.
+	///
+	/// Note: requires the node to run with `--rpc-methods=Unsafe`.
+	/// Note: requires runtimes compiled with wasm tracing support, `--features with-tracing`.
+	fn trace_block(
+		&self, block: Block::Hash,
+		targets: Option<String>,
+		storage_keys: Option<String>
+	) -> FutureResult<sp_rpc::tracing::TraceBlockResponse> {
+		if let Err(err) = self.deny_unsafe.check_if_safe() {
+			return Box::new(result(Err(err.into())))
+		}
+
+		self.backend.trace_block(block, targets, storage_keys)
 	}
 }
 

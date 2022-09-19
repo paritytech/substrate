@@ -49,6 +49,7 @@ use sp_transaction_pool::{
 	TxHash,
 };
 use sp_consensus::{Environment, Proposer};
+use sp_inherents::InherentDataProvider;
 
 use crate::{
 	common::SizeType,
@@ -153,10 +154,7 @@ impl core::Benchmark for ConstructionBenchmark {
 			None,
 			None,
 		);
-		let inherent_data_providers = sp_inherents::InherentDataProviders::new();
-		inherent_data_providers
-			.register_provider(sp_timestamp::InherentDataProvider)
-			.expect("Failed to register timestamp data provider");
+		let timestamp_provider = sp_timestamp::InherentDataProvider::from_system_time();
 
 		let start = std::time::Instant::now();
 
@@ -168,7 +166,7 @@ impl core::Benchmark for ConstructionBenchmark {
 
 		let _block = futures::executor::block_on(
 			proposer.propose(
-				inherent_data_providers.create_inherent_data().expect("Create inherent data failed"),
+				timestamp_provider.create_inherent_data().expect("Create inherent data failed"),
 				Default::default(),
 				std::time::Duration::from_secs(20),
 				None,
