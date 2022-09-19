@@ -102,10 +102,12 @@ where
 	}
 
 	fn reset_peers_cache_for_block(&mut self, block: NumberFor<B>) {
+		// TODO (issue #12296): replace peer selection with generic one that involves all protocols.
 		self.peers_cache = self.live_peers.lock().at_least_at_block(block);
 	}
 
-	pub fn try_next_peer(&mut self) -> Option<PeerId> {
+	fn try_next_peer(&mut self) -> Option<PeerId> {
+		// TODO (issue #12296): replace peer selection with generic one that involves all protocols.
 		let live = self.live_peers.lock();
 		while let Some(peer) = self.peers_cache.pop_front() {
 			if live.contains(&peer) {

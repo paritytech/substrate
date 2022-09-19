@@ -18,6 +18,9 @@
 
 //! Logic for keeping track of BEEFY peers.
 
+// TODO (issue #12296): replace this naive peer tracking with generic one that infers data
+// from multiple network protocols.
+
 use sc_network::PeerId;
 use sp_runtime::traits::{Block, NumberFor, Zero};
 use std::collections::{HashMap, VecDeque};
