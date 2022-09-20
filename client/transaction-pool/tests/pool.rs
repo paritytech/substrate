@@ -457,6 +457,7 @@ fn finalization() {
 
 #[test]
 fn fork_aware_finalization() {
+	sp_tracing::try_init_simple();
 	let api = TestApi::empty();
 	// starting block A1 (last finalized.)
 	api.push_block(1, vec![], true);
@@ -996,4 +997,43 @@ fn stale_transactions_are_pruned() {
 
 	assert_eq!(pool.status().future, 0);
 	assert_eq!(pool.status().ready, 0);
+}
+
+#[test]
+fn playground() {
+	sp_tracing::try_init_simple();
+	println!("xxxx");
+	let xt = uxt(Alice, 209);
+
+	let (pool, api, _guard) = maintained_pool();
+
+	// block_on(pool.submit_one(&BlockId::number(0), SOURCE, xt.clone())).expect("1. Imported");
+	let watcher = block_on(pool.submit_and_watch(&BlockId::number(0), SOURCE, xt.clone()))
+		.expect("1. Imported");
+	assert_eq!(pool.status().ready, 1);
+
+	let header = api.push_block(1, vec![xt.clone()], true);
+
+	let ps = pool.pool().validated_pool().status();
+	println!("status: {ps:?}");
+	// block_on(pool.maintain(block_event(header.clone())));
+	// let ps = pool.pool().validated_pool().status();
+	// println!("status: {ps:?}");
+
+	let event =
+		ChainEvent::Finalized { hash: header.clone().hash(), tree_route: Arc::from(vec![]) };
+	block_on(pool.maintain(event));
+
+	let ps = pool.pool().validated_pool().status();
+	println!("status: {ps:?}");
+
+	assert_eq!(pool.status().ready, 0);
+
+	{
+		let mut stream = futures::executor::block_on_stream(watcher);
+		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(header.clone().hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(header.hash())));
+		assert_eq!(stream.next(), None);
+	}
 }
