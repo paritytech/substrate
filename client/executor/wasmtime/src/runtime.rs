@@ -730,7 +730,8 @@ fn prepare_blob_for_compilation(
 	blob.add_extra_heap_pages_to_memory_section(
 		semantics
 			.extra_heap_pages
-			.try_into()
+			.maximum().map(TryInto::try_into)
+			.unwrap_or(Ok(1024))
 			.map_err(|e| WasmError::Other(format!("invalid `extra_heap_pages`: {}", e)))?,
 	)?;
 

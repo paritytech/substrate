@@ -120,6 +120,7 @@ pub trait WasmInstance: Send {
 	}
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
 pub enum HeapPages {
 	Max(usize),
 	Dynamic,
@@ -128,7 +129,7 @@ pub enum HeapPages {
 impl HeapPages {
 	pub fn maximum(&self) -> Option<usize> {
 		match self {
-			Self::Max(max) => Some(max),
+			Self::Max(max) => Some(*max),
 			Self::Dynamic => None,
 		}
 	}

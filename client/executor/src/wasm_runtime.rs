@@ -27,7 +27,7 @@ use lru::LruCache;
 use parking_lot::Mutex;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{WasmInstance, WasmModule, HeapPages},
+	wasm_runtime::{HeapPages, WasmInstance, WasmModule},
 };
 use sp_core::traits::{Externalities, FetchRuntimeCode, RuntimeCode};
 use sp_version::RuntimeVersion;
@@ -65,7 +65,7 @@ struct VersionedRuntimeId {
 	/// Wasm runtime type.
 	wasm_method: WasmExecutionMethod,
 	/// The number of WebAssembly heap pages this instance was created with.
-	heap_pages: u64,
+	heap_pages: HeapPages,
 }
 
 /// A Wasm runtime object along with its cached runtime version.
@@ -221,7 +221,7 @@ impl RuntimeCache {
 		runtime_code: &'c RuntimeCode<'c>,
 		ext: &mut dyn Externalities,
 		wasm_method: WasmExecutionMethod,
-		default_heap_pages: u64,
+		default_heap_pages: HeapPages,
 		allow_missing_func_imports: bool,
 		f: F,
 	) -> Result<Result<R, Error>, Error>
@@ -235,7 +235,10 @@ impl RuntimeCache {
 		) -> Result<R, Error>,
 	{
 		let code_hash = &runtime_code.hash;
-		let heap_pages = runtime_code.heap_pages.unwrap_or(default_heap_pages);
+		let heap_pages = runtime_code
+			.heap_pages
+			.map(|h| HeapPages::Max(h as _))
+			.unwrap_or(default_heap_pages);
 
 		let versioned_runtime_id =
 			VersionedRuntimeId { code_hash: code_hash.clone(), heap_pages, wasm_method };
@@ -396,7 +399,7 @@ fn create_versioned_wasm_runtime<H>(
 	code: &[u8],
 	ext: &mut dyn Externalities,
 	wasm_method: WasmExecutionMethod,
-	heap_pages: u64,
+	heap_pages: HeapPages,
 	allow_missing_func_imports: bool,
 	max_instances: usize,
 	cache_path: Option<&Path>,

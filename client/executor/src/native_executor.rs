@@ -36,7 +36,7 @@ use std::{
 use codec::Encode;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{AllocationStats, InvokeMethod, WasmInstance, WasmModule},
+	wasm_runtime::{AllocationStats, InvokeMethod, WasmInstance, WasmModule, HeapPages},
 };
 use sp_core::traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt};
 use sp_externalities::ExternalitiesExt as _;
@@ -45,7 +45,7 @@ use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
 use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions};
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: u64 = 2048;
+const DEFAULT_HEAP_PAGES: HeapPages = HeapPages::Max(2048);
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///
@@ -91,7 +91,7 @@ pub struct WasmExecutor<H> {
 	/// Method used to execute fallback Wasm code.
 	method: WasmExecutionMethod,
 	/// The number of 64KB pages to allocate for Wasm execution.
-	default_heap_pages: u64,
+	default_heap_pages: HeapPages,
 	/// WASM runtime cache.
 	cache: Arc<RuntimeCache>,
 	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
@@ -144,7 +144,7 @@ where
 	) -> Self {
 		WasmExecutor {
 			method,
-			default_heap_pages: default_heap_pages.unwrap_or(DEFAULT_HEAP_PAGES),
+			default_heap_pages: default_heap_pages.map(|h| HeapPages::Max(h as _)).unwrap_or(DEFAULT_HEAP_PAGES),
 			cache: Arc::new(RuntimeCache::new(
 				max_runtime_instances,
 				cache_path.clone(),
