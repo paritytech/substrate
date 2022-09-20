@@ -25,7 +25,6 @@ use pallet_staking::{CurrentEra, IndividualExposure, RewardDestination};
 
 use sp_runtime::{traits::BadOrigin, DispatchError, ModuleError};
 use sp_staking::StakingInterface;
-use sp_std::prelude::*;
 
 #[test]
 fn test_setup_works() {
