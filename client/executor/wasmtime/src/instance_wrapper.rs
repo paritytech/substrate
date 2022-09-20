@@ -197,28 +197,16 @@ fn extern_func(extern_: &Extern) -> Option<&Func> {
 	}
 }
 
-pub(crate) fn create_store(engine: &wasmtime::Engine, max_memory_size: Option<usize>) -> Store {
-	let limits = if let Some(max_memory_size) = max_memory_size {
-		wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
-	} else {
-		Default::default()
-	};
-
-	let mut store =
-		Store::new(engine, StoreData { limits, host_state: None, memory: None, table: None });
-	if max_memory_size.is_some() {
-		store.limiter(|s| &mut s.limits);
-	}
-	store
+pub(crate) fn create_store(engine: &wasmtime::Engine) -> Store {
+	Store::new(engine, StoreData { host_state: None, memory: None, table: None })
 }
 
 impl InstanceWrapper {
 	pub(crate) fn new(
 		engine: &Engine,
 		instance_pre: &InstancePre<StoreData>,
-		max_memory_size: Option<usize>,
 	) -> Result<Self> {
-		let mut store = create_store(engine, max_memory_size);
+		let mut store = create_store(engine);
 		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
 			WasmError::Other(format!(
 				"failed to instantiate a new WASM module instance: {:#}",

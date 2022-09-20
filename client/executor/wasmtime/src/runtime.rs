@@ -30,7 +30,7 @@ use sc_executor_common::{
 	runtime_blob::{
 		self, DataSegmentsSnapshot, ExposedMutableGlobalsSet, GlobalsSnapshot, RuntimeBlob,
 	},
-	wasm_runtime::{InvokeMethod, WasmInstance, WasmModule, HeapPages},
+	wasm_runtime::{HeapPages, InvokeMethod, WasmInstance, WasmModule},
 };
 use sp_runtime_interface::unpack_ptr_and_len;
 use sp_wasm_interface::{HostFunctions, Pointer, Value, WordSize};
@@ -44,9 +44,6 @@ use std::{
 use wasmtime::{Engine, Memory, StoreLimits, Table};
 
 pub(crate) struct StoreData {
-	/// The limits we apply to the store. We need to store it here to return a reference to this
-	/// object when we have the limits enabled.
-	pub(crate) limits: StoreLimits,
 	/// This will only be set when we call into the runtime.
 	pub(crate) host_state: Option<HostState>,
 	/// This will be always set once the store is initialized.
@@ -97,7 +94,7 @@ struct InstanceCreator {
 
 impl InstanceCreator {
 	fn instantiate(&mut self) -> Result<InstanceWrapper> {
-		InstanceWrapper::new(&self.engine, &self.instance_pre, self.max_memory_size)
+		InstanceWrapper::new(&self.engine, &self.instance_pre)
 	}
 }
 
@@ -144,11 +141,7 @@ impl WasmModule for WasmtimeRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>> {
 		let strategy = match self.instantiation_strategy {
 			InternalInstantiationStrategy::LegacyInstanceReuse(ref snapshot_data) => {
-				let mut instance_wrapper = InstanceWrapper::new(
-					&self.engine,
-					&self.instance_pre,
-					self.config.semantics.max_memory_size,
-				)?;
+				let mut instance_wrapper = InstanceWrapper::new(&self.engine, &self.instance_pre)?;
 				let heap_base = instance_wrapper.extract_heap_base()?;
 
 				// This function panics if the instance was created from a runtime blob different
@@ -170,7 +163,7 @@ impl WasmModule for WasmtimeRuntime {
 			InternalInstantiationStrategy::Builtin => Strategy::RecreateInstance(InstanceCreator {
 				engine: self.engine.clone(),
 				instance_pre: self.instance_pre.clone(),
-				max_memory_size: self.config.semantics.max_memory_size,
+				max_memory_size: None,
 			}),
 		};
 
@@ -354,25 +347,24 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 		InstantiationStrategy::LegacyInstanceReuse => (false, false),
 	};
 
+	const WASM_PAGE_SIZE: u64 = 65536;
+
 	config.memory_init_cow(use_cow);
 	config.memory_guaranteed_dense_image_size(
-		semantics.max_memory_size.map(|max| max as u64).unwrap_or(u64::MAX),
+		semantics
+			.heap_pages
+			.maximum()
+			.map(|max| max as u64 * WASM_PAGE_SIZE)
+			.unwrap_or(u64::MAX),
 	);
 
 	if use_pooling {
-		const WASM_PAGE_SIZE: u64 = 65536;
 		const MAX_WASM_PAGES: u64 = 0x10000;
 
-		let memory_pages = if let Some(max_memory_size) = semantics.max_memory_size {
-			let max_memory_size = max_memory_size as u64;
-			let mut pages = max_memory_size / WASM_PAGE_SIZE;
-			if max_memory_size % WASM_PAGE_SIZE != 0 {
-				pages += 1;
-			}
-
-			std::cmp::min(MAX_WASM_PAGES, pages)
-		} else {
-			MAX_WASM_PAGES
+		let memory_pages = match semantics.heap_pages {
+			HeapPages::Extra(extra) => extra as u64,
+			HeapPages::Max(max) => max as u64,
+			HeapPages::Dynamic => MAX_WASM_PAGES,
 		};
 
 		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
@@ -523,25 +515,8 @@ pub struct Semantics {
 	/// Configures wasmtime to use multiple threads for compiling.
 	pub parallel_compilation: bool,
 
-	/// The number of extra WASM pages which will be allocated
-	/// on top of what is requested by the WASM blob itself.
-	pub extra_heap_pages: HeapPages,
-
-	/// The total amount of memory in bytes an instance can request.
-	///
-	/// If specified, the runtime will be able to allocate only that much of wasm memory.
-	/// This is the total number and therefore the [`Semantics::extra_heap_pages`] is accounted
-	/// for.
-	///
-	/// That means that the initial number of pages of a linear memory plus the
-	/// [`Semantics::extra_heap_pages`] multiplied by the wasm page size (64KiB) should be less
-	/// than or equal to `max_memory_size`, otherwise the instance won't be created.
-	///
-	/// Moreover, `memory.grow` will fail (return -1) if the sum of sizes of currently mounted
-	/// and additional pages exceeds `max_memory_size`.
-	///
-	/// The default is `None`.
-	pub max_memory_size: Option<usize>,
+	/// The number of WASM pages which will be allocated.
+	pub heap_pages: HeapPages,
 }
 
 pub struct Config {
@@ -693,11 +668,10 @@ where
 	let mut linker = wasmtime::Linker::new(&engine);
 	crate::imports::prepare_imports::<H>(&mut linker, &module, config.allow_missing_func_imports)?;
 
-	let mut store =
-		crate::instance_wrapper::create_store(module.engine(), config.semantics.max_memory_size);
+	let mut store = crate::instance_wrapper::create_store(module.engine());
 	let instance_pre = linker
 		.instantiate_pre(&mut store, &module)
-		.map_err(|e| WasmError::Other(format!("cannot preinstantiate module: {:#}", e)))?;
+		.map_err(|e| WasmError::Other(format!("cannot pre-instantiate module: {:#}", e)))?;
 
 	Ok(WasmtimeRuntime {
 		engine,
@@ -727,13 +701,7 @@ fn prepare_blob_for_compilation(
 	// now automatically take care of creating the memory for us, and it is also necessary
 	// to enable `wasmtime`'s instance pooling. (Imported memories are ineligible for pooling.)
 	blob.convert_memory_import_into_export()?;
-	blob.add_extra_heap_pages_to_memory_section(
-		semantics
-			.extra_heap_pages
-			.maximum().map(TryInto::try_into)
-			.unwrap_or(Ok(1024))
-			.map_err(|e| WasmError::Other(format!("invalid `extra_heap_pages`: {}", e)))?,
-	)?;
+	blob.add_extra_heap_pages_to_memory_section(semantics.heap_pages)?;
 
 	Ok(blob)
 }

@@ -326,12 +326,11 @@ where
 					allow_missing_func_imports,
 					cache_path: cache_path.map(ToOwned::to_owned),
 					semantics: sc_executor_wasmtime::Semantics {
-						extra_heap_pages: heap_pages,
+						heap_pages,
 						instantiation_strategy,
 						deterministic_stack_limit: None,
 						canonicalize_nans: false,
 						parallel_compilation: true,
-						max_memory_size: None,
 					},
 				},
 			)

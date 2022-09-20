@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error::WasmError;
+use crate::{error::WasmError, wasm_runtime::HeapPages};
 use wasm_instrument::{
 	export_mutable_globals,
 	parity_wasm::elements::{
@@ -168,7 +168,7 @@ impl RuntimeBlob {
 	/// so that it's at least as big as the initial size.
 	pub fn add_extra_heap_pages_to_memory_section(
 		&mut self,
-		extra_heap_pages: u32,
+		heap_pages: HeapPages,
 	) -> Result<(), WasmError> {
 		let memory_section = self
 			.raw_module
@@ -179,8 +179,12 @@ impl RuntimeBlob {
 			return Err(WasmError::Other("memory section is empty".into()))
 		}
 		for memory_ty in memory_section.entries_mut() {
-			let min = memory_ty.limits().initial().saturating_add(extra_heap_pages);
-			let max = Some(memory_ty.limits().initial().saturating_add(extra_heap_pages));
+			let min = memory_ty.limits().initial();
+			let max = match heap_pages {
+				HeapPages::Dynamic => None,
+				HeapPages::Max(max) => Some(max as _),
+				HeapPages::Extra(extra) => Some(extra as u32 + memory_ty.limits().initial()),
+			};
 			*memory_ty = MemoryType::new(min, max);
 		}
 		Ok(())

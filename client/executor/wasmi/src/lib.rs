@@ -658,12 +658,20 @@ fn instantiate_module(
 
 			match (memory.maximum(), heap_pages) {
 				(Some(max), HeapPages::Max(requested_max)) =>
-					if max.0 - memory.initial().0 > requested_max {
+					if max.0 != requested_max {
 						return Err(Error::Other(format!(
-							"Request maximum pages {} is smaller than exported memory maximum {}",
+							"Request maximum pages {} doesn't match the exported memory maximum {}",
 							requested_max, max.0,
 						)))
 					},
+				(Some(max), HeapPages::Extra(extra)) => if max.0 != extra + memory.initial().0 {
+						return Err(Error::Other(format!(
+							"Request extra pages {} plus the initial pages {} doesn't match the exported memory maximum {}",
+							extra,
+							memory.initial().0,
+							max.0,
+						)))
+				},
 				(Some(max), HeapPages::Dynamic) => return Err(Error::Other(
 					format!("Requested dynamic maximum pages, while the exported memory has a maximum if {}", max.0)
 				)),
