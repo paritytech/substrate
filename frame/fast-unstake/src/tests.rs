@@ -81,7 +81,7 @@ fn cannot_register_if_head() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Insert some Head item for stash
 		Head::<T>::put(UnstakeRequest {
-			stash: 1.clone(),
+			stash: 1,
 			checked: bounded_vec![],
 			maybe_pool_id: None,
 		});
@@ -143,7 +143,7 @@ fn cannot_deregister_already_head() {
 		assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(2), Some(1_u32)));
 		// Insert some Head item for stash.
 		Head::<T>::put(UnstakeRequest {
-			stash: 1.clone(),
+			stash: 1,
 			checked: bounded_vec![],
 			maybe_pool_id: None,
 		});
