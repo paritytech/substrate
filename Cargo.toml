@@ -55,6 +55,7 @@ members = [
 	"client/rpc",
 	"client/rpc-api",
 	"client/rpc-servers",
+	"client/rpc-spec-v2",
 	"client/service",
 	"client/service/test",
 	"client/state-db",

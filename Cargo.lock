@@ -4836,6 +4836,7 @@ dependencies = [
  "sc-finality-grandpa-rpc",
  "sc-rpc",
  "sc-rpc-api",
+ "sc-rpc-spec-v2",
  "sc-sync-state-rpc",
  "sc-transaction-pool-api",
  "sp-api",
@@ -8771,6 +8772,17 @@ dependencies = [
  "log",
  "serde_json",
  "substrate-prometheus-endpoint",
+ "tokio",
+]
+
+[[package]]
+name = "sc-rpc-spec-v2"
+version = "0.10.0-dev"
+dependencies = [
+ "hex",
+ "jsonrpsee",
+ "sc-chain-spec",
+ "serde_json",
  "tokio",
 ]
 
