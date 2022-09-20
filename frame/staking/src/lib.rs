@@ -898,7 +898,7 @@ enum Releases {
 	V9_0_0,  // inject validators into `VoterList` as well.
 	V10_0_0, // remove `EarliestUnappliedSlash`.
 	V11_0_0, // Move pallet storage prefix, e.g. BagsList -> VoterBagsList
-	V12_0_0, // remove `HistoryDepth`
+	V12_0_0, // remove `HistoryDepth`.
 }
 
 impl Default for Releases {
