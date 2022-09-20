@@ -64,7 +64,7 @@ where
 			uri,
 			expected_spec_name,
 			expected_spec_version,
-			shared.no_spec_name_check,
+			shared.no_spec_check_panic,
 		)
 		.await;
 	}
