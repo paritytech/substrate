@@ -846,6 +846,13 @@ where
 					}
 				},
 				// Process incoming justifications as these can make some in-flight votes obsolete.
+				justif = self.on_demand_justifications.next().fuse() => {
+					if let Some(justif) = justif {
+						if let Err(err) = self.triage_incoming_justif(justif) {
+							debug!(target: "beefy", "🥩 {}", err);
+						}
+					}
+				},
 				justif = block_import_justif.next() => {
 					if let Some(justif) = justif {
 						// Block import justifications have already been verified to be valid
@@ -856,13 +863,6 @@ where
 					} else {
 						error!(target: "beefy", "🥩 Block import stream terminated, closing worker.");
 						return;
-					}
-				},
-				justif = self.on_demand_justifications.next().fuse() => {
-					if let Some(justif) = justif {
-						if let Err(err) = self.triage_incoming_justif(justif) {
-							debug!(target: "beefy", "🥩 {}", err);
-						}
 					}
 				},
 				// Finally process incoming votes.

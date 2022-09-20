@@ -22,8 +22,7 @@ use beefy_primitives::{crypto::AuthorityId, BeefyApi, ValidatorSet};
 use codec::Encode;
 use futures::{
 	channel::{oneshot, oneshot::Canceled},
-	future::Either,
-	stream::{FuturesUnordered, StreamExt},
+	stream::{self, StreamExt},
 };
 use log::{debug, error, warn};
 use parking_lot::Mutex;
@@ -51,8 +50,8 @@ type Response = Result<Vec<u8>, RequestFailure>;
 type ResponseReceiver = oneshot::Receiver<Response>;
 
 enum State<B: Block> {
-	Idle,
-	AwaitingResponse(PeerId, NumberFor<B>),
+	Idle(stream::Pending<Result<Response, Canceled>>),
+	AwaitingResponse(PeerId, NumberFor<B>, stream::Once<ResponseReceiver>),
 }
 
 pub struct OnDemandJustificationsEngine<B: Block, N, R> {
@@ -64,9 +63,6 @@ pub struct OnDemandJustificationsEngine<B: Block, N, R> {
 	peers_cache: VecDeque<PeerId>,
 
 	state: State<B>,
-	engine: FuturesUnordered<
-		Either<std::future::Pending<std::result::Result<Response, Canceled>>, ResponseReceiver>,
-	>,
 }
 
 impl<B, N, R> OnDemandJustificationsEngine<B, N, R>
@@ -82,23 +78,14 @@ where
 		protocol_name: ProtocolName,
 		live_peers: Arc<Mutex<KnownPeers<B>>>,
 	) -> Self {
-		let engine = FuturesUnordered::new();
-		engine.push(Either::Left(std::future::pending::<_>()));
 		Self {
 			network,
 			runtime,
 			protocol_name,
 			live_peers,
 			peers_cache: VecDeque::new(),
-			state: State::Idle,
-			engine,
+			state: State::Idle(stream::pending()),
 		}
-	}
-
-	fn reset_state(&mut self) {
-		self.state = State::Idle;
-		self.engine = FuturesUnordered::new();
-		self.engine.push(Either::Left(std::future::pending::<_>()));
 	}
 
 	fn reset_peers_cache_for_block(&mut self, block: NumberFor<B>) {
@@ -132,16 +119,15 @@ where
 			IfDisconnected::ImmediateError,
 		);
 
-		self.engine.push(Either::Right(rx));
-		self.state = State::AwaitingResponse(peer, block);
+		self.state = State::AwaitingResponse(peer, block, stream::once(rx));
 	}
 
 	/// If no other request is in progress, start new justification request for `block`.
 	pub fn request(&mut self, block: NumberFor<B>) {
 		// ignore new requests while there's already one pending
 		match &self.state {
-			State::AwaitingResponse(_, _) => return,
-			State::Idle => (),
+			State::AwaitingResponse(_, _, _) => return,
+			State::Idle(_) => (),
 		}
 		self.reset_peers_cache_for_block(block);
 
@@ -157,13 +143,13 @@ where
 	/// Cancel any pending request for block numbers smaller or equal to `block`.
 	pub fn cancel_requests_older_than(&mut self, block: NumberFor<B>) {
 		match &self.state {
-			State::AwaitingResponse(_, number) if *number <= block => {
+			State::AwaitingResponse(_, number, _) if *number <= block => {
 				debug!(
 					target: "beefy::sync",
 					"🥩 cancel pending request for justification #{:?}",
 					number
 				);
-				self.reset_state();
+				self.state = State::Idle(stream::pending());
 			},
 			_ => (),
 		}
@@ -174,8 +160,8 @@ where
 		peer: PeerId,
 		block: NumberFor<B>,
 		validator_set: &ValidatorSet<AuthorityId>,
-		response: std::result::Result<Response, Canceled>,
-	) -> std::result::Result<BeefyVersionedFinalityProof<B>, Error> {
+		response: Result<Response, Canceled>,
+	) -> Result<BeefyVersionedFinalityProof<B>, Error> {
 		response
 			.map_err(|e| {
 				debug!(
@@ -208,34 +194,20 @@ where
 	}
 
 	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B>> {
-		// The `engine` contains at the very least a `Pending` future (future that never finishes).
-		// This "blocks" until:
-		//  - we have a [ResponseReceiver] added to the engine, and
-		//  - we also get a [Response] on it.
-		let resp = self
-			.engine
-			.next()
-			.await
-			.expect("Engine will never end because of inner `Pending` future, qed.");
-
-		let (peer, block) = match self.state {
-			State::AwaitingResponse(peer, block) => (peer, block),
-			// Programming error to have active [ResponseReceiver]s in the engine with no pending
-			// requests. Just log an error for now.
-			State::Idle => {
-				error!(
-					target: "beefy::sync",
-					"🥩 unexpected response received in 'Idle' state: {:?}",
-					resp
-				);
-				self.reset_state();
+		let (peer, block, resp) = match &mut self.state {
+			State::Idle(pending) => {
+				let _ = pending.next().await;
+				// This never happens since 'stream::pending' never generates any items.
 				return None
 			},
+			State::AwaitingResponse(peer, block, receiver) => {
+				let resp = receiver.next().await?;
+				(*peer, *block, resp)
+			},
 		};
-		// We received the awaited response. All response processing success and error cases
-		// ultimately move the engine in `Idle` state, so just do it now to make things simple
-		// and make sure we don't miss any error short-circuit.
-		self.reset_state();
+		// We received the awaited response. Our 'stream::once()' receiver will never generate any
+		// other response, meaning we're done with current state. Move the engine to `State::Idle`.
+		self.state = State::Idle(stream::pending());
 
 		let block_id = BlockId::number(block);
 		let validator_set = self
