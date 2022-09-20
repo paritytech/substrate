@@ -127,8 +127,11 @@ pub mod pallet {
 
 		/// Number of eras to keep in history.
 		///
-		/// Information is kept for eras in `[current_era - history_depth;
-		/// current_era]`.
+		/// Following information is kept for eras in `[current_era -
+		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
+		/// `ErasValidatorPrefs`, `ErasValidatorReward`, `ErasRewardPoints`,
+		/// `ErasTotalStake`, `ErasStartSessionIndex`,
+		/// `StakingLedger.claimed_rewards`.
 		///
 		/// Must be more than the number of eras delayed by session otherwise.
 		/// I.e. active era must always be in history. I.e. `active_era >
