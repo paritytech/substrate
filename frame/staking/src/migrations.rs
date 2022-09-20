@@ -35,7 +35,6 @@ pub mod v12 {
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV12<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<(), &'static str> {
-			use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == Releases::V11_0_0,
 				"Expected v11 before upgrading to v12"

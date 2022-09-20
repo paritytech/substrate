@@ -5363,5 +5363,5 @@ fn pre_bonding_era_cannot_be_claimed() {
 
 		// fix the corrupted state for post conditions check
 		HistoryDepth::set(history_depth);
-	});
+	});	
 }
