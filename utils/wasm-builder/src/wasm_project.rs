@@ -666,8 +666,15 @@ fn compact_wasm_file(
 		.join(format!("{}.wasm", default_out_name));
 
 	let (wasm_compact_path, wasm_compact_compressed_path) = if profile.wants_compact() {
+		// Only in production we want to spend substantial time on optimizing. Otherwise we just
+		// run level 1 which bare takes a second.
+		let mut optimizer = match profile {
+			Profile::Production =>
+				wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively(),
+			_ => wasm_opt::OptimizationOptions::new_opt_level_1(),
+		};
 		let wasm_compact_path = project.join(format!("{}.compact.wasm", out_name,));
-		wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
+		optimizer
 			.zero_filled_memory(true)
 			.run(&in_path, Option::<&str>::None, &wasm_compact_path, Option::<&str>::None)
 			.expect("Failed to compact generated WASM binary.");
