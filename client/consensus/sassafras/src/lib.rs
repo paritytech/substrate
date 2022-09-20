@@ -20,7 +20,8 @@
 //!
 //! TODO-SASS-P2: documentation
 
-#![deny(warnings)]
+// TODO-SASS-P2: remove this
+//#![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
 use std::{
@@ -91,6 +92,8 @@ pub use sp_consensus_sassafras::{
 mod authorship;
 mod aux_schema;
 mod block_import;
+#[cfg(test)]
+mod tests;
 mod verification;
 
 pub use authorship::{start_sassafras, SassafrasParams, SassafrasWorker};
