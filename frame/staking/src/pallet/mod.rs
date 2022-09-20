@@ -133,7 +133,7 @@ pub mod pallet {
 		/// `ErasTotalStake`, `ErasStartSessionIndex`,
 		/// `StakingLedger.claimed_rewards`.
 		///
-		/// Must be more than the number of eras delayed by session otherwise.
+		/// Must be more than the number of eras delayed by session.
 		/// I.e. active era must always be in history. I.e. `active_era >
 		/// current_era - history_depth` must be guaranteed.
 		///
