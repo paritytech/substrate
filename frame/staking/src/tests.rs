@@ -5347,5 +5347,21 @@ fn pre_bonding_era_cannot_be_claimed() {
 			Staking::payout_stakers(Origin::signed(4), 3, current_era - 2),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
+
+		// decoding will fail now since Staking Ledger is in corrupt state
+		HistoryDepth::set(history_depth-1);
+		assert_eq!(
+			Staking::ledger(&4),
+			None
+		);
+
+		// make sure stakers still cannot claim rewards that they are not meant to
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(4), 3, current_era - 2),
+			Error::<Test>::NotController
+		);
+
+		// fix the corrupted state for post conditions check
+		HistoryDepth::set(history_depth);
 	});
 }
