@@ -502,17 +502,17 @@ benchmarks_instance_pallet! {
 		let (item2, ..) = mint_item::<T, I>(1);
 		let price = ItemPrice::<T, I>::from(100u32);
 		let duration = T::BlockNumber::max_value();
-		let user2: T::AccountId = account("user2", 0, SEED);
-		let user2_lookup = T::Lookup::unlookup(user2.clone());
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target.clone());
 		let origin = SystemOrigin::Signed(caller.clone());
-		Nfts::<T, I>::transfer(origin.clone().into(), collection, item1, user2_lookup)?;
+		Nfts::<T, I>::transfer(origin.clone().into(), collection, item2, target_lookup)?;
 		Nfts::<T, I>::create_swap(origin.clone().into(), collection, item1, collection, item2, Some(price), Some(duration))?;
-	}: _(SystemOrigin::Signed(user2.clone()), collection, item2, collection, item1, Some(price.clone()))
+	}: _(SystemOrigin::Signed(target.clone()), collection, item2, collection, item1, Some(price.clone()))
 	verify {
 		assert_last_event::<T, I>(Event::SwapClaimed {
 			send_collection: collection,
 			send_item: item2,
-			send_item_owner: user2,
+			send_item_owner: target,
 			receive_collection: collection,
 			receive_item: item1,
 			receive_item_owner: caller,
