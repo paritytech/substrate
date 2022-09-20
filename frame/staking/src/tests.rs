@@ -5413,7 +5413,6 @@ fn reducing_history_depth_without_migration() {
 		);
 
 		// new stakers can still bond
-		// add new staker works
 		assert_ok!(Staking::bond(Origin::signed(5), 6, 1200, RewardDestination::Controller));
 
 		// new staking ledgers created will be bounded by the current history depth
