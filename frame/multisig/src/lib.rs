@@ -47,6 +47,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+pub mod migrations;
 mod tests;
 pub mod weights;
 
@@ -58,7 +59,7 @@ use frame_support::{
 	},
 	ensure,
 	traits::{Currency, Get, ReservableCurrency},
-	weights::{GetDispatchInfo, Weight},
+	weights::Weight,
 	RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
@@ -72,6 +73,20 @@ use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
+
+/// The log target of this pallet.
+pub const LOG_TARGET: &'static str = "runtime::multisig";
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("[{:?}] 🏊‍♂️ ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+		)
+	};
+}
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -103,7 +118,7 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 type CallHash = [u8; 32];
 
 enum CallOrHash<T: Config> {
-	Call(<T as Config>::Call),
+	Call(<T as Config>::RuntimeCall),
 	Hash([u8; 32]),
 }
 
@@ -150,9 +165,13 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	/// The set of open multisig operations.
@@ -356,7 +375,7 @@ pub mod pallet {
 			threshold: u16,
 			other_signatories: Vec<T::AccountId>,
 			maybe_timepoint: Option<Timepoint<T::BlockNumber>>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 			max_weight: Weight,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
