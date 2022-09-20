@@ -18,12 +18,12 @@
 //! Various pieces of common functionality.
 
 use super::*;
+use enumflags2::BitFlags;
 use frame_support::{
 	ensure,
 	traits::{ExistenceRequirement, Get},
 };
 use sp_runtime::{DispatchError, DispatchResult};
-use enumflags2::BitFlags;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_transfer(

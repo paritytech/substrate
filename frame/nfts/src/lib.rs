@@ -378,9 +378,7 @@ pub mod pallet {
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
 		/// The config of a collection has change.
-		CollectionConfigChanged {
-			id: T::CollectionId,
-		},
+		CollectionConfigChanged { id: T::CollectionId },
 		/// The price was set for the instance.
 		ItemPriceSet {
 			collection: T::CollectionId,

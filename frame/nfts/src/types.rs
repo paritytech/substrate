@@ -33,6 +33,8 @@ pub enum UserFeature {
 	Administration,
 	IsLocked,
 	NonTransferableItems,
+	MetadataIsLocked,
+	AttributesAreLocked,
 }
 
 /// Wrapper type for `BitFlags<UserFeature>` that implements `Codec`.
@@ -82,9 +84,14 @@ impl TypeInfo for UserFeatures {
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum SystemFeature {
-	NoDeposit,
-	CreatorRoyalties,
-	OwnerRoyalties,
+	NoCollectionDeposit,
+	NoItemDeposit,
+	NoDataDeposit,
+	NoTrading,
+	NoAttributes,
+	NoApprovals,
+	NoSwaps,
+	NoClaims,
 }
 
 /// Wrapper type for `BitFlags<UserFeature>` that implements `Codec`.
