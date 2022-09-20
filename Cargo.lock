@@ -11894,6 +11894,10 @@ dependencies = [
 ]
 
 [[patch.unused]]
+name = "sc-finality-grandpa-rpc"
+version = "0.10.0-dev"
+
+[[patch.unused]]
 name = "orml-unknown-tokens"
 version = "0.4.1-dev"
 source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
@@ -11912,10 +11916,6 @@ source = "git+https://github.com/mangata-finance//open-runtime-module-library?br
 name = "orml-xtokens"
 version = "0.4.1-dev"
 source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
-
-[[patch.unused]]
-name = "sc-finality-grandpa-rpc"
-version = "0.10.0-dev"
 
 [[patch.unused]]
 name = "sc-finality-grandpa-rpc"
