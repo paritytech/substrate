@@ -34,7 +34,7 @@ pub mod v12 {
 	pub struct MigrateToV12<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV12<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == Releases::V11_0_0,
 				"Expected v11 before upgrading to v12"
@@ -45,7 +45,7 @@ pub mod v12 {
 				"Provided value of HistoryDepth should be same as the existing storage value"
 			);
 
-			Ok(())
+			Ok(Default::default())
 		}
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -62,7 +62,7 @@ pub mod v12 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 			frame_support::ensure!(
 				StorageVersion::<T>::get() == crate::Releases::V12_0_0,
 				"v12 not applied"

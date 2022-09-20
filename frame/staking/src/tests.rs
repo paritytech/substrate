@@ -5362,3 +5362,90 @@ fn pre_bonding_era_cannot_be_claimed() {
 		HistoryDepth::set(history_depth);
 	});
 }
+
+#[test]
+fn reducing_history_depth_without_migration() {
+	// Verifies initial conditions of mock
+	ExtBuilder::default().nominate(false).build_and_execute(|| {
+		let original_history_depth = HistoryDepth::get();
+		let mut current_era = original_history_depth + 10;
+		let last_reward_era = current_era - 1;
+		let start_reward_era = current_era - original_history_depth;
+
+		// put some money in (stash, controller)=(3,4),(5,6).
+		for i in 3..7 {
+			let _ = Balances::make_free_balance_be(&i, 2000);
+		}
+
+		// start current era
+		mock::start_active_era(current_era);
+
+		// add a new candidate for being a staker. account 3 controlled by 4.
+		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
+
+		// all previous era before the bonding action should be marked as
+		// claimed.
+		let mut claimed_rewards = vec![];
+		for i in start_reward_era..=last_reward_era {
+			claimed_rewards.push(i);
+		}
+
+		let claimed_rewards: BoundedVec<_, _> = claimed_rewards.try_into().unwrap();
+		assert_eq!(
+			Staking::ledger(&4).unwrap(),
+			StakingLedger {
+				stash: 3,
+				total: 1500,
+				active: 1500,
+				unlocking: Default::default(),
+				claimed_rewards,
+			}
+		);
+
+		// next era
+		current_era = current_era + 1;
+		mock::start_active_era(current_era);
+
+		// claiming reward for last era in which validator was active works
+		assert_ok!(Staking::payout_stakers(Origin::signed(4), 3, current_era - 1));
+
+		// next era
+		current_era = current_era + 1;
+		mock::start_active_era(current_era);
+
+		// history_depth reduced without migration
+		let history_depth = original_history_depth -1;
+		HistoryDepth::set(history_depth);
+		// claiming reward does not work anymore
+		assert_noop!(
+			Staking::payout_stakers(Origin::signed(4), 3, current_era - 1),
+			Error::<Test>::NotController
+		);
+
+		// new stakers can still bond
+		// add new staker works
+		assert_ok!(Staking::bond(Origin::signed(5), 6, 1200, RewardDestination::Controller));
+
+		// new staking ledgers created will be bounded by the current history depth 
+		let last_reward_era = current_era - 1;
+		let start_reward_era = current_era - history_depth;
+		let mut claimed_rewards = vec![];
+		for i in start_reward_era..=last_reward_era {
+			claimed_rewards.push(i);
+		}
+		let claimed_rewards: BoundedVec<_, _> = claimed_rewards.try_into().unwrap();
+		assert_eq!(
+			Staking::ledger(&6).unwrap(),
+			StakingLedger {
+				stash: 5,
+				total: 1200,
+				active: 1200,
+				unlocking: Default::default(),
+				claimed_rewards,
+			}
+		);
+		
+		// fix the corrupted state for post conditions check
+		HistoryDepth::set(original_history_depth);
+	});
+}
