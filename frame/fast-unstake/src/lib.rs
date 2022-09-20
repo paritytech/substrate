@@ -289,7 +289,9 @@ pub mod pallet {
 		///
 		/// 1. We assume this is only ever called once per `on_idle`. This is because we know that
 		/// in all use cases, even a single nominator cannot be unbonded in a single call. Multiple
-		/// calls to this function are thus not needed. 2. We will only mark a staker.
+		/// calls to this function are thus not needed.
+		///
+		/// 2. We will only mark a staker as unstaked if at the beginning of a check cycle, they are found out to have no eras to check. At the end of a check cycle, even if they are fully checked, we don't finish the process.
 		pub(crate) fn do_on_idle(remaining_weight: Weight) -> Weight {
 			let mut eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
@@ -302,11 +304,11 @@ pub mod pallet {
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
-			let worse_weight = |v, u| {
+			let max_weight = |v, u| {
 				<T as Config>::WeightInfo::on_idle_check(v * u)
 					.max(<T as Config>::WeightInfo::on_idle_unstake())
 			};
-			while worse_weight(validator_count, eras_to_check_per_block).any_gt(remaining_weight) {
+			while max_weight(validator_count, eras_to_check_per_block).any_gt(remaining_weight) {
 				eras_to_check_per_block.saturating_dec();
 				if eras_to_check_per_block.is_zero() {
 					log!(debug, "early existing because eras_to_check_per_block is zero");
