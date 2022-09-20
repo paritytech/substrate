@@ -95,6 +95,7 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
+			UserFeatures::new(UserFeature::Administration.into()),
 			admin.clone(),
 			T::CollectionDeposit::get(),
 			false,

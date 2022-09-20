@@ -278,6 +278,11 @@ pub mod pallet {
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
 
+	/// Maps a unique collection id to it's config.
+	#[pallet::storage]
+	pub(super) type CollectionConfigs<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfig>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -372,6 +377,10 @@ pub mod pallet {
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
+		/// The config of a collection has change.
+		CollectionConfigChanged {
+			id: T::CollectionId,
+		},
 		/// The price was set for the instance.
 		ItemPriceSet {
 			collection: T::CollectionId,
@@ -419,6 +428,8 @@ pub mod pallet {
 		Unaccepted,
 		/// The item is locked.
 		Locked,
+		/// The collection is locked.
+		CollectionIsLocked,
 		/// All items have been minted.
 		MaxSupplyReached,
 		/// The max supply has already been set.
@@ -469,6 +480,7 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
+			config: UserFeatures,
 			admin: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
@@ -477,6 +489,7 @@ pub mod pallet {
 			Self::do_create_collection(
 				collection,
 				owner.clone(),
+				config,
 				admin.clone(),
 				T::CollectionDeposit::get(),
 				false,
@@ -506,6 +519,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			owner: AccountIdLookupOf<T>,
+			config: UserFeatures,
 			free_holding: bool,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -514,11 +528,25 @@ pub mod pallet {
 			Self::do_create_collection(
 				collection,
 				owner.clone(),
+				config,
 				owner.clone(),
 				Zero::zero(),
 				free_holding,
 				Event::ForceCreated { collection, owner },
 			)
+		}
+
+		#[pallet::weight(0)]
+		pub fn change_collection_config(
+			origin: OriginFor<T>,
+			id: T::CollectionId,
+			new_config: UserFeatures,
+		) -> DispatchResult {
+			let sender = ensure_signed(origin)?;
+			let current_config =
+				CollectionConfigs::<T, I>::get(id).ok_or(Error::<T, I>::UnknownCollection)?;
+			Self::do_change_collection_config(id, sender, current_config, new_config)?;
+			Ok(())
 		}
 
 		/// Destroy a collection of fungible items.

@@ -23,6 +23,7 @@ use frame_support::{
 	traits::{ExistenceRequirement, Get},
 };
 use sp_runtime::{DispatchError, DispatchResult};
+use enumflags2::BitFlags;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_transfer(
@@ -69,6 +70,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_create_collection(
 		collection: T::CollectionId,
 		owner: T::AccountId,
+		user_config: UserFeatures,
 		admin: T::AccountId,
 		deposit: DepositBalanceOf<T, I>,
 		free_holding: bool,
@@ -97,6 +99,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
 		Self::deposit_event(event);
 		Ok(())
+	}
+
+	pub fn do_change_collection_config(
+		id: T::CollectionId,
+		caller: T::AccountId,
+		current_config: CollectionConfig,
+		new_config: UserFeatures,
+	) -> DispatchResult {
+		let collection = Collection::<T, I>::get(id).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection.owner == caller, Error::<T, I>::NoPermission);
+
+		let user_features: BitFlags<UserFeature> = current_config.user_features.get();
+
+		if user_features.contains(UserFeature::IsLocked) {
+			return Err(Error::<T, I>::CollectionIsLocked.into())
+		}
+
+		CollectionConfigs::<T, I>::try_mutate(id, |maybe_config| {
+			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
+
+			config.user_features = new_config;
+
+			Self::deposit_event(Event::<T, I>::CollectionConfigChanged { id });
+
+			Ok(())
+		})
 	}
 
 	pub fn do_destroy_collection(
