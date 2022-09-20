@@ -180,7 +180,7 @@ impl RuntimeBlob {
 		}
 		for memory_ty in memory_section.entries_mut() {
 			let min = memory_ty.limits().initial().saturating_add(extra_heap_pages);
-			let max = memory_ty.limits().maximum().map(|max| std::cmp::max(min, max));
+			let max = Some(memory_ty.limits().initial().saturating_add(extra_heap_pages));
 			*memory_ty = MemoryType::new(min, max);
 		}
 		Ok(())

@@ -806,7 +806,7 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 
 test_wasm_execution!(allocate_two_gigabyte);
 fn allocate_two_gigabyte(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Max(50));
+	let runtime = mk_test_runtime(wasm_method, HeapPages::Dynamic);
 
 	let mut instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("allocate_two_gigabyte", &[0]).unwrap();

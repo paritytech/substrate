@@ -22,7 +22,7 @@ log = "0.4.17"
 thiserror = "1.0.30"
 wasm-instrument = "0.3"
 wasmer = { version = "2.2", features = ["singlepass"], optional = true }
-wasmi = "0.13"
+wasmi = "0.13.2"
 sc-allocator = { version = "4.1.0-dev", path = "../../allocator" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../../primitives/maybe-compressed-blob" }
 sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
