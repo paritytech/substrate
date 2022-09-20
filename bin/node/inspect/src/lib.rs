@@ -305,7 +305,7 @@ mod tests {
 			))
 		);
 		assert_eq!(b1, Ok(ExtrinsicAddress::Block(BlockAddress::Number(1234), 0)));
-		assert_eq!(b2, Ok(ExtrinsicAddress::Block(BlockAddress::Number(0), 0)));
+		assert_eq!(b2, Ok(ExtrinsicAddress::Bytes(vec![0, 0])));
 		assert_eq!(b3, Ok(ExtrinsicAddress::Bytes(vec![0, 0x12, 0x34, 0x5f])));
 	}
 }
