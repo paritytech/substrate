@@ -189,7 +189,7 @@ benchmarks! {
 		);
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
-			Some(Event::Checked { .. })
+			Some(Event::Checking { .. })
 		));
 	}
 

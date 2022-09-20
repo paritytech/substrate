@@ -214,7 +214,7 @@ mod on_idle {
 			// then
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checked { stash: 1, eras: vec![3] }]
+				vec![Event::Checking { stash: 1, eras: vec![3] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
@@ -230,7 +230,7 @@ mod on_idle {
 			// then:
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checked { stash: 1, eras: bounded_vec![2] }]
+				vec![Event::Checking { stash: 1, eras: bounded_vec![2] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
@@ -256,7 +256,7 @@ mod on_idle {
 			// then:
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checked { stash: 1, eras: vec![1, 0] }]
+				vec![Event::Checking { stash: 1, eras: vec![1, 0] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
@@ -358,9 +358,9 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: None, result: Ok(()) },
-					Event::Checked { stash: 5, eras: vec![3, 2, 1, 0] }
+					Event::Checking { stash: 5, eras: vec![3, 2, 1, 0] }
 				]
 			);
 		});
@@ -405,9 +405,9 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) },
-					Event::Checked { stash: 3, eras: vec![3, 2, 1, 0] },
+					Event::Checking { stash: 3, eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 3, maybe_pool_id: Some(1), result: Ok(()) },
 				]
 			);
@@ -449,7 +449,7 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: None, result: Ok(()) }
 				]
 			);
@@ -489,7 +489,7 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
 					Event::Unstaked {
 						stash: 1,
 						maybe_pool_id: Some(0),
@@ -537,7 +537,7 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) }
 				]
 			);
@@ -609,10 +609,10 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 1, eras: vec![3] },
-					Event::Checked { stash: 1, eras: vec![2] },
-					Event::Checked { stash: 1, eras: vec![1] },
-					Event::Checked { stash: 1, eras: vec![0] },
+					Event::Checking { stash: 1, eras: vec![3] },
+					Event::Checking { stash: 1, eras: vec![2] },
+					Event::Checking { stash: 1, eras: vec![1] },
+					Event::Checking { stash: 1, eras: vec![0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) }
 				]
 			);
@@ -689,11 +689,11 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 1, eras: vec![3] },
-					Event::Checked { stash: 1, eras: vec![2] },
-					Event::Checked { stash: 1, eras: vec![1] },
-					Event::Checked { stash: 1, eras: vec![0] },
-					Event::Checked { stash: 1, eras: vec![4] },
+					Event::Checking { stash: 1, eras: vec![3] },
+					Event::Checking { stash: 1, eras: vec![2] },
+					Event::Checking { stash: 1, eras: vec![1] },
+					Event::Checking { stash: 1, eras: vec![0] },
+					Event::Checking { stash: 1, eras: vec![4] },
 					Event::Unstaked { stash: 1, maybe_pool_id: None, result: Ok(()) }
 				]
 			);
@@ -786,10 +786,10 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 1, eras: vec![3] },
-					Event::Checked { stash: 1, eras: vec![2] },
-					Event::Checked { stash: 1, eras: vec![4] },
-					Event::Checked { stash: 1, eras: vec![1] },
+					Event::Checking { stash: 1, eras: vec![3] },
+					Event::Checking { stash: 1, eras: vec![2] },
+					Event::Checking { stash: 1, eras: vec![4] },
+					Event::Checking { stash: 1, eras: vec![1] },
 					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) }
 				]
 			);
@@ -849,8 +849,8 @@ mod on_idle {
 				fast_unstake_events_since_last_call(),
 				// we slash them by 21, since we checked 3 eras in total (3, 2, 1).
 				vec![
-					Event::Checked { stash: exposed, eras: vec![3] },
-					Event::Checked { stash: exposed, eras: vec![2] },
+					Event::Checking { stash: exposed, eras: vec![3] },
+					Event::Checking { stash: exposed, eras: vec![2] },
 					Event::Slashed { stash: exposed, amount: 3 * 7 }
 				]
 			);
@@ -900,7 +900,7 @@ mod on_idle {
 				fast_unstake_events_since_last_call(),
 				// we slash them by 28, since we checked 4 eras in total.
 				vec![
-					Event::Checked { stash: exposed, eras: vec![3, 2] },
+					Event::Checking { stash: exposed, eras: vec![3, 2] },
 					Event::Slashed { stash: exposed, amount: 4 * 7 }
 				]
 			);
@@ -964,7 +964,7 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checked { stash: 42, eras: vec![3, 2, 1, 0] },
+					Event::Checking { stash: 42, eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 42, maybe_pool_id: None, result: Ok(()) }
 				]
 			);

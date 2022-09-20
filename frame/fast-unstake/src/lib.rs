@@ -98,8 +98,8 @@ pub mod pallet {
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	#[codec(mel_bound(T: Config))]
 	#[scale_info(skip_type_params(T))]
-	pub struct MaxChecked<T: Config>(sp_std::marker::PhantomData<T>);
-	impl<T: Config> frame_support::traits::Get<u32> for MaxChecked<T> {
+	pub struct MaxChecking<T: Config>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> frame_support::traits::Get<u32> for MaxChecking<T> {
 		fn get() -> u32 {
 			<T as pallet_staking::Config>::BondingDuration::get() + 1
 		}
@@ -135,7 +135,7 @@ pub mod pallet {
 	/// The current "head of the queue" being unstaked.
 	#[pallet::storage]
 	pub type Head<T: Config> =
-		StorageValue<_, UnstakeRequest<T::AccountId, MaxChecked<T>>, OptionQuery>;
+		StorageValue<_, UnstakeRequest<T::AccountId, MaxChecking<T>>, OptionQuery>;
 
 	/// The map of all accounts wishing to be unstaked.
 	///
@@ -162,7 +162,7 @@ pub mod pallet {
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
 		/// A staker was partially checked for the given eras, but the process did not finish.
-		Checked { stash: T::AccountId, eras: Vec<EraIndex> },
+		Checking { stash: T::AccountId, eras: Vec<EraIndex> },
 		/// Some internal error happened while migrating stash. They are removed as head as a
 		/// consequence.
 		Errored { stash: T::AccountId },
@@ -471,7 +471,7 @@ pub mod pallet {
 								checked,
 								maybe_pool_id,
 							});
-							Self::deposit_event(Event::<T>::Checked {
+							Self::deposit_event(Event::<T>::Checking {
 								stash,
 								eras: unchecked_eras_to_check,
 							});
