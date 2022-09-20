@@ -421,9 +421,9 @@ pub struct SharedParams {
 	#[clap(long)]
 	pub heap_pages: Option<u64>,
 
-	/// When enabled, the spec name check will not panic, and instead only show a warning.
+	/// When enabled, the spec check will not panic, and instead only show a warning.
 	#[clap(long)]
-	pub no_spec_name_check: bool,
+	pub no_spec_check_panic: bool,
 
 	/// State version that is used by the chain.
 	#[clap(long, default_value = "1", parse(try_from_str = parse::state_version))]
