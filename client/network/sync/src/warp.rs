@@ -134,19 +134,29 @@ where
 			Phase::TargetBlock(header) =>
 				if let Some(block_header) = &block.header {
 					if block_header == header {
-						if block.body.is_some() {
-							let state_sync = StateSync::new(
-								self.client.clone(),
-								header.clone(),
-								block.body,
-								false,
+						if block.body.is_none() {
+							log::debug!(
+								target: "sync",
+								"Importing target block failed: missing body.",
 							);
-							self.phase = Phase::State(state_sync);
-							TargetBlockImportResult::Success
-						} else {
-							log::debug!(target: "sync", "Importing target block failed: no body.");
-							TargetBlockImportResult::BadResponse
+							return TargetBlockImportResult::BadResponse
 						}
+						if block.justifications.is_none() {
+							log::debug!(
+								target: "sync",
+								"Importing target block failed: missing justifications.",
+							);
+							return TargetBlockImportResult::BadResponse
+						}
+						let state_sync = StateSync::new(
+							self.client.clone(),
+							header.clone(),
+							block.body,
+							block.justifications,
+							false,
+						);
+						self.phase = Phase::State(state_sync);
+						TargetBlockImportResult::Success
 					} else {
 						log::debug!(
 							target: "sync",
@@ -155,7 +165,7 @@ where
 						TargetBlockImportResult::BadResponse
 					}
 				} else {
-					log::debug!(target: "sync", "Importing target block failed: no header.");
+					log::debug!(target: "sync", "Importing target block failed: missing header.");
 					TargetBlockImportResult::BadResponse
 				},
 		}
@@ -186,7 +196,8 @@ where
 			Phase::TargetBlock(header) => {
 				let request = BlockRequest::<B> {
 					id: 0,
-					fields: BlockAttributes::HEADER | BlockAttributes::BODY,
+					fields: BlockAttributes::HEADER |
+						BlockAttributes::BODY | BlockAttributes::JUSTIFICATION,
 					from: FromBlock::Hash(header.hash()),
 					to: Some(header.hash()),
 					direction: Direction::Ascending,

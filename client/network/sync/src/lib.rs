@@ -1150,14 +1150,14 @@ where
 		};
 
 		match import_result {
-			state::ImportResult::Import(hash, header, state, body) => {
+			state::ImportResult::Import(hash, header, state, body, justifications) => {
 				let origin = BlockOrigin::NetworkInitialSync;
 				let block = IncomingBlock {
 					hash,
 					header: Some(header),
 					body,
 					indexed_body: None,
-					justifications: None,
+					justifications,
 					origin: None,
 					allow_missing_state: true,
 					import_existing: true,
@@ -1437,8 +1437,13 @@ where
 							number,
 							hash,
 						);
-						self.state_sync =
-							Some(StateSync::new(self.client.clone(), header, None, *skip_proofs));
+						self.state_sync = Some(StateSync::new(
+							self.client.clone(),
+							header,
+							None,
+							None,
+							*skip_proofs,
+						));
 						self.allowed_requests.set_all();
 					}
 				}
@@ -2537,6 +2542,18 @@ fn validate_blocks<Block: BlockT>(
 			trace!(
 				target: "sync",
 				"Missing requested body for a block in response from {}.",
+				who,
+			);
+
+			return Err(BadPeer(*who, rep::BAD_RESPONSE))
+		}
+
+		if request.fields.contains(BlockAttributes::JUSTIFICATION) &&
+			blocks.iter().any(|b| b.justifications.is_none())
+		{
+			trace!(
+				target: "sync",
+				"Missing justifications for a block in response from {}.",
 				who,
 			);
 
