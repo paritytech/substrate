@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A pallet that's designed to ONLY do:
+//! A pallet that's designed to JUST do the following:
 //!
-//! If a nominator is not exposed at all in any `ErasStakers` (i.e. "has not actively backed any
+//! If a nominator is not exposed in any `ErasStakers` (i.e. "has not actively backed any
 //! validators in the last `BondingDuration` days"), then they can register themselves in this
-//! pallet, unstake faster than needing to wait an entire bonding duration, and potentially move
+//! pallet, unstake faster than having to wait an entire bonding duration, and potentially move
 //! into a nomination pool.
 //!
 //! Appearing in the exposure of a validator means being exposed equal to that validator from the
@@ -28,9 +28,9 @@
 //! Nominator" role explained in the
 //! [February Staking Update](https://polkadot.network/blog/staking-update-february-2022/).
 //!
-//! This pallet works of the basis of `on_idle`, meaning that it provides no guarantee about when it
+//! This pallet works off the basis of `on_idle`, meaning that it provides no guarantee about when it
 //! will succeed, if at all. Moreover, the queue implementation is unordered. In case of congestion,
-//! not FIFO ordering is provided.
+//! no FIFO ordering is provided.
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
 //! [`Call::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them in
@@ -39,11 +39,11 @@
 //! Once queued, but not being actively processed, stakers can withdraw their request via
 //! [`Call::deregister`].
 //!
-//! Once queued, a staker wishing to unbond can perform to further action in pallet-staking. This is
+//! Once queued, a staker wishing to unbond can perform no further action in pallet-staking. This is
 //! to prevent them from accidentally exposing themselves behind a validator etc.
 //!
-//! Once processed, if successful, no additional fees for the checking process is taken, and the
-//! staker is instantly unbonded. Optionally, if the have asked to join a pool, their *entire* stake
+//! Once processed, if successful, no additional fee for the checking process is taken, and the
+//! staker is instantly unbonded. Optionally, if they have asked to join a pool, their *entire* stake
 //! is joined into their pool of choice.
 //!
 //! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
@@ -247,7 +247,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Deregister oneself from the fast-unstake (and possibly joining a pool).
+		/// Deregister oneself from the fast-unstake (also cancels joining the pool if that was supplied on `register_fast_unstake` .
 		///
 		/// This is useful if one is registered, they are still waiting, and they change their mind.
 		///
