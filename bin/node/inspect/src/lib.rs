@@ -296,7 +296,7 @@ mod tests {
 		let b2 = ExtrinsicAddress::from_str("0 0");
 		let b3 = ExtrinsicAddress::from_str("0x0012345f");
 
-		assert_eq!(e0, Err("Extrinsic index missing: example \"5:0\"".into()));
+		assert_eq!(e0, Ok(ExtrinsicAddress::Bytes(vec![0x12, 0x34])));
 		assert_eq!(
 			b0,
 			Ok(ExtrinsicAddress::Block(
