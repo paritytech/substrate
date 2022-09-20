@@ -317,7 +317,7 @@ pub enum PeerSyncState<B: BlockT> {
 	/// Downloading warp proof.
 	DownloadingWarpProof,
 	/// Downloading warp sync target block.
-	DownloadingWarpTarget,
+	DownloadingWarpTargetBlock,
 	/// Actively downloading block history after warp sync.
 	DownloadingGap(NumberFor<B>),
 }
@@ -1035,7 +1035,7 @@ where
 							Vec::new()
 						}
 					},
-					PeerSyncState::DownloadingWarpTarget => {
+					PeerSyncState::DownloadingWarpTargetBlock => {
 						peer.state = PeerSyncState::Available;
 						if let Some(warp_sync) = &mut self.warp_sync {
 							if blocks.len() == 1 {
@@ -2209,7 +2209,7 @@ where
 				sync.is_complete() ||
 				self.peers
 					.iter()
-					.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpTarget)
+					.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpTargetBlock)
 			{
 				// Only one pending warp target block request is allowed.
 				return None
@@ -2219,7 +2219,7 @@ where
 				for (id, peer) in self.peers.iter_mut() {
 					if peer.state.is_available() && peer.best_number >= target_number {
 						trace!(target: "sync", "New warp target block request for {}", id);
-						peer.state = PeerSyncState::DownloadingWarpTarget;
+						peer.state = PeerSyncState::DownloadingWarpTargetBlock;
 						self.allowed_requests.clear();
 						return Some((id, request))
 					}
