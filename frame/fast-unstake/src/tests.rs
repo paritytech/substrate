@@ -79,11 +79,7 @@ fn cannot_register_if_in_queue() {
 fn cannot_register_if_head() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Insert some Head item for stash
-		Head::<T>::put(UnstakeRequest {
-			stash: 1,
-			checked: bounded_vec![],
-			maybe_pool_id: None,
-		});
+		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![], maybe_pool_id: None });
 		// Controller attempts to regsiter
 		assert_noop!(
 			FastUnstake::register_fast_unstake(Origin::signed(2), Some(1_u32)),
@@ -141,11 +137,7 @@ fn cannot_deregister_already_head() {
 		// Controller attempts to register, should fail
 		assert_ok!(FastUnstake::register_fast_unstake(Origin::signed(2), Some(1_u32)));
 		// Insert some Head item for stash.
-		Head::<T>::put(UnstakeRequest {
-			stash: 1,
-			checked: bounded_vec![],
-			maybe_pool_id: None,
-		});
+		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![], maybe_pool_id: None });
 		// Controller attempts to deregister
 		assert_noop!(FastUnstake::deregister(Origin::signed(2)), Error::<T>::AlreadyHead);
 	});
