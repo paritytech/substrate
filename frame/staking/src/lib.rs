@@ -886,11 +886,12 @@ enum Releases {
 	V8_0_0,  // populate `VoterList`.
 	V9_0_0,  // inject validators into `VoterList` as well.
 	V10_0_0, // remove `EarliestUnappliedSlash`.
+	V11_0_0, // Move pallet storage prefix, e.g. BagsList -> VoterBagsList
 }
 
 impl Default for Releases {
 	fn default() -> Self {
-		Releases::V10_0_0
+		Releases::V11_0_0
 	}
 }
 

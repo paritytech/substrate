@@ -111,7 +111,7 @@ use frame_support::{
 	ensure,
 	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
 	weights::Weight,
-	BoundedVec,
+	BoundedVec, WeakBoundedVec,
 };
 use frame_system::{limits::BlockWeights, Pallet as System};
 use pallet_contracts_primitives::{
@@ -135,7 +135,7 @@ type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
-type RelaxedCodeVec<T> = BoundedVec<u8, <T as Config>::RelaxedMaxCodeLen>;
+type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// Used as a sentinel value when reading and writing contract memory.
@@ -365,15 +365,6 @@ pub mod pallet {
 		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
 		/// a wasm binary below this maximum size.
 		type MaxCodeLen: Get<u32>;
-
-		/// The maximum length of a contract code after reinstrumentation.
-		///
-		/// When uploading a new contract the size defined by [`Self::MaxCodeLen`] is used for both
-		/// the pristine **and** the instrumented version. When a existing contract needs to be
-		/// reinstrumented after a runtime upgrade we apply this bound. The reason is that if the
-		/// new instrumentation increases the size beyond the limit it would make that contract
-		/// inaccessible until rectified by another runtime upgrade.
-		type RelaxedMaxCodeLen: Get<u32>;
 
 		/// The maximum allowable length in bytes for storage keys.
 		type MaxStorageKeyLen: Get<u32>;
