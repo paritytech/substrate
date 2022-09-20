@@ -664,6 +664,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				status: AssetStatus::Live,
 			},
 		);
+		T::CallbackHandle::created(&id, &owner);
 		Self::deposit_event(Event::ForceCreated { asset_id: id, owner });
 		Ok(())
 	}
@@ -749,6 +750,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						break
 					}
 				}
+				T::CallbackHandle::destroyed(&id);
 				Self::deposit_event(Event::ApprovalsDestroyed {
 					asset_id: id,
 					approvals_destroyed: removed_approvals as u32,
