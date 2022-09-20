@@ -28,9 +28,9 @@
 //! Nominator" role explained in the
 //! [February Staking Update](https://polkadot.network/blog/staking-update-february-2022/).
 //!
-//! This pallet works off the basis of `on_idle`, meaning that it provides no guarantee about when it
-//! will succeed, if at all. Moreover, the queue implementation is unordered. In case of congestion,
-//! no FIFO ordering is provided.
+//! This pallet works off the basis of `on_idle`, meaning that it provides no guarantee about when
+//! it will succeed, if at all. Moreover, the queue implementation is unordered. In case of
+//! congestion, no FIFO ordering is provided.
 //!
 //! Stakers who are certain about NOT being exposed can register themselves with
 //! [`Call::register_fast_unstake`]. This will chill, and fully unbond the staker, and place them in
@@ -43,8 +43,8 @@
 //! to prevent them from accidentally exposing themselves behind a validator etc.
 //!
 //! Once processed, if successful, no additional fee for the checking process is taken, and the
-//! staker is instantly unbonded. Optionally, if they have asked to join a pool, their *entire* stake
-//! is joined into their pool of choice.
+//! staker is instantly unbonded. Optionally, if they have asked to join a pool, their *entire*
+//! stake is joined into their pool of choice.
 //!
 //! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
 //! they will end up being slashed for the amount of wasted work they have inflicted on the chian.
@@ -247,7 +247,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Deregister oneself from the fast-unstake (also cancels joining the pool if that was supplied on `register_fast_unstake` .
+		/// Deregister oneself from the fast-unstake (also cancels joining the pool if that was
+		/// supplied on `register_fast_unstake` .
 		///
 		/// This is useful if one is registered, they are still waiting, and they change their mind.
 		///
@@ -291,7 +292,9 @@ pub mod pallet {
 		/// in all use cases, even a single nominator cannot be unbonded in a single call. Multiple
 		/// calls to this function are thus not needed.
 		///
-		/// 2. We will only mark a staker as unstaked if at the beginning of a check cycle, they are found out to have no eras to check. At the end of a check cycle, even if they are fully checked, we don't finish the process.
+		/// 2. We will only mark a staker as unstaked if at the beginning of a check cycle, they are
+		/// found out to have no eras to check. At the end of a check cycle, even if they are fully
+		/// checked, we don't finish the process.
 		pub(crate) fn do_on_idle(remaining_weight: Weight) -> Weight {
 			let mut eras_to_check_per_block = ErasToCheckPerBlock::<T>::get();
 			if eras_to_check_per_block.is_zero() {
