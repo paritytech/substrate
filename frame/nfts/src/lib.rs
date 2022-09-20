@@ -42,6 +42,7 @@ mod types;
 pub mod weights;
 
 use codec::{Decode, Encode};
+use enumflags2::BitFlags;
 use frame_support::{
 	traits::{
 		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
@@ -153,6 +154,8 @@ pub mod pallet {
 		/// The maximum approvals an item could have.
 		#[pallet::constant]
 		type ApprovalsLimit: Get<u32>;
+
+		type DefaultSystemConfig: Get<SystemFeatures>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -414,6 +417,8 @@ pub mod pallet {
 		BadWitness,
 		/// The item ID is already taken.
 		InUse,
+		/// Items within that collection are non-transferable.
+		ItemsNotTransferable,
 		/// The item or collection is frozen.
 		Frozen,
 		/// The provided account is not a delegate.
@@ -979,6 +984,14 @@ pub mod pallet {
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
 			let delegate = T::Lookup::lookup(delegate)?;
+
+			let config = CollectionConfigs::<T, I>::get(collection)
+				.ok_or(Error::<T, I>::UnknownCollection)?;
+			let user_features: BitFlags<UserFeature> = config.user_features.get();
+			ensure!(
+				!user_features.contains(UserFeature::NonTransferableItems),
+				Error::<T, I>::ItemsNotTransferable
+			);
 
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;

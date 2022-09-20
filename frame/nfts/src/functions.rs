@@ -40,9 +40,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!collection_details.is_frozen, Error::<T, I>::Frozen);
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
 
+		let config =
+			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		ensure!(
+			!user_features.contains(UserFeature::NonTransferableItems),
+			Error::<T, I>::ItemsNotTransferable
+		);
+
 		let mut details =
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
+
 		with_details(&collection_details, &mut details)?;
 
 		Account::<T, I>::remove((&details.owner, &collection, &item));
@@ -95,6 +104,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				is_frozen: false,
 			},
 		);
+
+		let collection_config = CollectionConfig {
+			system_features: SystemFeatures::new((T::DefaultSystemConfig::get()).get()),
+			user_features: user_config,
+		};
+		CollectionConfigs::<T, I>::insert(&collection, collection_config);
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
 		Self::deposit_event(event);
@@ -257,6 +272,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
+		let config =
+			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		ensure!(
+			!user_features.contains(UserFeature::NonTransferableItems),
+			Error::<T, I>::ItemsNotTransferable
+		);
+
 		if let Some(ref price) = price {
 			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));
 			Self::deposit_event(Event::ItemPriceSet {
@@ -281,6 +304,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
+
+		let config =
+			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		ensure!(
+			!user_features.contains(UserFeature::NonTransferableItems),
+			Error::<T, I>::NotForSale
+		);
 
 		let price_info =
 			ItemPriceOf::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::NotForSale)?;

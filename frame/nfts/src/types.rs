@@ -84,6 +84,7 @@ impl TypeInfo for UserFeatures {
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum SystemFeature {
+	NoDeposit,
 	NoCollectionDeposit,
 	NoItemDeposit,
 	NoDataDeposit,

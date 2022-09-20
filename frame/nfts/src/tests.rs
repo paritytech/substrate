@@ -224,6 +224,23 @@ fn transfer_should_work() {
 
 		assert_ok!(Nfts::approve_transfer(Origin::signed(3), 0, 42, 2, None));
 		assert_ok!(Nfts::transfer(Origin::signed(2), 0, 42, 4));
+
+		// validate we can't transfer non-transferable items
+		let collection_id = 1;
+		assert_ok!(Nfts::force_create(
+			Origin::root(),
+			1,
+			1,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
+			true
+		));
+
+		assert_ok!(Nfts::mint(Origin::signed(1), 1, 1, 42));
+
+		assert_noop!(
+			Nfts::transfer(Origin::signed(1), collection_id, 42, 3,),
+			Error::<Test>::ItemsNotTransferable
+		);
 	});
 }
 
@@ -649,6 +666,23 @@ fn approval_lifecycle_works() {
 
 		assert_ok!(Nfts::approve_transfer(Origin::signed(4), 0, 42, 2, None));
 		assert_ok!(Nfts::transfer(Origin::signed(2), 0, 42, 2));
+
+		// ensure we can't buy an item when the collection has a NonTransferableItems flag
+		let collection_id = 1;
+		assert_ok!(Nfts::force_create(
+			Origin::root(),
+			collection_id,
+			1,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
+			true
+		));
+
+		assert_ok!(Nfts::mint(Origin::signed(1), 1, collection_id, 1));
+
+		assert_noop!(
+			Nfts::approve_transfer(Origin::signed(1), collection_id, 1, 2, None),
+			Error::<Test>::ItemsNotTransferable
+		);
 	});
 }
 
@@ -985,6 +1019,23 @@ fn set_price_should_work() {
 			item: item_2
 		}));
 		assert!(!ItemPriceOf::<Test>::contains_key(collection_id, item_2));
+
+		// ensure we can't set price when the items are non-transferable
+		let collection_id = 1;
+		assert_ok!(Nfts::force_create(
+			Origin::root(),
+			collection_id,
+			user_id,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
+			true
+		));
+
+		assert_ok!(Nfts::mint(Origin::signed(user_id), collection_id, item_1, user_id));
+
+		assert_noop!(
+			Nfts::set_price(Origin::signed(user_id), collection_id, item_1, Some(2), None),
+			Error::<Test>::ItemsNotTransferable
+		);
 	});
 }
 
@@ -1113,5 +1164,22 @@ fn buy_item_should_work() {
 			});
 			assert_noop!(buy_item_call.dispatch(Origin::signed(user_2)), Error::<Test>::Frozen);
 		}
+
+		// ensure we can't buy an item when the collection has a NonTransferableItems flag
+		let collection_id = 1;
+		assert_ok!(Nfts::force_create(
+			Origin::root(),
+			collection_id,
+			user_1,
+			UserFeatures::new(UserFeature::NonTransferableItems.into()),
+			true
+		));
+
+		assert_ok!(Nfts::mint(Origin::signed(user_1), collection_id, item_1, user_1));
+
+		assert_noop!(
+			Nfts::buy_item(Origin::signed(user_2), collection_id, item_1, price_1.into()),
+			Error::<Test>::NotForSale
+		);
 	});
 }

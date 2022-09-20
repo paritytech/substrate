@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_nfts;
 
 use frame_support::{
-	construct_runtime,
+	construct_runtime, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 };
 use sp_core::H256;
@@ -84,6 +84,10 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+parameter_types! {
+	pub NoDeposit: SystemFeatures = SystemFeatures::new(SystemFeature::NoDeposit.into());
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CollectionId = u32;
@@ -101,6 +105,7 @@ impl Config for Test {
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
 	type ApprovalsLimit = ConstU32<10>;
+	type DefaultSystemConfig = NoDeposit;
 	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
