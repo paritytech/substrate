@@ -341,15 +341,17 @@ where
 		if let Some(inner_body) = block.body.take() {
 			let check_block = B::new(block.header.clone(), inner_body);
 
-			self.check_inherents(
-				check_block.clone(),
-				BlockId::Hash(parent_hash),
-				self.create_inherent_data_providers
-					.create_inherent_data_providers(parent_hash, ())
-					.await?,
-				block.origin.into(),
-			)
-			.await?;
+			if !block.state_action.skip_execution_checks() {
+				self.check_inherents(
+					check_block.clone(),
+					BlockId::Hash(parent_hash),
+					self.create_inherent_data_providers
+						.create_inherent_data_providers(parent_hash, ())
+						.await?,
+					block.origin.into(),
+				)
+				.await?;
+			}
 
 			block.body = Some(check_block.deconstruct().1);
 		}
