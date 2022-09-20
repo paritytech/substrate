@@ -505,6 +505,7 @@ benchmarks_instance_pallet! {
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		let origin = SystemOrigin::Signed(caller.clone());
+		T::Currency::make_free_balance_be(&target, DepositBalanceOf::<T, I>::max_value());
 		Nfts::<T, I>::transfer(origin.clone().into(), collection, item2, target_lookup)?;
 		Nfts::<T, I>::create_swap(origin.clone().into(), collection, item1, collection, item2, Some(price), Some(duration))?;
 	}: _(SystemOrigin::Signed(target.clone()), collection, item2, collection, item1, Some(price.clone()))
