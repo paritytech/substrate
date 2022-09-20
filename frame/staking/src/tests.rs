@@ -5349,11 +5349,8 @@ fn pre_bonding_era_cannot_be_claimed() {
 		);
 
 		// decoding will fail now since Staking Ledger is in corrupt state
-		HistoryDepth::set(history_depth-1);
-		assert_eq!(
-			Staking::ledger(&4),
-			None
-		);
+		HistoryDepth::set(history_depth - 1);
+		assert_eq!(Staking::ledger(&4), None);
 
 		// make sure stakers still cannot claim rewards that they are not meant to
 		assert_noop!(
@@ -5363,5 +5360,5 @@ fn pre_bonding_era_cannot_be_claimed() {
 
 		// fix the corrupted state for post conditions check
 		HistoryDepth::set(history_depth);
-	});	
+	});
 }
