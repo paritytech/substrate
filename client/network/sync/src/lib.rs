@@ -2547,18 +2547,6 @@ fn validate_blocks<Block: BlockT>(
 
 			return Err(BadPeer(*who, rep::BAD_RESPONSE))
 		}
-
-		if request.fields.contains(BlockAttributes::JUSTIFICATION) &&
-			blocks.iter().any(|b| b.justifications.is_none())
-		{
-			trace!(
-				target: "sync",
-				"Missing justifications for a block in response from {}.",
-				who,
-			);
-
-			return Err(BadPeer(*who, rep::BAD_RESPONSE))
-		}
 	}
 
 	for b in blocks {
