@@ -372,6 +372,7 @@ fn partial_destroy_should_work() {
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 10));
 		assert_ok!(Assets::mint(Origin::signed(1), 0, 4, 10));
 		println!("TEST2🔥");
+		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
 
 		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
