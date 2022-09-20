@@ -22,15 +22,19 @@ use frame_support::{
 };
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_pay_tips(sender: T::AccountId, tips: Vec<ItemTip<T, I>>) -> DispatchResult {
+	pub fn do_pay_tips(
+		sender: T::AccountId,
+		tips: BoundedVec<ItemTipOf<T, I>, T::MaxTips>,
+	) -> DispatchResult {
 		for tip in tips {
-			T::Currency::transfer(&sender, &tip.2, tip.3, KeepAlive)?;
+			let ItemTip { collection, item, receiver, amount } = tip;
+			T::Currency::transfer(&sender, &receiver, amount, KeepAlive)?;
 			Self::deposit_event(Event::TipSent {
-				collection: tip.0,
-				item: tip.1,
+				collection,
+				item,
 				sender: sender.clone(),
-				receiver: tip.2,
-				amount: tip.3,
+				receiver,
+				amount,
 			});
 		}
 		Ok(())

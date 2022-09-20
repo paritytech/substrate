@@ -446,8 +446,6 @@ pub mod pallet {
 		BidTooLow,
 		/// The item has reached its approval limit.
 		ReachedApprovalLimit,
-		/// Too many tips provided.
-		TooManyTips,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1603,9 +1601,11 @@ pub mod pallet {
 		/// Emits `TipSent` on every tip transfer.
 		#[pallet::weight(T::WeightInfo::pay_tips(tips.len() as u32))]
 		#[transactional]
-		pub fn pay_tips(origin: OriginFor<T>, tips: Vec<ItemTip<T, I>>) -> DispatchResult {
+		pub fn pay_tips(
+			origin: OriginFor<T>,
+			tips: BoundedVec<ItemTipOf<T, I>, T::MaxTips>,
+		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			ensure!(tips.len() <= T::MaxTips::get() as usize, Error::<T, I>::TooManyTips);
 			Self::do_pay_tips(origin, tips)
 		}
 	}

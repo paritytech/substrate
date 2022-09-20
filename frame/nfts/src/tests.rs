@@ -972,27 +972,30 @@ fn pay_tips_should_work() {
 
 		assert_ok!(Nfts::pay_tips(
 			Origin::signed(user_1),
-			vec![(collection_id, item_id, user_2, tip), (collection_id, item_id, user_3, tip)]
+			bvec![
+				ItemTip { collection: collection_id, item: item_id, receiver: user_2, amount: tip },
+				ItemTip { collection: collection_id, item: item_id, receiver: user_3, amount: tip },
+			]
 		));
 
 		assert_eq!(Balances::total_balance(&user_1), initial_balance - tip * 2);
 		assert_eq!(Balances::total_balance(&user_2), initial_balance + tip);
 		assert_eq!(Balances::total_balance(&user_3), initial_balance + tip);
 
-		assert!(events().contains(&Event::<Test>::TipSent {
+		let events = events();
+		assert!(events.contains(&Event::<Test>::TipSent {
+			collection: collection_id,
+			item: item_id,
+			sender: user_1,
+			receiver: user_2,
+			amount: tip,
+		}));
+		assert!(events.contains(&Event::<Test>::TipSent {
 			collection: collection_id,
 			item: item_id,
 			sender: user_1,
 			receiver: user_3,
 			amount: tip,
 		}));
-
-		assert_noop!(
-			Nfts::pay_tips(
-				Origin::signed(user_1),
-				vec![(collection_id, item_id, user_2, tip); 15 as usize]
-			),
-			Error::<Test>::TooManyTips
-		);
 	});
 }

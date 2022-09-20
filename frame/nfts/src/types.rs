@@ -33,12 +33,12 @@ pub(super) type ItemDetailsFor<T, I> =
 pub(super) type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 pub(super) type ItemPrice<T, I = ()> = BalanceOf<T, I>;
-pub(super) type ItemTip<T, I = ()> = (
+pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as Config<I>>::CollectionId,
 	<T as Config<I>>::ItemId,
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
-);
+>;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
@@ -133,4 +133,16 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the item metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
+	/// A collection of the item.
+	pub(super) collection: CollectionId,
+	/// An item of which the tip is send for.
+	pub(super) item: ItemId,
+	/// A sender of the tip.
+	pub(super) receiver: AccountId,
+	/// An amount the sender is willing to tip.
+	pub(super) amount: Amount,
 }
