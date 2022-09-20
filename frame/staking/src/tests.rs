@@ -3308,7 +3308,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 	// * double claim of one era fails
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// Consumed weight for all payout_stakers dispatches that fail
-		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
 
 		let init_balance_10 = Balances::total_balance(&10);
 		let init_balance_100 = Balances::total_balance(&100);
@@ -3666,7 +3666,7 @@ fn payout_stakers_handles_basic_errors() {
 	// Here we will test payouts handle all errors.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// Consumed weight for all payout_stakers dispatches that fail
-		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
 
 		// Same setup as the test above
 		let balance = 1000;
@@ -5313,7 +5313,8 @@ fn pre_bonding_era_cannot_be_claimed() {
 		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
 
-		let claimed_rewards: BoundedVec<_, _> = (start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
+		let claimed_rewards: BoundedVec<_, _> =
+			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&4).unwrap(),
 			StakingLedger {
@@ -5333,7 +5334,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 		assert_ok!(Staking::payout_stakers(Origin::signed(4), 3, current_era - 1));
 
 		// consumed weight for all payout_stakers dispatches that fail
-		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
 		// cannot claim rewards for an era before bonding occured as it is
 		// already marked as claimed.
 		assert_noop!(
@@ -5378,12 +5379,8 @@ fn reducing_history_depth_without_migration() {
 
 		// all previous era before the bonding action should be marked as
 		// claimed.
-		let mut claimed_rewards = vec![];
-		for i in start_reward_era..=last_reward_era {
-			claimed_rewards.push(i);
-		}
-
-		let claimed_rewards: BoundedVec<_, _> = claimed_rewards.try_into().unwrap();
+		let claimed_rewards: BoundedVec<_, _> =
+			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&4).unwrap(),
 			StakingLedger {
@@ -5422,11 +5419,8 @@ fn reducing_history_depth_without_migration() {
 		// new staking ledgers created will be bounded by the current history depth
 		let last_reward_era = current_era - 1;
 		let start_reward_era = current_era - history_depth;
-		let mut claimed_rewards = vec![];
-		for i in start_reward_era..=last_reward_era {
-			claimed_rewards.push(i);
-		}
-		let claimed_rewards: BoundedVec<_, _> = claimed_rewards.try_into().unwrap();
+		let claimed_rewards: BoundedVec<_, _> =
+			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&6).unwrap(),
 			StakingLedger {
