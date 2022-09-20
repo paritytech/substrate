@@ -93,8 +93,8 @@ impl CliConfiguration for BenchmarkCmd {
 			self, cmd, cmd.base_path()
 		};
 
-		//If the base path was not provided, benchmark command shall use temporary path. Otherwise
-		//we may end up using shared path, which may be inappropriate for benchmarking.
+		// If the base path was not provided, benchmark command shall use temporary path. Otherwise
+		// we may end up using shared path, which may be inappropriate for benchmarking.
 		match inner {
 			Ok(None) => Some(BasePath::new_temp_dir()).transpose().map_err(|e| e.into()),
 			e => e,
