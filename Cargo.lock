@@ -3041,15 +3041,6 @@ dependencies = [
 
 [[package]]
 name = "impl-serde"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b47ca4d2b6931707a55fce5cf66aff80e2178c8b63bbb4ecb5695cbc870ddf6f"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "impl-serde"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc88fc67028ae3db0c853baa36269d398d5f45b6982f95549ff5def78c935cd"
@@ -6973,7 +6964,7 @@ checksum = "5cfd65aea0c5fa0bfcc7c9e7ca828c921ef778f43d325325ec84bda371bfa75a"
 dependencies = [
  "fixed-hash",
  "impl-codec",
- "impl-serde 0.4.0",
+ "impl-serde",
  "scale-info",
  "uint",
 ]
@@ -9745,7 +9736,7 @@ dependencies = [
  "hash256-std-hasher",
  "hex",
  "hex-literal",
- "impl-serde 0.3.1",
+ "impl-serde",
  "lazy_static",
  "libsecp256k1",
  "log",
@@ -10173,7 +10164,7 @@ version = "4.0.0"
 name = "sp-storage"
 version = "6.0.0"
 dependencies = [
- "impl-serde 0.3.1",
+ "impl-serde",
  "parity-scale-codec",
  "ref-cast",
  "serde",
@@ -10286,7 +10277,7 @@ dependencies = [
 name = "sp-version"
 version = "5.0.0"
 dependencies = [
- "impl-serde 0.3.1",
+ "impl-serde",
  "parity-scale-codec",
  "parity-wasm 0.45.0",
  "scale-info",
