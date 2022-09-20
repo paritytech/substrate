@@ -500,9 +500,9 @@ benchmarks_instance_pallet! {
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item1, ..) = mint_item::<T, I>(0);
 		let (item2, ..) = mint_item::<T, I>(1);
-		let price = ItemPrice::<T, I>::from(100u32);
+		let price = ItemPrice::<T, I>::from(0u32);
 		let duration = T::BlockNumber::max_value();
-		let target: T::AccountId = account("target", 1, SEED);
+		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		let origin = SystemOrigin::Signed(caller.clone());
 		Nfts::<T, I>::transfer(origin.clone().into(), collection, item2, target_lookup)?;
