@@ -395,7 +395,6 @@ impl Config for Test {
 	type AddressGenerator = DefaultAddressGenerator;
 	type ContractAccessWeight = DefaultContractAccessWeight<BlockWeights>;
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
-	type RelaxedMaxCodeLen = ConstU32<{ 256 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
 }
 
