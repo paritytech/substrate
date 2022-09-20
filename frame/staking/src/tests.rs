@@ -5414,7 +5414,7 @@ fn reducing_history_depth_without_migration() {
 		mock::start_active_era(current_era);
 
 		// history_depth reduced without migration
-		let history_depth = original_history_depth -1;
+		let history_depth = original_history_depth - 1;
 		HistoryDepth::set(history_depth);
 		// claiming reward does not work anymore
 		assert_noop!(
@@ -5426,7 +5426,7 @@ fn reducing_history_depth_without_migration() {
 		// add new staker works
 		assert_ok!(Staking::bond(Origin::signed(5), 6, 1200, RewardDestination::Controller));
 
-		// new staking ledgers created will be bounded by the current history depth 
+		// new staking ledgers created will be bounded by the current history depth
 		let last_reward_era = current_era - 1;
 		let start_reward_era = current_era - history_depth;
 		let mut claimed_rewards = vec![];
@@ -5444,7 +5444,7 @@ fn reducing_history_depth_without_migration() {
 				claimed_rewards,
 			}
 		);
-		
+
 		// fix the corrupted state for post conditions check
 		HistoryDepth::set(original_history_depth);
 	});
