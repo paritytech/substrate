@@ -1427,6 +1427,15 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
+			let config = CollectionConfigs::<T, I>::get(collection)
+				.ok_or(Error::<T, I>::UnknownCollection)?;
+
+			let user_features: BitFlags<UserFeature> = config.user_features.get();
+			ensure!(
+				!user_features.contains(UserFeature::IsLocked),
+				Error::<T, I>::CollectionIsLocked
+			);
+
 			let mut details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			if let Some(check_owner) = &maybe_check_owner {

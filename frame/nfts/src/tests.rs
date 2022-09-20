@@ -22,6 +22,7 @@ use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::Curr
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
 
+pub const DEFAULT_SYSTEM_FEATURES: SystemFeature = SystemFeature::NoDeposit;
 pub const DEFAULT_USER_FEATURES: UserFeature = UserFeature::Administration;
 
 fn items() -> Vec<(u64, u32, u32)> {
@@ -90,6 +91,21 @@ fn events() -> Vec<Event<Test>> {
 	result
 }
 
+fn get_id_from_event() -> Result<<Test as Config>::CollectionId, &'static str> {
+	let last_event = System::events().pop();
+	if let Some(e) = last_event.clone() {
+		match e.event {
+			mock::RuntimeEvent::Nfts(inner_event) => match inner_event {
+				Event::ForceCreated { collection, .. } => return Ok(collection),
+				_ => {},
+			},
+			_ => {},
+		}
+	}
+
+	Err("bad event")
+}
+
 #[test]
 fn basic_setup_works() {
 	new_test_ext().execute_with(|| {
@@ -121,6 +137,35 @@ fn basic_minting_should_work() {
 		assert_eq!(collections(), vec![(1, 0), (2, 1)]);
 		assert_ok!(Nfts::mint(Origin::signed(2), 1, 69, 1));
 		assert_eq!(items(), vec![(1, 0, 42), (1, 1, 69)]);
+	});
+}
+
+#[test]
+fn collection_locking_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+
+		assert_ok!(Nfts::force_create(
+			Origin::root(),
+			0,
+			user_id,
+			UserFeatures::new(DEFAULT_USER_FEATURES.into()),
+			true
+		));
+
+		let id = get_id_from_event().unwrap();
+		let new_config = UserFeatures::new(UserFeature::IsLocked.into());
+
+		assert_ok!(Nfts::change_collection_config(Origin::signed(user_id), id, new_config));
+
+		let collection_config = CollectionConfigs::<Test>::get(id);
+
+		let expected_config = CollectionConfig {
+			system_features: SystemFeatures::new(DEFAULT_SYSTEM_FEATURES.into()),
+			user_features: new_config,
+		};
+
+		assert_eq!(Some(expected_config), collection_config);
 	});
 }
 
@@ -484,6 +529,17 @@ fn set_item_metadata_should_work() {
 		);
 		assert_ok!(Nfts::clear_metadata(Origin::signed(1), 0, 42));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
+
+		// collection's metadata can't be changed after the collection gets locked
+		assert_ok!(Nfts::change_collection_config(
+			Origin::signed(1),
+			0,
+			UserFeatures::new(UserFeature::IsLocked.into())
+		));
+		assert_noop!(
+			Nfts::set_collection_metadata(Origin::signed(1), 0, bvec![0u8; 20], false),
+			Error::<Test>::CollectionIsLocked
+		);
 	});
 }
 
@@ -1181,5 +1237,44 @@ fn buy_item_should_work() {
 			Nfts::buy_item(Origin::signed(user_2), collection_id, item_1, price_1.into()),
 			Error::<Test>::NotForSale
 		);
+	});
+}
+
+#[test]
+fn different_user_flags() {
+	new_test_ext().execute_with(|| {
+		// when setting one feature it's required to call .into() on it
+		let user_features = UserFeatures::new(UserFeature::IsLocked.into());
+		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, user_features, false));
+
+		let collection_config = CollectionConfigs::<Test>::get(0);
+		let stored_user_features = collection_config.unwrap().user_features.get();
+		assert!(stored_user_features.contains(UserFeature::IsLocked));
+		assert!(!stored_user_features.contains(UserFeature::Administration));
+
+		// no need to call .into() for multiple features
+		let user_features = UserFeatures::new(UserFeature::Administration | UserFeature::IsLocked);
+		assert_ok!(Nfts::force_create(Origin::root(), 1, 1, user_features, false));
+		let collection_config = CollectionConfigs::<Test>::get(1);
+		let stored_user_features = collection_config.unwrap().user_features.get();
+		assert!(stored_user_features.contains(UserFeature::IsLocked));
+		assert!(stored_user_features.contains(UserFeature::Administration));
+
+		assert_ok!(Nfts::force_create(
+			Origin::root(),
+			2,
+			1,
+			UserFeatures::new(BitFlags::EMPTY),
+			false
+		));
+
+		use enumflags2::BitFlag;
+		assert_ok!(Nfts::force_create(
+			Origin::root(),
+			3,
+			1,
+			UserFeatures::new(UserFeature::empty()),
+			false
+		));
 	});
 }
