@@ -627,6 +627,7 @@ where
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(OnBlockData::Request(peer, req)) =>
 					prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
+				Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -974,6 +975,7 @@ where
 				CustomMessageOutcome::BlockImport(origin, blocks),
 			Ok(OnBlockData::Request(peer, req)) =>
 				prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
+			Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
 			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
