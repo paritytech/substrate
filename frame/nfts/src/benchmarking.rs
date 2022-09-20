@@ -460,11 +460,14 @@ benchmarks_instance_pallet! {
 
 	pay_tips {
 		let n in 0 .. T::MaxTips::get() as u32;
-		let tip = BalanceOf::<T, I>::from(100u32);
+		let amount = BalanceOf::<T, I>::from(100u32);
 		let caller: T::AccountId = whitelisted_caller();
 		let collection = T::Helper::collection(0);
 		let item = T::Helper::item(0);
-		let tips = vec![ItemTip(collection, item, caller, tip).into(); n as usize];
+		let tips: BoundedVec<_, _> = vec![
+			ItemTip
+				{ collection, item, receiver: caller.clone(), amount }; T::MaxTips::get() as usize
+		].try_into().unwrap();
 	}: _(SystemOrigin::Signed(caller.clone()), tips)
 	verify {
 		if !n.is_zero() {
@@ -473,7 +476,7 @@ benchmarks_instance_pallet! {
 				item,
 				sender: caller.clone(),
 				receiver: caller.clone(),
-				amount: tip,
+				amount,
 			}.into());
 		}
 	}
