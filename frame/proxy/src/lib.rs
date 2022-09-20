@@ -113,7 +113,7 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type RuntimeCall: Parameter
-			+ Dispatchable<Origin = Self::Origin>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>
 			+ IsSubType<Call<Self>>
@@ -819,7 +819,7 @@ impl<T: Config> Pallet<T> {
 		call: <T as Config>::RuntimeCall,
 	) {
 		// This is a freshly authenticated new account, the origin restrictions doesn't apply.
-		let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
+		let mut origin: T::RuntimeOrigin = frame_system::RawOrigin::Signed(real).into();
 		origin.add_filter(move |c: &<T as frame_system::Config>::RuntimeCall| {
 			let c = <T as Config>::RuntimeCall::from_ref(c);
 			// We make sure the proxy call does access this pallet to change modify proxies.

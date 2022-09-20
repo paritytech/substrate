@@ -105,12 +105,12 @@ pub mod pallet {
 
 		/// The origin which may forcibly create or destroy an item or otherwise alter privileged
 		/// attributes.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Standard collection creation is only allowed if the origin attempting it and the
 		/// collection are in this set.
 		type CreateOrigin: EnsureOriginWithArg<
-			Self::Origin,
+			Self::RuntimeOrigin,
 			Self::CollectionId,
 			Success = Self::AccountId,
 		>;

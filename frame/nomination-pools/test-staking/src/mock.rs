@@ -43,7 +43,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
@@ -227,7 +227,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 		// set some limit for nominations.
 		assert_ok!(Staking::set_staking_configs(
-			Origin::root(),
+			RuntimeOrigin::root(),
 			pallet_staking::ConfigOp::Set(10), // minimum nominator bond
 			pallet_staking::ConfigOp::Noop,
 			pallet_staking::ConfigOp::Noop,

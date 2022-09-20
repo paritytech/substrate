@@ -147,7 +147,9 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type RuntimeCall: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self, I>>;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ From<Call<Self, I>>;
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
@@ -168,11 +170,11 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
 		/// Origin from which proposals may be submitted.
-		type SubmitOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type SubmitOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 		/// Origin from which any vote may be cancelled.
-		type CancelOrigin: EnsureOrigin<Self::Origin>;
+		type CancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Origin from which any vote may be killed.
-		type KillOrigin: EnsureOrigin<Self::Origin>;
+		type KillOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 		/// The counting type for votes. Usually just balance.
@@ -217,7 +219,7 @@ pub mod pallet {
 			> + TracksInfo<
 				BalanceOf<Self, I>,
 				Self::BlockNumber,
-				Origin = <Self::Origin as OriginTrait>::PalletsOrigin,
+				RuntimeOrigin = <Self::RuntimeOrigin as OriginTrait>::PalletsOrigin,
 			>;
 	}
 
