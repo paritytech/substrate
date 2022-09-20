@@ -409,6 +409,12 @@ pub mod pallet {
 		AssetThawed { asset_id: T::AssetId },
 		/// An asset class was destroyed.
 		Destroyed { asset_id: T::AssetId },
+		/// An asset class was only destroyed. The destroy action should be re-executed.
+		PartiallyDestroyed {
+			asset_id: T::AssetId,
+			accounts_destroyed: u32,
+			accounts_remaining: u32,
+		},
 		/// Some asset class was force-created.
 		ForceCreated { asset_id: T::AssetId, owner: T::AccountId },
 		/// New metadata has been set for an asset.

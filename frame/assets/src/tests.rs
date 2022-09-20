@@ -364,6 +364,24 @@ fn destroy_should_refund_approvals() {
 }
 
 #[test]
+fn partial_destroy_should_work() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 10));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 10));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 10));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 4, 10));
+		println!("TEST2🔥");
+		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+
+		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
+		// TODO:
+		// - assert event is created correctly for partial destruction
+		// - reexec the destroy action and check that correct event is also created
+	})
+}
+
+#[test]
 fn non_providing_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));

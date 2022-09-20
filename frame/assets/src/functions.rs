@@ -679,35 +679,65 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				if let Some(check_owner) = maybe_check_owner {
 					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 				}
+				ensure!(details.is_frozen, Error::<T, I>::BadWitness);
 				ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
 				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
 				ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
 
-				for (who, v) in Account::<T, I>::drain_prefix(id) {
+				let accounts_to_delete: Vec<(T::AccountId, _)> =
+					Account::<T, I>::iter_prefix(id).take(witness.destroy_count as usize).collect();
+				for (who, v) in accounts_to_delete {
+					Account::<T, I>::remove(id, &who);
+
 					// We have to force this as it's destroying the entire asset class.
 					// This could mean that some accounts now have irreversibly reserved
 					// funds.
 					let _ = Self::dead_account(&who, &mut details, &v.reason, true);
 					dead_accounts.push(who);
 				}
-				debug_assert_eq!(details.accounts, 0);
-				debug_assert_eq!(details.sufficients, 0);
 
-				let metadata = Metadata::<T, I>::take(&id);
-				T::Currency::unreserve(
-					&details.owner,
-					details.deposit.saturating_add(metadata.deposit),
-				);
+				// FIXME:(delete comment before merge). What was the point of these 2 debug asserts?
+				// debug_assert_eq!(details.accounts, 0);
+				// debug_assert_eq!(details.sufficients, 0);
 
-				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
+				// FIXME:(delete comment before merge) An ideal implementation could be to
+				// unreserve&drain only approval for transactions sent by or recieved by one of the
+				// accounts which was deleted above. But it's not clear if that's strongly desired.
+				// This current approach buts the approval storage in an unusable state, since some
+				// vital transactions might be deleted for accounts that have not yet been deleted.
+				for ((owner, destination), approval) in Approvals::<T, I>::iter_prefix((id,)) {
 					T::Currency::unreserve(&owner, approval.deposit);
+					println!("IN APprovals iter {:?} {:?}", &owner, &approval);
+					Approvals::<T, I>::remove((id, owner, destination));
 				}
-				Self::deposit_event(Event::Destroyed { asset_id: id });
+
+				// for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((&id,)) {
+				// 	T::Currency::unreserve(&owner, approval.deposit);
+				// }
+
+				let accounts_remaining = Account::<T, I>::iter_prefix(id).count();
+				if accounts_remaining > 0 {
+					Self::deposit_event(Event::PartiallyDestroyed {
+						asset_id: id,
+						accounts_destroyed: dead_accounts.len() as u32,
+						accounts_remaining: accounts_remaining as u32,
+					});
+				} else {
+					// NOTE:(delete comment before merge) It's not yet clear what this block does,
+					// but it appears to be an operation to be done once after cleanup.
+					let metadata = Metadata::<T, I>::take(&id);
+					T::Currency::unreserve(
+						&details.owner,
+						details.deposit.saturating_add(metadata.deposit),
+					);
+					Self::deposit_event(Event::Destroyed { asset_id: id });
+				}
 
 				Ok(DestroyWitness {
 					accounts: details.accounts,
 					sufficients: details.sufficients,
 					approvals: details.approvals,
+					destroy_count: dead_accounts.len() as u32,
 				})
 			},
 		)?;
