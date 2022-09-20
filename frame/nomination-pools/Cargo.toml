@@ -32,9 +32,6 @@ sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 
 [features]
-runtime-benchmarks = []
-try-runtime = [ "frame-support/try-runtime" ]
-fuzz-test = []
 default = ["std"]
 std = [
 	"codec/std",
@@ -48,3 +45,10 @@ std = [
 	"sp-core/std",
 	"log/std",
 ]
+runtime-benchmarks = [
+	"sp-staking/runtime-benchmarks",
+]
+try-runtime = [
+	"frame-support/try-runtime"
+]
+fuzz-test = []

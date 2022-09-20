@@ -150,6 +150,11 @@ where
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.to_peer_id();
 
+		params
+			.network_config
+			.request_response_protocols
+			.extend(params.request_response_protocol_configs);
+
 		params.network_config.boot_nodes = params
 			.network_config
 			.boot_nodes

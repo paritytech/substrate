@@ -19,9 +19,10 @@
 
 use crate::*;
 use frame_support::{
-	assert_ok, parameter_types,
+	assert_ok,
+	dispatch::{DispatchInfo, GetDispatchInfo},
+	parameter_types,
 	traits::{ConstU64, OnInitialize},
-	weights::{DispatchInfo, GetDispatchInfo},
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures

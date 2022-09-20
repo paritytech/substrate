@@ -41,10 +41,10 @@ use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	dispatch::Pays,
 	ensure,
 	pallet_prelude::Get,
 	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency},
-	weights::Pays,
 	BoundedVec,
 };
 use scale_info::TypeInfo;
