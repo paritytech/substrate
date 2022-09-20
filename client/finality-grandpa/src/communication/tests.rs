@@ -551,9 +551,9 @@ fn local_chain_spec() -> Box<dyn sc_chain_spec::ChainSpec> {
 			Ok(())
 		}
 	}
-	let chain_spec = GenericChainSpec::<Genesis>::from_json_file(std::path::PathBuf::from(
-		"../chain-spec/res/chain_spec.json",
-	))
+	let chain_spec = GenericChainSpec::<Genesis>::from_json_bytes(
+		&include_bytes!("../../../chain-spec/res/chain_spec.json")[..],
+	)
 	.unwrap();
 	chain_spec.cloned_box()
 }

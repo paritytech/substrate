@@ -58,6 +58,7 @@ pub trait BaseArithmetic:
 	+ Bounded
 	+ HasCompact
 	+ Sized
+	+ Clone
 	+ TryFrom<u8>
 	+ TryInto<u8>
 	+ TryFrom<u16>
@@ -113,6 +114,7 @@ impl<
 			+ Bounded
 			+ HasCompact
 			+ Sized
+			+ Clone
 			+ TryFrom<u8>
 			+ TryInto<u8>
 			+ TryFrom<u16>

@@ -145,11 +145,7 @@ impl<'a> sp_wasm_interface::FunctionContext for HostContext<'a> {
 	}
 
 	fn register_panic_error_message(&mut self, message: &str) {
-		self.caller
-			.data_mut()
-			.host_state_mut()
-			.expect("host state is not empty when calling a function in wasm; qed")
-			.panic_message = Some(message.to_owned());
+		self.host_state_mut().panic_message = Some(message.to_owned());
 	}
 }
 

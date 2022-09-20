@@ -94,7 +94,9 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// this function should generally not be used in production as it could lead to a very large
 	/// number of storage accesses.
 	pub(crate) fn unsafe_clear() {
+		#[allow(deprecated)]
 		crate::ListBags::<T, I>::remove_all(None);
+		#[allow(deprecated)]
 		crate::ListNodes::<T, I>::remove_all();
 	}
 

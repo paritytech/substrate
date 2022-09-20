@@ -34,6 +34,7 @@ stages:
   - build
   - publish
   - deploy
+  - notify
 
 workflow:
   rules:
@@ -47,6 +48,8 @@ variables:                         &default-vars
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
   CI_IMAGE:                        "paritytech/ci-linux:production"
+  RUSTY_CACHIER_SINGLE_BRANCH:     master
+  RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
 
 default:
   retry:
@@ -90,8 +93,22 @@ default:
   image:                           "${CI_IMAGE}"
   before_script:
     - !reference [.rust-info-script, script]
+    - !reference [.rusty-cachier, before_script]
+  after_script:
+    - !reference [.rusty-cachier, after_script]
   tags:
     - linux-docker
+
+# rusty-cachier's hidden job. Parts of this job are used to instrument the pipeline's other real jobs with rusty-cachier
+# Description of the commands is available here - https://gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client#description
+.rusty-cachier:
+  before_script:
+    - curl -s https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.parity.io/parity/infrastructure/ci_cd/rusty-cachier/client/-/raw/release/util/install.sh | bash
+    - rusty-cachier environment check --gracefully
+    - $(rusty-cachier environment inject)
+    - rusty-cachier project mtime
+  after_script:
+    - env RUSTY_CACHIER_SUPRESS_OUTPUT=true rusty-cachier snapshot destroy
 
 .test-refs:
   rules:
@@ -201,6 +218,16 @@ deploy-prometheus-alerting-rules:
       changes:
         - .gitlab-ci.yml
         - ./scripts/ci/monitoring/**/*
+
+#### stage:                        notify
+
+# This job notifies rusty-cachier about the latest commit with the cache.
+# This info is later used for the cache distribution and an overlay creation.
+rusty-cachier-notify:
+  stage:                           notify
+  extends:                         .docker-env
+  script:
+    - rusty-cachier cache notify
 
 #### stage:                        .post
 

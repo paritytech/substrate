@@ -239,7 +239,7 @@ impl PruningMode {
 		}
 	}
 
-	/// Is this an archive (either ArchiveAll or ArchiveCanonical) pruning mode?
+	/// Returns the pruning mode
 	pub fn id(&self) -> &[u8] {
 		match self {
 			PruningMode::ArchiveAll => PRUNING_MODE_ARCHIVE,
@@ -247,6 +247,7 @@ impl PruningMode {
 			PruningMode::Constrained(_) => PRUNING_MODE_CONSTRAINED,
 		}
 	}
+
 	pub fn from_id(id: &[u8]) -> Option<Self> {
 		match id {
 			PRUNING_MODE_ARCHIVE => Some(Self::ArchiveAll),

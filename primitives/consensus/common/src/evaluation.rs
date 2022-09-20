@@ -30,6 +30,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+	#[error("Failed to verify block encoding/decoding")]
+	BadBlockCodec,
 	/// Proposal provided not a block.
 	#[error("Proposal provided not a block: decoding error: {0}")]
 	BadProposalFormat(#[from] codec::Error),
@@ -49,19 +51,22 @@ pub fn evaluate_initial<Block: BlockT>(
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 ) -> Result<()> {
 	let encoded = Encode::encode(proposal);
-	let proposal = Block::decode(&mut &encoded[..]).map_err(Error::BadProposalFormat)?;
+	let block = Block::decode(&mut &encoded[..]).map_err(Error::BadProposalFormat)?;
+	if &block != proposal {
+		return Err(Error::BadBlockCodec)
+	}
 
-	if *parent_hash != *proposal.header().parent_hash() {
+	if *parent_hash != *block.header().parent_hash() {
 		return Err(Error::WrongParentHash {
 			expected: format!("{:?}", *parent_hash),
-			got: format!("{:?}", proposal.header().parent_hash()),
+			got: format!("{:?}", block.header().parent_hash()),
 		})
 	}
 
-	if parent_number + One::one() != *proposal.header().number() {
+	if parent_number + One::one() != *block.header().number() {
 		return Err(Error::WrongNumber {
 			expected: parent_number.checked_into::<u128>().map(|x| x + 1),
-			got: (*proposal.header().number()).checked_into::<u128>(),
+			got: (*block.header().number()).checked_into::<u128>(),
 		})
 	}
 

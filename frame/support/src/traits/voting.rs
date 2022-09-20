@@ -19,7 +19,7 @@
 //! votes.
 
 use crate::dispatch::{DispatchError, Parameter};
-use codec::HasCompact;
+use codec::{HasCompact, MaxEncodedLen};
 use sp_arithmetic::{
 	traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto},
 	Perbill,
@@ -95,16 +95,18 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B>
 	}
 }
 
-pub trait VoteTally<Votes> {
-	fn ayes(&self) -> Votes;
-	fn turnout(&self) -> Perbill;
-	fn approval(&self) -> Perbill;
+pub trait VoteTally<Votes, Class> {
+	fn new(_: Class) -> Self;
+	fn ayes(&self, class: Class) -> Votes;
+	fn support(&self, class: Class) -> Perbill;
+	fn approval(&self, class: Class) -> Perbill;
 	#[cfg(feature = "runtime-benchmarks")]
-	fn unanimity() -> Self;
+	fn unanimity(class: Class) -> Self;
 	#[cfg(feature = "runtime-benchmarks")]
-	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self;
+	fn rejection(class: Class) -> Self;
+	#[cfg(feature = "runtime-benchmarks")]
+	fn from_requirements(support: Perbill, approval: Perbill, class: Class) -> Self;
 }
-
 pub enum PollStatus<Tally, Moment, Class> {
 	None,
 	Ongoing(Tally, Class),
@@ -120,10 +122,17 @@ impl<Tally, Moment, Class> PollStatus<Tally, Moment, Class> {
 	}
 }
 
+pub struct ClassCountOf<P, T>(sp_std::marker::PhantomData<(P, T)>);
+impl<T, P: Polling<T>> sp_runtime::traits::Get<u32> for ClassCountOf<P, T> {
+	fn get() -> u32 {
+		P::classes().len() as u32
+	}
+}
+
 pub trait Polling<Tally> {
-	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
-	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
-	type Class: Parameter + Member + Ord + PartialOrd;
+	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact + MaxEncodedLen;
+	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact + MaxEncodedLen;
+	type Class: Parameter + Member + Ord + PartialOrd + MaxEncodedLen;
 	type Moment;
 
 	/// Provides a vec of values that `T` may take.
