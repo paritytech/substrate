@@ -5313,14 +5313,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 		// add a new candidate for being a validator. account 3 controlled by 4.
 		assert_ok!(Staking::bond(Origin::signed(3), 4, 1500, RewardDestination::Controller));
 
-		// all previous era before the bonding action should be marked as
-		// claimed.
-		let mut claimed_rewards = vec![];
-		for i in start_reward_era..=last_reward_era {
-			claimed_rewards.push(i);
-		}
-
-		let claimed_rewards: BoundedVec<_, _> = claimed_rewards.try_into().unwrap();
+		let claimed_rewards: BoundedVec<_, _> = (start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
 		assert_eq!(
 			Staking::ledger(&4).unwrap(),
 			StakingLedger {
