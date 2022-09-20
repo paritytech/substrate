@@ -308,3 +308,14 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
+
+[patch.crates-io]
+parity-util-mem = { git = "https://github.com/paritytech/parity-common", branch = "ao-release-is-coming" }
+primitive-types = { git = "https://github.com/paritytech/parity-common", branch = "ao-release-is-coming" }
+kvdb = { git = "https://github.com/paritytech/parity-common", branch = "ao-release-is-coming" }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity-common", branch = "ao-release-is-coming" }
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common", branch = "ao-release-is-coming" }
+
+memory-db = { git = "https://github.com/paritytech/trie", branch = "ao-update-parity-util-mem" }
+trie-bench = { git = "https://github.com/paritytech/trie", branch = "ao-update-parity-util-mem" }
+hash-db = { git = "https://github.com/paritytech/trie", branch = "ao-update-parity-util-mem" }
