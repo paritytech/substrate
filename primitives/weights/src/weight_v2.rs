@@ -160,22 +160,22 @@ impl Weight {
 		Self { ref_time: 0 }
 	}
 
-	/// Constant version of Add with u64
+	/// Constant version of Add with u64. Is only overflow safe when evaluated at compile-time.
 	pub const fn add(self, scalar: u64) -> Self {
 		Self { ref_time: self.ref_time + scalar }
 	}
 
-	/// Constant version of Sub with u64
+	/// Constant version of Sub with u64. Is only overflow safe when evaluated at compile-time.
 	pub const fn sub(self, scalar: u64) -> Self {
 		Self { ref_time: self.ref_time - scalar }
 	}
 
-	/// Constant version of Div with u64
+	/// Constant version of Div with u64. Is only overflow safe when evaluated at compile-time.
 	pub const fn div(self, scalar: u64) -> Self {
 		Self { ref_time: self.ref_time / scalar }
 	}
 
-	/// Constant version of Mul with u64
+	/// Constant version of Mul with u64. Is only overflow safe when evaluated at compile-time.
 	pub const fn mul(self, scalar: u64) -> Self {
 		Self { ref_time: self.ref_time * scalar }
 	}
