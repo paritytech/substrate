@@ -679,6 +679,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				if let Some(check_owner) = maybe_check_owner {
 					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 				}
+
 				ensure!(details.is_frozen, Error::<T, I>::BadWitness);
 				ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
 				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
@@ -686,6 +687,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let accounts_to_delete: Vec<(T::AccountId, _)> =
 					Account::<T, I>::iter_prefix(id).take(witness.destroy_count as usize).collect();
+
 				for (who, v) in accounts_to_delete {
 					Account::<T, I>::remove(id, &who);
 
@@ -715,6 +717,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let accounts_remaining = Account::<T, I>::iter_prefix(id).count();
 				if accounts_remaining > 0 {
+					// Reintroduce the details, so the asset is not deleted yet.
+					let _ = maybe_details.insert(details.clone());
+
 					Self::deposit_event(Event::PartiallyDestroyed {
 						asset_id: id,
 						accounts_destroyed: dead_accounts.len() as u32,

@@ -64,7 +64,7 @@ impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, Deposi
 			accounts: self.accounts,
 			sufficients: self.sufficients,
 			approvals: self.approvals,
-			destroy_count: 2, // FIXME: How should this destroy could be xalculated
+			destroy_count: 5, // FIXME: How should this destroy could be xalculated
 		}
 	}
 }
