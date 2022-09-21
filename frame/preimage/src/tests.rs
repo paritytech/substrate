@@ -159,7 +159,7 @@ fn requested_then_noted_preimage_cannot_be_unnoted() {
 		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
 
 		// now it's gone
-		assert_ok!(Preimage::unrequest_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::unrequest_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert!(!Preimage::have_preimage(&hashed([1])));
 	});
 }
@@ -263,9 +263,9 @@ fn noted_preimage_use_correct_map() {
 	new_test_ext().execute_with(|| {
 		// Add one preimage per bucket...
 		for i in 0..7 {
-			assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; 128 << (i * 2)]));
+			assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), vec![0; 128 << (i * 2)]));
 		}
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![0; MAX_SIZE as usize]));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), vec![0; MAX_SIZE as usize]));
 		assert_eq!(PreimageFor::<Test>::iter().count(), 8);
 
 		// All are present
@@ -274,13 +274,13 @@ fn noted_preimage_use_correct_map() {
 		// Now start removing them again...
 		for i in 0..7 {
 			assert_ok!(Preimage::unnote_preimage(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				hashed(vec![0; 128 << (i * 2)])
 			));
 		}
 		assert_eq!(PreimageFor::<Test>::iter().count(), 1);
 		assert_ok!(Preimage::unnote_preimage(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			hashed(vec![0; MAX_SIZE as usize])
 		));
 		assert_eq!(PreimageFor::<Test>::iter().count(), 0);
