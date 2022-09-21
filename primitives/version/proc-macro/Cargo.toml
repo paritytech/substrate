@@ -1,0 +1,26 @@
+[package]
+name = "sp-version-proc-macro"
+version = "3.0.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2018"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "Macro for defining a runtime version."
+documentation = "https://docs.rs/sp-api-proc-macro"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0.3"
+syn = { version = "1.0.58", features = ["full", "fold", "extra-traits", "visit"] }
+proc-macro2 = "1.0.6"
+proc-macro-crate = "1.0.0"
+codec = { package = "parity-scale-codec", version = "2.0.0", features = [ "derive" ] }
+
+[dev-dependencies]
+sp-version = { version = "3.0.0", path = ".." }

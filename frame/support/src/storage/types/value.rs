@@ -24,9 +24,11 @@ use crate::{
 		bounded_vec::BoundedVec,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
-	traits::{GetDefault, StorageInstance, Get},
+	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
 };
 use frame_metadata::{DefaultByteGetter, StorageEntryModifier};
+use sp_arithmetic::traits::SaturatedConversion;
+use sp_std::prelude::*;
 
 /// A type that allow to store a value.
 ///
@@ -210,6 +212,29 @@ impl<Prefix, Value, QueryKind, OnEmpty> StorageValueMetadata
 	const NAME: &'static str = Prefix::STORAGE_PREFIX;
 	const DEFAULT: DefaultByteGetter =
 		DefaultByteGetter(&OnEmptyGetter::<QueryKind::Query, OnEmpty>(core::marker::PhantomData));
+}
+
+impl<Prefix, Value, QueryKind, OnEmpty>
+	crate::traits::StorageInfoTrait for
+	StorageValue<Prefix, Value, QueryKind, OnEmpty>
+where
+	Prefix: StorageInstance,
+	Value: FullCodec + MaxEncodedLen,
+	QueryKind: QueryKindTrait<Value, OnEmpty>,
+	OnEmpty: crate::traits::Get<QueryKind::Query> + 'static
+{
+	fn storage_info() -> Vec<StorageInfo> {
+		vec![
+			StorageInfo {
+				prefix: Self::hashed_key(),
+				max_values: Some(1),
+				max_size: Some(
+					Value::max_encoded_len()
+						.saturated_into(),
+				),
+			}
+		]
+	}
 }
 
 #[cfg(test)]

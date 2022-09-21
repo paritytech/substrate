@@ -653,38 +653,24 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(now: T::BlockNumber) {
-			match Self::current_phase() {
-				Phase::Unsigned((true, opened)) if opened == now => {
-					// mine a new solution, cache it, and attempt to submit it
-					let initial_output = Self::try_acquire_offchain_lock(now)
-						.and_then(|_| Self::mine_check_save_submit());
-					log!(info, "initial OCW output at {:?}: {:?}", now, initial_output);
+			use sp_runtime::offchain::storage_lock::{StorageLock, BlockAndTime};
+
+			// create a lock with the maximum deadline of number of blocks in the unsigned phase.
+			// This should only come useful in an **abrupt** termination of execution, otherwise the
+			// guard will be dropped upon successful execution.
+			let mut lock = StorageLock::<BlockAndTime<frame_system::Pallet::<T>>>::with_block_deadline(
+				unsigned::OFFCHAIN_LOCK,
+				T::UnsignedPhase::get().saturated_into(),
+			);
+
+			match lock.try_lock() {
+				Ok(_guard) => {
+					Self::do_synchronized_offchain_worker(now);
+				},
+				Err(deadline) => {
+					log!(debug, "offchain worker lock not released, deadline is {:?}", deadline);
 				}
-				Phase::Unsigned((true, opened)) if opened < now => {
-					// keep trying to submit solutions. worst case, we note that the stored solution
-					// is better than our cached/computed one, and decide not to submit after all.
-					//
-					// the offchain_lock prevents us from spamming submissions too often.
-					let resubmit_output = Self::try_acquire_offchain_lock(now)
-						.and_then(|_| Self::restore_or_compute_then_maybe_submit());
-					log!(info, "resubmit OCW output at {:?}: {:?}", now, resubmit_output);
-				}
-				_ => {}
-			}
-			// after election finalization, clear OCW solution storage
-			if <frame_system::Pallet<T>>::events()
-				.into_iter()
-				.filter_map(|event_record| {
-					let local_event = <T as Config>::Event::from(event_record.event);
-					local_event.try_into().ok()
-				})
-				.find(|event| {
-					matches!(event, Event::ElectionFinalized(_))
-				})
-				.is_some()
-			{
-				unsigned::kill_ocw_solution::<T>();
-			}
+			};
 		}
 
 		fn integrity_test() {
@@ -929,6 +915,44 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Internal logic of the offchain worker, to be executed only when the offchain lock is
+	/// acquired with success.
+	fn do_synchronized_offchain_worker(now: T::BlockNumber) {
+		log!(trace, "lock for offchain worker acquired.");
+		match Self::current_phase() {
+			Phase::Unsigned((true, opened)) if opened == now => {
+				// mine a new solution, cache it, and attempt to submit it
+				let initial_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
+					Self::mine_check_save_submit()
+				});
+				log!(debug, "initial offchain thread output: {:?}", initial_output);
+			}
+			Phase::Unsigned((true, opened)) if opened < now => {
+				// try and resubmit the cached solution, and recompute ONLY if it is not
+				// feasible.
+				let resubmit_output = Self::ensure_offchain_repeat_frequency(now).and_then(|_| {
+					Self::restore_or_compute_then_maybe_submit()
+				});
+				log!(debug, "resubmit offchain thread output: {:?}", resubmit_output);
+			}
+			_ => {}
+		}
+
+		// after election finalization, clear OCW solution storage.
+		if <frame_system::Pallet<T>>::events()
+			.into_iter()
+			.filter_map(|event_record| {
+				let local_event = <T as Config>::Event::from(event_record.event);
+				local_event.try_into().ok()
+			})
+			.any(|event| {
+				matches!(event, Event::ElectionFinalized(_))
+			})
+		{
+			unsigned::kill_ocw_solution::<T>();
+		}
+	}
+
 	/// Logic for [`<Pallet as Hooks>::on_initialize`] when signed phase is being opened.
 	///
 	/// This is decoupled for easy weight calculation.

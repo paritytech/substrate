@@ -22,11 +22,11 @@
 use super::*;
 
 use frame_system::RawOrigin;
-use frame_support::traits::{OnInitialize, UnfilteredDispatchable};
+use frame_support::traits::{EnsureOrigin, OnInitialize, UnfilteredDispatchable};
 use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::{Bounded, Zero};
 
-use crate::Module as Lottery;
+use crate::Pallet as Lottery;
 
 // Set up and start a lottery
 fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
@@ -36,7 +36,7 @@ fn setup_lottery<T: Config>(repeat: bool) -> Result<(), &'static str> {
 	// Calls will be maximum length...
 	let mut calls = vec![
 		frame_system::Call::<T>::set_code(vec![]).into();
-		T::MaxCalls::get().saturating_sub(1)
+		T::MaxCalls::get().saturating_sub(1) as usize
 	];
 	// Last call will be the match for worst case scenario.
 	calls.push(frame_system::Call::<T>::remark(vec![]).into());
@@ -56,10 +56,10 @@ benchmarks! {
 			&frame_system::Call::<T>::set_code(vec![]).into()
 		)?;
 		let already_called: (u32, Vec<CallIndex>) = (
-			LotteryIndex::get(),
+			LotteryIndex::<T>::get(),
 			vec![
 				set_code_index;
-				T::MaxCalls::get().saturating_sub(1)
+				T::MaxCalls::get().saturating_sub(1) as usize
 			],
 		);
 		Participants::<T>::insert(&caller, already_called);
@@ -67,7 +67,7 @@ benchmarks! {
 		let call = frame_system::Call::<T>::remark(vec![]);
 	}: _(RawOrigin::Signed(caller), Box::new(call.into()))
 	verify {
-		assert_eq!(TicketsCount::get(), 1);
+		assert_eq!(TicketsCount::<T>::get(), 1);
 	}
 
 	set_calls {
@@ -76,11 +76,11 @@ benchmarks! {
 
 		let call = Call::<T>::set_calls(calls);
 		let origin = T::ManagerOrigin::successful_origin();
-		assert!(CallIndices::get().is_empty());
+		assert!(CallIndices::<T>::get().is_empty());
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		if !n.is_zero() {
-			assert!(!CallIndices::get().is_empty());
+			assert!(!CallIndices::<T>::get().is_empty());
 		}
 	}
 
@@ -120,7 +120,7 @@ benchmarks! {
 		// Kill user account for worst case
 		T::Currency::make_free_balance_be(&winner, 0u32.into());
 		// Assert that lotto is set up for winner
-		assert_eq!(TicketsCount::get(), 1);
+		assert_eq!(TicketsCount::<T>::get(), 1);
 		assert!(!Lottery::<T>::pot().1.is_zero());
 	}: {
 		// Generate `MaxGenerateRandom` numbers for worst case scenario
@@ -132,7 +132,7 @@ benchmarks! {
 	}
 	verify {
 		assert!(crate::Lottery::<T>::get().is_none());
-		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(TicketsCount::<T>::get(), 0);
 		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
 		assert!(!T::Currency::free_balance(&winner).is_zero())
 	}
@@ -151,7 +151,7 @@ benchmarks! {
 		// Kill user account for worst case
 		T::Currency::make_free_balance_be(&winner, 0u32.into());
 		// Assert that lotto is set up for winner
-		assert_eq!(TicketsCount::get(), 1);
+		assert_eq!(TicketsCount::<T>::get(), 1);
 		assert!(!Lottery::<T>::pot().1.is_zero());
 	}: {
 		// Generate `MaxGenerateRandom` numbers for worst case scenario
@@ -163,8 +163,8 @@ benchmarks! {
 	}
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
-		assert_eq!(LotteryIndex::get(), 2);
-		assert_eq!(TicketsCount::get(), 0);
+		assert_eq!(LotteryIndex::<T>::get(), 2);
+		assert_eq!(TicketsCount::<T>::get(), 0);
 		assert_eq!(Lottery::<T>::pot().1, 0u32.into());
 		assert!(!T::Currency::free_balance(&winner).is_zero())
 	}

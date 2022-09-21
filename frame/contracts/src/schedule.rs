@@ -42,27 +42,12 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 /// Definition of the cost schedule and other parameterizations for the wasm vm.
 ///
 /// Its fields are private to the crate in order to allow addition of new contract
-/// callable functions without bumping to a new major version. A genesis config should
-/// rely on public functions of this type.
+/// callable functions without bumping to a new major version. The supplied [`Config::Schedule`]
+/// should rely on public functions of this type.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
 pub struct Schedule<T: Config> {
-	/// Version of the schedule.
-	///
-	/// # Note
-	///
-	/// Must be incremented whenever the [`self.instruction_weights`] are changed. The
-	/// reason is that changes to instruction weights require a re-instrumentation
-	/// of all contracts which are triggered by a version comparison on call.
-	/// Changes to other parts of the schedule should not increment the version in
-	/// order to avoid unnecessary re-instrumentations.
-	pub(crate) version: u32,
-
-	/// Whether the `seal_println` function is allowed to be used contracts.
-	/// MUST only be enabled for `dev` chains, NOT for production chains
-	pub(crate) enable_println: bool,
-
 	/// Describes the upper limits on various metrics.
 	pub(crate) limits: Limits,
 
@@ -73,12 +58,31 @@ pub struct Schedule<T: Config> {
 	pub(crate) host_fn_weights: HostFnWeights<T>,
 }
 
+impl<T: Config> Schedule<T> {
+	/// Set the version of the instruction weights.
+	///
+	/// # Note
+	///
+	/// Should be incremented whenever any instruction weight is changed. The
+	/// reason is that changes to instruction weights require a re-instrumentation
+	/// in order to apply the changes to an already deployed code. The re-instrumentation
+	/// is triggered by comparing the version of the current schedule with the the code was
+	/// instrumented with. Changes usually happen when pallet_contracts is re-benchmarked.
+	///
+	/// Changes to other parts of the schedule should not increment the version in
+	/// order to avoid unnecessary re-instrumentations.
+	pub fn set_instruction_weights_version(&mut self, version: u32) {
+		self.instruction_weights.version = version;
+	}
+}
+
 /// Describes the upper limits on various metrics.
 ///
 /// # Note
 ///
-/// The values in this struct should only ever be increased for a deployed chain. The reason
-/// is that decreasing those values will break existing contracts which are above the new limits.
+/// The values in this struct should never be decreased. The reason is that decreasing those
+/// values will break existing contracts which are above the new limits when a
+/// re-instrumentation is triggered.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
 pub struct Limits {
@@ -121,6 +125,17 @@ pub struct Limits {
 
 	/// The maximum length of a subject in bytes used for PRNG generation.
 	pub subject_len: u32,
+
+	/// The maximum nesting level of the call stack.
+	pub call_depth: u32,
+
+	/// The maximum size of a storage value and event payload in bytes.
+	pub payload_len: u32,
+
+	/// The maximum length of a contract code in bytes. This limit applies to the instrumented
+	/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
+	/// a wasm binary below this maximum size.
+	pub code_len: u32,
 }
 
 impl Limits {
@@ -153,6 +168,10 @@ impl Limits {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Encode, Decode, PartialEq, Eq, WeightDebug)]
 pub struct InstructionWeights<T: Config> {
+	/// Version of the instruction weights.
+	///
+	/// See [`Schedule::set_instruction_weights_version`].
+	pub(crate) version: u32,
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,
@@ -290,6 +309,9 @@ pub struct HostFnWeights<T: Config> {
 
 	/// Weight per byte of an event deposited through `seal_deposit_event`.
 	pub deposit_event_per_byte: Weight,
+
+	/// Weight of calling `seal_debug_message`.
+	pub debug_message: Weight,
 
 	/// Weight of calling `seal_set_rent_allowance`.
 	pub set_rent_allowance: Weight,
@@ -454,8 +476,6 @@ macro_rules! cost_byte_batched {
 impl<T: Config> Default for Schedule<T> {
 	fn default() -> Self {
 		Self {
-			version: 0,
-			enable_println: false,
 			limits: Default::default(),
 			instruction_weights: Default::default(),
 			host_fn_weights: Default::default(),
@@ -476,6 +496,9 @@ impl Default for Limits {
 			table_size: 4096,
 			br_table_size: 256,
 			subject_len: 32,
+			call_depth: 32,
+			payload_len: 16 * 1024,
+			code_len: 128 * 1024,
 		}
 	}
 }
@@ -484,6 +507,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
+			version: 2,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
 			i64store: cost_instr!(instr_i64store, 2),
@@ -569,6 +593,7 @@ impl<T: Config> Default for HostFnWeights<T> {
 			deposit_event: cost_batched!(seal_deposit_event),
 			deposit_event_per_topic: cost_batched_args!(seal_deposit_event_per_topic_and_kb, 1, 0),
 			deposit_event_per_byte: cost_byte_batched_args!(seal_deposit_event_per_topic_and_kb, 0, 1),
+			debug_message: cost_batched!(seal_debug_message),
 			set_rent_allowance: cost_batched!(seal_set_rent_allowance),
 			set_storage: cost_batched!(seal_set_storage),
 			set_storage_per_byte: cost_byte_batched!(seal_set_storage_per_kb),
@@ -606,20 +631,6 @@ struct ScheduleRules<'a, T: Config> {
 }
 
 impl<T: Config> Schedule<T> {
-	/// Allow contracts to call `seal_println` in order to print messages to the console.
-	///
-	/// This should only ever be activated in development chains. The printed messages
-	/// can be observed on the console by setting the environment variable
-	/// `RUST_LOG=runtime=debug` when running the node.
-	///
-	/// # Note
-	///
-	/// Is set to `false` by default.
-	pub fn enable_println(mut self, enable: bool) -> Self {
-		self.enable_println = enable;
-		self
-	}
-
 	pub(crate) fn rules(&self, module: &elements::Module) -> impl rules::Rules + '_ {
 		ScheduleRules {
 			schedule: &self,

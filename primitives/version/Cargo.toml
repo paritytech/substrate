@@ -20,6 +20,7 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
 sp-std = { version = "3.0.0", default-features = false, path = "../std" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
+sp-version-proc-macro = { version = "3.0.0", default-features = false, path = "proc-macro" }
 
 [features]
 default = ["std"]

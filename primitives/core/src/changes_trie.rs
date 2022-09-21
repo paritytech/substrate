@@ -226,7 +226,7 @@ mod tests {
 	#[test]
 	fn is_digest_build_required_at_block_works() {
 		fn test_with_zero(zero: u64) {
-			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 0u64));
+			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero));
 			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 1u64));
 			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 2u64));
 			assert!(!config(8, 4).is_digest_build_required_at_block(zero, zero + 4u64));
@@ -249,7 +249,7 @@ mod tests {
 	#[test]
 	fn digest_level_at_block_works() {
 		fn test_with_zero(zero: u64) {
-			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 0u64), None);
+			assert_eq!(config(8, 4).digest_level_at_block(zero, zero), None);
 			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 7u64), None);
 			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 63u64), None);
 			assert_eq!(config(8, 4).digest_level_at_block(zero, zero + 8u64), Some((1, 8, 1)));

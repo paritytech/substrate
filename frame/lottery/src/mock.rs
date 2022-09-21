@@ -97,7 +97,7 @@ impl pallet_balances::Config for Test {
 
 parameter_types! {
 	pub const LotteryPalletId: PalletId = PalletId(*b"py/lotto");
-	pub const MaxCalls: usize = 2;
+	pub const MaxCalls: u32 = 2;
 	pub const MaxGenerateRandom: u32 = 10;
 }
 

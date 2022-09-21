@@ -94,7 +94,7 @@ impl<Client, Block: traits::Block> OffchainWorkers<Client, Block> {
 		Self {
 			client,
 			_block: PhantomData,
-			thread_pool: Mutex::new(ThreadPool::new(num_cpus::get())),
+			thread_pool: Mutex::new(ThreadPool::with_name("offchain-worker".into(), num_cpus::get())),
 			shared_client,
 		}
 	}

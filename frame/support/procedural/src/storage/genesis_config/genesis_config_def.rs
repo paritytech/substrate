@@ -104,6 +104,10 @@ impl GenesisConfigDef {
 
 					parse_quote!( Vec<(#key1, #key2, #value_type)> )
 				},
+				StorageLineTypeDef::NMap(map) => {
+					let key_tuple = map.to_key_tuple();
+					parse_quote!( Vec<(#key_tuple, #value_type)> )
+				}
 			};
 
 			let default = line.default_value.as_ref()

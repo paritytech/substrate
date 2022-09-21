@@ -24,7 +24,7 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::{Config, CurrentSchedule};
+use crate::Config;
 use parity_wasm::elements::{
 	Instruction, Instructions, FuncBody, ValueType, BlockType, Section, CustomSection,
 };
@@ -33,6 +33,7 @@ use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
 use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
 use sp_std::{prelude::*, convert::TryFrom, borrow::ToOwned};
+use frame_support::traits::Get;
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
@@ -223,7 +224,7 @@ where
 		if def.inject_stack_metering {
 			code = inject_limiter(
 				code,
-				<CurrentSchedule<T>>::get().limits.stack_height
+				T::Schedule::get().limits.stack_height
 			)
 			.unwrap();
 		}
@@ -503,5 +504,5 @@ where
 	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	<CurrentSchedule<T>>::get().limits.memory_pages
+	T::Schedule::get().limits.memory_pages
 }

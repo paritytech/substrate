@@ -17,18 +17,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 mod sandbox;
 
+use std::sync::Arc;
 use codec::{Encode, Decode};
 use hex_literal::hex;
 use sp_core::{
 	blake2_128, blake2_256, ed25519, sr25519, map, Pair,
 	offchain::{OffchainWorkerExt, OffchainDbExt, testing},
-	traits::{Externalities, CallInWasm},
+	traits::Externalities,
 };
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 use sp_trie::{TrieConfiguration, trie_types::Layout};
 use sp_wasm_interface::HostFunctions as _;
 use sp_runtime::traits::BlakeTwo256;
+use sc_executor_common::{wasm_runtime::WasmModule, runtime_blob::RuntimeBlob};
 use tracing_subscriber::layer::SubscriberExt;
 
 use crate::WasmExecutionMethod;
@@ -77,13 +79,12 @@ fn call_in_wasm<E: Externalities>(
 		8,
 		None,
 	);
-	executor.call_in_wasm(
-		&wasm_binary_unwrap()[..],
-		None,
+	executor.uncached_call(
+		RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+		ext,
+		true,
 		function,
 		call_data,
-		ext,
-		sp_core::traits::MissingHostFunctions::Allow,
 	)
 }
 
@@ -541,28 +542,37 @@ fn should_trap_when_heap_exhausted(wasm_method: WasmExecutionMethod) {
 		None,
 	);
 
-	let err = executor.call_in_wasm(
-		&wasm_binary_unwrap()[..],
-		None,
-		"test_exhaust_heap",
-		&[0],
-		&mut ext.ext(),
-		sp_core::traits::MissingHostFunctions::Allow,
-	).unwrap_err();
+	let err = executor
+		.uncached_call(
+			RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+			&mut ext.ext(),
+			true,
+			"test_exhaust_heap",
+			&[0],
+		)
+		.unwrap_err();
 
 	assert!(err.contains("Allocator ran out of space"));
 }
 
-test_wasm_execution!(returns_mutable_static);
-fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
+fn mk_test_runtime(wasm_method: WasmExecutionMethod, pages: u64) -> Arc<dyn WasmModule> {
+	let blob = RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..])
+		.expect("failed to create a runtime blob out of test runtime");
+
+	crate::wasm_runtime::create_wasm_runtime_with_code(
 		wasm_method,
-		1024,
-		&wasm_binary_unwrap()[..],
+		pages,
+		blob,
 		HostFunctions::host_functions(),
 		true,
 		None,
-	).expect("Creates runtime");
+	)
+	.expect("failed to instantiate wasm runtime")
+}
+
+test_wasm_execution!(returns_mutable_static);
+fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
+	let runtime = mk_test_runtime(wasm_method, 1024);
 
 	let instance = runtime.new_instance().unwrap();
 	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
@@ -589,14 +599,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	// to our allocator algorithm there are inefficiencies.
 	const REQUIRED_MEMORY_PAGES: u64 = 32;
 
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
-		wasm_method,
-		REQUIRED_MEMORY_PAGES,
-		&wasm_binary_unwrap()[..],
-		HostFunctions::host_functions(),
-		true,
-		None,
-	).expect("Creates runtime");
+	let runtime = mk_test_runtime(wasm_method, REQUIRED_MEMORY_PAGES);
 	let instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
@@ -610,14 +613,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let runtime = crate::wasm_runtime::create_wasm_runtime_with_code(
-		wasm_method,
-		1024,
-		&wasm_binary_unwrap()[..],
-		HostFunctions::host_functions(),
-		true,
-		None,
-	).expect("Creates runtime");
+	let runtime = mk_test_runtime(wasm_method, 1024);
 	let instance = runtime.new_instance().unwrap();
 
 	let heap_base = instance.get_global_const("__heap_base")
@@ -642,27 +638,27 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 		8,
 		None,
 	));
-	let code_hash = blake2_256(wasm_binary_unwrap()).to_vec();
-	let threads: Vec<_> = (0..8).map(|_|
-		{
+	let threads: Vec<_> = (0..8)
+		.map(|_| {
 			let executor = executor.clone();
-			let code_hash = code_hash.clone();
 			std::thread::spawn(move || {
 				let mut ext = TestExternalities::default();
 				let mut ext = ext.ext();
 				assert_eq!(
-					executor.call_in_wasm(
-						&wasm_binary_unwrap()[..],
-						Some(code_hash.clone()),
-						"test_twox_128",
-						&[0],
-						&mut ext,
-						sp_core::traits::MissingHostFunctions::Allow,
-					).unwrap(),
+					executor
+						.uncached_call(
+							RuntimeBlob::uncompress_if_needed(&wasm_binary_unwrap()[..]).unwrap(),
+							&mut ext,
+							true,
+							"test_twox_128",
+							&[0],
+						)
+						.unwrap(),
 					hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
 				);
 			})
-		}).collect();
+		})
+		.collect();
 
 	for t in threads.into_iter() {
 		t.join().unwrap();
@@ -671,9 +667,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(wasm_tracing_should_work);
 fn wasm_tracing_should_work(wasm_method: WasmExecutionMethod) {
-
-	use std::sync::{Arc, Mutex};
-
+	use std::sync::Mutex;
 	use sc_tracing::{SpanDatum, TraceEvent};
 
 	struct TestTraceHandler(Arc<Mutex<Vec<SpanDatum>>>);
@@ -779,6 +773,5 @@ fn panic_in_spawned_instance_panics_on_joining_its_result(wasm_method: WasmExecu
 		&mut ext,
 	).unwrap_err();
 
-	dbg!(&error_result);
 	assert!(format!("{}", error_result).contains("Spawned task"));
 }

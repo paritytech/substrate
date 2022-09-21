@@ -5,7 +5,6 @@
 	(import "seal0" "seal_instantiate" (func $seal_instantiate
 		(param i32 i32 i64 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)
 	))
-	(import "seal0" "seal_println" (func $seal_println (param i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
 	(func $assert (param i32)

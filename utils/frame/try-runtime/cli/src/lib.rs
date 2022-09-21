@@ -51,7 +51,7 @@ pub struct TryRuntimeCmd {
 	#[structopt(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::enabled_variants(),
+		possible_values = &WasmExecutionMethod::variants(),
 		case_insensitive = true,
 		default_value = "Interpreted"
 	)]

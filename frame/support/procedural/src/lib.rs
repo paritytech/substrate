@@ -156,6 +156,9 @@ use proc_macro::TokenStream;
 /// * \[optional\] `config(#field_name)`: `field_name` is optional if get is set.
 /// Will include the item in `GenesisConfig`.
 /// * \[optional\] `build(#closure)`: Closure called with storage overlays.
+/// * \[optional\] `max_values(#expr)`: `expr` is an expression returning a `u32`. It is used to
+/// implement `StorageInfoTrait`. Note this attribute is not available for storage value as the maximum
+/// number of values is 1.
 /// * `#type`: Storage type.
 /// * \[optional\] `#default`: Value returned when none.
 ///
@@ -234,11 +237,20 @@ use proc_macro::TokenStream;
 /// add_extra_genesis {
 /// 	config(phantom): std::marker::PhantomData<I>,
 /// }
-/// ...
+/// ```
 ///
 /// This adds a field to your `GenesisConfig` with the name `phantom` that you can initialize with
 /// `Default::default()`.
 ///
+/// ## PoV information
+///
+/// To implement the trait `StorageInfoTrait` for storages an additional attribute can be used
+/// `generate_storage_info`:
+/// ```nocompile
+/// decl_storage! { generate_storage_info
+/// 	trait Store for ...
+/// }
+/// ```
 #[proc_macro]
 pub fn decl_storage(input: TokenStream) -> TokenStream {
 	storage::decl_storage_impl(input)

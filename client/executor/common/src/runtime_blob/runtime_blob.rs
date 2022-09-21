@@ -27,6 +27,17 @@ pub struct RuntimeBlob {
 }
 
 impl RuntimeBlob {
+	/// Create `RuntimeBlob` from the given wasm code. Will attempt to decompress the code before
+	/// deserializing it.
+	///
+	/// See [`sp_maybe_compressed_blob`] for details about decompression.
+	pub fn uncompress_if_needed(wasm_code: &[u8]) -> Result<Self, WasmError> {
+		use sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT;
+		let wasm_code = sp_maybe_compressed_blob::decompress(wasm_code, CODE_BLOB_BOMB_LIMIT)
+			.map_err(|e| WasmError::Other(format!("Decompression error: {:?}", e)))?;
+		Self::new(&wasm_code)
+	}
+
 	/// Create `RuntimeBlob` from the given wasm code.
 	///
 	/// Returns `Err` if the wasm code cannot be deserialized.
@@ -85,9 +96,23 @@ impl RuntimeBlob {
 		})
 	}
 
+	/// Scans the wasm blob for the first section with the name that matches the given. Returns the
+	/// contents of the custom section if found or `None` otherwise.
+	pub fn custom_section_contents(&self, section_name: &str) -> Option<&[u8]> {
+		self.raw_module
+			.custom_sections()
+			.find(|cs| cs.name() == section_name)
+			.map(|cs| cs.payload())
+		}
+
 	/// Consumes this runtime blob and serializes it.
 	pub fn serialize(self) -> Vec<u8> {
 		serialize(self.raw_module)
 			.expect("serializing into a vec should succeed; qed")
+	}
+
+	/// Destructure this structure into the underlying parity-wasm Module.
+	pub fn into_inner(self) -> RawModule {
+		self.raw_module
 	}
 }

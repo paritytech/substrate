@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 sp-runtime-interface = { version = "3.0.0", path = "../" }
 sc-executor = { version = "0.9.0", path = "../../../client/executor" }
+sc-executor-common = { version = "0.9.0", path = "../../../client/executor/common" }
 sp-runtime-interface-test-wasm = { version = "2.0.0", path = "../test-wasm" }
 sp-runtime-interface-test-wasm-deprecated = { version = "2.0.0", path = "../test-wasm-deprecated" }
 sp-state-machine = { version = "0.9.0", path = "../../state-machine" }
