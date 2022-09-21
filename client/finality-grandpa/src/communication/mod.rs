@@ -83,9 +83,10 @@ pub mod grandpa_protocol_name {
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> ProtocolName {
+		let genesis_hash = genesis_hash.as_ref();
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-			None => format!("/{}", hex::encode(genesis_hash)),
+			Some(fork_id) => format!("/{}/{}", array_bytes::bytes2hex("", genesis_hash), fork_id),
+			None => format!("/{}", array_bytes::bytes2hex("", genesis_hash)),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}

@@ -229,14 +229,14 @@ impl<
 /// Implemented for pallet dispatchable type by `decl_module` and for runtime dispatchable by
 /// `construct_runtime`.
 pub trait UnfilteredDispatchable {
-	/// The origin type of the runtime, (i.e. `frame_system::Config::Origin`).
-	type Origin;
+	/// The origin type of the runtime, (i.e. `frame_system::Config::RuntimeOrigin`).
+	type RuntimeOrigin;
 
 	/// Dispatch this call but do not check the filter in origin.
-	fn dispatch_bypass_filter(self, origin: Self::Origin) -> DispatchResultWithPostInfo;
+	fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo;
 }
 
-/// Methods available on `frame_system::Config::Origin`.
+/// Methods available on `frame_system::Config::RuntimeOrigin`.
 pub trait OriginTrait: Sized {
 	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
