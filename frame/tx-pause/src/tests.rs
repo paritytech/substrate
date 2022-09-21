@@ -29,8 +29,8 @@ fn can_set_arbitrary_pause() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			b"SomePallet".to_vec().try_into().unwrap(),
-			b"some_function".to_vec().try_into().unwrap(),
+			name(b"SomePallet"),
+			name(b"some_function"),
 		));
 	});
 }
@@ -42,8 +42,8 @@ fn can_pause_system_call() {
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			b"System".to_vec().try_into().unwrap(),
-			b"remark".to_vec().try_into().unwrap(),
+			name(b"System"),
+			name(b"remark"),
 		));
 
 		assert_err!(
@@ -62,8 +62,8 @@ fn can_pause_specific_call() {
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			b"Balances".to_vec().try_into().unwrap(),
-			b"transfer".to_vec().try_into().unwrap(),
+			name(b"Balances"),
+			name(b"transfer"),
 		));
 
 		assert_err!(
@@ -81,8 +81,8 @@ fn can_unpause_specific_call() {
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			b"Balances".to_vec().try_into().unwrap(),
-			b"transfer".to_vec().try_into().unwrap(),
+			name(b"Balances"),
+			name(b"transfer"),
 		));
 		assert_err!(
 			call_paused.clone().dispatch(Origin::signed(0)),
@@ -91,8 +91,8 @@ fn can_unpause_specific_call() {
 
 		assert_ok!(TxPause::unpause_call(
 			Origin::signed(mock::UnpauseOrigin::get()),
-			b"Balances".to_vec().try_into().unwrap(),
-			b"transfer".to_vec().try_into().unwrap(),
+			name(b"Balances"),
+			name(b"transfer"),
 		));
 		assert_ok!(call_paused.clone().dispatch(Origin::signed(0)));
 	});
@@ -103,14 +103,11 @@ fn can_unpause_specific_call() {
 #[test]
 fn fails_to_pause_self() {
 	new_test_ext().execute_with(|| {
-		let within_bound_name =
-			(0u8..(MaxNameLen::get() - 1).try_into().unwrap()).collect::<Vec<_>>();
-
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				b"TxPause".to_vec().try_into().unwrap(),
-				within_bound_name.try_into().expect("Function name under MaxNameLen")
+				name(b"TxPause"),
+				name(b"should_not_matter"),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -120,33 +117,11 @@ fn fails_to_pause_self() {
 #[test]
 fn fails_to_pause_unpausable_pallet() {
 	new_test_ext().execute_with(|| {
-		let within_bound_name =
-			(0u8..(MaxNameLen::get() - 1).try_into().unwrap()).collect::<Vec<_>>();
-
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				b"UnpausablePallet".to_vec().try_into().unwrap(),
-				within_bound_name.try_into().expect("Function name under MaxNameLen")
-			),
-			Error::<Test>::IsUnpausable
-		);
-	});
-}
-
-#[test]
-#[should_panic(expected = "Pallet name under MaxNameLen")] // TODO - this test likely redundant/unneeded, as BoundedVec is effectively what we are testing.
-fn panics_with_too_long_pallet_name() {
-	new_test_ext().execute_with(|| {
-		let too_long_name = (0u8..(MaxNameLen::get() + 1).try_into().unwrap()).collect::<Vec<_>>();
-		let within_bound_name =
-			(0u8..(MaxNameLen::get() - 1).try_into().unwrap()).collect::<Vec<_>>();
-
-		assert_noop!(
-			TxPause::pause_call(
-				Origin::signed(mock::PauseOrigin::get()),
-				too_long_name.try_into().expect("Pallet name under MaxNameLen"),
-				within_bound_name.try_into().expect("Function name under MaxNameLen")
+				name(b"UnpausablePallet"),
+				name(b"should_not_matter"),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -158,15 +133,15 @@ fn fails_to_pause_already_paused_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			b"SomePallet".to_vec().try_into().unwrap(),
-			b"some_function".to_vec().try_into().unwrap(),
+			name(b"SomePallet"),
+			name(b"some_function"),
 		));
 
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				b"SomePallet".to_vec().try_into().unwrap(),
-				b"some_function".to_vec().try_into().unwrap(),
+				name(b"SomePallet"),
+				name(b"some_function"),
 			),
 			Error::<Test>::IsPaused
 		);
@@ -179,10 +154,14 @@ fn fails_to_unpause_not_paused_pallet() {
 		assert_noop!(
 			TxPause::unpause_call(
 				Origin::signed(mock::UnpauseOrigin::get()),
-				b"SomePallet".to_vec().try_into().unwrap(),
-				b"some_function".to_vec().try_into().unwrap(),
+				name(b"SomePallet"),
+				name(b"some_function"),
 			),
 			Error::<Test>::IsUnpaused
 		);
 	});
+}
+
+fn name(bytes: &[u8]) -> BoundedVec<u8, MaxNameLen> {
+	bytes.to_vec().try_into().unwrap()
 }

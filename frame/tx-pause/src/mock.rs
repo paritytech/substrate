@@ -121,6 +121,7 @@ impl Config for Test {
 	type UnpausablePallets = MockUnpausablePallets;
 	type MaxNameLen = MaxNameLen;
 	type PauseTooLongNames = PauseTooLongNames;
+	type WeightInfo = ();
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
