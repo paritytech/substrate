@@ -37,7 +37,7 @@ pub struct PruningParams {
 	///
 	/// NOTE: only finalized blocks are subject for removal!
 	#[clap(alias = "keep-blocks", long, value_name = "COUNT")]
-	pub blocks_pruning: Option<u32>,
+	pub blocks_pruning: Option<String>,
 }
 
 impl PruningParams {
@@ -50,7 +50,7 @@ impl PruningParams {
 				"archive-canonical" => Ok(PruningMode::ArchiveCanonical),
 				bc => bc
 					.parse()
-					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))
+					.map_err(|_| error::Error::Input("Invalid state pruning mode specified".to_string()))
 					.map(PruningMode::blocks_pruning),
 			})
 			.transpose()
@@ -58,10 +58,18 @@ impl PruningParams {
 
 	/// Get the block pruning value from the parameters
 	pub fn blocks_pruning(&self) -> error::Result<BlocksPruning> {
-		Ok(match self.blocks_pruning {
-			Some(0) => BlocksPruning::KeepAll,
-			Some(n) => BlocksPruning::Some(n),
-			None => BlocksPruning::KeepFinalized,
-		})
+		match self.blocks_pruning.as_ref() {
+			Some(bp) => {
+				match bp.as_str() {
+					"archive" => Ok(BlocksPruning::KeepAll),
+					"archive-canonical" => Ok(BlocksPruning::KeepFinalized),
+					bc => bc
+						.parse()
+						.map_err(|_| error::Error::Input("Invalid blocks pruning mode specified".to_string()))
+						.map(|n| BlocksPruning::Some(n)),
+				}
+			},
+			None => Ok(BlocksPruning::KeepFinalized),
+		}
 	}
 }

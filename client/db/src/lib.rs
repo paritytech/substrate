@@ -1080,6 +1080,24 @@ impl<Block: BlockT> Backend<Block> {
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
+	#[cfg(any(test, feature = "test-helpers"))]
+	pub fn new_test_with_tx_storage_2(blocks_pruning: BlocksPruning, canonicalization_delay: u64) -> Self {
+		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
+		let db = sp_database::as_database(db);
+		let state_pruning = match blocks_pruning {
+			BlocksPruning::KeepAll  => PruningMode::ArchiveAll ,
+			BlocksPruning::KeepFinalized => PruningMode::ArchiveCanonical ,
+			BlocksPruning::Some(n) => PruningMode::blocks_pruning(n) ,
+		};
+		let db_setting = DatabaseSettings {
+			trie_cache_maximum_size: Some(16 * 1024 * 1024),
+			state_pruning: Some(state_pruning),
+			source: DatabaseSource::Custom { db, require_create_flag: true },
+			blocks_pruning: blocks_pruning,
+		};
+
+		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
+	}
 
 	/// Expose the Database that is used by this backend.
 	/// The second argument is the Column that stores the State.
@@ -3232,6 +3250,111 @@ pub(crate) mod tests {
 		assert_eq!(None, bc.body(BlockId::hash(blocks[2])).unwrap());
 		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+	}
+	
+	#[test]
+	fn prune_blocks_on_finalize_in_keep_all() {
+		let backend = Backend::<Block>::new_test_with_tx_storage_2(BlocksPruning::KeepAll, 0);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+		for i in 0..5 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+			prev_hash = hash;
+		}
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+		for i in 1..3 {
+			op.mark_finalized(BlockId::Hash(blocks[i]), None).unwrap();
+		}
+		backend.commit_operation(op).unwrap();
+		
+		let bc = backend.blockchain();
+		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+	}
+
+	#[test]
+	fn prune_blocks_on_finalize_with_fork_in_keep_all() {
+		let backend = Backend::<Block>::new_test_with_tx_storage_2(BlocksPruning::KeepAll, 10);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+		for i in 0..5 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+			prev_hash = hash;
+		}
+
+		// insert a fork at block 2
+		let fork_hash_root = insert_block(
+			&backend,
+			2,
+			blocks[1],
+			None,
+			sp_core::H256::random(),
+			vec![2.into()],
+			None,
+		)
+		.unwrap();
+		insert_block(
+			&backend,
+			3,
+			fork_hash_root,
+			None,
+			H256::random(),
+			vec![3.into(), 11.into()],
+			None,
+		)
+		.unwrap();
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+		op.mark_head(BlockId::Hash(blocks[4])).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		let bc = backend.blockchain();
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+
+		for i in 1..5 {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::Hash(blocks[i])).unwrap();
+			op.mark_finalized(BlockId::Hash(blocks[i]), None).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+
+		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+		assert_eq!(bc.info().best_number, 4);
+		for i in 0..5 {
+			assert!(bc.hash(i).unwrap().is_some());
+		}
 	}
 
 	#[test]
