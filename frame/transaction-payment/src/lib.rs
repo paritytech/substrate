@@ -237,10 +237,7 @@ where
 }
 
 /// A struct to make the fee multiplier a constant
-pub struct ConstFeeMultiplier<M: Get<Multiplier>, X: Get<Multiplier>>(
-	sp_std::marker::PhantomData<M>,
-	sp_std::marker::PhantomData<X>,
-);
+pub struct ConstFeeMultiplier<M: Get<Multiplier>, X: Get<Multiplier>>(sp_std::marker::PhantomData<(M, X)>);
 
 impl<M: Get<Multiplier>, X: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M, X> {
 	fn min() -> Multiplier {
