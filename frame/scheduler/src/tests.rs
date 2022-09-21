@@ -59,7 +59,7 @@ fn scheduling_with_preimages_works() {
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let len = call.using_encoded(|x| x.len()) as u32;
 		let hashed = Preimage::pick(hash, len);
-		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(0), call.encode()));
 		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
 		assert!(Preimage::is_requested(&hash));
 		run_to_block(3);
@@ -686,14 +686,16 @@ fn root_calls_works() {
 			i: 42,
 			weight: Weight::from_ref_time(10),
 		}));
-		assert_ok!(Scheduler::schedule_named(Origin::root(), [1u8; 32], 4, None, 127, call,));
-		assert_ok!(Scheduler::schedule(Origin::root(), 4, None, 127, call2));
+		assert_ok!(
+			Scheduler::schedule_named(RuntimeOrigin::root(), [1u8; 32], 4, None, 127, call,)
+		);
+		assert_ok!(Scheduler::schedule(RuntimeOrigin::root(), 4, None, 127, call2));
 		run_to_block(3);
 		// Scheduled calls are in the agenda.
 		assert_eq!(Agenda::<Test>::get(4).len(), 2);
 		assert!(logger::log().is_empty());
-		assert_ok!(Scheduler::cancel_named(Origin::root(), [1u8; 32]));
-		assert_ok!(Scheduler::cancel(Origin::root(), 4, 1));
+		assert_ok!(Scheduler::cancel_named(RuntimeOrigin::root(), [1u8; 32]));
+		assert_ok!(Scheduler::cancel(RuntimeOrigin::root(), 4, 1));
 		// Scheduled calls are made NONE, so should not effect state
 		run_to_block(100);
 		assert!(logger::log().is_empty());
@@ -719,17 +721,17 @@ fn fails_to_schedule_task_in_the_past() {
 		}));
 
 		assert_noop!(
-			Scheduler::schedule_named(Origin::root(), [1u8; 32], 2, None, 127, call1),
+			Scheduler::schedule_named(RuntimeOrigin::root(), [1u8; 32], 2, None, 127, call1),
 			Error::<Test>::TargetBlockNumberInPast,
 		);
 
 		assert_noop!(
-			Scheduler::schedule(Origin::root(), 2, None, 127, call2),
+			Scheduler::schedule(RuntimeOrigin::root(), 2, None, 127, call2),
 			Error::<Test>::TargetBlockNumberInPast,
 		);
 
 		assert_noop!(
-			Scheduler::schedule(Origin::root(), 3, None, 127, call3),
+			Scheduler::schedule(RuntimeOrigin::root(), 3, None, 127, call3),
 			Error::<Test>::TargetBlockNumberInPast,
 		);
 	});

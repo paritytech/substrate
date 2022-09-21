@@ -90,7 +90,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -148,7 +148,7 @@ mod benchmarks {
 	crate::benchmarks! {
 		where_clause {
 			where
-				crate::tests::Origin: From<RawOrigin<<T as frame_system::Config>::AccountId>>,
+				crate::tests::RuntimeOrigin: From<RawOrigin<<T as frame_system::Config>::AccountId>>,
 		}
 
 		set_value {

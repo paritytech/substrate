@@ -59,7 +59,7 @@ pub mod decl_pallet {
 	pub trait Config: frame_system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 			#[weight = 0]
 			pub fn set_value(_origin, value: u32) {
 				DeclValue::put(value);
@@ -86,7 +86,7 @@ impl frame_system::Config for Runtime {
 	type BlockLength = ();
 	type DbWeight = ();
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;
@@ -256,11 +256,11 @@ fn storage_layer_in_pallet_call() {
 	TestExternalities::default().execute_with(|| {
 		use sp_runtime::traits::Dispatchable;
 		let call1 = RuntimeCall::MyPallet(pallet::Call::set_value { value: 2 });
-		assert_ok!(call1.dispatch(Origin::signed(0)));
+		assert_ok!(call1.dispatch(RuntimeOrigin::signed(0)));
 		assert_eq!(Value::<Runtime>::get(), 2);
 
 		let call2 = RuntimeCall::MyPallet(pallet::Call::set_value { value: 1 });
-		assert_noop!(call2.dispatch(Origin::signed(0)), Error::<Runtime>::Revert);
+		assert_noop!(call2.dispatch(RuntimeOrigin::signed(0)), Error::<Runtime>::Revert);
 	});
 }
 
@@ -271,12 +271,15 @@ fn storage_layer_in_decl_pallet_call() {
 		use sp_runtime::traits::Dispatchable;
 
 		let call1 = RuntimeCall::DeclPallet(decl_pallet::Call::set_value { value: 2 });
-		assert_ok!(call1.dispatch(Origin::signed(0)));
+		assert_ok!(call1.dispatch(RuntimeOrigin::signed(0)));
 		assert_eq!(decl_pallet::DeclValue::get(), 2);
 
 		let call2 = RuntimeCall::DeclPallet(decl_pallet::Call::set_value { value: 1 });
-		assert_noop!(call2.dispatch(Origin::signed(0)), "Revert!");
+		assert_noop!(call2.dispatch(RuntimeOrigin::signed(0)), "Revert!");
 		// Calling the function directly also works with storage layers.
-		assert_noop!(decl_pallet::Module::<Runtime>::set_value(Origin::signed(1), 1), "Revert!");
+		assert_noop!(
+			decl_pallet::Module::<Runtime>::set_value(RuntimeOrigin::signed(1), 1),
+			"Revert!"
+		);
 	});
 }

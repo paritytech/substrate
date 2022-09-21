@@ -72,7 +72,7 @@ benchmarks! {
 		let s in 0 .. MAX_SIZE;
 		let (preimage, hash) = sized_preimage_and_hash::<T>(s);
 		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
-	}: note_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), preimage)
+	}: note_preimage<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), preimage)
 	verify {
 		assert!(Preimage::<T>::have_preimage(&hash));
 	}
@@ -91,7 +91,7 @@ benchmarks! {
 	unnote_no_deposit_preimage {
 		let (preimage, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::note_preimage(T::ManagerOrigin::successful_origin(), preimage));
-	}: unnote_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
+	}: unnote_preimage<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		assert!(!Preimage::<T>::have_preimage(&hash));
 	}
@@ -102,7 +102,7 @@ benchmarks! {
 		let noter = funded_account::<T>("noter", 0);
 		whitelist_account!(noter);
 		assert_ok!(Preimage::<T>::note_preimage(RawOrigin::Signed(noter.clone()).into(), preimage));
-	}: _<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
+	}: _<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		let deposit = T::BaseDeposit::get() + T::ByteDeposit::get() * MAX_SIZE.into();
 		let s = RequestStatus::Requested { deposit: Some((noter, deposit)), count: 1, len: Some(MAX_SIZE) };
@@ -112,7 +112,7 @@ benchmarks! {
 	request_no_deposit_preimage {
 		let (preimage, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::note_preimage(T::ManagerOrigin::successful_origin(), preimage));
-	}: request_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
+	}: request_preimage<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		let s = RequestStatus::Requested { deposit: None, count: 2, len: Some(MAX_SIZE) };
 		assert_eq!(StatusFor::<T>::get(&hash), Some(s));
@@ -120,7 +120,7 @@ benchmarks! {
 	// Cheap request - the preimage is not yet noted, so deposit to unreserve.
 	request_unnoted_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
-	}: request_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
+	}: request_preimage<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		let s = RequestStatus::Requested { deposit: None, count: 1, len: None };
 		assert_eq!(StatusFor::<T>::get(&hash), Some(s));
@@ -129,7 +129,7 @@ benchmarks! {
 	request_requested_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
-	}: request_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
+	}: request_preimage<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		let s = RequestStatus::Requested { deposit: None, count: 2, len: None };
 		assert_eq!(StatusFor::<T>::get(&hash), Some(s));
@@ -140,7 +140,7 @@ benchmarks! {
 		let (preimage, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
 		assert_ok!(Preimage::<T>::note_preimage(T::ManagerOrigin::successful_origin(), preimage));
-	}: _<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
+	}: _<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		assert_eq!(StatusFor::<T>::get(&hash), None);
 	}
@@ -148,7 +148,7 @@ benchmarks! {
 	unrequest_unnoted_preimage {
 		let (_, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
-	}: unrequest_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
+	}: unrequest_preimage<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		assert_eq!(StatusFor::<T>::get(&hash), None);
 	}
@@ -157,7 +157,7 @@ benchmarks! {
 		let (_, hash) = preimage_and_hash::<T>();
 		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
 		assert_ok!(Preimage::<T>::request_preimage(T::ManagerOrigin::successful_origin(), hash));
-	}: unrequest_preimage<T::Origin>(T::ManagerOrigin::successful_origin(), hash)
+	}: unrequest_preimage<T::RuntimeOrigin>(T::ManagerOrigin::successful_origin(), hash)
 	verify {
 		let s = RequestStatus::Requested { deposit: None, count: 1, len: None };
 		assert_eq!(StatusFor::<T>::get(&hash), Some(s));
