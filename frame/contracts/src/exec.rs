@@ -816,7 +816,7 @@ where
 			// Storage limit is enforced as late as possible (when the last frame returns) so that
 			// the ordering of storage accesses does not matter.
 			if self.frames.is_empty() {
-				let frame = top_frame_mut!(self);
+				let frame = &mut self.first_frame;
 				frame.contract_info.load(&frame.account_id);
 				let contract = frame.contract_info.as_contract();
 				frame.nested_storage.enforce_limit(contract)?;

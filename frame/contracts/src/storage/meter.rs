@@ -415,7 +415,7 @@ where
 		self.own_contribution = Contribution::Terminated(Deposit::Refund(info.total_deposit()));
 	}
 
-	/// [Self::charge`] does not enforce the storage limit since we want to do this check as late
+	/// [`Self::charge`] does not enforce the storage limit since we want to do this check as late
 	/// as possible to allow later refunds to offset earlier charges.
 	///
 	/// # Note
