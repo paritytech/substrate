@@ -43,8 +43,7 @@ use sp_runtime::{
 };
 
 use beefy_primitives::{
-	crypto::{AuthorityId, Signature},
-	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
+	ecdsa_crypto, known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
@@ -59,7 +58,7 @@ use crate::{
 	Client,
 };
 
-pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, BKS: BeefyKeystore> {
+pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, AuthId, BKS: BeefyKeystore<AuthId>> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub runtime: Arc<R>,
@@ -67,27 +66,27 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, BKS: BeefyKeystore> {
 	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	pub gossip_engine: GossipEngine<B>,
-	pub gossip_validator: Arc<GossipValidator<B, BKS>>,
+	pub gossip_validator: Arc<GossipValidator<B, AuthId, BKS>>,
 	pub min_block_delta: u32,
 	pub metrics: Option<Metrics>,
 	pub sync_oracle: SO,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, BKS: BeefyKeystore> {
+pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, AuthId, BKS: BeefyKeystore<AuthId>> {
 	client: Arc<C>,
 	backend: Arc<BE>,
 	runtime: Arc<R>,
 	key_store: BKS,
 	signed_commitment_sender: BeefySignedCommitmentSender<B>,
 	gossip_engine: Arc<Mutex<GossipEngine<B>>>,
-	gossip_validator: Arc<GossipValidator<B, BKS>>,
+	gossip_validator: Arc<GossipValidator<B, BKS, AuthId>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on
 	min_block_delta: u32,
 	metrics: Option<Metrics>,
 	rounds: Option<Rounds<Payload, B>>,
 	/// Buffer holding votes for blocks that the client hasn't seen finality for.
-	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
+	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, BKS::Public, BKS::Signature>>>,
 	finality_notifications: FinalityNotifications<B>,
 	/// Best block we received a GRANDPA notification for
 	best_grandpa_block_header: <B as Block>::Header,
@@ -103,15 +102,16 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, BKS: BeefyKeystore> {
 	_backend: PhantomData<BE>,
 }
 
-impl<B, BE, C, R, SO, BKS> BeefyWorker<B, BE, C, R, SO, BKS>
+impl<B, BE, C, R, SO, AuthId, BKS> BeefyWorker<B, BE, C, R, SO, AuthId, BKS>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
+	R::Api: BeefyApi<B, BKS::Public> + MmrApi<B, MmrRootHash>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-        BKS: BeefyKeystore,
+        BKS: BeefyKeystore<AuthId>,
+
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -119,7 +119,7 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO, BKS>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO, AuthId, BKS>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
@@ -203,12 +203,12 @@ where
 	fn verify_validator_set(
 		&self,
 		block: &NumberFor<B>,
-		active: &ValidatorSet<AuthorityId>,
+		active: &ValidatorSet<BKS::Public>,
 	) -> Result<(), error::Error> {
-		let active: BTreeSet<&AuthorityId> = active.validators().iter().collect();
+		let active: BTreeSet<&BKS::Public> = active.validators().iter().collect();
 
 		let public_keys = self.key_store.public_keys()?;
-		let store: BTreeSet<&AuthorityId> = public_keys.iter().collect();
+		let store: BTreeSet<&BKS::Public> = public_keys.iter().collect();
 
 		if store.intersection(&active).count() == 0 {
 			let msg = "no authority public key found in store".to_string();
@@ -250,7 +250,7 @@ where
 	/// Handle session changes by starting new voting round for mandatory blocks.
 	fn init_session_at(
 		&mut self,
-		active: ValidatorSet<AuthorityId>,
+		active: ValidatorSet<ecdsa_crypto::AuthorityId>,
 		new_session_start: NumberFor<B>,
 	) {
 		debug!(target: "beefy", "🥩 New active validator set: {:?}", active);
@@ -333,7 +333,7 @@ where
 	fn handle_vote(
 		&mut self,
 		round: (Payload, NumberFor<B>),
-		vote: (AuthorityId, Signature),
+		vote: (BKS::Public, BKS::Signature),
 		self_vote: bool,
 	) {
 		self.gossip_validator.note_round(round.1);
@@ -517,7 +517,7 @@ where
 			|notification| async move {
 				trace!(target: "beefy", "🥩 Got vote message: {:?}", notification);
 
-				VoteMessage::<NumberFor<B>, AuthorityId, Signature>::decode(
+				VoteMessage::<NumberFor<B>, BKS::Public, BKS::Signature>::decode(
 					&mut &notification.message[..],
 				)
 				.ok()
@@ -591,7 +591,7 @@ where
 {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
 
-	let filter = |log: ConsensusLog<AuthorityId>| match log {
+	let filter = |log: ConsensusLog<ecdsa_crypto::AuthorityId>| match log {
 		ConsensusLog::MmrRoot(root) => Some(root),
 		_ => None,
 	};
@@ -600,13 +600,13 @@ where
 
 /// Scan the `header` digest log for a BEEFY validator set change. Return either the new
 /// validator set or `None` in case no validator set change has been signaled.
-fn find_authorities_change<B>(header: &B::Header) -> Option<ValidatorSet<AuthorityId>>
+fn find_authorities_change<B>(header: &B::Header) -> Option<ValidatorSet<ecdsa_crypto::AuthorityId>>
 where
 	B: Block,
 {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
 
-	let filter = |log: ConsensusLog<AuthorityId>| match log {
+	let filter = |log: ConsensusLog<ecdsa_crypto::AuthorityId>| match log {
 		ConsensusLog::AuthoritiesChange(validator_set) => Some(validator_set),
 		_ => None,
 	};

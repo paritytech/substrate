@@ -23,8 +23,8 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use log::warn;
 
 use beefy_primitives::{
-	crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
-    bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
+	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
+    bls_crypto::{Public as BLSPublic, Signature as BLSSignature, AuthorityId},
 	KEY_TYPE,
 };
 
@@ -38,10 +38,13 @@ use sp_application_crypto::Pair as app_crypto_Pair;
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate)  trait BeefyKeystore : From<Option<SyncCryptoStorePtr>> + Sync + Send {
-    type Signature: Encode + Decode + Debug;
+pub(crate)  trait BeefyKeystore<AuthorityId> : From<Option<SyncCryptoStorePtr>> + Sync + Send where
+	AuthorityId: Encode + Decode
+{
+    type Signature:  Encode + Decode + Debug;
     type Public: Encode + Decode + Debug;
-        fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public>;
+	
+        fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public>;
 
 	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<(Self::Signature),  error::Error>;
 
@@ -61,7 +64,9 @@ pub struct BeefyBLSKeystore(Option<SyncCryptoStorePtr>);
 
 pub struct BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>);
 
-impl BeefyKeystore for BeefyECDSAKeystore {
+impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyECDSAKeystore where
+	AuthorityId : Encode + Decode + Into<<BeefyECDSAKeystore as BeefyKeystore<AuthorityId>>::Public> + From<<BeefyECDSAKeystore as BeefyKeystore<AuthorityId>>::Public>,
+
 	type Public = ECDSAPublic;
 	type Signature = ECDSASignature;
 	/// Check if the keystore contains a private key for one of the public keys
@@ -70,7 +75,7 @@ impl BeefyKeystore for BeefyECDSAKeystore {
 	///
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
-	fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public> {
+	fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public> {
 		let store = self.0.clone()?;
 
 		// we do check for multiple private keys as a key store sanity check.
@@ -86,6 +91,7 @@ impl BeefyKeystore for BeefyECDSAKeystore {
 
 		public.get(0).cloned()
 	}
+
 	/// Sign `message` with the `public` key.
 	///
 	/// Note that `message` usually will be pre-hashed before being signed.
@@ -109,7 +115,7 @@ impl BeefyKeystore for BeefyECDSAKeystore {
 		Ok(sig)
 	}
 
-	/// Returns a vector of [`beefy_primitives::crypto::Public`] keys which are currently supported
+	/// Returns a vector of [`beefy_primitives::ecdsa_crypto::Public`] keys which are currently supported
 	/// (i.e. found in the keystore).
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
@@ -135,7 +141,9 @@ impl BeefyKeystore for BeefyECDSAKeystore {
 }
 
 //Implement BLSKeyStore
-impl BeefyKeystore for  BeefyBLSKeystore {
+impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyBLSKeystore where
+	AuthorityId : Encode + Decode,
+{	
 	type Public = BLSPublic;
 	type Signature = BLSSignature;
 	/// Check if the keystore contains a private key for one of the public keys
@@ -144,7 +152,7 @@ impl BeefyKeystore for  BeefyBLSKeystore {
 	///
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
-	fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public> {
+	fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public> {
 		let store = self.0.clone()?;
 
 		// we do check for multiple private keys as a key store sanity check.
@@ -184,7 +192,7 @@ impl BeefyKeystore for  BeefyBLSKeystore {
 		Ok(sig)
 	}
 
-	/// Returns a vector of [`beefy_primitives::crypto::Public`] keys which are currently supported
+	/// Returns a vector of [`beefy_primitives::ecdsa_crypto::Public`] keys which are currently supported
 	/// (i.e. found in the keystore).
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
@@ -215,7 +223,9 @@ impl BeefyBLSnECDSAKeystore {
     }
 }
 
-impl BeefyKeystore for BeefyBLSnECDSAKeystore {
+impl<AuthorityId> BeefyKeystore<AuthorityId> for BeefyBLSnECDSAKeystore where
+	AuthorityId : Encode + Decode,
+{	
         type Signature = (ECDSASignature,BLSSignature);
 	type Public = (ECDSAPublic,BLSPublic);
 	/// Check if the keystore contains a private key for one of the public keys
@@ -224,16 +234,16 @@ impl BeefyKeystore for BeefyBLSnECDSAKeystore {
 	///
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
-	fn authority_id(&self, keys: &[Self::Public]) -> Option<Self::Public> {
+	fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public> {
 		let (ecdsa_pubkeys, bls_pubkeys): (Vec<ECDSAPublic>, Vec<BLSPublic>) = keys.iter().cloned().unzip();
-		let own_ecdsa_key = self.both().0.authority_id(&ecdsa_pubkeys);
-		let own_bls_key  = self.both().1.authority_id(&bls_pubkeys);
+		let own_ecdsa_key = self.both().0.authority_id(&keys);
+		let own_bls_key  = self.both().1.authority_id(&bls_pubkeys); 
+		own_bls_key = 
 		if own_ecdsa_key == None || own_bls_key == None {
 			None
 		} else {
 			Some((own_ecdsa_key.unwrap(), own_bls_key.unwrap()))
 		}
-				
 	}
 
 	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<Self::Signature,  error::Error> {
@@ -307,18 +317,18 @@ pub mod tests {
 
 	impl Keyring {
 		/// Sign `msg`.
-		pub fn sign(self, msg: &[u8]) -> crypto::Signature {
+		pub fn sign(self, msg: &[u8]) -> ecdsa_crypto::Signature {
 			let msg = keccak_256(msg);
 			ecdsa::Pair::from(self).sign_prehashed(&msg).into()
 		}
 
 		/// Return key pair.
-		pub fn pair(self) -> crypto::Pair {
+		pub fn pair(self) -> ecdsa_crypto::Pair {
 			ecdsa::Pair::from_string(self.to_seed().as_str(), None).unwrap().into()
 		}
 
 		/// Return public key.
-		pub fn public(self) -> crypto::Public {
+		pub fn public(self) -> ecdsa_crypto::Public {
 			self.pair().public()
 		}
 
@@ -328,7 +338,7 @@ pub mod tests {
 		}
 	}
 
-	impl From<Keyring> for crypto::Pair {
+	impl From<Keyring> for ecdsa_crypto::Pair {
 		fn from(k: Keyring) -> Self {
 			k.pair()
 		}
@@ -372,35 +382,35 @@ pub mod tests {
 
 	#[test]
 	fn pair_works() {
-		let want = crypto::Pair::from_string("//Alice", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Alice", None).expect("Pair failed").to_raw_vec();
 		let got = Keyring::Alice.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Bob", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Bob", None).expect("Pair failed").to_raw_vec();
 		let got = Keyring::Bob.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Charlie", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Charlie", None).expect("Pair failed").to_raw_vec();
 		let got = Keyring::Charlie.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Dave", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Dave", None).expect("Pair failed").to_raw_vec();
 		let got = Keyring::Dave.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Eve", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Eve", None).expect("Pair failed").to_raw_vec();
 		let got = Keyring::Eve.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Ferdie", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Ferdie", None).expect("Pair failed").to_raw_vec();
 		let got = Keyring::Ferdie.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//One", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//One", None).expect("Pair failed").to_raw_vec();
 		let got = Keyring::One.pair().to_raw_vec();
 		assert_eq!(want, got);
 
-		let want = crypto::Pair::from_string("//Two", None).expect("Pair failed").to_raw_vec();
+		let want = ecdsa_crypto::Pair::from_string("//Two", None).expect("Pair failed").to_raw_vec();
 		let got = Keyring::Two.pair().to_raw_vec();
 		assert_eq!(want, got);
 	}
@@ -409,7 +419,7 @@ pub mod tests {
 	fn authority_id_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
+		let alice: ecdsa_crypto::Public =
 			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 				.ok()
 				.unwrap()
@@ -435,7 +445,7 @@ pub mod tests {
 	fn sign_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
+		let alice: ecdsa_crypto::Public =
 			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 				.ok()
 				.unwrap()
@@ -487,7 +497,7 @@ pub mod tests {
 	fn verify_works() {
 		let store = keystore();
 
-		let alice: crypto::Public =
+		let alice: ecdsa_crypto::Public =
 			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
 				.ok()
 				.unwrap()
@@ -508,7 +518,7 @@ pub mod tests {
 	// Note that we use keys with and without a seed for this test.
 	#[test]
 	fn public_keys_works() {
-		const TEST_TYPE: sp_application_crypto::KeyTypeId =
+		const TEST_TYPE: sp_application_ecdsa_crypto::KeyTypeId =
 			sp_application_crypto::KeyTypeId(*b"test");
 
 		let store = keystore();
@@ -528,8 +538,8 @@ pub mod tests {
 		let _ = add_key(KEY_TYPE, Some(Keyring::Dave.to_seed().as_str()));
 		let _ = add_key(KEY_TYPE, Some(Keyring::Eve.to_seed().as_str()));
 
-		let key1: crypto::Public = add_key(KEY_TYPE, None).into();
-		let key2: crypto::Public = add_key(KEY_TYPE, None).into();
+		let key1: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
+		let key2: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
 
 		let store: BeefyKeystore = Some(store).into();
 

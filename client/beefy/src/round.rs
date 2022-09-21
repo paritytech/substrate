@@ -24,7 +24,7 @@ use std::{
 use log::{debug, trace};
 
 use beefy_primitives::{
-	crypto::{Public, Signature},
+	ecdsa_crypto::{Public, Signature},
 	ValidatorSet, ValidatorSetId,
 };
 use sp_runtime::traits::{Block, NumberFor};
@@ -167,7 +167,7 @@ mod tests {
 	use sc_network_test::Block;
 	use sp_core::H256;
 
-	use beefy_primitives::{crypto::Public, ValidatorSet};
+	use beefy_primitives::{ecdsa_crypto::Public, ValidatorSet};
 
 	use super::{threshold, RoundTracker, Rounds};
 	use crate::keystore::tests::Keyring;

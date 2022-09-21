@@ -98,29 +98,33 @@ impl<B: Block> KnownVotes<B> {
 /// rejected/expired.
 ///
 ///All messaging is handled in a single BEEFY global topic.
-pub(crate) struct GossipValidator<B, BKS>
+pub(crate) struct GossipValidator<B, AuthId, BKS>
 where
 	B: Block,
-        BKS: BeefyKeystore
+        BKS: BeefyKeystore<AuthId>,
+	AuthId: Encode + Decode, 
 {
 	topic: B::Hash,
 	known_votes: RwLock<KnownVotes<B>>,
 	next_rebroadcast: Mutex<Instant>,
-	keystore_type: PhantomData<BKS>,
+	_keystore: PhantomData<BKS>,
+	_authid: PhantomData<AuthId>,
 	
 }
 
-impl<B, BKS> GossipValidator<B, BKS>
+impl<B, AuthId, BKS> GossipValidator<B, AuthId, BKS>
 where
 	B: Block,
-BKS: BeefyKeystore,
+	BKS: BeefyKeystore<AuthId>,
+	AuthId: From<<BKS as BeefyKeystore<AuthId>>::Public> + Into<<BKS as BeefyKeystore<AuthId>>::Public> + Encode + Decode, 
 {
-	pub fn new() -> GossipValidator<B, BKS> {
+	pub fn new() -> GossipValidator<B, AuthId, BKS> {
 		GossipValidator {
 			topic: topic::<B>(),
 			known_votes: RwLock::new(KnownVotes::new()),
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
-			keystore_type: PhantomData,
+			_keystore: PhantomData,
+			_auth_id: PhantomData,
 		}
 	}
 
@@ -141,10 +145,11 @@ BKS: BeefyKeystore,
 	}
 }
 
-impl<B, BKS> Validator<B> for GossipValidator<B, BKS>
+impl<B, AuthId, BKS> Validator<B> for GossipValidator<B, AuthId, BKS>
 where
 	B: Block,
-        BKS: BeefyKeystore
+        BKS: BeefyKeystore<AuthId>,
+	AuthId: From<<BKS as BeefyKeystore<AuthId>>::Public> + Into<<BKS as BeefyKeystore<AuthId>>::Public> + Encode + Decode + Sync + Send, 
 {
 	fn validate(
 		&self,

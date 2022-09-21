@@ -166,17 +166,13 @@ pub struct VoteMessage<Number, Id, Signature> {
 }
 
 sp_api::decl_runtime_apis! {
-	/// API necessary for BEEFY voters.
-	pub trait BeefyApi<AuthorityId,PublicKey> where AuthorityId: Encode + Decode,
-							PublicKey: Encode + Decode,
-	
+	/// API necessary for BEEFY voters with only ECDSA key.	
+	pub trait BeefyApi<AuthorityId> where AuthorityId : Encode + Decode
 	{
 		/// Return the current active BEEFY validator set
 		fn validator_set() -> Option<ValidatorSet<AuthorityId>>;
-
-		/// Return validator's public key given the authority id
-		fn validator_public_key(validator_id: AuthorityId) -> Option<PublicKey>;
 	}
+
 }
 
 #[cfg(test)]
