@@ -682,25 +682,24 @@ mod tests {
 	fn charging_works() {
 		clear_ext();
 
-		let mut meter = TestMeter::new(&ALICE, Some(1_000), 0).unwrap();
-		assert_eq!(meter.available(), 1_000);
+		let mut meter = TestMeter::new(&ALICE, Some(100), 0).unwrap();
+		assert_eq!(meter.available(), 100);
 
 		let mut nested0_info =
 			new_info(StorageInfo { bytes: 100, items: 5, bytes_deposit: 100, items_deposit: 10 });
 		let mut nested0 = meter.nested();
 		nested0.charge(&Diff {
-			bytes_added: 10,
+			bytes_added: 108,
 			bytes_removed: 5,
 			items_added: 1,
 			items_removed: 2,
 		});
-		nested0.charge(&Diff { bytes_removed: 1, ..Default::default() });
+		nested0.charge(&Diff { bytes_removed: 99, ..Default::default() });
 
 		let mut nested1_info =
 			new_info(StorageInfo { bytes: 100, items: 10, bytes_deposit: 100, items_deposit: 20 });
 		let mut nested1 = nested0.nested();
 		nested1.charge(&Diff { items_removed: 5, ..Default::default() });
-		nested1.enforce_limit(Some(&mut nested1_info)).unwrap();
 		nested0.absorb(nested1, &CHARLIE, Some(&mut nested1_info));
 
 		let mut nested2_info =
@@ -709,6 +708,7 @@ mod tests {
 		nested2.charge(&Diff { items_removed: 7, ..Default::default() });
 		nested0.absorb(nested2, &CHARLIE, Some(&mut nested2_info));
 
+        nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
 		meter.absorb(nested0, &BOB, Some(&mut nested0_info));
 
 		meter.into_deposit(&ALICE);
