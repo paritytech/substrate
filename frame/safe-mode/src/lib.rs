@@ -17,22 +17,28 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+#[cfg(test)]
+pub mod mock;
+#[cfg(test)]
+mod tests;
+pub mod weights;
+
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		CallMetadata, Contains, Currency, Defensive, GetCallMetadata, PalletInfoAccess,
 		ReservableCurrency,
 	},
+	weights::Weight,
 };
 use frame_system::pallet_prelude::*;
 use sp_runtime::traits::Saturating;
 use sp_std::{convert::TryInto, prelude::*};
 
-mod benchmarking;
-mod mock;
-mod tests;
-
 pub use pallet::*;
+pub use weights::*;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -97,7 +103,7 @@ pub mod pallet {
 		type RepayOrigin: EnsureOrigin<Self::Origin>;
 
 		// Weight information for extrinsics in this pallet.
-		//type WeightInfo: WeightInfo;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -149,10 +155,12 @@ pub mod pallet {
 	/// This is set to `None` if the safe-mode is disabled.
 	/// The safe-mode is automatically disabled when the current block number is greater than this.
 	#[pallet::storage]
+	#[pallet::getter(fn enabled)]
 	pub type Enabled<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
 
 	/// Holds the stake that was reserved from a user at a specific block number.
 	#[pallet::storage]
+	#[pallet::getter(fn stakes)]
 	pub type Stakes<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
@@ -196,7 +204,8 @@ pub mod pallet {
 		/// Reserves `EnableStakeAmount` from the caller's account.
 		/// Errors if the safe-mode is already enabled.
 		/// Can be permanently disabled by configuring `EnableStakeAmount` to `None`.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::enable())]
+		// #[pallet::weight(0)]
 		pub fn enable(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
