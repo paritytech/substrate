@@ -56,7 +56,7 @@ use sp_storage::{StorageData, StorageKey};
 /// # 	type BaseCallFilter = ();
 /// # 	type BlockWeights = ();
 /// # 	type BlockLength = ();
-/// # 	type Origin = Origin;
+/// # 	type RuntimeOrigin = RuntimeOrigin;
 /// # 	type RuntimeCall = RuntimeCall;
 /// # 	type Index = u64;
 /// # 	type BlockNumber = u64;

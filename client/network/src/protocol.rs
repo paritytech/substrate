@@ -41,7 +41,9 @@ use message::{
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_client_api::HeaderBackend;
-use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
+use sc_consensus::import_queue::{
+	BlockImportError, BlockImportStatus, IncomingBlock, RuntimeOrigin,
+};
 use sc_network_common::{
 	config::ProtocolId,
 	protocol::ProtocolName,
@@ -627,6 +629,7 @@ where
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(OnBlockData::Request(peer, req)) =>
 					prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
+				Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -974,6 +977,7 @@ where
 				CustomMessageOutcome::BlockImport(origin, blocks),
 			Ok(OnBlockData::Request(peer, req)) =>
 				prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
+			Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
 			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -1255,7 +1259,7 @@ fn prepare_warp_sync_request<B: BlockT>(
 #[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
-	JustificationImport(Origin, B::Hash, NumberFor<B>, Justifications),
+	JustificationImport(RuntimeOrigin, B::Hash, NumberFor<B>, Justifications),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,

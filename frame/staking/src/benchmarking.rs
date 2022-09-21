@@ -953,7 +953,7 @@ benchmarks! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{Balances, ExtBuilder, Origin, Staking, Test};
+	use crate::mock::{Balances, ExtBuilder, RuntimeOrigin, Staking, Test};
 	use frame_support::assert_ok;
 
 	#[test]
@@ -1000,7 +1000,11 @@ mod tests {
 			let current_era = CurrentEra::<Test>::get().unwrap();
 
 			let original_free_balance = Balances::free_balance(&validator_stash);
-			assert_ok!(Staking::payout_stakers(Origin::signed(1337), validator_stash, current_era));
+			assert_ok!(Staking::payout_stakers(
+				RuntimeOrigin::signed(1337),
+				validator_stash,
+				current_era
+			));
 			let new_free_balance = Balances::free_balance(&validator_stash);
 
 			assert!(original_free_balance < new_free_balance);

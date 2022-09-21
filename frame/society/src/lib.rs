@@ -421,10 +421,10 @@ pub mod pallet {
 		type MaxLockDuration: Get<Self::BlockNumber>;
 
 		/// The origin that is allowed to call `found`.
-		type FounderSetOrigin: EnsureOrigin<Self::Origin>;
+		type FounderSetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin that is allowed to make suspension judgements.
-		type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>;
+		type SuspensionJudgementOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The number of blocks between membership challenges.
 		#[pallet::constant]
@@ -1268,19 +1268,19 @@ pub mod pallet {
 
 /// Simple ensure origin struct to filter for the founder account.
 pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> EnsureOrigin<T::Origin> for EnsureFounder<T> {
+impl<T: Config> EnsureOrigin<T::RuntimeOrigin> for EnsureFounder<T> {
 	type Success = T::AccountId;
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		o.into().and_then(|o| match (o, Founder::<T>::get()) {
 			(frame_system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
-			(r, _) => Err(T::Origin::from(r)),
+			(r, _) => Err(T::RuntimeOrigin::from(r)),
 		})
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let founder = Founder::<T>::get().ok_or(())?;
-		Ok(T::Origin::from(frame_system::RawOrigin::Signed(founder)))
+		Ok(T::RuntimeOrigin::from(frame_system::RawOrigin::Signed(founder)))
 	}
 }
 
