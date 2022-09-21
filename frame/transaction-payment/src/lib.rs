@@ -237,14 +237,14 @@ where
 }
 
 /// A struct to make the fee multiplier a constant
-pub struct ConstFeeMultiplier<M: Get<Multiplier>, X: Get<Multiplier>>(sp_std::marker::PhantomData<(M, X)>);
+pub struct ConstFeeMultiplier<M: Get<Multiplier>>(sp_std::marker::PhantomData<M>);
 
-impl<M: Get<Multiplier>, X: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M, X> {
+impl<M: Get<Multiplier>> MultiplierUpdate for ConstFeeMultiplier<M> {
 	fn min() -> Multiplier {
 		M::get()
 	}
 	fn max() -> Multiplier {
-		X::get()
+		M::get()
 	}
 	fn target() -> Perquintill {
 		Default::default()
@@ -254,10 +254,9 @@ impl<M: Get<Multiplier>, X: Get<Multiplier>> MultiplierUpdate for ConstFeeMultip
 	}
 }
 
-impl<M, X> Convert<Multiplier, Multiplier> for ConstFeeMultiplier<M, X>
+impl<M> Convert<Multiplier, Multiplier> for ConstFeeMultiplier<M>
 where
 	M: Get<Multiplier>,
-	X: Get<Multiplier>,
 {
 	fn convert(_previous: Multiplier) -> Multiplier {
 		Self::min()
