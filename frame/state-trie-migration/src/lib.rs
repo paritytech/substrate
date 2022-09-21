@@ -446,10 +446,10 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Origin that can control the configurations of this pallet.
-		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
+		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Filter on which origin that trigger the manual migrations.
-		type SignedFilter: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type SignedFilter: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -1084,7 +1084,7 @@ mod mock {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = ();
 		type BlockLength = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type RuntimeCall = RuntimeCall;
 		type Index = u64;
 		type BlockNumber = u32;
@@ -1293,7 +1293,7 @@ mod test {
 
 			// fails if the top key is too long.
 			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				MigrationLimits { item: 50, size: 1 << 20 },
 				Bounded::max_value(),
 				MigrationProcess::<Test>::get()
@@ -1328,7 +1328,7 @@ mod test {
 
 			// fails if the top key is too long.
 			frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				MigrationLimits { item: 50, size: 1 << 20 },
 				Bounded::max_value(),
 				MigrationProcess::<Test>::get()
@@ -1457,7 +1457,7 @@ mod test {
 			// can't submit if limit is too high.
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					MigrationLimits { item: 5, size: sp_runtime::traits::Bounded::max_value() },
 					Bounded::max_value(),
 					MigrationProcess::<Test>::get()
@@ -1468,7 +1468,7 @@ mod test {
 			// can't submit if poor.
 			frame_support::assert_err!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(2),
+					RuntimeOrigin::signed(2),
 					MigrationLimits { item: 5, size: 100 },
 					100,
 					MigrationProcess::<Test>::get()
@@ -1479,7 +1479,7 @@ mod test {
 			// can't submit with bad witness.
 			frame_support::assert_err_ignore_postinfo!(
 				StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					MigrationLimits { item: 5, size: 100 },
 					100,
 					MigrationTask {
@@ -1500,7 +1500,7 @@ mod test {
 				assert!(result.is_ok());
 
 				frame_support::assert_ok!(StateTrieMigration::continue_migrate(
-					Origin::signed(1),
+					RuntimeOrigin::signed(1),
 					StateTrieMigration::signed_migration_max_limits().unwrap(),
 					task.dyn_size,
 					MigrationProcess::<Test>::get()
@@ -1523,7 +1523,7 @@ mod test {
 		let correct_witness = 3 + sp_core::storage::TRIE_VALUE_NODE_THRESHOLD * 3 + 1 + 2 + 3;
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness,
 			));
@@ -1536,7 +1536,7 @@ mod test {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			// works if the witness is an overestimate
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness + 99,
 			));
@@ -1551,7 +1551,7 @@ mod test {
 
 			// note that we don't expect this to be a noop -- we do slash.
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_top(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				vec![b"key1".to_vec(), b"key2".to_vec(), b"key3".to_vec()],
 				correct_witness - 1,
 			),);
@@ -1569,7 +1569,7 @@ mod test {
 	fn custom_migrate_child_works() {
 		new_test_ext(StateVersion::V0, true, None, None).execute_with(|| {
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				55 + 66,
@@ -1585,7 +1585,7 @@ mod test {
 
 			// note that we don't expect this to be a noop -- we do slash.
 			frame_support::assert_ok!(StateTrieMigration::migrate_custom_child(
-				Origin::signed(1),
+				RuntimeOrigin::signed(1),
 				StateTrieMigration::childify("chk1"),
 				vec![b"key1".to_vec(), b"key2".to_vec()],
 				999999, // wrong witness
