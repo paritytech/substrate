@@ -362,7 +362,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 		const MAX_WASM_PAGES: u64 = 0x10000;
 
 		let memory_pages = match semantics.heap_pages {
-			HeapPages::Extra(extra) => extra as u64,
+			HeapPages::Extra(extra) => MAX_WASM_PAGES,
 			HeapPages::Max(max) => max as u64,
 			HeapPages::Dynamic => MAX_WASM_PAGES,
 		};

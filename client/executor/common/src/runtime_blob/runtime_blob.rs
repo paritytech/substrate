@@ -180,11 +180,11 @@ impl RuntimeBlob {
 		}
 		for memory_ty in memory_section.entries_mut() {
 			let min = memory_ty.limits().initial();
-			let max = match heap_pages {
+			let max = dbg!(match heap_pages {
 				HeapPages::Dynamic => None,
 				HeapPages::Max(max) => Some(max as _),
 				HeapPages::Extra(extra) => Some(extra as u32 + memory_ty.limits().initial()),
-			};
+			});
 			*memory_ty = MemoryType::new(min, max);
 		}
 		Ok(())

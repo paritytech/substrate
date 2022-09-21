@@ -58,6 +58,10 @@ impl MemoryT for MemoryWrapper<'_> {
 		self.0.current_size().0 as _
 	}
 
+	fn max_pages(&self) -> Option<u32> {
+		self.0.maximum().map(|p| p.0 as _)
+	}
+
 	fn grow(&mut self, additional: u32) -> Result<(), ()> {
 		self.0
 			.grow(Pages(additional as _))
@@ -447,15 +451,15 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 						_ => {},
 					};
 
-					let memory = MemoryInstance::alloc(
-						Pages(
-							memory_type.initial() as usize +
-								self.heap_pages.maximum().unwrap_or(1024),
-						),
-						self.heap_pages
-							.maximum()
-							.map(|m| Pages(memory_type.initial() as usize + m)),
-					)?;
+					let min = Pages(memory_type.initial() as usize);
+					let max = match self.heap_pages {
+						HeapPages::Dynamic => None,
+						HeapPages::Extra(extra) =>
+							Some(Pages(memory_type.initial() as usize + extra)),
+						HeapPages::Max(max) => Some(Pages(max)),
+					};
+
+					let memory = MemoryInstance::alloc(dbg!(min), dbg!(max))?;
 
 					*memory_ref = Some(memory.clone());
 					Ok(memory)

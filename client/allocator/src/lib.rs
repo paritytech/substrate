@@ -33,4 +33,5 @@ pub trait Memory {
 	fn with_access<R>(&self, run: impl FnOnce(&[u8]) -> R) -> R;
 	fn grow(&mut self, additional: u32) -> Result<(), ()>;
 	fn pages(&self) -> u32;
+	fn max_pages(&self) -> Option<u32>;
 }

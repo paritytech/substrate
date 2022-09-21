@@ -153,6 +153,10 @@ impl<C: AsContextMut> MemoryT for MemoryWrapper<'_, C> {
 	fn pages(&self) -> u32 {
 		self.0.size(&self.1) as u32
 	}
+
+	fn max_pages(&self) -> Option<u32> {
+		self.0.ty(&self.1).maximum().map(|p| p as _)
+	}
 }
 
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
