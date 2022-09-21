@@ -743,7 +743,6 @@ impl<'a> OverlayedExtensions<'a> {
 mod tests {
 	use super::*;
 	use crate::{ext::Ext, InMemoryBackend};
-	use hex_literal::hex;
 	use sp_core::{traits::Externalities, Blake2Hasher};
 	use std::collections::BTreeMap;
 
@@ -870,10 +869,11 @@ mod tests {
 
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-		const ROOT: [u8; 32] =
-			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
+		let root = array_bytes::hex2bytes_unchecked(
+			"39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa",
+		);
 
-		assert_eq!(&ext.storage_root(state_version)[..], &ROOT);
+		assert_eq!(&ext.storage_root(state_version)[..], &root);
 	}
 
 	#[test]

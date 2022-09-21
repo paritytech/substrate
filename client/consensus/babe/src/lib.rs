@@ -67,7 +67,6 @@
 #![warn(missing_docs)]
 
 use std::{
-	borrow::Cow,
 	collections::{HashMap, HashSet},
 	future::Future,
 	pin::Pin,
@@ -857,10 +856,8 @@ where
 		import_block.body = Some(body);
 		import_block.state_action =
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
-		import_block.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		import_block
+			.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<B> { epoch_descriptor });
 
 		Ok(import_block)
 	}
@@ -1272,9 +1269,9 @@ where
 
 				block.header = pre_header;
 				block.post_digests.push(verified_info.seal);
-				block.intermediates.insert(
-					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<Block> { epoch_descriptor }) as Box<_>,
+				block.insert_intermediate(
+					INTERMEDIATE_KEY,
+					BabeIntermediate::<Block> { epoch_descriptor },
 				);
 				block.post_hash = Some(hash);
 
@@ -1426,7 +1423,7 @@ where
 		match self.client.status(BlockId::Hash(hash)) {
 			Ok(sp_blockchain::BlockStatus::InChain) => {
 				// When re-importing existing block strip away intermediates.
-				let _ = block.take_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
+				let _ = block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY);
 				block.fork_choice = Some(ForkChoiceStrategy::Custom(false));
 				return self.inner.import_block(block, new_cache).await.map_err(Into::into)
 			},
@@ -1495,7 +1492,7 @@ where
 				};
 
 				let intermediate =
-					block.take_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY)?;
+					block.remove_intermediate::<BabeIntermediate<Block>>(INTERMEDIATE_KEY)?;
 
 				let epoch_descriptor = intermediate.epoch_descriptor;
 				let first_in_epoch = parent_slot < epoch_descriptor.start_slot();

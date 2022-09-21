@@ -25,6 +25,7 @@ pub(crate) mod gossip;
 pub(crate) mod peers;
 
 pub(crate) mod beefy_protocol_name {
+	use array_bytes::bytes2hex;
 	use sc_network::ProtocolName;
 
 	/// BEEFY votes gossip protocol name suffix.
@@ -42,10 +43,11 @@ pub(crate) mod beefy_protocol_name {
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
 	) -> ProtocolName {
+		let genesis_hash = genesis_hash.as_ref();
 		if let Some(fork_id) = fork_id {
-			format!("/{}/{}{}", hex::encode(genesis_hash), fork_id, GOSSIP_NAME).into()
+			format!("/{}/{}{}", bytes2hex("", genesis_hash), fork_id, GOSSIP_NAME).into()
 		} else {
-			format!("/{}{}", hex::encode(genesis_hash), GOSSIP_NAME).into()
+			format!("/{}{}", bytes2hex("", genesis_hash), GOSSIP_NAME).into()
 		}
 	}
 
@@ -54,10 +56,11 @@ pub(crate) mod beefy_protocol_name {
 		genesis_hash: Hash,
 		fork_id: Option<&str>,
 	) -> ProtocolName {
+		let genesis_hash = genesis_hash.as_ref();
 		if let Some(fork_id) = fork_id {
-			format!("/{}/{}{}", hex::encode(genesis_hash), fork_id, JUSTIFICATIONS_NAME).into()
+			format!("/{}/{}{}", bytes2hex("", genesis_hash), fork_id, JUSTIFICATIONS_NAME).into()
 		} else {
-			format!("/{}{}", hex::encode(genesis_hash), JUSTIFICATIONS_NAME).into()
+			format!("/{}{}", bytes2hex("", genesis_hash), JUSTIFICATIONS_NAME).into()
 		}
 	}
 }
@@ -86,7 +89,7 @@ mod tests {
 		use beefy_protocol_name::gossip_protocol_name;
 		// Create protocol name using random genesis hash.
 		let genesis_hash = H256::random();
-		let expected = format!("/{}/beefy/1", hex::encode(genesis_hash));
+		let expected = format!("/{}/beefy/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
 		let proto_name = gossip_protocol_name(&genesis_hash, None);
 		assert_eq!(proto_name.to_string(), expected);
 

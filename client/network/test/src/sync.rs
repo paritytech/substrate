@@ -1192,7 +1192,7 @@ fn warp_sync() {
 		..Default::default()
 	});
 	let gap_end = net.peer(0).push_blocks(63, false);
-	net.peer(0).push_blocks(1, false);
+	let target = net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(64, false);
 	net.peer(2).push_blocks(64, false);
 	// Wait for peer 1 to sync state.
@@ -1203,7 +1203,7 @@ fn warp_sync() {
 	// Wait for peer 1 download block history
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(3).has_block(&gap_end) {
+		if net.peer(3).has_body(&gap_end) && net.peer(3).has_body(&target) {
 			Poll::Ready(())
 		} else {
 			Poll::Pending

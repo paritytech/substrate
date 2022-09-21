@@ -70,7 +70,7 @@ use sc_network_sync::{
 use sc_service::client::Client;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
-	HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
+	Backend as BlockchainBackend, HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
 };
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
@@ -539,6 +539,13 @@ where
 		self.backend
 			.as_ref()
 			.map(|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some())
+			.unwrap_or(false)
+	}
+
+	pub fn has_body(&self, hash: &H256) -> bool {
+		self.backend
+			.as_ref()
+			.map(|backend| backend.blockchain().body(BlockId::hash(*hash)).unwrap().is_some())
 			.unwrap_or(false)
 	}
 }

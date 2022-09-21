@@ -43,7 +43,7 @@ pub struct PalletCmd {
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
-	#[clap(short, long, default_value = "1")]
+	#[clap(short, long, default_value = "2")]
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.

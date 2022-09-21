@@ -138,7 +138,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
-pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
+pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::RuntimeOrigin;
 
 /// Main entry point for certain runtime actions as e.g. `execute_block`.
 ///
@@ -287,10 +287,15 @@ where
 	///
 	/// This should only be used for testing.
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		// ensure both `pre_upgrade` and `post_upgrade` won't change the storage root
+		let state = {
+			let _guard = frame_support::StorageNoopGuard::default();
+			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap()
+		};
 		let weight = Self::execute_on_runtime_upgrade();
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
-
+		let _guard = frame_support::StorageNoopGuard::default();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(state)
+			.unwrap();
 		Ok(weight)
 	}
 }
@@ -597,8 +602,6 @@ where
 mod tests {
 	use super::*;
 
-	use hex_literal::hex;
-
 	use sp_core::H256;
 	use sp_runtime::{
 		generic::{DigestItem, Era},
@@ -784,7 +787,7 @@ mod tests {
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type RuntimeCall = RuntimeCall;
 		type BlockNumber = u64;
@@ -942,11 +945,15 @@ mod tests {
 	fn block_import_works() {
 		block_import_works_inner(
 			new_test_ext_v0(1),
-			hex!("1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5").into(),
+			array_bytes::hex_n_into_unchecked(
+				"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5",
+			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
-			hex!("75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5").into(),
+			array_bytes::hex_n_into_unchecked(
+				"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5",
+			),
 		);
 	}
 	fn block_import_works_inner(mut ext: sp_io::TestExternalities, state_root: H256) {
@@ -956,10 +963,9 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root,
-					extrinsics_root: hex!(
-						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
-					)
-					.into(),
+					extrinsics_root: array_bytes::hex_n_into_unchecked(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+					),
 					digest: Digest { logs: vec![] },
 				},
 				extrinsics: vec![],
@@ -976,10 +982,9 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: [0u8; 32].into(),
-					extrinsics_root: hex!(
-						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
-					)
-					.into(),
+					extrinsics_root: array_bytes::hex_n_into_unchecked(
+						"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+					),
 					digest: Digest { logs: vec![] },
 				},
 				extrinsics: vec![],
@@ -995,10 +1000,9 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!(
-						"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5"
-					)
-					.into(),
+					state_root: array_bytes::hex_n_into_unchecked(
+						"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5",
+					),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![] },
 				},
