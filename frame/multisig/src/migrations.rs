@@ -43,18 +43,15 @@ pub mod v1 {
 				return T::DbWeight::get().reads(1)
 			}
 
-			let mut calls_read = 0u64;
-
 			// TODO: Assuming this is one write and a read per record
 			Calls::<T>::drain().for_each(|(_call_hash, (_data, caller, deposit))| {
-				calls_read += 1;
 				//TODO: What's the weight of one unreserve?
 				T::Currency::unreserve(&caller, deposit);
 			});
 
 			current.put::<Pallet<T>>();
 
-			T::DbWeight::get().reads_writes(calls_read + 1, 2)
+			<T as frame_system::Config>::BlockWeights::get().max_block
 		}
 
 		#[cfg(feature = "try-runtime")]
