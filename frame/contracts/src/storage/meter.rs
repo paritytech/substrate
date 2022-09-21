@@ -708,7 +708,7 @@ mod tests {
 		nested2.charge(&Diff { items_removed: 7, ..Default::default() });
 		nested0.absorb(nested2, &CHARLIE, Some(&mut nested2_info));
 
-        nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
+		nested0.enforce_limit(Some(&mut nested0_info)).unwrap();
 		meter.absorb(nested0, &BOB, Some(&mut nested0_info));
 
 		meter.into_deposit(&ALICE);
