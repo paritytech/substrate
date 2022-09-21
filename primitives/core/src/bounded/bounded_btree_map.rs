@@ -17,7 +17,7 @@
 
 //! Traits, types and structs to support a bounded BTreeMap.
 
-use crate::traits::{Get, TryCollect};
+use crate::{Get, TryCollect};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{borrow::Borrow, collections::btree_map::BTreeMap, marker::PhantomData, ops::Deref};
 
@@ -363,7 +363,7 @@ where
 #[cfg(test)]
 pub mod test {
 	use super::*;
-	use crate::traits::ConstU32;
+	use crate::ConstU32;
 
 	fn map_from_keys<K>(keys: &[K]) -> BTreeMap<K, ()>
 	where

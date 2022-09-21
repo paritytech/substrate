@@ -23,7 +23,6 @@ mod block_import;
 mod sync;
 
 use std::{
-	borrow::Cow,
 	collections::HashMap,
 	marker::PhantomData,
 	pin::Pin,
@@ -51,13 +50,14 @@ use sc_consensus::{
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role,
-		SyncMode, TransportConfig,
+		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,
+		TransportConfig,
 	},
 	Multiaddr, NetworkService, NetworkWorker,
 };
-pub use sc_network_common::config::ProtocolId;
 use sc_network_common::{
+	config::{MultiaddrWithPeerId, ProtocolId},
+	protocol::ProtocolName,
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
@@ -69,7 +69,7 @@ use sc_network_sync::{
 use sc_service::client::Client;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
-	HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
+	Backend as BlockchainBackend, HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
 };
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
@@ -540,6 +540,13 @@ where
 			.map(|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some())
 			.unwrap_or(false)
 	}
+
+	pub fn has_body(&self, hash: &H256) -> bool {
+		self.backend
+			.as_ref()
+			.map(|backend| backend.blockchain().body(BlockId::hash(*hash)).unwrap().is_some())
+			.unwrap_or(false)
+	}
 }
 
 pub trait BlockImportAdapterFull:
@@ -682,7 +689,7 @@ pub struct FullPeerConfig {
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
-	pub notifications_protocols: Vec<Cow<'static, str>>,
+	pub notifications_protocols: Vec<ProtocolName>,
 	/// The indices of the peers the peer should be connected to.
 	///
 	/// If `None`, it will be connected to all other peers.
@@ -887,6 +894,7 @@ where
 			state_request_protocol_config,
 			light_client_request_protocol_config,
 			warp_sync_protocol_config: Some(warp_protocol_config),
+			request_response_protocol_configs: Vec::new(),
 		})
 		.unwrap();
 

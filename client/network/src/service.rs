@@ -29,8 +29,7 @@
 
 use crate::{
 	behaviour::{self, Behaviour, BehaviourOut},
-	bitswap::Bitswap,
-	config::{parse_str_addr, Params, TransportConfig},
+	config::{Params, TransportConfig},
 	discovery::DiscoveryConfig,
 	error::Error,
 	network_state::{
@@ -59,10 +58,13 @@ use libp2p::{
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
 use parking_lot::Mutex;
-use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
-	protocol::event::{DhtEvent, Event},
+	config::MultiaddrWithPeerId,
+	protocol::{
+		event::{DhtEvent, Event},
+		ProtocolName,
+	},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		NetworkDHTProvider, NetworkEventStream, NetworkNotification, NetworkPeers, NetworkSigner,
@@ -74,10 +76,9 @@ use sc_network_common::{
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
-use sp_blockchain::{HeaderBackend, HeaderMetadata};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
-	borrow::Cow,
 	cmp,
 	collections::{HashMap, HashSet},
 	fs, iter,
@@ -123,7 +124,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B, H>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
-	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, Cow<'static, str>), NotificationsSink>>>,
+	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
 	notifications_sizes_metric: Option<HistogramVec>,
@@ -136,13 +137,7 @@ impl<B, H, Client> NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Creates the network service.
 	///
@@ -155,22 +150,16 @@ where
 		let local_public = local_identity.public();
 		let local_peer_id = local_public.to_peer_id();
 
+		params
+			.network_config
+			.request_response_protocols
+			.extend(params.request_response_protocol_configs);
+
 		params.network_config.boot_nodes = params
 			.network_config
 			.boot_nodes
 			.into_iter()
-			.filter(|boot_node| {
-				if boot_node.peer_id == local_peer_id {
-					warn!(
-						target: "sub-libp2p",
-						"Local peer ID used in bootnode, ignoring: {}",
-						boot_node,
-					);
-					false
-				} else {
-					true
-				}
-			})
+			.filter(|boot_node| boot_node.peer_id != local_peer_id)
 			.collect();
 		params.network_config.default_peers_set.reserved_nodes = params
 			.network_config
@@ -230,7 +219,7 @@ where
 			params.protocol_id.clone(),
 			params
 				.chain
-				.block_hash(0u32.into())
+				.hash(0u32.into())
 				.ok()
 				.flatten()
 				.expect("Genesis block exists; qed"),
@@ -384,7 +373,6 @@ where
 			};
 
 			let behaviour = {
-				let bitswap = params.network_config.ipfs_server.then(|| Bitswap::new(params.chain));
 				let result = Behaviour::new(
 					protocol,
 					user_agent,
@@ -393,7 +381,6 @@ where
 					params.block_request_protocol_config,
 					params.state_request_protocol_config,
 					params.warp_sync_protocol_config,
-					bitswap,
 					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
@@ -712,9 +699,8 @@ where
 		self.service.remove_reserved_peer(peer);
 	}
 
-	/// Adds a `PeerId` and its address as reserved. The string should encode the address
-	/// and peer ID of the remote node.
-	pub fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
+	/// Adds a `PeerId` and its `Multiaddr` as reserved.
+	pub fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		self.service.add_reserved_peer(peer)
 	}
 
@@ -910,7 +896,7 @@ where
 		self.peerset.report_peer(who, cost_benefit);
 	}
 
-	fn disconnect_peer(&self, who: PeerId, protocol: Cow<'static, str>) {
+	fn disconnect_peer(&self, who: PeerId, protocol: ProtocolName) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::DisconnectPeer(who, protocol));
 	}
 
@@ -922,17 +908,16 @@ where
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SetReservedOnly(true));
 	}
 
-	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
-		let (peer_id, addr) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
+	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		// Make sure the local peer ID is never added to the PSM.
-		if peer_id == self.local_peer_id {
+		if peer.peer_id == self.local_peer_id {
 			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
 		}
 
 		let _ = self
 			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer_id, addr));
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer_id));
+			.unbounded_send(ServiceToWorkerMsg::AddKnownAddress(peer.peer_id, peer.multiaddr));
+		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AddReserved(peer.peer_id));
 		Ok(())
 	}
 
@@ -942,7 +927,7 @@ where
 
 	fn set_reserved_peers(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		let peers_addrs = self.split_multiaddr_and_peer_id(peers)?;
@@ -973,7 +958,7 @@ where
 
 	fn add_peers_to_reserved_set(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
@@ -997,7 +982,7 @@ where
 		Ok(())
 	}
 
-	fn remove_peers_from_reserved_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+	fn remove_peers_from_reserved_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
 		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
@@ -1007,7 +992,7 @@ where
 
 	fn add_to_peers_set(
 		&self,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		let peers = self.split_multiaddr_and_peer_id(peers)?;
@@ -1031,7 +1016,7 @@ where
 		Ok(())
 	}
 
-	fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peers: Vec<PeerId>) {
+	fn remove_from_peers_set(&self, protocol: ProtocolName, peers: Vec<PeerId>) {
 		for peer_id in peers.into_iter() {
 			let _ = self
 				.to_worker
@@ -1061,7 +1046,7 @@ where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	fn write_notification(&self, target: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+	fn write_notification(&self, target: PeerId, protocol: ProtocolName, message: Vec<u8>) {
 		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
 		// `peers_notifications_sinks` mutex as soon as possible.
 		let sink = {
@@ -1098,7 +1083,7 @@ where
 	fn notification_sender(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSenderT>, NotificationSenderError> {
 		// We clone the `NotificationsSink` in order to be able to unlock the network-wide
 		// `peers_notifications_sinks` mutex as soon as possible.
@@ -1129,7 +1114,7 @@ where
 	async fn request(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		connect: IfDisconnected,
 	) -> Result<Vec<u8>, RequestFailure> {
@@ -1149,7 +1134,7 @@ where
 	fn start_request(
 		&self,
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
@@ -1200,7 +1185,7 @@ pub struct NotificationSender {
 	sink: NotificationsSink,
 
 	/// Name of the protocol on the wire.
-	protocol_name: Cow<'static, str>,
+	protocol_name: ProtocolName,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1233,7 +1218,7 @@ pub struct NotificationSenderReady<'a> {
 	peer_id: &'a PeerId,
 
 	/// Name of the protocol on the wire.
-	protocol_name: &'a Cow<'static, str>,
+	protocol_name: &'a ProtocolName,
 
 	/// Field extracted from the [`Metrics`] struct and necessary to report the
 	/// notifications-related metrics.
@@ -1277,16 +1262,16 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	AddReserved(PeerId),
 	RemoveReserved(PeerId),
 	SetReserved(HashSet<PeerId>),
-	SetPeersetReserved(Cow<'static, str>, HashSet<PeerId>),
-	AddSetReserved(Cow<'static, str>, PeerId),
-	RemoveSetReserved(Cow<'static, str>, PeerId),
-	AddToPeersSet(Cow<'static, str>, PeerId),
-	RemoveFromPeersSet(Cow<'static, str>, PeerId),
+	SetPeersetReserved(ProtocolName, HashSet<PeerId>),
+	AddSetReserved(ProtocolName, PeerId),
+	RemoveSetReserved(ProtocolName, PeerId),
+	AddToPeersSet(ProtocolName, PeerId),
+	RemoveFromPeersSet(ProtocolName, PeerId),
 	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
 	Request {
 		target: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		request: Vec<u8>,
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 		connect: IfDisconnected,
@@ -1297,7 +1282,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	NetworkState {
 		pending_response: oneshot::Sender<Result<NetworkState, RequestFailure>>,
 	},
-	DisconnectPeer(PeerId, Cow<'static, str>),
+	DisconnectPeer(PeerId, ProtocolName),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
 }
 
@@ -1309,13 +1294,7 @@ pub struct NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
@@ -1339,7 +1318,7 @@ where
 	boot_node_ids: Arc<HashSet<PeerId>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
-	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, Cow<'static, str>), NotificationsSink>>>,
+	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
 	/// Controller for the handler of incoming and outgoing transactions.
 	tx_handler_controller: transactions::TransactionsHandlerController<H>,
 }
@@ -1348,13 +1327,7 @@ impl<B, H, Client> Future for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	type Output = ();
 
@@ -1387,7 +1360,6 @@ where
 				Poll::Ready(None) => return Poll::Ready(()),
 				Poll::Pending => break,
 			};
-
 			match msg {
 				ServiceToWorkerMsg::AnnounceBlock(hash, data) => this
 					.network_service
@@ -1490,7 +1462,7 @@ where
 					.network_service
 					.behaviour_mut()
 					.user_protocol_mut()
-					.disconnect_peer(&who, &protocol_name),
+					.disconnect_peer(&who, protocol_name),
 				ServiceToWorkerMsg::NewBestBlockImported(hash, number) => this
 					.network_service
 					.behaviour_mut()
@@ -1775,14 +1747,10 @@ where
 						let reason = match cause {
 							Some(ConnectionError::IO(_)) => "transport-error",
 							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::B(EitherError::A(
-									PingFailure::Timeout,
-								))),
+								EitherError::B(EitherError::A(PingFailure::Timeout)),
 							)))) => "ping-timeout",
 							Some(ConnectionError::Handler(EitherError::A(EitherError::A(
-								EitherError::A(EitherError::A(
-									NotifsHandlerError::SyncNotificationsClogged,
-								)),
+								EitherError::A(NotifsHandlerError::SyncNotificationsClogged),
 							)))) => "sync-notifications-clogged",
 							Some(ConnectionError::Handler(_)) => "protocol-error",
 							Some(ConnectionError::KeepAliveTimeout) => "keep-alive-timeout",
@@ -1824,7 +1792,7 @@ where
 								if let ConnectedPoint::Dialer { address, role_override: _ } =
 									endpoint
 								{
-									error!(
+									warn!(
 										"💔 The bootnode you want to connect to at `{}` provided a different peer ID `{}` than the one you expect `{}`.",
 										address,
 										obtained,
@@ -2000,13 +1968,7 @@ impl<B, H, Client> Unpin for NetworkWorker<B, H, Client>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 }
 
@@ -2014,13 +1976,7 @@ where
 struct NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	protocol: &'a mut Swarm<Behaviour<B, Client>>,
 }
@@ -2028,13 +1984,7 @@ where
 impl<'a, B, Client> Link<B> for NetworkLink<'a, B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	fn blocks_processed(
 		&mut self,

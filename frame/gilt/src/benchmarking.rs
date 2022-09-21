@@ -77,7 +77,7 @@ benchmarks! {
 
 	set_target {
 		let origin = T::AdminOrigin::successful_origin();
-	}: _<T::Origin>(origin, Default::default())
+	}: _<T::RuntimeOrigin>(origin, Default::default())
 	verify {}
 
 	thaw {

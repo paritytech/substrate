@@ -35,10 +35,9 @@ pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	dispatch::DispatchError,
+	dispatch::{DispatchError, GetDispatchInfo},
 	ensure,
 	traits::{Currency, Get, InstanceFilter, IsSubType, IsType, OriginTrait, ReservableCurrency},
-	weights::GetDispatchInfo,
 	RuntimeDebug,
 };
 use frame_system::{self as system};
@@ -110,15 +109,15 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Parameter
-			+ Dispatchable<Origin = Self::Origin>
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>
 			+ IsSubType<Call<Self>>
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -131,7 +130,7 @@ pub mod pallet {
 			+ Member
 			+ Ord
 			+ PartialOrd
-			+ InstanceFilter<<Self as Config>::Call>
+			+ InstanceFilter<<Self as Config>::RuntimeCall>
 			+ Default
 			+ MaxEncodedLen;
 
@@ -199,16 +198,16 @@ pub mod pallet {
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy(T::MaxProxies::get())
-				.saturating_add(di.weight)
 				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+				.saturating_add(di.weight),
 			di.class)
 		})]
 		pub fn proxy(
 			origin: OriginFor<T>,
 			real: AccountIdLookupOf<T>,
 			force_proxy_type: Option<T::ProxyType>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let real = T::Lookup::lookup(real)?;
@@ -529,9 +528,9 @@ pub mod pallet {
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get())
-				.saturating_add(di.weight)
 				 // AccountData for inner call origin accountdata.
-				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+				.saturating_add(di.weight),
 			di.class)
 		})]
 		pub fn proxy_announced(
@@ -539,7 +538,7 @@ pub mod pallet {
 			delegate: AccountIdLookupOf<T>,
 			real: AccountIdLookupOf<T>,
 			force_proxy_type: Option<T::ProxyType>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
@@ -817,12 +816,12 @@ impl<T: Config> Pallet<T> {
 	fn do_proxy(
 		def: ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>,
 		real: T::AccountId,
-		call: <T as Config>::Call,
+		call: <T as Config>::RuntimeCall,
 	) {
 		// This is a freshly authenticated new account, the origin restrictions doesn't apply.
-		let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
-		origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
-			let c = <T as Config>::Call::from_ref(c);
+		let mut origin: T::RuntimeOrigin = frame_system::RawOrigin::Signed(real).into();
+		origin.add_filter(move |c: &<T as frame_system::Config>::RuntimeCall| {
+			let c = <T as Config>::RuntimeCall::from_ref(c);
 			// We make sure the proxy call does access this pallet to change modify proxies.
 			match c.is_sub_type() {
 				// Proxy call cannot add or remove a proxy with more permissions than it already

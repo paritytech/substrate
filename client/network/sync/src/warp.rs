@@ -23,17 +23,21 @@ use crate::{
 	state::{ImportResult, StateSync},
 };
 use sc_client_api::ProofProvider;
-use sc_network_common::sync::warp::{
-	EncodedProof, VerificationResult, WarpProofRequest, WarpSyncPhase, WarpSyncProgress,
-	WarpSyncProvider,
+use sc_network_common::sync::{
+	message::{BlockAttributes, BlockData, BlockRequest, Direction, FromBlock},
+	warp::{
+		EncodedProof, VerificationResult, WarpProofRequest, WarpSyncPhase, WarpSyncProgress,
+		WarpSyncProvider,
+	},
 };
 use sp_blockchain::HeaderBackend;
 use sp_finality_grandpa::{AuthorityList, SetId};
-use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
 use std::sync::Arc;
 
 enum Phase<B: BlockT, Client> {
 	WarpProof { set_id: SetId, authorities: AuthorityList, last_hash: B::Hash },
+	TargetBlock(B::Header),
 	State(StateSync<B, Client>),
 }
 
@@ -42,6 +46,14 @@ pub enum WarpProofImportResult {
 	/// Import was successful.
 	Success,
 	/// Bad proof.
+	BadResponse,
+}
+
+/// Import target block result.
+pub enum TargetBlockImportResult {
+	/// Import was successful.
+	Success,
+	/// Invalid block.
 	BadResponse,
 }
 
@@ -72,7 +84,7 @@ where
 	///  Validate and import a state response.
 	pub fn import_state(&mut self, response: StateResponse) -> ImportResult<B> {
 		match &mut self.phase {
-			Phase::WarpProof { .. } => {
+			Phase::WarpProof { .. } | Phase::TargetBlock(_) => {
 				log::debug!(target: "sync", "Unexpected state response");
 				ImportResult::BadResponse
 			},
@@ -83,7 +95,7 @@ where
 	///  Validate and import a warp proof response.
 	pub fn import_warp_proof(&mut self, response: EncodedProof) -> WarpProofImportResult {
 		match &mut self.phase {
-			Phase::State(_) => {
+			Phase::State(_) | Phase::TargetBlock(_) => {
 				log::debug!(target: "sync", "Unexpected warp proof response");
 				WarpProofImportResult::BadResponse
 			},
@@ -104,8 +116,7 @@ where
 					Ok(VerificationResult::Complete(new_set_id, _, header)) => {
 						log::debug!(target: "sync", "Verified complete proof, set_id={:?}", new_set_id);
 						self.total_proof_bytes += response.0.len() as u64;
-						let state_sync = StateSync::new(self.client.clone(), header, false);
-						self.phase = Phase::State(state_sync);
+						self.phase = Phase::TargetBlock(header);
 						WarpProofImportResult::Success
 					},
 				}
@@ -113,35 +124,100 @@ where
 		}
 	}
 
+	/// Import the target block body.
+	pub fn import_target_block(&mut self, block: BlockData<B>) -> TargetBlockImportResult {
+		match &mut self.phase {
+			Phase::WarpProof { .. } | Phase::State(_) => {
+				log::debug!(target: "sync", "Unexpected target block response");
+				TargetBlockImportResult::BadResponse
+			},
+			Phase::TargetBlock(header) =>
+				if let Some(block_header) = &block.header {
+					if block_header == header {
+						if block.body.is_some() {
+							let state_sync = StateSync::new(
+								self.client.clone(),
+								header.clone(),
+								block.body,
+								block.justifications,
+								false,
+							);
+							self.phase = Phase::State(state_sync);
+							TargetBlockImportResult::Success
+						} else {
+							log::debug!(
+								target: "sync",
+								"Importing target block failed: missing body.",
+							);
+							TargetBlockImportResult::BadResponse
+						}
+					} else {
+						log::debug!(
+							target: "sync",
+							"Importing target block failed: different header.",
+						);
+						TargetBlockImportResult::BadResponse
+					}
+				} else {
+					log::debug!(target: "sync", "Importing target block failed: missing header.");
+					TargetBlockImportResult::BadResponse
+				},
+		}
+	}
+
 	/// Produce next state request.
 	pub fn next_state_request(&self) -> Option<StateRequest> {
 		match &self.phase {
 			Phase::WarpProof { .. } => None,
+			Phase::TargetBlock(_) => None,
 			Phase::State(sync) => Some(sync.next_request()),
 		}
 	}
 
 	/// Produce next warp proof request.
-	pub fn next_warp_poof_request(&self) -> Option<WarpProofRequest<B>> {
+	pub fn next_warp_proof_request(&self) -> Option<WarpProofRequest<B>> {
 		match &self.phase {
-			Phase::State(_) => None,
 			Phase::WarpProof { last_hash, .. } => Some(WarpProofRequest { begin: *last_hash }),
+			Phase::TargetBlock(_) => None,
+			Phase::State(_) => None,
+		}
+	}
+
+	/// Produce next target block request.
+	pub fn next_target_block_request(&self) -> Option<(NumberFor<B>, BlockRequest<B>)> {
+		match &self.phase {
+			Phase::WarpProof { .. } => None,
+			Phase::TargetBlock(header) => {
+				let request = BlockRequest::<B> {
+					id: 0,
+					fields: BlockAttributes::HEADER |
+						BlockAttributes::BODY | BlockAttributes::JUSTIFICATION,
+					from: FromBlock::Hash(header.hash()),
+					to: Some(header.hash()),
+					direction: Direction::Ascending,
+					max: Some(1),
+				};
+				Some((*header.number(), request))
+			},
+			Phase::State(_) => None,
 		}
 	}
 
 	/// Return target block hash if it is known.
 	pub fn target_block_hash(&self) -> Option<B::Hash> {
 		match &self.phase {
-			Phase::State(s) => Some(s.target()),
 			Phase::WarpProof { .. } => None,
+			Phase::TargetBlock(_) => None,
+			Phase::State(s) => Some(s.target()),
 		}
 	}
 
 	/// Return target block number if it is known.
 	pub fn target_block_number(&self) -> Option<NumberFor<B>> {
 		match &self.phase {
-			Phase::State(s) => Some(s.target_block_num()),
 			Phase::WarpProof { .. } => None,
+			Phase::TargetBlock(header) => Some(*header.number()),
+			Phase::State(s) => Some(s.target_block_num()),
 		}
 	}
 
@@ -149,6 +225,7 @@ where
 	pub fn is_complete(&self) -> bool {
 		match &self.phase {
 			Phase::WarpProof { .. } => false,
+			Phase::TargetBlock(_) => false,
 			Phase::State(sync) => sync.is_complete(),
 		}
 	}
@@ -158,6 +235,10 @@ where
 		match &self.phase {
 			Phase::WarpProof { .. } => WarpSyncProgress {
 				phase: WarpSyncPhase::DownloadingWarpProofs,
+				total_bytes: self.total_proof_bytes,
+			},
+			Phase::TargetBlock(_) => WarpSyncProgress {
+				phase: WarpSyncPhase::DownloadingTargetBlock,
 				total_bytes: self.total_proof_bytes,
 			},
 			Phase::State(sync) => WarpSyncProgress {
