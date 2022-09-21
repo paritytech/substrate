@@ -1006,10 +1006,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let deposit_lock_event = |prev: T::Balance, after: T::Balance, reason: Reasons| {
 			if prev < after {
-				let amount = after.saturaitng_sub(prev);
+				let amount = after.saturating_sub(prev);
 				Self::deposit_event(Event::Locked { who: who.clone(), amount, reason });
 			} else if prev > after {
-				let amount = prev.saturaitng_sub(after);
+				let amount = prev.saturating_sub(after);
 				Self::deposit_event(Event::Unlocked { who: who.clone(), amount, reason });
 			}
 		};
