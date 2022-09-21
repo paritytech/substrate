@@ -19,8 +19,6 @@
 
 use super::*;
 use frame_support::traits::OnRuntimeUpgrade;
-#[cfg(feature = "try-runtime")]
-use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
@@ -99,7 +97,7 @@ pub mod v3 {
 
 	impl<T: Config<Hash = PreimageHash>> OnRuntimeUpgrade for MigrateToV4<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 3, "Can only upgrade from version 3");
 
 			let agendas = Agenda::<T>::iter_keys().count() as u32;
@@ -115,7 +113,6 @@ pub mod v3 {
 				);
 			}
 			log::info!(target: TARGET, "Trying to migrate {} agendas...", decodable_agendas);
-			Self::set_temp_storage(decodable_agendas, "decodable_agendas");
 
 			// Check that no agenda overflows `MaxScheduledPerBlock`.
 			let max_scheduled_per_block = T::MaxScheduledPerBlock::get() as usize;
@@ -132,7 +129,7 @@ pub mod v3 {
 				}
 			}
 
-			Ok(())
+			Ok((decodable_agendas as u32).encode())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -151,7 +148,7 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 4, "Must upgrade");
 
 			// Check that everything decoded fine.
@@ -159,7 +156,8 @@ pub mod v3 {
 				assert!(crate::Agenda::<T>::try_get(k).is_ok(), "Cannot decode V4 Agenda");
 			}
 
-			let old_agendas: u32 = Self::get_temp_storage("decodable_agendas").unwrap();
+			let old_agendas: u32 =
+				Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
 			let new_agendas = crate::Agenda::<T>::iter_keys().count() as u32;
 			if old_agendas != new_agendas {
 				// This is not necessarily an error, but can happen when there are Calls
@@ -250,9 +248,9 @@ mod test {
 				frame_support::migration::put_storage_value(b"Scheduler", b"Agenda", &k, old);
 			}
 
-			v3::MigrateToV4::<Test>::pre_upgrade().unwrap();
+			let state = v3::MigrateToV4::<Test>::pre_upgrade().unwrap();
 			let _w = v3::MigrateToV4::<Test>::on_runtime_upgrade();
-			v3::MigrateToV4::<Test>::post_upgrade().unwrap();
+			v3::MigrateToV4::<Test>::post_upgrade(state).unwrap();
 
 			let mut x = Agenda::<Test>::iter().map(|x| (x.0, x.1.into_inner())).collect::<Vec<_>>();
 			x.sort_by_key(|x| x.0);

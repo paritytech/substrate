@@ -18,8 +18,6 @@
 //! Storage migrations for the preimage pallet.
 
 use super::*;
-#[cfg(feature = "try-runtime")]
-use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 use frame_support::{pallet_prelude::*, storage_alias, traits::OnRuntimeUpgrade, BoundedVec};
 use sp_core::H256;
 
@@ -63,7 +61,7 @@ pub mod v1 {
 
 	impl<T: Config + frame_system::Config<Hash = H256>> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0, "can only upgrade from version 0");
 
 			let props_count = v0::PublicProps::<T>::get().len();
@@ -73,9 +71,7 @@ pub mod v1 {
 			let referenda_count = v0::ReferendumInfoOf::<T>::iter().count();
 			log::info!(target: TARGET, "{} referenda will be migrated.", referenda_count);
 
-			Self::set_temp_storage(referenda_count as u32, "referenda_count");
-			Self::set_temp_storage(props_count as u32, "props_count");
-			Ok(())
+			Ok((referenda_count as u32, props_count as u32).encode())
 		}
 
 		#[allow(deprecated)]
@@ -135,14 +131,13 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 1, "must upgrade");
 
-			let old_props_count = Self::get_temp_storage::<u32>("props_count").unwrap();
+			let (old_props_count, old_ref_count): (u32, u32) =
+				Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
 			let new_props_count = crate::PublicProps::<T>::get().len() as u32;
 			assert_eq!(new_props_count, old_props_count, "must migrate all public proposals");
-
-			let old_ref_count = Self::get_temp_storage::<u32>("referenda_count").unwrap();
 			let new_ref_count = crate::ReferendumInfoOf::<T>::iter().count() as u32;
 			assert_eq!(new_ref_count, old_ref_count, "must migrate all referenda");
 
@@ -196,9 +191,9 @@ mod test {
 			v0::NextExternal::<T>::put((hash.clone(), VoteThreshold::SuperMajorityApprove));
 
 			// Migrate.
-			v1::Migration::<T>::pre_upgrade().unwrap();
+			let state = v1::Migration::<T>::pre_upgrade().unwrap();
 			let _weight = v1::Migration::<T>::on_runtime_upgrade();
-			v1::Migration::<T>::post_upgrade().unwrap();
+			v1::Migration::<T>::post_upgrade(state).unwrap();
 			// Check that all values got migrated.
 
 			// Case 1: Ongoing referendum

@@ -80,13 +80,12 @@ pub mod v1 {
 
 	impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(StorageVersion::get::<Pallet<T>>(), 0, "can only upgrade from version 0");
 
 			let images = v0::image_count::<T>().expect("v0 storage corrupted");
 			log::info!(target: TARGET, "Migrating {} images", &images);
-			Self::set_temp_storage(images, "old_images");
-			Ok(())
+			Ok((images as u32).encode())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -151,8 +150,9 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
-			let old_images = Self::get_temp_storage::<u32>("old_images").unwrap();
+		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+			let old_images: u32 =
+				Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
 			let new_images = image_count::<T>().expect("V1 storage corrupted");
 
 			if new_images != old_images {
