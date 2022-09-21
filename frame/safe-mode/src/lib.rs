@@ -200,9 +200,8 @@ pub mod pallet {
 		/// Emits an [`Event::Enabled`] event on success.
 		#[pallet::weight(0)]
 		pub fn force_enable(origin: OriginFor<T>) -> DispatchResult {
-			T::EnableOrigin::ensure_origin(origin)?;
+			let duration = T::EnableOrigin::ensure_origin(origin)?;
 
-			let duration = T::EnableDuration::get();
 			Self::do_enable(None, duration)
 		}
 
@@ -224,9 +223,8 @@ pub mod pallet {
 		/// Can only be called by the [`Config::ExtendOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn force_extend(origin: OriginFor<T>) -> DispatchResult {
-			T::ExtendOrigin::ensure_origin(origin)?;
+			let duration = T::ExtendOrigin::ensure_origin(origin)?;
 
-			let duration = T::ExtendDuration::get();
 			Self::do_extend(None, duration)
 		}
 

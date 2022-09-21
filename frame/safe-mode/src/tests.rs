@@ -20,34 +20,49 @@
 use super::*;
 use crate::mock::{Call, *};
 
-use frame_support::{assert_err, assert_noop, assert_ok};
-use frame_support::dispatch::Dispatchable;
+use frame_support::{assert_err, assert_noop, assert_ok, dispatch::Dispatchable};
 
 // GENERAL FAIL/NEGATIVE TESTS ---------------------
-
 
 #[test]
 fn fails_to_filter_calls_to_safe_mode_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::enable(Origin::signed(0)));
 		let enabled_at_block = System::block_number();
-		let call = Call::Balances(pallet_balances::Call::transfer{dest: 1, value: 1});
+		let call = Call::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
 
-		assert_err!(call.clone().dispatch(Origin::signed(0)), frame_system::Error::<Test>::CallFiltered);
+		assert_err!(
+			call.clone().dispatch(Origin::signed(0)),
+			frame_system::Error::<Test>::CallFiltered
+		);
 		// TODO ^^^ consider refactor to throw a safe mode error, not generic `CallFiltered`
 
 		next_block();
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
-		assert_ok!(SafeMode::force_extend(Origin::signed(mock::ExtendOrigin::get())));
-		assert_err!(call.clone().dispatch(Origin::signed(0)), frame_system::Error::<Test>::CallFiltered);
+		assert_ok!(SafeMode::force_extend(ForceExtendOrigin::Weak.signed()));
+		assert_err!(
+			call.clone().dispatch(Origin::signed(0)),
+			frame_system::Error::<Test>::CallFiltered
+		);
 		assert_ok!(SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())));
-		assert_ok!(SafeMode::repay_stake(Origin::signed(mock::RepayOrigin::get()), 0, enabled_at_block));
+		assert_ok!(SafeMode::repay_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			enabled_at_block
+		));
 
 		next_block();
 		assert_ok!(SafeMode::enable(Origin::signed(0)));
-		assert_err!(call.clone().dispatch(Origin::signed(0)), frame_system::Error::<Test>::CallFiltered);
+		assert_err!(
+			call.clone().dispatch(Origin::signed(0)),
+			frame_system::Error::<Test>::CallFiltered
+		);
 		assert_ok!(SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())));
-		assert_ok!(SafeMode::slash_stake(Origin::signed(mock::RepayOrigin::get()), 0, enabled_at_block + 2));
+		assert_ok!(SafeMode::slash_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			enabled_at_block + 2
+		));
 	});
 }
 
@@ -61,13 +76,12 @@ fn fails_to_extend_if_not_enabled() {
 
 // GENERAL SUCCESS/POSITIVE TESTS ---------------------
 
-
 #[test]
 fn can_automatically_disable_after_timeout() {
 	new_test_ext().execute_with(|| {
 		let enabled_at_block = System::block_number();
-		assert_ok!(SafeMode::force_enable(Origin::signed(mock::EnableOrigin::get())));
-		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
+		assert_ok!(SafeMode::force_enable(ForceEnableOrigin::Weak.signed()));
+		run_to(ForceEnableOrigin::Weak.duration() + enabled_at_block + 1);
 		SafeMode::on_initialize(System::block_number());
 		assert_eq!(SafeMode::enabled(), None);
 	});
@@ -76,11 +90,14 @@ fn can_automatically_disable_after_timeout() {
 #[test]
 fn can_filter_balance_calls_when_enabled() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Balances(pallet_balances::Call::transfer{dest: 1, value: 1});
+		let call = Call::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
 
 		assert_ok!(call.clone().dispatch(Origin::signed(0)));
 		assert_ok!(SafeMode::enable(Origin::signed(0)));
-		assert_err!(call.clone().dispatch(Origin::signed(0)), frame_system::Error::<Test>::CallFiltered);
+		assert_err!(
+			call.clone().dispatch(Origin::signed(0)),
+			frame_system::Error::<Test>::CallFiltered
+		);
 		// TODO ^^^ consider refactor to throw a safe mode error, not generic `CallFiltered`
 	});
 }
@@ -111,7 +128,10 @@ fn can_extend_with_signed_origin() {
 			SafeMode::enabled().unwrap(),
 			System::block_number() + mock::EnableDuration::get() + mock::ExtendDuration::get()
 		);
-		assert_eq!(Balances::reserved_balance(0), mock::EnableStakeAmount::get() + mock::ExtendStakeAmount::get());
+		assert_eq!(
+			Balances::reserved_balance(0),
+			mock::EnableStakeAmount::get() + mock::ExtendStakeAmount::get()
+		);
 	});
 }
 
@@ -124,9 +144,14 @@ fn fails_signed_origin_when_explicit_origin_required() {
 		assert_err!(SafeMode::force_enable(Origin::signed(0)), DispatchError::BadOrigin);
 		assert_err!(SafeMode::force_extend(Origin::signed(0)), DispatchError::BadOrigin);
 		assert_err!(SafeMode::force_disable(Origin::signed(0)), DispatchError::BadOrigin);
-		assert_err!(SafeMode::slash_stake(Origin::signed(0), 0, enabled_at_block), DispatchError::BadOrigin);
-		assert_err!(SafeMode::repay_stake(Origin::signed(0), 0, enabled_at_block), DispatchError::BadOrigin);
-
+		assert_err!(
+			SafeMode::slash_stake(Origin::signed(0), 0, enabled_at_block),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::repay_stake(Origin::signed(0), 0, enabled_at_block),
+			DispatchError::BadOrigin
+		);
 	});
 }
 
@@ -135,7 +160,10 @@ fn fails_signed_origin_when_explicit_origin_required() {
 #[test]
 fn fails_force_disable_if_not_enabled() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())), Error::<Test>::IsDisabled);
+		assert_noop!(
+			SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())),
+			Error::<Test>::IsDisabled
+		);
 		assert_noop!(
 			SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())),
 			Error::<Test>::IsDisabled
@@ -146,16 +174,16 @@ fn fails_force_disable_if_not_enabled() {
 #[test]
 fn can_force_enable_with_config_origin() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::force_enable(Origin::signed(mock::EnableOrigin::get())));
+		assert_ok!(SafeMode::force_enable(ForceEnableOrigin::Weak.signed()));
 		assert_eq!(
 			SafeMode::enabled().unwrap(),
-			System::block_number() + mock::EnableDuration::get()
+			System::block_number() + ForceEnableOrigin::Weak.duration()
 		);
 		assert_noop!(
-			SafeMode::force_enable(Origin::signed(mock::EnableOrigin::get())),
+			SafeMode::force_enable(ForceEnableOrigin::Weak.signed()),
 			Error::<Test>::IsEnabled
 		);
-		assert_eq!(Balances::reserved_balance(mock::EnableOrigin::get()), 0);
+		assert_eq!(Balances::reserved_balance(ForceEnableOrigin::Weak.acc()), 0);
 	});
 }
 
@@ -167,8 +195,8 @@ fn can_force_disable_with_config_origin() {
 			SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())),
 			Error::<Test>::IsDisabled
 		);
-		assert_ok!(SafeMode::force_enable(Origin::signed(mock::EnableOrigin::get())));
-		assert_eq!(Balances::reserved_balance(mock::EnableOrigin::get()), 0);
+		assert_ok!(SafeMode::force_enable(ForceEnableOrigin::Weak.signed()));
+		assert_eq!(Balances::reserved_balance(ForceEnableOrigin::Weak.acc()), 0);
 		assert_ok!(SafeMode::force_disable(Origin::signed(mock::DisableOrigin::get())));
 	});
 }
@@ -176,17 +204,20 @@ fn can_force_disable_with_config_origin() {
 #[test]
 fn can_force_extend_with_config_origin() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(SafeMode::force_enable(Origin::signed(mock::EnableOrigin::get())));
+		// Enable by `Weak` and extended by `Medium`.
+		assert_ok!(SafeMode::force_enable(ForceEnableOrigin::Weak.signed()));
 		assert_eq!(
 			SafeMode::enabled().unwrap(),
-			System::block_number() + mock::EnableDuration::get()
+			System::block_number() + ForceEnableOrigin::Weak.duration()
 		);
-		assert_ok!(SafeMode::force_extend(Origin::signed(mock::ExtendOrigin::get())));
+		assert_ok!(SafeMode::force_extend(ForceExtendOrigin::Medium.signed()));
 		assert_eq!(
 			SafeMode::enabled().unwrap(),
-			System::block_number() + mock::EnableDuration::get() + mock::ExtendDuration::get()
+			System::block_number() +
+				ForceEnableOrigin::Weak.duration() +
+				ForceExtendOrigin::Medium.duration()
 		);
-		assert_eq!(Balances::reserved_balance(mock::EnableOrigin::get()), 0);
+		assert_eq!(Balances::reserved_balance(ForceEnableOrigin::Weak.acc()), 0);
 		assert_eq!(Balances::reserved_balance(mock::ExtendDuration::get()), 0);
 	});
 }
@@ -202,7 +233,11 @@ fn can_repay_stake_with_config_origin() {
 		);
 		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
 		SafeMode::on_initialize(System::block_number());
-		assert_ok!(SafeMode::repay_stake(Origin::signed(mock::RepayOrigin::get()), 0, enabled_at_block));
+		assert_ok!(SafeMode::repay_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			enabled_at_block
+		));
 		// TODO: test accounting is correct
 	});
 }
@@ -218,7 +253,11 @@ fn can_slash_stake_with_config_origin() {
 		);
 		run_to(mock::EnableDuration::get() + enabled_at_block + 1);
 		SafeMode::on_initialize(System::block_number());
-		assert_ok!(SafeMode::slash_stake(Origin::signed(mock::RepayOrigin::get()), 0, enabled_at_block));
+		assert_ok!(SafeMode::slash_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			enabled_at_block
+		));
 		// TODO: test accounting is correct
 	});
 }
@@ -228,25 +267,69 @@ fn fails_when_explicit_origin_required() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(SafeMode::enabled(), None);
 		let enabled_at_block = System::block_number();
-		
-		assert_err!(SafeMode::force_extend(Origin::signed(mock::EnableOrigin::get())), DispatchError::BadOrigin);
-		assert_err!(SafeMode::force_disable(Origin::signed(mock::EnableOrigin::get())), DispatchError::BadOrigin);
-		assert_err!(SafeMode::slash_stake(Origin::signed(mock::EnableOrigin::get()), 0, enabled_at_block), DispatchError::BadOrigin);
-		assert_err!(SafeMode::repay_stake(Origin::signed(mock::EnableOrigin::get()), 0, enabled_at_block), DispatchError::BadOrigin);
 
-		assert_err!(SafeMode::force_enable(Origin::signed(mock::ExtendOrigin::get())), DispatchError::BadOrigin);
-		assert_err!(SafeMode::force_disable(Origin::signed(mock::ExtendOrigin::get())), DispatchError::BadOrigin);
-		assert_err!(SafeMode::slash_stake(Origin::signed(mock::ExtendOrigin::get()), 0, enabled_at_block), DispatchError::BadOrigin);
-		assert_err!(SafeMode::repay_stake(Origin::signed(mock::ExtendOrigin::get()), 0, enabled_at_block), DispatchError::BadOrigin);
+		assert_err!(
+			SafeMode::force_extend(ForceEnableOrigin::Weak.signed()),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::force_disable(ForceEnableOrigin::Weak.signed()),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::slash_stake(ForceEnableOrigin::Weak.signed(), 0, enabled_at_block),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::repay_stake(ForceEnableOrigin::Weak.signed(), 0, enabled_at_block),
+			DispatchError::BadOrigin
+		);
 
-		assert_err!(SafeMode::force_enable(Origin::signed(mock::DisableOrigin::get())), DispatchError::BadOrigin);
-		assert_err!(SafeMode::force_extend(Origin::signed(mock::DisableOrigin::get())), DispatchError::BadOrigin);
-		assert_err!(SafeMode::slash_stake(Origin::signed(mock::DisableOrigin::get()), 0, enabled_at_block), DispatchError::BadOrigin);
-		assert_err!(SafeMode::repay_stake(Origin::signed(mock::DisableOrigin::get()), 0, enabled_at_block), DispatchError::BadOrigin);
+		assert_err!(
+			SafeMode::force_enable(ForceExtendOrigin::Weak.signed()),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::force_disable(ForceExtendOrigin::Weak.signed()),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::slash_stake(ForceExtendOrigin::Weak.signed(), 0, enabled_at_block),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::repay_stake(ForceExtendOrigin::Weak.signed(), 0, enabled_at_block),
+			DispatchError::BadOrigin
+		);
 
-		assert_err!(SafeMode::force_enable(Origin::signed(mock::RepayOrigin::get())), DispatchError::BadOrigin);
-		assert_err!(SafeMode::force_extend(Origin::signed(mock::RepayOrigin::get())), DispatchError::BadOrigin);
-		assert_err!(SafeMode::force_disable(Origin::signed(mock::RepayOrigin::get())), DispatchError::BadOrigin);
+		assert_err!(
+			SafeMode::force_enable(Origin::signed(mock::DisableOrigin::get())),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::force_extend(Origin::signed(mock::DisableOrigin::get())),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::slash_stake(Origin::signed(mock::DisableOrigin::get()), 0, enabled_at_block),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::repay_stake(Origin::signed(mock::DisableOrigin::get()), 0, enabled_at_block),
+			DispatchError::BadOrigin
+		);
 
+		assert_err!(
+			SafeMode::force_enable(Origin::signed(mock::RepayOrigin::get())),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::force_extend(Origin::signed(mock::RepayOrigin::get())),
+			DispatchError::BadOrigin
+		);
+		assert_err!(
+			SafeMode::force_disable(Origin::signed(mock::RepayOrigin::get())),
+			DispatchError::BadOrigin
+		);
 	});
 }
