@@ -1,27 +1,12 @@
-// This file is part of Substrate.
-
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2022-05-24 (Y/M/D)
+//! DATE: 2022-09-21 (Y/M/D)
+//! HOSTNAME: `bm2`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
 //!
 //! SHORT-NAME: `extrinsic`, LONG-NAME: `ExtrinsicBase`, RUNTIME: `Development`
 //! WARMUPS: `10`, REPEAT: `100`
 //! WEIGHT-PATH: `./frame/support/src/weights/`
-//! WEIGHT-METRIC: `Average`, WEIGHT-MUL: `1`, WEIGHT-ADD: `0`
+//! WEIGHT-METRIC: `Average`, WEIGHT-MUL: `1.0`, WEIGHT-ADD: `0`
 
 // Executed Command:
 //   ./target/production/substrate
@@ -39,23 +24,24 @@ use sp_weights::{constants::WEIGHT_PER_NANOS, Weight};
 
 parameter_types! {
 	/// Time to execute a NO-OP extrinsic, for example `System::remark`.
-	/// Calculated by multiplying the *Average* with `1` and adding `0`.
+	/// Calculated by multiplying the *Average* with `1.0` and adding `0`.
 	///
 	/// Stats nanoseconds:
-	///   Min, Max: 86_060, 86_999
-	///   Average:  86_298
-	///   Median:   86_248
-	///   Std-Dev:  207.19
+	///   Min, Max: 101_368, 102_177
+	///   Average:  101_678
+	///   Median:   101_672
+	///   Std-Dev:  167.91
 	///
 	/// Percentiles nanoseconds:
-	///   99th: 86_924
-	///   95th: 86_828
-	///   75th: 86_347
-	pub const ExtrinsicBaseWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(86_298);
+	///   99th: 102_117
+	///   95th: 101_922
+	///   75th: 101_802
+	pub const ExtrinsicBaseWeight: Weight = WEIGHT_PER_NANOS.saturating_mul(101_678);
 }
 
 #[cfg(test)]
 mod test_weights {
+	use super::*;
 	use sp_weights::constants;
 
 	/// Checks that the weight exists and is sane.
@@ -66,14 +52,8 @@ mod test_weights {
 		let w = super::ExtrinsicBaseWeight::get();
 
 		// At least 10 µs.
-		assert!(
-			w.ref_time() >= 10u64 * constants::WEIGHT_PER_MICROS.ref_time(),
-			"Weight should be at least 10 µs."
-		);
+		assert!(w.ref_time() >= 10u64 * constants::WEIGHT_PER_MICROS.ref_time(), "Weight should be at least 10 µs.");
 		// At most 1 ms.
-		assert!(
-			w.ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
-			"Weight should be at most 1 ms."
-		);
+		assert!(w.ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(), "Weight should be at most 1 ms.");
 	}
 }
