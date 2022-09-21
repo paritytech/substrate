@@ -1706,6 +1706,7 @@ pub type Executive = frame_executive::Executive<
 type Migrations = (
 	pallet_nomination_pools::migration::v2::MigrateToV2<Runtime>,
 	pallet_alliance::migration::Migration<Runtime>,
+	pallet_contracts::Migration<Runtime>,
 );
 
 /// MMR helper types.
