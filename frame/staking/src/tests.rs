@@ -3714,8 +3714,16 @@ fn test_payout_stakers() {
 		}
 
 		// We clean it up as history passes
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_start_reward_era
+		));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_last_reward_era
+		));
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3808,8 +3816,16 @@ fn payout_stakers_handles_basic_errors() {
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era + 1),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_start_reward_era
+		));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_last_reward_era
+		));
 
 		// Can't claim again
 		assert_noop!(
