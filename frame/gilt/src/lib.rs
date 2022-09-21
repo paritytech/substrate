@@ -116,7 +116,7 @@ pub mod pallet {
 			+ MaxEncodedLen;
 
 		/// Origin required for setting the target proportion to be under gilt.
-		type AdminOrigin: EnsureOrigin<Self::Origin>;
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Unbalanced handler to account for funds created (in case of a higher total issuance over
 		/// freezing period).

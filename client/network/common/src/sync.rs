@@ -96,6 +96,8 @@ pub enum OnBlockData<Block: BlockT> {
 	Import(BlockOrigin, Vec<IncomingBlock<Block>>),
 	/// A new block request needs to be made to the given peer.
 	Request(PeerId, BlockRequest<Block>),
+	/// Continue processing events.
+	Continue,
 }
 
 /// Result of [`ChainSync::on_block_justification`].

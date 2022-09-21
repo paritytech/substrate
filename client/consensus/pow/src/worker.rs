@@ -32,7 +32,6 @@ use sp_runtime::{
 	DigestItem,
 };
 use std::{
-	borrow::Cow,
 	collections::HashMap,
 	pin::Pin,
 	sync::{
@@ -212,10 +211,7 @@ where
 		let intermediate = PowIntermediate::<Algorithm::Difficulty> {
 			difficulty: Some(build.metadata.difficulty),
 		};
-
-		import_block
-			.intermediates
-			.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<_>);
+		import_block.insert_intermediate(INTERMEDIATE_KEY, intermediate);
 
 		let header = import_block.post_header();
 		let mut block_import = self.block_import.lock();

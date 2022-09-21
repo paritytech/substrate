@@ -59,7 +59,7 @@ cargo-check-benches:
     CI_JOB_NAME:                   "cargo-check-benches"
   extends:
     - .docker-env
-    - .test-refs-no-trigger-prs-only-check-benches
+    - .test-refs-check-benches
     - .collect-artifacts
     - .pipeline-stopper-artifacts
   before_script:
