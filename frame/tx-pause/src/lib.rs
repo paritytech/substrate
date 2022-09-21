@@ -17,6 +17,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+#[cfg(test)]
+pub mod mock;
+#[cfg(test)]
+mod tests;
+pub mod weights;
+
 use frame_support::{
 	pallet_prelude::*,
 	traits::{CallMetadata, Contains, GetCallMetadata},
@@ -24,11 +32,8 @@ use frame_support::{
 use frame_system::pallet_prelude::*;
 use sp_std::{convert::TryInto, prelude::*};
 
-mod benchmarking;
-mod mock;
-mod tests;
-
 pub use pallet::*;
+pub use weights::*;
 
 pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
@@ -74,7 +79,7 @@ pub mod pallet {
 		type PauseTooLongNames: Get<bool>;
 
 		// Weight information for extrinsics in this pallet.
-		//type WeightInfo: WeightInfo;
+		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
@@ -100,6 +105,7 @@ pub mod pallet {
 
 	/// The set of calls that are explicitly paused.
 	#[pallet::storage]
+	#[pallet::getter(fn paused_calls)]
 	pub type PausedCalls<T: Config> =
 		StorageMap<_, Blake2_128Concat, (PalletNameOf<T>, CallNameOf<T>), (), OptionQuery>;
 
@@ -135,7 +141,7 @@ pub mod pallet {
 		///
 		/// Can only be called by [`Config::PauseOrigin`].
 		/// Emits an [`Event::CallPaused`] event on success.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::pause_call())]
 		pub fn pause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
@@ -154,7 +160,7 @@ pub mod pallet {
 		///
 		/// Can only be called by [`Config::UnpauseOrigin`].
 		/// Emits an [`Event::CallUnpaused`] event on success.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::unpause_call())]
 		pub fn unpause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,

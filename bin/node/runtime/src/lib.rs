@@ -218,6 +218,14 @@ impl pallet_tx_pause::Config for Runtime {
 	type UnpauseOrigin = EnsureRoot<AccountId>;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
+	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
+	// signed config
+	pub const EnableStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub BlockHeight: BlockNumber = System::block_number(); // TODO ensure this plus config below is correct
 }
 
 parameter_types! {
@@ -1807,6 +1815,7 @@ mod benches {
 		[pallet_utility, Utility]
 		[pallet_vesting, Vesting]
 		[pallet_whitelist, Whitelist]
+		[pallet_tx_pause, TxPause]
 		[pallet_safe_mode, SafeMode]
 	);
 }
