@@ -421,7 +421,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Public + Derive> Ss58Codec for T {
 		let cap = SS58_REGEX.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let s = cap.name("ss58").map(|r| r.as_str()).unwrap_or(DEV_ADDRESS);
 		let addr = if let Some(stripped) = s.strip_prefix("0x") {
-			let d = hex::decode(stripped).map_err(|_| PublicError::InvalidFormat)?;
+			let d = array_bytes::hex2bytes(stripped).map_err(|_| PublicError::InvalidFormat)?;
 			Self::from_slice(&d).map_err(|()| PublicError::BadLength)?
 		} else {
 			Self::from_ss58check(s)?
@@ -614,10 +614,7 @@ impl sp_std::str::FromStr for AccountId32 {
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let hex_or_ss58_without_prefix = s.trim_start_matches("0x");
 		if hex_or_ss58_without_prefix.len() == 64 {
-			let mut bytes = [0u8; 32];
-			hex::decode_to_slice(hex_or_ss58_without_prefix, &mut bytes)
-				.map_err(|_| "invalid hex address.")
-				.map(|_| Self::from(bytes))
+			array_bytes::hex_n_into(hex_or_ss58_without_prefix).map_err(|_| "invalid hex address.")
 		} else {
 			Self::from_ss58check(s).map_err(|_| "invalid ss58 address.")
 		}
@@ -943,7 +940,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 			password_override.or_else(|| password.as_ref().map(|p| p.expose_secret().as_str()));
 
 		let (root, seed) = if let Some(stripped) = phrase.expose_secret().strip_prefix("0x") {
-			hex::decode(stripped)
+			array_bytes::hex2bytes(stripped)
 				.ok()
 				.and_then(|seed_vec| {
 					let mut seed = Self::Seed::default();
@@ -1127,7 +1124,6 @@ pub mod key_types {
 mod tests {
 	use super::*;
 	use crate::DeriveJunction;
-	use hex_literal::hex;
 
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	enum TestPair {
@@ -1269,7 +1265,7 @@ mod tests {
 	fn interpret_std_seed_should_work() {
 		assert_eq!(
 			TestPair::from_string("0x0123456789abcdef", None),
-			Ok(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
+			Ok(TestPair::Seed(array_bytes::hex2bytes_unchecked("0123456789abcdef")))
 		);
 	}
 

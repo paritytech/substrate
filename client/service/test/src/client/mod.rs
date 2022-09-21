@@ -17,7 +17,6 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use futures::executor::block_on;
-use hex_literal::hex;
 use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
@@ -155,7 +154,9 @@ fn block1(genesis_hash: Hash, backend: &InMemoryBackend<BlakeTwo256>) -> (Vec<u8
 		backend,
 		1,
 		genesis_hash,
-		hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c").into(),
+		array_bytes::hex_n_into_unchecked(
+			"25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c",
+		),
 		vec![Transfer {
 			from: AccountKeyring::One.into(),
 			to: AccountKeyring::Two.into(),
@@ -1594,7 +1595,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 		.build();
 
 	let child_root = b":child_storage:default:child".to_vec();
-	let prefix = StorageKey(hex!("3a").to_vec());
+	let prefix = StorageKey(array_bytes::hex2bytes_unchecked("3a"));
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
@@ -1604,25 +1605,29 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 		.collect();
 	assert_eq!(
 		res,
-		[child_root.clone(), hex!("3a636f6465").to_vec(), hex!("3a686561707061676573").to_vec(),]
+		[
+			child_root.clone(),
+			array_bytes::hex2bytes_unchecked("3a636f6465"),
+			array_bytes::hex2bytes_unchecked("3a686561707061676573"),
+		]
 	);
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
 			&BlockId::Number(0),
 			Some(&prefix),
-			Some(&StorageKey(hex!("3a636f6465").to_vec())),
+			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
-	assert_eq!(res, [hex!("3a686561707061676573").to_vec()]);
+	assert_eq!(res, [array_bytes::hex2bytes_unchecked("3a686561707061676573")]);
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
 			&BlockId::Number(0),
 			Some(&prefix),
-			Some(&StorageKey(hex!("3a686561707061676573").to_vec())),
+			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a686561707061676573"))),
 		)
 		.unwrap()
 		.map(|x| x.0)
@@ -1653,13 +1658,13 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 fn storage_keys_iter_works() {
 	let client = substrate_test_runtime_client::new();
 
-	let prefix = StorageKey(hex!("").to_vec());
+	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
 	let res: Vec<_> = client
 		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
 		.unwrap()
 		.take(8)
-		.map(|x| hex::encode(&x.0))
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
 		res,
@@ -1679,11 +1684,11 @@ fn storage_keys_iter_works() {
 		.storage_keys_iter(
 			&BlockId::Number(0),
 			Some(&prefix),
-			Some(&StorageKey(hex!("3a636f6465").to_vec())),
+			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
 		.unwrap()
 		.take(7)
-		.map(|x| hex::encode(&x.0))
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
 		res,
@@ -1702,13 +1707,13 @@ fn storage_keys_iter_works() {
 		.storage_keys_iter(
 			&BlockId::Number(0),
 			Some(&prefix),
-			Some(&StorageKey(
-				hex!("79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d").to_vec(),
-			)),
+			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
+				"79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d",
+			))),
 		)
 		.unwrap()
 		.take(5)
-		.map(|x| hex::encode(x.0))
+		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
 		res,

@@ -275,7 +275,6 @@ mod tests {
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight};
-	use hex_literal::hex;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 	use sp_core::{Bytes, H256};
@@ -1828,10 +1827,9 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: Bytes(
-					hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F")
-						.to_vec()
-				),
+				data: array_bytes::hex_into_unchecked(
+					"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
+				)
 			},
 		);
 	}
@@ -1901,7 +1899,9 @@ mod tests {
 				flags: ReturnFlags::empty(),
 				data: Bytes(
 					(
-						hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"),
+						array_bytes::hex2array_unchecked::<32>(
+							"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
+						),
 						42u64,
 					)
 						.encode()
@@ -2110,7 +2110,7 @@ mod tests {
 	fn seal_return_with_success_status() {
 		let output = execute(
 			CODE_RETURN_WITH_DATA,
-			hex!("00000000445566778899").to_vec(),
+			array_bytes::hex2bytes_unchecked("00000000445566778899"),
 			MockExt::default(),
 		)
 		.unwrap();
@@ -2119,7 +2119,7 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: Bytes(hex!("445566778899").to_vec()),
+				data: Bytes(array_bytes::hex2bytes_unchecked("445566778899")),
 			}
 		);
 		assert!(!output.did_revert());
@@ -2127,15 +2127,18 @@ mod tests {
 
 	#[test]
 	fn return_with_revert_status() {
-		let output =
-			execute(CODE_RETURN_WITH_DATA, hex!("010000005566778899").to_vec(), MockExt::default())
-				.unwrap();
+		let output = execute(
+			CODE_RETURN_WITH_DATA,
+			array_bytes::hex2bytes_unchecked("010000005566778899"),
+			MockExt::default(),
+		)
+		.unwrap();
 
 		assert_eq!(
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::REVERT,
-				data: Bytes(hex!("5566778899").to_vec()),
+				data: Bytes(array_bytes::hex2bytes_unchecked("5566778899")),
 			}
 		);
 		assert!(output.did_revert());

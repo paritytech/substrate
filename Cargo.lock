@@ -113,6 +113,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "698b65a961a9d730fb45b6b0327e20207810c9f61ee421b082b27ba003f49e2b"
 
 [[package]]
+name = "array-bytes"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a913633b0c922e6b745072795f50d90ebea78ba31a57e2ac8c2fc7b50950949"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -446,12 +452,12 @@ dependencies = [
 name = "beefy-gadget"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "async-trait",
  "beefy-primitives",
  "fnv",
  "futures",
  "futures-timer",
- "hex",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -514,10 +520,9 @@ dependencies = [
 name = "beefy-merkle-tree"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "beefy-primitives",
  "env_logger",
- "hex",
- "hex-literal",
  "log",
  "sp-api",
  "tiny-keccak",
@@ -527,8 +532,7 @@ dependencies = [
 name = "beefy-primitives"
 version = "4.0.0-dev"
 dependencies = [
- "hex",
- "hex-literal",
+ "array-bytes",
  "parity-scale-codec",
  "scale-info",
  "sp-api",
@@ -2113,9 +2117,9 @@ dependencies = [
 name = "frame-benchmarking"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "frame-support",
  "frame-system",
- "hex-literal",
  "linregress",
  "log",
  "parity-scale-codec",
@@ -2139,6 +2143,7 @@ name = "frame-benchmarking-cli"
 version = "4.0.0-dev"
 dependencies = [
  "Inflector",
+ "array-bytes",
  "chrono",
  "clap 3.1.18",
  "comfy-table",
@@ -2148,7 +2153,6 @@ dependencies = [
  "gethostname",
  "handlebars",
  "hash-db",
- "hex",
  "itertools",
  "kvdb",
  "lazy_static",
@@ -2239,10 +2243,10 @@ dependencies = [
 name = "frame-executive"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "frame-support",
  "frame-system",
  "frame-try-runtime",
- "hex-literal",
  "pallet-balances",
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -2856,12 +2860,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hex-literal"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
-
-[[package]]
 name = "hex_fmt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3356,7 +3354,6 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
- "hex-literal",
  "log",
  "node-primitives",
  "pallet-alliance",
@@ -4638,12 +4635,12 @@ dependencies = [
 name = "node-bench"
 version = "0.9.0-dev"
 dependencies = [
+ "array-bytes",
  "clap 3.1.18",
  "derive_more",
  "fs_extra",
  "futures",
  "hash-db",
- "hex",
  "kitchensink-runtime",
  "kvdb",
  "kvdb-rocksdb",
@@ -4675,6 +4672,7 @@ dependencies = [
 name = "node-cli"
 version = "3.0.0-dev"
 dependencies = [
+ "array-bytes",
  "assert_cmd",
  "async-std",
  "clap 3.1.18",
@@ -4684,7 +4682,6 @@ dependencies = [
  "frame-system",
  "frame-system-rpc-runtime-api",
  "futures",
- "hex-literal",
  "jsonrpsee",
  "kitchensink-runtime",
  "log",
@@ -4913,7 +4910,6 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
- "hex-literal",
  "pallet-aura",
  "pallet-balances",
  "pallet-grandpa",
@@ -5182,11 +5178,10 @@ dependencies = [
 name = "pallet-alliance"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex",
- "hex-literal",
  "log",
  "pallet-balances",
  "pallet-collective",
@@ -5417,12 +5412,11 @@ dependencies = [
 name = "pallet-beefy-mmr"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "beefy-merkle-tree",
  "beefy-primitives",
  "frame-support",
  "frame-system",
- "hex",
- "hex-literal",
  "log",
  "pallet-beefy",
  "pallet-mmr",
@@ -5494,13 +5488,13 @@ dependencies = [
 name = "pallet-contracts"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "assert_matches",
  "bitflags",
  "env_logger",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal",
  "impl-trait-for-tuples",
  "log",
  "pallet-balances",
@@ -5861,12 +5855,12 @@ dependencies = [
 name = "pallet-mmr"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "ckb-merkle-mountain-range",
  "env_logger",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal",
  "itertools",
  "parity-scale-codec",
  "scale-info",
@@ -6454,10 +6448,10 @@ dependencies = [
 name = "pallet-transaction-storage"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal",
  "log",
  "pallet-balances",
  "parity-scale-codec",
@@ -7898,11 +7892,11 @@ dependencies = [
 name = "sc-cli"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
  "chrono",
  "clap 3.1.18",
  "fdlimit",
  "futures",
- "hex",
  "libp2p",
  "log",
  "names",
@@ -8245,9 +8239,9 @@ dependencies = [
 name = "sc-executor"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
  "criterion",
  "env_logger",
- "hex-literal",
  "lazy_static",
  "lru",
  "num_cpus",
@@ -8341,6 +8335,7 @@ name = "sc-finality-grandpa"
 version = "0.10.0-dev"
 dependencies = [
  "ahash",
+ "array-bytes",
  "assert_matches",
  "async-trait",
  "dyn-clone",
@@ -8348,7 +8343,6 @@ dependencies = [
  "fork-tree",
  "futures",
  "futures-timer",
- "hex",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8429,8 +8423,8 @@ dependencies = [
 name = "sc-keystore"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "async-trait",
- "hex",
  "parking_lot 0.12.1",
  "serde_json",
  "sp-application-crypto",
@@ -8444,6 +8438,7 @@ dependencies = [
 name = "sc-network"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
  "assert_matches",
  "async-std",
  "async-trait",
@@ -8456,7 +8451,6 @@ dependencies = [
  "fork-tree",
  "futures",
  "futures-timer",
- "hex",
  "ip_network",
  "libp2p",
  "linked-hash-map",
@@ -8570,8 +8564,8 @@ dependencies = [
 name = "sc-network-light"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
  "futures",
- "hex",
  "libp2p",
  "log",
  "parity-scale-codec",
@@ -8590,9 +8584,9 @@ dependencies = [
 name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
+ "array-bytes",
  "fork-tree",
  "futures",
- "hex",
  "libp2p",
  "log",
  "lru",
@@ -8669,11 +8663,11 @@ dependencies = [
 name = "sc-offchain"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "bytes",
  "fnv",
  "futures",
  "futures-timer",
- "hex",
  "hyper",
  "hyper-rustls",
  "lazy_static",
@@ -8898,10 +8892,9 @@ dependencies = [
 name = "sc-service-test"
 version = "2.0.0"
 dependencies = [
+ "array-bytes",
  "fdlimit",
  "futures",
- "hex",
- "hex-literal",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -9042,11 +9035,11 @@ dependencies = [
 name = "sc-transaction-pool"
 version = "4.0.0-dev"
 dependencies = [
+ "array-bytes",
  "assert_matches",
  "criterion",
  "futures",
  "futures-timer",
- "hex",
  "linked-hash-map",
  "log",
  "parity-scale-codec",
@@ -9784,6 +9777,7 @@ dependencies = [
 name = "sp-core"
 version = "6.0.0"
 dependencies = [
+ "array-bytes",
  "base58",
  "bitflags",
  "blake2",
@@ -9794,8 +9788,6 @@ dependencies = [
  "futures",
  "hash-db",
  "hash256-std-hasher",
- "hex",
- "hex-literal",
  "impl-serde",
  "lazy_static",
  "libsecp256k1",
@@ -9976,7 +9968,7 @@ dependencies = [
 name = "sp-mmr-primitives"
 version = "4.0.0-dev"
 dependencies = [
- "hex-literal",
+ "array-bytes",
  "log",
  "parity-scale-codec",
  "serde",
@@ -10194,9 +10186,9 @@ dependencies = [
 name = "sp-state-machine"
 version = "0.12.0"
 dependencies = [
+ "array-bytes",
  "assert_matches",
  "hash-db",
- "hex-literal",
  "log",
  "num-traits",
  "parity-scale-codec",
@@ -10311,10 +10303,10 @@ name = "sp-trie"
 version = "6.0.0"
 dependencies = [
  "ahash",
+ "array-bytes",
  "criterion",
  "hash-db",
  "hashbrown 0.12.3",
- "hex-literal",
  "lazy_static",
  "lru",
  "memory-db",
@@ -10617,9 +10609,9 @@ dependencies = [
 name = "substrate-test-client"
 version = "2.0.1"
 dependencies = [
+ "array-bytes",
  "async-trait",
  "futures",
- "hex",
  "parity-scale-codec",
  "sc-client-api",
  "sc-client-db",

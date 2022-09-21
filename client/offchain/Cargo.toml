@@ -13,12 +13,12 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+array-bytes = "4.1"
 bytes = "1.1"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 fnv = "1.0.6"
 futures = "0.3.21"
 futures-timer = "3.0.2"
-hex = "0.4"
 hyper = { version = "0.14.16", features = ["stream", "http2"] }
 hyper-rustls = { version = "0.23.0", features = ["http2"] }
 libp2p = { version = "0.46.1", default-features = false }
