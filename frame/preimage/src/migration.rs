@@ -18,8 +18,6 @@
 //! Storage migrations for the preimage pallet.
 
 use super::*;
-#[cfg(feature = "try-runtime")]
-use frame_support::traits::OnRuntimeUpgradeHelpersExt;
 use frame_support::{
 	storage_alias,
 	traits::{ConstU32, OnRuntimeUpgrade},
