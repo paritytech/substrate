@@ -22,9 +22,9 @@ use crate as pallet_tx_pause;
 
 use frame_support::{
 	parameter_types,
-	traits::{EitherOfDiverse, Everything, InsideBoth, SortedMembers},
+	traits::{Everything, InsideBoth, SortedMembers},
 };
-use frame_system::{EnsureRoot, EnsureSignedBy};
+use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -112,12 +112,8 @@ impl SortedMembers<u64> for UnpauseOrigin {
 
 impl Config for Test {
 	type Event = Event;
-	type PauseOrigin =
-		EitherOfDiverse<EnsureSignedBy<PauseOrigin, Self::AccountId>, EnsureRoot<Self::AccountId>>; // TODO should not need to explicitly define root in addition?
-	type UnpauseOrigin = EitherOfDiverse<
-		EnsureSignedBy<UnpauseOrigin, Self::AccountId>,
-		EnsureRoot<Self::AccountId>,
-	>; // TODO should not need to explicitly define root in addition?
+	type PauseOrigin = EnsureSignedBy<PauseOrigin, Self::AccountId>;
+	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
 	type UnpausablePallets = MockUnpausablePallets;
 	type MaxNameLen = MaxNameLen;
 	type PauseTooLongNames = PauseTooLongNames;
