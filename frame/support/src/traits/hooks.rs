@@ -177,8 +177,10 @@ impl OnRuntimeUpgrade for Tuple {
 		let mut state: Vec<u8> = Vec::default();
 		let mut weight = Weight::zero();
 		for_tuples!( #(
+			let _guard = frame_support::StorageNoopGuard::default();
 			state = Tuple::pre_upgrade().unwrap();
 			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
+			let _guard = frame_support::StorageNoopGuard::default();
 			Tuple::post_upgrade(state).unwrap();
 		)* );
 		weight
