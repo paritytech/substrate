@@ -195,7 +195,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the elections-phragmen pallet's lock
 		#[pallet::constant]
@@ -1185,13 +1185,13 @@ mod tests {
 		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -1206,7 +1206,7 @@ mod tests {
 
 	impl pallet_balances::Config for Test {
 		type Balance = u64;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type DustRemoval = ();
 		type ExistentialDeposit = ConstU64<1>;
 		type AccountStore = frame_system::Pallet<Test>;
@@ -1279,7 +1279,7 @@ mod tests {
 
 	impl Config for Test {
 		type PalletId = ElectionsPhragmenPalletId;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
 		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 		type ChangeMembers = TestChangeMembers;
@@ -1298,7 +1298,8 @@ mod tests {
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-	pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, u64, Call, ()>;
+	pub type UncheckedExtrinsic =
+		sp_runtime::generic::UncheckedExtrinsic<u32, u64, RuntimeCall, ()>;
 
 	frame_support::construct_runtime!(
 		pub enum Test where
@@ -2201,7 +2202,7 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(Event::Elections(super::Event::EmptyTerm));
+			System::assert_last_event(RuntimeEvent::Elections(super::Event::EmptyTerm));
 		})
 	}
 
@@ -2217,7 +2218,7 @@ mod tests {
 			System::set_block_number(5);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
 				new_members: vec![(4, 35), (5, 45)],
 			}));
 
@@ -2230,7 +2231,7 @@ mod tests {
 			System::set_block_number(10);
 			Elections::on_initialize(System::block_number());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
 				new_members: vec![],
 			}));
 
@@ -2302,7 +2303,7 @@ mod tests {
 			assert_eq!(Elections::election_rounds(), 1);
 			assert!(members_ids().is_empty());
 
-			System::assert_last_event(Event::Elections(super::Event::NewTerm {
+			System::assert_last_event(RuntimeEvent::Elections(super::Event::NewTerm {
 				new_members: vec![],
 			}));
 		});
@@ -2610,7 +2611,7 @@ mod tests {
 			// 5 is an outgoing loser. will also get slashed.
 			assert_eq!(balances(&5), (45, 2));
 
-			System::assert_has_event(Event::Elections(super::Event::NewTerm {
+			System::assert_has_event(RuntimeEvent::Elections(super::Event::NewTerm {
 				new_members: vec![(4, 35), (5, 45)],
 			}));
 		})

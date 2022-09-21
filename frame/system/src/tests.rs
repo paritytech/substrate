@@ -18,8 +18,7 @@
 use crate::*;
 use frame_support::{
 	assert_noop, assert_ok,
-	dispatch::PostDispatchInfo,
-	weights::{Pays, WithPostDispatchInfo},
+	dispatch::{Pays, PostDispatchInfo, WithPostDispatchInfo},
 };
 use mock::{Origin, *};
 use sp_core::H256;
@@ -55,9 +54,9 @@ fn stored_map_works() {
 		System::dec_consumers(&0);
 		assert!(!System::is_provider_required(&0));
 
-		assert!(KILLED.with(|r| r.borrow().is_empty()));
+		assert!(Killed::get().is_empty());
 		assert_ok!(System::remove(&0));
-		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
+		assert_eq!(Killed::get(), vec![0u64]);
 	});
 }
 

@@ -105,7 +105,7 @@ pub fn expand_outer_origin(
 		#[derive(Clone)]
 		pub struct Origin {
 			caller: OriginCaller,
-			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::Call) -> bool>>,
+			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::RuntimeCall) -> bool>>,
 		}
 
 		#[cfg(not(feature = "std"))]
@@ -132,7 +132,7 @@ pub fn expand_outer_origin(
 		}
 
 		impl #scrate::traits::OriginTrait for Origin {
-			type Call = <#runtime as #system_path::Config>::Call;
+			type Call = <#runtime as #system_path::Config>::RuntimeCall;
 			type PalletsOrigin = OriginCaller;
 			type AccountId = <#runtime as #system_path::Config>::AccountId;
 
@@ -147,7 +147,7 @@ pub fn expand_outer_origin(
 			fn reset_filter(&mut self) {
 				let filter = <
 					<#runtime as #system_path::Config>::BaseCallFilter
-					as #scrate::traits::Contains<<#runtime as #system_path::Config>::Call>
+					as #scrate::traits::Contains<<#runtime as #system_path::Config>::RuntimeCall>
 				>::contains;
 
 				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(filter));

@@ -36,7 +36,7 @@ pub use pallet::*;
 pub use weights::*;
 
 pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
-pub type FunctionNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
+pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -98,22 +98,22 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// This call got paused.
-		CallPaused(PalletNameOf<T>, FunctionNameOf<T>),
+		CallPaused(PalletNameOf<T>, CallNameOf<T>),
 		/// This call got un-paused.
-		CallUnpaused(PalletNameOf<T>, FunctionNameOf<T>),
+		CallUnpaused(PalletNameOf<T>, CallNameOf<T>),
 	}
 
 	/// The set of calls that are explicitly paused.
 	#[pallet::storage]
 	#[pallet::getter(fn paused_calls)]
 	pub type PausedCalls<T: Config> =
-		StorageMap<_, Blake2_128Concat, (PalletNameOf<T>, FunctionNameOf<T>), (), OptionQuery>;
+		StorageMap<_, Blake2_128Concat, (PalletNameOf<T>, CallNameOf<T>), (), OptionQuery>;
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		/// The initially paused calls.
-		pub paused: Vec<(PalletNameOf<T>, FunctionNameOf<T>)>,
+		pub paused: Vec<(PalletNameOf<T>, CallNameOf<T>)>,
 		pub _phantom: PhantomData<T>,
 	}
 
@@ -145,13 +145,13 @@ pub mod pallet {
 		pub fn pause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
-			function: FunctionNameOf<T>,
+			call: CallNameOf<T>,
 		) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_pause(&pallet, &function)?;
-			PausedCalls::<T>::insert((&pallet, &function), ());
-			Self::deposit_event(Event::CallPaused(pallet, function));
+			Self::ensure_can_pause(&pallet, &call)?;
+			PausedCalls::<T>::insert((&pallet, &call), ());
+			Self::deposit_event(Event::CallPaused(pallet, call));
 
 			Ok(())
 		}
@@ -164,13 +164,13 @@ pub mod pallet {
 		pub fn unpause_call(
 			origin: OriginFor<T>,
 			pallet: PalletNameOf<T>,
-			function: FunctionNameOf<T>,
+			call: CallNameOf<T>,
 		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_unpause(&pallet, &function)?;
-			PausedCalls::<T>::remove((&pallet, &function));
-			Self::deposit_event(Event::CallUnpaused(pallet, function));
+			Self::ensure_can_unpause(&pallet, &call)?;
+			PausedCalls::<T>::remove((&pallet, &call));
+			Self::deposit_event(Event::CallUnpaused(pallet, call));
 
 			Ok(())
 		}
@@ -179,25 +179,25 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Return whether this call is paused.
-	pub fn is_paused_unbound(pallet: Vec<u8>, function: Vec<u8>) -> bool {
-		let pallet = PalletNameOf::<T>::try_from(pallet);
-		let function = FunctionNameOf::<T>::try_from(function);
+	pub fn is_paused_unbound(pallet: Vec<u8>, call: Vec<u8>) -> bool {
+		let pallet = PalletNameOf::<T>::try_from(call);
+		let call = CallNameOf::<T>::try_from(call);
 
-		match (pallet, function) {
-			(Ok(pallet), Ok(function)) => Self::is_paused(&pallet, &function),
+		match (pallet, call) {
+			(Ok(pallet), Ok(call)) => Self::is_paused(&pallet, &call),
 			_ => T::PauseTooLongNames::get(),
 		}
 	}
 
 	/// Return whether this call is paused.
-	pub fn is_paused(pallet: &PalletNameOf<T>, function: &FunctionNameOf<T>) -> bool {
-		<PausedCalls<T>>::contains_key((pallet, function))
+	pub fn is_paused(pallet: &PalletNameOf<T>, call: &CallNameOf<T>) -> bool {
+		<PausedCalls<T>>::contains_key((pallet, call))
 	}
 
 	/// Ensure that this call can be paused.
 	pub fn ensure_can_pause(
 		pallet: &PalletNameOf<T>,
-		function: &FunctionNameOf<T>,
+		call: &CallNameOf<T>,
 	) -> Result<(), Error<T>> {
 		// The `TxPause` pallet can never be paused.
 		if pallet.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
@@ -206,7 +206,7 @@ impl<T: Config> Pallet<T> {
 		if T::UnpausablePallets::contains(&pallet) {
 			return Err(Error::<T>::IsUnpausable)
 		}
-		if Self::is_paused(pallet, function) {
+		if Self::is_paused(pallet, call) {
 			return Err(Error::<T>::IsPaused)
 		}
 		Ok(())
@@ -215,9 +215,9 @@ impl<T: Config> Pallet<T> {
 	/// Ensure that this call can be un-paused.
 	pub fn ensure_can_unpause(
 		pallet: &PalletNameOf<T>,
-		function: &FunctionNameOf<T>,
+		call: &CallNameOf<T>,
 	) -> Result<(), Error<T>> {
-		if Self::is_paused(pallet, function) {
+		if Self::is_paused(pallet, call) {
 			// SAFETY: Everything that is paused, can be un-paused.
 			Ok(())
 		} else {

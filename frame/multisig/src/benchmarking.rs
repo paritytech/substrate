@@ -42,7 +42,7 @@ fn setup_multi<T: Config>(
 	}
 	signatories.sort();
 	// Must first convert to outer call type.
-	let call: <T as Config>::Call =
+	let call: <T as Config>::RuntimeCall =
 		frame_system::Call::<T>::remark { remark: vec![0; z as usize] }.into();
 	let call_data = OpaqueCall::<T>::from_encoded(call.encode());
 	Ok((signatories, call_data))
@@ -54,7 +54,7 @@ benchmarks! {
 		let z in 0 .. 10_000;
 		let max_signatories = T::MaxSignatories::get().into();
 		let (mut signatories, _) = setup_multi::<T>(max_signatories, z)?;
-		let call: <T as Config>::Call = frame_system::Call::<T>::remark {
+		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark {
 			remark: vec![0; z as usize]
 		}.into();
 		let call_hash = call.using_encoded(blake2_256);

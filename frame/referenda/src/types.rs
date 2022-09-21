@@ -30,7 +30,7 @@ pub type BalanceOf<T, I = ()> =
 pub type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-pub type CallOf<T, I> = <T as Config<I>>::Call;
+pub type CallOf<T, I> = <T as Config<I>>::RuntimeCall;
 pub type VotesOf<T, I> = <T as Config<I>>::Votes;
 pub type TallyOf<T, I> = <T as Config<I>>::Tally;
 pub type PalletsOriginOf<T> = <<T as frame_system::Config>::Origin as OriginTrait>::PalletsOrigin;
