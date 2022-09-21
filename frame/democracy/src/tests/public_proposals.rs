@@ -35,10 +35,10 @@ fn backing_for_should_work() {
 fn deposit_for_proposals_should_be_taken() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));
-		assert_ok!(Democracy::second(Origin::signed(2), 0, u32::MAX));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(RuntimeOrigin::signed(2), 0, u32::MAX));
+		assert_ok!(Democracy::second(RuntimeOrigin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(RuntimeOrigin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(RuntimeOrigin::signed(5), 0, u32::MAX));
 		assert_eq!(Balances::free_balance(1), 5);
 		assert_eq!(Balances::free_balance(2), 15);
 		assert_eq!(Balances::free_balance(5), 35);
@@ -49,10 +49,10 @@ fn deposit_for_proposals_should_be_taken() {
 fn deposit_for_proposals_should_be_returned() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));
-		assert_ok!(Democracy::second(Origin::signed(2), 0, u32::MAX));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
-		assert_ok!(Democracy::second(Origin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(RuntimeOrigin::signed(2), 0, u32::MAX));
+		assert_ok!(Democracy::second(RuntimeOrigin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(RuntimeOrigin::signed(5), 0, u32::MAX));
+		assert_ok!(Democracy::second(RuntimeOrigin::signed(5), 0, u32::MAX));
 		fast_forward_to(3);
 		assert_eq!(Balances::free_balance(1), 10);
 		assert_eq!(Balances::free_balance(2), 20);
@@ -79,7 +79,7 @@ fn poor_seconder_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(2, 2, 11));
 		assert_noop!(
-			Democracy::second(Origin::signed(1), 0, u32::MAX),
+			Democracy::second(RuntimeOrigin::signed(1), 0, u32::MAX),
 			BalancesError::<Test, _>::InsufficientBalance
 		);
 	});
@@ -89,7 +89,10 @@ fn poor_seconder_should_not_work() {
 fn invalid_seconds_upper_bound_should_not_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(1, 2, 5));
-		assert_noop!(Democracy::second(Origin::signed(2), 0, 0), Error::<Test>::WrongUpperBound);
+		assert_noop!(
+			Democracy::second(RuntimeOrigin::signed(2), 0, 0),
+			Error::<Test>::WrongUpperBound
+		);
 	});
 }
 
@@ -98,8 +101,8 @@ fn cancel_proposal_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(propose_set_balance_and_note(1, 2, 2));
 		assert_ok!(propose_set_balance_and_note(1, 4, 4));
-		assert_noop!(Democracy::cancel_proposal(Origin::signed(1), 0), BadOrigin);
-		assert_ok!(Democracy::cancel_proposal(Origin::root(), 0));
+		assert_noop!(Democracy::cancel_proposal(RuntimeOrigin::signed(1), 0), BadOrigin);
+		assert_ok!(Democracy::cancel_proposal(RuntimeOrigin::root(), 0));
 		System::assert_last_event(crate::Event::ProposalCanceled { prop_index: 0 }.into());
 		assert_eq!(Democracy::backing_for(0), None);
 		assert_eq!(Democracy::backing_for(1), Some(4));
@@ -115,8 +118,8 @@ fn blacklisting_should_work() {
 		assert_ok!(propose_set_balance_and_note(1, 2, 2));
 		assert_ok!(propose_set_balance_and_note(1, 4, 4));
 
-		assert_noop!(Democracy::blacklist(Origin::signed(1), hash, None), BadOrigin);
-		assert_ok!(Democracy::blacklist(Origin::root(), hash, None));
+		assert_noop!(Democracy::blacklist(RuntimeOrigin::signed(1), hash, None), BadOrigin);
+		assert_ok!(Democracy::blacklist(RuntimeOrigin::root(), hash, None));
 
 		assert_eq!(Democracy::backing_for(0), None);
 		assert_eq!(Democracy::backing_for(1), Some(4));
@@ -127,7 +130,7 @@ fn blacklisting_should_work() {
 
 		let hash = set_balance_proposal_hash(4);
 		assert_ok!(Democracy::referendum_status(0));
-		assert_ok!(Democracy::blacklist(Origin::root(), hash, Some(0)));
+		assert_ok!(Democracy::blacklist(RuntimeOrigin::root(), hash, Some(0)));
 		assert_noop!(Democracy::referendum_status(0), Error::<Test>::ReferendumInvalid);
 	});
 }
@@ -140,10 +143,10 @@ fn runners_up_should_come_after() {
 		assert_ok!(propose_set_balance_and_note(1, 4, 4));
 		assert_ok!(propose_set_balance_and_note(1, 3, 3));
 		fast_forward_to(2);
-		assert_ok!(Democracy::vote(Origin::signed(1), 0, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), 0, aye(1)));
 		fast_forward_to(4);
-		assert_ok!(Democracy::vote(Origin::signed(1), 1, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), 1, aye(1)));
 		fast_forward_to(6);
-		assert_ok!(Democracy::vote(Origin::signed(1), 2, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), 2, aye(1)));
 	});
 }

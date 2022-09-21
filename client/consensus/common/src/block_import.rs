@@ -294,18 +294,23 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 		}
 	}
 
-	/// Take intermediate by given key, and remove it from the processing list.
-	pub fn take_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<Box<T>, Error> {
+	/// Insert intermediate by given key.
+	pub fn insert_intermediate<T: 'static + Send>(&mut self, key: &'static [u8], value: T) {
+		self.intermediates.insert(Cow::from(key), Box::new(value));
+	}
+
+	/// Remove and return intermediate by given key.
+	pub fn remove_intermediate<T: 'static>(&mut self, key: &[u8]) -> Result<T, Error> {
 		let (k, v) = self.intermediates.remove_entry(key).ok_or(Error::NoIntermediate)?;
 
-		v.downcast::<T>().map_err(|v| {
+		v.downcast::<T>().map(|v| *v).map_err(|v| {
 			self.intermediates.insert(k, v);
 			Error::InvalidIntermediate
 		})
 	}
 
 	/// Get a reference to a given intermediate.
-	pub fn intermediate<T: 'static>(&self, key: &[u8]) -> Result<&T, Error> {
+	pub fn get_intermediate<T: 'static>(&self, key: &[u8]) -> Result<&T, Error> {
 		self.intermediates
 			.get(key)
 			.ok_or(Error::NoIntermediate)?
@@ -314,7 +319,7 @@ impl<Block: BlockT, Transaction> BlockImportParams<Block, Transaction> {
 	}
 
 	/// Get a mutable reference to a given intermediate.
-	pub fn intermediate_mut<T: 'static>(&mut self, key: &[u8]) -> Result<&mut T, Error> {
+	pub fn get_intermediate_mut<T: 'static>(&mut self, key: &[u8]) -> Result<&mut T, Error> {
 		self.intermediates
 			.get_mut(key)
 			.ok_or(Error::NoIntermediate)?

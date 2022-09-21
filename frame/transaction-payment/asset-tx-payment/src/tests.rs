@@ -87,7 +87,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;
@@ -338,7 +338,7 @@ fn transaction_payment_in_asset_possible() {
 			let asset_id = 1;
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				asset_id,
 				42,   /* owner */
 				true, /* is_sufficient */
@@ -391,7 +391,7 @@ fn transaction_payment_without_fee() {
 			let asset_id = 1;
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				asset_id,
 				42,   /* owner */
 				true, /* is_sufficient */
@@ -444,7 +444,7 @@ fn asset_transaction_payment_with_tip_and_refund() {
 			let asset_id = 1;
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				asset_id,
 				42,   /* owner */
 				true, /* is_sufficient */
@@ -496,7 +496,7 @@ fn payment_from_account_with_only_assets() {
 			let asset_id = 1;
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				asset_id,
 				42,   /* owner */
 				true, /* is_sufficient */
@@ -555,7 +555,7 @@ fn payment_only_with_existing_sufficient_asset() {
 			// create the non-sufficient asset
 			let min_balance = 2;
 			assert_ok!(Assets::force_create(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				asset_id,
 				42,    /* owner */
 				false, /* is_sufficient */
@@ -580,7 +580,7 @@ fn converted_fee_is_never_zero_if_input_fee_is_not() {
 			let asset_id = 1;
 			let min_balance = 1;
 			assert_ok!(Assets::force_create(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				asset_id,
 				42,   /* owner */
 				true, /* is_sufficient */
@@ -645,7 +645,7 @@ fn post_dispatch_fee_is_zero_if_pre_dispatch_fee_is_zero() {
 			let asset_id = 1;
 			let min_balance = 100;
 			assert_ok!(Assets::force_create(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				asset_id,
 				42,   /* owner */
 				true, /* is_sufficient */
@@ -702,7 +702,7 @@ fn post_dispatch_fee_is_zero_if_unsigned_pre_dispatch_fee_is_zero() {
 			let asset_id = 1;
 			let min_balance = 100;
 			assert_ok!(Assets::force_create(
-				Origin::root(),
+				RuntimeOrigin::root(),
 				asset_id,
 				42,   /* owner */
 				true, /* is_sufficient */

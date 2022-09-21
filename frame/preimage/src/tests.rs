@@ -26,7 +26,7 @@ use pallet_balances::Error as BalancesError;
 #[test]
 fn user_note_preimage_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
 		assert_eq!(Balances::reserved_balance(2), 3);
 		assert_eq!(Balances::free_balance(2), 97);
 
@@ -35,11 +35,11 @@ fn user_note_preimage_works() {
 		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
 
 		assert_noop!(
-			Preimage::note_preimage(Origin::signed(2), vec![1]),
+			Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]),
 			Error::<Test>::AlreadyNoted
 		);
 		assert_noop!(
-			Preimage::note_preimage(Origin::signed(0), vec![2]),
+			Preimage::note_preimage(RuntimeOrigin::signed(0), vec![2]),
 			BalancesError::<Test>::InsufficientBalance
 		);
 	});
@@ -48,7 +48,7 @@ fn user_note_preimage_works() {
 #[test]
 fn manager_note_preimage_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), vec![1]));
 		assert_eq!(Balances::reserved_balance(1), 0);
 		assert_eq!(Balances::free_balance(1), 100);
 
@@ -57,7 +57,7 @@ fn manager_note_preimage_works() {
 		assert_eq!(Preimage::get_preimage(&h), Some(vec![1]));
 
 		assert_noop!(
-			Preimage::note_preimage(Origin::signed(1), vec![1]),
+			Preimage::note_preimage(RuntimeOrigin::signed(1), vec![1]),
 			Error::<Test>::AlreadyNoted
 		);
 	});
@@ -66,19 +66,19 @@ fn manager_note_preimage_works() {
 #[test]
 fn user_unnote_preimage_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
 		assert_noop!(
-			Preimage::unnote_preimage(Origin::signed(3), hashed([1])),
+			Preimage::unnote_preimage(RuntimeOrigin::signed(3), hashed([1])),
 			Error::<Test>::NotAuthorized
 		);
 		assert_noop!(
-			Preimage::unnote_preimage(Origin::signed(2), hashed([2])),
+			Preimage::unnote_preimage(RuntimeOrigin::signed(2), hashed([2])),
 			Error::<Test>::NotNoted
 		);
 
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(2), hashed([1])));
+		assert_ok!(Preimage::unnote_preimage(RuntimeOrigin::signed(2), hashed([1])));
 		assert_noop!(
-			Preimage::unnote_preimage(Origin::signed(2), hashed([1])),
+			Preimage::unnote_preimage(RuntimeOrigin::signed(2), hashed([1])),
 			Error::<Test>::NotNoted
 		);
 
@@ -91,10 +91,10 @@ fn user_unnote_preimage_works() {
 #[test]
 fn manager_unnote_preimage_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), vec![1]));
+		assert_ok!(Preimage::unnote_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_noop!(
-			Preimage::unnote_preimage(Origin::signed(1), hashed([1])),
+			Preimage::unnote_preimage(RuntimeOrigin::signed(1), hashed([1])),
 			Error::<Test>::NotNoted
 		);
 
@@ -107,17 +107,17 @@ fn manager_unnote_preimage_works() {
 #[test]
 fn manager_unnote_user_preimage_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
 		assert_noop!(
-			Preimage::unnote_preimage(Origin::signed(3), hashed([1])),
+			Preimage::unnote_preimage(RuntimeOrigin::signed(3), hashed([1])),
 			Error::<Test>::NotAuthorized
 		);
 		assert_noop!(
-			Preimage::unnote_preimage(Origin::signed(2), hashed([2])),
+			Preimage::unnote_preimage(RuntimeOrigin::signed(2), hashed([2])),
 			Error::<Test>::NotNoted
 		);
 
-		assert_ok!(Preimage::unnote_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::unnote_preimage(RuntimeOrigin::signed(1), hashed([1])));
 
 		let h = hashed([1]);
 		assert!(!Preimage::have_preimage(&h));
@@ -128,10 +128,10 @@ fn manager_unnote_user_preimage_works() {
 #[test]
 fn requested_then_noted_preimage_cannot_be_unnoted() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), vec![1]));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_noop!(
-			Preimage::unnote_preimage(Origin::signed(1), hashed([1])),
+			Preimage::unnote_preimage(RuntimeOrigin::signed(1), hashed([1])),
 			Error::<Test>::Requested
 		);
 
@@ -144,16 +144,16 @@ fn requested_then_noted_preimage_cannot_be_unnoted() {
 #[test]
 fn request_note_order_makes_no_difference() {
 	let one_way = new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), vec![1]));
 		(
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
 			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		)
 	});
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(1), vec![1]));
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(1), vec![1]));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		let other_way = (
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
 			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
@@ -165,8 +165,8 @@ fn request_note_order_makes_no_difference() {
 #[test]
 fn requested_then_user_noted_preimage_is_free() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
 		assert_eq!(Balances::reserved_balance(2), 0);
 		assert_eq!(Balances::free_balance(2), 100);
 
@@ -179,16 +179,16 @@ fn requested_then_user_noted_preimage_is_free() {
 #[test]
 fn request_user_note_order_makes_no_difference() {
 	let one_way = new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
 		(
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
 			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
 		)
 	});
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		let other_way = (
 			StatusFor::<Test>::iter().collect::<Vec<_>>(),
 			PreimageFor::<Test>::iter().collect::<Vec<_>>(),
@@ -200,20 +200,20 @@ fn request_user_note_order_makes_no_difference() {
 #[test]
 fn unrequest_preimage_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
 		assert_noop!(
-			Preimage::unrequest_preimage(Origin::signed(1), hashed([2])),
+			Preimage::unrequest_preimage(RuntimeOrigin::signed(1), hashed([2])),
 			Error::<Test>::NotRequested
 		);
 
-		assert_ok!(Preimage::unrequest_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::unrequest_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert!(Preimage::have_preimage(&hashed([1])));
 
-		assert_ok!(Preimage::unrequest_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::unrequest_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		assert_noop!(
-			Preimage::unrequest_preimage(Origin::signed(1), hashed([1])),
+			Preimage::unrequest_preimage(RuntimeOrigin::signed(1), hashed([1])),
 			Error::<Test>::NotRequested
 		);
 	});
@@ -222,10 +222,10 @@ fn unrequest_preimage_works() {
 #[test]
 fn user_noted_then_requested_preimage_is_refunded_once_only() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1; 3]));
-		assert_ok!(Preimage::note_preimage(Origin::signed(2), vec![1]));
-		assert_ok!(Preimage::request_preimage(Origin::signed(1), hashed([1])));
-		assert_ok!(Preimage::unrequest_preimage(Origin::signed(1), hashed([1])));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1; 3]));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(2), vec![1]));
+		assert_ok!(Preimage::request_preimage(RuntimeOrigin::signed(1), hashed([1])));
+		assert_ok!(Preimage::unrequest_preimage(RuntimeOrigin::signed(1), hashed([1])));
 		// Still have reserve from `vec[1; 3]`.
 		assert_eq!(Balances::reserved_balance(2), 5);
 		assert_eq!(Balances::free_balance(2), 95);
