@@ -280,10 +280,10 @@ where
 	///
 	/// # Parameters
 	///
-	/// `absorbed`: The child storage meter that should be absorbed.
-	/// `origin`: The origin that spawned the original root meter.
-	/// `contract`: The contract that this sub call belongs to.
-	/// `info`: The info of the contract in question. `None` if the contract was terminated.
+	/// - `absorbed`: The child storage meter that should be absorbed.
+	/// - `origin`: The origin that spawned the original root meter.
+	/// - `contract`: The contract that this sub call belongs to.
+	/// - `info`: The info of the contract in question. `None` if the contract was terminated.
 	pub fn absorb(
 		&mut self,
 		absorbed: RawMeter<T, E, Nested>,
@@ -720,7 +720,7 @@ mod tests {
 		assert_eq!(
 			TestExtTestValue::get(),
 			TestExt {
-				limit_checks: vec![LimitCheck { origin: ALICE, limit: 1_000, min_leftover: 0 }],
+				limit_checks: vec![LimitCheck { origin: ALICE, limit: 100, min_leftover: 0 }],
 				charges: vec![
 					Charge {
 						origin: ALICE,
