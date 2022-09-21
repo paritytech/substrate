@@ -167,7 +167,7 @@ where
 	/// [`beefy_protocol_name::justifications_protocol_name`].
 	pub justifications_protocol_name: ProtocolName,
 
-	_phantom: PhantomData<B>,
+	pub _phantom: PhantomData<B>,
 }
 
 /// BEEFY gadget initialization parameters.

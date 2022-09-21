@@ -128,13 +128,13 @@ where
 	Client: BlockBackend<B> + Send + Sync,
 {
 	/// Create a new [`BeefyJustifsRequestHandler`].
-	pub fn new(fork_id: Option<&str>, client: Arc<Client>) -> (Self, RequestResponseConfig) {
-		let genesis = client
-			.block_hash(0u32.into())
-			.ok()
-			.flatten()
-			.expect("Genesis block exists; qed");
-		let (request_receiver, config) = on_demand_justifications_protocol_config(genesis, fork_id);
+	pub fn new<Hash: AsRef<[u8]>>(
+		genesis_hash: Hash,
+		fork_id: Option<&str>,
+		client: Arc<Client>,
+	) -> (Self, RequestResponseConfig) {
+		let (request_receiver, config) =
+			on_demand_justifications_protocol_config(genesis_hash, fork_id);
 		let justif_protocol_name = config.name.clone();
 
 		(Self { request_receiver, justif_protocol_name, client, _block: PhantomData }, config)
