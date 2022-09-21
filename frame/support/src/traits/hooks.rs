@@ -23,7 +23,7 @@ use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
 #[cfg(feature = "try-runtime")]
-use codec::{Decode, Encode};
+use codec::Decode;
 
 /// The block initialization trait.
 ///
@@ -165,6 +165,7 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
+	#[cfg(not(feature = "try-runtime"))]
 	fn on_runtime_upgrade() -> Weight {
 		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
@@ -172,20 +173,29 @@ impl OnRuntimeUpgrade for Tuple {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		let mut state: Vec<Vec<u8>> = Vec::default();
-		for_tuples!( #( state.push(Tuple::pre_upgrade()?); )* );
-		Ok(state.encode())
+	/// We are executing pre and post checks sequentially in order to be able to test seveal
+	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
+	/// hooks for tuples are a noop.
+	fn on_runtime_upgrade() -> Weight {
+		let mut state: Vec<u8> = Vec::default();
+		let mut weight = Weight::zero();
+		for_tuples!( #(
+			state = Tuple::pre_upgrade().unwrap();
+			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
+			Tuple::post_upgrade(state).unwrap();
+		)* );
+		weight
 	}
 
 	#[cfg(feature = "try-runtime")]
+	/// noop
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	/// noop
 	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-		let state: Vec<Vec<u8>> = Decode::decode(&mut state.as_slice())
-			.expect("the state parameter should be the same as pre_upgrade generated");
-		let mut state_iter = state.into_iter();
-		for_tuples!( #( Tuple::post_upgrade(
-			state_iter.next().expect("the state parameter should be the same as pre_upgrade generated")
-		)?; )* );
 		Ok(())
 	}
 }
