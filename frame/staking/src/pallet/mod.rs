@@ -22,10 +22,12 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
+		Currency, CurrencyToVote, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
+		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
+		UnixTime,
 	},
 	weights::Weight,
+	BoundedVec,
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use sp_runtime::{
@@ -58,7 +60,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Possible operations on the configuration values of this pallet.
@@ -123,6 +124,28 @@ pub mod pallet {
 		/// Maximum number of nominations per nominator.
 		#[pallet::constant]
 		type MaxNominations: Get<u32>;
+
+		/// Number of eras to keep in history.
+		///
+		/// Following information is kept for eras in `[current_era -
+		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
+		/// `ErasValidatorPrefs`, `ErasValidatorReward`, `ErasRewardPoints`,
+		/// `ErasTotalStake`, `ErasStartSessionIndex`,
+		/// `StakingLedger.claimed_rewards`.
+		///
+		/// Must be more than the number of eras delayed by session.
+		/// I.e. active era must always be in history. I.e. `active_era >
+		/// current_era - history_depth` must be guaranteed.
+		///
+		/// If migrating an existing pallet from storage value to config value,
+		/// this should be set to same value or greater as in storage.
+		///
+		/// Note: `HistoryDepth` is used as the upper bound for the `BoundedVec`
+		/// item `StakingLedger.claimed_rewards`. Setting this value lower than
+		/// the existing value can lead to inconsistencies and will need to be
+		/// handled properly in a migration.
+		#[pallet::constant]
+		type HistoryDepth: Get<u32>;
 
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
@@ -230,22 +253,6 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	#[pallet::type_value]
-	pub(crate) fn HistoryDepthOnEmpty() -> u32 {
-		84u32
-	}
-
-	/// Number of eras to keep in history.
-	///
-	/// Information is kept for eras in `[current_era - history_depth; current_era]`.
-	///
-	/// Must be more than the number of eras delayed by session otherwise. I.e. active era must
-	/// always be in history. I.e. `active_era > current_era - history_depth` must be
-	/// guaranteed.
-	#[pallet::storage]
-	#[pallet::getter(fn history_depth)]
-	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
-
 	/// The ideal number of staking participants.
 	#[pallet::storage]
 	#[pallet::getter(fn validator_count)]
@@ -261,6 +268,7 @@ pub mod pallet {
 	/// invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
+	#[pallet::unbounded]
 	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
@@ -364,6 +372,7 @@ pub mod pallet {
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers)]
+	#[pallet::unbounded]
 	pub type ErasStakers<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
@@ -386,6 +395,7 @@ pub mod pallet {
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn eras_stakers_clipped)]
 	pub type ErasStakersClipped<T: Config> = StorageDoubleMap<
 		_,
@@ -425,6 +435,7 @@ pub mod pallet {
 	/// Rewards for the last `HISTORY_DEPTH` eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn eras_reward_points)]
 	pub type ErasRewardPoints<T: Config> =
 		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
@@ -456,6 +467,7 @@ pub mod pallet {
 
 	/// All unapplied slashes that are queued for later.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub type UnappliedSlashes<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -469,6 +481,7 @@ pub mod pallet {
 	/// Must contains information for eras for the range:
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(crate) type BondedEras<T: Config> =
 		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
 
@@ -491,6 +504,7 @@ pub mod pallet {
 
 	/// Slashing spans for stash accounts.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(crate) type SlashingSpans<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
 
@@ -522,6 +536,7 @@ pub mod pallet {
 	/// whether a given validator has previously offended using binary search. It gets cleared when
 	/// the era ends.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn offending_validators)]
 	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
@@ -540,7 +555,6 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub history_depth: u32,
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
 		pub invulnerables: Vec<T::AccountId>,
@@ -559,7 +573,6 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig {
-				history_depth: 84u32,
 				validator_count: Default::default(),
 				minimum_validator_count: Default::default(),
 				invulnerables: Default::default(),
@@ -578,7 +591,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			HistoryDepth::<T>::put(self.history_depth);
 			ValidatorCount::<T>::put(self.validator_count);
 			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
 			Invulnerables::<T>::put(&self.invulnerables);
@@ -729,6 +741,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
+		/// Some bound is not met.
+		BoundNotMet,
 	}
 
 	#[pallet::hooks]
@@ -830,7 +844,7 @@ pub mod pallet {
 			<Payee<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
-			let history_depth = Self::history_depth();
+			let history_depth = T::HistoryDepth::get();
 			let last_reward_era = current_era.saturating_sub(history_depth);
 
 			let stash_balance = T::Currency::free_balance(&stash);
@@ -841,7 +855,12 @@ pub mod pallet {
 				total: value,
 				active: value,
 				unlocking: Default::default(),
-				claimed_rewards: (last_reward_era..current_era).collect(),
+				claimed_rewards: (last_reward_era..current_era)
+					.try_collect()
+					// Since last_reward_era is calculated as `current_era -
+					// HistoryDepth`, following bound is always expected to be
+					// satisfied.
+					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())
@@ -1464,48 +1483,6 @@ pub mod pallet {
 				.saturating_add(initial_unlocking)
 				.saturating_sub(ledger.unlocking.len() as u32);
 			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
-		}
-
-		/// Set `HistoryDepth` value. This function will delete any history information
-		/// when `HistoryDepth` is reduced.
-		///
-		/// Parameters:
-		/// - `new_history_depth`: The new history depth you would like to set.
-		/// - `era_items_deleted`: The number of items that will be deleted by this dispatch. This
-		///   should report all the storage items that will be deleted by clearing old era history.
-		///   Needed to report an accurate weight for the dispatch. Trusted by `Root` to report an
-		///   accurate number.
-		///
-		/// RuntimeOrigin must be root.
-		///
-		/// # <weight>
-		/// - E: Number of history depths removed, i.e. 10 -> 7 = 3
-		/// - Weight: O(E)
-		/// - DB Weight:
-		///     - Reads: Current Era, History Depth
-		///     - Writes: History Depth
-		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
-		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake,
-		///       ErasStartSessionIndex
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_history_depth(*_era_items_deleted))]
-		pub fn set_history_depth(
-			origin: OriginFor<T>,
-			#[pallet::compact] new_history_depth: EraIndex,
-			#[pallet::compact] _era_items_deleted: u32,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			if let Some(current_era) = Self::current_era() {
-				HistoryDepth::<T>::mutate(|history_depth| {
-					let last_kept = current_era.saturating_sub(*history_depth);
-					let new_last_kept = current_era.saturating_sub(new_history_depth);
-					for era_index in last_kept..new_last_kept {
-						Self::clear_era_information(era_index);
-					}
-					*history_depth = new_history_depth
-				})
-			}
-			Ok(())
 		}
 
 		/// Remove all data structures concerning a staker/stash once it is at a state where it can

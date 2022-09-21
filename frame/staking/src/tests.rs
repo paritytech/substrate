@@ -148,14 +148,14 @@ fn basic_setup_works() {
 
 		// Account 10 controls the stash from account 11, which is 100 * balance_factor units
 		assert_eq!(
-			Staking::ledger(&10),
-			Some(StakingLedger {
+			Staking::ledger(&10).unwrap(),
+			StakingLedger {
 				stash: 11,
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![]
-			})
+				claimed_rewards: bounded_vec![],
+			}
 		);
 		// Account 20 controls the stash from account 21, which is 200 * balance_factor units
 		assert_eq!(
@@ -165,7 +165,7 @@ fn basic_setup_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![]
+				claimed_rewards: bounded_vec![],
 			})
 		);
 		// Account 1 does not control any stash
@@ -188,7 +188,7 @@ fn basic_setup_works() {
 				total: 500,
 				active: 500,
 				unlocking: Default::default(),
-				claimed_rewards: vec![]
+				claimed_rewards: bounded_vec![],
 			})
 		);
 		assert_eq!(Staking::nominators(101).unwrap().targets, vec![11, 21]);
@@ -433,7 +433,7 @@ fn staking_should_work() {
 				total: 1500,
 				active: 1500,
 				unlocking: Default::default(),
-				claimed_rewards: vec![0],
+				claimed_rewards: bounded_vec![0],
 			})
 		);
 		// e.g. it cannot reserve more than 500 that it has free from the total 2000
@@ -1022,7 +1022,7 @@ fn reward_destination_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1045,7 +1045,7 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: vec![0],
+				claimed_rewards: bounded_vec![0],
 			})
 		);
 
@@ -1073,7 +1073,7 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: vec![0, 1],
+				claimed_rewards: bounded_vec![0, 1],
 			})
 		);
 
@@ -1102,7 +1102,7 @@ fn reward_destination_works() {
 				total: 1000 + total_payout_0,
 				active: 1000 + total_payout_0,
 				unlocking: Default::default(),
-				claimed_rewards: vec![0, 1, 2],
+				claimed_rewards: bounded_vec![0, 1, 2],
 			})
 		);
 		// Check that amount in staked account is NOT increased.
@@ -1164,7 +1164,7 @@ fn bond_extra_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1181,7 +1181,7 @@ fn bond_extra_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1195,7 +1195,7 @@ fn bond_extra_works() {
 				total: 1000000,
 				active: 1000000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 	});
@@ -1233,7 +1233,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 		assert_eq!(
@@ -1251,7 +1251,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 		// Exposure is a snapshot! only updated after the next era update.
@@ -1272,7 +1272,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 1000 + 100,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 		// Exposure is now updated.
@@ -1290,7 +1290,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
-				claimed_rewards: vec![]
+				claimed_rewards: bounded_vec![],
 			}),
 		);
 
@@ -1303,7 +1303,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
-				claimed_rewards: vec![]
+				claimed_rewards: bounded_vec![],
 			}),
 		);
 
@@ -1319,7 +1319,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 1000 + 100,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 1000, era: 2 + 3 }],
-				claimed_rewards: vec![]
+				claimed_rewards: bounded_vec![],
 			}),
 		);
 
@@ -1335,7 +1335,7 @@ fn bond_extra_and_withdraw_unbonded_works() {
 				total: 100,
 				active: 100,
 				unlocking: Default::default(),
-				claimed_rewards: vec![]
+				claimed_rewards: bounded_vec![],
 			}),
 		);
 	})
@@ -1405,7 +1405,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1424,7 +1424,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 900, era: 2 + 3 }],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1437,7 +1437,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1450,7 +1450,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1463,7 +1463,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 600,
 				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1476,7 +1476,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1491,7 +1491,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 900, era: 5 }],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1504,7 +1504,7 @@ fn rebond_works() {
 				total: 1000,
 				active: 600,
 				unlocking: bounded_vec![UnlockChunk { value: 400, era: 5 }],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 	})
@@ -1531,7 +1531,7 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1546,7 +1546,7 @@ fn rebond_is_fifo() {
 				total: 1000,
 				active: 600,
 				unlocking: bounded_vec![UnlockChunk { value: 400, era: 2 + 3 }],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1564,7 +1564,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 300, era: 3 + 3 },
 				],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1583,7 +1583,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 300, era: 3 + 3 },
 					UnlockChunk { value: 200, era: 4 + 3 },
 				],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1599,7 +1599,7 @@ fn rebond_is_fifo() {
 					UnlockChunk { value: 400, era: 2 + 3 },
 					UnlockChunk { value: 100, era: 3 + 3 },
 				],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 	})
@@ -1628,7 +1628,7 @@ fn rebond_emits_right_value_in_event() {
 				total: 1000,
 				active: 100,
 				unlocking: bounded_vec![UnlockChunk { value: 900, era: 1 + 3 }],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 
@@ -1641,7 +1641,7 @@ fn rebond_emits_right_value_in_event() {
 				total: 1000,
 				active: 200,
 				unlocking: bounded_vec![UnlockChunk { value: 800, era: 1 + 3 }],
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 		// Event emitted should be correct
@@ -1656,7 +1656,7 @@ fn rebond_emits_right_value_in_event() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 		// Event emitted should be correct, only 800
@@ -1692,7 +1692,7 @@ fn reward_to_stake_works() {
 					total: 69,
 					active: 69,
 					unlocking: Default::default(),
-					claimed_rewards: vec![],
+					claimed_rewards: bounded_vec![],
 				},
 			);
 
@@ -1756,7 +1756,7 @@ fn reap_stash_works() {
 					total: 5,
 					active: 5,
 					unlocking: Default::default(),
-					claimed_rewards: vec![],
+					claimed_rewards: bounded_vec![],
 				},
 			);
 
@@ -1891,7 +1891,7 @@ fn bond_with_no_staked_value() {
 					active: 0,
 					total: 5,
 					unlocking: bounded_vec![UnlockChunk { value: 5, era: 3 }],
-					claimed_rewards: vec![],
+					claimed_rewards: bounded_vec![],
 				})
 			);
 
@@ -2990,7 +2990,7 @@ fn staker_cannot_bail_deferred_slash() {
 				active: 0,
 				total: 500,
 				stash: 101,
-				claimed_rewards: Default::default(),
+				claimed_rewards: bounded_vec![],
 				unlocking: bounded_vec![UnlockChunk { era: 4u32, value: 500 }],
 			}
 		);
@@ -3397,7 +3397,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 	// * double claim of one era fails
 	ExtBuilder::default().nominate(true).build_and_execute(|| {
 		// Consumed weight for all payout_stakers dispatches that fail
-		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
 
 		let init_balance_10 = Balances::total_balance(&10);
 		let init_balance_100 = Balances::total_balance(&100);
@@ -3432,7 +3432,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		assert!(total_payout_2 != total_payout_0);
 		assert!(total_payout_2 != total_payout_1);
 
-		mock::start_active_era(Staking::history_depth() + 1);
+		mock::start_active_era(HistoryDepth::get() + 1);
 
 		let active_era = active_era();
 
@@ -3440,7 +3440,7 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 		let current_era = Staking::current_era().unwrap();
 
 		// Last kept is 1:
-		assert!(current_era - Staking::history_depth() == 1);
+		assert!(current_era - HistoryDepth::get() == 1);
 		assert_noop!(
 			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 0),
 			// Fail: Era out of history
@@ -3605,25 +3605,6 @@ fn test_max_nominator_rewarded_per_validator_and_cant_steal_someone_else_reward(
 }
 
 #[test]
-fn set_history_depth_works() {
-	ExtBuilder::default().build_and_execute(|| {
-		mock::start_active_era(10);
-		Staking::set_history_depth(RuntimeOrigin::root(), 20, 0).unwrap();
-		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
-		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(RuntimeOrigin::root(), 4, 0).unwrap();
-		assert!(<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(RuntimeOrigin::root(), 3, 0).unwrap();
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-		Staking::set_history_depth(RuntimeOrigin::root(), 8, 0).unwrap();
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 4));
-		assert!(!<Staking as Store>::ErasTotalStake::contains_key(10 - 5));
-	});
-}
-
-#[test]
 fn test_payout_stakers() {
 	// Test that payout_stakers work in general, including that only the top
 	// `T::MaxNominatorRewardedPerValidator` nominators are rewarded.
@@ -3686,7 +3667,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![1]
+				claimed_rewards: bounded_vec![1]
 			})
 		);
 
@@ -3717,11 +3698,15 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (1..=14).collect()
+				claimed_rewards: (1..=14).collect::<Vec<_>>().try_into().unwrap()
 			})
 		);
 
-		for i in 16..100 {
+		let last_era = 99;
+		let history_depth = HistoryDepth::get();
+		let expected_last_reward_era = last_era - 1;
+		let expected_start_reward_era = last_era - history_depth;
+		for i in 16..=last_era {
 			Staking::reward_by_ids(vec![(11, 1)]);
 			// compute and ensure the reward amount is greater than zero.
 			let _ = current_total_payout_for_duration(reward_time_per_era());
@@ -3729,8 +3714,16 @@ fn test_payout_stakers() {
 		}
 
 		// We clean it up as history passes
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 15));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 98));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_start_reward_era
+		));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_last_reward_era
+		));
 		assert_eq!(
 			Staking::ledger(&10),
 			Some(StakingLedger {
@@ -3738,7 +3731,7 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![15, 98]
+				claimed_rewards: bounded_vec![expected_start_reward_era, expected_last_reward_era]
 			})
 		);
 
@@ -3753,7 +3746,13 @@ fn test_payout_stakers() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![15, 23, 42, 69, 98]
+				claimed_rewards: bounded_vec![
+					expected_start_reward_era,
+					23,
+					42,
+					69,
+					expected_last_reward_era
+				]
 			})
 		);
 	});
@@ -3764,7 +3763,7 @@ fn payout_stakers_handles_basic_errors() {
 	// Here we will test payouts handle all errors.
 	ExtBuilder::default().has_stakers(false).build_and_execute(|| {
 		// Consumed weight for all payout_stakers dispatches that fail
-		let err_weight = weights::SubstrateWeight::<Test>::payout_stakers_alive_staked(0);
+		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
 
 		// Same setup as the test above
 		let balance = 1000;
@@ -3794,32 +3793,47 @@ fn payout_stakers_handles_basic_errors() {
 			Error::<Test>::NotStash.with_weight(err_weight)
 		);
 
-		for i in 3..100 {
+		let last_era = 99;
+		for i in 3..=last_era {
 			Staking::reward_by_ids(vec![(11, 1)]);
 			// compute and ensure the reward amount is greater than zero.
 			let _ = current_total_payout_for_duration(reward_time_per_era());
 			mock::start_active_era(i);
 		}
-		// We are at era 99, with history depth of 84
-		// We should be able to payout era 15 through 98 (84 total eras), but not 14 or 99.
+
+		let history_depth = HistoryDepth::get();
+		let expected_last_reward_era = last_era - 1;
+		let expected_start_reward_era = last_era - history_depth;
+
+		// We are at era last_era=99. Given history_depth=80, we should be able
+		// to payout era starting from expected_start_reward_era=19 through
+		// expected_last_reward_era=98 (80 total eras), but not 18 or 99.
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 14),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era - 1),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 99),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era + 1),
 			Error::<Test>::InvalidEraToReward.with_weight(err_weight)
 		);
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 15));
-		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 98));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_start_reward_era
+		));
+		assert_ok!(Staking::payout_stakers(
+			RuntimeOrigin::signed(1337),
+			11,
+			expected_last_reward_era
+		));
 
 		// Can't claim again
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 15),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 		assert_noop!(
-			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, 98),
+			Staking::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era),
 			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
 		);
 	});
@@ -3944,7 +3958,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: bounded_vec![],
 			})
 		);
 		mock::start_active_era(5);
@@ -3956,10 +3970,14 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (0..5).collect(),
+				claimed_rewards: (0..5).collect::<Vec<_>>().try_into().unwrap(),
 			})
 		);
-		mock::start_active_era(99);
+
+		// make sure only era upto history depth is stored
+		let current_era = 99;
+		let last_reward_era = 99 - HistoryDepth::get();
+		mock::start_active_era(current_era);
 		bond_validator(13, 12, 1000);
 		assert_eq!(
 			Staking::ledger(&12),
@@ -3968,7 +3986,10 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
 				total: 1000,
 				active: 1000,
 				unlocking: Default::default(),
-				claimed_rewards: (15..99).collect(),
+				claimed_rewards: (last_reward_era..current_era)
+					.collect::<Vec<_>>()
+					.try_into()
+					.unwrap(),
 			})
 		);
 	});
@@ -4213,7 +4234,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 10 * 1000,
 					unlocking: Default::default(),
-					claimed_rewards: vec![]
+					claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4227,7 +4248,7 @@ fn cannot_rebond_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 0,
 					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
-					claimed_rewards: vec![]
+					claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4253,7 +4274,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 10 * 1000,
 					unlocking: Default::default(),
-					claimed_rewards: vec![]
+					claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4267,7 +4288,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
 					total: 10 * 1000,
 					active: 0,
 					unlocking: bounded_vec![UnlockChunk { value: 10 * 1000, era: 3 }],
-					claimed_rewards: vec![]
+					claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4294,7 +4315,7 @@ fn do_not_die_when_active_is_ed() {
 					total: 1000 * ed,
 					active: 1000 * ed,
 					unlocking: Default::default(),
-					claimed_rewards: vec![]
+					claimed_rewards: bounded_vec![],
 				}
 			);
 
@@ -4311,7 +4332,7 @@ fn do_not_die_when_active_is_ed() {
 					total: ed,
 					active: ed,
 					unlocking: Default::default(),
-					claimed_rewards: vec![]
+					claimed_rewards: bounded_vec![],
 				}
 			);
 		})
@@ -5162,7 +5183,7 @@ fn proportional_slash_stop_slashing_if_remaining_zero() {
 		active: 20,
 		// we have some chunks, but they are not affected.
 		unlocking: bounded_vec![c(1, 10), c(2, 10)],
-		claimed_rewards: vec![],
+		claimed_rewards: bounded_vec![],
 	};
 
 	assert_eq!(BondingDuration::get(), 3);
@@ -5180,7 +5201,7 @@ fn proportional_ledger_slash_works() {
 		total: 10,
 		active: 10,
 		unlocking: bounded_vec![],
-		claimed_rewards: vec![],
+		claimed_rewards: bounded_vec![],
 	};
 	assert_eq!(BondingDuration::get(), 3);
 
@@ -5395,4 +5416,147 @@ fn proportional_ledger_slash_works() {
 		LedgerSlashPerEra::get().1,
 		BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 0)])
 	);
+}
+
+#[test]
+fn pre_bonding_era_cannot_be_claimed() {
+	// Verifies initial conditions of mock
+	ExtBuilder::default().nominate(false).build_and_execute(|| {
+		let history_depth = HistoryDepth::get();
+		// jump to some era above history_depth
+		let mut current_era = history_depth + 10;
+		let last_reward_era = current_era - 1;
+		let start_reward_era = current_era - history_depth;
+
+		// put some money in stash=3 and controller=4.
+		for i in 3..5 {
+			let _ = Balances::make_free_balance_be(&i, 2000);
+		}
+
+		mock::start_active_era(current_era);
+
+		// add a new candidate for being a validator. account 3 controlled by 4.
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 1500, RewardDestination::Controller));
+
+		let claimed_rewards: BoundedVec<_, _> =
+			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
+		assert_eq!(
+			Staking::ledger(&4).unwrap(),
+			StakingLedger {
+				stash: 3,
+				total: 1500,
+				active: 1500,
+				unlocking: Default::default(),
+				claimed_rewards,
+			}
+		);
+
+		// start next era
+		current_era = current_era + 1;
+		mock::start_active_era(current_era);
+
+		// claiming reward for last era in which validator was active works
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1));
+
+		// consumed weight for all payout_stakers dispatches that fail
+		let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
+		// cannot claim rewards for an era before bonding occured as it is
+		// already marked as claimed.
+		assert_noop!(
+			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 2),
+			Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+		);
+
+		// decoding will fail now since Staking Ledger is in corrupt state
+		HistoryDepth::set(history_depth - 1);
+		assert_eq!(Staking::ledger(&4), None);
+
+		// make sure stakers still cannot claim rewards that they are not meant to
+		assert_noop!(
+			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 2),
+			Error::<Test>::NotController
+		);
+
+		// fix the corrupted state for post conditions check
+		HistoryDepth::set(history_depth);
+	});
+}
+
+#[test]
+fn reducing_history_depth_without_migration() {
+	// Verifies initial conditions of mock
+	ExtBuilder::default().nominate(false).build_and_execute(|| {
+		let original_history_depth = HistoryDepth::get();
+		let mut current_era = original_history_depth + 10;
+		let last_reward_era = current_era - 1;
+		let start_reward_era = current_era - original_history_depth;
+
+		// put some money in (stash, controller)=(3,4),(5,6).
+		for i in 3..7 {
+			let _ = Balances::make_free_balance_be(&i, 2000);
+		}
+
+		// start current era
+		mock::start_active_era(current_era);
+
+		// add a new candidate for being a staker. account 3 controlled by 4.
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 1500, RewardDestination::Controller));
+
+		// all previous era before the bonding action should be marked as
+		// claimed.
+		let claimed_rewards: BoundedVec<_, _> =
+			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
+		assert_eq!(
+			Staking::ledger(&4).unwrap(),
+			StakingLedger {
+				stash: 3,
+				total: 1500,
+				active: 1500,
+				unlocking: Default::default(),
+				claimed_rewards,
+			}
+		);
+
+		// next era
+		current_era = current_era + 1;
+		mock::start_active_era(current_era);
+
+		// claiming reward for last era in which validator was active works
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1));
+
+		// next era
+		current_era = current_era + 1;
+		mock::start_active_era(current_era);
+
+		// history_depth reduced without migration
+		let history_depth = original_history_depth - 1;
+		HistoryDepth::set(history_depth);
+		// claiming reward does not work anymore
+		assert_noop!(
+			Staking::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1),
+			Error::<Test>::NotController
+		);
+
+		// new stakers can still bond
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(5), 6, 1200, RewardDestination::Controller));
+
+		// new staking ledgers created will be bounded by the current history depth
+		let last_reward_era = current_era - 1;
+		let start_reward_era = current_era - history_depth;
+		let claimed_rewards: BoundedVec<_, _> =
+			(start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
+		assert_eq!(
+			Staking::ledger(&6).unwrap(),
+			StakingLedger {
+				stash: 5,
+				total: 1200,
+				active: 1200,
+				unlocking: Default::default(),
+				claimed_rewards,
+			}
+		);
+
+		// fix the corrupted state for post conditions check
+		HistoryDepth::set(original_history_depth);
+	});
 }
