@@ -369,10 +369,15 @@ where
 		let block_announces_protocol = {
 			let genesis_hash =
 				chain.hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
+			let genesis_hash = genesis_hash.as_ref();
 			if let Some(fork_id) = fork_id {
-				format!("/{}/{}/block-announces/1", hex::encode(genesis_hash), fork_id)
+				format!(
+					"/{}/{}/block-announces/1",
+					array_bytes::bytes2hex("", genesis_hash),
+					fork_id
+				)
 			} else {
-				format!("/{}/block-announces/1", hex::encode(genesis_hash))
+				format!("/{}/block-announces/1", array_bytes::bytes2hex("", genesis_hash))
 			}
 		};
 

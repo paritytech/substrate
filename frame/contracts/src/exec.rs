@@ -1379,7 +1379,6 @@ mod tests {
 	use codec::{Decode, Encode};
 	use frame_support::{assert_err, assert_ok, parameter_types};
 	use frame_system::{EventRecord, Phase};
-	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
@@ -3210,13 +3209,12 @@ mod tests {
 	#[test]
 	fn ecdsa_to_eth_address_returns_proper_value() {
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
-			let pubkey_compressed: [u8; 33] =
-				hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")[..]
-					.try_into()
-					.unwrap();
+			let pubkey_compressed = array_bytes::hex2array_unchecked(
+				"028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91",
+			);
 			assert_eq!(
 				ctx.ext.ecdsa_to_eth_address(&pubkey_compressed).unwrap(),
-				hex!("09231da7b19A016f9e576d23B16277062F4d46A8")[..]
+				array_bytes::hex2array_unchecked::<20>("09231da7b19A016f9e576d23B16277062F4d46A8")
 			);
 			exec_success()
 		});
