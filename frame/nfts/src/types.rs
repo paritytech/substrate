@@ -18,11 +18,12 @@
 //! Various basic types for use in the Nfts pallet.
 
 use super::*;
+use enumflags2::{bitflags, BitFlags};
 use frame_support::{
 	pallet_prelude::{BoundedVec, MaxEncodedLen},
 	traits::Get,
 };
-use scale_info::TypeInfo;
+use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
@@ -126,4 +127,125 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) data: BoundedVec<u8, StringLimit>,
 	/// Whether the item metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
+}
+
+// Support for up to 64 user-enabled features on a collection.
+#[bitflags]
+#[repr(u64)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum UserFeature {
+	Administration,
+	IsLocked,
+	NonTransferableItems,
+	MetadataIsLocked,
+	AttributesAreLocked,
+}
+
+/// Wrapper type for `BitFlags<UserFeature>` that implements `Codec`.
+#[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
+pub struct UserFeatures(pub BitFlags<UserFeature>);
+
+impl UserFeatures {
+	pub fn new(input: BitFlags<UserFeature>) -> Self {
+		UserFeatures(input)
+	}
+
+	pub fn get(&self) -> BitFlags<UserFeature> {
+		self.0.clone()
+	}
+}
+
+impl MaxEncodedLen for UserFeatures {
+	fn max_encoded_len() -> usize {
+		u64::max_encoded_len()
+	}
+}
+
+impl Encode for UserFeatures {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.bits().using_encoded(f)
+	}
+}
+impl Decode for UserFeatures {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		let field = u64::decode(input)?;
+		Ok(Self(<BitFlags<UserFeature>>::from_bits(field as u64).map_err(|_| "invalid value")?))
+	}
+}
+impl TypeInfo for UserFeatures {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("BitFlags", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<UserFeature>()))])
+			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("UserFeature")))
+	}
+}
+
+// Support for up to 64 system-enabled features on a collection.
+#[bitflags]
+#[repr(u64)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum SystemFeature {
+	NoDeposit,
+	NoCollectionDeposit,
+	NoItemDeposit,
+	NoDataDeposit,
+	NoTrading,
+	NoAttributes,
+	NoApprovals,
+	NoSwaps,
+	NoClaims,
+}
+
+/// Wrapper type for `BitFlags<UserFeature>` that implements `Codec`.
+#[derive(Clone, Copy, PartialEq, Default, RuntimeDebug)]
+pub struct SystemFeatures(pub BitFlags<SystemFeature>);
+
+impl SystemFeatures {
+	pub fn new(input: BitFlags<SystemFeature>) -> Self {
+		SystemFeatures(input)
+	}
+
+	pub fn get(&self) -> BitFlags<SystemFeature> {
+		self.0.clone()
+	}
+}
+
+impl MaxEncodedLen for SystemFeatures {
+	fn max_encoded_len() -> usize {
+		u64::max_encoded_len()
+	}
+}
+
+impl Eq for SystemFeatures {}
+impl Encode for SystemFeatures {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.bits().using_encoded(f)
+	}
+}
+impl Decode for SystemFeatures {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		let field = u64::decode(input)?;
+		Ok(Self(<BitFlags<SystemFeature>>::from_bits(field as u64).map_err(|_| "invalid value")?))
+	}
+}
+impl TypeInfo for SystemFeatures {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("BitFlags", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<SystemFeature>()))])
+			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("SystemFeature")))
+	}
+}
+
+// TODO: Implement Default
+
+#[derive(Encode, Decode, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
+pub struct CollectionConfig {
+	pub system_features: SystemFeatures,
+	pub user_features: UserFeatures,
 }
