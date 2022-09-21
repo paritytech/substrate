@@ -144,6 +144,8 @@ pub mod generic {
 		/// Block announce.
 		BlockAnnounce(BlockAnnounce<Header>),
 		/// Consensus protocol message.
+		// NOTE: index is incremented by 1 due to transaction-related
+		// message that was removed
 		#[codec(index = 6)]
 		Consensus(ConsensusMessage),
 		/// Remote method call request.
