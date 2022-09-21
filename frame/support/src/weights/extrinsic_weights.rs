@@ -1,4 +1,3 @@
-
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
 //! DATE: 2022-09-21 (Y/M/D)
 //! HOSTNAME: `bm2`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
@@ -51,8 +50,14 @@ mod test_weights {
 		let w = super::ExtrinsicBaseWeight::get();
 
 		// At least 10 µs.
-		assert!(w.ref_time() >= 10u64 * constants::WEIGHT_PER_MICROS.ref_time(), "Weight should be at least 10 µs.");
+		assert!(
+			w.ref_time() >= 10u64 * constants::WEIGHT_PER_MICROS.ref_time(),
+			"Weight should be at least 10 µs."
+		);
 		// At most 1 ms.
-		assert!(w.ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(), "Weight should be at most 1 ms.");
+		assert!(
+			w.ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
+			"Weight should be at most 1 ms."
+		);
 	}
 }
