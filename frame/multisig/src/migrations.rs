@@ -43,11 +43,11 @@ pub mod v1 {
 				return T::DbWeight::get().reads(1)
 			}
 
-			// TODO: Assuming this is one read
-			let calls_read = Calls::<T>::iter().count() as u64;
+			let mut calls_read = 0u64;
 
 			// TODO: Assuming this is one write and a read per record
 			Calls::<T>::drain().for_each(|(_call_hash, (_data, caller, deposit))| {
+				calls_read += 1;
 				//TODO: What's the weight of one unreserve?
 				T::Currency::unreserve(&caller, deposit);
 			});
