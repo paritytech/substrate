@@ -25,6 +25,7 @@ use crate as utility;
 use frame_support::{
 	assert_err_ignore_postinfo, assert_noop, assert_ok,
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable},
+	error::BadOrigin,
 	parameter_types, storage,
 	traits::{ConstU32, ConstU64, Contains},
 	weights::{Pays, Weight},
@@ -620,7 +621,7 @@ fn force_batch_works() {
 				call_transfer(2, 10),
 				call_transfer(2, 5),
 			]
-		),);
+		));
 		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
 		System::assert_has_event(
 			utility::Event::ItemFailed { error: DispatchError::Other("") }.into(),
@@ -631,10 +632,19 @@ fn force_batch_works() {
 		assert_ok!(Utility::force_batch(
 			Origin::signed(2),
 			vec![call_transfer(1, 5), call_transfer(1, 5),]
-		),);
+		));
 		System::assert_last_event(utility::Event::BatchCompleted.into());
 
 		assert_ok!(Utility::force_batch(Origin::signed(1), vec![call_transfer(2, 50),]),);
 		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
 	});
+}
+
+#[test]
+fn none_origin_does_not_work() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(Utility::force_batch(Origin::none(), vec![]), BadOrigin);
+		assert_noop!(Utility::batch(Origin::none(), vec![]), BadOrigin);
+		assert_noop!(Utility::batch_all(Origin::none(), vec![]), BadOrigin);
+	})
 }

@@ -203,7 +203,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_root(origin.clone()).is_ok();
+			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
@@ -319,7 +319,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_root(origin.clone()).is_ok();
+			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
@@ -424,7 +424,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_root(origin.clone()).is_ok();
+			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
