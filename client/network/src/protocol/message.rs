@@ -143,9 +143,8 @@ pub mod generic {
 		BlockResponse(BlockResponse<Header, Hash, Extrinsic>),
 		/// Block announce.
 		BlockAnnounce(BlockAnnounce<Header>),
-		/// Transactions.
-		Transactions,
 		/// Consensus protocol message.
+		#[codec(index = 6)]
 		Consensus(ConsensusMessage),
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),
