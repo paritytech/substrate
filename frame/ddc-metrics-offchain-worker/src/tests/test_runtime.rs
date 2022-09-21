@@ -156,13 +156,12 @@ impl contracts::Config for Test {
     type RentFraction = ();
     type SurchargeReward = SurchargeReward;
     type CallStack = [pallet_contracts::Frame<Self>; 31];
-    type MaxValueSize = MaxValueSize;
     type WeightPrice = Self; //pallet_transaction_payment::Module<Self>;
     type WeightInfo = ();
     type ChainExtension = ();
     type DeletionQueueDepth = ();
     type DeletionWeightLimit = ();
-    type MaxCodeSize = MaxCodeSize;
+    type Schedule = ();
 }
 
 parameter_types! {
