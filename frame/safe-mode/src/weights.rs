@@ -55,7 +55,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_safe_mode.
 pub trait WeightInfo {
-	fn enable() -> Weight;
+	fn activate() -> Weight;
 }
 
 /// Weights for pallet_safe_mode using the Substrate node and recommended hardware.
@@ -63,7 +63,7 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: SafeMode Stakes (r:1 w:1)
 	// Storage: SafeMode Enabled (r:1 w:1)
-	fn enable() -> Weight {
+	fn activate() -> Weight {
 		Weight::from_ref_time(51_688_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
@@ -74,7 +74,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: SafeMode Stakes (r:1 w:1)
 	// Storage: SafeMode Enabled (r:1 w:1)
-	fn enable() -> Weight {
+	fn activate() -> Weight {
 		Weight::from_ref_time(51_688_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))

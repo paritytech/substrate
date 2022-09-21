@@ -223,14 +223,14 @@ impl pallet_tx_pause::Config for Runtime {
 
 parameter_types! {
 	// signed config
-	pub const EnableStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const ActivateStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
 	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
 	pub BlockHeight: BlockNumber = System::block_number(); // TODO ensure this plus config below is correct
 }
 
 parameter_types! {
 	// signed config
-	pub const EnableStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const ActivateStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
 	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
 	pub BlockHeight: BlockNumber = System::block_number(); // TODO ensure this plus config below is correct
 }
@@ -239,13 +239,13 @@ impl pallet_safe_mode::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 	type SafeModeFilter = Nothing; // TODO add TxPause pallet
-	type EnableDuration = ConstU32<{ 2 * DAYS }>;
+	type ActivateDuration = ConstU32<{ 2 * DAYS }>;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
 	type EnableOrigin = EnsureRootWithSuccess<AccountId, BlockHeight>;
 	type ExtendOrigin = EnsureRootWithSuccess<AccountId, BlockHeight>;
-	type DisableOrigin = EnsureRoot<AccountId>;
+	type DeactivateOrigin = EnsureRoot<AccountId>;
 	type RepayOrigin = EnsureRoot<AccountId>;
-	type EnableStakeAmount = EnableStakeAmount;
+	type ActivateStakeAmount = ActivateStakeAmount;
 	type ExtendStakeAmount = ExtendStakeAmount;
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }

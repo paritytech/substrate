@@ -25,19 +25,19 @@ use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::Bounded;
 
 benchmarks! {
-  enable {
+  activate {
 		let caller: T::AccountId = whitelisted_caller();
-    let origin = RawOrigin::Signed(caller.clone());
+	let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-  }: enable(origin)
+  }: activate(origin)
   verify {
 		assert_eq!(
-			SafeMode::<T>::enabled().unwrap(),
-			System::<T>::block_number() + T::EnableDuration::get()
+			SafeMode::<T>::activated().unwrap(),
+			System::<T>::block_number() + T::ActivateDuration::get()
 		);
   }
 
-//  force_enable {
+//  force_activate {
 //   /* code to set the initial state */
 //   }: {
 //     /* code to test the function benchmarked */
@@ -64,7 +64,7 @@ benchmarks! {
 //     /* optional verification */
 //   }
 
-// force_disable {
+// force_inactivate {
 //     /* code to set the initial state */
 //   }: {
 //     /* code to test the function benchmarked */

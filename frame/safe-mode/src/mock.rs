@@ -90,7 +90,7 @@ impl Contains<Call> for MockSafeModeFilter {
 }
 
 /// An origin that can enable the safe-mode by force.
-pub enum ForceEnableOrigin {
+pub enum ForceActivateOrigin {
 	Weak,
 	Medium,
 	Strong,
@@ -103,8 +103,8 @@ pub enum ForceExtendOrigin {
 	Strong,
 }
 
-impl ForceEnableOrigin {
-	/// The duration of how long the safe-mode will be enabled.
+impl ForceActivateOrigin {
+	/// The duration of how long the safe-mode will be activated.
 	pub fn duration(&self) -> u64 {
 		match self {
 			Self::Weak => 5,
@@ -154,18 +154,18 @@ impl ForceExtendOrigin {
 }
 
 impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug> EnsureOrigin<O>
-	for ForceEnableOrigin
+	for ForceActivateOrigin
 {
 	type Success = u64;
 
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
-			RawOrigin::Signed(acc) if acc == ForceEnableOrigin::Weak.acc() =>
-				Ok(ForceEnableOrigin::Weak.duration()),
-			RawOrigin::Signed(acc) if acc == ForceEnableOrigin::Medium.acc() =>
-				Ok(ForceEnableOrigin::Medium.duration()),
-			RawOrigin::Signed(acc) if acc == ForceEnableOrigin::Strong.acc() =>
-				Ok(ForceEnableOrigin::Strong.duration()),
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Weak.acc() =>
+				Ok(ForceActivateOrigin::Weak.duration()),
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Medium.acc() =>
+				Ok(ForceActivateOrigin::Medium.duration()),
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Strong.acc() =>
+				Ok(ForceActivateOrigin::Strong.duration()),
 			r => Err(O::from(r)),
 		})
 	}
@@ -190,16 +190,16 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug
 }
 
 parameter_types! {
-	pub const EnableDuration: u64 = 3;
+	pub const ActivateDuration: u64 = 3;
 	pub const ExtendDuration: u64 = 30;
-	pub const EnableStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
-	pub const ExtendStakeAmount: u64 = 100; //TODO This needs to be something sensible for the implications of enablement!
-	pub const DisableOrigin: u64 =3;
+	pub const ActivateStakeAmount: u64 = 100;
+	pub const ExtendStakeAmount: u64 = 100;
+	pub const DeactivateOrigin: u64 =3;
 	pub const RepayOrigin: u64 = 4;
 }
 
 // Required impl to use some <Configured Origin>::get() in tests
-impl SortedMembers<u64> for DisableOrigin {
+impl SortedMembers<u64> for DeactivateOrigin {
 	fn sorted_members() -> Vec<u64> {
 		vec![Self::get()]
 	}
@@ -215,17 +215,17 @@ impl SortedMembers<u64> for RepayOrigin {
 }
 
 impl Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type SafeModeFilter = MockSafeModeFilter;
-	type EnableDuration = EnableDuration;
+	type ActivateDuration = ActivateDuration;
 	type ExtendDuration = ExtendDuration;
-	type EnableOrigin = ForceEnableOrigin;
-	type ExtendOrigin = ForceExtendOrigin;
-	type DisableOrigin = EnsureSignedBy<DisableOrigin, Self::AccountId>;
-	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
-	type EnableStakeAmount = EnableStakeAmount;
+	type ActivateStakeAmount = ActivateStakeAmount;
+	type ForceActivateOrigin = ForceActivateOrigin;
+	type ForceExtendOrigin = ForceExtendOrigin;
 	type ExtendStakeAmount = ExtendStakeAmount;
+	type ForceInactivateOrigin = EnsureSignedBy<DeactivateOrigin, Self::AccountId>;
+	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
 	type WeightInfo = ();
 }
 
@@ -248,23 +248,20 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(0, 1234), (1, 5678), (2, 5678), (3, 5678), (4, 5678)], /* The 0 account
-		                                                                        * is NOT a special
-		                                                                        * origin, the
-		                                                                        * rest may be. */
+		// The 0 account is NOT a special origin, the rest may be.
+		balances: vec![(0, 1234), (1, 5678), (2, 5678), (3, 5678), (4, 5678)], 
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
 
-	// TODO requires a GenesisConfig impl
-	// GenesisBuild::<Test>::assimilate_storage(
-	// 	&pallet_safe_mode::GenesisConfig {
-	// 		enabled: None,
-	// 		stakes: None,
-	// 	},
-	// 	&mut t,
-	// )
-	// .unwrap();
+	GenesisBuild::<Test>::assimilate_storage(
+		&pallet_safe_mode::GenesisConfig {
+			active: None,
+			_phantom: Default::default(),
+		},
+		&mut t,
+	)
+	.unwrap();
 
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| {
