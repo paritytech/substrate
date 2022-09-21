@@ -856,7 +856,7 @@ mod tests {
 	use crate::{
 		mock::{
 			roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, ExtBuilder, Extrinsic,
-			MinerMaxWeight, MultiPhase, Origin, Runtime, RuntimeCall as OuterCall, System,
+			MinerMaxWeight, MultiPhase, Runtime, RuntimeCall as OuterCall, RuntimeOrigin, System,
 			TestNposSolution, TrimHelpers, UnsignedPhase,
 		},
 		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
@@ -1071,7 +1071,7 @@ mod tests {
 				witness: witness(),
 			};
 			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(Origin::none());
+			let _ = outer_call.dispatch(RuntimeOrigin::none());
 		})
 	}
 
@@ -1097,7 +1097,7 @@ mod tests {
 				witness: correct_witness,
 			};
 			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(Origin::none());
+			let _ = outer_call.dispatch(RuntimeOrigin::none());
 		})
 	}
 
@@ -1116,7 +1116,11 @@ mod tests {
 
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_ok!(MultiPhase::submit_unsigned(Origin::none(), Box::new(solution), witness));
+			assert_ok!(MultiPhase::submit_unsigned(
+				RuntimeOrigin::none(),
+				Box::new(solution),
+				witness
+			));
 			assert!(MultiPhase::queued_solution().is_some());
 		})
 	}
@@ -1215,7 +1219,7 @@ mod tests {
 				let solution = RawSolution { solution: raw, score, round: MultiPhase::round() };
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
 				assert_ok!(MultiPhase::submit_unsigned(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					Box::new(solution),
 					witness
 				));
@@ -1276,7 +1280,7 @@ mod tests {
 				// and it is fine
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
 				assert_ok!(MultiPhase::submit_unsigned(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					Box::new(solution),
 					witness
 				));

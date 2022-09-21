@@ -31,6 +31,7 @@ sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elect
 
 [features]
 default = ["std"]
+fuzz = ["default"]
 std = [
 	"codec/std",
 	"frame-support/std",

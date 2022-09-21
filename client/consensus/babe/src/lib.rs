@@ -1237,24 +1237,26 @@ where
 					warn!(target: "babe", "Error checking/reporting BABE equivocation: {}", err);
 				}
 
-				// if the body is passed through, we need to use the runtime
-				// to check that the internally-set timestamp in the inherents
-				// actually matches the slot set in the seal.
 				if let Some(inner_body) = block.body {
-					let mut inherent_data = create_inherent_data_providers
-						.create_inherent_data()
-						.map_err(Error::<Block>::CreateInherents)?;
-					inherent_data.babe_replace_inherent_data(slot);
 					let new_block = Block::new(pre_header.clone(), inner_body);
+					if !block.state_action.skip_execution_checks() {
+						// if the body is passed through and the block was executed,
+						// we need to use the runtime to check that the internally-set
+						// timestamp in the inherents actually matches the slot set in the seal.
+						let mut inherent_data = create_inherent_data_providers
+							.create_inherent_data()
+							.map_err(Error::<Block>::CreateInherents)?;
+						inherent_data.babe_replace_inherent_data(slot);
 
-					self.check_inherents(
-						new_block.clone(),
-						BlockId::Hash(parent_hash),
-						inherent_data,
-						create_inherent_data_providers,
-						block.origin.into(),
-					)
-					.await?;
+						self.check_inherents(
+							new_block.clone(),
+							BlockId::Hash(parent_hash),
+							inherent_data,
+							create_inherent_data_providers,
+							block.origin.into(),
+						)
+						.await?;
+					}
 
 					let (_, inner_body) = new_block.deconstruct();
 					block.body = Some(inner_body);

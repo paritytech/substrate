@@ -164,7 +164,7 @@ impl<T: Into<DispatchError>> From<T> for TrapReason {
 pub enum RuntimeCosts {
 	/// Charge the gas meter with the cost of a metering block. The charged costs are
 	/// the supplied cost of the block plus the overhead of the metering itself.
-	MeteringBlock(u32),
+	MeteringBlock(u64),
 	/// Weight charged for copying data from the sandbox.
 	CopyFromContract(u32),
 	/// Weight charged for copying data to the sandbox.
@@ -261,7 +261,7 @@ impl RuntimeCosts {
 	{
 		use self::RuntimeCosts::*;
 		let weight = match *self {
-			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
+			MeteringBlock(amount) => s.gas.saturating_add(amount),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
@@ -957,7 +957,7 @@ pub mod env {
 	/// This call is supposed to be called only by instrumentation injected code.
 	///
 	/// - amount: How much gas is used.
-	fn gas(ctx: Runtime<E>, amount: u32) -> Result<(), TrapReason> {
+	fn gas(ctx: Runtime<E>, amount: u64) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::MeteringBlock(amount))?;
 		Ok(())
 	}
@@ -1737,7 +1737,7 @@ pub mod env {
 	#[prefixed_alias]
 	fn gas_left(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
-		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
+		let gas_left = &ctx.ext.gas_meter().gas_left().ref_time().encode();
 		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, gas_left, false, already_charged)?)
 	}
 

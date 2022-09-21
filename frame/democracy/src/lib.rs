@@ -253,7 +253,9 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Sized {
-		type Proposal: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self>>;
+		type Proposal: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ From<Call<Self>>;
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet.
@@ -289,25 +291,25 @@ pub mod pallet {
 
 		/// Origin from which the next tabled referendum may be forced. This is a normal
 		/// "super-majority-required" referendum.
-		type ExternalOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a majority-carries referendum.
-		type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalMajorityOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a negative-turnout-bias (default-carries) referendum.
-		type ExternalDefaultOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalDefaultOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
 		/// tabled to vote according to the `FastTrackVotingPeriod` asynchronously in a similar
 		/// manner to the emergency origin. It retains its threshold method.
-		type FastTrackOrigin: EnsureOrigin<Self::Origin>;
+		type FastTrackOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
 		/// tabled to vote immediately and asynchronously in a similar manner to the emergency
 		/// origin. It retains its threshold method.
-		type InstantOrigin: EnsureOrigin<Self::Origin>;
+		type InstantOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Indicator for whether an emergency origin is even allowed to happen. Some chains may
 		/// want to set this permanently to `false`, others may want to condition it on things such
@@ -320,13 +322,13 @@ pub mod pallet {
 		type FastTrackVotingPeriod: Get<Self::BlockNumber>;
 
 		/// Origin from which any referendum may be cancelled in an emergency.
-		type CancellationOrigin: EnsureOrigin<Self::Origin>;
+		type CancellationOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which proposals may be blacklisted.
-		type BlacklistOrigin: EnsureOrigin<Self::Origin>;
+		type BlacklistOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which a proposal may be cancelled and its backers slashed.
-		type CancelProposalOrigin: EnsureOrigin<Self::Origin>;
+		type CancelProposalOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin for anyone able to veto proposals.
 		///
@@ -334,7 +336,7 @@ pub mod pallet {
 		///
 		/// The number of Vetoers for a proposal must be small, extrinsics are weighted according to
 		/// [MAX_VETOERS](./const.MAX_VETOERS.html)
-		type VetoOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type VetoOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		#[pallet::constant]
@@ -345,7 +347,7 @@ pub mod pallet {
 		type PreimageByteDeposit: Get<BalanceOf<Self>>;
 
 		/// An origin that can provide a preimage using operational extrinsics.
-		type OperationalPreimageOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type OperationalPreimageOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;

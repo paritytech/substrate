@@ -47,7 +47,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
@@ -95,7 +95,7 @@ parameter_types! {
 }
 type AllianceCollective = pallet_collective::Instance1;
 impl pallet_collective::Config<AllianceCollective> for Test {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Proposal = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type MotionDuration = MotionDuration;
@@ -283,7 +283,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| {
-		assert_ok!(Identity::add_registrar(Origin::signed(1), 1));
+		assert_ok!(Identity::add_registrar(RuntimeOrigin::signed(1), 1));
 
 		let info = IdentityInfo {
 			additional: BoundedVec::default(),
@@ -296,58 +296,58 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			image: Data::default(),
 			twitter: Data::default(),
 		};
-		assert_ok!(Identity::set_identity(Origin::signed(1), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(1), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			0,
 			1,
 			Judgement::KnownGood,
 			BlakeTwo256::hash_of(&info)
 		));
-		assert_ok!(Identity::set_identity(Origin::signed(2), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(2), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			0,
 			2,
 			Judgement::KnownGood,
 			BlakeTwo256::hash_of(&info)
 		));
-		assert_ok!(Identity::set_identity(Origin::signed(3), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(3), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			0,
 			3,
 			Judgement::KnownGood,
 			BlakeTwo256::hash_of(&info)
 		));
-		assert_ok!(Identity::set_identity(Origin::signed(4), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(4), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			0,
 			4,
 			Judgement::KnownGood,
 			BlakeTwo256::hash_of(&info)
 		));
-		assert_ok!(Identity::set_identity(Origin::signed(5), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(5), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			0,
 			5,
 			Judgement::KnownGood,
 			BlakeTwo256::hash_of(&info)
 		));
-		assert_ok!(Identity::set_identity(Origin::signed(6), Box::new(info.clone())));
-		assert_ok!(Identity::set_identity(Origin::signed(8), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(6), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(8), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			0,
 			8,
 			Judgement::KnownGood,
 			BlakeTwo256::hash_of(&info)
 		));
-		assert_ok!(Identity::set_identity(Origin::signed(9), Box::new(info.clone())));
+		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(9), Box::new(info.clone())));
 		assert_ok!(Identity::provide_judgement(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			0,
 			9,
 			Judgement::KnownGood,
@@ -356,11 +356,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 		// Joining before init should fail.
 		assert_noop!(
-			Alliance::join_alliance(Origin::signed(1)),
+			Alliance::join_alliance(RuntimeOrigin::signed(1)),
 			Error::<Test, ()>::AllianceNotYetInitialized
 		);
 
-		assert_ok!(Alliance::init_members(Origin::root(), vec![1, 2], vec![3], vec![]));
+		assert_ok!(Alliance::init_members(RuntimeOrigin::root(), vec![1, 2], vec![3], vec![]));
 
 		System::set_block_number(1);
 	});

@@ -155,7 +155,7 @@ pub mod pallet {
 		type SlashDeferDuration: Get<EraIndex>;
 
 		/// The origin which can cancel a deferred slash. Root can always do this.
-		type SlashCancelOrigin: EnsureOrigin<Self::Origin>;
+		type SlashCancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: SessionInterface<Self::AccountId>;
@@ -184,7 +184,35 @@ pub mod pallet {
 		///
 		/// The changes to nominators are reported to this. Moreover, each validator's self-vote is
 		/// also reported as one independent vote.
+		///
+		/// To keep the load off the chain as much as possible, changes made to the staked amount
+		/// via rewards and slashes are not reported and thus need to be manually fixed by the
+		/// staker. In case of `bags-list`, this always means using `rebag` and `putInFrontOf`.
+		///
+		/// Invariant: what comes out of this list will always be a nominator.
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
+
+		/// WIP: This is a noop as of now, the actual business logic that's described below is going
+		/// to be introduced in a follow-up PR.
+		///
+		/// Something that provides a best-effort sorted list of targets aka electable validators,
+		/// used for NPoS election.
+		///
+		/// The changes to the approval stake of each validator are reported to this. This means any
+		/// change to:
+		/// 1. The stake of any validator or nominator.
+		/// 2. The targets of any nominator
+		/// 3. The role of any staker (e.g. validator -> chilled, nominator -> validator, etc)
+		///
+		/// Unlike `VoterList`, the values in this list are always kept up to date with reward and
+		/// slash as well, and thus represent the accurate approval stake of all account being
+		/// nominated by nominators.
+		///
+		/// Note that while at the time of nomination, all targets are checked to be real
+		/// validators, they can chill at any point, and their approval stakes will still be
+		/// recorded. This implies that what comes out of iterating this list MIGHT NOT BE AN ACTIVE
+		/// VALIDATOR.
+		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
 		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
 		/// determines how many unique eras a staker may be unbonding in.
@@ -580,18 +608,18 @@ pub mod pallet {
 					"Stash does not have enough balance to bond."
 				);
 				frame_support::assert_ok!(<Pallet<T>>::bond(
-					T::Origin::from(Some(stash.clone()).into()),
+					T::RuntimeOrigin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
 				));
 				frame_support::assert_ok!(match status {
 					crate::StakerStatus::Validator => <Pallet<T>>::validate(
-						T::Origin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(controller.clone()).into()),
 						Default::default(),
 					),
 					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
-						T::Origin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(controller.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),
@@ -1448,7 +1476,7 @@ pub mod pallet {
 		///   Needed to report an accurate weight for the dispatch. Trusted by `Root` to report an
 		///   accurate number.
 		///
-		/// Origin must be root.
+		/// RuntimeOrigin must be root.
 		///
 		/// # <weight>
 		/// - E: Number of history depths removed, i.e. 10 -> 7 = 3
@@ -1565,7 +1593,7 @@ pub mod pallet {
 		/// * `min_commission`: The minimum amount of commission that each validators must maintain.
 		///   This is checked only upon calling `validate`. Existing validators are not affected.
 		///
-		/// Origin must be Root to call this function.
+		/// RuntimeOrigin must be Root to call this function.
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
