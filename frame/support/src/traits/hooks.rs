@@ -183,6 +183,7 @@ impl OnRuntimeUpgrade for Tuple {
 		for_tuples!( #(
 			let _guard = frame_support::StorageNoopGuard::default();
 			state = Tuple::pre_upgrade().unwrap();
+			drop(_guard);
 			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
 			let _guard = frame_support::StorageNoopGuard::default();
 			Tuple::post_upgrade(state).unwrap();
