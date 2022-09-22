@@ -64,6 +64,8 @@ pub enum WarpSyncPhase<Block: BlockT> {
 	AwaitingPeers,
 	/// Downloading and verifying grandpa warp proofs.
 	DownloadingWarpProofs,
+	/// Downloading target block.
+	DownloadingTargetBlock,
 	/// Downloading state data.
 	DownloadingState,
 	/// Importing state.
@@ -77,6 +79,7 @@ impl<Block: BlockT> fmt::Display for WarpSyncPhase<Block> {
 		match self {
 			Self::AwaitingPeers => write!(f, "Waiting for peers"),
 			Self::DownloadingWarpProofs => write!(f, "Downloading finality proofs"),
+			Self::DownloadingTargetBlock => write!(f, "Downloading target block"),
 			Self::DownloadingState => write!(f, "Downloading state"),
 			Self::ImportingState => write!(f, "Importing state"),
 			Self::DownloadingBlocks(n) => write!(f, "Downloading block history (#{})", n),

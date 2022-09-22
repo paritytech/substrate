@@ -71,7 +71,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;
@@ -103,7 +103,7 @@ impl pallet_preimage::Config for Test {
 }
 impl pallet_scheduler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
 	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaxWeight;
@@ -148,7 +148,7 @@ impl SortedMembers<u64> for OneToFive {
 pub struct TestTracksInfo;
 impl TracksInfo<u64, u64> for TestTracksInfo {
 	type Id = u8;
-	type Origin = <Origin as OriginTrait>::PalletsOrigin;
+	type RuntimeOrigin = <RuntimeOrigin as OriginTrait>::PalletsOrigin;
 	fn tracks() -> &'static [(Self::Id, TrackInfo<u64, u64>)] {
 		static DATA: [(u8, TrackInfo<u64, u64>); 2] = [
 			(
@@ -198,7 +198,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 		];
 		&DATA[..]
 	}
-	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()> {
+	fn track_for(id: &Self::RuntimeOrigin) -> Result<Self::Id, ()> {
 		if let Ok(system_origin) = frame_system::RawOrigin::try_from(id.clone()) {
 			match system_origin {
 				frame_system::RawOrigin::Root => Ok(0),
@@ -319,7 +319,7 @@ pub fn set_balance_proposal_hash(value: u64) -> H256 {
 #[allow(dead_code)]
 pub fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 	Referenda::submit(
-		Origin::signed(who),
+		RuntimeOrigin::signed(who),
 		Box::new(frame_system::RawOrigin::Root.into()),
 		set_balance_proposal_hash(value),
 		DispatchTime::After(delay),
@@ -447,12 +447,12 @@ pub enum RefState {
 impl RefState {
 	pub fn create(self) -> ReferendumIndex {
 		assert_ok!(Referenda::submit(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			Box::new(frame_support::dispatch::RawOrigin::Root.into()),
 			set_balance_proposal_hash(1),
 			DispatchTime::At(10),
 		));
-		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		assert_ok!(Referenda::place_decision_deposit(RuntimeOrigin::signed(2), 0));
 		if matches!(self, RefState::Confirming { immediate: true }) {
 			set_tally(0, 100, 0);
 		}

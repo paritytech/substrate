@@ -119,7 +119,7 @@ impl Def {
 					let g = genesis_build::GenesisBuildDef::try_from(span, index, item)?;
 					genesis_build = Some(g);
 				},
-				Some(PalletAttr::Origin(_)) if origin.is_none() =>
+				Some(PalletAttr::RuntimeOrigin(_)) if origin.is_none() =>
 					origin = Some(origin::OriginDef::try_from(index, item)?),
 				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
@@ -394,7 +394,7 @@ enum PalletAttr {
 	RuntimeCall(proc_macro2::Span),
 	Error(proc_macro2::Span),
 	RuntimeEvent(proc_macro2::Span),
-	Origin(proc_macro2::Span),
+	RuntimeOrigin(proc_macro2::Span),
 	Inherent(proc_macro2::Span),
 	Storage(proc_macro2::Span),
 	GenesisConfig(proc_macro2::Span),
@@ -413,7 +413,7 @@ impl PalletAttr {
 			Self::RuntimeCall(span) => *span,
 			Self::Error(span) => *span,
 			Self::RuntimeEvent(span) => *span,
-			Self::Origin(span) => *span,
+			Self::RuntimeOrigin(span) => *span,
 			Self::Inherent(span) => *span,
 			Self::Storage(span) => *span,
 			Self::GenesisConfig(span) => *span,
@@ -447,7 +447,7 @@ impl syn::parse::Parse for PalletAttr {
 		} else if lookahead.peek(keyword::event) {
 			Ok(PalletAttr::RuntimeEvent(content.parse::<keyword::event>()?.span()))
 		} else if lookahead.peek(keyword::origin) {
-			Ok(PalletAttr::Origin(content.parse::<keyword::origin>()?.span()))
+			Ok(PalletAttr::RuntimeOrigin(content.parse::<keyword::origin>()?.span()))
 		} else if lookahead.peek(keyword::inherent) {
 			Ok(PalletAttr::Inherent(content.parse::<keyword::inherent>()?.span()))
 		} else if lookahead.peek(keyword::storage) {
