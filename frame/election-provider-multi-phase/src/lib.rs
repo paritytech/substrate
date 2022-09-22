@@ -1869,7 +1869,7 @@ mod tests {
 			assert!(MultiPhase::snapshot().is_none());
 			assert_eq!(MultiPhase::round(), 1);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::snapshot().is_some());
@@ -2053,7 +2053,7 @@ mod tests {
 			roll_to(14);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
@@ -2091,7 +2091,7 @@ mod tests {
 			roll_to(14);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
@@ -2398,7 +2398,7 @@ mod tests {
 			crate::mock::MaxElectingVoters::set(2);
 
 			// Signed phase opens just fine.
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			assert_eq!(
@@ -2413,7 +2413,7 @@ mod tests {
 	#[test]
 	fn untrusted_score_verification_is_respected() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			// set the solution balancing to get the desired score.
