@@ -516,7 +516,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A proxy was executed correctly, with the given.
 		ProxyExecuted { result: DispatchResult },
-		/// pure account has been created by new proxy with given
+		/// A pure account has been created by new proxy with given
 		/// disambiguation index and proxy type.
 		PureCreated {
 			pure: T::AccountId,
