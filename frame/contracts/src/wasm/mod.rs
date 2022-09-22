@@ -1548,8 +1548,11 @@ mod tests {
 		let gas_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
 		// TODO: maybe factor in proof size weight
-		assert!(gas_left.ref_time() < gas_limit, "gas_left must be less than initial");
-		assert!(gas_left.ref_time() > actual_left, "gas_left must be greater than final");
+		assert!(gas_left.ref_time() < gas_limit.ref_time(), "gas_left must be less than initial");
+		assert!(
+			gas_left.ref_time() > actual_left.ref_time(),
+			"gas_left must be greater than final"
+		);
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1947,7 +1950,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left().all_gt(Weight::zero()));
+		assert!(mock_ext.gas_meter.gas_left().ref_time() > 0);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
