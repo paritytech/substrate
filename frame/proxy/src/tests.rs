@@ -552,7 +552,7 @@ fn proxying_works() {
 #[test]
 fn pure_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Proxy::pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 		let anon = Proxy::pure_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(
 			ProxyEvent::PureCreated {
@@ -565,19 +565,19 @@ fn pure_works() {
 		);
 
 		// other calls to pure allowed as long as they're not exactly the same.
-		assert_ok!(Proxy::pure(RuntimeOrigin::signed(1), ProxyType::JustTransfer, 0, 0));
-		assert_ok!(Proxy::pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 1));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::JustTransfer, 0, 0));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 1));
 		let anon2 = Proxy::pure_account(&2, &ProxyType::Any, 0, None);
-		assert_ok!(Proxy::pure(RuntimeOrigin::signed(2), ProxyType::Any, 0, 0));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(2), ProxyType::Any, 0, 0));
 		assert_noop!(
-			Proxy::pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0),
+			Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0),
 			Error::<Test>::Duplicate
 		);
 		System::set_extrinsic_index(1);
-		assert_ok!(Proxy::pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 		System::set_extrinsic_index(0);
 		System::set_block_number(2);
-		assert_ok!(Proxy::pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 
 		let call = Box::new(call_transfer(6, 1));
 		assert_ok!(Balances::transfer(RuntimeOrigin::signed(3), anon, 5));

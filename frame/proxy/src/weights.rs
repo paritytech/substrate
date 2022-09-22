@@ -52,7 +52,7 @@ pub trait WeightInfo {
 	fn add_proxy(p: u32, ) -> Weight;
 	fn remove_proxy(p: u32, ) -> Weight;
 	fn remove_proxies(p: u32, ) -> Weight;
-	fn pure(p: u32, ) -> Weight;
+	fn create_pure(p: u32, ) -> Weight;
 	fn kill_pure(p: u32, ) -> Weight;
 }
 
@@ -138,7 +138,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: unknown [0x3a65787472696e7369635f696e646578] (r:1 w:0)
 	// Storage: Proxy Proxies (r:1 w:1)
-	fn pure(p: u32, ) -> Weight {
+	fn create_pure(p: u32, ) -> Weight {
 		Weight::from_ref_time(31_077_000 as u64)
 			// Standard Error: 3_000
 			.saturating_add(Weight::from_ref_time(37_000 as u64).saturating_mul(p as u64))
@@ -236,7 +236,7 @@ impl WeightInfo for () {
 	}
 	// Storage: unknown [0x3a65787472696e7369635f696e646578] (r:1 w:0)
 	// Storage: Proxy Proxies (r:1 w:1)
-	fn pure(p: u32, ) -> Weight {
+	fn create_pure(p: u32, ) -> Weight {
 		Weight::from_ref_time(31_077_000 as u64)
 			// Standard Error: 3_000
 			.saturating_add(Weight::from_ref_time(37_000 as u64).saturating_mul(p as u64))

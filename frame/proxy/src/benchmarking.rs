@@ -218,7 +218,7 @@ benchmarks! {
 		assert_eq!(proxies.len() as u32, 0);
 	}
 
-	pure {
+	create_pure {
 		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
@@ -243,7 +243,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		Pallet::<T>::pure(
+		Pallet::<T>::create_pure(
 			RawOrigin::Signed(whitelisted_caller()).into(),
 			T::ProxyType::default(),
 			T::BlockNumber::zero(),

@@ -288,8 +288,8 @@ pub mod pallet {
 		/// same sender, with the same parameters.
 		///
 		/// Fails if there are insufficient funds to pay for deposit.
-		#[pallet::weight(T::WeightInfo::pure(T::MaxProxies::get()))]
-		pub fn pure(
+		#[pallet::weight(T::WeightInfo::create_pure(T::MaxProxies::get()))]
+		pub fn create_pure(
 			origin: OriginFor<T>,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
