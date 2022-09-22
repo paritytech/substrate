@@ -436,12 +436,17 @@ mod tests {
 		struct Test2;
 		struct Test3;
 
+		let mut test1_assertions = 0;
+		let mut test2_assertions = 0;
+		let mut test3_assertions = 0;
+
 		impl OnRuntimeUpgrade for Test1 {
 			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 				Ok("Test1".encode())
 			}
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: String = Decode::decode(&mut state.as_slice()).unwrap();
+				test1_assertions += 1;
 				assert_eq!(s, "Test1");
 				Ok(())
 			}
@@ -452,6 +457,7 @@ mod tests {
 			}
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: u32 = Decode::decode(&mut state.as_slice()).unwrap();
+				test2_assertions += 1;
 				assert_eq!(s, 100);
 				Ok(())
 			}
@@ -463,59 +469,40 @@ mod tests {
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: bool = Decode::decode(&mut state.as_slice()).unwrap();
 				assert_eq!(s, true);
+				test3_assertions += 1;
 				Ok(())
 			}
 		}
 
 		type TestEmpty = ();
 		let origin_state = <TestEmpty as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
-		assert!(states.is_empty());
+		assert!(origin_state.is_empty());
 		<TestEmpty as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
 
 		type Test1Tuple = (Test1,);
 		let origin_state = <Test1Tuple as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
-		assert_eq!(states.len(), 1);
-		assert_eq!(
-			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
-			"Test1".to_owned()
-		);
+		assert!(origin_state.is_empty());
 		<Test1Tuple as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+		assert_eq!(test1_assertions, 0);
+		<Test1Tuple as OnRuntimeUpgrade>::on_runtime_upgrade();
+		assert_eq!(test1_assertions, 1);
 
 		type Test123 = (Test1, Test2, Test3);
-		let origin_state = <Test123 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
-		assert_eq!(
-			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
-			"Test1".to_owned()
-		);
-		assert_eq!(<u32 as Decode>::decode(&mut states[1].as_slice()).unwrap(), 100u32);
-		assert_eq!(<bool as Decode>::decode(&mut states[2].as_slice()).unwrap(), true);
-		<Test123 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+		<Test123 as OnRuntimeUpgrade>::on_runtime_upgrade();
+		assert_eq!(test1_assertions, 2);
+		assert_eq!(test2_assertions, 1);
+		assert_eq!(test3_assertions, 1);
 
 		type Test321 = (Test3, Test2, Test1);
-		let origin_state = <Test321 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
-		assert_eq!(<bool as Decode>::decode(&mut states[0].as_slice()).unwrap(), true);
-		assert_eq!(<u32 as Decode>::decode(&mut states[1].as_slice()).unwrap(), 100u32);
-		assert_eq!(
-			<String as Decode>::decode(&mut states[2].as_slice()).unwrap(),
-			"Test1".to_owned()
-		);
-		<Test321 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+		<Test321 as OnRuntimeUpgrade>::on_runtime_upgrade();
+		assert_eq!(test1_assertions, 3);
+		assert_eq!(test2_assertions, 2);
+		assert_eq!(test3_assertions, 2);
 
 		type TestNested123 = (Test1, (Test2, Test3));
-		let origin_state = <TestNested123 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
-		assert_eq!(
-			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
-			"Test1".to_owned()
-		);
-		// nested state for (Test2, Test3)
-		let nested_states: Vec<Vec<u8>> = Decode::decode(&mut states[1].as_slice()).unwrap();
-		assert_eq!(<u32 as Decode>::decode(&mut nested_states[0].as_slice()).unwrap(), 100u32);
-		assert_eq!(<bool as Decode>::decode(&mut nested_states[1].as_slice()).unwrap(), true);
-		<TestNested123 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+		<TestNested123 as OnRuntimeUpgrade>::on_runtime_upgrade();
+		assert_eq!(test1_assertions, 4);
+		assert_eq!(test2_assertions, 3);
+		assert_eq!(test3_assertions, 3);
 	}
 }
