@@ -315,7 +315,7 @@ fn lifecycle_should_work() {
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 20, 100));
 		assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
-		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
@@ -336,7 +336,7 @@ fn lifecycle_should_work() {
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 20, 100));
 		assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
-		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::destroy(RuntimeOrigin::root(), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
@@ -355,7 +355,7 @@ fn destroy_with_bad_witness_should_not_work() {
 		let mut w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 10, 100));
 		// witness too low
-		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 		assert_noop!(Assets::destroy(RuntimeOrigin::signed(1), 0, w), Error::<Test>::BadWitness);
 		// witness too high is okay though
 		w.accounts += 2;
@@ -375,7 +375,7 @@ fn destroy_should_refund_approvals() {
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 4, 50));
 		assert_eq!(Balances::reserved_balance(&1), 3);
 
-		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
@@ -388,17 +388,17 @@ fn destroy_should_refund_approvals() {
 #[test]
 fn partial_destroy_should_work() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 1));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 10));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 10));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 3, 10));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 4, 10));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 5, 10));
-		assert_ok!(Assets::mint(Origin::signed(1), 0, 6, 10));
-		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 10));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 2, 10));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 3, 10));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 4, 10));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 5, 10));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 6, 10));
+		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
+		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
 		System::assert_has_event(RuntimeEvent::Assets(crate::Event::PartiallyDestroyed {
 			asset_id: 0,
 			accounts_destroyed: 5,
@@ -409,7 +409,7 @@ fn partial_destroy_should_work() {
 
 		// Second call to destroy on PartiallyDestroyed asset
 		let w2 = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(Origin::signed(1), 0, w2));
+		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w2));
 		System::assert_has_event(RuntimeEvent::Assets(crate::Event::Destroyed { asset_id: 0 }));
 
 		// Destroyed Asset should not exist
@@ -826,7 +826,7 @@ fn destroy_calls_died_hooks() {
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 2, 100));
 		// Destroy the asset.
-		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
 

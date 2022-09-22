@@ -168,11 +168,10 @@ benchmarks_instance_pallet! {
 
 	destroy {
 		let c in 0 .. 5_000;
-		let s in 0 .. 5_000;
 		let a in 0 .. 5_00;
 		let (caller, _) = create_default_asset::<T, I>(true);
 		add_consumers::<T, I>(caller.clone(), c);
-		add_sufficients::<T, I>(caller.clone(), s);
+		// add_sufficients::<T, I>(caller.clone(), s);
 		add_approvals::<T, I>(caller.clone(), a);
 		let witness = Asset::<T, I>::get(T::AssetId::default()).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), Default::default(), witness)

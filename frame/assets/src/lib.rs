@@ -193,9 +193,13 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ TypeInfo;
 
-		/// Max number of storage keys to remove per extrinsic call.
+		/// Max number of accounts to destroy per extrinsic call.
 		#[pallet::constant]
-		type RemoveKeysLimit: Get<u32>;
+		type RemoveAccountsLimit: Get<u32>;
+
+		/// Max number of approvalss to destroy per extrinsic call.
+		#[pallet::constant]
+		type RemoveApprovalsLimit: Get<u32>;
 
 		/// Identifier for the class of asset.
 		type AssetId: Member
@@ -600,9 +604,8 @@ pub mod pallet {
 		/// - `a = witness.approvals`
 		/// TODO: Change the weights to T::RemoveKeysLimit::get() like in cloudloads
 		#[pallet::weight(T::WeightInfo::destroy(
-			witness.accounts.saturating_sub(witness.sufficients),
- 			witness.sufficients,
- 			witness.approvals,
+			T::RemoveAccountsLimit::get(),
+ 			T::RemoveApprovalsLimit::get(),
  		))]
 		pub fn destroy(
 			origin: OriginFor<T>,
@@ -615,8 +618,7 @@ pub mod pallet {
 			};
 			let details = Self::do_destroy(id, witness, maybe_check_owner)?;
 			Ok(Some(T::WeightInfo::destroy(
-				details.accounts.saturating_sub(details.sufficients),
-				details.sufficients,
+				details.accounts,
 				details.approvals,
 			))
 			.into())

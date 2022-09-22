@@ -64,7 +64,6 @@ impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, Deposi
 			accounts: self.accounts,
 			sufficients: self.sufficients,
 			approvals: self.approvals,
-			destroy_count: 5, // FIXME: How should this destroy could be xalculated
 		}
 	}
 }
@@ -152,9 +151,6 @@ pub struct DestroyWitness {
 	/// The number of transfer-approvals of the asset.
 	#[codec(compact)]
 	pub(super) approvals: u32,
-	/// The number of accounts to delete per call
-	#[codec(compact)]
-	pub(super) destroy_count: u32,
 }
 
 /// Trait for allowing a minimum balance on the account to be specified, beyond the

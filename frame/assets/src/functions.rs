@@ -685,10 +685,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
 				ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
 
-				let accounts_to_delete: Vec<(T::AccountId, _)> =
-					Account::<T, I>::iter_prefix(id).take(witness.destroy_count as usize).collect();
+				let mut removed_accounts = 0u32;
+				let mut removed_approvals = 0u32;
+
+				let accounts_to_delete: Vec<(T::AccountId, _)> = Account::<T, I>::iter_prefix(id)
+					.take(T::RemoveAccountsLimit::get() as usize)
+					.collect();
 
 				for (who, v) in accounts_to_delete {
+					if removed_accounts >= T::RemoveAccountsLimit::get() {
+						break
+					}
+
 					Account::<T, I>::remove(id, &who);
 
 					// We have to force this as it's destroying the entire asset class.
@@ -696,19 +704,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// funds.
 					let _ = Self::dead_account(&who, &mut details, &v.reason, true);
 					dead_accounts.push(who);
+					removed_accounts += 1;
 				}
 
-				// FIXME:(delete comment before merge) An ideal implementation could be to
-				// unreserve&drain only approval for transactions sent by or recieved by one of the
-				// accounts which was deleted above. But it's not clear if that's strongly desired.
-				// This current approach buts the approval storage in an unusable state, since some
-				// vital transactions might be deleted for accounts that have not yet been deleted.
 				for ((owner, destination), approval) in Approvals::<T, I>::iter_prefix((id,)) {
-					// println!("IN Approvals iter {:?} {:?}", &owner, &approval);
-					if dead_accounts.contains(&owner) {
-						T::Currency::unreserve(&owner, approval.deposit);
-						Approvals::<T, I>::remove((id, owner, destination));
-					};
+					if removed_approvals >= T::RemoveApprovalsLimit::get() {
+						break
+					}
+
+					T::Currency::unreserve(&owner, approval.deposit);
+					Approvals::<T, I>::remove((id, owner, destination));
+					removed_approvals += 1;
 				}
 
 				let accounts_remaining = Account::<T, I>::iter_prefix(id).count();
@@ -725,8 +731,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					debug_assert_eq!(details.accounts, 0);
 					debug_assert_eq!(details.sufficients, 0);
 
-					// NOTE:(delete comment before merge) It's not yet clear what this block does,
-					// but it appears to be an operation to be done once after cleanup.
 					let metadata = Metadata::<T, I>::take(&id);
 					T::Currency::unreserve(
 						&details.owner,
@@ -736,10 +740,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 
 				Ok(DestroyWitness {
-					accounts: details.accounts,
-					sufficients: details.sufficients,
-					approvals: details.approvals,
-					destroy_count: dead_accounts.len() as u32,
+					accounts: removed_accounts,
+					sufficients: 0,
+					approvals: removed_approvals,
 				})
 			},
 		)?;
