@@ -18,7 +18,7 @@
 //! Test utilities for the safe mode pallet.
 
 use super::*;
-use crate::mock::{Call, *};
+use crate::mock::{RuntimeCall, *};
 
 use frame_support::{assert_err, assert_noop, assert_ok, dispatch::Dispatchable};
 
@@ -29,7 +29,7 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		let activated_at_block = System::block_number();
-		let call = Call::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
+		let call = RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
 
 		assert_err!(
 			call.clone().dispatch(Origin::signed(0)),
@@ -69,7 +69,7 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 #[test]
 fn fails_to_extend_if_not_activated() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::activated(), None);
+		assert_eq!(SafeMode::active_until(), None);
 		assert_noop!(SafeMode::extend(Origin::signed(2)), Error::<Test>::IsInactive);
 	});
 }
@@ -83,14 +83,14 @@ fn can_automatically_inactivate_after_timeout() {
 		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
 		run_to(ForceActivateOrigin::Weak.duration() + activated_at_block + 1);
 		SafeMode::on_initialize(System::block_number());
-		assert_eq!(SafeMode::activated(), None);
+		assert_eq!(SafeMode::active_until(), None);
 	});
 }
 
 #[test]
 fn can_filter_balance_calls_when_activated() {
 	new_test_ext().execute_with(|| {
-		let call = Call::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
+		let call = RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
 
 		assert_ok!(call.clone().dispatch(Origin::signed(0)));
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
@@ -109,7 +109,7 @@ fn can_activate_with_signed_origin() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_eq!(
-			SafeMode::activated().unwrap(),
+			SafeMode::active_until().unwrap(),
 			System::block_number() + mock::ActivateDuration::get()
 		);
 		assert_eq!(Balances::reserved_balance(0), mock::ActivateStakeAmount::get());
@@ -125,7 +125,7 @@ fn can_extend_with_signed_origin() {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
 		assert_eq!(
-			SafeMode::activated().unwrap(),
+			SafeMode::active_until().unwrap(),
 			System::block_number() + mock::ActivateDuration::get() + mock::ExtendDuration::get()
 		);
 		assert_eq!(
@@ -138,7 +138,7 @@ fn can_extend_with_signed_origin() {
 #[test]
 fn fails_signed_origin_when_explicit_origin_required() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::activated(), None);
+		assert_eq!(SafeMode::active_until(), None);
 		let activated_at_block = System::block_number();
 
 		assert_err!(SafeMode::force_activate(Origin::signed(0)), DispatchError::BadOrigin);
@@ -176,7 +176,7 @@ fn can_force_activate_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
 		assert_eq!(
-			SafeMode::activated().unwrap(),
+			SafeMode::active_until().unwrap(),
 			System::block_number() + ForceActivateOrigin::Weak.duration()
 		);
 		assert_noop!(
@@ -190,7 +190,7 @@ fn can_force_activate_with_config_origin() {
 #[test]
 fn can_force_inactivate_with_config_origin() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::activated(), None);
+		assert_eq!(SafeMode::active_until(), None);
 		assert_err!(
 			SafeMode::force_inactivate(Origin::signed(mock::DeactivateOrigin::get())),
 			Error::<Test>::IsInactive
@@ -207,12 +207,12 @@ fn can_force_extend_with_config_origin() {
 		// Activated by `Weak` and extended by `Medium`.
 		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
 		assert_eq!(
-			SafeMode::activated().unwrap(),
+			SafeMode::active_until().unwrap(),
 			System::block_number() + ForceActivateOrigin::Weak.duration()
 		);
 		assert_ok!(SafeMode::force_extend(ForceExtendOrigin::Medium.signed()));
 		assert_eq!(
-			SafeMode::activated().unwrap(),
+			SafeMode::active_until().unwrap(),
 			System::block_number() +
 				ForceActivateOrigin::Weak.duration() +
 				ForceExtendOrigin::Medium.duration()
@@ -265,7 +265,7 @@ fn can_slash_stake_with_config_origin() {
 #[test]
 fn fails_when_explicit_origin_required() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(SafeMode::activated(), None);
+		assert_eq!(SafeMode::active_until(), None);
 		let activated_at_block = System::block_number();
 
 		assert_err!(
@@ -311,11 +311,19 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::slash_stake(Origin::signed(mock::DeactivateOrigin::get()), 0, activated_at_block),
+			SafeMode::slash_stake(
+				Origin::signed(mock::DeactivateOrigin::get()),
+				0,
+				activated_at_block
+			),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::repay_stake(Origin::signed(mock::DeactivateOrigin::get()), 0, activated_at_block),
+			SafeMode::repay_stake(
+				Origin::signed(mock::DeactivateOrigin::get()),
+				0,
+				activated_at_block
+			),
 			DispatchError::BadOrigin
 		);
 

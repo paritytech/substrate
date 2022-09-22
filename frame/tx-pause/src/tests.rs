@@ -18,7 +18,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate::mock::{Call, *};
+use crate::mock::{RuntimeCall, *};
 
 use frame_support::{assert_err, assert_noop, assert_ok, dispatch::Dispatchable};
 
@@ -38,7 +38,7 @@ fn can_set_arbitrary_pause() {
 #[test]
 fn can_pause_system_call() {
 	new_test_ext().execute_with(|| {
-		let call = Call::System(frame_system::Call::remark { remark: vec![] });
+		let call = RuntimeCall::System(frame_system::Call::remark { remark: vec![] });
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
@@ -56,9 +56,10 @@ fn can_pause_system_call() {
 #[test]
 fn can_pause_specific_call() {
 	new_test_ext().execute_with(|| {
-		let call_paused = Call::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
+		let call_paused =
+			RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
 		let call_not_paused =
-			Call::Balances(pallet_balances::Call::transfer_keep_alive { dest: 1, value: 1 });
+			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { dest: 1, value: 1 });
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
@@ -77,7 +78,8 @@ fn can_pause_specific_call() {
 #[test]
 fn can_unpause_specific_call() {
 	new_test_ext().execute_with(|| {
-		let call_paused = Call::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
+		let call_paused =
+			RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),

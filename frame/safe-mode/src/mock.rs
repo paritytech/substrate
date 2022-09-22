@@ -29,7 +29,6 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
 };
 
 parameter_types! {
@@ -40,7 +39,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type Origin = Origin;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -48,7 +47,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = BlockHashCount;
 	type DbWeight = ();
 	type Version = ();
@@ -69,7 +68,7 @@ parameter_types! {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -80,11 +79,11 @@ impl pallet_balances::Config for Test {
 
 /// Filter to block balance pallet calls
 pub struct MockSafeModeFilter;
-impl Contains<Call> for MockSafeModeFilter {
-	fn contains(call: &Call) -> bool {
+impl Contains<RuntimeCall> for MockSafeModeFilter {
+	fn contains(call: &RuntimeCall) -> bool {
 		match call {
-			Call::System(_) | Call::SafeMode(_) => true,
-			Call::Balances(_) => false,
+			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) => true,
+			RuntimeCall::Balances(_) => false,
 		}
 	}
 }
@@ -249,16 +248,13 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	pallet_balances::GenesisConfig::<Test> {
 		// The 0 account is NOT a special origin, the rest may be.
-		balances: vec![(0, 1234), (1, 5678), (2, 5678), (3, 5678), (4, 5678)], 
+		balances: vec![(0, 1234), (1, 5678), (2, 5678), (3, 5678), (4, 5678)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
 
 	GenesisBuild::<Test>::assimilate_storage(
-		&pallet_safe_mode::GenesisConfig {
-			active: None,
-			_phantom: Default::default(),
-		},
+		&pallet_safe_mode::GenesisConfig { active: None, _phantom: Default::default() },
 		&mut t,
 	)
 	.unwrap();

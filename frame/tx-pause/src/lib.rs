@@ -49,7 +49,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The only origin that can pause calls.
 		type PauseOrigin: EnsureOrigin<Self::Origin>;
@@ -180,7 +180,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Return whether this call is paused.
 	pub fn is_paused_unbound(pallet: Vec<u8>, call: Vec<u8>) -> bool {
-		let pallet = PalletNameOf::<T>::try_from(call);
+		let pallet = PalletNameOf::<T>::try_from(pallet);
 		let call = CallNameOf::<T>::try_from(call);
 
 		match (pallet, call) {
@@ -226,12 +226,12 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: pallet::Config> Contains<T::Call> for Pallet<T>
+impl<T: pallet::Config> Contains<T::RuntimeCall> for Pallet<T>
 where
-	<T as frame_system::Config>::Call: GetCallMetadata,
+	<T as frame_system::Config>::RuntimeCall: GetCallMetadata,
 {
 	/// Return whether the call is allowed to be dispatched.
-	fn contains(call: &T::Call) -> bool {
+	fn contains(call: &T::RuntimeCall) -> bool {
 		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
 		!Pallet::<T>::is_paused_unbound(pallet_name.into(), function_name.into())
 	}
