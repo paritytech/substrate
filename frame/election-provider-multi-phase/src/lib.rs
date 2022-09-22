@@ -1827,9 +1827,9 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, raw_solution, roll_to, roll_to_elect, roll_to_unsigned, AccountId, ExtBuilder, MockWeightInfo,
-			MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin, SignedMaxSubmissions, System,
-			TargetIndex, Targets,
+			multi_phase_events, raw_solution, roll_to, roll_to_elect, roll_to_unsigned, AccountId,
+			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
+			SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
