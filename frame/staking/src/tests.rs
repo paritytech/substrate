@@ -5565,5 +5565,75 @@ fn reducing_history_depth_without_migration() {
 
 #[test]
 fn change_max_unlocking_chunks_effect(){
+	//Concern is on validators only
+	//By Default 11, 10 are stash and ctrl and 21,20
+	ExtBuilder::default()
+		.build_and_execute(||{
+			//initial state
+			assert_eq!(MaxUnlockingChunks::get(),32);
 
+			//starting an era
+			let current_era = 10;
+			start_active_era(current_era);
+			//bond some funds
+			assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 300, RewardDestination::Staked));
+			assert_eq!(Staking::ledger(4),Some(StakingLedger {
+				stash: 3,
+				total: 300,
+				active: 300,
+				unlocking: Default::default(),
+				claimed_rewards: bounded_vec![0,1,2,3,4,5,6,7,8,9],
+			}));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4),20));
+			assert_eq!(Staking::ledger(4),Some(StakingLedger {
+				stash: 3,
+				total: 300,
+				active: 280,
+				unlocking: bounded_vec![UnlockChunk{value:20,era:13}],
+				claimed_rewards: bounded_vec![0,1,2,3,4,5,6,7,8,9],
+			}));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4),50));
+			assert_eq!(Staking::ledger(4),Some(StakingLedger {
+				stash: 3,
+				total: 300,
+				active: 230,
+				unlocking: bounded_vec![UnlockChunk{value:70,era:13}],
+				claimed_rewards: bounded_vec![0,1,2,3,4,5,6,7,8,9],
+			}));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4),20));
+
+			// changing MaxUnlockingChunks without migration it works
+			MaxUnlockingChunks::set(10);
+
+			assert_eq!(MaxUnlockingChunks::get(),10);
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4),30));
+			assert_eq!(Staking::ledger(4),Some(StakingLedger {
+				stash: 3,
+				total: 300,
+				active: 180,
+				unlocking: bounded_vec![UnlockChunk{value:120,era:13}] ,
+				claimed_rewards: bounded_vec![0,1,2,3,4,5,6,7,8,9],
+			}));
+
+
+			MaxUnlockingChunks::set(3);
+
+			assert_eq!(MaxUnlockingChunks::get(),3);
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4),20));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4),20));
+			assert_eq!(Staking::ledger(4),Some(StakingLedger {
+				stash: 3,
+				total: 300,
+				active: 140,
+				unlocking: bounded_vec![UnlockChunk{value:160,era:13}] ,
+				claimed_rewards: bounded_vec![0,1,2,3,4,5,6,7,8,9],
+			}));
+			//rebonding without migration
+			assert_ok!(Staking::rebond(RuntimeOrigin::signed(4),100));
+			MaxUnlockingChunks::set(1);
+			assert_ok!(Staking::rebond(RuntimeOrigin::signed(4),120));
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(4),20));
+			// No effect on storage items changing MaxUnlockingChunks
+			// Note decreasing to zero affects rebond and unbond funtions
+		})
 }
