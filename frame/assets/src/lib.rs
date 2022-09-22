@@ -193,6 +193,10 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ TypeInfo;
 
+		/// Max number of storage keys to remove per extrinsic call.
+		#[pallet::constant]
+		type RemoveKeysLimit: Get<u32>;
+
 		/// Identifier for the class of asset.
 		type AssetId: Member
 			+ Parameter
@@ -576,6 +580,7 @@ pub mod pallet {
 		}
 
 		/// Destroy a class of fungible assets.
+		/// Due to weight restrictions, this function may need to be called multiple
 		///
 		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
 		/// owner of the asset `id`.
@@ -593,6 +598,7 @@ pub mod pallet {
 		/// - `c = (witness.accounts - witness.sufficients)`
 		/// - `s = witness.sufficients`
 		/// - `a = witness.approvals`
+		/// TODO: Change the weights to T::RemoveKeysLimit::get() like in cloudloads
 		#[pallet::weight(T::WeightInfo::destroy(
 			witness.accounts.saturating_sub(witness.sufficients),
  			witness.sufficients,

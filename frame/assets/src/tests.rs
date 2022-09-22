@@ -355,7 +355,7 @@ fn destroy_with_bad_witness_should_not_work() {
 		let mut w = Asset::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 10, 100));
 		// witness too low
-    assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
+		assert_ok!(Assets::freeze_asset(Origin::signed(1), 0));
 		assert_noop!(Assets::destroy(RuntimeOrigin::signed(1), 0, w), Error::<Test>::BadWitness);
 		// witness too high is okay though
 		w.accounts += 2;

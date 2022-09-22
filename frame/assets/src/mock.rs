@@ -84,6 +84,10 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+parameter_types! {
+	pub const RemoveKeysLimit: u32 = 1000;
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
@@ -99,6 +103,7 @@ impl Config for Test {
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
 	type Extra = ();
+	type RemoveKeysLimit = RemoveKeysLimit;
 }
 
 use std::collections::HashMap;

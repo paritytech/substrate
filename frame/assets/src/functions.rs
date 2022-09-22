@@ -708,7 +708,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// This current approach buts the approval storage in an unusable state, since some
 				// vital transactions might be deleted for accounts that have not yet been deleted.
 				for ((owner, destination), approval) in Approvals::<T, I>::iter_prefix((id,)) {
-					println!("IN Approvals iter {:?} {:?}", &owner, &approval);
+					// println!("IN Approvals iter {:?} {:?}", &owner, &approval);
 					if dead_accounts.contains(&owner) {
 						T::Currency::unreserve(&owner, approval.deposit);
 						Approvals::<T, I>::remove((id, owner, destination));
