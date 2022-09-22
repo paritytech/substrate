@@ -354,8 +354,7 @@ pub(crate) fn write_results(
 		created_files.push(file_path);
 	}
 
-	for file in created_files.iter().duplicates()
-	{
+	for file in created_files.iter().duplicates() {
 		// This can happen when there are multiple instances of a pallet deployed
 		// and `--output` forces the output of all instances into the same file.
 		println!("Multiple benchmarks were written to the same file: {:?}.", file);
