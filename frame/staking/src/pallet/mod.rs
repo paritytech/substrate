@@ -43,7 +43,7 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations,
 	PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakingLedger,
 	UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
@@ -942,7 +942,7 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
-				ledger.unlocking.len() < MaxUnlockingChunks::get() as usize,
+				ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
 				Error::<T>::NoMoreChunks,
 			);
 
@@ -1456,7 +1456,7 @@ pub mod pallet {
 		/// - Bounded by `MaxUnlockingChunks`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::rebond(MaxUnlockingChunks::get() as u32))]
+		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get() as u32))]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
