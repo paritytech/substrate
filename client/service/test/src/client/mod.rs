@@ -1663,7 +1663,7 @@ fn storage_keys_iter_works() {
 	let res: Vec<_> = client
 		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
 		.unwrap()
-		.take(8)
+		.take(9)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
@@ -1675,6 +1675,7 @@ fn storage_keys_iter_works() {
 			"1a560ecfd2a62c2b8521ef149d0804eb621050e3988ed97dca55f0d7c3e6aa34",
 			"1d66850d32002979d67dd29dc583af5b2ae2a1f71c1f35ad90fff122be7a3824",
 			"237498b98d8803334286e9f0483ef513098dd3c1c22ca21c4dc155b4ef6cc204",
+			"26aa394eea5630e07c48ae0c9558cef75e0621c4869aa60c02be9adcc98a0d1d",
 			"29b9db10ec5bf7907d8f74b5e60aa8140c4fbdd8127a1ee5600cb98e5ec01729",
 			"3a636f6465",
 		]
@@ -1699,7 +1700,7 @@ fn storage_keys_iter_works() {
 			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
 			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
 			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
-			"79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d",
+			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
 		]
 	);
 
@@ -1708,7 +1709,7 @@ fn storage_keys_iter_works() {
 			&BlockId::Number(0),
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
-				"79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d",
+				"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
 			))),
 		)
 		.unwrap()
@@ -1718,11 +1719,11 @@ fn storage_keys_iter_works() {
 	assert_eq!(
 		res,
 		[
-			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
 			"811ecfaadcf5f2ee1d67393247e2f71a1662d433e8ce7ff89fb0d4aa9561820b",
 			"a93d74caa7ec34ea1b04ce1e5c090245f867d333f0f88278a451e45299654dc5",
 			"a9ee1403384afbfc13f13be91ff70bfac057436212e53b9733914382ac942892",
 			"cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f",
+			"e3b47b6c84c0493481f97c5197d2554f",
 		]
 	);
 }
