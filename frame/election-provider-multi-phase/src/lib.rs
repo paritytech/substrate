@@ -2019,7 +2019,6 @@ mod tests {
 
 			assert!(MultiPhase::current_phase().is_off());
 
-			// DOUBLE CHECK THIS
 			assert_eq!(
 				multi_phase_events(),
 				vec![Event::ElectionFinalized {
