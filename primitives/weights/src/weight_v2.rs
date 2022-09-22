@@ -46,7 +46,7 @@ impl Decode for Weight {
 				let Compact(proof_size) = Compact::<u64>::decode(input)
 					.map_err(|e| e.chain("Could not decode `Weight::proof_size`"))?;
 				return Ok(Self { ref_time, proof_size })
-			}
+			},
 		};
 		Ok(Self { ref_time, proof_size: 0 })
 	}
