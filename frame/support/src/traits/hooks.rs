@@ -22,8 +22,7 @@ use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
-#[cfg(test)]
-#[cfg(feature = "try-runtime")]
+#[cfg(all(feature = "try-runtime", test))]
 use codec::{Decode, Encode};
 
 /// The block initialization trait.
