@@ -178,14 +178,17 @@ impl OnRuntimeUpgrade for Tuple {
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
 	fn on_runtime_upgrade() -> Weight {
-		let mut state: Vec<u8> = Vec::default();
 		let mut weight = Weight::zero();
 		for_tuples!( #(
 			let _guard = frame_support::StorageNoopGuard::default();
-			state = Tuple::pre_upgrade().unwrap();
+			// expected unwrap: we want to panic if any checks fail right here right now.
+			let state = Tuple::pre_upgrade().unwrap();
 			drop(_guard);
+			
 			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
+			
 			let _guard = frame_support::StorageNoopGuard::default();
+						// expected unwrap: we want to panic if any checks fail right here right now.
 			Tuple::post_upgrade(state).unwrap();
 			drop(_guard);
 		)* );
