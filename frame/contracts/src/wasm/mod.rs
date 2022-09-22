@@ -1547,8 +1547,9 @@ mod tests {
 
 		let gas_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		assert!(gas_left.all_lt(gas_limit), "gas_left must be less than initial");
-		assert!(gas_left.all_gt(actual_left), "gas_left must be greater than final");
+		// TODO: maybe factor in proof size weight
+		assert!(gas_left.ref_time() < gas_limit, "gas_left must be less than initial");
+		assert!(gas_left.ref_time() > actual_left, "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
