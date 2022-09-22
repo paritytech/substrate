@@ -66,7 +66,8 @@ impl InspectNodeKeyCmd {
 		if !self.bin {
 			// With hex input, give to the user a bit of tolerance about whitespaces
 			let keyhex = String::from_utf8_lossy(&file_data);
-			file_data = hex::decode(keyhex.trim()).map_err(|_| "failed to decode secret as hex")?;
+			file_data = array_bytes::hex2bytes(keyhex.trim())
+				.map_err(|_| "failed to decode secret as hex")?;
 		}
 
 		let secret =

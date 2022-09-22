@@ -60,7 +60,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -128,12 +128,12 @@ fn it_works_for_optional_value() {
 		assert_eq!(Example::dummy(), Some(val1));
 
 		// Check that accumulate works when we have Some value in Dummy already.
-		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val2));
+		assert_ok!(Example::accumulate_dummy(RuntimeOrigin::signed(1), val2));
 		assert_eq!(Example::dummy(), Some(val1 + val2));
 
 		// Check that accumulate works when we Dummy has None in it.
 		<Example as OnInitialize<u64>>::on_initialize(2);
-		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val1));
+		assert_ok!(Example::accumulate_dummy(RuntimeOrigin::signed(1), val1));
 		assert_eq!(Example::dummy(), Some(val1 + val2 + val1));
 	});
 }
@@ -142,7 +142,7 @@ fn it_works_for_optional_value() {
 fn it_works_for_default_value() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Example::foo(), 24);
-		assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
+		assert_ok!(Example::accumulate_foo(RuntimeOrigin::signed(1), 1));
 		assert_eq!(Example::foo(), 25);
 	});
 }
@@ -151,7 +151,7 @@ fn it_works_for_default_value() {
 fn set_dummy_works() {
 	new_test_ext().execute_with(|| {
 		let test_val = 133;
-		assert_ok!(Example::set_dummy(Origin::root(), test_val.into()));
+		assert_ok!(Example::set_dummy(RuntimeOrigin::root(), test_val.into()));
 		assert_eq!(Example::dummy(), Some(test_val));
 	});
 }

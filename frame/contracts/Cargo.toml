@@ -45,9 +45,9 @@ sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../p
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
+array-bytes = "4.1"
 assert_matches = "1"
 env_logger = "0.9"
-hex-literal = "0.3"
 pretty_assertions = "1"
 wat = "1"
 
