@@ -221,3 +221,109 @@ impl<Hash> From<TransactionEventIR<Hash>> for TransactionEvent<Hash> {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn validated_event() {
+		let event: TransactionEvent<()> = TransactionEvent::Validated;
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"event":"validated"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn broadcasted_event() {
+		let event: TransactionEvent<()> =
+			TransactionEvent::Broadcasted(TransactionBroadcasted { num_peers: 2 });
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"event":"broadcasted","numPeers":2}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn best_chain_event() {
+		let event: TransactionEvent<()> = TransactionEvent::BestChainBlockIncluded(None);
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"event":"bestChainBlockIncluded","block":null}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+
+		let event: TransactionEvent<u8> =
+			TransactionEvent::BestChainBlockIncluded(Some(TransactionBlock { hash: 1, index: 2 }));
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"event":"bestChainBlockIncluded","block":{"hash":1,"index":2}}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionEvent<u8> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn finalized_event() {
+		let event: TransactionEvent<u8> =
+			TransactionEvent::Finalized(TransactionBlock { hash: 1, index: 2 });
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"event":"finalized","block":{"hash":1,"index":2}}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionEvent<u8> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn error_event() {
+		let event: TransactionEvent<()> =
+			TransactionEvent::Error(TransactionError { error: "abc".to_string() });
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"event":"error","error":"abc"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn invalid_event() {
+		let event: TransactionEvent<()> =
+			TransactionEvent::Invalid(TransactionError { error: "abc".to_string() });
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"event":"invalid","error":"abc"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn dropped_event() {
+		let event: TransactionEvent<()> = TransactionEvent::Dropped(TransactionDropped {
+			broadcasted: true,
+			error: "abc".to_string(),
+		});
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"event":"dropped","broadcasted":true,"error":"abc"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+}
