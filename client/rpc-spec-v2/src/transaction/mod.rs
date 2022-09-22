@@ -26,6 +26,7 @@
 //! Methods are prefixed by `transaction`.
 
 pub mod api;
+pub mod error;
 pub mod event;
 
 pub use api::TransactionApiServer;
