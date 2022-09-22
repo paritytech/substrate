@@ -19,6 +19,7 @@
 use std::{collections::BTreeMap, time::Duration};
 
 use std::marker::PhantomData;
+use core::fmt::Debug;
 
 use sc_network::PeerId;
 use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorContext};
@@ -98,33 +99,38 @@ impl<B: Block> KnownVotes<B> {
 /// rejected/expired.
 ///
 ///All messaging is handled in a single BEEFY global topic.
-pub(crate) struct GossipValidator<B, AuthId, BKS>
+pub(crate) struct GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
-        BKS: BeefyKeystore<AuthId>,
-	AuthId: Encode + Decode, 
+        BKS: BeefyKeystore<AuthId, TSignature>,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 {
 	topic: B::Hash,
 	known_votes: RwLock<KnownVotes<B>>,
 	next_rebroadcast: Mutex<Instant>,
 	_keystore: PhantomData<BKS>,
-	_authid: PhantomData<AuthId>,
+	_auth_id: PhantomData<AuthId>,
+	_signature: PhantomData<TSignature>,
 	
 }
 
-impl<B, AuthId, BKS> GossipValidator<B, AuthId, BKS>
+impl<B, AuthId, TSignature, BKS> GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
-	BKS: BeefyKeystore<AuthId>,
-	AuthId: From<<BKS as BeefyKeystore<AuthId>>::Public> + Into<<BKS as BeefyKeystore<AuthId>>::Public> + Encode + Decode, 
+	BKS: BeefyKeystore<AuthId, TSignature>,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 {
-	pub fn new() -> GossipValidator<B, AuthId, BKS> {
+	pub fn new() -> GossipValidator<B, AuthId, TSignature, BKS> {
 		GossipValidator {
 			topic: topic::<B>(),
 			known_votes: RwLock::new(KnownVotes::new()),
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
 			_keystore: PhantomData,
 			_auth_id: PhantomData,
+			_signature: PhantomData,
+			
 		}
 	}
 
@@ -145,11 +151,12 @@ where
 	}
 }
 
-impl<B, AuthId, BKS> Validator<B> for GossipValidator<B, AuthId, BKS>
+impl<B, AuthId, TSignature, BKS> Validator<B> for GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
-        BKS: BeefyKeystore<AuthId>,
-	AuthId: From<<BKS as BeefyKeystore<AuthId>>::Public> + Into<<BKS as BeefyKeystore<AuthId>>::Public> + Encode + Decode + Sync + Send, 
+        BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	fn validate(
 		&self,
@@ -157,7 +164,7 @@ where
 		sender: &PeerId,
 		mut data: &[u8],
 	) -> ValidationResult<B::Hash> {
-		if let Ok(msg) = VoteMessage::<NumberFor<B>, BKS::Public, BKS::Signature>::decode(&mut data) {
+		if let Ok(msg) = VoteMessage::<NumberFor<B>, AuthId, TSignature>::decode(&mut data) {
 			let msg_hash = twox_64(data);
 			let round = msg.commitment.block_number;
 
@@ -191,7 +198,7 @@ where
 	fn message_expired<'a>(&'a self) -> Box<dyn FnMut(B::Hash, &[u8]) -> bool + 'a> {
 		let known_votes = self.known_votes.read();
 		Box::new(move |_topic, mut data| {
-			let msg = match VoteMessage::<NumberFor<B>, BKS::Public, BKS::Signature>::decode(&mut data) {
+			let msg = match VoteMessage::<NumberFor<B>, AuthId, TSignature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return true,
 			};
@@ -225,7 +232,7 @@ where
 				return do_rebroadcast
 			}
 
-			let msg = match VoteMessage::<NumberFor<B>, BKS::Public, BKS::Signature>::decode(&mut data) {
+			let msg = match VoteMessage::<NumberFor<B>, AuthId, TSignature>::decode(&mut data) {
 				Ok(vote) => vote,
 				Err(_) => return false,
 			};

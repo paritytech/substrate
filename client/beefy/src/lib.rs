@@ -18,6 +18,8 @@
 
 use std::{sync::Arc,
 	  marker::PhantomData,};
+use core::fmt::Debug;
+
 use prometheus::Registry;
 
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
@@ -112,14 +114,15 @@ where
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B, BE, C, N, R, AuthId, BKS>
+pub struct BeefyParams<B, BE, C, N, R, AuthId, TSignature, BKS>
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,        
-	BKS: keystore::BeefyKeystore<AuthId>,
-	AuthId: From<<BKS as keystore::BeefyKeystore<AuthId>>::Public> + Into<<BKS as keystore::BeefyKeystore<AuthId>>::Public> + Encode + Decode, 
+	BKS: keystore::BeefyKeystore<AuthId, TSignature>,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
         
@@ -135,7 +138,7 @@ where
 	/// Gossip network
 	pub network: N,
 	/// BEEFY signed commitment sender
-	pub signed_commitment_sender: BeefySignedCommitmentSender<B>,
+	pub signed_commitment_sender: BeefySignedCommitmentSender<B, TSignature>,
 	// BEEFY best block sender
 	pub beefy_best_block_sender: BeefyBestBlockSender<B>,
 	/// Minimal delta between blocks, BEEFY should vote for
@@ -144,14 +147,14 @@ where
 	pub prometheus_registry: Option<Registry>,
 	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
 	pub protocol_name: std::borrow::Cow<'static, str>,
-	_authid : PhantomData::<AuthId>
+	_auth_id : PhantomData::<AuthId>
 
 }
 
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, R, AuthId, BKS>(beefy_params: BeefyParams<B, BE, C, N, R, AuthId, BKS>)
+pub async fn start_beefy_gadget<B, BE, C, N, R, AuthId, TSignature, BKS>(beefy_params: BeefyParams<B, BE, C, N, R, AuthId, TSignature, BKS>)
 where
 	B: Block,
 	BE: Backend<B>,
@@ -159,8 +162,9 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
-        BKS: keystore::BeefyKeystore<AuthId> +'static,
-	AuthId: From<<BKS as keystore::BeefyKeystore<AuthId>>::Public> + Into<<BKS as keystore::BeefyKeystore<AuthId>>::Public> + Encode + Decode, 
+        BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId> +'static,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send +'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send +'static,
 {
 	let BeefyParams {
 		client,
@@ -173,6 +177,7 @@ where
 		min_block_delta,
 		prometheus_registry,
 		protocol_name,
+		_auth_id,
 	} = beefy_params;
 
 	let sync_oracle = network.clone();
@@ -212,7 +217,7 @@ where
 		sync_oracle,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _, _, _, _>::new(worker_params);
 
 	worker.run().await
 }

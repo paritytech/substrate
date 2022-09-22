@@ -24,13 +24,13 @@ use log::warn;
 
 use beefy_primitives::{
 	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
-    bls_crypto::{Public as BLSPublic, Signature as BLSSignature, AuthorityId},
+    bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
 	KEY_TYPE,
 };
 
 use codec::{Decode, Encode};
 use core::fmt::Debug;
-
+	
 use crate::error;
 
 use sp_core::bls::Pair as BLSPair;
@@ -38,22 +38,23 @@ use sp_application_crypto::Pair as app_crypto_Pair;
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate)  trait BeefyKeystore<AuthorityId> : From<Option<SyncCryptoStorePtr>> + Sync + Send where
-	AuthorityId: Encode + Decode
+pub(crate)  trait BeefyKeystore<AuthorityId, TSignature> : From<Option<SyncCryptoStorePtr>> + Sync + Send where
+	AuthorityId: Encode + Decode + Debug + Ord + Sync + Send,
+	TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
 {
-    type Signature:  Encode + Decode + Debug;
-    type Public: Encode + Decode + Debug;
+	type Public;
 	
         fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public>;
 
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<(Self::Signature),  error::Error>;
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<(TSignature),  error::Error>;
 
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error>;
 
-	// TODO: Maybe future plan: We only use ecdsa public key as list of authority ids to stay compatible with other part of the code 
-	// fn authority_ids(&self) -> Result<Vec<ECDSAPublic>, error::Error>;
+	fn authority_ids(&self) -> Result<Vec<AuthorityId>, error::Error>;
 
-	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool;
+	fn verify(public: &Self::Public, sig: &TSignature, message: &[u8]) -> bool;
+
+	fn authority_id_to_public_key(auth_id: &AuthorityId) -> Result<Self::Public,  error::Error>;
 
 }
 
@@ -64,18 +65,16 @@ pub struct BeefyBLSKeystore(Option<SyncCryptoStorePtr>);
 
 pub struct BeefyBLSnECDSAKeystore(Option<SyncCryptoStorePtr>);
 
-impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyECDSAKeystore where
-	AuthorityId : Encode + Decode + Into<<BeefyECDSAKeystore as BeefyKeystore<AuthorityId>>::Public> + From<<BeefyECDSAKeystore as BeefyKeystore<AuthorityId>>::Public>,
-
+impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
+{
 	type Public = ECDSAPublic;
-	type Signature = ECDSASignature;
 	/// Check if the keystore contains a private key for one of the public keys
 	/// contained in `keys`. A public key with a matching private key is known
 	/// as a local authority id.
 	///
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
-	fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public> {
+	fn authority_id(&self, keys: &[ECDSAPublic]) -> Option<Self::Public> {
 		let store = self.0.clone()?;
 
 		// we do check for multiple private keys as a key store sanity check.
@@ -97,7 +96,7 @@ impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyECDSAKeystore where
 	/// Note that `message` usually will be pre-hashed before being signed.
 	///
 	/// Return the message signature or an error in case of failure.
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<Self::Signature,  error::Error> {
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<ECDSASignature,  error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let msg = keccak_256(message);
@@ -128,31 +127,40 @@ impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyECDSAKeystore where
 		Ok(pk)
 	}
 
+
+	/// Returns a vector of [`beefy_primitives::ecdsa_crypto::Public`] keys which are currently supported
+	/// (i.e. found in the keystore).
+	fn authority_ids(&self) -> Result<Vec<ECDSAPublic>, error::Error> {
+		self.public_keys()
+	}
+		
 	/// Use the `public` key to verify that `sig` is a valid signature for `message`.
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
-	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool {
+	fn verify(public: &Self::Public, sig: &ECDSASignature, message: &[u8]) -> bool {
 		let msg = keccak_256(message);
 		let sig = sig.as_ref();
 		let public = public.as_ref();
 
 		sp_core::ecdsa::Pair::verify_prehashed(sig, &msg, public)
 	}
+
+	fn authority_id_to_public_key(auth_id: &ECDSAPublic) -> Result<Self::Public,  error::Error> {
+		Ok(*auth_id)
+	}
 }
 
 //Implement BLSKeyStore
-impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyBLSKeystore where
-	AuthorityId : Encode + Decode,
+impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
 {	
 	type Public = BLSPublic;
-	type Signature = BLSSignature;
 	/// Check if the keystore contains a private key for one of the public keys
 	/// contained in `keys`. A public key with a matching private key is known
 	/// as a local authority id.
 	///
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
-	fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public> {
+	fn authority_id(&self, keys: &[BLSPublic]) -> Option<Self::Public> {
 		let store = self.0.clone()?;
 
 		// we do check for multiple private keys as a key store sanity check.
@@ -174,7 +182,7 @@ impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyBLSKeystore where
 	/// Note that `message` usually will be pre-hashed before being signed.
 	///
 	/// Return the message signature or an error in case of failure.
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<Self::Signature,  error::Error> {
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<BLSSignature,  error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
 
 		let msg = keccak_256(message);
@@ -192,7 +200,7 @@ impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyBLSKeystore where
 		Ok(sig)
 	}
 
-	/// Returns a vector of [`beefy_primitives::ecdsa_crypto::Public`] keys which are currently supported
+	/// Returns a vector of [`beefy_primitives::bls_crypto::Public`] keys which are currently supported
 	/// (i.e. found in the keystore).
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error> {
 		let store = self.0.clone().ok_or_else(|| error::Error::Keystore("no Keystore".into()))?;
@@ -205,14 +213,24 @@ impl<AuthorityId> BeefyKeystore<AuthorityId> for  BeefyBLSKeystore where
 		Ok(pk)
 	}
 
+	/// Returns a vector of [`beefy_primitives::bls_crypto::Public`] keys which are currently supported
+	/// (i.e. found in the keystore).
+	fn authority_ids(&self) -> Result<Vec<BLSPublic>, error::Error> {
+		self.public_keys()
+	}
+
 	/// Use the `public` key to verify that `sig` is a valid signature for `message`.
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
-	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool {
+	fn verify(public: &Self::Public, sig: &BLSSignature, message: &[u8]) -> bool {
 		let sig = sig.as_ref();
 		let public = public.as_ref();
 
 		sp_core::bls::Pair::verify(sig, &message, public)
+	}
+
+	fn authority_id_to_public_key(auth_id: &BLSPublic) -> Result<Self::Public,  error::Error> {
+		Ok(*auth_id)
 	}
 
 }
@@ -223,10 +241,8 @@ impl BeefyBLSnECDSAKeystore {
     }
 }
 
-impl<AuthorityId> BeefyKeystore<AuthorityId> for BeefyBLSnECDSAKeystore where
-	AuthorityId : Encode + Decode,
+impl BeefyKeystore<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)> for BeefyBLSnECDSAKeystore
 {	
-        type Signature = (ECDSASignature,BLSSignature);
 	type Public = (ECDSAPublic,BLSPublic);
 	/// Check if the keystore contains a private key for one of the public keys
 	/// contained in `keys`. A public key with a matching private key is known
@@ -234,11 +250,10 @@ impl<AuthorityId> BeefyKeystore<AuthorityId> for BeefyBLSnECDSAKeystore where
 	///
 	/// Return the public key for which we also do have a private key. If no
 	/// matching private key is found, `None` will be returned.
-	fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public> {
+	fn authority_id(&self, keys: &[(ECDSAPublic,BLSPublic)]) -> Option<Self::Public> {
 		let (ecdsa_pubkeys, bls_pubkeys): (Vec<ECDSAPublic>, Vec<BLSPublic>) = keys.iter().cloned().unzip();
-		let own_ecdsa_key = self.both().0.authority_id(&keys);
+		let own_ecdsa_key = self.both().0.authority_id(&ecdsa_pubkeys);
 		let own_bls_key  = self.both().1.authority_id(&bls_pubkeys); 
-		own_bls_key = 
 		if own_ecdsa_key == None || own_bls_key == None {
 			None
 		} else {
@@ -246,7 +261,7 @@ impl<AuthorityId> BeefyKeystore<AuthorityId> for BeefyBLSnECDSAKeystore where
 		}
 	}
 
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<Self::Signature,  error::Error> {
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<(ECDSASignature,BLSSignature),  error::Error> {
 		let bls_n_ecdsa = self.both();
 		match (bls_n_ecdsa.0.sign(&public.0, message), bls_n_ecdsa.1.sign(&public.1, message)) {
 			(Ok(ecdsa_sign),Ok(bls_sign))=> Ok((ecdsa_sign, bls_sign)),
@@ -264,14 +279,24 @@ impl<AuthorityId> BeefyKeystore<AuthorityId> for BeefyBLSnECDSAKeystore where
 
 	}
 
-	fn verify(public: &Self::Public, sig: &Self::Signature, message: &[u8]) -> bool {
+	/// Returns a vector of [`(beefy_primitives::ecdsa_crypto::Public, beefy_primitives::bls_crypto::Public)`] keys which are currently supported
+	/// (i.e. found in the keystore).
+	fn authority_ids(&self) -> Result<Vec<(ECDSAPublic,BLSPublic)>, error::Error> {
+		self.public_keys()
+	}
+
+	fn verify(public: &Self::Public, sig: &(ECDSASignature,BLSSignature), message: &[u8]) -> bool {
 		match (BeefyECDSAKeystore::verify(&public.0, &sig.0, message),
 		       BeefyBLSKeystore::verify(&public.1, &sig.1, message)) {
 			(true, true) => true,
 			_ => false
 		}
 	}
-	
+
+	fn authority_id_to_public_key(auth_id: &(ECDSAPublic,BLSPublic)) -> Result<Self::Public,  error::Error> {
+		Ok(*auth_id)
+	}
+
 }
     
 macro_rules! impl_from_cryptostore_for_keystore {

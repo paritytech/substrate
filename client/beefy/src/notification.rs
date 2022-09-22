@@ -20,8 +20,8 @@ use sc_utils::notification::{NotificationSender, NotificationStream, TracingKeyS
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// A commitment with matching BEEFY authorities' signatures.
-pub type BeefySignedCommitment<Block> =
-	beefy_primitives::SignedCommitment<NumberFor<Block>, beefy_primitives::ecdsa_crypto::Signature, >;
+pub type BeefySignedCommitment<Block, TSignature> =
+	beefy_primitives::SignedCommitment<NumberFor<Block>, TSignature >;
 
 /// The sending half of the notifications channel(s) used to send
 /// notifications about best BEEFY block from the gadget side.
@@ -34,12 +34,12 @@ pub type BeefyBestBlockStream<Block> =
 
 /// The sending half of the notifications channel(s) used to send notifications
 /// about signed commitments generated at the end of a BEEFY round.
-pub type BeefySignedCommitmentSender<Block> = NotificationSender<BeefySignedCommitment<Block>>;
+pub type BeefySignedCommitmentSender<Block,TSignature> = NotificationSender<BeefySignedCommitment<Block, TSignature>>;
 
 /// The receiving half of a notifications channel used to receive notifications
 /// about signed commitments generated at the end of a BEEFY round.
-pub type BeefySignedCommitmentStream<Block> =
-	NotificationStream<BeefySignedCommitment<Block>, BeefySignedCommitmentTracingKey>;
+pub type BeefySignedCommitmentStream<Block,TSignature> =
+	NotificationStream<BeefySignedCommitment<Block, TSignature>, BeefySignedCommitmentTracingKey>;
 
 /// Provides tracing key for BEEFY best block stream.
 #[derive(Clone)]

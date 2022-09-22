@@ -18,29 +18,36 @@
 
 use std::{
 	collections::{BTreeMap, HashMap},
-	hash::Hash,
+	hash::Hash, marker::PhantomData,
 };
+use codec::{Decode, Encode};
+use core::fmt::Debug;
 
 use log::{debug, trace};
 
 use beefy_primitives::{
-	ecdsa_crypto::{Public, Signature},
 	ValidatorSet, ValidatorSetId,
 };
 use sp_runtime::traits::{Block, NumberFor};
+use crate::keystore::BeefyKeystore;
 
 /// Tracks for each round which validators have voted/signed and
 /// whether the local `self` validator has voted/signed.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Default)]
-struct RoundTracker {
+///#[derive(Default)]
+struct RoundTracker<AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	self_vote: bool,
-	votes: HashMap<Public, Signature>,
+	votes: HashMap<AuthId, TSignature>,
+	
 }
 
-impl RoundTracker {
-	fn add_vote(&mut self, vote: (Public, Signature), self_vote: bool) -> bool {
+impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> Default for RoundTracker<AuthId, TSignature> {
+ 	fn default() -> Self { RoundTracker::<_,_> {self_vote: false,  votes: <HashMap<AuthId, TSignature> as Default>::default()}}
+ }
+
+impl<AuthId: Encode + Decode + Debug + Ord + Sync + Send + core::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> RoundTracker<AuthId, TSignature> {
+	fn add_vote(&mut self, vote: (AuthId, TSignature), self_vote: bool) -> bool {
 		if self.votes.contains_key(&vote.0) {
 			return false
 		}
@@ -67,34 +74,38 @@ fn threshold(authorities: usize) -> usize {
 /// Keeps track of all voting rounds (block numbers) within a session.
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
-/// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-pub(crate) struct Rounds<Payload, B: Block> {
-	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
+/// Does not do any validation on votes or signatures, layers above need to handle that (gos sip).
+pub(crate) struct Rounds<Payload, B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
+	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker<AuthId, TSignature>>,
 	best_done: Option<NumberFor<B>>,
 	session_start: NumberFor<B>,
-	validator_set: ValidatorSet<Public>,
+	validator_set: ValidatorSet<AuthId>,
 }
 
-impl<P, B> Rounds<P, B>
+impl<P, B, AuthId, TSignature> Rounds<P, B, AuthId, TSignature>
 where
 	P: Ord + Hash + Clone,
 	B: Block,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
-	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<Public>) -> Self {
+	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<AuthId>) -> Self {
 		Rounds { rounds: BTreeMap::new(), best_done: None, session_start, validator_set }
 	}
 }
 
-impl<P, B> Rounds<P, B>
+impl<P, B, AuthId, TSignature> Rounds<P, B, AuthId, TSignature>
 where
 	P: Ord + Hash + Clone,
 	B: Block,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
 		self.validator_set.id()
 	}
 
-	pub(crate) fn validators(&self) -> &[Public] {
+	pub(crate) fn validators(&self) -> &[AuthId] {
 		self.validator_set.validators()
 	}
 
@@ -110,7 +121,7 @@ where
 	pub(crate) fn add_vote(
 		&mut self,
 		round: &(P, NumberFor<B>),
-		vote: (Public, Signature),
+		vote: (AuthId, TSignature),
 		self_vote: bool,
 	) -> bool {
 		if Some(round.1.clone()) <= self.best_done {
@@ -128,6 +139,7 @@ where
 			);
 			false
 		} else {
+			//self.rounds.entry(round.clone()).or_default().add_vote(vote, self_vote)
 			self.rounds.entry(round.clone()).or_default().add_vote(vote, self_vote)
 		}
 	}
@@ -135,7 +147,7 @@ where
 	pub(crate) fn try_conclude(
 		&mut self,
 		round: &(P, NumberFor<B>),
-	) -> Option<Vec<Option<Signature>>> {
+	) -> Option<Vec<Option<TSignature>>> {
 		let done = self
 			.rounds
 			.get(round)
@@ -153,7 +165,7 @@ where
 			Some(
 				self.validators()
 					.iter()
-					.map(|authority_id| signatures.get(authority_id).cloned())
+					.map(|authority_id| &signatures.get(authority_id).cloned())
 					.collect(),
 			)
 		} else {
