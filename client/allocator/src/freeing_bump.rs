@@ -511,10 +511,10 @@ impl FreeingBumpHeapAllocator {
 	fn bump(bumper: &mut u32, size: u32, memory: &mut impl Memory) -> Result<u32, Error> {
 		let required_size = dbg!(u64::from(*bumper) + u64::from(size));
 
-		if required_size > memory.size() {
+		if required_size > dbg!(memory.size()) {
 			let required_pages =
-				u32::try_from((required_size + PAGE_SIZE as u64 - 1) / PAGE_SIZE as u64)
-					.map_err(|_| Error::Other("Number of required wasm pages is above u32"))?;
+				dbg!(u32::try_from((required_size + PAGE_SIZE as u64 - 1) / PAGE_SIZE as u64)
+					.map_err(|_| Error::Other("Number of required wasm pages is above u32")))?;
 
 			let pages = memory.pages();
 			let max_pages = memory.max_pages().unwrap_or(MAX_WASM_PAGES);
@@ -527,7 +527,7 @@ impl FreeingBumpHeapAllocator {
 				// Let us growth by at least pages * 2, but in maximum we can allocate
 				// `MAX_WASM_PAGES`
 				let next_pages =
-					std::cmp::min(std::cmp::max(pages * 2, required_pages), max_pages);
+					std::cmp::min(std::cmp::max(pages * 2, dbg!(required_pages)), max_pages);
 
 				if dbg!(next_pages) == dbg!(pages) {
 					return Err(Error::AllocatorOutOfSpace)

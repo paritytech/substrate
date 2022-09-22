@@ -451,12 +451,12 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 						_ => {},
 					};
 
-					let min = Pages(memory_type.initial() as usize);
-					let max = match self.heap_pages {
-						HeapPages::Dynamic => None,
+					let min = memory_type.initial() as usize;
+					let (min, max) = match self.heap_pages {
+						HeapPages::Dynamic => (Pages(min + 1024), None),
 						HeapPages::Extra(extra) =>
-							Some(Pages(memory_type.initial() as usize + extra)),
-						HeapPages::Max(max) => Some(Pages(max)),
+							(Pages(extra + min), Some(Pages(min + extra))),
+						HeapPages::Max(max) => (Pages(max), Some(Pages(max))),
 					};
 
 					let memory = MemoryInstance::alloc(dbg!(min), dbg!(max))?;

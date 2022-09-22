@@ -45,7 +45,7 @@ use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
 use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions};
 
 /// Default num of pages for the heap
-const DEFAULT_HEAP_PAGES: HeapPages = HeapPages::Max(2048);
+const DEFAULT_HEAP_PAGES: HeapPages = HeapPages::Extra(2048);
 
 /// Set up the externalities and safe calling environment to execute runtime calls.
 ///
@@ -144,7 +144,7 @@ where
 	) -> Self {
 		WasmExecutor {
 			method,
-			default_heap_pages: default_heap_pages.map(|h| HeapPages::Max(h as _)).unwrap_or(DEFAULT_HEAP_PAGES),
+			default_heap_pages: default_heap_pages.map(|h| HeapPages::Extra(h as _)).unwrap_or(DEFAULT_HEAP_PAGES),
 			cache: Arc::new(RuntimeCache::new(
 				max_runtime_instances,
 				cache_path.clone(),
