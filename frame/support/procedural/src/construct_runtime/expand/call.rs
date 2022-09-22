@@ -162,12 +162,12 @@ pub fn expand_outer_dispatch(
 			}
 		}
 		impl #scrate::dispatch::Dispatchable for RuntimeCall {
-			type Origin = Origin;
+			type RuntimeOrigin = RuntimeOrigin;
 			type Config = RuntimeCall;
 			type Info = #scrate::dispatch::DispatchInfo;
 			type PostInfo = #scrate::dispatch::PostDispatchInfo;
-			fn dispatch(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
-				if !<Self::Origin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
+			fn dispatch(self, origin: RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
+				if !<Self::RuntimeOrigin as #scrate::traits::OriginTrait>::filter_call(&origin, &self) {
 					return #scrate::sp_std::result::Result::Err(
 						#system_path::Error::<#runtime>::CallFiltered.into()
 					);
@@ -177,8 +177,8 @@ pub fn expand_outer_dispatch(
 			}
 		}
 		impl #scrate::traits::UnfilteredDispatchable for RuntimeCall {
-			type Origin = Origin;
-			fn dispatch_bypass_filter(self, origin: Origin) -> #scrate::dispatch::DispatchResultWithPostInfo {
+			type RuntimeOrigin = RuntimeOrigin;
+			fn dispatch_bypass_filter(self, origin: RuntimeOrigin) -> #scrate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(
 						#pallet_attrs

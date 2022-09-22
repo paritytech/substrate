@@ -123,7 +123,7 @@ benchmarks! {
 		ensure!(Registrars::<T>::get().len() as u32 == r, "Registrars not set up correctly.");
 		let origin = T::RegistrarOrigin::successful_origin();
 		let account = T::Lookup::unlookup(account("registrar", r + 1, SEED));
-	}: _<T::Origin>(origin, account)
+	}: _<T::RuntimeOrigin>(origin, account)
 	verify {
 		ensure!(Registrars::<T>::get().len() as u32 == r + 1, "Registrars not added.");
 	}
@@ -135,7 +135,7 @@ benchmarks! {
 			// The target user
 			let caller: T::AccountId = whitelisted_caller();
 			let caller_lookup = T::Lookup::unlookup(caller.clone());
-			let caller_origin: <T as frame_system::Config>::Origin = RawOrigin::Signed(caller.clone()).into();
+			let caller_origin: <T as frame_system::Config>::RuntimeOrigin = RawOrigin::Signed(caller.clone()).into();
 			let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 			// Add an initial identity
@@ -193,7 +193,7 @@ benchmarks! {
 
 	clear_identity {
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller.clone()));
+		let caller_origin = <T as frame_system::Config>::RuntimeOrigin::from(RawOrigin::Signed(caller.clone()));
 		let caller_lookup = <T::Lookup as StaticLookup>::unlookup(caller.clone());
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
@@ -208,7 +208,7 @@ benchmarks! {
 		// Create their main identity with x additional fields
 		let info = create_identity_info::<T>(x);
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller.clone()));
+		let caller_origin = <T as frame_system::Config>::RuntimeOrigin::from(RawOrigin::Signed(caller.clone()));
 		Identity::<T>::set_identity(caller_origin.clone(), Box::new(info.clone()))?;
 
 		// User requests judgement from all the registrars, and they approve
@@ -237,7 +237,7 @@ benchmarks! {
 			// Create their main identity with x additional fields
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
-			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
+			let caller_origin = <T as frame_system::Config>::RuntimeOrigin::from(RawOrigin::Signed(caller));
 			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
@@ -247,7 +247,7 @@ benchmarks! {
 
 	cancel_request {
 		let caller: T::AccountId = whitelisted_caller();
-		let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller.clone()));
+		let caller_origin = <T as frame_system::Config>::RuntimeOrigin::from(RawOrigin::Signed(caller.clone()));
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
@@ -255,7 +255,7 @@ benchmarks! {
 			// Create their main identity with x additional fields
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
-			let caller_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(caller));
+			let caller_origin = <T as frame_system::Config>::RuntimeOrigin::from(RawOrigin::Signed(caller));
 			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
@@ -323,7 +323,7 @@ benchmarks! {
 	provide_judgement {
 		// The user
 		let user: T::AccountId = account("user", r, SEED);
-		let user_origin = <T as frame_system::Config>::Origin::from(RawOrigin::Signed(user.clone()));
+		let user_origin = <T as frame_system::Config>::RuntimeOrigin::from(RawOrigin::Signed(user.clone()));
 		let user_lookup = <T::Lookup as StaticLookup>::unlookup(user.clone());
 		let _ = T::Currency::make_free_balance_be(&user, BalanceOf::<T>::max_value());
 
@@ -352,7 +352,7 @@ benchmarks! {
 		let x in 1 .. T::MaxAdditionalFields::get();
 
 		let target: T::AccountId = account("target", 0, SEED);
-		let target_origin: <T as frame_system::Config>::Origin = RawOrigin::Signed(target.clone()).into();
+		let target_origin: <T as frame_system::Config>::RuntimeOrigin = RawOrigin::Signed(target.clone()).into();
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		let _ = T::Currency::make_free_balance_be(&target, BalanceOf::<T>::max_value());
 
@@ -373,7 +373,7 @@ benchmarks! {
 		}
 		ensure!(IdentityOf::<T>::contains_key(&target), "Identity not set");
 		let origin = T::ForceOrigin::successful_origin();
-	}: _<T::Origin>(origin, target_lookup)
+	}: _<T::RuntimeOrigin>(origin, target_lookup)
 	verify {
 		ensure!(!IdentityOf::<T>::contains_key(&target), "Identity not removed");
 	}
