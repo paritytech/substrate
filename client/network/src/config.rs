@@ -585,7 +585,7 @@ impl NodeKeyConfig {
 				f,
 				|mut b| match String::from_utf8(b.to_vec()).ok().and_then(|s| {
 					if s.len() == 64 {
-						hex::decode(&s).ok()
+						array_bytes::hex2bytes(&s).ok()
 					} else {
 						None
 					}

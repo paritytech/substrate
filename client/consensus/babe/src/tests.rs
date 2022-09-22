@@ -642,10 +642,8 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
 	import.post_digests.push(seal);
 	import.body = Some(block.extrinsics);
-	import.intermediates.insert(
-		Cow::from(INTERMEDIATE_KEY),
-		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<_>,
-	);
+	import
+		.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<TestBlock> { epoch_descriptor });
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 	let import_result = block_on(block_import.import_block(import, Default::default())).unwrap();
 
