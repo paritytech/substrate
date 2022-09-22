@@ -174,7 +174,7 @@ impl OnRuntimeUpgrade for Tuple {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	/// We are executing pre and post checks sequentially in order to be able to test seveal
+	/// We are executing pre- and post-checks sequentially in order to be able to test several
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
 	fn on_runtime_upgrade() -> Weight {
