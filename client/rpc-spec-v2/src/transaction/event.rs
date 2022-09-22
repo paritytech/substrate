@@ -66,6 +66,60 @@ pub struct TransactionDropped {
 	pub error: String,
 }
 
+/// Possible transaction status events.
+///
+/// The status events can be grouped based on their kinds as:
+///
+/// 1. Runtime validated the transaction:
+/// 		- `Validated`
+///
+/// 2. Inside the `Ready` queue:
+/// 		- `Broadcast`
+///
+/// 3. Leaving the pool:
+/// 		- `BestChainBlockIncluded`
+/// 		- `Invalid`
+///
+/// 4. Block finalized:
+/// 		- `Finalized`
+///
+/// 5. At any time:
+/// 		- `Dropped`
+/// 		- `Error`
+///
+/// The subscription's stream is considered finished whenever the following events are
+/// received: `Finalized`, `Error`, `Invalid` or `Dropped. However, the user is allowed
+/// to unsubscribe at any moment.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+// We need to manually specify the trait bounds for the `Hash` trait to ensure `into` and
+// `form` still work.
+#[serde(bound(
+	serialize = "Hash: Serialize + Clone",
+	deserialize = "Hash: Deserialize<'de> + Clone"
+))]
+#[serde(into = "TransactionEventIR<Hash>", from = "TransactionEventIR<Hash>")]
+pub enum TransactionEvent<Hash> {
+	/// The transaction was validated by the runtime.
+	Validated,
+	/// The transaction was broadcasted to a number of peers.
+	Broadcasted(TransactionBroadcasted),
+	/// The transaction was included in a best block of the chain.
+	///
+	/// # Note
+	///
+	/// This may contain `None` if the block is no longer a best
+	/// block of the chain.
+	BestChainBlockIncluded(Option<TransactionBlock<Hash>>),
+	/// The transaction was included in a finialized block.
+	Finalized(TransactionBlock<Hash>),
+	/// The transaction could not be processed due to an error.
+	Error(TransactionError),
+	/// The transaction is marked as invalid.
+	Invalid(TransactionError),
+	/// The client was not capable of keeping track of this transaction.
+	Dropped(TransactionDropped),
+}
+
 /// Intermediate representation (IR) for the transaction events
 /// that handles block events only.
 ///
@@ -125,4 +179,45 @@ pub(crate) enum TransactionEventNonBlock {
 pub(crate) enum TransactionEventIR<Hash> {
 	Block(TransactionEventBlock<Hash>),
 	NonBlock(TransactionEventNonBlock),
+}
+
+impl<Hash> From<TransactionEvent<Hash>> for TransactionEventIR<Hash> {
+	fn from(value: TransactionEvent<Hash>) -> Self {
+		match value {
+			TransactionEvent::Validated =>
+				TransactionEventIR::NonBlock(TransactionEventNonBlock::Validated),
+			TransactionEvent::Broadcasted(event) =>
+				TransactionEventIR::NonBlock(TransactionEventNonBlock::Broadcasted(event)),
+			TransactionEvent::BestChainBlockIncluded(event) =>
+				TransactionEventIR::Block(TransactionEventBlock::BestChainBlockIncluded(event)),
+			TransactionEvent::Finalized(event) =>
+				TransactionEventIR::Block(TransactionEventBlock::Finalized(event)),
+			TransactionEvent::Error(event) =>
+				TransactionEventIR::NonBlock(TransactionEventNonBlock::Error(event)),
+			TransactionEvent::Invalid(event) =>
+				TransactionEventIR::NonBlock(TransactionEventNonBlock::Invalid(event)),
+			TransactionEvent::Dropped(event) =>
+				TransactionEventIR::NonBlock(TransactionEventNonBlock::Dropped(event)),
+		}
+	}
+}
+
+impl<Hash> From<TransactionEventIR<Hash>> for TransactionEvent<Hash> {
+	fn from(value: TransactionEventIR<Hash>) -> Self {
+		match value {
+			TransactionEventIR::NonBlock(status) => match status {
+				TransactionEventNonBlock::Validated => TransactionEvent::Validated,
+				TransactionEventNonBlock::Broadcasted(event) =>
+					TransactionEvent::Broadcasted(event),
+				TransactionEventNonBlock::Error(event) => TransactionEvent::Error(event),
+				TransactionEventNonBlock::Invalid(event) => TransactionEvent::Invalid(event),
+				TransactionEventNonBlock::Dropped(event) => TransactionEvent::Dropped(event),
+			},
+			TransactionEventIR::Block(block) => match block {
+				TransactionEventBlock::Finalized(event) => TransactionEvent::Finalized(event),
+				TransactionEventBlock::BestChainBlockIncluded(event) =>
+					TransactionEvent::BestChainBlockIncluded(event),
+			},
+		}
+	}
 }
