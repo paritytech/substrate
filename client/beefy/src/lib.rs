@@ -156,10 +156,10 @@ where
 pub struct BeefyNetworkParams<B, N>
 where
 	B: Block,
-	N: GossipNetwork<B> + NetworkRequest + Clone + SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
 {
 	/// Network implementing gossip, requests and sync-oracle.
-	pub network: N,
+	pub network: Arc<N>,
 	/// Chain specific BEEFY gossip protocol name. See
 	/// [`beefy_protocol_name::gossip_protocol_name`].
 	pub gossip_protocol_name: ProtocolName,
@@ -178,7 +178,7 @@ where
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
-	N: GossipNetwork<B> + NetworkRequest + Clone + SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -210,7 +210,7 @@ where
 	C: Client<B, BE> + BlockBackend<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
-	N: GossipNetwork<B> + NetworkRequest + Clone + SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,

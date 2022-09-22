@@ -203,7 +203,7 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, N> {
 	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B>>,
-	pub on_demand_justifications: OnDemandJustificationsEngine<B, N, R>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B, R>,
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub min_block_delta: u32,
@@ -222,7 +222,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, N> {
 	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B>>,
-	on_demand_justifications: OnDemandJustificationsEngine<B, N, R>,
+	on_demand_justifications: OnDemandJustificationsEngine<B, R>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.

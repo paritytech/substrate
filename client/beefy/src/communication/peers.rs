@@ -66,7 +66,7 @@ impl<B: Block> KnownPeers<B> {
 	pub fn at_least_at_block(&self, block: NumberFor<B>) -> VecDeque<PeerId> {
 		self.live
 			.iter()
-			.filter_map(|(k, v)| if v.last_voted_on >= block { Some(k) } else { None })
+			.filter_map(|(k, v)| (v.last_voted_on >= block).then_some(k))
 			.cloned()
 			.collect()
 	}

@@ -54,8 +54,8 @@ enum State<B: Block> {
 	AwaitingResponse(PeerId, NumberFor<B>, stream::Once<ResponseReceiver>),
 }
 
-pub struct OnDemandJustificationsEngine<B: Block, N, R> {
-	network: N,
+pub struct OnDemandJustificationsEngine<B: Block, R> {
+	network: Arc<dyn NetworkRequest + Send + Sync>,
 	runtime: Arc<R>,
 	protocol_name: ProtocolName,
 
@@ -65,15 +65,14 @@ pub struct OnDemandJustificationsEngine<B: Block, N, R> {
 	state: State<B>,
 }
 
-impl<B, N, R> OnDemandJustificationsEngine<B, N, R>
+impl<B, R> OnDemandJustificationsEngine<B, R>
 where
 	B: Block,
-	N: NetworkRequest,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B>,
 {
 	pub fn new(
-		network: N,
+		network: Arc<dyn NetworkRequest + Send + Sync>,
 		runtime: Arc<R>,
 		protocol_name: ProtocolName,
 		live_peers: Arc<Mutex<KnownPeers<B>>>,

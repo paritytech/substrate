@@ -146,7 +146,7 @@ where
 	}
 
 	// Sends back justification response if justification found in client backend.
-	async fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
+	fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
 		// TODO (issue #12293): validate `request` and change peer reputation for invalid requests.
 
 		let maybe_encoded_proof = self
@@ -174,7 +174,7 @@ where
 
 		while let Ok(request) = self.request_receiver.recv(|| vec![]).await {
 			let peer = request.peer;
-			match self.handle_request(request).await {
+			match self.handle_request(request) {
 				Ok(()) => {
 					debug!(
 						target: "beefy::sync",
