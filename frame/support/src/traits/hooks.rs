@@ -203,7 +203,7 @@ impl OnRuntimeUpgrade for Tuple {
 
 	#[cfg(feature = "try-runtime")]
 	/// noop
-	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 }
