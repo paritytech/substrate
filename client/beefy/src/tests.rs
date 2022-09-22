@@ -99,7 +99,7 @@ fn beefy_protocol_name() {
 
 	// Create protocol name using random genesis hash.
 	let genesis_hash = H256::random();
-	let expected = format!("/{}/beefy/1", hex::encode(genesis_hash));
+	let expected = format!("/{}/beefy/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
 	let proto_name = beefy_protocol_name::standard_name(&genesis_hash, &chain_spec);
 	assert_eq!(proto_name.to_string(), expected);
 

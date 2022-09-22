@@ -53,7 +53,7 @@ use crate::{
 	BalanceOf, Config, Error, Exposure, NegativeImbalanceOf, Pallet, Perbill, SessionInterface,
 	Store, UnappliedSlash,
 };
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	ensure,
 	traits::{Currency, Defensive, Get, Imbalance, OnUnbalanced},
@@ -182,7 +182,7 @@ impl SlashingSpans {
 }
 
 /// A slashing-span record for a particular stash.
-#[derive(Encode, Decode, Default, TypeInfo)]
+#[derive(Encode, Decode, Default, TypeInfo, MaxEncodedLen)]
 pub(crate) struct SpanRecord<Balance> {
 	slashed: Balance,
 	paid_out: Balance,
