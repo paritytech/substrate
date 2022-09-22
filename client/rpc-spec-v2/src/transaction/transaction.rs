@@ -22,7 +22,10 @@ use crate::{
 	transaction::{
 		api::TransactionApiServer,
 		error::Error,
-		event::{TransactionBlock, TransactionBroadcasted, TransactionError, TransactionEvent},
+		event::{
+			TransactionBlock, TransactionBroadcasted, TransactionDropped, TransactionError,
+			TransactionEvent,
+		},
 	},
 	SubscriptionTaskExecutor,
 };
@@ -168,7 +171,8 @@ impl TransactionState {
 				}))),
 			TransactionStatus::Retracted(_) => Some(TransactionEvent::BestChainBlockIncluded(None)),
 			TransactionStatus::FinalityTimeout(_) =>
-				Some(TransactionEvent::Invalid(TransactionError {
+				Some(TransactionEvent::Dropped(TransactionDropped {
+					broadcasted: self.broadcasted,
 					error: "Maximum number of finality watchers has been reached".into(),
 				})),
 			TransactionStatus::Finalized((hash, index)) =>
