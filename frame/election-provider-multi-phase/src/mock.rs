@@ -108,6 +108,11 @@ pub fn roll_to_unsigned() {
 		roll_next();
 	}
 }
+pub fn roll_to_signed() {
+	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
+		roll_next();
+	}
+}
 
 pub fn roll_to_with_ocw(n: BlockNumber) {
 	let now = System::block_number();

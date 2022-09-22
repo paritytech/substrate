@@ -1843,8 +1843,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, raw_solution, roll_to, roll_to_unsigned, AccountId, ExtBuilder,
-			MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
+			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
+			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
 			SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
@@ -1913,7 +1913,7 @@ mod tests {
 			roll_to(44);
 			assert!(MultiPhase::current_phase().is_off());
 
-			roll_to(45);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			roll_to(55);
@@ -1986,7 +1986,7 @@ mod tests {
 			roll_to(19);
 			assert!(MultiPhase::current_phase().is_off());
 
-			roll_to(20);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 
@@ -2153,7 +2153,7 @@ mod tests {
 			roll_to(14);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
