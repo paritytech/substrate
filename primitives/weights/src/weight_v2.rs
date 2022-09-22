@@ -36,12 +36,19 @@ pub struct Weight {
 // Custom Decode implementation for the purposes of migrating from 1D weights.
 impl Decode for Weight {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
-		let Compact(ref_time) = Compact::<u64>::decode(input)
-			.map_err(|e| e.chain("Could not decode `Weight::ref_time`"))?;
-		let Compact(proof_size) = Compact::<u64>::decode(input)
-			// Likely coming from 1D weight -- migrate to 2D by defaulting the proof size to 0
-			.unwrap_or(Compact(0));
-		Ok(Self { ref_time, proof_size })
+		// Try and decode as V1 first...
+		let ref_time = match u64::decode(input) {
+			Ok(r) => r,
+			// ...and if it fails, decode as V2
+			Err(_) => {
+				let Compact(ref_time) = Compact::<u64>::decode(input)
+					.map_err(|e| e.chain("Could not decode `Weight::ref_time`"))?;
+				let Compact(proof_size) = Compact::<u64>::decode(input)
+					.map_err(|e| e.chain("Could not decode `Weight::proof_size`"))?;
+				return Ok(Self { ref_time, proof_size })
+			}
+		};
+		Ok(Self { ref_time, proof_size: 0 })
 	}
 }
 
@@ -433,8 +440,7 @@ mod tests {
 		type WeightV1 = u64;
 
 		let weight_v1: WeightV1 = 12345;
-		let compact_weight_v1 = Compact(weight_v1);
-		let encoded = compact_weight_v1.encode();
+		let encoded = weight_v1.encode();
 
 		// Decode as weight v2
 		let decoded: Weight = Decode::decode(&mut &encoded[..]).unwrap();
