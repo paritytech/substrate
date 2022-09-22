@@ -108,15 +108,16 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	Ready,
 	/// The transaction has been broadcast to the given peers.
 	Broadcast(Vec<String>),
-	/// Transaction has been included in block with given hash.
-	InBlock(BlockHash),
+	/// Transaction has been included in block with given hash
+	/// at the given position.
+	InBlock((BlockHash, TxIndex)),
 	/// The block this transaction was included in has been retracted.
 	Retracted(BlockHash),
 	/// Maximum number of finality watchers has been reached,
 	/// old watchers are being removed.
 	FinalityTimeout(BlockHash),
-	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA
-	Finalized(BlockHash),
+	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA.
+	Finalized((BlockHash, TxIndex)),
 	/// Transaction has been replaced in the pool, by another transaction
 	/// that provides the same tags. (e.g. same (sender, nonce)).
 	Usurped(Hash),
@@ -143,6 +144,8 @@ pub type TransactionFor<P> = <<P as TransactionPool>::Block as BlockT>::Extrinsi
 pub type TransactionStatusStreamFor<P> = TransactionStatusStream<TxHash<P>, BlockHash<P>>;
 /// Transaction type for a local pool.
 pub type LocalTransactionFor<P> = <<P as LocalTransactionPool>::Block as BlockT>::Extrinsic;
+/// Transaction's index within the block in which it was included.
+pub type TxIndex = usize;
 
 /// Typical future type used in transaction pool api.
 pub type PoolFuture<T, E> = std::pin::Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
