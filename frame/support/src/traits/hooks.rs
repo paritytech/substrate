@@ -439,16 +439,18 @@ mod tests {
 	#[cfg(feature = "try-runtime")]
 	#[test]
 	fn on_runtime_upgrade_tuple() {
+		use frame_support::parameter_types;
 		use sp_io::TestExternalities;
-		use sp_std::sync::atomic::{AtomicUsize, Ordering};
 
 		struct Test1;
 		struct Test2;
 		struct Test3;
 
-		static TEST1_ASSERTIONS: AtomicUsize = AtomicUsize::new(0);
-		static TEST2_ASSERTIONS: AtomicUsize = AtomicUsize::new(0);
-		static TEST3_ASSERTIONS: AtomicUsize = AtomicUsize::new(0);
+		parameter_types! {
+			static Test1Assertions: u8 = 0;
+			static Test2Assertions: u8 = 0;
+			static Test3Assertions: u8 = 0;
+		}
 
 		impl OnRuntimeUpgrade for Test1 {
 			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
@@ -456,7 +458,7 @@ mod tests {
 			}
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: String = Decode::decode(&mut state.as_slice()).unwrap();
-				TEST1_ASSERTIONS.fetch_add(1, Ordering::SeqCst);
+				Test1Assertions::mutate(|val| *val += 1);
 				assert_eq!(s, "Test1");
 				Ok(())
 			}
@@ -467,7 +469,7 @@ mod tests {
 			}
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: u32 = Decode::decode(&mut state.as_slice()).unwrap();
-				TEST2_ASSERTIONS.fetch_add(1, Ordering::SeqCst);
+				Test2Assertions::mutate(|val| *val += 1);
 				assert_eq!(s, 100);
 				Ok(())
 			}
@@ -478,7 +480,7 @@ mod tests {
 			}
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: bool = Decode::decode(&mut state.as_slice()).unwrap();
-				TEST3_ASSERTIONS.fetch_add(1, Ordering::SeqCst);
+				Test3Assertions::mutate(|val| *val += 1);
 				assert_eq!(s, true);
 				Ok(())
 			}
@@ -494,27 +496,27 @@ mod tests {
 			let origin_state = <Test1Tuple as OnRuntimeUpgrade>::pre_upgrade().unwrap();
 			assert!(origin_state.is_empty());
 			<Test1Tuple as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
-			assert_eq!(TEST1_ASSERTIONS.load(Ordering::SeqCst), 0);
+			assert_eq!(Test1Assertions::get(), 0);
 			<Test1Tuple as OnRuntimeUpgrade>::on_runtime_upgrade();
-			assert_eq!(TEST1_ASSERTIONS.load(Ordering::SeqCst), 1);
+			assert_eq!(Test1Assertions::take(), 1);
 
 			type Test123 = (Test1, Test2, Test3);
 			<Test123 as OnRuntimeUpgrade>::on_runtime_upgrade();
-			assert_eq!(TEST1_ASSERTIONS.load(Ordering::SeqCst), 2);
-			assert_eq!(TEST2_ASSERTIONS.load(Ordering::SeqCst), 1);
-			assert_eq!(TEST3_ASSERTIONS.load(Ordering::SeqCst), 1);
+			assert_eq!(Test1Assertions::take(), 1);
+			assert_eq!(Test2Assertions::take(), 1);
+			assert_eq!(Test3Assertions::take(), 1);
 
 			type Test321 = (Test3, Test2, Test1);
 			<Test321 as OnRuntimeUpgrade>::on_runtime_upgrade();
-			assert_eq!(TEST1_ASSERTIONS.load(Ordering::SeqCst), 3);
-			assert_eq!(TEST2_ASSERTIONS.load(Ordering::SeqCst), 2);
-			assert_eq!(TEST3_ASSERTIONS.load(Ordering::SeqCst), 2);
+			assert_eq!(Test1Assertions::take(), 1);
+			assert_eq!(Test2Assertions::take(), 1);
+			assert_eq!(Test3Assertions::take(), 1);
 
 			type TestNested123 = (Test1, (Test2, Test3));
 			<TestNested123 as OnRuntimeUpgrade>::on_runtime_upgrade();
-			assert_eq!(TEST1_ASSERTIONS.load(Ordering::SeqCst), 4);
-			assert_eq!(TEST2_ASSERTIONS.load(Ordering::SeqCst), 3);
-			assert_eq!(TEST3_ASSERTIONS.load(Ordering::SeqCst), 3);
+			assert_eq!(Test1Assertions::take(), 1);
+			assert_eq!(Test2Assertions::take(), 1);
+			assert_eq!(Test3Assertions::take(), 1);
 		});
 	}
 }
