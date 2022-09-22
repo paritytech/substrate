@@ -820,6 +820,9 @@ mod tests {
 		};
 	}
 
+	// Todo: Enable this test when polkadot-v0.9.3 is merged
+	// https://github.com/paritytech/substrate/tree/polkadot-v0.9.3
+	#[ignore]
 	#[test]
 	fn request_write_body_invalid_call() {
 		let (mut api, addr) = build_api_server!();
