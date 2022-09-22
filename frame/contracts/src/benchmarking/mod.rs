@@ -371,7 +371,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
-	}: _(origin, code, None)
+	}: _(origin, code, None, Determinism::Deterministic)
 	verify {
 		// uploading the code reserves some balance in the callers account
 		assert!(T::Currency::reserved_balance(&caller) > 0u32.into());
@@ -386,7 +386,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
-		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None)?;
+		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None, Determinism::Deterministic)?;
 		assert_eq!(uploaded.code_hash, hash);
 		assert_eq!(uploaded.deposit, T::Currency::reserved_balance(&caller));
 		assert!(<Contract<T>>::code_exists(&hash));
@@ -2894,6 +2894,7 @@ benchmarks! {
 			None,
 			data,
 			false,
+			Determinism::Deterministic,
 		)
 		.result?;
 	}
@@ -2941,6 +2942,7 @@ benchmarks! {
 			None,
 			data,
 			false,
+			Determinism::Deterministic,
 		)
 		.result?;
 	}

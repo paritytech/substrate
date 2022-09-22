@@ -37,11 +37,36 @@ changes still persist.
 One gas is equivalent to one [weight](https://docs.substrate.io/v3/runtime/weights-and-fees)
 which is defined as one picosecond of execution time on the runtime's reference machine.
 
-### Notable Scenarios
+### Revert Behaviour
 
-Contract call failures are not always cascading. When failures occur in a sub-call, they do not "bubble up",
+Contract call failures are not cascading. When failures occur in a sub-call, they do not "bubble up",
 and the call will only revert at the specific contract level. For example, if contract A calls contract B, and B
 fails, A can decide how to handle that failure, either proceeding or reverting A's changes.
+
+### Offchain Execution
+
+In general, a contract execution needs to be deterministic so that all nodes come to the same
+conclusion when executing it. To that end we disallow any instructions that could cause
+indeterminism. Most notable are any floating point arithmetic. That said, sometimes contracts
+are executed off-chain and hence are not subject to consensus. If code is only executed by a
+single node and implicitly trusted by other actors is such a case. Trusted execution environments
+come to mind. To that end we allow the execution of indeterminstic code for offchain usages
+with the following constraints:
+
+1. No contract can ever be instantiated from an indeterministic code. The only way to execute
+the code is to use a delegate call from a deterministic contract.
+2. The code that wants to use this feature needs to depend on `pallet-contracts` and use `bare_call`
+directly. This makes sure that by default `pallet-contracts` does not expose any indeterminism.
+
+## How to use
+
+When setting up the `Schedule` for your runtime make sure to set `InstructionWeights::fallback`
+to a non zero value. The default is `0` and prevents the upload of any non deterministic code.
+
+An indeterministic code can be deployed on-chain by passing `Determinism::AllowIndeterministic`
+to `upload_code`. A determinstic contract can then delegate call into it if and only if it
+is ran by using `bare_call` and passing `Determinism::AllowIndeterministic` to it. **Never use
+this argument when the contract is called from an on-chain transaction.**
 
 ## Interface
 
