@@ -25,7 +25,10 @@ use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute the sanity check of the bags-list.
-pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
+pub async fn execute<
+	Runtime: crate::RuntimeT<pallet_bags_list::Instance1>,
+	Block: BlockT + DeserializeOwned,
+>(
 	currency_unit: u64,
 	currency_name: &'static str,
 	ws_url: String,
@@ -33,7 +36,8 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),
-			pallets: vec![pallet_bags_list::Pallet::<Runtime>::name().to_string()],
+			pallets: vec![pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::name()
+				.to_string()],
 			..Default::default()
 		}))
 		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
@@ -44,7 +48,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 
 	ext.execute_with(|| {
 		sp_core::crypto::set_default_ss58_version(Runtime::SS58Prefix::get().try_into().unwrap());
-		pallet_bags_list::Pallet::<Runtime>::try_state().unwrap();
+		pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::try_state().unwrap();
 		log::info!(target: crate::LOG_TARGET, "executed bags-list sanity check with no errors.");
 
 		crate::display_and_check_bags::<Runtime>(currency_unit, currency_name);

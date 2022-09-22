@@ -41,7 +41,7 @@ mod pallet_test {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where
-			origin: T::Origin, <T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>
+			origin: T::RuntimeOrigin, <T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>
 		{
 			#[weight = 0]
 			fn set_value(origin, n: u32) -> frame_support::dispatch::DispatchResult {
@@ -91,7 +91,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;

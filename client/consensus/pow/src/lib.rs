@@ -65,10 +65,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
 	RuntimeString,
 };
-use std::{
-	borrow::Cow, cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc,
-	time::Duration,
-};
+use std::{cmp::Ordering, collections::HashMap, marker::PhantomData, sync::Arc, time::Duration};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
@@ -341,23 +338,25 @@ where
 		if let Some(inner_body) = block.body.take() {
 			let check_block = B::new(block.header.clone(), inner_body);
 
-			self.check_inherents(
-				check_block.clone(),
-				BlockId::Hash(parent_hash),
-				self.create_inherent_data_providers
-					.create_inherent_data_providers(parent_hash, ())
-					.await?,
-				block.origin.into(),
-			)
-			.await?;
+			if !block.state_action.skip_execution_checks() {
+				self.check_inherents(
+					check_block.clone(),
+					BlockId::Hash(parent_hash),
+					self.create_inherent_data_providers
+						.create_inherent_data_providers(parent_hash, ())
+						.await?,
+					block.origin.into(),
+				)
+				.await?;
+			}
 
 			block.body = Some(check_block.deconstruct().1);
 		}
 
 		let inner_seal = fetch_seal::<B>(block.post_digests.last(), block.header.hash())?;
 
-		let intermediate =
-			block.take_intermediate::<PowIntermediate<Algorithm::Difficulty>>(INTERMEDIATE_KEY)?;
+		let intermediate = block
+			.remove_intermediate::<PowIntermediate<Algorithm::Difficulty>>(INTERMEDIATE_KEY)?;
 
 		let difficulty = match intermediate.difficulty {
 			Some(difficulty) => difficulty,
@@ -453,9 +452,7 @@ where
 		let intermediate = PowIntermediate::<Algorithm::Difficulty> { difficulty: None };
 		block.header = checked_header;
 		block.post_digests.push(seal);
-		block
-			.intermediates
-			.insert(Cow::from(INTERMEDIATE_KEY), Box::new(intermediate) as Box<_>);
+		block.insert_intermediate(INTERMEDIATE_KEY, intermediate);
 		block.post_hash = Some(hash);
 
 		Ok((block, None))

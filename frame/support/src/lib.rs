@@ -93,7 +93,7 @@ pub mod unsigned {
 	};
 }
 
-#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+#[cfg(any(feature = "std", feature = "runtime-benchmarks", feature = "try-runtime", test))]
 pub use self::storage::storage_noop_guard::StorageNoopGuard;
 pub use self::{
 	dispatch::{Callable, Parameter},
@@ -845,7 +845,7 @@ pub mod tests {
 
 	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default + TypeInfo;
-		type Origin;
+		type RuntimeOrigin;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
@@ -856,7 +856,7 @@ pub mod tests {
 		use super::Config;
 
 		decl_module! {
-			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
+			pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self  {}
 		}
 	}
 
@@ -888,7 +888,7 @@ pub mod tests {
 
 	impl Config for Test {
 		type BlockNumber = u32;
-		type Origin = u32;
+		type RuntimeOrigin = u32;
 		type PalletInfo = PanicPalletInfo;
 		type DbWeight = ();
 	}
@@ -1856,6 +1856,21 @@ pub mod pallet_prelude {
 /// #[cfg(feature = "my-feature")]
 /// #[pallet::storage]
 /// pub(super) type MyStorage<T> = StorageValue<Value = u32>;
+/// ```
+///
+/// The optional attribute `#[pallet::whitelist_storage]` will declare the
+/// storage as whitelisted from benchmarking. Doing so will exclude reads of
+/// that value's storage key from counting towards weight calculations during
+/// benchmarking.
+///
+/// This attribute should only be attached to storages that are known to be
+/// read/used in every block. This will result in a more accurate benchmarking weight.
+///
+/// ### Example
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::whitelist_storage]
+/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 /// ```
 ///
 /// All the `cfg` attributes are automatically copied to the items generated for the storage,
