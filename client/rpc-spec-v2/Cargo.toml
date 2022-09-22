@@ -16,6 +16,8 @@ targets = ["x86_64-unknown-linux-gnu"]
 jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }
 # Internal chain structures for "chain_spec".
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
+
 serde = "1.0"
 hex = "0.4"
 
