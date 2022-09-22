@@ -99,12 +99,14 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
-pub fn roll_to_unsigned() {
-	roll_to(25);
+fn roll_next() {
+	roll_to(System::block_number() + 1);
 }
 
-pub fn roll_to_elect() {
-	roll_to(30);
+pub fn roll_to_unsigned() {
+	while !matches!(MultiPhase::current_phase(), Phase::Unsigned(_)) {
+		roll_next();
+	}
 }
 
 pub fn roll_to_with_ocw(n: BlockNumber) {

@@ -1843,8 +1843,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, raw_solution, roll_to, roll_to_elect, roll_to_unsigned, AccountId,
-			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
+			multi_phase_events, raw_solution, roll_to, roll_to_unsigned, AccountId, ExtBuilder,
+			MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
 			SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
@@ -1895,7 +1895,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(MultiPhase::snapshot().is_some());
 
-			roll_to_elect();
+			roll_to(15);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(MultiPhase::snapshot().is_some());
 
@@ -1952,7 +1952,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 			assert!(MultiPhase::snapshot().is_some());
 
-			roll_to_elect();
+			roll_to(15);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 
 			assert_ok!(MultiPhase::elect());
@@ -1990,7 +1990,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 
-			roll_to_elect();
+			roll_to(15);
 			assert!(MultiPhase::current_phase().is_signed());
 
 			assert_ok!(MultiPhase::elect());
@@ -2027,7 +2027,7 @@ mod tests {
 			roll_to(20);
 			assert!(MultiPhase::current_phase().is_off());
 
-			roll_to_elect();
+			roll_to(15);
 			assert!(MultiPhase::current_phase().is_off());
 
 			// This module is now only capable of doing on-chain backup.
@@ -2162,7 +2162,7 @@ mod tests {
 				Box::new(solution)
 			));
 
-			roll_to_elect();
+			roll_to(15);
 			assert_ok!(MultiPhase::elect());
 
 			assert_eq!(
@@ -2171,7 +2171,6 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
 					Event::Rewarded { account: 99, value: 7 },
-					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Signed,
 						score: ElectionScore {
@@ -2179,7 +2178,7 @@ mod tests {
 							sum_stake: 100,
 							sum_stake_squared: 5200
 						}
-					}
+					},
 				],
 			);
 		})
@@ -2207,7 +2206,7 @@ mod tests {
 			));
 			assert!(MultiPhase::queued_solution().is_some());
 
-			roll_to_elect();
+			roll_to(15);
 			assert_ok!(MultiPhase::elect());
 
 			assert_eq!(
@@ -2346,7 +2345,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// Unsigned phase failed to open.
-			roll_to_unsigned();
+			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// On-chain backup works though.
@@ -2377,7 +2376,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// Unsigned phase failed to open.
-			roll_to_unsigned();
+			roll_to(25);
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(29);
