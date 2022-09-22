@@ -698,10 +698,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					dead_accounts.push(who);
 				}
 
-				// FIXME:(delete comment before merge). What was the point of these 2 debug asserts?
-				// debug_assert_eq!(details.accounts, 0);
-				// debug_assert_eq!(details.sufficients, 0);
-
 				// FIXME:(delete comment before merge) An ideal implementation could be to
 				// unreserve&drain only approval for transactions sent by or recieved by one of the
 				// accounts which was deleted above. But it's not clear if that's strongly desired.
@@ -726,6 +722,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						accounts_remaining: accounts_remaining as u32,
 					});
 				} else {
+					debug_assert_eq!(details.accounts, 0);
+					debug_assert_eq!(details.sufficients, 0);
+
 					// NOTE:(delete comment before merge) It's not yet clear what this block does,
 					// but it appears to be an operation to be done once after cleanup.
 					let metadata = Metadata::<T, I>::take(&id);
