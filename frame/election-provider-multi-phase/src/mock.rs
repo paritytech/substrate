@@ -99,6 +99,14 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
+pub fn roll_to_unsigned() {
+	roll_to(25);
+}
+
+pub fn roll_to_elect() {
+	roll_to(30);
+}
+
 pub fn roll_to_with_ocw(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
