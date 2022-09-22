@@ -25,3 +25,6 @@
 
 pub mod chain_spec;
 pub mod transaction;
+
+/// Task executor that is being used by RPC subscriptions.
+pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;

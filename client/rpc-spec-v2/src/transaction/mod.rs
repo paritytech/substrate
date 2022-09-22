@@ -28,9 +28,11 @@
 pub mod api;
 pub mod error;
 pub mod event;
+pub mod transaction;
 
 pub use api::TransactionApiServer;
 pub use event::{
 	TransactionBlock, TransactionBroadcasted, TransactionDropped, TransactionError,
 	TransactionEvent,
 };
+pub use transaction::Transaction;
