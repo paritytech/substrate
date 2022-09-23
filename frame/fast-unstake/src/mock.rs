@@ -176,6 +176,7 @@ parameter_types! {
 	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
 	pub static MaxMetadataLen: u32 = 10;
 	pub static CheckLevel: u8 = 255;
+	pub static BatchSize: u32 = 1;
 }
 
 impl pallet_nomination_pools::Config for Runtime {
@@ -202,6 +203,7 @@ impl fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type SlashPerEra = SlashPerEra;
 	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type BatchSize = BatchSize;
 	type WeightInfo = ();
 }
 
