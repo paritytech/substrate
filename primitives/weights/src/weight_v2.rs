@@ -160,7 +160,9 @@ impl Weight {
 		Self { ref_time: 0 }
 	}
 
-	/// Constant version of Add with u64. Is only overflow safe when evaluated at compile-time.
+	/// Constant version of Add with u64.
+	///
+	/// Is only overflow safe when evaluated at compile-time.
 	pub const fn add(self, scalar: u64) -> Self {
 		Self { ref_time: self.ref_time + scalar }
 	}
