@@ -278,7 +278,10 @@ fn pool_slash_e2e() {
 			2, // slash era 2, affects chunks at era 5 onwards.
 		);
 
-		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 30)]);
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Slashed { staker: POOL1_BONDED, amount: 30 }]
+		);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
@@ -486,7 +489,10 @@ fn pool_slash_proportional() {
 			100,
 		);
 
-		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 50)]);
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Slashed { staker: POOL1_BONDED, amount: 50 }]
+		);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
@@ -567,7 +573,10 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 			100,
 		);
 
-		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 30)]);
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Slashed { staker: POOL1_BONDED, amount: 30 }]
+		);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![PoolsEvent::PoolSlashed { pool_id: 1, balance: 10 }]
@@ -640,7 +649,10 @@ fn pool_slash_non_proportional_bonded_pool_and_chunks() {
 			100,
 		);
 
-		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 50)]);
+		assert_eq!(
+			staking_events_since_last_call(),
+			vec![StakingEvent::Slashed { staker: POOL1_BONDED, amount: 50 }]
+		);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
