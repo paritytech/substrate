@@ -4966,7 +4966,7 @@ fn min_commission_works() {
 		// event emitted should be correct
 		assert_eq!(
 			*staking_events().last().unwrap(),
-			Event::ValidatorPrefsSet{
+			Event::ValidatorPrefsSet {
 				stash: 11,
 				prefs: ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
 			}
