@@ -38,13 +38,10 @@ use log::{debug, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{CanAuthorWith, Proposal, Proposer, SelectChain, SyncOracle};
+use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT},
-};
+use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
 use sp_timestamp::Timestamp;
 use std::{fmt::Debug, ops::Deref, time::Duration};
 
@@ -486,13 +483,12 @@ impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
+pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 	slot_duration: SlotDuration,
 	client: C,
 	mut worker: W,
 	sync_oracle: SO,
 	create_inherent_data_providers: CIDP,
-	can_author_with: CAW,
 ) where
 	B: BlockT,
 	C: SelectChain<B>,
@@ -500,7 +496,6 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
 	SO: SyncOracle + Send,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	CAW: CanAuthorWith<B> + Send,
 {
 	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
 
@@ -518,19 +513,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
 			continue
 		}
 
-		if let Err(err) =
-			can_author_with.can_author_with(&BlockId::Hash(slot_info.chain_head.hash()))
-		{
-			warn!(
-				target: "slots",
-				"Unable to author block in slot {},. `can_author_with` returned: {} \
-				Probably a node update is required!",
-				slot_info.slot,
-				err,
-			);
-		} else {
-			let _ = worker.on_slot(slot_info).await;
-		}
+		let _ = worker.on_slot(slot_info).await;
 	}
 }
 

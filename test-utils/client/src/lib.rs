@@ -346,7 +346,7 @@ impl RpcHandlersExt for RpcHandlers {
 						"params": ["0x{}"],
 						"id": 0
 					}}"#,
-				hex::encode(extrinsic.encode())
+				array_bytes::bytes2hex("", &extrinsic.encode())
 			))
 			.await
 			.expect("valid JSON-RPC request object; qed");

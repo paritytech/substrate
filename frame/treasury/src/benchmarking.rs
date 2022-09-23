@@ -61,7 +61,7 @@ fn setup_pot_account<T: Config<I>, I: 'static>() {
 	let _ = T::Currency::make_free_balance_be(&pot_account, value);
 }
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -100,7 +100,7 @@ benchmarks_instance_pallet! {
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		let reject_origin = T::RejectOrigin::successful_origin();
-	}: _<T::Origin>(reject_origin, proposal_id)
+	}: _<T::RuntimeOrigin>(reject_origin, proposal_id)
 
 	approve_proposal {
 		let p in 0 .. T::MaxApprovals::get() - 1;
@@ -113,7 +113,7 @@ benchmarks_instance_pallet! {
 		)?;
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: _<T::Origin>(approve_origin, proposal_id)
+	}: _<T::RuntimeOrigin>(approve_origin, proposal_id)
 
 	remove_approval {
 		let (caller, value, beneficiary_lookup) = setup_proposal::<T, _>(SEED);
@@ -125,7 +125,7 @@ benchmarks_instance_pallet! {
 		let proposal_id = Treasury::<T, _>::proposal_count() - 1;
 		Treasury::<T, I>::approve_proposal(RawOrigin::Root.into(), proposal_id)?;
 		let reject_origin = T::RejectOrigin::successful_origin();
-	}: _<T::Origin>(reject_origin, proposal_id)
+	}: _<T::RuntimeOrigin>(reject_origin, proposal_id)
 
 	on_initialize_proposals {
 		let p in 0 .. T::MaxApprovals::get();

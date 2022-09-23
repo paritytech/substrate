@@ -34,7 +34,7 @@ use pallet_contracts_primitives::ExecReturnValue;
 use smallvec::{Array, SmallVec};
 use sp_core::{crypto::UncheckedFrom, ecdsa::Public as ECDSAPublic};
 use sp_io::{crypto::secp256k1_ecdsa_recover_compressed, hashing::blake2_256};
-use sp_runtime::traits::Convert;
+use sp_runtime::traits::{Convert, Hash};
 use sp_std::{marker::PhantomData, mem, prelude::*};
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -282,7 +282,7 @@ pub trait Ext: sealing::Sealed {
 	fn append_debug_buffer(&mut self, msg: &str) -> bool;
 
 	/// Call some dispatchable and return the result.
-	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo;
+	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo;
 
 	/// Recovers ECDSA compressed public key based on signature and message hash.
 	fn ecdsa_recover(&self, signature: &[u8; 65], message_hash: &[u8; 32]) -> Result<[u8; 33], ()>;
@@ -664,7 +664,7 @@ where
 		debug_message: Option<&'a mut Vec<u8>>,
 	) -> Result<(Self, E), ExecError> {
 		let (first_frame, executable, nonce) =
-			Self::new_frame(args, value, gas_meter, storage_meter, 0, schedule)?;
+			Self::new_frame(args, value, gas_meter, storage_meter, Weight::zero(), schedule)?;
 		let stack = Self {
 			origin,
 			schedule,
@@ -784,16 +784,19 @@ where
 	///
 	/// This can be either a call or an instantiate.
 	fn run(&mut self, executable: E, input_data: Vec<u8>) -> Result<ExecReturnValue, ExecError> {
-		let entry_point = self.top_frame().entry_point;
+		let frame = self.top_frame();
+		let entry_point = frame.entry_point;
+		let delegated_code_hash =
+			if frame.delegate_caller.is_some() { Some(*executable.code_hash()) } else { None };
 		let do_transaction = || {
 			// We need to charge the storage deposit before the initial transfer so that
 			// it can create the account in case the initial transfer is < ed.
 			if entry_point == ExportedFunction::Constructor {
-				let top_frame = top_frame_mut!(self);
-				top_frame.nested_storage.charge_instantiate(
+				let frame = top_frame_mut!(self);
+				frame.nested_storage.charge_instantiate(
 					&self.origin,
-					&top_frame.account_id,
-					top_frame.contract_info.get(&top_frame.account_id),
+					&frame.account_id,
+					frame.contract_info.get(&frame.account_id),
 				)?;
 			}
 
@@ -805,23 +808,51 @@ where
 				.execute(self, &entry_point, input_data)
 				.map_err(|e| ExecError { error: e.error, origin: ErrorOrigin::Callee })?;
 
-			// Additional work needs to be performed in case of an instantiation.
-			if !output.did_revert() && entry_point == ExportedFunction::Constructor {
-				let frame = self.top_frame();
+			// Avoid useless work that would be reverted anyways.
+			if output.did_revert() {
+				return Ok(output)
+			}
 
-				// It is not allowed to terminate a contract inside its constructor.
-				if matches!(frame.contract_info, CachedContract::Terminated) {
-					return Err(Error::<T>::TerminatedInConstructor.into())
-				}
+			// Storage limit is enforced as late as possible (when the last frame returns) so that
+			// the ordering of storage accesses does not matter.
+			if self.frames.is_empty() {
+				let frame = &mut self.first_frame;
+				frame.contract_info.load(&frame.account_id);
+				let contract = frame.contract_info.as_contract();
+				frame.nested_storage.enforce_limit(contract)?;
+			}
 
-				// Deposit an instantiation event.
-				deposit_event::<T>(
-					vec![],
-					Event::Instantiated {
-						deployer: self.caller().clone(),
-						contract: frame.account_id.clone(),
-					},
-				);
+			let frame = self.top_frame();
+			let account_id = &frame.account_id;
+			match (entry_point, delegated_code_hash) {
+				(ExportedFunction::Constructor, _) => {
+					// It is not allowed to terminate a contract inside its constructor.
+					if matches!(frame.contract_info, CachedContract::Terminated) {
+						return Err(Error::<T>::TerminatedInConstructor.into())
+					}
+
+					// Deposit an instantiation event.
+					Contracts::<T>::deposit_event(
+						vec![T::Hashing::hash_of(self.caller()), T::Hashing::hash_of(account_id)],
+						Event::Instantiated {
+							deployer: self.caller().clone(),
+							contract: account_id.clone(),
+						},
+					);
+				},
+				(ExportedFunction::Call, Some(code_hash)) => {
+					Contracts::<T>::deposit_event(
+						vec![T::Hashing::hash_of(account_id), T::Hashing::hash_of(&code_hash)],
+						Event::DelegateCalled { contract: account_id.clone(), code_hash },
+					);
+				},
+				(ExportedFunction::Call, None) => {
+					let caller = self.caller();
+					Contracts::<T>::deposit_event(
+						vec![T::Hashing::hash_of(caller), T::Hashing::hash_of(account_id)],
+						Event::Called { caller: caller.clone(), contract: account_id.clone() },
+					);
+				},
 			}
 
 			Ok(output)
@@ -850,6 +881,7 @@ where
 			// has changed.
 			Err(error) => (false, Err(error.into())),
 		};
+
 		self.pop_frame(success);
 		output
 	}
@@ -888,12 +920,7 @@ where
 			// it was invalidated.
 			frame.contract_info.load(account_id);
 			let mut contract = frame.contract_info.into_contract();
-			prev.nested_storage.absorb(
-				frame.nested_storage,
-				&self.origin,
-				account_id,
-				contract.as_mut(),
-			);
+			prev.nested_storage.absorb(frame.nested_storage, account_id, contract.as_mut());
 
 			// In case the contract wasn't terminated we need to persist changes made to it.
 			if let Some(contract) = contract {
@@ -931,7 +958,6 @@ where
 			let mut contract = self.first_frame.contract_info.as_contract();
 			self.storage_meter.absorb(
 				mem::take(&mut self.first_frame.nested_storage),
-				&self.origin,
 				&self.first_frame.account_id,
 				contract.as_deref_mut(),
 			);
@@ -1089,7 +1115,7 @@ where
 				delegated_call: Some(DelegatedCall { executable, caller: self.caller().clone() }),
 			},
 			value,
-			0,
+			Weight::zero(),
 		)?;
 		self.run(executable, input_data)
 	}
@@ -1134,10 +1160,13 @@ where
 		)?;
 		ContractInfoOf::<T>::remove(&frame.account_id);
 		E::remove_user(info.code_hash);
-		Contracts::<T>::deposit_event(Event::Terminated {
-			contract: frame.account_id.clone(),
-			beneficiary: beneficiary.clone(),
-		});
+		Contracts::<T>::deposit_event(
+			vec![T::Hashing::hash_of(&frame.account_id), T::Hashing::hash_of(&beneficiary)],
+			Event::Terminated {
+				contract: frame.account_id.clone(),
+				beneficiary: beneficiary.clone(),
+			},
+		);
 		Ok(())
 	}
 
@@ -1242,7 +1271,7 @@ where
 	}
 
 	fn deposit_event(&mut self, topics: Vec<T::Hash>, data: Vec<u8>) {
-		deposit_event::<Self::T>(
+		Contracts::<Self::T>::deposit_event(
 			topics,
 			Event::ContractEmitted { contract: self.top_frame().account_id.clone(), data },
 		);
@@ -1279,8 +1308,8 @@ where
 		}
 	}
 
-	fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
-		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
+	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo {
+		let mut origin: T::RuntimeOrigin = RawOrigin::Signed(self.address().clone()).into();
 		origin.add_filter(T::CallFilter::contains);
 		call.dispatch(origin)
 	}
@@ -1304,20 +1333,16 @@ where
 		let prev_hash = top_frame.contract_info().code_hash;
 		E::remove_user(prev_hash);
 		top_frame.contract_info().code_hash = hash;
-		Contracts::<Self::T>::deposit_event(Event::ContractCodeUpdated {
-			contract: top_frame.account_id.clone(),
-			new_code_hash: hash,
-			old_code_hash: prev_hash,
-		});
+		Contracts::<Self::T>::deposit_event(
+			vec![T::Hashing::hash_of(&top_frame.account_id), hash, prev_hash],
+			Event::ContractCodeUpdated {
+				contract: top_frame.account_id.clone(),
+				new_code_hash: hash,
+				old_code_hash: prev_hash,
+			},
+		);
 		Ok(())
 	}
-}
-
-fn deposit_event<T: Config>(topics: Vec<T::Hash>, event: Event<T>) {
-	<frame_system::Pallet<T>>::deposit_event_indexed(
-		&topics,
-		<T as Config>::Event::from(event).into(),
-	)
 }
 
 mod sealing {
@@ -1347,16 +1372,16 @@ mod tests {
 		gas::GasMeter,
 		storage::Storage,
 		tests::{
-			test_utils::{get_balance, place_contract, set_balance},
-			Call, Event as MetaEvent, ExtBuilder, Test, TestFilter, ALICE, BOB, CHARLIE, GAS_LIMIT,
+			test_utils::{get_balance, hash, place_contract, set_balance},
+			ExtBuilder, RuntimeCall, RuntimeEvent as MetaEvent, Test, TestFilter, ALICE, BOB,
+			CHARLIE, GAS_LIMIT,
 		},
 		Error,
 	};
 	use assert_matches::assert_matches;
 	use codec::{Decode, Encode};
-	use frame_support::{assert_err, assert_ok};
+	use frame_support::{assert_err, assert_ok, parameter_types};
 	use frame_system::{EventRecord, Phase};
-	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
@@ -1371,8 +1396,8 @@ mod tests {
 
 	type MockStack<'a> = Stack<'a, Test, MockExecutable>;
 
-	thread_local! {
-		static LOADER: RefCell<MockLoader> = RefCell::new(MockLoader::default());
+	parameter_types! {
+		static Loader: MockLoader = MockLoader::default();
 	}
 
 	fn events() -> Vec<Event<Test>> {
@@ -1398,8 +1423,8 @@ mod tests {
 		refcount: u64,
 	}
 
-	#[derive(Default)]
-	struct MockLoader {
+	#[derive(Default, Clone)]
+	pub struct MockLoader {
 		map: HashMap<CodeHash<Test>, MockExecutable>,
 		counter: u64,
 	}
@@ -1409,8 +1434,7 @@ mod tests {
 			func_type: ExportedFunction,
 			f: impl Fn(MockCtx, &MockExecutable) -> ExecResult + 'static,
 		) -> CodeHash<Test> {
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				// Generate code hashes as monotonically increasing values.
 				let hash = <Test as frame_system::Config>::Hash::from_low_u64_be(loader.counter);
 				loader.counter += 1;
@@ -1423,8 +1447,7 @@ mod tests {
 		}
 
 		fn increment_refcount(code_hash: CodeHash<Test>) -> Result<(), DispatchError> {
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				match loader.map.entry(code_hash) {
 					Entry::Vacant(_) => Err(<Error<Test>>::CodeNotFound)?,
 					Entry::Occupied(mut entry) => entry.get_mut().refcount += 1,
@@ -1435,8 +1458,7 @@ mod tests {
 
 		fn decrement_refcount(code_hash: CodeHash<Test>) {
 			use std::collections::hash_map::Entry::Occupied;
-			LOADER.with(|loader| {
-				let mut loader = loader.borrow_mut();
+			Loader::mutate(|loader| {
 				let mut entry = match loader.map.entry(code_hash) {
 					Occupied(e) => e,
 					_ => panic!("code_hash does not exist"),
@@ -1456,13 +1478,8 @@ mod tests {
 			_schedule: &Schedule<Test>,
 			_gas_meter: &mut GasMeter<Test>,
 		) -> Result<Self, DispatchError> {
-			LOADER.with(|loader| {
-				loader
-					.borrow_mut()
-					.map
-					.get(&code_hash)
-					.cloned()
-					.ok_or(Error::<Test>::CodeNotFound.into())
+			Loader::mutate(|loader| {
+				loader.map.get(&code_hash).cloned().ok_or(Error::<Test>::CodeNotFound.into())
 			})
 		}
 
@@ -1509,14 +1526,14 @@ mod tests {
 
 	#[test]
 	fn it_works() {
-		thread_local! {
-			static TEST_DATA: RefCell<Vec<usize>> = RefCell::new(vec![0]);
+		parameter_types! {
+			static TestData: Vec<usize> = vec![0];
 		}
 
 		let value = Default::default();
 		let mut gas_meter = GasMeter::<Test>::new(GAS_LIMIT);
 		let exec_ch = MockLoader::insert(Call, |_ctx, _executable| {
-			TEST_DATA.with(|data| data.borrow_mut().push(1));
+			TestData::mutate(|data| data.push(1));
 			exec_success()
 		});
 
@@ -1540,7 +1557,7 @@ mod tests {
 			);
 		});
 
-		TEST_DATA.with(|data| assert_eq!(*data.borrow(), vec![0, 1]));
+		assert_eq!(TestData::get(), vec![0, 1]);
 	}
 
 	#[test]
@@ -1819,16 +1836,15 @@ mod tests {
 	fn max_depth() {
 		// This test verifies that when we reach the maximal depth creation of an
 		// yet another context fails.
-		thread_local! {
-			static REACHED_BOTTOM: RefCell<bool> = RefCell::new(false);
+		parameter_types! {
+			static ReachedBottom: bool = false;
 		}
 		let value = Default::default();
 		let recurse_ch = MockLoader::insert(Call, |ctx, _| {
 			// Try to call into yourself.
-			let r = ctx.ext.call(0, BOB, 0, vec![], true);
+			let r = ctx.ext.call(Weight::zero(), BOB, 0, vec![], true);
 
-			REACHED_BOTTOM.with(|reached_bottom| {
-				let mut reached_bottom = reached_bottom.borrow_mut();
+			ReachedBottom::mutate(|reached_bottom| {
 				if !*reached_bottom {
 					// We are first time here, it means we just reached bottom.
 					// Verify that we've got proper error and set `reached_bottom`.
@@ -1869,24 +1885,22 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 
-		thread_local! {
-			static WITNESSED_CALLER_BOB: RefCell<Option<AccountIdOf<Test>>> = RefCell::new(None);
-			static WITNESSED_CALLER_CHARLIE: RefCell<Option<AccountIdOf<Test>>> = RefCell::new(None);
+		parameter_types! {
+			static WitnessedCallerBob: Option<AccountIdOf<Test>> = None;
+			static WitnessedCallerCharlie: Option<AccountIdOf<Test>> = None;
 		}
 
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for bob.
-			WITNESSED_CALLER_BOB
-				.with(|caller| *caller.borrow_mut() = Some(ctx.ext.caller().clone()));
+			WitnessedCallerBob::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 
 			// Call into CHARLIE contract.
-			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
 			// Record the caller for charlie.
-			WITNESSED_CALLER_CHARLIE
-				.with(|caller| *caller.borrow_mut() = Some(ctx.ext.caller().clone()));
+			WitnessedCallerCharlie::mutate(|caller| *caller = Some(ctx.ext.caller().clone()));
 			exec_success()
 		});
 
@@ -1910,8 +1924,8 @@ mod tests {
 			assert_matches!(result, Ok(_));
 		});
 
-		WITNESSED_CALLER_BOB.with(|caller| assert_eq!(*caller.borrow(), Some(origin)));
-		WITNESSED_CALLER_CHARLIE.with(|caller| assert_eq!(*caller.borrow(), Some(dest)));
+		assert_eq!(WitnessedCallerBob::get(), Some(origin));
+		assert_eq!(WitnessedCallerCharlie::get(), Some(dest));
 	}
 
 	#[test]
@@ -2011,7 +2025,7 @@ mod tests {
 			// ALICE is the origin of the call stack
 			assert!(ctx.ext.caller_is_origin());
 			// BOB calls CHARLIE
-			ctx.ext.call(0, CHARLIE, 0, vec![], true)
+			ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true)
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -2041,7 +2055,7 @@ mod tests {
 			assert_eq!(*ctx.ext.address(), BOB);
 
 			// Call into charlie contract.
-			assert_matches!(ctx.ext.call(0, CHARLIE, 0, vec![], true), Ok(_));
+			assert_matches!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), Ok(_));
 			exec_success()
 		});
 		let charlie_ch = MockLoader::insert(Call, |ctx, _| {
@@ -2190,7 +2204,7 @@ mod tests {
 				let (address, output) = ctx
 					.ext
 					.instantiate(
-						0,
+						Weight::zero(),
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2237,7 +2251,10 @@ mod tests {
 			);
 			assert_eq!(
 				&events(),
-				&[Event::Instantiated { deployer: BOB, contract: instantiated_contract_address }]
+				&[
+					Event::Instantiated { deployer: BOB, contract: instantiated_contract_address },
+					Event::Called { caller: ALICE, contract: BOB },
+				]
 			);
 		});
 	}
@@ -2250,7 +2267,7 @@ mod tests {
 				// Instantiate a contract and save it's address in `instantiated_contract_address`.
 				assert_matches!(
 					ctx.ext.instantiate(
-						0,
+						Weight::zero(),
 						dummy_ch,
 						<Test as Config>::Currency::minimum_balance(),
 						vec![],
@@ -2289,7 +2306,7 @@ mod tests {
 
 			// The contract wasn't instantiated so we don't expect to see an instantiation
 			// event here.
-			assert_eq!(&events(), &[]);
+			assert_eq!(&events(), &[Event::Called { caller: ALICE, contract: BOB },]);
 		});
 	}
 
@@ -2340,15 +2357,15 @@ mod tests {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
 				let info = ctx.ext.contract_info();
-				assert_eq!(info.storage_deposit, 0);
-				info.storage_deposit = 42;
-				assert_eq!(ctx.ext.call(0, CHARLIE, 0, vec![], true), exec_trapped());
-				assert_eq!(ctx.ext.contract_info().storage_deposit, 42);
+				assert_eq!(info.storage_byte_deposit, 0);
+				info.storage_byte_deposit = 42;
+				assert_eq!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), exec_trapped());
+				assert_eq!(ctx.ext.contract_info().storage_byte_deposit, 42);
 			}
 			exec_success()
 		});
 		let code_charlie = MockLoader::insert(Call, |ctx, _| {
-			assert!(ctx.ext.call(0, BOB, 0, vec![99], true).is_ok());
+			assert!(ctx.ext.call(Weight::zero(), BOB, 0, vec![99], true).is_ok());
 			exec_trapped()
 		});
 
@@ -2377,7 +2394,7 @@ mod tests {
 	fn recursive_call_during_constructor_fails() {
 		let code = MockLoader::insert(Constructor, |ctx, _| {
 			assert_matches!(
-				ctx.ext.call(0, ctx.ext.address().clone(), 0, vec![], true),
+				ctx.ext.call(Weight::zero(), ctx.ext.address().clone(), 0, vec![], true),
 				Err(ExecError{error, ..}) if error == <Error<Test>>::ContractNotFound.into()
 			);
 			exec_success()
@@ -2479,7 +2496,7 @@ mod tests {
 		// call the contract passed as input with disabled reentry
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			let dest = Decode::decode(&mut ctx.input_data.as_ref()).unwrap();
-			ctx.ext.call(0, dest, 0, vec![], false)
+			ctx.ext.call(Weight::zero(), dest, 0, vec![], false)
 		});
 
 		let code_charlie = MockLoader::insert(Call, |_, _| exec_success());
@@ -2524,7 +2541,7 @@ mod tests {
 	fn call_deny_reentry() {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
-				ctx.ext.call(0, CHARLIE, 0, vec![], false)
+				ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], false)
 			} else {
 				exec_success()
 			}
@@ -2532,7 +2549,7 @@ mod tests {
 
 		// call BOB with input set to '1'
 		let code_charlie =
-			MockLoader::insert(Call, |ctx, _| ctx.ext.call(0, BOB, 0, vec![1], true));
+			MockLoader::insert(Call, |ctx, _| ctx.ext.call(Weight::zero(), BOB, 0, vec![1], true));
 
 		ExtBuilder::default().build().execute_with(|| {
 			let schedule = <Test as Config>::Schedule::get();
@@ -2561,7 +2578,7 @@ mod tests {
 	#[test]
 	fn call_runtime_works() {
 		let code_hash = MockLoader::insert(Call, |ctx, _| {
-			let call = Call::System(frame_system::Call::remark_with_event {
+			let call = RuntimeCall::System(frame_system::Call::remark_with_event {
 				remark: b"Hello World".to_vec(),
 			});
 			ctx.ext.call_runtime(call).unwrap();
@@ -2591,14 +2608,24 @@ mod tests {
 			let remark_hash = <Test as frame_system::Config>::Hashing::hash(b"Hello World");
 			assert_eq!(
 				System::events(),
-				vec![EventRecord {
-					phase: Phase::Initialization,
-					event: MetaEvent::System(frame_system::Event::Remarked {
-						sender: BOB,
-						hash: remark_hash
-					}),
-					topics: vec![],
-				},]
+				vec![
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::System(frame_system::Event::Remarked {
+							sender: BOB,
+							hash: remark_hash
+						}),
+						topics: vec![],
+					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::Contracts(crate::Event::Called {
+							caller: ALICE,
+							contract: BOB,
+						}),
+						topics: vec![hash(&ALICE), hash(&BOB)],
+					},
+				]
 			);
 		});
 	}
@@ -2612,10 +2639,11 @@ mod tests {
 
 			// remark should still be allowed
 			let allowed_call =
-				Call::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
+				RuntimeCall::System(SysCall::remark_with_event { remark: b"Hello".to_vec() });
 
 			// transfers are disallowed by the `TestFiler` (see below)
-			let forbidden_call = Call::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
+			let forbidden_call =
+				RuntimeCall::Balances(BalanceCall::transfer { dest: CHARLIE, value: 22 });
 
 			// simple cases: direct call
 			assert_err!(
@@ -2624,7 +2652,7 @@ mod tests {
 			);
 
 			// as part of a patch: return is OK (but it interrupted the batch)
-			assert_ok!(ctx.ext.call_runtime(Call::Utility(UtilCall::batch {
+			assert_ok!(ctx.ext.call_runtime(RuntimeCall::Utility(UtilCall::batch {
 				calls: vec![allowed_call.clone(), forbidden_call, allowed_call]
 			})),);
 
@@ -2635,7 +2663,7 @@ mod tests {
 		});
 
 		TestFilter::set_filter(|call| match call {
-			Call::Balances(pallet_balances::Call::transfer { .. }) => false,
+			RuntimeCall::Balances(pallet_balances::Call::transfer { .. }) => false,
 			_ => true,
 		});
 
@@ -2684,6 +2712,14 @@ mod tests {
 						},),
 						topics: vec![],
 					},
+					EventRecord {
+						phase: Phase::Initialization,
+						event: MetaEvent::Contracts(crate::Event::Called {
+							caller: ALICE,
+							contract: BOB,
+						}),
+						topics: vec![hash(&ALICE), hash(&BOB)],
+					},
 				]
 			);
 		});
@@ -2695,18 +2731,30 @@ mod tests {
 		let success_code = MockLoader::insert(Constructor, |_, _| exec_success());
 		let succ_fail_code = MockLoader::insert(Constructor, move |ctx, _| {
 			ctx.ext
-				.instantiate(0, fail_code, ctx.ext.minimum_balance() * 100, vec![], &[])
+				.instantiate(
+					Weight::zero(),
+					fail_code,
+					ctx.ext.minimum_balance() * 100,
+					vec![],
+					&[],
+				)
 				.ok();
 			exec_success()
 		});
 		let succ_succ_code = MockLoader::insert(Constructor, move |ctx, _| {
 			let (account_id, _) = ctx
 				.ext
-				.instantiate(0, success_code, ctx.ext.minimum_balance() * 100, vec![], &[])
+				.instantiate(
+					Weight::zero(),
+					success_code,
+					ctx.ext.minimum_balance() * 100,
+					vec![],
+					&[],
+				)
 				.unwrap();
 
 			// a plain call should not influence the account counter
-			ctx.ext.call(0, account_id, 0, vec![], false).unwrap();
+			ctx.ext.call(Weight::zero(), account_id, 0, vec![], false).unwrap();
 
 			exec_success()
 		});
@@ -3164,13 +3212,12 @@ mod tests {
 	#[test]
 	fn ecdsa_to_eth_address_returns_proper_value() {
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
-			let pubkey_compressed: [u8; 33] =
-				hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")[..]
-					.try_into()
-					.unwrap();
+			let pubkey_compressed = array_bytes::hex2array_unchecked(
+				"028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91",
+			);
 			assert_eq!(
 				ctx.ext.ecdsa_to_eth_address(&pubkey_compressed).unwrap(),
-				hex!("09231da7b19A016f9e576d23B16277062F4d46A8")[..]
+				array_bytes::hex2array_unchecked::<20>("09231da7b19A016f9e576d23B16277062F4d46A8")
 			);
 			exec_success()
 		});

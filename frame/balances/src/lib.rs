@@ -185,7 +185,7 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, RuntimeDebug,
+	ArithmeticError, DispatchError, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
@@ -212,13 +212,15 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ Debug
 			+ MaxEncodedLen
-			+ TypeInfo;
+			+ TypeInfo
+			+ FixedPointOperand;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
@@ -492,6 +494,7 @@ pub mod pallet {
 	/// The total units issued in the system.
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
+	#[pallet::whitelist_storage]
 	pub type TotalIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The Balances pallet example of storing the balance of an account.
@@ -1000,6 +1003,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Is a no-op if:
 	/// - the value to be moved is zero; or
 	/// - the `slashed` id equal to `beneficiary` and the `status` is `Reserved`.
+	///
+	/// NOTE: returns actual amount of transferred value in `Ok` case.
 	fn do_transfer_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
@@ -1013,7 +1018,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if slashed == beneficiary {
 			return match status {
-				Status::Free => Ok(Self::unreserve(slashed, value)),
+				Status::Free => Ok(value.saturating_sub(Self::unreserve(slashed, value))),
 				Status::Reserved => Ok(value.saturating_sub(Self::reserved_balance(slashed))),
 			}
 		}
@@ -1785,6 +1790,8 @@ where
 	/// Unreserve some funds, returning any amount that was unable to be unreserved.
 	///
 	/// Is a no-op if the value to be unreserved is zero or the account does not exist.
+	///
+	/// NOTE: returns amount value which wasn't successfully unreserved.
 	fn unreserve(who: &T::AccountId, value: Self::Balance) -> Self::Balance {
 		if value.is_zero() {
 			return Zero::zero()

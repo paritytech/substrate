@@ -40,10 +40,10 @@ mod pallet_old {
 		type Balance: Parameter
 			+ codec::HasCompact
 			+ From<u32>
-			+ Into<Weight>
+			+ Into<u64>
 			+ Default
 			+ SomeAssociation;
-		type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	decl_storage! {
@@ -70,12 +70,12 @@ mod pallet_old {
 	);
 
 	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 			type Error = Error<T>;
 			fn deposit_event() = default;
 			const SomeConst: T::Balance = T::SomeConst::get();
 
-			#[weight = <T::Balance as Into<Weight>>::into(new_value.clone())]
+			#[weight = <T::Balance as Into<u64>>::into(new_value.clone())]
 			fn set_dummy(origin, #[compact] new_value: T::Balance) {
 				ensure_root(origin)?;
 
@@ -85,7 +85,7 @@ mod pallet_old {
 
 			fn on_initialize(_n: T::BlockNumber) -> Weight {
 				<Dummy<T>>::put(T::Balance::from(10));
-				10
+				Weight::from_ref_time(10)
 			}
 
 			fn on_finalize(_n: T::BlockNumber) {
@@ -113,14 +113,14 @@ pub mod pallet {
 		type Balance: Parameter
 			+ codec::HasCompact
 			+ From<u32>
-			+ Into<Weight>
+			+ Into<u64>
 			+ Default
 			+ MaybeSerializeDeserialize
 			+ SomeAssociation
 			+ scale_info::StaticTypeInfo;
 		#[pallet::constant]
 		type SomeConst: Get<Self::Balance>;
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -131,7 +131,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			<Dummy<T>>::put(T::Balance::from(10));
-			10
+			Weight::from_ref_time(10)
 		}
 
 		fn on_finalize(_n: T::BlockNumber) {
@@ -141,7 +141,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(<T::Balance as Into<Weight>>::into(new_value.clone()))]
+		#[pallet::weight(<T::Balance as Into<u64>>::into(new_value.clone()))]
 		pub fn set_dummy(
 			origin: OriginFor<T>,
 			#[pallet::compact] new_value: T::Balance,
@@ -226,16 +226,16 @@ pub mod pallet {
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -251,19 +251,19 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 impl pallet_old::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type SomeConst = ConstU64<10>;
 	type Balance = u64;
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where

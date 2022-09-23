@@ -535,11 +535,16 @@ mod tests {
 			cases.into_iter().map(Result::<_, codec::Error>::Ok).collect::<Vec<_>>()
 		);
 		// check encoding correctness
-		assert_eq!(&encoded[0], &hex_literal::hex!("00343048656c6c6f20576f726c6421"));
+		assert_eq!(
+			&encoded[0],
+			&array_bytes::hex2bytes_unchecked("00343048656c6c6f20576f726c6421")
+		);
 		assert_eq!(
 			encoded[1].as_slice(),
-			hex_literal::hex!("01c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")
-				.as_ref()
+			array_bytes::hex2bytes_unchecked(
+				"01c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"
+			)
+			.as_slice()
 		);
 	}
 
