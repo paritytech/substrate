@@ -178,19 +178,21 @@ impl OnRuntimeUpgrade for Tuple {
 	/// hooks for tuples are a noop.
 	fn on_runtime_upgrade() -> Weight {
 		let mut weight = Weight::zero();
-		let mut i = 0;
+		// migration index in the tuple, start with 1 for better readability
+		let mut i = 1;
 		for_tuples!( #(
 			let _guard = frame_support::StorageNoopGuard::default();
 			// we want to panic if any checks fail right here right now.
-			let state = Tuple::pre_upgrade().expect("PreUpgrade failed for migration #{}", i);
+			let state = Tuple::pre_upgrade().expect(&format!("PreUpgrade failed for migration #{}", i));
 			drop(_guard);
 
 			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
 
 			let _guard = frame_support::StorageNoopGuard::default();
 			// we want to panic if any checks fail right here right now.
-			Tuple::post_upgrade(state).expect("PostUpgrade failed for migration #{}", i);
+			Tuple::post_upgrade(state).expect(&format!("PostUpgrade failed for migration #{}", i));
 			drop(_guard);
+
 			i += 1;
 		)* );
 		weight
@@ -437,23 +439,6 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn on_runtime_upgrade_tuple_no_try_runtime() {
-		struct Test1;
-
-		impl OnRuntimeUpgrade for Test1 {
-			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-				panic!("should not be called")
-			}
-			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-				panic!("should not be called")
-			}
-		}
-
-		type Test1Tuple = (Test1,);
-		<Test1Tuple as OnRuntimeUpgrade>::on_runtime_upgrade();
-	}
-
 	#[cfg(feature = "try-runtime")]
 	#[test]
 	#[allow(dead_code)]
@@ -534,8 +519,8 @@ mod tests {
 			<Test1Tuple as OnRuntimeUpgrade>::on_runtime_upgrade();
 			assert_eq!(Test1Assertions::take(), 1);
 
-			type Test123 = (Test1, Test2, Test3);
-			<Test123 as OnRuntimeUpgrade>::on_runtime_upgrade();
+			type Test321 = (Test3, Test2, Test1);
+			<Test321 as OnRuntimeUpgrade>::on_runtime_upgrade();
 			assert_eq!(Test1Assertions::take(), 1);
 			assert_eq!(Test2Assertions::take(), 1);
 			assert_eq!(Test3Assertions::take(), 1);
@@ -543,8 +528,8 @@ mod tests {
 			// enable sequential tests
 			EnableSequentialTest::mutate(|val| *val = true);
 
-			type Test321 = (Test3, Test2, Test1);
-			<Test321 as OnRuntimeUpgrade>::on_runtime_upgrade();
+			type Test123 = (Test1, Test2, Test3);
+			<Test123 as OnRuntimeUpgrade>::on_runtime_upgrade();
 			assert_eq!(Test1Assertions::take(), 1);
 			assert_eq!(Test2Assertions::take(), 1);
 			assert_eq!(Test3Assertions::take(), 1);
