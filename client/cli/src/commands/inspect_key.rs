@@ -127,7 +127,7 @@ fn expect_public_from_phrase<Pair: sp_core::Pair>(
 ) -> Result<(), Error> {
 	let secret_uri = SecretUri::from_str(suri).map_err(|e| format!("{:?}", e))?;
 	let expected_public = if let Some(public) = expect_public.strip_prefix("0x") {
-		let hex_public = hex::decode(&public)
+		let hex_public = array_bytes::hex2bytes(public)
 			.map_err(|_| format!("Invalid expected public key hex: `{}`", expect_public))?;
 		Pair::Public::try_from(&hex_public)
 			.map_err(|_| format!("Invalid expected public key: `{}`", expect_public))?
@@ -208,7 +208,7 @@ mod tests {
 			.expect("Valid")
 			.0
 			.public();
-		let valid_public_hex = format!("0x{}", hex::encode(valid_public.as_slice()));
+		let valid_public_hex = array_bytes::bytes2hex("0x", valid_public.as_slice());
 		let valid_accountid = format!("{}", valid_public.into_account());
 
 		// It should fail with the invalid public key
@@ -226,7 +226,7 @@ mod tests {
 				.0
 				.public();
 		let valid_public_hex_with_password =
-			format!("0x{}", hex::encode(&valid_public_with_password.as_slice()));
+			array_bytes::bytes2hex("0x", valid_public_with_password.as_slice());
 		let valid_accountid_with_password =
 			format!("{}", &valid_public_with_password.into_account());
 
@@ -248,7 +248,7 @@ mod tests {
 			.0
 			.public();
 		let valid_public_hex_with_password_and_derivation =
-			format!("0x{}", hex::encode(&valid_public_with_password_and_derivation.as_slice()));
+			array_bytes::bytes2hex("0x", valid_public_with_password_and_derivation.as_slice());
 
 		// They should still be valid, because we check the base secret key.
 		check_cmd(&seed_with_password_and_derivation, &valid_public_hex_with_password, true);

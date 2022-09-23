@@ -128,7 +128,7 @@ impl sp_staking::StakingInterface for StakingMock {
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
@@ -291,7 +291,7 @@ impl ExtBuilder {
 			let amount_to_bond = Pools::depositor_min_bond();
 			Balances::make_free_balance_be(&10, amount_to_bond * 5);
 			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
-			assert_ok!(Pools::set_metadata(Origin::signed(900), 1, vec![1, 1]));
+			assert_ok!(Pools::set_metadata(RuntimeOrigin::signed(900), 1, vec![1, 1]));
 			let last_pool = LastPoolId::<Runtime>::get();
 			for (account_id, bonded) in self.members {
 				Balances::make_free_balance_be(&account_id, bonded * 2);
@@ -353,7 +353,7 @@ pub fn fully_unbond_permissioned(member: AccountId) -> DispatchResult {
 	let points = PoolMembers::<Runtime>::get(&member)
 		.map(|d| d.active_points())
 		.unwrap_or_default();
-	Pools::unbond(Origin::signed(member), member, points)
+	Pools::unbond(RuntimeOrigin::signed(member), member, points)
 }
 
 #[cfg(test)]

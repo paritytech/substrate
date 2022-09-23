@@ -70,7 +70,7 @@ mod pallet_old {
 	);
 
 	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 			type Error = Error<T>;
 			fn deposit_event() = default;
 			const SomeConst: T::Balance = T::SomeConst::get();
@@ -226,7 +226,7 @@ pub mod pallet {
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;

@@ -66,7 +66,7 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type RuntimeCall: IsType<<Self as frame_system::Config>::RuntimeCall>
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ FullCodec
 			+ TypeInfo
@@ -74,10 +74,10 @@ pub mod pallet {
 			+ Parameter;
 
 		/// Required origin for whitelisting a call.
-		type WhitelistOrigin: EnsureOrigin<Self::Origin>;
+		type WhitelistOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Required origin for dispatching whitelisted call with root origin.
-		type DispatchWhitelistedOrigin: EnsureOrigin<Self::Origin>;
+		type DispatchWhitelistedOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The handler of pre-images.
 		// NOTE: recipient is only needed for benchmarks.

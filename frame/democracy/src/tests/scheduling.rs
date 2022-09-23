@@ -28,7 +28,7 @@ fn simple_passing_should_work() {
 			VoteThreshold::SuperMajorityApprove,
 			0,
 		);
-		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r, aye(1)));
 		assert_eq!(tally(r), Tally { ayes: 1, nays: 0, turnout: 10 });
 		assert_eq!(Democracy::lowest_unbaked(), 0);
 		next_block();
@@ -47,7 +47,7 @@ fn simple_failing_should_work() {
 			VoteThreshold::SuperMajorityApprove,
 			0,
 		);
-		assert_ok!(Democracy::vote(Origin::signed(1), r, nay(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r, nay(1)));
 		assert_eq!(tally(r), Tally { ayes: 0, nays: 1, turnout: 10 });
 
 		next_block();
@@ -73,13 +73,13 @@ fn ooo_inject_referendums_should_work() {
 			0,
 		);
 
-		assert_ok!(Democracy::vote(Origin::signed(1), r2, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r2, aye(1)));
 		assert_eq!(tally(r2), Tally { ayes: 1, nays: 0, turnout: 10 });
 
 		next_block();
 		assert_eq!(Balances::free_balance(42), 2);
 
-		assert_ok!(Democracy::vote(Origin::signed(1), r1, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r1, aye(1)));
 		assert_eq!(tally(r1), Tally { ayes: 1, nays: 0, turnout: 10 });
 
 		next_block();
@@ -96,12 +96,12 @@ fn delayed_enactment_should_work() {
 			VoteThreshold::SuperMajorityApprove,
 			1,
 		);
-		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
-		assert_ok!(Democracy::vote(Origin::signed(2), r, aye(2)));
-		assert_ok!(Democracy::vote(Origin::signed(3), r, aye(3)));
-		assert_ok!(Democracy::vote(Origin::signed(4), r, aye(4)));
-		assert_ok!(Democracy::vote(Origin::signed(5), r, aye(5)));
-		assert_ok!(Democracy::vote(Origin::signed(6), r, aye(6)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(2), r, aye(2)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(3), r, aye(3)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(4), r, aye(4)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(5), r, aye(5)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(6), r, aye(6)));
 
 		assert_eq!(tally(r), Tally { ayes: 21, nays: 0, turnout: 210 });
 
@@ -134,10 +134,10 @@ fn lowest_unbaked_should_be_sensible() {
 			VoteThreshold::SuperMajorityApprove,
 			0,
 		);
-		assert_ok!(Democracy::vote(Origin::signed(1), r1, aye(1)));
-		assert_ok!(Democracy::vote(Origin::signed(1), r2, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r1, aye(1)));
+		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r2, aye(1)));
 		// r3 is canceled
-		assert_ok!(Democracy::cancel_referendum(Origin::root(), r3.into()));
+		assert_ok!(Democracy::cancel_referendum(RuntimeOrigin::root(), r3.into()));
 		assert_eq!(Democracy::lowest_unbaked(), 0);
 
 		next_block();
