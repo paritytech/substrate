@@ -42,7 +42,7 @@ const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
 #[derive(Debug, Clone, clap::Parser)]
 pub struct FollowChainCmd {
 	/// The url to connect to.
-	#[clap(short, long, parse(try_from_str = parse::url))]
+	#[clap(short, long, value_parser = parse::url)]
 	uri: String,
 
 	/// If set, then the state root check is enabled.

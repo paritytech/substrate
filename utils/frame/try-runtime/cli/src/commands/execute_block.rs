@@ -59,7 +59,7 @@ pub struct ExecuteBlockCmd {
 	#[clap(
 		long,
 		multiple_values = false,
-		parse(try_from_str = crate::parse::hash)
+		value_parser = crate::parse::hash
 	)]
 	block_at: Option<String>,
 
@@ -70,7 +70,7 @@ pub struct ExecuteBlockCmd {
 	#[clap(
 		long,
 		multiple_values = false,
-		parse(try_from_str = crate::parse::url)
+		value_parser = crate::parse::url
 	)]
 	block_ws_uri: Option<String>,
 

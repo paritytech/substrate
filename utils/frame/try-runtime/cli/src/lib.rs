@@ -426,7 +426,7 @@ pub struct SharedParams {
 	pub no_spec_check_panic: bool,
 
 	/// State version that is used by the chain.
-	#[clap(long, default_value = "1", parse(try_from_str = parse::state_version))]
+	#[clap(long, default_value = "1", value_parser = parse::state_version)]
 	pub state_version: StateVersion,
 }
 
@@ -459,7 +459,7 @@ pub enum State {
 		#[clap(
 			short,
 			long,
-			parse(try_from_str = parse::url),
+			value_parser = parse::url,
 		)]
 		uri: String,
 
@@ -471,7 +471,7 @@ pub enum State {
 			short,
 			long,
 			multiple_values = false,
-			parse(try_from_str = parse::hash),
+			value_parser = parse::hash,
 		)]
 		at: Option<String>,
 

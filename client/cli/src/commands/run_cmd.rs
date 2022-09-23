@@ -148,7 +148,7 @@ pub struct RunCmd {
 	/// value). Value of `all` will disable origin validation. Default is to
 	/// allow localhost and <https://polkadot.js.org> origins. When running in
 	/// --dev mode the default is to allow all origins.
-	#[clap(long, value_name = "ORIGINS", parse(from_str = parse_cors))]
+	#[clap(long, value_name = "ORIGINS", value_parser = parse_cors)]
 	pub rpc_cors: Option<Cors>,
 
 	/// Specify Prometheus exporter TCP Port.
@@ -179,7 +179,7 @@ pub struct RunCmd {
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity.
 	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`.
-	#[clap(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
+	#[clap(long = "telemetry-url", value_name = "URL VERBOSITY", value_parser = parse_telemetry_endpoints)]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
 	#[allow(missing_docs)]
@@ -597,7 +597,7 @@ impl From<Cors> for Option<Vec<String>> {
 }
 
 /// Parse cors origins.
-fn parse_cors(s: &str) -> Cors {
+fn parse_cors(s: &str) -> std::result::Result<Cors, String> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
 	for part in s.split(',') {
@@ -611,9 +611,9 @@ fn parse_cors(s: &str) -> Cors {
 	}
 
 	if is_all {
-		Cors::All
+		Ok(Cors::All)
 	} else {
-		Cors::List(origins)
+		Ok(Cors::List(origins))
 	}
 }
 

@@ -47,7 +47,7 @@ pub struct KeystoreParams {
 	/// seed.
 	#[clap(
 		long,
-		parse(try_from_str = secret_string_from_str),
+		value_parser = secret_string_from_str,
 		conflicts_with_all = &["password-interactive", "password-filename"]
 	)]
 	pub password: Option<SecretString>,

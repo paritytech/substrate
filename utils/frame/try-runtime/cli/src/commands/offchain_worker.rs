@@ -41,7 +41,7 @@ pub struct OffchainWorkerCmd {
 	#[clap(
 		long,
 		multiple_values = false,
-		parse(try_from_str = parse::hash)
+		value_parser = parse::hash
 	)]
 	header_at: Option<String>,
 
@@ -52,7 +52,7 @@ pub struct OffchainWorkerCmd {
 	#[clap(
 		long,
 		multiple_values = false,
-		parse(try_from_str = parse::url)
+		value_parser = parse::url
 	)]
 	header_ws_uri: Option<String>,
 

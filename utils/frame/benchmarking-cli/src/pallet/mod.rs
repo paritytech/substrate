@@ -27,15 +27,15 @@ use std::{fmt::Debug, path::PathBuf};
 
 // Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
 // used like crate names with `_`
-fn parse_pallet_name(pallet: &str) -> String {
-	pallet.replace("-", "_")
+fn parse_pallet_name(pallet: &str) -> std::result::Result<String, String> {
+	Ok(pallet.replace("-", "_"))
 }
 
 /// Benchmark the extrinsic weight of FRAME Pallets.
 #[derive(Debug, clap::Parser)]
 pub struct PalletCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[clap(short, long, parse(from_str = parse_pallet_name), required_unless_present = "list")]
+	#[clap(short, long, value_parser = parse_pallet_name, required_unless_present = "list")]
 	pub pallet: Option<String>,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
