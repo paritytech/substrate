@@ -30,6 +30,8 @@
 #
 #######################################################################
 
+set -eu
+
 SUBSTRATE_ROOT=$1
 declare -a RULES=(
 	"default,std never implies runtime-benchmarks"
@@ -64,7 +66,7 @@ function check_does_not_imply() {
 
 	for CRATE in $CRATES; do
 		RET=0
-		OUTPUT=$(cargo tree --no-default-features --locked --offline -e features --features $ENABLED -p $CRATE 2>&1)
+		OUTPUT=$(cargo tree --no-default-features --locked --offline -e features --features $ENABLED -p $CRATE 2>&1 || true)
 		IS_NOT_SUPPORTED=$(echo $OUTPUT | grep -q "not supported for packages in this workspace" || echo $?)
 
 		if [ $IS_NOT_SUPPORTED -eq 0 ]; then

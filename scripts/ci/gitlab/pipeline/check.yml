@@ -43,7 +43,7 @@ test-rust-features:
   variables:
     CI_IMAGE:                      "paritytech/tools:latest"
   script:
-    - ./scripts/ci/gitlab/rust-features.sh
+    - bash ./scripts/ci/gitlab/rust-features.sh .
 
 test-prometheus-alerting-rules:
   stage:                           check
