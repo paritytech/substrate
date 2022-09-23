@@ -146,6 +146,9 @@ const WASM_BUILD_NO_COLOR: &str = "WASM_BUILD_NO_COLOR";
 /// Environment variable to set the toolchain used to compile the wasm binary.
 const WASM_BUILD_TOOLCHAIN: &str = "WASM_BUILD_TOOLCHAIN";
 
+/// Environment variable to instruct cleanup of `target` after successful wasm build.
+const WASM_BUILD_CLEAN_TARGET: &str = "WASM_BUILD_CLEAN_TARGET";
+
 /// Environment variable that makes sure the WASM build is triggered.
 const FORCE_WASM_BUILD_ENV: &str = "FORCE_WASM_BUILD";
 

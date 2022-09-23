@@ -130,7 +130,7 @@ pub(crate) fn create_and_compile(
 		features_to_enable,
 	);
 
-	let profile = build_project(&project, default_rustflags, cargo_cmd);
+	let profile = build_project(&project, default_rustflags, &cargo_cmd);
 	let (wasm_binary, wasm_binary_compressed, bloaty) =
 		compact_wasm_file(&project, profile, project_cargo_toml, wasm_binary_name);
 
@@ -154,6 +154,10 @@ pub(crate) fn create_and_compile(
 
 	if let Err(err) = adjust_mtime(&bloaty, final_wasm_binary.as_ref()) {
 		build_helper::warning!("Error while adjusting the mtime of the wasm binaries: {}", err)
+	}
+
+	if env::var(crate::WASM_BUILD_CLEAN_TARGET).is_ok() {
+		clean_target(&project, &cargo_cmd);
 	}
 
 	(final_wasm_binary, bloaty)
@@ -602,7 +606,7 @@ fn offline_build() -> bool {
 fn build_project(
 	project: &Path,
 	default_rustflags: &str,
-	cargo_cmd: CargoCommandVersioned,
+	cargo_cmd: &CargoCommandVersioned,
 ) -> Profile {
 	let manifest_path = project.join("Cargo.toml");
 	let mut build_cmd = cargo_cmd.command();
@@ -646,6 +650,30 @@ fn build_project(
 
 	match build_cmd.status().map(|s| s.success()) {
 		Ok(true) => profile,
+		// Use `process.exit(1)` to have a clean error output.
+		_ => process::exit(1),
+	}
+}
+
+/// Build the project to create the WASM binary.
+fn clean_target(project: &Path, cargo_cmd: &CargoCommandVersioned) {
+	let manifest_path = project.join("Cargo.toml");
+	let mut build_cmd = cargo_cmd.command();
+
+	build_cmd
+		.arg("clean")
+		.arg(format!("--manifest-path={}", manifest_path.display()))
+		// Unset the `CARGO_TARGET_DIR` to prevent a cargo deadlock (cargo locks a target dir
+		// exclusive). The runner project is created in `CARGO_TARGET_DIR` and executing it will
+		// create a sub target directory inside of `CARGO_TARGET_DIR`.
+		.env_remove("CARGO_TARGET_DIR");
+
+	if super::color_output_enabled() {
+		build_cmd.arg("--color=always");
+	}
+
+	match build_cmd.status().map(|s| s.success()) {
+		Ok(true) => (),
 		// Use `process.exit(1)` to have a clean error output.
 		_ => process::exit(1),
 	}
