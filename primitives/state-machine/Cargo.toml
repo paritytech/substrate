@@ -22,7 +22,7 @@ parking_lot = { version = "0.12.1", optional = true }
 rand = { version = "0.7.2", optional = true }
 smallvec = "1.8.0"
 thiserror = { version = "1.0.30", optional = true }
-tracing = { version = "0.1.29", optional = true }
+tracing = { version = "0.1.36", optional = true }
 trie-root = { version = "0.17.0", default-features = false }
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
 sp-externalities = { version = "0.12.0", default-features = false, path = "../externalities" }
