@@ -464,10 +464,10 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let collection = T::Helper::collection(0);
 		let item = T::Helper::item(0);
-		let tips: BoundedVec<_, _> = vec![
+		let tips: BoundedVec<_, _> = bounded_vec![
 			ItemTip
-				{ collection, item, receiver: caller.clone(), amount }; T::MaxTips::get() as usize
-		].try_into().unwrap();
+				{ collection, item, receiver: caller.clone(), amount }; n as usize
+		];
 	}: _(SystemOrigin::Signed(caller.clone()), tips)
 	verify {
 		if !n.is_zero() {
