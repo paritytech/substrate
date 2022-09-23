@@ -905,8 +905,14 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// a validator switches role and register...
-			assert_ok!(Staking::nominate(RuntimeOrigin::signed(VALIDATOR_PREFIX), vec![VALIDATOR_PREFIX]));
-			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(VALIDATOR_PREFIX), None));
+			assert_ok!(Staking::nominate(
+				RuntimeOrigin::signed(VALIDATOR_PREFIX),
+				vec![VALIDATOR_PREFIX]
+			));
+			assert_ok!(FastUnstake::register_fast_unstake(
+				RuntimeOrigin::signed(VALIDATOR_PREFIX),
+				None
+			));
 
 			// but they indeed are exposed!
 			assert!(pallet_staking::ErasStakers::<T>::contains_key(
