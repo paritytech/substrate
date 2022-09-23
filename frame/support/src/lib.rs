@@ -361,9 +361,9 @@ macro_rules! parameter_types {
 		}
 	};
 	(IMPL_STORAGE $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
+		#[allow(unused)]
 		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
-			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
 				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
@@ -372,7 +372,6 @@ macro_rules! parameter_types {
 			///
 			/// This needs to be executed in an externalities provided
 			/// environment.
-			#[allow(unused)]
 			pub fn set(value: &$type) {
 				$crate::storage::unhashed::put(&Self::key(), value);
 			}
