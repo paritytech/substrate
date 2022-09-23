@@ -87,7 +87,7 @@ pub struct ImportParams {
 	/// Specify the path where local WASM runtimes are stored.
 	///
 	/// These runtimes will override on-chain runtimes when the version matches.
-	#[clap(long, value_name = "PATH", parse(from_os_str))]
+	#[clap(long, value_name = "PATH", value_parser)]
 	pub wasm_runtime_overrides: Option<PathBuf>,
 
 	#[allow(missing_docs)]

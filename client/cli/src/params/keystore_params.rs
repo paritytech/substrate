@@ -36,7 +36,7 @@ pub struct KeystoreParams {
 	pub keystore_uri: Option<String>,
 
 	/// Specify custom keystore path.
-	#[clap(long, value_name = "PATH", parse(from_os_str))]
+	#[clap(long, value_name = "PATH", value_parser)]
 	pub keystore_path: Option<PathBuf>,
 
 	/// Use interactive shell for entering the password used by the keystore.
@@ -56,7 +56,7 @@ pub struct KeystoreParams {
 	#[clap(
 		long,
 		value_name = "PATH",
-		parse(from_os_str),
+		value_parser,
 		conflicts_with_all = &["password-interactive", "password"]
 	)]
 	pub password_filename: Option<PathBuf>,

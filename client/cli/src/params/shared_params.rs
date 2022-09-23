@@ -39,7 +39,7 @@ pub struct SharedParams {
 	pub dev: bool,
 
 	/// Specify custom base path.
-	#[clap(long, short = 'd', value_name = "PATH", parse(from_os_str))]
+	#[clap(long, short = 'd', value_name = "PATH", value_parser)]
 	pub base_path: Option<PathBuf>,
 
 	/// Sets a custom logging filter. Syntax is <target>=<level>, e.g. -lsync=debug.

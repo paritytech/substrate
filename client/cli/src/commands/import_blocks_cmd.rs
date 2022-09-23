@@ -37,7 +37,7 @@ use std::{
 #[derive(Debug, Parser)]
 pub struct ImportBlocksCmd {
 	/// Input file or stdin if unspecified.
-	#[clap(parse(from_os_str))]
+	#[clap(value_parser)]
 	pub input: Option<PathBuf>,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
