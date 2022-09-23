@@ -24,6 +24,7 @@ use sp_std::prelude::*;
 
 #[cfg(all(feature = "try-runtime", test))]
 use codec::{Decode, Encode};
+use scale_info::prelude::format;
 
 /// The block initialization trait.
 ///
