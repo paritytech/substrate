@@ -25,9 +25,6 @@ use sp_std::prelude::*;
 #[cfg(all(feature = "try-runtime", test))]
 use codec::{Decode, Encode};
 
-#[cfg(feature = "try-runtime")]
-use scale_info::prelude::format;
-
 /// The block initialization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is
@@ -180,6 +177,8 @@ impl OnRuntimeUpgrade for Tuple {
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
 	fn on_runtime_upgrade() -> Weight {
+		use scale_info::prelude::format;
+
 		let mut weight = Weight::zero();
 		// migration index in the tuple, start with 1 for better readability
 		let mut i = 1;
