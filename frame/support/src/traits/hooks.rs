@@ -178,18 +178,20 @@ impl OnRuntimeUpgrade for Tuple {
 	/// hooks for tuples are a noop.
 	fn on_runtime_upgrade() -> Weight {
 		let mut weight = Weight::zero();
+		let mut i = 0;
 		for_tuples!( #(
 			let _guard = frame_support::StorageNoopGuard::default();
 			// we want to panic if any checks fail right here right now.
-			let state = Tuple::pre_upgrade().expect("PreUpgrade failed for migration #{}", Tuple::ID);
+			let state = Tuple::pre_upgrade().expect("PreUpgrade failed for migration #{}", i);
 			drop(_guard);
 
 			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
 
 			let _guard = frame_support::StorageNoopGuard::default();
 			// we want to panic if any checks fail right here right now.
-			Tuple::post_upgrade(state).expect("PostUpgrade failed for migration #{}", Tuple::ID);
+			Tuple::post_upgrade(state).expect("PostUpgrade failed for migration #{}", i);
 			drop(_guard);
+			i += 1;
 		)* );
 		weight
 	}
