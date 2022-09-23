@@ -157,16 +157,8 @@ impl RuntimeBlob {
 		Ok(())
 	}
 
-	/// Increases the number of memory pages requested by the WASM blob by
-	/// the given amount of `extra_heap_pages`.
-	///
-	/// Will return an error in case there is no memory section present,
-	/// or if the memory section is empty.
-	///
-	/// Only modifies the initial size of the memory; the maximum is unmodified
-	/// unless it's smaller than the initial size, in which case it will be increased
-	/// so that it's at least as big as the initial size.
-	pub fn add_extra_heap_pages_to_memory_section(
+	/// Setup the memory instances according to the given `heap_pages`.
+	pub fn setup_memory_according_to_heap_pages(
 		&mut self,
 		heap_pages: HeapPages,
 	) -> Result<(), WasmError> {
@@ -179,12 +171,12 @@ impl RuntimeBlob {
 			return Err(WasmError::Other("memory section is empty".into()))
 		}
 		for memory_ty in memory_section.entries_mut() {
-			let min = memory_ty.limits().initial();
-			let max = dbg!(match heap_pages {
-				HeapPages::Dynamic => None,
-				HeapPages::Max(max) => Some(max as _),
-				HeapPages::Extra(extra) => Some(extra as u32 + memory_ty.limits().initial()),
-			});
+			let initial = memory_ty.limits().initial();
+			let (min, max) = match heap_pages {
+				HeapPages::Dynamic => (initial + 1024, None),
+				HeapPages::Max(max) => (max as u32, Some(max as _)),
+				HeapPages::Extra(extra) => (initial + extra as u32, Some(initial + extra as u32)),
+			};
 			*memory_ty = MemoryType::new(min, max);
 		}
 		Ok(())

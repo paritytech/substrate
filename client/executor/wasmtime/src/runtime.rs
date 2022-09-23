@@ -701,7 +701,7 @@ fn prepare_blob_for_compilation(
 	// now automatically take care of creating the memory for us, and it is also necessary
 	// to enable `wasmtime`'s instance pooling. (Imported memories are ineligible for pooling.)
 	blob.convert_memory_import_into_export()?;
-	blob.add_extra_heap_pages_to_memory_section(semantics.heap_pages)?;
+	blob.setup_memory_according_to_heap_pages(semantics.heap_pages)?;
 
 	Ok(blob)
 }

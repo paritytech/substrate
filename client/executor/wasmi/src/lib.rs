@@ -364,26 +364,17 @@ struct Resolver<'a> {
 	allow_missing_func_imports: bool,
 	/// All the names of functions for that we did not provide a host function.
 	missing_functions: RefCell<Vec<String>>,
-	/// Will be used as initial and maximum size of the imported memory.
-	heap_pages: HeapPages,
-	/// By default, runtimes should import memory and this is `Some(_)` after
-	/// resolving. However, to be backwards compatible, we also support memory
-	/// exported by the WASM blob (this will be `None` after resolving).
-	import_memory: RefCell<Option<MemoryRef>>,
 }
 
 impl<'a> Resolver<'a> {
 	fn new(
 		host_functions: &'a [&'static dyn Function],
 		allow_missing_func_imports: bool,
-		heap_pages: HeapPages,
 	) -> Resolver<'a> {
 		Resolver {
 			host_functions,
 			allow_missing_func_imports,
 			missing_functions: RefCell::new(Vec::new()),
-			heap_pages,
-			import_memory: Default::default(),
 		}
 	}
 }
@@ -427,50 +418,12 @@ impl<'a> wasmi::ModuleImportResolver for Resolver<'a> {
 
 	fn resolve_memory(
 		&self,
-		field_name: &str,
-		memory_type: &wasmi::MemoryDescriptor,
+		_: &str,
+		_: &wasmi::MemoryDescriptor,
 	) -> Result<MemoryRef, wasmi::Error> {
-		if field_name == "memory" {
-			match &mut *self.import_memory.borrow_mut() {
-				Some(_) =>
-					Err(wasmi::Error::Instantiation("Memory can not be imported twice!".into())),
-				memory_ref @ None => {
-					match (self.heap_pages, memory_type.maximum()) {
-						(HeapPages::Max(max), Some(memory_max))
-							if max as u32 > memory_max - memory_type.initial() =>
-							return Err(wasmi::Error::Instantiation(format!(
-								"Heap pages ({}) is greater than imported memory maximum ({}).",
-								max,
-								memory_max - memory_type.initial(),
-							))),
-						(HeapPages::Dynamic, Some(memory_max)) =>
-							return Err(wasmi::Error::Instantiation(format!(
-								"Requested dynamic heap pages while the imported memory requests a maximum ({}).",
-								memory_max - memory_type.initial(),
-							))),
-						_ => {},
-					};
-
-					let min = memory_type.initial() as usize;
-					let (min, max) = match self.heap_pages {
-						HeapPages::Dynamic => (Pages(min + 1024), None),
-						HeapPages::Extra(extra) =>
-							(Pages(extra + min), Some(Pages(min + extra))),
-						HeapPages::Max(max) => (Pages(max), Some(Pages(max))),
-					};
-
-					let memory = MemoryInstance::alloc(dbg!(min), dbg!(max))?;
-
-					*memory_ref = Some(memory.clone());
-					Ok(memory)
-				},
-			}
-		} else {
-			Err(wasmi::Error::Instantiation(format!(
-				"Unknown memory reference with name: {}",
-				field_name
-			)))
-		}
+		Err(wasmi::Error::Instantiation(
+			"Internal error, wasmi expects that the wasm blob exports memory.".into(),
+		))
 	}
 }
 
@@ -632,12 +585,11 @@ fn call_in_wasm_module(
 
 /// Prepare module instance
 fn instantiate_module(
-	heap_pages: HeapPages,
 	module: &Module,
 	host_functions: &[&'static dyn Function],
 	allow_missing_func_imports: bool,
 ) -> Result<(ModuleRef, Vec<String>, MemoryRef), Error> {
-	let resolver = Resolver::new(host_functions, allow_missing_func_imports, heap_pages);
+	let resolver = Resolver::new(host_functions, allow_missing_func_imports);
 	// start module instantiation. Don't run 'start' function yet.
 	let intermediate_instance =
 		ModuleInstance::new(module, &ImportsBuilder::new().with_resolver("env", &resolver))?;
@@ -645,49 +597,10 @@ fn instantiate_module(
 	// Verify that the module has the heap base global variable.
 	let _ = get_heap_base(intermediate_instance.not_started_instance())?;
 
-	// Get the memory reference. Runtimes should import memory, but to be backwards
-	// compatible we also support exported memory.
-	let memory = match resolver.import_memory.into_inner() {
-		Some(memory) => memory,
-		None => {
-			debug!(
-				target: "wasm-executor",
-				"WASM blob does not imports memory, falling back to exported memory",
-			);
-
-			let memory = get_mem_instance(intermediate_instance.not_started_instance())?;
-			memory
-				.grow(Pages(heap_pages.maximum().unwrap_or(1024)))
-				.map_err(|_| Error::Runtime)?;
-
-			match (memory.maximum(), heap_pages) {
-				(Some(max), HeapPages::Max(requested_max)) =>
-					if max.0 != requested_max {
-						return Err(Error::Other(format!(
-							"Request maximum pages {} doesn't match the exported memory maximum {}",
-							requested_max, max.0,
-						)))
-					},
-				(Some(max), HeapPages::Extra(extra)) => if max.0 != extra + memory.initial().0 {
-						return Err(Error::Other(format!(
-							"Request extra pages {} plus the initial pages {} doesn't match the exported memory maximum {}",
-							extra,
-							memory.initial().0,
-							max.0,
-						)))
-				},
-				(Some(max), HeapPages::Dynamic) => return Err(Error::Other(
-					format!("Requested dynamic maximum pages, while the exported memory has a maximum if {}", max.0)
-				)),
-				(None, _) =>
-					return Err(Error::Other(
-					"Requested maximum pages while exported memory doesn't provide any maximum".into(),
-				)),
-			}
-
-			memory
-		},
-	};
+	// The `module` should export the memory with the correct properties (min, max).
+	//
+	// This is ensured by modifying the `RuntimeBlob` before initializing the `Module`.
+	let memory = get_mem_instance(intermediate_instance.not_started_instance())?;
 
 	if intermediate_instance.has_start() {
 		// Runtime is not allowed to have the `start` function.
@@ -752,8 +665,6 @@ pub struct WasmiRuntime {
 	/// Enable stub generation for functions that are not available in `host_functions`.
 	/// These stubs will error when the wasm blob tries to call them.
 	allow_missing_func_imports: bool,
-	/// Numer of heap pages this runtime uses.
-	heap_pages: HeapPages,
 
 	global_vals_snapshot: GlobalValsSnapshot,
 	data_segments_snapshot: DataSegmentsSnapshot,
@@ -763,7 +674,6 @@ impl WasmModule for WasmiRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error> {
 		// Instantiate this module.
 		let (instance, missing_functions, memory) = instantiate_module(
-			self.heap_pages,
 			&self.module,
 			&self.host_functions,
 			self.allow_missing_func_imports,
@@ -785,7 +695,7 @@ impl WasmModule for WasmiRuntime {
 /// Create a new `WasmiRuntime` given the code. This function loads the module and
 /// stores it in the instance.
 pub fn create_runtime(
-	blob: RuntimeBlob,
+	mut blob: RuntimeBlob,
 	heap_pages: HeapPages,
 	host_functions: Vec<&'static dyn Function>,
 	allow_missing_func_imports: bool,
@@ -793,12 +703,17 @@ pub fn create_runtime(
 	let data_segments_snapshot =
 		DataSegmentsSnapshot::take(&blob).map_err(|e| WasmError::Other(e.to_string()))?;
 
+	// Make sure we only have exported memory to simplify the code of the wasmi executor.
+	blob.convert_memory_import_into_export()?;
+	// Ensure that the memory uses the correct heap pages.
+	blob.setup_memory_according_to_heap_pages(heap_pages)?;
+
 	let module =
 		Module::from_parity_wasm_module(blob.into_inner()).map_err(|_| WasmError::InvalidModule)?;
 
 	let global_vals_snapshot = {
 		let (instance, _, _) =
-			instantiate_module(heap_pages, &module, &host_functions, allow_missing_func_imports)
+			instantiate_module(&module, &host_functions, allow_missing_func_imports)
 				.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 		GlobalValsSnapshot::take(&instance)
 	};
@@ -809,7 +724,6 @@ pub fn create_runtime(
 		global_vals_snapshot,
 		host_functions: Arc::new(host_functions),
 		allow_missing_func_imports,
-		heap_pages,
 	})
 }
 
