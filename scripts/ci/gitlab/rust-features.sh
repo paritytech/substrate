@@ -32,6 +32,11 @@
 
 set -eu
 
+# Check that cargo, grep and egrep are installed.
+command -v cargo >/dev/null 2>&1 || { echo >&2 "cargo is required but not installed. Aborting."; exit 1; }
+command -v grep >/dev/null 2>&1 || { echo >&2 "grep is required but not installed. Aborting."; exit 1; }
+command -v egrep >/dev/null 2>&1 || { echo >&2 "egrep is required but not installed. Aborting."; exit 1; }
+
 SUBSTRATE_ROOT=$1
 declare -a RULES=(
 	"default,std never implies runtime-benchmarks"
@@ -63,6 +68,7 @@ function check_does_not_imply() {
 	CRATES=`cargo workspaces list --all | egrep -o '^(\w|-)+'`
 	FAILED=0
 	PASSED=0
+	echo "🔍 Checking individual crates"
 
 	for CRATE in $CRATES; do
 		RET=0
@@ -93,6 +99,6 @@ function check_does_not_imply() {
 cd "$SUBSTRATE_ROOT"
 
 for RULE in "${RULES[@]}"; do
-    read -a strarr <<< "$RULE"  # uses default whitespace IFS
-	check_does_not_imply "${strarr[0]}" "${strarr[3]}"
+    read -a splits <<< "$RULE"
+	check_does_not_imply "${splits[0]}" "${splits[3]}"
 done
