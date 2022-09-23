@@ -180,15 +180,15 @@ impl OnRuntimeUpgrade for Tuple {
 		let mut weight = Weight::zero();
 		for_tuples!( #(
 			let _guard = frame_support::StorageNoopGuard::default();
-			// expected unwrap: we want to panic if any checks fail right here right now.
-			let state = Tuple::pre_upgrade().unwrap();
+			// we want to panic if any checks fail right here right now.
+			let state = Tuple::pre_upgrade().expect("PreUpgrade failed for migration #{}", Tuple::ID);
 			drop(_guard);
 
 			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
 
 			let _guard = frame_support::StorageNoopGuard::default();
-						// expected unwrap: we want to panic if any checks fail right here right now.
-			Tuple::post_upgrade(state).unwrap();
+			// we want to panic if any checks fail right here right now.
+			Tuple::post_upgrade(state).expect("PostUpgrade failed for migration #{}", Tuple::ID);
 			drop(_guard);
 		)* );
 		weight
@@ -454,6 +454,7 @@ mod tests {
 
 	#[cfg(feature = "try-runtime")]
 	#[test]
+	#[allow(dead_code)]
 	fn on_runtime_upgrade_tuple() {
 		use frame_support::parameter_types;
 		use sp_io::TestExternalities;
