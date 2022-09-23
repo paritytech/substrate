@@ -79,8 +79,11 @@ fn cannot_register_if_in_queue() {
 fn cannot_register_if_head() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Insert some Head item for stash
-		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![], maybe_pool_id: None });
-		// Controller attempts to regsiter
+		Head::<T>::put(UnstakeRequest {
+			stashes_and_pool_id: bounded_vec![(1, None)],
+			checked: bounded_vec![],
+		});
+		// Controller attempts to register
 		assert_noop!(
 			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2), Some(1_u32)),
 			Error::<T>::AlreadyHead
@@ -137,7 +140,10 @@ fn cannot_deregister_already_head() {
 		// Controller attempts to register, should fail
 		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2), Some(1_u32)));
 		// Insert some Head item for stash.
-		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![], maybe_pool_id: None });
+		Head::<T>::put(UnstakeRequest {
+			stashes_and_pool_id: bounded_vec![(1, None)],
+			checked: bounded_vec![],
+		});
 		// Controller attempts to deregister
 		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::AlreadyHead);
 	});
@@ -205,11 +211,14 @@ mod on_idle {
 			// then
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checking { stash: 1, eras: vec![3] }]
+				vec![Event::Checking { eras: vec![3] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest {
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
+					checked: bounded_vec![3]
+				})
 			);
 
 			// when: another 1 era.
@@ -221,14 +230,13 @@ mod on_idle {
 			// then:
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checking { stash: 1, eras: bounded_vec![2] }]
+				vec![Event::Checking { eras: bounded_vec![2] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
-					checked: bounded_vec![3, 2],
-					maybe_pool_id: Some(1)
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
+					checked: bounded_vec![3, 2]
 				})
 			);
 
@@ -247,14 +255,13 @@ mod on_idle {
 			// then:
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checking { stash: 1, eras: vec![1, 0] }]
+				vec![Event::Checking { eras: vec![1, 0] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -268,9 +275,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -318,9 +324,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, None)],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: None
 				})
 			);
 			assert_eq!(Queue::<T>::count(), 4);
@@ -339,9 +344,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 5,
+					stashes_and_pool_id: bounded_vec![(5, None)],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: None
 				}),
 			);
 			assert_eq!(Queue::<T>::count(), 3);
@@ -349,9 +353,9 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: None, result: Ok(()) },
-					Event::Checking { stash: 5, eras: vec![3, 2, 1, 0] }
+					Event::Checking { eras: vec![3, 2, 1, 0] }
 				]
 			);
 		});
@@ -396,9 +400,9 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) },
-					Event::Checking { stash: 3, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 3, maybe_pool_id: Some(1), result: Ok(()) },
 				]
 			);
@@ -428,9 +432,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, None)],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: None
 				})
 			);
 
@@ -440,7 +443,7 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: None, result: Ok(()) }
 				]
 			);
@@ -468,9 +471,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(0))],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: Some(0)
 				})
 			);
 
@@ -480,7 +482,7 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked {
 						stash: 1,
 						maybe_pool_id: Some(0),
@@ -516,9 +518,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -528,7 +529,7 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) }
 				]
 			);
@@ -557,7 +558,10 @@ mod on_idle {
 			// assert head item present
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest {
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
+					checked: bounded_vec![3]
+				})
 			);
 
 			next_block(true);
@@ -565,9 +569,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -576,9 +579,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2, 1],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -587,9 +589,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -600,10 +601,10 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3] },
-					Event::Checking { stash: 1, eras: vec![2] },
-					Event::Checking { stash: 1, eras: vec![1] },
-					Event::Checking { stash: 1, eras: vec![0] },
+					Event::Checking { eras: vec![3] },
+					Event::Checking { eras: vec![2] },
+					Event::Checking { eras: vec![1] },
+					Event::Checking { eras: vec![0] },
 					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) }
 				]
 			);
@@ -629,22 +630,9 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: None })
-			);
-
-			next_block(true);
-			assert_eq!(
-				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2], maybe_pool_id: None })
-			);
-
-			next_block(true);
-			assert_eq!(
-				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
-					checked: bounded_vec![3, 2, 1],
-					maybe_pool_id: None
+					stashes_and_pool_id: bounded_vec![(1, None)],
+					checked: bounded_vec![3]
 				})
 			);
 
@@ -652,9 +640,26 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, None)],
+					checked: bounded_vec![3, 2]
+				})
+			);
+
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stashes_and_pool_id: bounded_vec![(1, None)],
+					checked: bounded_vec![3, 2, 1],
+				})
+			);
+
+			next_block(true);
+			assert_eq!(
+				Head::<T>::get(),
+				Some(UnstakeRequest {
+					stashes_and_pool_id: bounded_vec![(1, None)],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: None
 				})
 			);
 
@@ -667,10 +672,9 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, None)],
 					// note era 0 is pruned to keep the vector length sane.
 					checked: bounded_vec![3, 2, 1, 4],
-					maybe_pool_id: None
 				})
 			);
 
@@ -680,11 +684,11 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3] },
-					Event::Checking { stash: 1, eras: vec![2] },
-					Event::Checking { stash: 1, eras: vec![1] },
-					Event::Checking { stash: 1, eras: vec![0] },
-					Event::Checking { stash: 1, eras: vec![4] },
+					Event::Checking { eras: vec![3] },
+					Event::Checking { eras: vec![2] },
+					Event::Checking { eras: vec![1] },
+					Event::Checking { eras: vec![0] },
+					Event::Checking { eras: vec![4] },
 					Event::Unstaked { stash: 1, maybe_pool_id: None, result: Ok(()) }
 				]
 			);
@@ -706,16 +710,18 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: Some(1) })
+				Some(UnstakeRequest {
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
+					checked: bounded_vec![3]
+				})
 			);
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -727,9 +733,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -737,9 +742,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -753,9 +757,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2, 4],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -764,9 +767,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes_and_pool_id: bounded_vec![(1, Some(1))],
 					checked: bounded_vec![3, 2, 4, 1],
-					maybe_pool_id: Some(1)
 				})
 			);
 
@@ -777,10 +779,10 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3] },
-					Event::Checking { stash: 1, eras: vec![2] },
-					Event::Checking { stash: 1, eras: vec![4] },
-					Event::Checking { stash: 1, eras: vec![1] },
+					Event::Checking { eras: vec![3] },
+					Event::Checking { eras: vec![2] },
+					Event::Checking { eras: vec![4] },
+					Event::Checking { eras: vec![1] },
 					Event::Unstaked { stash: 1, maybe_pool_id: Some(1), result: Ok(()) }
 				]
 			);
@@ -819,18 +821,16 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: exposed,
+					stashes_and_pool_id: bounded_vec![(exposed, None)],
 					checked: bounded_vec![3],
-					maybe_pool_id: None
 				})
 			);
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: exposed,
+					stashes_and_pool_id: bounded_vec![(exposed, None)],
 					checked: bounded_vec![3, 2],
-					maybe_pool_id: None
 				})
 			);
 			next_block(true);
@@ -840,9 +840,10 @@ mod on_idle {
 				fast_unstake_events_since_last_call(),
 				// we slash them by 21, since we checked 3 eras in total (3, 2, 1).
 				vec![
-					Event::Checking { stash: exposed, eras: vec![3] },
-					Event::Checking { stash: exposed, eras: vec![2] },
-					Event::Slashed { stash: exposed, amount: 3 * 7 }
+					Event::Checking { eras: vec![3] },
+					Event::Checking { eras: vec![2] },
+					Event::Slashed { stash: exposed, amount: 3 * 7 },
+					Event::Terminated
 				]
 			);
 		});
@@ -879,9 +880,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: exposed,
+					stashes_and_pool_id: bounded_vec![(exposed, None)],
 					checked: bounded_vec![3, 2],
-					maybe_pool_id: None
 				})
 			);
 			next_block(true);
@@ -891,8 +891,9 @@ mod on_idle {
 				fast_unstake_events_since_last_call(),
 				// we slash them by 28, since we checked 4 eras in total.
 				vec![
-					Event::Checking { stash: exposed, eras: vec![3, 2] },
-					Event::Slashed { stash: exposed, amount: 4 * 7 }
+					Event::Checking { eras: vec![3, 2] },
+					Event::Slashed { stash: exposed, amount: 4 * 7 },
+					Event::Terminated,
 				]
 			);
 		});
@@ -926,7 +927,10 @@ mod on_idle {
 
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Slashed { stash: 100, amount: 100 }]
+				vec![
+					Event::Slashed { stash: 100, amount: 100 },
+					Event::Terminated,
+				]
 			);
 		});
 	}
@@ -950,9 +954,8 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 42,
+					stashes_and_pool_id: bounded_vec![(42, None)],
 					checked: bounded_vec![3, 2, 1, 0],
-					maybe_pool_id: None
 				})
 			);
 			next_block(true);
@@ -961,7 +964,7 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 42, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 42, maybe_pool_id: None, result: Ok(()) }
 				]
 			);
@@ -1018,7 +1021,10 @@ mod signed_extension {
 
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3], maybe_pool_id: None })
+				Some(UnstakeRequest {
+					stashes_and_pool_id: bounded_vec![(1, None)],
+					checked: bounded_vec![3]
+				})
 			);
 
 			// then

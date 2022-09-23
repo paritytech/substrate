@@ -37,13 +37,16 @@ pub type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
 #[derive(
 	Encode, Decode, EqNoBound, PartialEqNoBound, Clone, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen,
 )]
-pub struct UnstakeRequest<AccountId: Eq + PartialEq + Debug, MaxChecked: Get<u32>> {
+#[scale_info(skip_type_params(MaxStashes))]
+pub struct UnstakeRequest<
+	AccountId: Eq + PartialEq + Debug,
+	MaxChecked: Get<u32>,
+	MaxStashes: Get<u32>,
+> {
 	/// Their stash account.
-	pub(crate) stash: AccountId,
+	pub(crate) stashes_and_pool_id: BoundedVec<(AccountId, Option<PoolId>), MaxStashes>,
 	/// The list of eras for which they have been checked.
 	pub(crate) checked: BoundedVec<EraIndex, MaxChecked>,
-	/// The pool they wish to join, if any.
-	pub(crate) maybe_pool_id: Option<PoolId>,
 }
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo, RuntimeDebugNoBound)]
@@ -84,9 +87,7 @@ where
 		// we don't check this in the tx-pool as it requires a storage read.
 		if <Self::Call as IsSubType<pallet_staking::Call<T>>>::is_sub_type(call).is_some() {
 			let check_stash = |stash: &T::AccountId| {
-				if Queue::<T>::contains_key(&stash) ||
-					Head::<T>::get().map_or(false, |u| &u.stash == stash)
-				{
+				if Queue::<T>::contains_key(&stash) || Pallet::<T>::is_head(&stash) {
 					Err(TransactionValidityError::Invalid(InvalidTransaction::Call))
 				} else {
 					Ok(())
