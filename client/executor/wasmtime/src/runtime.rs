@@ -41,7 +41,7 @@ use std::{
 		Arc,
 	},
 };
-use wasmtime::{Engine, Memory, StoreLimits, Table};
+use wasmtime::{Engine, Memory, Table};
 
 pub(crate) struct StoreData {
 	/// This will only be set when we call into the runtime.
@@ -89,7 +89,6 @@ enum Strategy {
 struct InstanceCreator {
 	engine: wasmtime::Engine,
 	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
-	max_memory_size: Option<usize>,
 }
 
 impl InstanceCreator {
@@ -134,7 +133,6 @@ pub struct WasmtimeRuntime {
 	engine: wasmtime::Engine,
 	instance_pre: Arc<wasmtime::InstancePre<StoreData>>,
 	instantiation_strategy: InternalInstantiationStrategy,
-	config: Config,
 }
 
 impl WasmModule for WasmtimeRuntime {
@@ -163,7 +161,6 @@ impl WasmModule for WasmtimeRuntime {
 			InternalInstantiationStrategy::Builtin => Strategy::RecreateInstance(InstanceCreator {
 				engine: self.engine.clone(),
 				instance_pre: self.instance_pre.clone(),
-				max_memory_size: None,
 			}),
 		};
 
@@ -677,7 +674,6 @@ where
 		engine,
 		instance_pre: Arc::new(instance_pre),
 		instantiation_strategy,
-		config,
 	})
 }
 
