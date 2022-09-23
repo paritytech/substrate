@@ -88,7 +88,7 @@ pub struct TransactionDropped {
 /// 		- `Error`
 ///
 /// The subscription's stream is considered finished whenever the following events are
-/// received: `Finalized`, `Error`, `Invalid` or `Dropped. However, the user is allowed
+/// received: `Finalized`, `Error`, `Invalid` or `Dropped`. However, the user is allowed
 /// to unsubscribe at any moment.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 // We need to manually specify the trait bounds for the `Hash` trait to ensure `into` and
@@ -110,7 +110,7 @@ pub enum TransactionEvent<Hash> {
 	/// This may contain `None` if the block is no longer a best
 	/// block of the chain.
 	BestChainBlockIncluded(Option<TransactionBlock<Hash>>),
-	/// The transaction was included in a finialized block.
+	/// The transaction was included in a finalized block.
 	Finalized(TransactionBlock<Hash>),
 	/// The transaction could not be processed due to an error.
 	Error(TransactionError),
@@ -125,7 +125,7 @@ pub enum TransactionEvent<Hash> {
 ///
 /// The block events require a JSON compatible interpretation similar to:
 ///
-/// ```sh
+/// ```json
 /// { event: "EVENT", block: { hash: "0xFF", index: 0 } }
 /// ```
 ///
@@ -147,7 +147,7 @@ pub(crate) enum TransactionEventBlock<Hash> {
 ///
 /// The non-block events require a JSON compatible interpretation similar to:
 ///
-/// ```sh
+/// ```json
 /// { event: "EVENT", num_peers: 0 }
 /// ```
 ///
