@@ -71,7 +71,7 @@ pub trait PalletsInfoAccess {
 	///
 	/// You probably don't want this function but `infos()` instead.
 	fn count() -> usize {
-		// for backwards compatibility with XCM-3, Mark is deprecated.
+		// for backwards compatibility with XCM-3, Mark as deprecated.
 		Self::infos().len()
 	}
 

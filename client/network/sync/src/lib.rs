@@ -80,6 +80,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
+use warp::TargetBlockImportResult;
 
 mod extra_requests;
 
@@ -315,6 +316,8 @@ pub enum PeerSyncState<B: BlockT> {
 	DownloadingState,
 	/// Downloading warp proof.
 	DownloadingWarpProof,
+	/// Downloading warp sync target block.
+	DownloadingWarpTargetBlock,
 	/// Actively downloading block history after warp sync.
 	DownloadingGap(NumberFor<B>),
 }
@@ -659,10 +662,11 @@ where
 	}
 
 	fn block_requests(&mut self) -> Box<dyn Iterator<Item = (&PeerId, BlockRequest<B>)> + '_> {
-		if self.allowed_requests.is_empty() ||
-			self.state_sync.is_some() ||
-			self.mode == SyncMode::Warp
-		{
+		if self.mode == SyncMode::Warp {
+			return Box::new(std::iter::once(self.warp_target_block_request()).flatten())
+		}
+
+		if self.allowed_requests.is_empty() || self.state_sync.is_some() {
 			return Box::new(std::iter::empty())
 		}
 
@@ -824,7 +828,7 @@ where
 				// Only one pending state request is allowed.
 				return None
 			}
-			if let Some(request) = sync.next_warp_poof_request() {
+			if let Some(request) = sync.next_warp_proof_request() {
 				let mut targets: Vec<_> = self.peers.values().map(|p| p.best_number).collect();
 				if !targets.is_empty() {
 					targets.sort();
@@ -1031,6 +1035,40 @@ where
 							Vec::new()
 						}
 					},
+					PeerSyncState::DownloadingWarpTargetBlock => {
+						peer.state = PeerSyncState::Available;
+						if let Some(warp_sync) = &mut self.warp_sync {
+							if blocks.len() == 1 {
+								validate_blocks::<B>(&blocks, who, Some(request))?;
+								match warp_sync.import_target_block(
+									blocks.pop().expect("`blocks` len checked above."),
+								) {
+									TargetBlockImportResult::Success =>
+										return Ok(OnBlockData::Continue),
+									TargetBlockImportResult::BadResponse =>
+										return Err(BadPeer(*who, rep::VERIFICATION_FAIL)),
+								}
+							} else if blocks.is_empty() {
+								debug!(target: "sync", "Empty block response from {}", who);
+								return Err(BadPeer(*who, rep::NO_BLOCK))
+							} else {
+								debug!(
+									target: "sync",
+									"Too many blocks ({}) in warp target block response from {}",
+									blocks.len(),
+									who,
+								);
+								return Err(BadPeer(*who, rep::NOT_REQUESTED))
+							}
+						} else {
+							debug!(
+								target: "sync",
+								"Logic error: we think we are downloading warp target block from {}, but no warp sync is happening.",
+								who,
+							);
+							return Ok(OnBlockData::Continue)
+						}
+					},
 					PeerSyncState::Available |
 					PeerSyncState::DownloadingJustification(..) |
 					PeerSyncState::DownloadingState |
@@ -1112,14 +1150,14 @@ where
 		};
 
 		match import_result {
-			state::ImportResult::Import(hash, header, state) => {
+			state::ImportResult::Import(hash, header, state, body, justifications) => {
 				let origin = BlockOrigin::NetworkInitialSync;
 				let block = IncomingBlock {
 					hash,
 					header: Some(header),
-					body: None,
+					body,
 					indexed_body: None,
-					justifications: None,
+					justifications,
 					origin: None,
 					allow_missing_state: true,
 					import_existing: true,
@@ -1399,8 +1437,13 @@ where
 							number,
 							hash,
 						);
-						self.state_sync =
-							Some(StateSync::new(self.client.clone(), header, *skip_proofs));
+						self.state_sync = Some(StateSync::new(
+							self.client.clone(),
+							header,
+							None,
+							None,
+							*skip_proofs,
+						));
 						self.allowed_requests.set_all();
 					}
 				}
@@ -2162,6 +2205,33 @@ where
 				}
 			})
 			.collect()
+	}
+
+	/// Generate block request for downloading of the target block body during warp sync.
+	fn warp_target_block_request(&mut self) -> Option<(&PeerId, BlockRequest<B>)> {
+		if let Some(sync) = &self.warp_sync {
+			if self.allowed_requests.is_empty() ||
+				sync.is_complete() ||
+				self.peers
+					.iter()
+					.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpTargetBlock)
+			{
+				// Only one pending warp target block request is allowed.
+				return None
+			}
+			if let Some((target_number, request)) = sync.next_target_block_request() {
+				// Find a random peer that has a block with the target number.
+				for (id, peer) in self.peers.iter_mut() {
+					if peer.state.is_available() && peer.best_number >= target_number {
+						trace!(target: "sync", "New warp target block request for {}", id);
+						peer.state = PeerSyncState::DownloadingWarpTargetBlock;
+						self.allowed_requests.clear();
+						return Some((id, request))
+					}
+				}
+			}
+		}
+		None
 	}
 }
 

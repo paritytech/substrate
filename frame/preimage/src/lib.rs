@@ -41,10 +41,10 @@ use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
+	dispatch::Pays,
 	ensure,
 	pallet_prelude::Get,
 	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency},
-	weights::Pays,
 	BoundedVec,
 };
 use scale_info::TypeInfo;
@@ -76,7 +76,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The Weight information for this pallet.
 		type WeightInfo: weights::WeightInfo;
@@ -86,7 +86,7 @@ pub mod pallet {
 
 		/// An origin that can request a preimage be placed on-chain without a deposit or fee, or
 		/// manage existing preimages.
-		type ManagerOrigin: EnsureOrigin<Self::Origin>;
+		type ManagerOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Max size allowed for a preimage.
 		type MaxSize: Get<u32>;
@@ -191,7 +191,9 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Ensure that the origin is either the `ManagerOrigin` or a signed origin.
-	fn ensure_signed_or_manager(origin: T::Origin) -> Result<Option<T::AccountId>, BadOrigin> {
+	fn ensure_signed_or_manager(
+		origin: T::RuntimeOrigin,
+	) -> Result<Option<T::AccountId>, BadOrigin> {
 		if T::ManagerOrigin::ensure_origin(origin.clone()).is_ok() {
 			return Ok(None)
 		}

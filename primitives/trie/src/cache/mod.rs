@@ -593,26 +593,35 @@ mod tests {
 			.map(|d| d.0)
 			.all(|l| TEST_DATA.iter().any(|d| l.storage_key().unwrap() == d.0)));
 
-		{
-			let local_cache = shared_cache.local_cache();
+		// Run this in a loop. The first time we check that with the filled value cache,
+		// the expected values are at the top of the LRU.
+		// The second run is using an empty value cache to ensure that we access the nodes.
+		for _ in 0..2 {
+			{
+				let local_cache = shared_cache.local_cache();
 
-			let mut cache = local_cache.as_trie_db_cache(root);
-			let trie = TrieDBBuilder::<Layout>::new(&db, &root).with_cache(&mut cache).build();
+				let mut cache = local_cache.as_trie_db_cache(root);
+				let trie = TrieDBBuilder::<Layout>::new(&db, &root).with_cache(&mut cache).build();
 
-			for (k, _) in TEST_DATA.iter().take(2) {
-				trie.get(k).unwrap().unwrap();
+				for (k, _) in TEST_DATA.iter().take(2) {
+					trie.get(k).unwrap().unwrap();
+				}
 			}
-		}
 
-		// Ensure that the accessed items are most recently used items of the shared value cache.
-		assert!(shared_cache
-			.read_lock_inner()
-			.value_cache()
-			.lru
-			.iter()
-			.take(2)
-			.map(|d| d.0)
-			.all(|l| { TEST_DATA.iter().take(2).any(|d| l.storage_key().unwrap() == d.0) }));
+			// Ensure that the accessed items are most recently used items of the shared value
+			// cache.
+			assert!(shared_cache
+				.read_lock_inner()
+				.value_cache()
+				.lru
+				.iter()
+				.take(2)
+				.map(|d| d.0)
+				.all(|l| { TEST_DATA.iter().take(2).any(|d| l.storage_key().unwrap() == d.0) }));
+
+			// Delete the value cache, so that we access the nodes.
+			shared_cache.reset_value_cache();
+		}
 
 		let most_recently_used_nodes = shared_cache
 			.read_lock_inner()
@@ -621,9 +630,6 @@ mod tests {
 			.iter()
 			.map(|d| *d.0)
 			.collect::<Vec<_>>();
-
-		// Delete the value cache, so that we access the nodes.
-		shared_cache.reset_value_cache();
 
 		{
 			let local_cache = shared_cache.local_cache();

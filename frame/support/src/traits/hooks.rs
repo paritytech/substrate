@@ -17,9 +17,13 @@
 
 //! Traits for hooking tasks to events in a blockchain's lifecycle.
 
+use crate::weights::Weight;
 use impl_trait_for_tuples::impl_for_tuples;
-use sp_arithmetic::traits::Saturating;
 use sp_runtime::traits::AtLeast32BitUnsigned;
+use sp_std::prelude::*;
+
+#[cfg(feature = "try-runtime")]
+use codec::{Decode, Encode};
 
 /// The block initialization trait.
 ///
@@ -33,8 +37,8 @@ pub trait OnInitialize<BlockNumber> {
 	/// NOTE: This function is called BEFORE ANY extrinsic in a block is applied,
 	/// including inherent extrinsics. Hence for instance, if you runtime includes
 	/// `pallet_timestamp`, the `timestamp` is not yet up to date at this point.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
-		0
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Weight::zero()
 	}
 }
 
@@ -42,8 +46,8 @@ pub trait OnInitialize<BlockNumber> {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Clone> OnInitialize<BlockNumber> for Tuple {
-	fn on_initialize(n: BlockNumber) -> crate::weights::Weight {
-		let mut weight = 0;
+	fn on_initialize(n: BlockNumber) -> Weight {
+		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_initialize(n.clone())); )* );
 		weight
 	}
@@ -75,11 +79,8 @@ pub trait OnIdle<BlockNumber> {
 	///
 	/// NOTE: This function is called AFTER ALL extrinsics - including inherent extrinsics -
 	/// in a block are applied but before `on_finalize` is executed.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight,
-	) -> crate::weights::Weight {
-		0
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
+		Weight::zero()
 	}
 }
 
@@ -87,20 +88,18 @@ pub trait OnIdle<BlockNumber> {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl<BlockNumber: Copy + AtLeast32BitUnsigned> OnIdle<BlockNumber> for Tuple {
-	fn on_idle(n: BlockNumber, remaining_weight: crate::weights::Weight) -> crate::weights::Weight {
-		let on_idle_functions: &[fn(
-			BlockNumber,
-			crate::weights::Weight,
-		) -> crate::weights::Weight] = &[for_tuples!( #( Tuple::on_idle ),* )];
-		let mut weight = 0;
+	fn on_idle(n: BlockNumber, remaining_weight: Weight) -> Weight {
+		let on_idle_functions: &[fn(BlockNumber, Weight) -> Weight] =
+			&[for_tuples!( #( Tuple::on_idle ),* )];
+		let mut weight = Weight::zero();
 		let len = on_idle_functions.len();
 		let start_index = n % (len as u32).into();
 		let start_index = start_index.try_into().ok().expect(
 			"`start_index % len` always fits into `usize`, because `len` can be in maximum `usize::MAX`; qed"
 		);
-		for on_idle in on_idle_functions.iter().cycle().skip(start_index).take(len) {
+		for on_idle_fn in on_idle_functions.iter().cycle().skip(start_index).take(len) {
 			let adjusted_remaining_weight = remaining_weight.saturating_sub(weight);
-			weight = weight.saturating_add(on_idle(n, adjusted_remaining_weight));
+			weight = weight.saturating_add(on_idle_fn(n, adjusted_remaining_weight));
 		}
 		weight
 	}
@@ -119,47 +118,6 @@ pub trait OnGenesis {
 	fn on_genesis() {}
 }
 
-/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
-#[cfg(feature = "try-runtime")]
-pub const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
-
-/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
-#[cfg(feature = "try-runtime")]
-pub trait OnRuntimeUpgradeHelpersExt {
-	/// Generate a storage key unique to this runtime upgrade.
-	///
-	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
-	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
-	#[cfg(feature = "try-runtime")]
-	fn storage_key(ident: &str) -> [u8; 32] {
-		crate::storage::storage_prefix(ON_RUNTIME_UPGRADE_PREFIX, ident.as_bytes())
-	}
-
-	/// Get temporary storage data written by [`Self::set_temp_storage`].
-	///
-	/// Returns `None` if either the data is unavailable or un-decodable.
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
-	#[cfg(feature = "try-runtime")]
-	fn get_temp_storage<T: codec::Decode>(at: &str) -> Option<T> {
-		sp_io::storage::get(&Self::storage_key(at))
-			.and_then(|bytes| codec::Decode::decode(&mut &*bytes).ok())
-	}
-
-	/// Write some temporary data to a specific storage that can be read (potentially in
-	/// post-upgrade hook) via [`Self::get_temp_storage`].
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being written
-	/// to.
-	#[cfg(feature = "try-runtime")]
-	fn set_temp_storage<T: codec::Encode>(data: T, at: &str) {
-		sp_io::storage::set(&Self::storage_key(at), &data.encode());
-	}
-}
-
-#[cfg(feature = "try-runtime")]
-impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
-
 /// The runtime upgrade trait.
 ///
 /// Implementing this lets you express what should happen when the runtime upgrades,
@@ -174,23 +132,31 @@ pub trait OnRuntimeUpgrade {
 	/// block local data are not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+	fn on_runtime_upgrade() -> Weight {
+		Weight::zero()
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
+	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
+	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
+	/// should be returned if there is no such need.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
+	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
+	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
+	/// be passed in, in such case `post_upgrade` should ignore it.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 }
@@ -199,24 +165,28 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		let mut weight = 0;
+	fn on_runtime_upgrade() -> Weight {
+		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
 		weight
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::pre_upgrade()); )* );
-		result
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		let mut state: Vec<Vec<u8>> = Vec::default();
+		for_tuples!( #( state.push(Tuple::pre_upgrade()?); )* );
+		Ok(state.encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
-		result
+	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+		let state: Vec<Vec<u8>> = Decode::decode(&mut state.as_slice())
+			.expect("the state parameter should be the same as pre_upgrade generated");
+		let mut state_iter = state.into_iter();
+		for_tuples!( #( Tuple::post_upgrade(
+			state_iter.next().expect("the state parameter should be the same as pre_upgrade generated")
+		)?; )* );
+		Ok(())
 	}
 }
 
@@ -243,18 +213,15 @@ pub trait Hooks<BlockNumber> {
 	/// Will not fire if the remaining weight is 0.
 	/// Return the weight used, the hook will subtract it from current weight used
 	/// and pass the result to the next `on_idle` hook if it exists.
-	fn on_idle(
-		_n: BlockNumber,
-		_remaining_weight: crate::weights::Weight,
-	) -> crate::weights::Weight {
-		0
+	fn on_idle(_n: BlockNumber, _remaining_weight: Weight) -> Weight {
+		Weight::zero()
 	}
 
 	/// The block is being initialized. Implement to have something happen.
 	///
 	/// Return the non-negotiable weight consumed in the block.
-	fn on_initialize(_n: BlockNumber) -> crate::weights::Weight {
-		0
+	fn on_initialize(_n: BlockNumber) -> Weight {
+		Weight::zero()
 	}
 
 	/// Perform a module upgrade.
@@ -276,23 +243,40 @@ pub trait Hooks<BlockNumber> {
 	/// pallet is discouraged and might get deprecated in the future. Alternatively, export the same
 	/// logic as a free-function from your pallet, and pass it to `type Executive` from the
 	/// top-level runtime.
-	fn on_runtime_upgrade() -> crate::weights::Weight {
-		0
+	fn on_runtime_upgrade() -> Weight {
+		Weight::zero()
+	}
+
+	/// Execute the sanity checks of this pallet, per block.
+	///
+	/// It should focus on certain checks to ensure that the state is sensible. This is never
+	/// executed in a consensus code-path, therefore it can consume as much weight as it needs.
+	#[cfg(feature = "try-runtime")]
+	fn try_state(_n: BlockNumber) -> Result<(), &'static str> {
+		Ok(())
 	}
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
+	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
+	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
+	/// should be returned if there is no such need.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
+	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
+	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
+	/// be passed in, in such case `post_upgrade` should ignore it.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -360,18 +344,18 @@ mod tests {
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
 		struct Test;
 		impl OnInitialize<u8> for Test {
-			fn on_initialize(_n: u8) -> crate::weights::Weight {
-				10
+			fn on_initialize(_n: u8) -> Weight {
+				Weight::from_ref_time(10)
 			}
 		}
 		impl OnRuntimeUpgrade for Test {
-			fn on_runtime_upgrade() -> crate::weights::Weight {
-				20
+			fn on_runtime_upgrade() -> Weight {
+				Weight::from_ref_time(20)
 			}
 		}
 
-		assert_eq!(<(Test, Test)>::on_initialize(0), 20);
-		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), 40);
+		assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
+		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
 	}
 
 	#[test]
@@ -383,50 +367,140 @@ mod tests {
 		struct Test3;
 		type TestTuple = (Test1, Test2, Test3);
 		impl OnIdle<u32> for Test1 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test1");
 				}
-				0
+				Weight::zero()
 			}
 		}
 		impl OnIdle<u32> for Test2 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test2");
 				}
-				0
+				Weight::zero()
 			}
 		}
 		impl OnIdle<u32> for Test3 {
-			fn on_idle(_n: u32, _weight: crate::weights::Weight) -> crate::weights::Weight {
+			fn on_idle(_n: u32, _weight: Weight) -> Weight {
 				unsafe {
 					ON_IDLE_INVOCATION_ORDER.push("Test3");
 				}
-				0
+				Weight::zero()
 			}
 		}
 
 		unsafe {
-			TestTuple::on_idle(0, 0);
+			TestTuple::on_idle(0, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(1, 0);
+			TestTuple::on_idle(1, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(2, 0);
+			TestTuple::on_idle(2, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test3", "Test1", "Test2"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(3, 0);
+			TestTuple::on_idle(3, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test1", "Test2", "Test3"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 
-			TestTuple::on_idle(4, 0);
+			TestTuple::on_idle(4, Weight::zero());
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	#[test]
+	fn on_runtime_upgrade_tuple() {
+		struct Test1;
+		struct Test2;
+		struct Test3;
+
+		impl OnRuntimeUpgrade for Test1 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok("Test1".encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: String = Decode::decode(&mut state.as_slice()).unwrap();
+				assert_eq!(s, "Test1");
+				Ok(())
+			}
+		}
+		impl OnRuntimeUpgrade for Test2 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok(100u32.encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: u32 = Decode::decode(&mut state.as_slice()).unwrap();
+				assert_eq!(s, 100);
+				Ok(())
+			}
+		}
+		impl OnRuntimeUpgrade for Test3 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok(true.encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: bool = Decode::decode(&mut state.as_slice()).unwrap();
+				assert_eq!(s, true);
+				Ok(())
+			}
+		}
+
+		type TestEmpty = ();
+		let origin_state = <TestEmpty as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert!(states.is_empty());
+		<TestEmpty as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+
+		type Test1Tuple = (Test1,);
+		let origin_state = <Test1Tuple as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert_eq!(states.len(), 1);
+		assert_eq!(
+			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
+			"Test1".to_owned()
+		);
+		<Test1Tuple as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+
+		type Test123 = (Test1, Test2, Test3);
+		let origin_state = <Test123 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert_eq!(
+			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
+			"Test1".to_owned()
+		);
+		assert_eq!(<u32 as Decode>::decode(&mut states[1].as_slice()).unwrap(), 100u32);
+		assert_eq!(<bool as Decode>::decode(&mut states[2].as_slice()).unwrap(), true);
+		<Test123 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+
+		type Test321 = (Test3, Test2, Test1);
+		let origin_state = <Test321 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert_eq!(<bool as Decode>::decode(&mut states[0].as_slice()).unwrap(), true);
+		assert_eq!(<u32 as Decode>::decode(&mut states[1].as_slice()).unwrap(), 100u32);
+		assert_eq!(
+			<String as Decode>::decode(&mut states[2].as_slice()).unwrap(),
+			"Test1".to_owned()
+		);
+		<Test321 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+
+		type TestNested123 = (Test1, (Test2, Test3));
+		let origin_state = <TestNested123 as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let states: Vec<Vec<u8>> = Decode::decode(&mut origin_state.as_slice()).unwrap();
+		assert_eq!(
+			<String as Decode>::decode(&mut states[0].as_slice()).unwrap(),
+			"Test1".to_owned()
+		);
+		// nested state for (Test2, Test3)
+		let nested_states: Vec<Vec<u8>> = Decode::decode(&mut states[1].as_slice()).unwrap();
+		assert_eq!(<u32 as Decode>::decode(&mut nested_states[0].as_slice()).unwrap(), 100u32);
+		assert_eq!(<bool as Decode>::decode(&mut nested_states[1].as_slice()).unwrap(), true);
+		<TestNested123 as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
 	}
 }

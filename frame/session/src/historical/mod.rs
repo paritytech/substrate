@@ -375,7 +375,7 @@ impl<T: Config, D: AsRef<[u8]>> KeyOwnerProofSystem<(KeyTypeId, D)> for Pallet<T
 pub(crate) mod tests {
 	use super::*;
 	use crate::mock::{
-		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
+		force_new_session, set_next_validators, NextValidators, Session, System, Test,
 	};
 
 	use sp_runtime::{key_types::DUMMY, testing::UintAuthorityId};
@@ -389,9 +389,11 @@ pub(crate) mod tests {
 
 	pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 		let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-		let keys: Vec<_> = NEXT_VALIDATORS.with(|l| {
-			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-		});
+		let keys: Vec<_> = NextValidators::get()
+			.iter()
+			.cloned()
+			.map(|i| (i, i, UintAuthorityId(i).into()))
+			.collect();
 		BasicExternalities::execute_with_storage(&mut t, || {
 			for (ref k, ..) in &keys {
 				frame_system::Pallet::<Test>::inc_providers(k);

@@ -28,7 +28,7 @@ mod no_instance {
 	pub trait Config: frame_support_test::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=frame_support_test {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
 	}
 
 	frame_support::decl_storage! {
@@ -53,7 +53,7 @@ mod instance {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance = DefaultInstance>
-			for enum Call where origin: T::Origin, system=frame_support_test {}
+			for enum Call where origin: T::RuntimeOrigin, system=frame_support_test {}
 	}
 
 	frame_support::decl_storage! {

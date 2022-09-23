@@ -16,11 +16,10 @@
 // limitations under the License.
 
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
+	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, UnfilteredDispatchable},
 	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
@@ -42,7 +41,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type MyGetParam: Get<u32>;
 		type Balance: Parameter + Default + scale_info::StaticTypeInfo;
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -54,10 +54,10 @@ pub mod pallet {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(10));
-				10
+				Weight::from_ref_time(10)
 			} else {
 				Self::deposit_event(Event::Something(11));
-				11
+				Weight::from_ref_time(11)
 			}
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
@@ -70,10 +70,10 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(30));
-				30
+				Weight::from_ref_time(30)
 			} else {
 				Self::deposit_event(Event::Something(31));
-				31
+				Weight::from_ref_time(31)
 			}
 		}
 		fn integrity_test() {}
@@ -82,7 +82,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
-		#[pallet::weight(Weight::from(*_foo))]
+		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -253,7 +253,8 @@ pub mod pallet2 {
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]
@@ -285,16 +286,16 @@ pub mod pallet2 {
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -310,25 +311,25 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance1> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet2::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 }
 impl pallet2::Config<pallet::Instance1> for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -345,12 +346,18 @@ frame_support::construct_runtime!(
 	}
 );
 
+use frame_support::weights::Weight;
+
 #[test]
 fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo {
+			weight: Weight::from_ref_time(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		}
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_storage_layer"]);
@@ -358,7 +365,11 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo { foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
+		DispatchInfo {
+			weight: Weight::from_ref_time(3),
+			class: DispatchClass::Normal,
+			pays_fee: Pays::Yes
+		}
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
@@ -423,7 +434,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Example(pallet::Event::Something(3)),
+			RuntimeEvent::Example(pallet::Event::Something(3)),
 		);
 	});
 
@@ -434,7 +445,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Instance1Example(pallet::Event::Something(3)),
+			RuntimeEvent::Instance1Example(pallet::Event::Something(3)),
 		);
 	});
 }
@@ -651,34 +662,34 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 21);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(21));
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 61);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(61));
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Example(pallet::Event::Something(10)),
+			RuntimeEvent::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Instance1Example(pallet::Event::Something(11)),
+			RuntimeEvent::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::Example(pallet::Event::Something(20)),
+			RuntimeEvent::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			Event::Instance1Example(pallet::Event::Something(21)),
+			RuntimeEvent::Instance1Example(pallet::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::Example(pallet::Event::Something(30)),
+			RuntimeEvent::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::Instance1Example(pallet::Event::Something(31)),
+			RuntimeEvent::Instance1Example(pallet::Event::Something(31)),
 		);
 	})
 }

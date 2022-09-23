@@ -31,7 +31,7 @@ use frame_system::Pallet as System;
 
 const BLOCK_NUMBER: u32 = 2;
 
-type SystemOrigin<T> = <T as frame_system::Config>::Origin;
+type SystemOrigin<T> = <T as frame_system::Config>::RuntimeOrigin;
 
 /// Add `n` named items to the schedule.
 ///
@@ -77,9 +77,9 @@ fn fill_schedule<T: Config>(
 	Ok(())
 }
 
-fn call_and_hash<T: Config>(i: u32) -> (<T as Config>::Call, T::Hash) {
+fn call_and_hash<T: Config>(i: u32) -> (<T as Config>::RuntimeCall, T::Hash) {
 	// Essentially a no-op call.
-	let call: <T as Config>::Call = frame_system::Call::remark { remark: i.encode() }.into();
+	let call: <T as Config>::RuntimeCall = frame_system::Call::remark { remark: i.encode() }.into();
 	let hash = T::Hashing::hash_of(&call);
 	(call, hash)
 }

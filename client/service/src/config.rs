@@ -262,31 +262,43 @@ impl Default for RpcMethods {
 	}
 }
 
-/// The base path that is used for everything that needs to be write on disk to run a node.
+#[static_init::dynamic(drop, lazy)]
+static mut BASE_PATH_TEMP: Option<TempDir> = None;
+
+/// The base path that is used for everything that needs to be written on disk to run a node.
 #[derive(Debug)]
-pub enum BasePath {
-	/// A temporary directory is used as base path and will be deleted when dropped.
-	Temporary(TempDir),
-	/// A path on the disk.
-	Permanenent(PathBuf),
+pub struct BasePath {
+	path: PathBuf,
 }
 
 impl BasePath {
 	/// Create a `BasePath` instance using a temporary directory prefixed with "substrate" and use
 	/// it as base path.
 	///
-	/// Note: the temporary directory will be created automatically and deleted when the `BasePath`
-	/// instance is dropped.
+	/// Note: The temporary directory will be created automatically and deleted when the program
+	/// exits. Every call to this function will return the same path for the lifetime of the
+	/// program.
 	pub fn new_temp_dir() -> io::Result<BasePath> {
-		Ok(BasePath::Temporary(tempfile::Builder::new().prefix("substrate").tempdir()?))
+		let mut temp = BASE_PATH_TEMP.write();
+
+		match &*temp {
+			Some(p) => Ok(Self::new(p.path())),
+			None => {
+				let temp_dir = tempfile::Builder::new().prefix("substrate").tempdir()?;
+				let path = PathBuf::from(temp_dir.path());
+
+				*temp = Some(temp_dir);
+				Ok(Self::new(path))
+			},
+		}
 	}
 
 	/// Create a `BasePath` instance based on an existing path on disk.
 	///
 	/// Note: this function will not ensure that the directory exist nor create the directory. It
 	/// will also not delete the directory when the instance is dropped.
-	pub fn new<P: AsRef<Path>>(path: P) -> BasePath {
-		BasePath::Permanenent(path.as_ref().to_path_buf())
+	pub fn new<P: Into<PathBuf>>(path: P) -> BasePath {
+		Self { path: path.into() }
 	}
 
 	/// Create a base path from values describing the project.
@@ -300,10 +312,7 @@ impl BasePath {
 
 	/// Retrieve the base path.
 	pub fn path(&self) -> &Path {
-		match self {
-			BasePath::Temporary(temp_dir) => temp_dir.path(),
-			BasePath::Permanenent(path) => path.as_path(),
-		}
+		&self.path
 	}
 
 	/// Returns the configuration directory inside this base path.

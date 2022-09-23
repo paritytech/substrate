@@ -79,6 +79,12 @@ pub struct StorageParams {
 	#[clap(long)]
 	pub template_path: Option<PathBuf>,
 
+	/// Add a header to the generated weight output file.
+	///
+	/// Good for adding LICENSE headers.
+	#[clap(long, value_name = "PATH")]
+	pub header: Option<PathBuf>,
+
 	/// Path to write the raw 'read' results in JSON format to. Can be a file or directory.
 	#[clap(long)]
 	pub json_read_path: Option<PathBuf>,
@@ -99,8 +105,14 @@ pub struct StorageParams {
 	/// Trie cache size in bytes.
 	///
 	/// Providing `0` will disable the cache.
-	#[clap(long, default_value = "1024")]
+	#[clap(long, value_name = "Bytes", default_value = "67108864")]
 	pub trie_cache_size: usize,
+
+	/// Enable the Trie cache.
+	///
+	/// This should only be used for performance analysis and not for final results.
+	#[clap(long)]
+	pub enable_trie_cache: bool,
 
 	/// Include child trees in benchmark.
 	#[clap(long)]
@@ -122,7 +134,7 @@ impl StorageCmd {
 		Block: BlockT<Hash = DbHash>,
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 	{
-		let mut template = TemplateData::new(&cfg, &self.params);
+		let mut template = TemplateData::new(&cfg, &self.params)?;
 
 		let block_id = BlockId::<Block>::Number(client.usage_info().chain.best_number);
 		template.set_block_number(block_id.to_string());
@@ -214,10 +226,10 @@ impl CliConfiguration for StorageCmd {
 	}
 
 	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
-		if self.params.trie_cache_size == 0 {
-			Ok(None)
-		} else {
+		if self.params.enable_trie_cache && self.params.trie_cache_size > 0 {
 			Ok(Some(self.params.trie_cache_size))
+		} else {
+			Ok(None)
 		}
 	}
 }

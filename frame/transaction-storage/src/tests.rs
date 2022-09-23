@@ -95,7 +95,7 @@ fn checks_proof() {
 		let proof =
 			build_proof(parent_hash.as_ref(), vec![vec![0u8; MAX_DATA_SIZE as usize]]).unwrap();
 		assert_noop!(
-			TransactionStorage::<Test>::check_proof(Origin::none(), proof,),
+			TransactionStorage::<Test>::check_proof(RuntimeOrigin::none(), proof,),
 			Error::<Test>::UnexpectedProof,
 		);
 		run_to_block(11, || None);
@@ -103,13 +103,13 @@ fn checks_proof() {
 
 		let invalid_proof = build_proof(parent_hash.as_ref(), vec![vec![0u8; 1000]]).unwrap();
 		assert_noop!(
-			TransactionStorage::<Test>::check_proof(Origin::none(), invalid_proof,),
+			TransactionStorage::<Test>::check_proof(RuntimeOrigin::none(), invalid_proof,),
 			Error::<Test>::InvalidProof,
 		);
 
 		let proof =
 			build_proof(parent_hash.as_ref(), vec![vec![0u8; MAX_DATA_SIZE as usize]]).unwrap();
-		assert_ok!(TransactionStorage::<Test>::check_proof(Origin::none(), proof));
+		assert_ok!(TransactionStorage::<Test>::check_proof(RuntimeOrigin::none(), proof));
 	});
 }
 
