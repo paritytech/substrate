@@ -435,6 +435,23 @@ mod tests {
 		}
 	}
 
+	#[test]
+	fn on_runtime_upgrade_tuple_no_try_runtime() {
+		struct Test1;
+
+		impl OnRuntimeUpgrade for Test1 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				panic!("should not be called")
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				panic!("should not be called")
+			}
+		}
+
+		type Test1Tuple = (Test1,);
+		<Test1Tuple as OnRuntimeUpgrade>::on_runtime_upgrade();
+	}
+
 	#[cfg(feature = "try-runtime")]
 	#[test]
 	fn on_runtime_upgrade_tuple() {
@@ -449,6 +466,8 @@ mod tests {
 			static Test1Assertions: u8 = 0;
 			static Test2Assertions: u8 = 0;
 			static Test3Assertions: u8 = 0;
+			static EnableSequentialTest: bool = false;
+			static SequentialAssertions: u8 = 0;
 		}
 
 		impl OnRuntimeUpgrade for Test1 {
@@ -458,10 +477,14 @@ mod tests {
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: String = Decode::decode(&mut state.as_slice()).unwrap();
 				Test1Assertions::mutate(|val| *val += 1);
+				if EnableSequentialTest::get() {
+					SequentialAssertions::mutate(|val| *val += 1);
+				}
 				assert_eq!(s, "Test1");
 				Ok(())
 			}
 		}
+
 		impl OnRuntimeUpgrade for Test2 {
 			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 				Ok(100u32.encode())
@@ -469,10 +492,15 @@ mod tests {
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: u32 = Decode::decode(&mut state.as_slice()).unwrap();
 				Test2Assertions::mutate(|val| *val += 1);
+				if EnableSequentialTest::get() {
+					assert_eq!(SequentialAssertions::get(), 1);
+					SequentialAssertions::mutate(|val| *val += 1);
+				}
 				assert_eq!(s, 100);
 				Ok(())
 			}
 		}
+
 		impl OnRuntimeUpgrade for Test3 {
 			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 				Ok(true.encode())
@@ -480,6 +508,10 @@ mod tests {
 			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
 				let s: bool = Decode::decode(&mut state.as_slice()).unwrap();
 				Test3Assertions::mutate(|val| *val += 1);
+				if EnableSequentialTest::get() {
+					assert_eq!(SequentialAssertions::get(), 2);
+					SequentialAssertions::mutate(|val| *val += 1);
+				}
 				assert_eq!(s, true);
 				Ok(())
 			}
@@ -505,11 +537,17 @@ mod tests {
 			assert_eq!(Test2Assertions::take(), 1);
 			assert_eq!(Test3Assertions::take(), 1);
 
+			// enable sequential tests
+			EnableSequentialTest::mutate(|val| *val = true);
+
 			type Test321 = (Test3, Test2, Test1);
 			<Test321 as OnRuntimeUpgrade>::on_runtime_upgrade();
 			assert_eq!(Test1Assertions::take(), 1);
 			assert_eq!(Test2Assertions::take(), 1);
 			assert_eq!(Test3Assertions::take(), 1);
+
+			// reset assertions
+			SequentialAssertions::take();
 
 			type TestNested123 = (Test1, (Test2, Test3));
 			<TestNested123 as OnRuntimeUpgrade>::on_runtime_upgrade();
