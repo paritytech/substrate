@@ -88,7 +88,7 @@ use frame_support::{
 	Parameter, storage,
 	traits::{
 		SortedMembers, Get, PalletInfo, OnNewAccount, OnKilledAccount, HandleLifetime,
-		StoredMap, EnsureOrigin, OriginTrait, Filter,
+		StoredMap, EnsureOrigin, OriginTrait, Filter, MaxEncodedLen,
 	},
 	weights::{
 		Weight, RuntimeDbWeight, DispatchInfo, DispatchClass,
@@ -194,19 +194,20 @@ pub mod pallet {
 		type BlockNumber:
 			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay +
 			AtLeast32BitUnsigned + Default + Bounded + Copy + sp_std::hash::Hash +
-			sp_std::str::FromStr + MaybeMallocSizeOf;
+			sp_std::str::FromStr + MaybeMallocSizeOf + MaxEncodedLen;
 
 		/// The output of the `Hashing` function.
 		type Hash:
 			Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + SimpleBitOps + Ord
-			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]> + MaybeMallocSizeOf;
+			+ Default + Copy + CheckEqual + sp_std::hash::Hash + AsRef<[u8]> + AsMut<[u8]>
+			+ MaybeMallocSizeOf + MaxEncodedLen;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
 		type Hashing: Hash<Output=Self::Hash>;
 
 		/// The user account identifier type for the runtime.
 		type AccountId: Parameter + Member + MaybeSerializeDeserialize + Debug + MaybeDisplay + Ord
-			+ Default;
+			+ Default + MaxEncodedLen;
 
 		/// Converting trait to take a source type and convert to `AccountId`.
 		///

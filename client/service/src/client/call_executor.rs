@@ -220,7 +220,7 @@ where
 						Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof) as Box<dyn sp_state_machine::Error>
 					)?;
 
-				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&trie_state);
+				let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_state);
 				// It is important to extract the runtime code here before we create the proof
 				// recorder.
 				let runtime_code = state_runtime_code.runtime_code()

@@ -1517,6 +1517,9 @@ impl<B: BlockT> NetworkBehaviour for Protocol<B> {
 						);
 						CustomMessageOutcome::None
 					}
+					_ if self.bad_handshake_substreams.contains(&(peer_id.clone(), set_id)) => {
+						CustomMessageOutcome::None
+					}
 					_ => {
 						let protocol_name = self.notification_protocols[usize::from(set_id) - NUM_HARDCODED_PEERSETS].clone();
 						CustomMessageOutcome::NotificationsReceived {

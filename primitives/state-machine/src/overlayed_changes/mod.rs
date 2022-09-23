@@ -669,24 +669,24 @@ impl OverlayedChanges {
 		})
 	}
 
-	/// Returns the next (in lexicographic order) storage key in the overlayed alongside its value.
-	/// If no value is next then `None` is returned.
-	pub fn next_storage_key_change(&self, key: &[u8]) -> Option<(&[u8], &OverlayedValue)> {
-		self.top.next_change(key)
+	/// Returns an iterator over the keys (in lexicographic order) following `key` (excluding `key`)
+	/// alongside its value.
+	pub fn iter_after(&self, key: &[u8]) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
+		self.top.changes_after(key)
 	}
 
-	/// Returns the next (in lexicographic order) child storage key in the overlayed alongside its
-	/// value.  If no value is next then `None` is returned.
-	pub fn next_child_storage_key_change(
+	/// Returns an iterator over the keys (in lexicographic order) following `key` (excluding `key`)
+	/// alongside its value for the given `storage_key` child.
+	pub fn child_iter_after(
 		&self,
 		storage_key: &[u8],
 		key: &[u8]
-	) -> Option<(&[u8], &OverlayedValue)> {
+	) -> impl Iterator<Item = (&[u8], &OverlayedValue)> {
 		self.children
 			.get(storage_key)
-			.and_then(|(overlay, _)|
-				overlay.next_change(key)
-			)
+			.map(|(overlay, _)| overlay.changes_after(key))
+			.into_iter()
+			.flatten()
 	}
 
 	/// Read only access ot offchain overlay.
@@ -988,28 +988,28 @@ mod tests {
 		overlay.set_storage(vec![30], None);
 
 		// next_prospective < next_committed
-		let next_to_5 = overlay.next_storage_key_change(&[5]).unwrap();
+		let next_to_5 = overlay.iter_after(&[5]).next().unwrap();
 		assert_eq!(next_to_5.0.to_vec(), vec![10]);
 		assert_eq!(next_to_5.1.value(), Some(&vec![10]));
 
 		// next_committed < next_prospective
-		let next_to_10 = overlay.next_storage_key_change(&[10]).unwrap();
+		let next_to_10 = overlay.iter_after(&[10]).next().unwrap();
 		assert_eq!(next_to_10.0.to_vec(), vec![20]);
 		assert_eq!(next_to_10.1.value(), Some(&vec![20]));
 
 		// next_committed == next_prospective
-		let next_to_20 = overlay.next_storage_key_change(&[20]).unwrap();
+		let next_to_20 = overlay.iter_after(&[20]).next().unwrap();
 		assert_eq!(next_to_20.0.to_vec(), vec![30]);
 		assert_eq!(next_to_20.1.value(), None);
 
 		// next_committed, no next_prospective
-		let next_to_30 = overlay.next_storage_key_change(&[30]).unwrap();
+		let next_to_30 = overlay.iter_after(&[30]).next().unwrap();
 		assert_eq!(next_to_30.0.to_vec(), vec![40]);
 		assert_eq!(next_to_30.1.value(), Some(&vec![40]));
 
 		overlay.set_storage(vec![50], Some(vec![50]));
 		// next_prospective, no next_committed
-		let next_to_40 = overlay.next_storage_key_change(&[40]).unwrap();
+		let next_to_40 = overlay.iter_after(&[40]).next().unwrap();
 		assert_eq!(next_to_40.0.to_vec(), vec![50]);
 		assert_eq!(next_to_40.1.value(), Some(&vec![50]));
 	}
@@ -1029,28 +1029,28 @@ mod tests {
 		overlay.set_child_storage(child_info, vec![30], None);
 
 		// next_prospective < next_committed
-		let next_to_5 = overlay.next_child_storage_key_change(child, &[5]).unwrap();
+		let next_to_5 = overlay.child_iter_after(child, &[5]).next().unwrap();
 		assert_eq!(next_to_5.0.to_vec(), vec![10]);
 		assert_eq!(next_to_5.1.value(), Some(&vec![10]));
 
 		// next_committed < next_prospective
-		let next_to_10 = overlay.next_child_storage_key_change(child, &[10]).unwrap();
+		let next_to_10 = overlay.child_iter_after(child, &[10]).next().unwrap();
 		assert_eq!(next_to_10.0.to_vec(), vec![20]);
 		assert_eq!(next_to_10.1.value(), Some(&vec![20]));
 
 		// next_committed == next_prospective
-		let next_to_20 = overlay.next_child_storage_key_change(child, &[20]).unwrap();
+		let next_to_20 = overlay.child_iter_after(child, &[20]).next().unwrap();
 		assert_eq!(next_to_20.0.to_vec(), vec![30]);
 		assert_eq!(next_to_20.1.value(), None);
 
 		// next_committed, no next_prospective
-		let next_to_30 = overlay.next_child_storage_key_change(child, &[30]).unwrap();
+		let next_to_30 = overlay.child_iter_after(child, &[30]).next().unwrap();
 		assert_eq!(next_to_30.0.to_vec(), vec![40]);
 		assert_eq!(next_to_30.1.value(), Some(&vec![40]));
 
 		overlay.set_child_storage(child_info, vec![50], Some(vec![50]));
 		// next_prospective, no next_committed
-		let next_to_40 = overlay.next_child_storage_key_change(child, &[40]).unwrap();
+		let next_to_40 = overlay.child_iter_after(child, &[40]).next().unwrap();
 		assert_eq!(next_to_40.0.to_vec(), vec![50]);
 		assert_eq!(next_to_40.1.value(), Some(&vec![50]));
 	}

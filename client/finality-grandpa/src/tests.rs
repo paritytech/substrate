@@ -25,7 +25,7 @@ use sc_network_test::{
 	Block, BlockImportAdapter, Hash, PassThroughVerifier, Peer, PeersClient, PeersFullClient,
 	TestClient, TestNetFactory, FullPeerConfig,
 };
-use sc_network::config::ProtocolConfig;
+use sc_network::config::{ProtocolConfig, Role};
 use parking_lot::{RwLock, Mutex};
 use futures_timer::Delay;
 use futures::executor::block_on;
@@ -277,7 +277,7 @@ fn initialize_grandpa(
 				justification_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
-				is_authority: true,
+				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
 			},
@@ -421,7 +421,7 @@ fn finalize_3_voters_1_full_observer() {
 				justification_period: 32,
 				keystore: None,
 				name: Some(format!("peer#{}", peer_id)),
-				is_authority: true,
+				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
 			},
@@ -524,7 +524,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				justification_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", peer_id)),
-				is_authority: true,
+				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
 			},
@@ -952,7 +952,7 @@ fn voter_persists_its_votes() {
 			justification_period: 32,
 			keystore: Some(bob_keystore.clone()),
 			name: Some(format!("peer#{}", 1)),
-			is_authority: true,
+			local_role: Role::Authority,
 			observer_enabled: true,
 			telemetry: None,
 		};
@@ -995,7 +995,7 @@ fn voter_persists_its_votes() {
 				justification_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", 0)),
-				is_authority: true,
+				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
 			},
@@ -1036,7 +1036,7 @@ fn voter_persists_its_votes() {
 				justification_period: 32,
 				keystore: Some(keystore),
 				name: Some(format!("peer#{}", 0)),
-				is_authority: true,
+				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
 			},
@@ -1196,7 +1196,7 @@ fn finalize_3_voters_1_light_observer() {
 			justification_period: 32,
 			keystore: None,
 			name: Some("observer".to_string()),
-			is_authority: false,
+			local_role: Role::Full,
 			observer_enabled: true,
 			telemetry: None,
 		},
@@ -1238,7 +1238,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				justification_period: 32,
 				keystore,
 				name: Some(format!("peer#{}", peer_id)),
-				is_authority: true,
+				local_role: Role::Authority,
 				observer_enabled: true,
 				telemetry: None,
 			},
@@ -1361,7 +1361,7 @@ where
 		justification_period: 32,
 		keystore,
 		name: None,
-		is_authority: true,
+		local_role: Role::Authority,
 		observer_enabled: true,
 		telemetry: None,
 	};

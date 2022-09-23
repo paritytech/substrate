@@ -33,7 +33,7 @@ mod tests;
 mod benchmarking;
 pub mod weights;
 
-use sp_std::prelude::*;
+use sp_std::{prelude::*, convert::TryInto};
 use codec::{Encode, Decode};
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
@@ -43,8 +43,11 @@ use sp_runtime::{
 use frame_support::{
 		RuntimeDebug, ensure,
 		dispatch::{DispatchResultWithPostInfo, PostDispatchInfo},
-		traits::{Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait, IsType, IsSubType},
-		weights::{Weight, GetDispatchInfo}
+		traits::{
+			Get, ReservableCurrency, Currency, InstanceFilter, OriginTrait,
+			IsType, IsSubType, MaxEncodedLen,
+		},
+		weights::GetDispatchInfo,
 };
 use frame_system::{self as system};
 use frame_support::dispatch::DispatchError;
@@ -58,7 +61,7 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 
 /// The parameters under which a particular account has a proxy relationship with some other
 /// account.
-#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, MaxEncodedLen)]
 pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 	/// The account which may act on behalf of another.
 	delegate: AccountId,
@@ -70,7 +73,7 @@ pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 }
 
 /// Details surrounding a specific instance of an announcement to make a call.
-#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
 pub struct Announcement<AccountId, Hash, BlockNumber> {
 	/// The account which made the announcement.
 	real: AccountId,
@@ -88,6 +91,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Configuration trait.
@@ -109,7 +113,7 @@ pub mod pallet {
 		///
 		/// IMPORTANT: `Default` must be provided and MUST BE the the *most permissive* value.
 		type ProxyType: Parameter + Member + Ord + PartialOrd + InstanceFilter<<Self as Config>::Call>
-			+ Default;
+			+ Default + MaxEncodedLen;
 
 		/// The base amount of currency needed to reserve for creating a proxy.
 		///
@@ -128,7 +132,7 @@ pub mod pallet {
 
 		/// The maximum amount of proxies allowed for a single account.
 		#[pallet::constant]
-		type MaxProxies: Get<u16>;
+		type MaxProxies: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -293,14 +297,20 @@ pub mod pallet {
 
 			let anonymous = Self::anonymous_account(&who, &proxy_type, index, None);
 			ensure!(!Proxies::<T>::contains_key(&anonymous), Error::<T>::Duplicate);
-			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
-			T::Currency::reserve(&who, deposit)?;
+
 			let proxy_def = ProxyDefinition {
 				delegate: who.clone(),
 				proxy_type: proxy_type.clone(),
 				delay,
 			};
-			Proxies::<T>::insert(&anonymous, (vec![proxy_def], deposit));
+			let bounded_proxies: BoundedVec<_, T::MaxProxies> = vec![proxy_def]
+				.try_into()
+				.map_err(|_| Error::<T>::TooMany)?;
+
+			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
+			T::Currency::reserve(&who, deposit)?;
+
+			Proxies::<T>::insert(&anonymous, (bounded_proxies, deposit));
 			Self::deposit_event(Event::AnonymousCreated(anonymous, who, proxy_type, index));
 
 			Ok(().into())
@@ -386,8 +396,7 @@ pub mod pallet {
 			};
 
 			Announcements::<T>::try_mutate(&who, |(ref mut pending, ref mut deposit)| {
-				ensure!(pending.len() < T::MaxPending::get() as usize, Error::<T>::TooMany);
-				pending.push(announcement);
+				pending.try_push(announcement).map_err(|_| Error::<T>::TooMany)?;
 				Self::rejig_deposit(
 					&who,
 					*deposit,
@@ -555,7 +564,13 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		(Vec<ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>>, BalanceOf<T>),
+		(
+			BoundedVec<
+				ProxyDefinition<T::AccountId, T::ProxyType, T::BlockNumber>,
+				T::MaxProxies,
+			>,
+			BalanceOf<T>
+		),
 		ValueQuery
 	>;
 
@@ -566,7 +581,13 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		(Vec<Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>>, BalanceOf<T>),
+		(
+			BoundedVec<
+				Announcement<T::AccountId, CallHashOf<T>, T::BlockNumber>,
+				T::MaxPending,
+			>,
+			BalanceOf<T>,
+		),
 		ValueQuery
 	>;
 
@@ -616,10 +637,9 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResultWithPostInfo {
 		ensure!(delegator != &delegatee, Error::<T>::NoSelfProxy);
 		Proxies::<T>::try_mutate(delegator, |(ref mut proxies, ref mut deposit)| {
-			ensure!(proxies.len() < T::MaxProxies::get() as usize, Error::<T>::TooMany);
 			let proxy_def = ProxyDefinition { delegate: delegatee, proxy_type, delay };
 			let i = proxies.binary_search(&proxy_def).err().ok_or(Error::<T>::Duplicate)?;
-			proxies.insert(i, proxy_def);
+			proxies.try_insert(i, proxy_def).map_err(|_| Error::<T>::TooMany)?;
 			let new_deposit = Self::deposit(proxies.len() as u32);
 			if new_deposit > *deposit {
 				T::Currency::reserve(delegator, new_deposit - *deposit)?;
@@ -747,34 +767,5 @@ impl<T: Config> Pallet<T> {
 		});
 		let e = call.dispatch(origin);
 		Self::deposit_event(Event::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
-	}
-}
-
-/// Migration utilities for upgrading the Proxy pallet between its different versions.
-pub mod migration {
-	use super::*;
-
-	/// Migration code for <https://github.com/paritytech/substrate/pull/6770>
-	///
-	/// Details: This migration was introduced between Substrate 2.0-RC6 and Substrate 2.0 releases.
-	/// Before this migration, the `Proxies` storage item used a tuple of `AccountId` and
-	/// `ProxyType` to represent the proxy definition. After #6770, we switched to use a struct
-	/// `ProxyDefinition` which additionally included a `BlockNumber` delay value. This function,
-	/// simply takes any existing proxies using the old tuple format, and migrates it to the new
-	/// struct by setting the delay to zero.
-	pub fn migrate_to_time_delayed_proxies<T: Config>() -> Weight {
-		Proxies::<T>::translate::<(Vec<(T::AccountId, T::ProxyType)>, BalanceOf<T>), _>(
-			|_, (targets, deposit)| Some((
-				targets.into_iter()
-					.map(|(a, t)| ProxyDefinition {
-						delegate: a,
-						proxy_type: t,
-						delay: Zero::zero(),
-					})
-					.collect::<Vec<_>>(),
-				deposit,
-			))
-		);
-		T::BlockWeights::get().max_block
 	}
 }

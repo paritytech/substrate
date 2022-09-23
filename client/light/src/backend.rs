@@ -526,7 +526,7 @@ impl<H: Hasher> StateBackend<H> for GenesisOrUnavailableState<H>
 		}
 	}
 
-	fn register_overlay_stats(&mut self, _stats: &sp_state_machine::StateMachineStats) { }
+	fn register_overlay_stats(&self, _stats: &sp_state_machine::StateMachineStats) { }
 
 	fn usage_info(&self) -> sp_state_machine::UsageInfo {
 		sp_state_machine::UsageInfo::empty()

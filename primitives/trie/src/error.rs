@@ -26,7 +26,7 @@ pub enum Error {
 	/// Bad format.
 	BadFormat,
 	/// Decoding error.
-	Decode(codec::Error)
+	Decode(codec::Error),
 }
 
 impl From<codec::Error> for Error {

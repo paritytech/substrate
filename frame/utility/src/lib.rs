@@ -62,7 +62,7 @@ use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
 use frame_support::{
 	transactional,
-	traits::{OriginTrait, UnfilteredDispatchable},
+	traits::{OriginTrait, UnfilteredDispatchable, IsSubType},
 	weights::{GetDispatchInfo, extract_actual_weight},
 	dispatch::PostDispatchInfo,
 };
@@ -91,7 +91,9 @@ pub mod pallet {
 		/// The overarching call type.
 		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
 			+ GetDispatchInfo + From<frame_system::Call<Self>>
-			+ UnfilteredDispatchable<Origin=Self::Origin>;
+			+ UnfilteredDispatchable<Origin=Self::Origin>
+			+ IsSubType<Call<Self>>
+			+ IsType<<Self as frame_system::Config>::Call>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -266,7 +268,13 @@ pub mod pallet {
 				let result = if is_root {
 					call.dispatch_bypass_filter(origin.clone())
 				} else {
-					call.dispatch(origin.clone())
+					let mut filtered_origin = origin.clone();
+					// Don't allow users to nest `batch_all` calls.
+					filtered_origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
+						let c = <T as Config>::Call::from_ref(c);
+						!matches!(c.is_sub_type(), Some(Call::batch_all(_)))
+					});
+					call.dispatch(filtered_origin)
 				};
 				// Add the weight of this call.
 				weight = weight.saturating_add(extract_actual_weight(&result, &info));

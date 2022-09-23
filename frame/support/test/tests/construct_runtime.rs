@@ -112,8 +112,96 @@ mod module2 {
 	}
 }
 
+mod nested {
+	use super::*;
+
+	pub mod module3 {
+		use super::*;
+
+		pub trait Config: system::Config {}
+
+		frame_support::decl_module! {
+			pub struct Module<T: Config> for enum Call
+				where origin: <T as system::Config>::Origin, system=system
+			{
+				#[weight = 0]
+				pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
+					Err(Error::<T>::Something.into())
+				}
+
+				fn integrity_test() {
+					INTEGRITY_TEST_EXEC.with(|i| *i.borrow_mut() += 1);
+				}
+			}
+		}
+
+		#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+		pub struct Origin;
+
+		frame_support::decl_event! {
+			pub enum Event {
+				A,
+			}
+		}
+
+		frame_support::decl_error! {
+			pub enum Error for Module<T: Config> {
+				Something
+			}
+		}
+
+		frame_support::decl_storage! {
+			trait Store for Module<T: Config> as Module {}
+			add_extra_genesis {
+				build(|_config| {})
+			}
+		}
+	}
+}
+
+pub mod module3 {
+	use super::*;
+
+	pub trait Config: system::Config {}
+
+	frame_support::decl_module! {
+		pub struct Module<T: Config> for enum Call
+			where origin: <T as system::Config>::Origin, system=system
+		{
+			#[weight = 0]
+			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
+				Err(Error::<T>::Something.into())
+			}
+		}
+	}
+
+	#[derive(Clone, PartialEq, Eq, Debug, codec::Encode, codec::Decode)]
+	pub struct Origin<T>(pub core::marker::PhantomData<T>);
+
+	frame_support::decl_event! {
+		pub enum Event {
+			A,
+		}
+	}
+
+	frame_support::decl_error! {
+		pub enum Error for Module<T: Config> {
+			Something
+		}
+	}
+
+	frame_support::decl_storage! {
+		trait Store for Module<T: Config> as Module {}
+		add_extra_genesis {
+			build(|_config| {})
+		}
+	}
+}
+
 impl<I> module1::Config<I> for Runtime {}
 impl module2::Config for Runtime {}
+impl nested::module3::Config for Runtime {}
+impl module3::Config for Runtime {}
 
 pub type Signature = sr25519::Signature;
 pub type AccountId = <Signature as Verify>::Signer;
@@ -142,6 +230,8 @@ frame_support::construct_runtime!(
 		Module1_1: module1::<Instance1>::{Pallet, Call, Storage, Event<T>, Origin<T>},
 		Module2: module2::{Pallet, Call, Storage, Event, Origin},
 		Module1_2: module1::<Instance2>::{Pallet, Call, Storage, Event<T>, Origin<T>},
+		NestedModule3: nested::module3::{Pallet, Call, Config, Storage, Event, Origin},
+		Module3: self::module3::{Pallet, Call, Config, Storage, Event, Origin<T>},
 		Module1_3: module1::<Instance3>::{Pallet, Storage} = 6,
 		Module1_4: module1::<Instance4>::{Pallet, Call} = 3,
 		Module1_5: module1::<Instance5>::{Pallet, Event<T>},
@@ -156,6 +246,82 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
+mod origin_test {
+	use frame_support::traits::{Filter, OriginTrait};
+	use super::{module3, nested, system, Block, UncheckedExtrinsic};
+
+	impl nested::module3::Config for RuntimeOriginTest {}
+	impl module3::Config for RuntimeOriginTest {}
+
+	pub struct BaseCallFilter;
+	impl Filter<Call> for BaseCallFilter {
+		fn filter(c: &Call) -> bool {
+			match c {
+				Call::NestedModule3(_) => true,
+				_ => false,
+			}
+		}
+	}
+
+	impl system::Config for RuntimeOriginTest {
+		type BaseCallFilter = BaseCallFilter;
+		type Hash = super::H256;
+		type Origin = Origin;
+		type BlockNumber = super::BlockNumber;
+		type AccountId = u32;
+		type Event = Event;
+		type PalletInfo = PalletInfo;
+		type Call = Call;
+		type DbWeight = ();
+	}
+
+	frame_support::construct_runtime!(
+		pub enum RuntimeOriginTest where
+			Block = Block,
+			NodeBlock = Block,
+			UncheckedExtrinsic = UncheckedExtrinsic
+		{
+			System: system::{Pallet, Event<T>, Origin<T>},
+			NestedModule3: nested::module3::{Pallet, Origin, Call},
+			Module3: module3::{Pallet, Origin<T>, Call},
+		}
+	);
+
+	#[test]
+	fn origin_default_filter() {
+		let accepted_call = nested::module3::Call::fail().into();
+		let rejected_call = module3::Call::fail().into();
+
+		assert_eq!(Origin::root().filter_call(&accepted_call), true);
+		assert_eq!(Origin::root().filter_call(&rejected_call), true);
+		assert_eq!(Origin::none().filter_call(&accepted_call), true);
+		assert_eq!(Origin::none().filter_call(&rejected_call), false);
+		assert_eq!(Origin::signed(0).filter_call(&accepted_call), true);
+		assert_eq!(Origin::signed(0).filter_call(&rejected_call), false);
+		assert_eq!(Origin::from(Some(0)).filter_call(&accepted_call), true);
+		assert_eq!(Origin::from(Some(0)).filter_call(&rejected_call), false);
+		assert_eq!(Origin::from(None).filter_call(&accepted_call), true);
+		assert_eq!(Origin::from(None).filter_call(&rejected_call), false);
+		assert_eq!(Origin::from(super::nested::module3::Origin).filter_call(&accepted_call), true);
+		assert_eq!(Origin::from(super::nested::module3::Origin).filter_call(&rejected_call), false);
+
+		let mut origin = Origin::from(Some(0));
+
+		origin.add_filter(|c| matches!(c, Call::Module3(_)));
+		assert_eq!(origin.filter_call(&accepted_call), false);
+		assert_eq!(origin.filter_call(&rejected_call), false);
+
+		origin.set_caller_from(Origin::root());
+		assert!(matches!(origin.caller, OriginCaller::system(super::system::RawOrigin::Root)));
+		assert_eq!(origin.filter_call(&accepted_call), false);
+		assert_eq!(origin.filter_call(&rejected_call), false);
+
+		origin.reset_filter();
+		assert_eq!(origin.filter_call(&accepted_call), true);
+		assert_eq!(origin.filter_call(&rejected_call), false);
+	}
+}
+
 #[test]
 fn check_modules_error_type() {
 	assert_eq!(
@@ -169,6 +335,10 @@ fn check_modules_error_type() {
 	assert_eq!(
 		Module1_2::fail(system::Origin::<Runtime>::Root.into()),
 		Err(DispatchError::Module { index: 33, error: 0, message: Some("Something") }),
+	);
+	assert_eq!(
+		NestedModule3::fail(system::Origin::<Runtime>::Root.into()),
+		Err(DispatchError::Module { index: 34, error: 0, message: Some("Something") }),
 	);
 	assert_eq!(
 		Module1_3::fail(system::Origin::<Runtime>::Root.into()),
@@ -203,7 +373,7 @@ fn check_modules_error_type() {
 #[test]
 fn integrity_test_works() {
 	__construct_runtime_integrity_test::runtime_integrity_tests();
-	assert_eq!(INTEGRITY_TEST_EXEC.with(|i| *i.borrow()), 1);
+	assert_eq!(INTEGRITY_TEST_EXEC.with(|i| *i.borrow()), 2);
 }
 
 #[test]
@@ -221,6 +391,12 @@ fn origin_codec() {
 
 	let origin = OriginCaller::module1_Instance2(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 33);
+
+	let origin = OriginCaller::nested_module3(nested::module3::Origin);
+	assert_eq!(origin.encode()[0], 34);
+
+	let origin = OriginCaller::module3(module3::Origin(Default::default()));
+	assert_eq!(origin.encode()[0], 35);
 
 	let origin = OriginCaller::module1_Instance6(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 1);
@@ -251,6 +427,12 @@ fn event_codec() {
 	let event = module1::Event::<Runtime, module1::Instance2>::A(Default::default());
 	assert_eq!(Event::from(event).encode()[0], 33);
 
+	let event = nested::module3::Event::A;
+	assert_eq!(Event::from(event).encode()[0], 34);
+
+	let event = module3::Event::A;
+	assert_eq!(Event::from(event).encode()[0], 35);
+
 	let event = module1::Event::<Runtime, module1::Instance5>::A(Default::default());
 	assert_eq!(Event::from(event).encode()[0], 4);
 
@@ -274,6 +456,8 @@ fn call_codec() {
 	assert_eq!(Call::Module1_1(module1::Call::fail()).encode()[0], 31);
 	assert_eq!(Call::Module2(module2::Call::fail()).encode()[0], 32);
 	assert_eq!(Call::Module1_2(module1::Call::fail()).encode()[0], 33);
+	assert_eq!(Call::NestedModule3(nested::module3::Call::fail()).encode()[0], 34);
+	assert_eq!(Call::Module3(module3::Call::fail()).encode()[0], 35);
 	assert_eq!(Call::Module1_4(module1::Call::fail()).encode()[0], 3);
 	assert_eq!(Call::Module1_6(module1::Call::fail()).encode()[0], 1);
 	assert_eq!(Call::Module1_7(module1::Call::fail()).encode()[0], 2);
@@ -380,6 +564,54 @@ fn test_metadata() {
 				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
 				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
 				index: 33,
+			},
+			ModuleMetadata {
+				name: DecodeDifferent::Encode("NestedModule3"),
+				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
+					prefix: DecodeDifferent::Encode("Module"),
+					entries: DecodeDifferent::Encode(&[]),
+				}))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[
+					FunctionMetadata {
+						name: DecodeDifferent::Encode("fail"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					},
+				]))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					},
+				]))),
+				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
+				index: 34,
+			},
+			ModuleMetadata {
+				name: DecodeDifferent::Encode("Module3"),
+				storage: Some(DecodeDifferent::Encode(FnEncode(|| StorageMetadata {
+					prefix: DecodeDifferent::Encode("Module"),
+					entries: DecodeDifferent::Encode(&[]),
+				}))),
+				calls: Some(DecodeDifferent::Encode(FnEncode(|| &[
+					FunctionMetadata {
+						name: DecodeDifferent::Encode("fail"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					},
+				]))),
+				event: Some(DecodeDifferent::Encode(FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("A"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					},
+				]))),
+				constants: DecodeDifferent::Encode(FnEncode(|| &[])),
+				errors: DecodeDifferent::Encode(FnEncode(|| &[])),
+				index: 35,
 			},
 			ModuleMetadata {
 				name: DecodeDifferent::Encode("Module1_3"),
@@ -521,6 +753,12 @@ fn pallet_in_runtime_is_correct() {
 
 	assert_eq!(PalletInfo::index::<Module1_2>().unwrap(), 33);
 	assert_eq!(PalletInfo::name::<Module1_2>().unwrap(), "Module1_2");
+
+	assert_eq!(PalletInfo::index::<NestedModule3>().unwrap(), 34);
+	assert_eq!(PalletInfo::name::<NestedModule3>().unwrap(), "NestedModule3");
+
+	assert_eq!(PalletInfo::index::<Module3>().unwrap(), 35);
+	assert_eq!(PalletInfo::name::<Module3>().unwrap(), "Module3");
 
 	assert_eq!(PalletInfo::index::<Module1_3>().unwrap(), 6);
 	assert_eq!(PalletInfo::name::<Module1_3>().unwrap(), "Module1_3");

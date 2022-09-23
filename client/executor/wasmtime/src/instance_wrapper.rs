@@ -36,75 +36,71 @@ pub enum EntryPointType {
 	/// Direct call.
 	///
 	/// Call is made by providing only payload reference and length.
-	Direct,
+	Direct {
+		entrypoint: wasmtime::TypedFunc<(u32, u32), u64>,
+	},
 	/// Indirect call.
 	///
 	/// Call is made by providing payload reference and length, and extra argument
-	/// for advanced routing (typically extra WASM function pointer).
-	Wrapped(u32),
+	/// for advanced routing.
+	Wrapped {
+		/// The extra argument passed to the runtime. It is typically a wasm function pointer.
+		func: u32,
+		dispatcher: wasmtime::TypedFunc<(u32, u32, u32), u64>,
+	},
 }
 
 /// Wasm blob entry point.
 pub struct EntryPoint {
 	call_type: EntryPointType,
-	func: wasmtime::Func,
 }
 
 impl EntryPoint {
 	/// Call this entry point.
 	pub fn call(&self, data_ptr: Pointer<u8>, data_len: WordSize) -> Result<u64> {
-		let data_ptr = u32::from(data_ptr) as i32;
-		let data_len = u32::from(data_len) as i32;
+		let data_ptr = u32::from(data_ptr);
+		let data_len = u32::from(data_len);
 
-		(match self.call_type {
-			EntryPointType::Direct => {
-				self.func.call(&[
-					wasmtime::Val::I32(data_ptr),
-					wasmtime::Val::I32(data_len),
-				])
-			},
-			EntryPointType::Wrapped(func) => {
-				self.func.call(&[
-					wasmtime::Val::I32(func as _),
-					wasmtime::Val::I32(data_ptr),
-					wasmtime::Val::I32(data_len),
-				])
-			},
-		})
-			.map(|results|
-				// the signature is checked to have i64 return type
-				results[0].unwrap_i64() as u64
-			)
-			.map_err(|err| Error::from(format!(
-				"Wasm execution trapped: {}",
-				err
-			)))
+		fn handle_trap(err: wasmtime::Trap) -> Error {
+			Error::from(format!("Wasm execution trapped: {}", err))
+		}
+
+		match self.call_type {
+			EntryPointType::Direct { ref entrypoint } => {
+				entrypoint.call((data_ptr, data_len)).map_err(handle_trap)
+			}
+			EntryPointType::Wrapped {
+				func,
+				ref dispatcher,
+			} => {
+				dispatcher
+					.call((func, data_ptr, data_len))
+					.map_err(handle_trap)
+			}
+		}
 	}
 
 	pub fn direct(func: wasmtime::Func) -> std::result::Result<Self, &'static str> {
-		use wasmtime::ValType;
-		let entry_point = wasmtime::FuncType::new(
-			[ValType::I32, ValType::I32].iter().cloned(),
-			[ValType::I64].iter().cloned(),
-		);
-		if func.ty() == entry_point {
-			Ok(Self { func, call_type: EntryPointType::Direct })
-		} else {
-			Err("Invalid signature for direct entry point")
-		}
+		let entrypoint = func
+			.typed::<(u32, u32), u64>()
+			.map_err(|_| "Invalid signature for direct entry point")?
+			.clone();
+		Ok(Self {
+			call_type: EntryPointType::Direct { entrypoint },
+		})
 	}
 
-	pub fn wrapped(dispatcher: wasmtime::Func, func: u32) -> std::result::Result<Self, &'static str> {
-		use wasmtime::ValType;
-		let entry_point = wasmtime::FuncType::new(
-			[ValType::I32, ValType::I32, ValType::I32].iter().cloned(),
-			[ValType::I64].iter().cloned(),
-		);
-		if dispatcher.ty() == entry_point {
-			Ok(Self { func: dispatcher, call_type: EntryPointType::Wrapped(func) })
-		} else {
-			Err("Invalid signature for wrapped entry point")
-		}
+	pub fn wrapped(
+		dispatcher: wasmtime::Func,
+		func: u32,
+	) -> std::result::Result<Self, &'static str> {
+		let dispatcher = dispatcher
+			.typed::<(u32, u32, u32), u64>()
+			.map_err(|_| "Invalid signature for wrapped entry point")?
+			.clone();
+		Ok(Self {
+			call_type: EntryPointType::Wrapped { func, dispatcher },
+		})
 	}
 }
 

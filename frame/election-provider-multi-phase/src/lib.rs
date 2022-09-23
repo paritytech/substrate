@@ -502,6 +502,8 @@ pub enum FeasibilityError {
 	InvalidScore,
 	/// The provided round is incorrect.
 	InvalidRound,
+	/// Comparison against `MinimumUntrustedScore` failed.
+	UntrustedScoreTooLow,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -578,6 +580,9 @@ pub mod pallet {
 
 		/// Configuration for the fallback
 		type Fallback: Get<FallbackStrategy>;
+
+		/// Origin that can set the minimum score.
+		type ForceOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
@@ -773,6 +778,21 @@ pub mod pallet {
 
 			Ok(None.into())
 		}
+
+		/// Set a new value for `MinimumUntrustedScore`.
+		///
+		/// Dispatch origin must be aligned with `T::ForceOrigin`.
+		///
+		/// This check can be turned off by setting the value to `None`.
+		#[pallet::weight(T::DbWeight::get().writes(1))]
+		fn set_minimum_untrusted_score(
+			origin: OriginFor<T>,
+			maybe_next_score: Option<ElectionScore>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			<MinimumUntrustedScore<T>>::set(maybe_next_score);
+			Ok(())
+		}
 	}
 
 	#[pallet::event]
@@ -909,6 +929,14 @@ pub mod pallet {
 	#[pallet::getter(fn snapshot_metadata)]
 	pub type SnapshotMetadata<T: Config> = StorageValue<_, SolutionOrSnapshotSize>;
 
+	/// The minimum score that each 'untrusted' solution must attain in order to be considered
+	/// feasible.
+	///
+	/// Can be set via `set_minimum_untrusted_score`.
+	#[pallet::storage]
+	#[pallet::getter(fn minimum_untrusted_score)]
+	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -959,7 +987,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(snapshot_weight)` if success, where `snapshot_weight` is the weight that
 	/// needs to recorded for the creation of snapshot.
-	pub(crate) fn on_initialize_open_signed() -> Result<Weight, ElectionError> {
+	pub fn on_initialize_open_signed() -> Result<Weight, ElectionError> {
 		let weight = Self::create_snapshot()?;
 		<CurrentPhase<T>>::put(Phase::Signed);
 		Self::deposit_event(Event::SignedPhaseStarted(Self::round()));
@@ -972,7 +1000,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Returns `Ok(snapshot_weight)` if success, where `snapshot_weight` is the weight that
 	/// needs to recorded for the creation of snapshot.
-	pub(crate) fn on_initialize_open_unsigned(
+	pub fn on_initialize_open_unsigned(
 		need_snapshot: bool,
 		enabled: bool,
 		now: T::BlockNumber,
@@ -997,7 +1025,7 @@ impl<T: Config> Pallet<T> {
 	/// 3. [`DesiredTargets`]
 	///
 	/// Returns `Ok(consumed_weight)` if operation is okay.
-	pub(crate) fn create_snapshot() -> Result<Weight, ElectionError> {
+	pub fn create_snapshot() -> Result<Weight, ElectionError> {
 		let target_limit = <CompactTargetIndexOf<T>>::max_value().saturated_into::<usize>();
 		let voter_limit = <CompactVoterIndexOf<T>>::max_value().saturated_into::<usize>();
 
@@ -1051,6 +1079,15 @@ impl<T: Config> Pallet<T> {
 		// already checked this in `unsigned_per_dispatch_checks`. The signed path *could* check it
 		// upon arrival, thus we would then remove it here. Given overlay it is cheap anyhow
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
+
+		// ensure that the solution's score can pass absolute min-score.
+		let submitted_score = solution.score.clone();
+		ensure!(
+			Self::minimum_untrusted_score().map_or(true, |min_score|
+				sp_npos_elections::is_score_better(submitted_score, min_score, Perbill::zero())
+			),
+			FeasibilityError::UntrustedScoreTooLow
+		);
 
 		// read the entire snapshot.
 		let RoundSnapshot { voters: snapshot_voters, targets: snapshot_targets } =
@@ -1593,6 +1630,31 @@ mod tests {
 			roll_to(29);
 			let (supports, _) = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
+		})
+	}
+
+	#[test]
+	fn untrusted_score_verification_is_respected() {
+		ExtBuilder::default().build_and_execute(|| {
+			roll_to(15);
+			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
+
+
+			let (solution, _) = MultiPhase::mine_solution(2).unwrap();
+			// default solution has a score of [50, 100, 5000].
+			assert_eq!(solution.score, [50, 100, 5000]);
+
+			<MinimumUntrustedScore<Runtime>>::put([49, 0, 0]);
+			assert_ok!(MultiPhase::feasibility_check(solution.clone(), ElectionCompute::Signed));
+
+			<MinimumUntrustedScore<Runtime>>::put([51, 0, 0]);
+			assert_noop!(
+				MultiPhase::feasibility_check(
+					solution,
+					ElectionCompute::Signed
+				),
+				FeasibilityError::UntrustedScoreTooLow,
+			);
 		})
 	}
 

@@ -18,7 +18,7 @@
 
 use std::{convert::TryFrom, time::SystemTime};
 
-use crate::{NetworkStatus, NetworkState, NetworkStatusSinks, config::Configuration};
+use crate::config::Configuration;
 use futures_timer::Delay;
 use prometheus_endpoint::{register, Gauge, U64, Registry, PrometheusError, Opts, GaugeVec};
 use sc_telemetry::{telemetry, TelemetryHandle, SUBSTRATE_INFO};
@@ -26,9 +26,8 @@ use sp_api::ProvideRuntimeApi;
 use sp_runtime::traits::{NumberFor, Block, SaturatedConversion, UniqueSaturatedInto};
 use sp_transaction_pool::{PoolStatus, MaintainedTransactionPool};
 use sp_utils::metrics::register_globals;
-use sp_utils::mpsc::TracingUnboundedReceiver;
 use sc_client_api::{ClientInfo, UsageProvider};
-use sc_network::config::Role;
+use sc_network::{config::Role, NetworkStatus, NetworkService, network_state::NetworkState};
 use std::sync::Arc;
 use std::time::Duration;
 use wasm_timer::Instant;
@@ -163,7 +162,7 @@ impl MetricsService {
 		mut self,
 		client: Arc<TCl>,
 		transactions: Arc<TExPool>,
-		network: NetworkStatusSinks<TBl>,
+		network: Arc<NetworkService<TBl, <TBl as Block>::Hash>>,
 	) where
 		TBl: Block,
 		TCl: ProvideRuntimeApi<TBl> + UsageProvider<TBl>,
@@ -172,33 +171,23 @@ impl MetricsService {
 		let mut timer = Delay::new(Duration::from_secs(0));
 		let timer_interval = Duration::from_secs(5);
 
-		// Metric and telemetry update interval.
-		let net_status_interval = timer_interval;
-		let net_state_interval = Duration::from_secs(30);
-
-		// Source of network information.
-		let mut net_status_rx = Some(network.status_stream(net_status_interval));
-		let mut net_state_rx = Some(network.state_stream(net_state_interval));
+		let net_state_duration = Duration::from_secs(30);
+		let mut last_net_state = Instant::now();
 
 		loop {
 			// Wait for the next tick of the timer.
 			(&mut timer).await;
+			let now = Instant::now();
+			let from_net_state = now.duration_since(last_net_state);
 
 			// Try to get the latest network information.
-			let mut net_status = None;
-			let mut net_state = None;
-			if let Some(rx) = net_status_rx.as_mut() {
-				match Self::latest(rx) {
-					Ok(status) => { net_status = status; }
-					Err(()) => { net_status_rx = None; }
-				}
-			}
-			if let Some(rx) = net_state_rx.as_mut() {
-				match Self::latest(rx) {
-					Ok(state) => { net_state = state; }
-					Err(()) => { net_state_rx = None; }
-				}
-			}
+			let net_status = network.status().await.ok();
+			let net_state = if from_net_state >= net_state_duration {
+				last_net_state = now;
+				network.network_state().await.ok()
+			} else {
+				None
+			};
 
 			// Update / Send the metrics.
 			self.update(
@@ -211,25 +200,6 @@ impl MetricsService {
 			// Schedule next tick.
 			timer.reset(timer_interval);
 		}
-	}
-
-	// Try to get the latest value from a receiver, dropping intermediate values.
-	fn latest<T>(rx: &mut TracingUnboundedReceiver<T>) -> Result<Option<T>, ()> {
-		let mut value = None;
-
-		while let Ok(next) = rx.try_next() {
-			match next {
-				Some(v) => {
-					value = Some(v)
-				}
-				None => {
-					log::error!("Receiver closed unexpectedly.");
-					return Err(())
-				}
-			}
-		}
-
-		Ok(value)
 	}
 
 	fn update<T: Block>(

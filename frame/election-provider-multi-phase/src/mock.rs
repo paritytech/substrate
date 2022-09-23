@@ -345,6 +345,7 @@ impl crate::Config for Runtime {
 	type BenchmarkingConfig = ();
 	type OnChainAccuracy = Perbill;
 	type Fallback = Fallback;
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type CompactSolution = TestCompact;
 }
 

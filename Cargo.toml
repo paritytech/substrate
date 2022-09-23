@@ -122,6 +122,7 @@ members = [
 	"frame/transaction-payment/rpc/runtime-api",
 	"frame/treasury",
 	"frame/tips",
+	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
 	"frame/ddc-pallet",
@@ -200,6 +201,9 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/prometheus",
 	"utils/wasm-builder",
+	# temp deps
+	"max-encoded-len",
+	"max-encoded-len/derive",
 ]
 
 # The list of dependencies below (which can be both direct and indirect dependencies) are crates

@@ -1,6 +1,6 @@
 [package]
 name = "pallet-grandpa"
-version = "3.0.0"
+version = "3.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -17,6 +17,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 sp-application-crypto = { version = "3.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-core = { version = "3.0.0", default-features = false, path = "../../primitives/core" }
 sp-finality-grandpa = { version = "3.0.0", default-features = false, path = "../../primitives/finality-grandpa" }
+sp-io = { version = "3.0.0", default-features = false, path = "../../primitives/io" }
 sp-session = { version = "3.0.0", default-features = false, path = "../../primitives/session" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../primitives/std" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../primitives/runtime" }
@@ -31,7 +32,6 @@ log = { version = "0.4.14", default-features = false }
 [dev-dependencies]
 frame-benchmarking = { version = "3.1.0", path = "../benchmarking" }
 grandpa = { package = "finality-grandpa", version = "0.14.0", features = ["derive-codec"] }
-sp-io = { version = "3.0.0", path = "../../primitives/io" }
 sp-keyring = { version = "3.0.0", path = "../../primitives/keyring" }
 pallet-balances = { version = "3.0.0", path = "../balances" }
 pallet-offences = { version = "3.0.0", path = "../offences" }

@@ -240,7 +240,7 @@ impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 		self.ready.read().contains_key(hash)
 	}
 
-	/// Retrive transaction by hash
+	/// Retrieve transaction by hash
 	pub fn by_hash(&self, hash: &Hash) -> Option<Arc<Transaction<Hash, Ex>>> {
 		self.by_hashes(&[hash.clone()]).into_iter().next().unwrap_or(None)
 	}

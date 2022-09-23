@@ -64,7 +64,7 @@ frame_support::construct_runtime!(
 
 impl_opaque_keys! {
 	pub struct TestSessionKeys {
-		pub grandpa_authority: super::Module<Test>,
+		pub grandpa_authority: super::Pallet<Test>,
 	}
 }
 

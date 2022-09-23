@@ -24,7 +24,7 @@ use crate::{
 	chain_extension::ChainExtension,
 	wasm::{PrefabWasmModule, env_def::ImportSatisfyCheck},
 };
-use parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
+use pwasm_utils::parity_wasm::elements::{self, Internal, External, MemoryType, Type, ValueType};
 use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
 
@@ -105,7 +105,7 @@ impl<'a, T: Config> ContractModule<'a, T> {
 			return Ok(());
 		};
 		for instr in code_section.bodies().iter().flat_map(|body| body.code().elements()) {
-			use parity_wasm::elements::Instruction::BrTable;
+			use self::elements::Instruction::BrTable;
 			if let BrTable(table) = instr {
 				if table.table.len() > limit as usize {
 					return Err("BrTable's immediate value is too big.")
@@ -484,7 +484,7 @@ pub fn reinstrument_contract<T: Config>(
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking {
 	use super::*;
-	use parity_wasm::elements::FunctionType;
+	use super::elements::FunctionType;
 
 	impl ImportSatisfyCheck for () {
 		fn can_satisfy(_module: &[u8], _name: &[u8], _func_type: &FunctionType) -> bool {
