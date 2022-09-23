@@ -107,9 +107,6 @@ pub mod pallet {
 		BatchCompleted,
 	}
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Send a batch of dispatch calls.

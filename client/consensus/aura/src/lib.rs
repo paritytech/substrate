@@ -44,7 +44,7 @@ use sp_consensus::{
 	BlockImport, Environment, Proposer, CanAuthorWith, ForkChoiceStrategy, BlockImportParams,
 	BlockOrigin, Error as ConsensusError, SelectChain,
 };
-use sc_client_api::{backend::AuxStore, BlockOf};
+use sc_client_api::{backend::AuxStore, BlockOf, UsageProvider};
 use sp_blockchain::{Result as CResult, well_known_cache_keys, ProvideCache, HeaderBackend};
 use sp_core::crypto::Public;
 use sp_application_crypto::{AppKey, AppPublic};
@@ -70,7 +70,10 @@ pub use sp_consensus_aura::{
 	},
 };
 pub use sp_consensus::SyncOracle;
-pub use import_queue::{ImportQueueParams, import_queue, AuraBlockImport, CheckForEquivocation};
+pub use import_queue::{
+	ImportQueueParams, import_queue, CheckForEquivocation,
+	build_verifier, BuildVerifierParams, AuraVerifier,
+};
 pub use sc_consensus_slots::SlotProportion;
 
 type AuthorityId<P> = <P as Pair>::Public;
@@ -82,7 +85,7 @@ pub type SlotDuration = sc_consensus_slots::SlotDuration<sp_consensus_aura::Slot
 pub fn slot_duration<A, B, C>(client: &C) -> CResult<SlotDuration> where
 	A: Codec,
 	B: BlockT,
-	C: AuxStore + ProvideRuntimeApi<B>,
+	C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 	C::Api: AuraApi<B, A>,
 {
 	SlotDuration::get_or_compute(client, |a, b| a.slot_duration(b).map_err(Into::into))
@@ -491,10 +494,6 @@ enum Error<B: BlockT> {
 	#[display(fmt = "Bad signature on {:?}", _0)]
 	BadSignature(B::Hash),
 	Client(sp_blockchain::Error),
-	#[display(fmt = "Slot number must increase: parent slot: {}, this slot: {}", _0, _1)]
-	SlotMustIncrease(Slot, Slot),
-	#[display(fmt = "Parent ({}) of {} unavailable. Cannot import", _0, _1)]
-	ParentUnavailable(B::Hash, B::Hash),
 	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
 	#[display(fmt = "Inherent error: {}", _0)]

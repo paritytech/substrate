@@ -66,7 +66,7 @@ pub mod weights;
 use sp_std::prelude::*;
 use frame_support::{
 	decl_module, decl_storage, decl_event, ensure, print, decl_error,
-	PalletId, BoundedVec, bounded_vec::TryAppendValue,
+	PalletId, BoundedVec, storage::TryAppendValue,
 };
 use frame_support::traits::{
 	Currency, Get, Imbalance, OnUnbalanced, ExistenceRequirement::KeepAlive,

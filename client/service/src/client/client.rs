@@ -118,7 +118,7 @@ pub struct Client<B, E, Block, RA> where Block: BlockT {
 	importing_block: RwLock<Option<Block::Hash>>,
 	block_rules: BlockRules<Block>,
 	execution_extensions: ExecutionExtensions<Block>,
-	config: ClientConfig,
+	config: ClientConfig<Block>,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<RA>,
 }
@@ -159,10 +159,10 @@ pub fn new_in_mem<E, Block, S, RA>(
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 	spawn_handle: Box<dyn SpawnNamed>,
-	config: ClientConfig,
+	config: ClientConfig<Block>,
 ) -> sp_blockchain::Result<Client<
 	in_mem::Backend<Block>,
-	LocalCallExecutor<in_mem::Backend<Block>, E>,
+	LocalCallExecutor<Block, in_mem::Backend<Block>, E>,
 	Block,
 	RA
 >> where
@@ -183,14 +183,28 @@ pub fn new_in_mem<E, Block, S, RA>(
 }
 
 /// Relevant client configuration items relevant for the client.
-#[derive(Debug,Clone,Default)]
-pub struct ClientConfig {
+#[derive(Debug, Clone)]
+pub struct ClientConfig<Block: BlockT> {
 	/// Enable the offchain worker db.
 	pub offchain_worker_enabled: bool,
 	/// If true, allows access from the runtime to write into offchain worker db.
 	pub offchain_indexing_api: bool,
 	/// Path where WASM files exist to override the on-chain WASM.
 	pub wasm_runtime_overrides: Option<PathBuf>,
+	/// Map of WASM runtime substitute starting at the child of the given block until the runtime
+	/// version doesn't match anymore.
+	pub wasm_runtime_substitutes: HashMap<Block::Hash, Vec<u8>>,
+}
+
+impl<Block: BlockT> Default for ClientConfig<Block> {
+	fn default() -> Self {
+		Self {
+			offchain_worker_enabled: false,
+			offchain_indexing_api: false,
+			wasm_runtime_overrides: None,
+			wasm_runtime_substitutes: HashMap::new(),
+		}
+	}
 }
 
 /// Create a client with the explicitly provided backend.
@@ -204,8 +218,8 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
-	config: ClientConfig,
-) -> sp_blockchain::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
+	config: ClientConfig<Block>,
+) -> sp_blockchain::Result<Client<B, LocalCallExecutor<Block, B, E>, Block, RA>>
 	where
 		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
@@ -308,7 +322,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		execution_extensions: ExecutionExtensions<Block>,
 		prometheus_registry: Option<Registry>,
 		telemetry: Option<TelemetryHandle>,
-		config: ClientConfig,
+		config: ClientConfig<Block>,
 	) -> sp_blockchain::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()

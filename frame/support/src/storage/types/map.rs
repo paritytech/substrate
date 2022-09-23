@@ -21,8 +21,7 @@
 use codec::{FullCodec, Decode, EncodeLike, Encode};
 use crate::{
 	storage::{
-		StorageAppend, StorageDecodeLength, StoragePrefixedMap,
-		bounded_vec::BoundedVec,
+		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
 	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
@@ -95,35 +94,6 @@ where
 	}
 	fn storage_prefix() -> &'static [u8] {
 		<Self as crate::storage::generator::StorageMap<Key, Value>>::storage_prefix()
-	}
-}
-
-impl<Prefix, Hasher, Key, QueryKind, OnEmpty, MaxValues, VecValue, VecBound>
-	StorageMap<Prefix, Hasher, Key, BoundedVec<VecValue, VecBound>, QueryKind, OnEmpty, MaxValues>
-where
-	Prefix: StorageInstance,
-	Hasher: crate::hash::StorageHasher,
-	Key: FullCodec,
-	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
-	OnEmpty: Get<QueryKind::Query> + 'static,
-	MaxValues: Get<Option<u32>>,
-	VecValue: FullCodec,
-	VecBound: Get<u32>,
-{
-	/// Try and append the given item to the map in the storage.
-	///
-	/// Is only available if `Value` of the map is [`BoundedVec`].
-	pub fn try_append<EncodeLikeItem, EncodeLikeKey>(
-		key: EncodeLikeKey,
-		item: EncodeLikeItem,
-	) -> Result<(), ()>
-	where
-		EncodeLikeKey: EncodeLike<Key> + Clone,
-		EncodeLikeItem: EncodeLike<VecValue>,
-	{
-		<Self as crate::storage::bounded_vec::TryAppendMap<Key, VecValue, VecBound>>::try_append(
-			key, item,
-		)
 	}
 }
 
@@ -288,6 +258,24 @@ where
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
 	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(f: F) {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::translate_values(f)
+	}
+
+	/// Try and append the given item to the value in the storage.
+	///
+	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
+	pub fn try_append<KArg, Item, EncodeLikeItem>(
+		key: KArg,
+		item: EncodeLikeItem,
+	) -> Result<(), ()>
+	where
+		KArg: EncodeLike<Key> + Clone,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		Value: StorageTryAppend<Item>,
+	{
+		<
+			Self as crate::storage::TryAppendMap<Key, Value, Item>
+		>::try_append(key, item)
 	}
 }
 

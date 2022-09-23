@@ -50,7 +50,7 @@ use sp_runtime::traits::{
 };
 use sp_api::{ProvideRuntimeApi, CallApiAt};
 use sc_executor::{NativeExecutor, NativeExecutionDispatch, RuntimeInfo};
-use std::sync::Arc;
+use std::{sync::Arc, str::FromStr};
 use wasm_timer::SystemTime;
 use sc_telemetry::{
 	telemetry,
@@ -150,6 +150,7 @@ pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 
 /// Full client call executor type.
 pub type TFullCallExecutor<TBl, TExecDisp> = crate::client::LocalCallExecutor<
+	TBl,
 	sc_client_db::Backend<TBl>,
 	NativeExecutor<TExecDisp>,
 >;
@@ -172,6 +173,7 @@ pub type TLightCallExecutor<TBl, TExecDisp> = sc_light::GenesisCallExecutor<
 		HashFor<TBl>
 	>,
 	crate::client::LocalCallExecutor<
+		TBl,
 		sc_light::Backend<
 			sc_client_db::light::LightStorage<TBl>,
 			HashFor<TBl>
@@ -206,7 +208,7 @@ pub type TLightClientWithBackend<TBl, TRtApi, TExecDisp, TBackend> = Client<
 	TBackend,
 	sc_light::GenesisCallExecutor<
 		TBackend,
-		crate::client::LocalCallExecutor<TBackend, NativeExecutor<TExecDisp>>,
+		crate::client::LocalCallExecutor<TBl, TBackend, NativeExecutor<TExecDisp>>,
 	>,
 	TBl,
 	TRtApi,
@@ -295,6 +297,7 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 ) -> Result<TFullClient<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
+	TBl::Hash: FromStr,
 {
 	new_full_parts(config, telemetry).map(|parts| parts.0)
 }
@@ -303,9 +306,10 @@ pub fn new_full_client<TBl, TRtApi, TExecDisp>(
 pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 	config: &Configuration,
 	telemetry: Option<TelemetryHandle>,
-) -> Result<TFullParts<TBl, TRtApi, TExecDisp>,	Error> where
+) -> Result<TFullParts<TBl, TRtApi, TExecDisp>, Error> where
 	TBl: BlockT,
 	TExecDisp: NativeExecutionDispatch + 'static,
+	TBl::Hash: FromStr,
 {
 	let keystore_container = KeystoreContainer::new(&config.keystore)?;
 
@@ -349,6 +353,16 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 			sc_offchain::OffchainDb::factory_from_backend(&*backend),
 		);
 
+		let wasm_runtime_substitutes = config.chain_spec.code_substitutes().into_iter().map(|(h, c)| {
+			let hash = TBl::Hash::from_str(&h)
+				.map_err(|_|
+					 Error::Application(Box::from(
+						format!("Failed to parse `{}` as block hash for code substitutes.", h)
+					))
+				)?;
+			Ok((hash, c))
+		}).collect::<Result<std::collections::HashMap<_, _>, Error>>()?;
+
 		let client = new_client(
 			backend.clone(),
 			executor,
@@ -363,6 +377,7 @@ pub fn new_full_parts<TBl, TRtApi, TExecDisp>(
 				offchain_worker_enabled : config.offchain_worker.enabled,
 				offchain_indexing_api: config.offchain_worker.indexing_enabled,
 				wasm_runtime_overrides: config.wasm_runtime_overrides.clone(),
+				wasm_runtime_substitutes,
 			},
 		)?;
 
@@ -453,11 +468,11 @@ pub fn new_client<E, Block, RA>(
 	spawn_handle: Box<dyn SpawnNamed>,
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
-	config: ClientConfig,
+	config: ClientConfig<Block>,
 ) -> Result<
 	crate::client::Client<
 		Backend<Block>,
-		crate::client::LocalCallExecutor<Backend<Block>, E>,
+		crate::client::LocalCallExecutor<Block, Backend<Block>, E>,
 		Block,
 		RA,
 	>,

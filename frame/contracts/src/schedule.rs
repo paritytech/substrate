@@ -23,7 +23,7 @@ use crate::{Config, weights::WeightInfo};
 #[cfg(feature = "std")]
 use serde::{Serialize, Deserialize};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
-use frame_support::weights::Weight;
+use frame_support::{DefaultNoBound, weights::Weight};
 use sp_std::{marker::PhantomData, vec::Vec};
 use codec::{Encode, Decode};
 use parity_wasm::elements;
@@ -46,7 +46,7 @@ pub const INSTR_BENCHMARK_BATCH_SIZE: u32 = 1_000;
 /// should rely on public functions of this type.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(bound(serialize = "", deserialize = "")))]
-#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, ScheduleDebug, DefaultNoBound)]
 pub struct Schedule<T: Config> {
 	/// Describes the upper limits on various metrics.
 	pub(crate) limits: Limits,
@@ -388,9 +388,6 @@ pub struct HostFnWeights<T: Config> {
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
 	pub hash_blake2_128_per_byte: Weight,
 
-	/// Weight of calling `seal_rent_params`.
-	pub rent_params: Weight,
-
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
 	pub _phantom: PhantomData<T>
@@ -470,16 +467,6 @@ macro_rules! cost_byte {
 macro_rules! cost_byte_batched {
 	($name:ident) => {
 		cost_byte_batched_args!($name, 1)
-	}
-}
-
-impl<T: Config> Default for Schedule<T> {
-	fn default() -> Self {
-		Self {
-			limits: Default::default(),
-			instruction_weights: Default::default(),
-			host_fn_weights: Default::default(),
-		}
 	}
 }
 
@@ -619,7 +606,6 @@ impl<T: Config> Default for HostFnWeights<T> {
 			hash_blake2_256_per_byte: cost_byte_batched!(seal_hash_blake2_256_per_kb),
 			hash_blake2_128: cost_batched!(seal_hash_blake2_128),
 			hash_blake2_128_per_byte: cost_byte_batched!(seal_hash_blake2_128_per_kb),
-			rent_params: cost_batched!(seal_rent_params),
 			_phantom: PhantomData,
 		}
 	}

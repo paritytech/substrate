@@ -730,18 +730,12 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 
 		if idx < self.0.len() {
 			let (set_id, block_number) = self.0[idx].clone();
-			// To make sure we have the right set we need to check that the one before it also exists.
-			if idx > 0 {
-				let (prev_set_id, _) = self.0[idx - 1usize];
-				if set_id != prev_set_id + 1u64 {
-					// Without the preceding set_id we don't have a well-defined start.
-					return AuthoritySetChangeId::Unknown;
-				}
-			} else if set_id != 0 {
-				// If this is the first index, yet not the first set id then it's not well-defined
-				// that we are in the right set id.
+
+			// if this is the first index but not the first set id then we are missing data.
+			if idx == 0 && set_id != 0 {
 				return AuthoritySetChangeId::Unknown;
 			}
+
 			AuthoritySetChangeId::Set(set_id, block_number)
 		} else {
 			AuthoritySetChangeId::Unknown
@@ -751,14 +745,23 @@ impl<N: Ord + Clone> AuthoritySetChanges<N> {
 	/// Returns an iterator over all historical authority set changes starting at the given block
 	/// number (excluded). The iterator yields a tuple representing the set id and the block number
 	/// of the last block in that set.
-	pub fn iter_from(&self, block_number: N) -> impl Iterator<Item = &(u64, N)> {
+	pub fn iter_from(&self, block_number: N) -> Option<impl Iterator<Item = &(u64, N)>> {
 		let idx = self.0.binary_search_by_key(&block_number, |(_, n)| n.clone())
 			// if there was a change at the given block number then we should start on the next
 			// index since we want to exclude the current block number
 			.map(|n| n + 1)
 			.unwrap_or_else(|b| b);
 
-		self.0[idx..].iter()
+		if idx < self.0.len() {
+			let (set_id, _) = self.0[idx].clone();
+
+			// if this is the first index but not the first set id then we are missing data.
+			if idx == 0 && set_id != 0 {
+				return None;
+			}
+		}
+
+		Some(self.0[idx..].iter())
 	}
 }
 
@@ -1710,26 +1713,38 @@ mod tests {
 		let mut authority_set_changes = AuthoritySetChanges::empty();
 		authority_set_changes.append(1, 41);
 		authority_set_changes.append(2, 81);
+
+		// we are missing the data for the first set, therefore we should return `None`
+		assert_eq!(
+			None,
+			authority_set_changes.iter_from(40).map(|it| it.collect::<Vec<_>>()),
+		);
+
+		// after adding the data for the first set the same query should work
+		let mut authority_set_changes = AuthoritySetChanges::empty();
+		authority_set_changes.append(0, 21);
+		authority_set_changes.append(1, 41);
+		authority_set_changes.append(2, 81);
 		authority_set_changes.append(3, 121);
 
 		assert_eq!(
-			vec![(1, 41), (2, 81), (3, 121)],
-			authority_set_changes.iter_from(40).cloned().collect::<Vec<_>>(),
+			Some(vec![(1, 41), (2, 81), (3, 121)]),
+			authority_set_changes.iter_from(40).map(|it| it.cloned().collect::<Vec<_>>()),
 		);
 
 		assert_eq!(
-			vec![(2, 81), (3, 121)],
-			authority_set_changes.iter_from(41).cloned().collect::<Vec<_>>(),
-		);
-
-		assert_eq!(
-			0,
-			authority_set_changes.iter_from(121).count(),
+			Some(vec![(2, 81), (3, 121)]),
+			authority_set_changes.iter_from(41).map(|it| it.cloned().collect::<Vec<_>>()),
 		);
 
 		assert_eq!(
 			0,
-			authority_set_changes.iter_from(200).count(),
+			authority_set_changes.iter_from(121).unwrap().count(),
+		);
+
+		assert_eq!(
+			0,
+			authority_set_changes.iter_from(200).unwrap().count(),
 		);
 	}
 }

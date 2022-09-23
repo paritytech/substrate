@@ -21,8 +21,7 @@
 use codec::{Decode, Encode, EncodeLike, FullCodec};
 use crate::{
 	storage::{
-		StorageAppend, StorageDecodeLength, StoragePrefixedMap,
-		bounded_vec::BoundedVec,
+		StorageAppend, StorageTryAppend, StorageDecodeLength, StoragePrefixedMap,
 		types::{OptionQuery, QueryKindTrait, OnEmptyGetter},
 	},
 	traits::{GetDefault, StorageInstance, Get, MaxEncodedLen, StorageInfo},
@@ -113,52 +112,6 @@ where
 	}
 	fn storage_prefix() -> &'static [u8] {
 		<Self as crate::storage::generator::StorageDoubleMap<Key1, Key2, Value>>::storage_prefix()
-	}
-}
-
-impl<Prefix, Hasher1, Key1, Hasher2, Key2, QueryKind, OnEmpty, MaxValues, VecValue, VecBound>
-	StorageDoubleMap<
-		Prefix,
-		Hasher1,
-		Key1,
-		Hasher2,
-		Key2,
-		BoundedVec<VecValue, VecBound>,
-		QueryKind,
-		OnEmpty,
-		MaxValues,
-	> where
-	Prefix: StorageInstance,
-	Hasher1: crate::hash::StorageHasher,
-	Hasher2: crate::hash::StorageHasher,
-	Key1: FullCodec,
-	Key2: FullCodec,
-	QueryKind: QueryKindTrait<BoundedVec<VecValue, VecBound>, OnEmpty>,
-	OnEmpty: Get<QueryKind::Query> + 'static,
-	MaxValues: Get<Option<u32>>,
-	VecValue: FullCodec,
-	VecBound: Get<u32>,
-{
-	/// Try and append the given item to the double map in the storage.
-	///
-	/// Is only available if `Value` of the map is [`BoundedVec`].
-	pub fn try_append<EncodeLikeItem, EncodeLikeKey1, EncodeLikeKey2>(
-		key1: EncodeLikeKey1,
-		key2: EncodeLikeKey2,
-		item: EncodeLikeItem,
-	) -> Result<(), ()>
-	where
-		EncodeLikeKey1: EncodeLike<Key1> + Clone,
-		EncodeLikeKey2: EncodeLike<Key2> + Clone,
-		EncodeLikeItem: EncodeLike<VecValue>,
-	{
-		<
-			Self
-			as
-			crate::storage::bounded_vec::TryAppendDoubleMap<Key1, Key2, VecValue, VecBound>
-		>::try_append(
-			key1, key2, item,
-		)
 	}
 }
 
@@ -389,6 +342,26 @@ where
 	/// This would typically be called inside the module implementation of on_runtime_upgrade.
 	pub fn translate_values<OldValue: Decode, F: FnMut(OldValue) -> Option<Value>>(f: F) {
 		<Self as crate::storage::StoragePrefixedMap<Value>>::translate_values(f)
+	}
+
+	/// Try and append the given item to the value in the storage.
+	///
+	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
+	pub fn try_append<KArg1, KArg2, Item, EncodeLikeItem>(
+		key1: KArg1,
+		key2: KArg2,
+		item: EncodeLikeItem,
+	) -> Result<(), ()>
+	where
+		KArg1: EncodeLike<Key1> + Clone,
+		KArg2: EncodeLike<Key2> + Clone,
+		Item: Encode,
+		EncodeLikeItem: EncodeLike<Item>,
+		Value: StorageTryAppend<Item>,
+	{
+		<
+			Self as crate::storage::TryAppendDoubleMap<Key1, Key2, Value, Item>
+		>::try_append(key1, key2, item)
 	}
 }
 

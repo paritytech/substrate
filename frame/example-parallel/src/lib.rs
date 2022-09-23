@@ -48,9 +48,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
-
 	/// A public part of the pallet.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {

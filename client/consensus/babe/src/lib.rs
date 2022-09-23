@@ -98,7 +98,7 @@ use sp_consensus::{
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sc_client_api::{
-	backend::AuxStore, BlockchainEvents, ProvideUncles,
+	backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider
 };
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use futures::channel::mpsc::{channel, Sender, Receiver};
@@ -317,7 +317,7 @@ impl Config {
 	/// Either fetch the slot duration from disk or compute it from the genesis
 	/// state.
 	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self> where
-		C: AuxStore + ProvideRuntimeApi<B>, C::Api: BabeApi<B>,
+		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>, C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
 		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {

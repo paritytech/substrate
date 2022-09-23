@@ -23,6 +23,7 @@ use frame_support::{
 		DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo, DispatchError,
 	},
 	weights::Weight,
+	DefaultNoBound,
 };
 use sp_core::crypto::UncheckedFrom;
 
@@ -73,6 +74,7 @@ pub struct ErasedToken {
 	pub token: Box<dyn Any>,
 }
 
+#[derive(DefaultNoBound)]
 pub struct GasMeter<T: Config> {
 	gas_limit: Weight,
 	/// Amount of gas left from initial gas limit. Can reach zero.
@@ -80,18 +82,6 @@ pub struct GasMeter<T: Config> {
 	_phantom: PhantomData<T>,
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
-}
-
-impl<T: Config> Default for GasMeter<T> {
-	fn default() -> Self {
-		Self {
-			gas_limit: Default::default(),
-			gas_left: Default::default(),
-			_phantom: Default::default(),
-			#[cfg(test)]
-			tokens: Default::default(),
-		}
-	}
 }
 
 impl<T: Config> GasMeter<T>

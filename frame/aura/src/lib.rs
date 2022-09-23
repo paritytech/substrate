@@ -87,9 +87,6 @@ pub mod pallet {
 		}
 	}
 
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
-
 	/// The current authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn authorities)]

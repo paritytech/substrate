@@ -527,20 +527,13 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
 
-	seal_rent_params {
-		let r in 0 .. API_BENCHMARK_BATCHES;
-		let instance = Contract::<T>::new(WasmModule::getter(
-			"seal_rent_params", r * API_BENCHMARK_BATCH_SIZE
-		), vec![], Endow::Max)?;
-		let origin = RawOrigin::Signed(instance.caller.clone());
-	}: call(origin, instance.addr, 0u32.into(), Weight::max_value(), vec![])
-
 	seal_weight_to_fee {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let pages = code::max_pages::<T>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_weight_to_fee",
 				params: vec![ValueType::I64, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -565,6 +558,7 @@ benchmarks! {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "gas",
 				params: vec![ValueType::I32],
 				return_type: None,
@@ -588,6 +582,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_input",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -616,6 +611,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_input",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -645,6 +641,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_return",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -666,6 +663,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_return",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -692,6 +690,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_terminate",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -729,6 +728,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_terminate",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -780,6 +780,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_restore_to",
 				params: vec![
 					ValueType::I32,
@@ -864,6 +865,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_restore_to",
 				params: vec![
 					ValueType::I32,
@@ -935,6 +937,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_random",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -965,6 +968,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_deposit_event",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -996,6 +1000,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_deposit_event",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -1026,6 +1031,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory { min_pages: 1, max_pages: 1 }),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_set_rent_allowance",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -1056,6 +1062,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory { min_pages: 1, max_pages: 1 }),
 			imported_functions: vec![ImportedFunction {
+				module: "__unstable__",
 				name: "seal_debug_message",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1085,6 +1092,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -1114,6 +1122,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: None,
@@ -1149,6 +1158,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_clear_storage",
 				params: vec![ValueType::I32],
 				return_type: None,
@@ -1192,6 +1202,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1233,6 +1244,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1285,6 +1297,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_transfer",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1336,6 +1349,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_call",
 				params: vec![
 					ValueType::I32,
@@ -1387,6 +1401,7 @@ benchmarks! {
 		let callee_code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_return",
 				params: vec![
 					ValueType::I32,
@@ -1417,6 +1432,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_call",
 				params: vec![
 					ValueType::I32,
@@ -1502,6 +1518,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_instantiate",
 				params: vec![
 					ValueType::I32,
@@ -1584,6 +1601,7 @@ benchmarks! {
 		let callee_code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_return",
 				params: vec![
 					ValueType::I32,
@@ -1627,6 +1645,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
+				module: "seal0",
 				name: "seal_instantiate",
 				params: vec![
 					ValueType::I32,

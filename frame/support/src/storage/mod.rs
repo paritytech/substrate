@@ -36,6 +36,7 @@ pub mod hashed;
 pub mod bounded_btree_map;
 pub mod bounded_btree_set;
 pub mod bounded_vec;
+pub mod weak_bounded_vec;
 pub mod child;
 #[doc(hidden)]
 pub mod generator;
@@ -965,12 +966,14 @@ pub trait StorageDecodeLength: private::Sealed + codec::DecodeLength {
 mod private {
 	use super::*;
 	use bounded_vec::BoundedVec;
+	use weak_bounded_vec::WeakBoundedVec;
 
 	pub trait Sealed {}
 
 	impl<T: Encode> Sealed for Vec<T> {}
 	impl<Hash: Encode> Sealed for Digest<Hash> {}
 	impl<T, S> Sealed for BoundedVec<T, S> {}
+	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
 
@@ -1010,13 +1013,132 @@ impl<T: Encode> StorageDecodeLength for Vec<T> {}
 /// format ever changes, we need to remove this here.
 impl<Hash: Encode> StorageAppend<DigestItem<Hash>> for Digest<Hash> {}
 
+/// Marker trait that is implemented for types that support the `storage::append` api with a limit
+/// on the number of element.
+///
+/// This trait is sealed.
+pub trait StorageTryAppend<Item>: StorageDecodeLength + private::Sealed {
+	fn bound() -> usize;
+}
+
+/// Storage value that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendValue<T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage item.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<LikeI: EncodeLike<I>>(item: LikeI) -> Result<(), ()>;
+}
+
+impl<T, I, StorageValueT> TryAppendValue<T, I> for StorageValueT
+where
+	I: Encode,
+	T: FullCodec + StorageTryAppend<I>,
+	StorageValueT: generator::StorageValue<T>,
+{
+	fn try_append<LikeI: EncodeLike<I>>(item: LikeI) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len().unwrap_or_default();
+		if current < bound {
+			// NOTE: we cannot reuse the implementation for `Vec<T>` here because we never want to
+			// mark `BoundedVec<T, S>` as `StorageAppend`.
+			let key = Self::storage_value_final_key();
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Storage map that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendMap<K: Encode, T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage map at the given `key`.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<LikeK: EncodeLike<K> + Clone, LikeI: EncodeLike<I>>(
+		key: LikeK,
+		item: LikeI,
+	) -> Result<(), ()>;
+}
+
+impl<K, T, I, StorageMapT> TryAppendMap<K, T, I> for StorageMapT
+where
+	K: FullCodec,
+	T: FullCodec + StorageTryAppend<I>,
+	I: Encode,
+	StorageMapT: generator::StorageMap<K, T>,
+{
+	fn try_append<LikeK: EncodeLike<K> + Clone, LikeI: EncodeLike<I>>(
+		key: LikeK,
+		item: LikeI,
+	) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len(key.clone()).unwrap_or_default();
+		if current < bound {
+			let key = Self::storage_map_final_key(key);
+			sp_io::storage::append(&key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
+/// Storage double map that is capable of [`StorageTryAppend`](crate::storage::StorageTryAppend).
+pub trait TryAppendDoubleMap<K1: Encode, K2: Encode, T: StorageTryAppend<I>, I: Encode> {
+	/// Try and append the `item` into the storage double map at the given `key`.
+	///
+	/// This might fail if bounds are not respected.
+	fn try_append<
+		LikeK1: EncodeLike<K1> + Clone,
+		LikeK2: EncodeLike<K2> + Clone,
+		LikeI: EncodeLike<I>,
+	>(
+		key1: LikeK1,
+		key2: LikeK2,
+		item: LikeI,
+	) -> Result<(), ()>;
+}
+
+impl<K1, K2, T, I, StorageDoubleMapT> TryAppendDoubleMap<K1, K2, T, I> for StorageDoubleMapT
+where
+	K1: FullCodec,
+	K2: FullCodec,
+	T: FullCodec + StorageTryAppend<I>,
+	I: Encode,
+	StorageDoubleMapT: generator::StorageDoubleMap<K1, K2, T>,
+{
+	fn try_append<
+		LikeK1: EncodeLike<K1> + Clone,
+		LikeK2: EncodeLike<K2> + Clone,
+		LikeI: EncodeLike<I>,
+	>(
+		key1: LikeK1,
+		key2: LikeK2,
+		item: LikeI,
+	) -> Result<(), ()> {
+		let bound = T::bound();
+		let current = Self::decode_len(key1.clone(), key2.clone()).unwrap_or_default();
+		if current < bound {
+			let double_map_key = Self::storage_double_map_final_key(key1, key2);
+			sp_io::storage::append(&double_map_key, item.encode());
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+}
+
 #[cfg(test)]
 mod test {
 	use super::*;
 	use sp_core::hashing::twox_128;
-	use crate::hash::Identity;
+	use crate::{hash::Identity, assert_ok};
 	use sp_io::TestExternalities;
 	use generator::StorageValue as _;
+	use bounded_vec::BoundedVec;
+	use weak_bounded_vec::WeakBoundedVec;
+	use core::convert::{TryFrom, TryInto};
 
 	#[test]
 	fn prefixed_map_works() {
@@ -1222,6 +1344,82 @@ mod test {
 					(vec![1, 2, 3], 8),
 					(vec![3], 8),
 				],
+			);
+		});
+	}
+
+	crate::parameter_types! {
+		pub const Seven: u32 = 7;
+		pub const Four: u32 = 4;
+	}
+
+	crate::generate_storage_alias! { Prefix, Foo => Value<WeakBoundedVec<u32, Seven>> }
+	crate::generate_storage_alias! { Prefix, FooMap => Map<(u32, Twox128), BoundedVec<u32, Seven>> }
+	crate::generate_storage_alias! {
+		Prefix,
+		FooDoubleMap => DoubleMap<(u32, Twox128), (u32, Twox128), BoundedVec<u32, Seven>>
+	}
+
+	#[test]
+	fn try_append_works() {
+		TestExternalities::default().execute_with(|| {
+			let bounded: WeakBoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			Foo::put(bounded);
+			assert_ok!(Foo::try_append(4));
+			assert_ok!(Foo::try_append(5));
+			assert_ok!(Foo::try_append(6));
+			assert_ok!(Foo::try_append(7));
+			assert_eq!(Foo::decode_len().unwrap(), 7);
+			assert!(Foo::try_append(8).is_err());
+		});
+
+		TestExternalities::default().execute_with(|| {
+			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			FooMap::insert(1, bounded);
+
+			assert_ok!(FooMap::try_append(1, 4));
+			assert_ok!(FooMap::try_append(1, 5));
+			assert_ok!(FooMap::try_append(1, 6));
+			assert_ok!(FooMap::try_append(1, 7));
+			assert_eq!(FooMap::decode_len(1).unwrap(), 7);
+			assert!(FooMap::try_append(1, 8).is_err());
+
+			// append to a non-existing
+			assert!(FooMap::get(2).is_none());
+			assert_ok!(FooMap::try_append(2, 4));
+			assert_eq!(
+				FooMap::get(2).unwrap(),
+				BoundedVec::<u32, Seven>::try_from(vec![4]).unwrap(),
+			);
+			assert_ok!(FooMap::try_append(2, 5));
+			assert_eq!(
+				FooMap::get(2).unwrap(),
+				BoundedVec::<u32, Seven>::try_from(vec![4, 5]).unwrap(),
+			);
+		});
+
+		TestExternalities::default().execute_with(|| {
+			let bounded: BoundedVec<u32, Seven> = vec![1, 2, 3].try_into().unwrap();
+			FooDoubleMap::insert(1, 1, bounded);
+
+			assert_ok!(FooDoubleMap::try_append(1, 1, 4));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 5));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 6));
+			assert_ok!(FooDoubleMap::try_append(1, 1, 7));
+			assert_eq!(FooDoubleMap::decode_len(1, 1).unwrap(), 7);
+			assert!(FooDoubleMap::try_append(1, 1, 8).is_err());
+
+			// append to a non-existing
+			assert!(FooDoubleMap::get(2, 1).is_none());
+			assert_ok!(FooDoubleMap::try_append(2, 1, 4));
+			assert_eq!(
+				FooDoubleMap::get(2, 1).unwrap(),
+				BoundedVec::<u32, Seven>::try_from(vec![4]).unwrap(),
+			);
+			assert_ok!(FooDoubleMap::try_append(2, 1, 5));
+			assert_eq!(
+				FooDoubleMap::get(2, 1).unwrap(),
+				BoundedVec::<u32, Seven>::try_from(vec![4, 5]).unwrap(),
 			);
 		});
 	}
