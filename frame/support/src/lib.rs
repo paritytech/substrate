@@ -448,6 +448,7 @@ macro_rules! parameter_types_impl_thread_local {
 					}
 
 					/// Mutate the internal value in place.
+					#[allow(unused)]
 					pub fn mutate<R, F: FnOnce(&mut $type) -> R>(mutate: F) -> R{
 						let mut current = Self::get();
 						let result = mutate(&mut current);
@@ -456,6 +457,7 @@ macro_rules! parameter_types_impl_thread_local {
 					}
 
 					/// Get current value and replace with initial value of the parameter type.
+					#[allow(unused)]
 					pub fn take() -> $type {
 						let current = Self::get();
 						Self::set($value);
