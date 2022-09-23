@@ -78,7 +78,7 @@ benchmarks! {
 		let calls = vec![frame_system::Call::<T>::remark { remark: vec![] }.into(); n as usize];
 		let origin = T::ManagerOrigin::successful_origin();
 		assert!(CallIndices::<T>::get().is_empty());
-	}: _<T::Origin>(origin, calls)
+	}: _<T::RuntimeOrigin>(origin, calls)
 	verify {
 		if !n.is_zero() {
 			assert!(!CallIndices::<T>::get().is_empty());
@@ -90,7 +90,7 @@ benchmarks! {
 		let end = 10u32.into();
 		let payout = 5u32.into();
 		let origin = T::ManagerOrigin::successful_origin();
-	}: _<T::Origin>(origin, price, end, payout, true)
+	}: _<T::RuntimeOrigin>(origin, price, end, payout, true)
 	verify {
 		assert!(crate::Lottery::<T>::get().is_some());
 	}
@@ -99,7 +99,7 @@ benchmarks! {
 		setup_lottery::<T>(true)?;
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, true);
 		let origin = T::ManagerOrigin::successful_origin();
-	}: _<T::Origin>(origin)
+	}: _<T::RuntimeOrigin>(origin)
 	verify {
 		assert_eq!(crate::Lottery::<T>::get().unwrap().repeat, false);
 	}

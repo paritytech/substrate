@@ -208,7 +208,7 @@ pub mod pallet {
 
 		/// The origin which may forcibly create or destroy an asset or otherwise alter privileged
 		/// attributes.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The basic amount of funds that must be reserved for an asset.
 		#[pallet::constant]

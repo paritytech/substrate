@@ -199,7 +199,7 @@ pub fn witness() -> SolutionOrSnapshotSize {
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
