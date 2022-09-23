@@ -1424,7 +1424,7 @@ impl pallet_assets::Config for Runtime {
 	type Balance = u128;
 	type AssetId = u32;
 	type Currency = Balances;
-	type ForceOrigin = EnsureSigned<AccountId>;
+	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDeposit = AssetDeposit;
 	type AssetAccountDeposit = ConstU128<DOLLARS>;
 	type MetadataDepositBase = MetadataDepositBase;
