@@ -42,9 +42,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let config =
 			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		let user_features: BitFlags<CollectionFeature> = config.get(); // TODO: can we omit the type?
 		ensure!(
-			!user_features.contains(UserFeature::NonTransferableItems),
+			!user_features.contains(CollectionFeature::NonTransferableItems),
 			Error::<T, I>::ItemsNotTransferable
 		);
 
@@ -78,7 +78,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_create_collection(
 		collection: T::CollectionId,
 		owner: T::AccountId,
-		user_config: UserFeatures,
+		collection_config: CollectionFeatures,
 		admin: T::AccountId,
 		deposit: DepositBalanceOf<T, I>,
 		free_holding: bool,
@@ -104,10 +104,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
-		let collection_config = CollectionConfig {
-			system_features: SystemFeatures::new((T::DefaultSystemConfig::get()).get()),
-			user_features: user_config,
-		};
+		// let config/*: BitFlags<CollectionFeature>*/ = CollectionFeatures::new(collection_config);
 		CollectionConfigs::<T, I>::insert(&collection, collection_config);
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
@@ -247,9 +244,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let config =
 			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		let user_features: BitFlags<CollectionFeature> = config.get();
 		ensure!(
-			!user_features.contains(UserFeature::NonTransferableItems),
+			!user_features.contains(CollectionFeature::NonTransferableItems),
 			Error::<T, I>::ItemsNotTransferable
 		);
 
@@ -280,9 +277,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let config =
 			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		let user_features: BitFlags<UserFeature> = config.user_features.get();
+		let user_features: BitFlags<CollectionFeature> = config.get();
 		ensure!(
-			!user_features.contains(UserFeature::NonTransferableItems),
+			!user_features.contains(CollectionFeature::NonTransferableItems),
 			Error::<T, I>::NotForSale
 		);
 
@@ -317,16 +314,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub fn do_change_collection_config(
+	/*pub fn do_change_collection_config(
 		id: T::CollectionId,
 		caller: T::AccountId,
 		current_config: CollectionConfig,
-		new_config: UserFeatures,
+		new_config: CollectionFeatures,
 	) -> DispatchResult {
 		let collection = Collection::<T, I>::get(id).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(collection.owner == caller, Error::<T, I>::NoPermission);
 
-		let user_features: BitFlags<UserFeature> = current_config.user_features.get();
+		let user_features: BitFlags<CollectionFeature> = current_config.user_features.get();
 
 		if user_features.contains(UserFeature::IsLocked) {
 			return Err(Error::<T, I>::CollectionIsLocked.into())
@@ -341,5 +338,5 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			Ok(())
 		})
-	}
+	}*/
 }

@@ -85,17 +85,20 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, BitFlags<CollectionFeature>>
+	for Pallet<T, I>
+{
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
 	fn create_collection(
 		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
+		config: &BitFlags<CollectionFeature>,
 	) -> DispatchResult {
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
-			UserFeatures::new(UserFeature::Administration.into()),
+			CollectionFeatures::new(*config),
 			admin.clone(),
 			T::CollectionDeposit::get(),
 			false,
