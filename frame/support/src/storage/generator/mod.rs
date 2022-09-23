@@ -36,6 +36,7 @@ pub use value::StorageValue;
 
 #[cfg(test)]
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod tests {
 	use crate::{
 		assert_noop, assert_ok,

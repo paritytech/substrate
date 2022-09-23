@@ -28,7 +28,6 @@
 // of this crate.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![allow(deprecated)]
 
 /// Export ourself as `frame_support` to make tests happy.
 extern crate self as frame_support;
@@ -815,6 +814,8 @@ macro_rules! assert_error_encoded_size {
 pub use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
+#[allow(dead_code)]
+#[allow(deprecated)]
 pub mod tests {
 	use super::*;
 	use crate::metadata::{
@@ -852,8 +853,6 @@ pub mod tests {
 	}
 
 	mod module {
-		#![allow(dead_code)]
-
 		use super::Config;
 
 		decl_module! {

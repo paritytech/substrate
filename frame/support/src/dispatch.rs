@@ -649,6 +649,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed};
+/// # #[allow(deprecated)]
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 ///
@@ -692,6 +693,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed};
+/// # #[allow(deprecated)]
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
@@ -727,6 +729,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// # extern crate frame_support;
 /// # use frame_support::{weights::Weight, dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}};
 /// # use frame_system::{Config, ensure_signed};
+/// # #[allow(deprecated)]
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 1_000_000]
@@ -757,6 +760,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// # extern crate frame_support;
 /// # use frame_support::transactional;
 /// # use frame_system::Config;
+/// # #[allow(deprecated)]
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
@@ -778,6 +782,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// # extern crate frame_support;
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed, ensure_root};
+/// # #[allow(deprecated)]
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
@@ -818,6 +823,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// # impl Instance for DefaultInstance {}
 /// pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {}
 ///
+/// # #[allow(deprecated)]
 /// decl_module! {
 /// 	pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::RuntimeOrigin {
 /// 		// Your implementation
@@ -843,6 +849,7 @@ impl<T> PaysFee<T> for (u64, Pays) {
 /// # use frame_system::{self as system, ensure_signed};
 /// pub trait Config: system::Config where Self::AccountId: From<u32> {}
 ///
+/// # #[allow(deprecated)]
 /// decl_module! {
 /// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, T::AccountId: From<u32> {
 /// 		// Your implementation
@@ -3176,6 +3183,7 @@ macro_rules! __check_reserved_fn_name {
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod tests {
 	use super::*;
 	use crate::{
@@ -3495,6 +3503,7 @@ mod tests {
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
+#[allow(deprecated)]
 mod weight_tests {
 	use super::*;
 	use sp_core::{parameter_types, Get};
