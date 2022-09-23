@@ -33,7 +33,6 @@ test-dependency-rules:
   variables:
     CI_IMAGE:                      "paritytech/tools:latest"
   script:
-    - cargo install cargo-workspaces
     - ./scripts/ci/gitlab/ensure-deps.sh
 
 test-rust-features:
