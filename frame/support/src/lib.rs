@@ -1398,6 +1398,7 @@ pub mod pallet_prelude {
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
+	pub use frame_support::pallet_macros::*;
 	pub use scale_info::TypeInfo;
 	pub use sp_runtime::{
 		traits::{MaybeSerializeDeserialize, Member, ValidateUnsigned},
@@ -1856,21 +1857,6 @@ pub mod pallet_prelude {
 /// #[cfg(feature = "my-feature")]
 /// #[pallet::storage]
 /// pub(super) type MyStorage<T> = StorageValue<Value = u32>;
-/// ```
-///
-/// The optional attribute `#[pallet::whitelist_storage]` will declare the
-/// storage as whitelisted from benchmarking. Doing so will exclude reads of
-/// that value's storage key from counting towards weight calculations during
-/// benchmarking.
-///
-/// This attribute should only be attached to storages that are known to be
-/// read/used in every block. This will result in a more accurate benchmarking weight.
-///
-/// ### Example
-/// ```ignore
-/// #[pallet::storage]
-/// #[pallet::whitelist_storage]
-/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 /// ```
 ///
 /// All the `cfg` attributes are automatically copied to the items generated for the storage,
@@ -2580,3 +2566,8 @@ pub mod pallet_prelude {
 /// 	```
 /// * use the newest nightly possible.
 pub use frame_support_procedural::pallet;
+
+/// Contains macro stubs for all of the pallet:: macros
+pub mod pallet_macros {
+	pub use frame_support_procedural::whitelist_storage;
+}
