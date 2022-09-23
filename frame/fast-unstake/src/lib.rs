@@ -126,7 +126,7 @@ pub mod pallet {
 		type SlashPerEra: Get<BalanceOf<Self>>;
 
 		/// The origin that can control this pallet.
-		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
+		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
