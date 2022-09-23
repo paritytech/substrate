@@ -28,6 +28,7 @@ mod keyword {
 	syn::custom_keyword!(getter);
 	syn::custom_keyword!(storage_prefix);
 	syn::custom_keyword!(unbounded);
+	syn::custom_keyword!(whitelist_storage);
 	syn::custom_keyword!(OptionQuery);
 	syn::custom_keyword!(ResultQuery);
 	syn::custom_keyword!(ValueQuery);
@@ -37,16 +38,21 @@ mod keyword {
 /// * `#[pallet::getter(fn dummy)]`
 /// * `#[pallet::storage_prefix = "CustomName"]`
 /// * `#[pallet::unbounded]`
+/// * `#[pallet::whitelist_storage]
 pub enum PalletStorageAttr {
 	Getter(syn::Ident, proc_macro2::Span),
 	StorageName(syn::LitStr, proc_macro2::Span),
 	Unbounded(proc_macro2::Span),
+	WhitelistStorage(proc_macro2::Span),
 }
 
 impl PalletStorageAttr {
 	fn attr_span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Getter(_, span) | Self::StorageName(_, span) | Self::Unbounded(span) => *span,
+			Self::Getter(_, span) |
+			Self::StorageName(_, span) |
+			Self::Unbounded(span) |
+			Self::WhitelistStorage(span) => *span,
 		}
 	}
 }
@@ -84,6 +90,9 @@ impl syn::parse::Parse for PalletStorageAttr {
 			content.parse::<keyword::unbounded>()?;
 
 			Ok(Self::Unbounded(attr_span))
+		} else if lookahead.peek(keyword::whitelist_storage) {
+			content.parse::<keyword::whitelist_storage>()?;
+			Ok(Self::WhitelistStorage(attr_span))
 		} else {
 			Err(lookahead.error())
 		}
@@ -94,6 +103,7 @@ struct PalletStorageAttrInfo {
 	getter: Option<syn::Ident>,
 	rename_as: Option<syn::LitStr>,
 	unbounded: bool,
+	whitelisted: bool,
 }
 
 impl PalletStorageAttrInfo {
@@ -101,12 +111,14 @@ impl PalletStorageAttrInfo {
 		let mut getter = None;
 		let mut rename_as = None;
 		let mut unbounded = false;
+		let mut whitelisted = false;
 		for attr in attrs {
 			match attr {
 				PalletStorageAttr::Getter(ident, ..) if getter.is_none() => getter = Some(ident),
 				PalletStorageAttr::StorageName(name, ..) if rename_as.is_none() =>
 					rename_as = Some(name),
 				PalletStorageAttr::Unbounded(..) if !unbounded => unbounded = true,
+				PalletStorageAttr::WhitelistStorage(..) if !whitelisted => whitelisted = true,
 				attr =>
 					return Err(syn::Error::new(
 						attr.attr_span(),
@@ -115,7 +127,7 @@ impl PalletStorageAttrInfo {
 			}
 		}
 
-		Ok(PalletStorageAttrInfo { getter, rename_as, unbounded })
+		Ok(PalletStorageAttrInfo { getter, rename_as, unbounded, whitelisted })
 	}
 }
 
@@ -171,6 +183,8 @@ pub struct StorageDef {
 	pub named_generics: Option<StorageGenerics>,
 	/// If the value stored in this storage is unbounded.
 	pub unbounded: bool,
+	/// Whether or not reads to this storage key will be ignored by benchmarking
+	pub whitelisted: bool,
 }
 
 /// The parsed generic from the
@@ -672,7 +686,7 @@ impl StorageDef {
 		};
 
 		let attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
-		let PalletStorageAttrInfo { getter, rename_as, unbounded } =
+		let PalletStorageAttrInfo { getter, rename_as, unbounded, whitelisted } =
 			PalletStorageAttrInfo::from_attrs(attrs)?;
 
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
@@ -814,6 +828,7 @@ impl StorageDef {
 			cfg_attrs,
 			named_generics,
 			unbounded,
+			whitelisted,
 		})
 	}
 }

@@ -18,7 +18,7 @@
 use super::*;
 use crate::log;
 use frame_support::traits::OnRuntimeUpgrade;
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod v1 {
 	use super::*;
@@ -97,7 +97,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
 			Pallet::<T>::try_state(frame_system::Pallet::<T>::block_number())?;
@@ -119,7 +119,7 @@ pub mod v2 {
 		ExtBuilder::default().build_and_execute(|| {
 			let join = |x| {
 				Balances::make_free_balance_be(&x, Balances::minimum_balance() + 10);
-				frame_support::assert_ok!(Pools::join(Origin::signed(x), 10, 1));
+				frame_support::assert_ok!(Pools::join(RuntimeOrigin::signed(x), 10, 1));
 			};
 
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 10);
@@ -347,7 +347,7 @@ pub mod v2 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			// all reward accounts must have more than ED.
 			RewardPools::<T>::iter().for_each(|(id, _)| {
 				assert!(
@@ -356,11 +356,11 @@ pub mod v2 {
 				)
 			});
 
-			Ok(())
+			Ok(Vec::new())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			// new version must be set.
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 2);
 
@@ -430,16 +430,16 @@ pub mod v3 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			ensure!(
 				Pallet::<T>::current_storage_version() > Pallet::<T>::on_chain_storage_version(),
 				"the on_chain version is equal or more than the current one"
 			);
-			Ok(())
+			Ok(Vec::new())
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			ensure!(
 				Metadata::<T>::iter_keys().all(|id| BondedPools::<T>::contains_key(&id)),
 				"not all of the stale metadata has been removed"

@@ -63,7 +63,7 @@ use sp_runtime::{
 	SaturatedConversion,
 };
 
-#[cfg(any(feature = "runtime-benchmarks", test))]
+#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod default_weights;
 mod mmr;

@@ -22,12 +22,13 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../../election-provider-support" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
-pallet-bags-list = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../bags-list" }
-pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
-pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../", features = ["runtime-benchmarks"] }
+pallet-bags-list = { version = "4.0.0-dev", default-features = false, path = "../../bags-list" }
+pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
+pallet-nomination-pools = { version = "1.0.0", default-features = false, path = "../" }
 
 # Substrate Primitives
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime-interface" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
@@ -40,6 +41,7 @@ sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]
+
 std = [
 	"frame-benchmarking/std",
 	"frame-election-provider-support/std",
@@ -49,7 +51,20 @@ std = [
 	"pallet-staking/std",
 	"pallet-nomination-pools/std",
 	"sp-runtime/std",
+	"sp-runtime-interface/std",
+	"sp-io/std",
 	"sp-staking/std",
-	"sp-std/std",
-	"pallet-balances/std",
+	"sp-std/std",	
+]
+
+runtime-benchmarks = [
+	"frame-election-provider-support/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks",
+	"frame-support/runtime-benchmarks",
+	"pallet-staking/runtime-benchmarks",
+	"pallet-nomination-pools/runtime-benchmarks",
+	"pallet-bags-list/runtime-benchmarks",
 ]
