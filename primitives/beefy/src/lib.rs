@@ -42,11 +42,34 @@ pub use commitment::{
 
 use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
+use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
+use sp_runtime::traits::{Convert, Hash};
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
 pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::KeyTypeId(*b"beef");
+
+/// Trait representing BEEFY authority id.
+pub trait BeefyAuthorityId: RuntimeAppPublic {}
+
+/// Means of verification for a BEEFY authority signature.
+///
+/// Accepts custom hashing fn for the message and custom convertor fn for the signer.
+pub trait BeefyVerify<
+	MsgHash: Hash,
+	AccountId: PartialEq,
+	SignerToAccountId: Convert<Self::Signer, AccountId>,
+>
+{
+	/// Type of the signer.
+	type Signer: BeefyAuthorityId;
+
+	/// Verify a signature.
+	///
+	/// Return `true` if signature is valid for the value.
+	fn verify(&self, msg: &[u8], signer: &AccountId) -> bool;
+}
 
 /// BEEFY cryptographic types
 ///
@@ -61,7 +84,9 @@ pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::Ke
 /// The current underlying crypto scheme used is ECDSA. This can be changed,
 /// without affecting code restricted against the above listed crypto types.
 pub mod crypto {
+	use super::{BeefyAuthorityId, BeefyVerify, Convert, Hash};
 	use sp_application_crypto::{app_crypto, ecdsa};
+	use sp_core::crypto::Wraps;
 	app_crypto!(ecdsa, crate::KEY_TYPE);
 
 	/// Identity of a BEEFY authority using ECDSA as its crypto.
@@ -69,6 +94,34 @@ pub mod crypto {
 
 	/// Signature for a BEEFY authority using ECDSA as its crypto.
 	pub type AuthoritySignature = Signature;
+
+	impl BeefyAuthorityId for AuthorityId {}
+
+	impl<
+			MsgHash: Hash,
+			AccountId: PartialEq,
+			SignerToAccountId: Convert<AuthorityId, AccountId>,
+		> BeefyVerify<MsgHash, AccountId, SignerToAccountId> for AuthoritySignature
+	where
+		<MsgHash as Hash>::Output: Into<[u8; 32]>,
+	{
+		type Signer = AuthorityId;
+
+		fn verify(&self, msg: &[u8], signer: &AccountId) -> bool {
+			use sp_application_crypto::ByteArray;
+
+			let msg_hash = <MsgHash as Hash>::hash(msg).into();
+			match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
+				self.as_inner_ref().as_ref(),
+				&msg_hash,
+			)
+			.map(|raw_pubkey| Public::from_slice(raw_pubkey.as_ref()))
+			{
+				Ok(Ok(pubkey)) => signer == &SignerToAccountId::convert(pubkey),
+				_ => false,
+			}
+		}
+	}
 }
 
 /// The `ConsensusEngineId` of BEEFY.
@@ -181,7 +234,8 @@ sp_api::decl_runtime_apis! {
 mod tests {
 	use super::*;
 	use sp_application_crypto::ecdsa::{self, Public};
-	use sp_core::Pair;
+	use sp_core::{crypto::Wraps, keccak_256, Pair};
+	use sp_runtime::traits::{BlakeTwo256, Identity, Keccak256};
 
 	#[test]
 	fn validator_set() {
@@ -194,5 +248,26 @@ mod tests {
 
 		assert_eq!(validators.id(), set_id);
 		assert_eq!(validators.validators(), &vec![alice.public()]);
+	}
+
+	#[test]
+	fn beefy_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = crypto::Pair::generate();
+
+		let signature: crypto::Signature =
+			pair.as_inner_ref().sign_prehashed(&keccak_256(msg)).into();
+
+		// Verification works
+		assert!(BeefyVerify::<Keccak256, _, Identity>::verify(&signature, msg, &pair.public()));
+		// Other Hashing fn doesn't work
+		assert!(!BeefyVerify::<BlakeTwo256, _, Identity>::verify(&signature, msg, &pair.public()));
+		// Other public key doesn't work
+		let (other_pair, _) = crypto::Pair::generate();
+		assert!(!BeefyVerify::<Keccak256, _, Identity>::verify(
+			&signature,
+			msg,
+			&other_pair.public()
+		));
 	}
 }

@@ -16,16 +16,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use sp_application_crypto::{RuntimeAppPublic, Wraps};
+use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::traits::{CustomVerify, Identity, Keccak256};
+use sp_runtime::traits::{Identity, Keccak256};
 
 use log::warn;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
-	KEY_TYPE,
+	BeefyVerify, KEY_TYPE,
 };
 
 use crate::error;
@@ -99,11 +99,7 @@ impl BeefyKeystore {
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
 	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
-		CustomVerify::<Keccak256, _, Identity>::custom_verify(
-			sig.as_inner_ref(),
-			message,
-			public.as_inner_ref(),
-		)
+		BeefyVerify::<Keccak256, _, Identity>::verify(sig, message, public)
 	}
 }
 
