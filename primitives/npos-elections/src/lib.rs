@@ -76,11 +76,10 @@
 
 use scale_info::TypeInfo;
 use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
-use sp_core::RuntimeDebug;
+use sp_core::{RuntimeDebug, bounded::BoundedVec};
 use sp_std::{
 	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc, vec,
 };
-
 use codec::{Decode, Encode, MaxEncodedLen};
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -438,6 +437,18 @@ pub struct Support<AccountId> {
 	pub voters: Vec<(AccountId, ExtendedBalance)>,
 }
 
+/// A Bounded Support.
+///
+/// See also: [`Support`]
+#[derive(RuntimeDebug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct BoundedSupport<AccountId, MaxVoters: sp_core::Get<u32>> {
+	/// Total support.
+	pub total: ExtendedBalance,
+	/// Support from voters.
+	pub voters: BoundedVec<(AccountId, ExtendedBalance), MaxVoters>,
+}
+
 impl<AccountId> Default for Support<AccountId> {
 	fn default() -> Self {
 		Self { total: Default::default(), voters: vec![] }
@@ -450,6 +461,9 @@ impl<AccountId> Default for Support<AccountId> {
 ///
 /// The main advantage of this is that it is encodable.
 pub type Supports<A> = Vec<(A, Support<A>)>;
+
+/// A bounded `Supports` with MaxVoters and MaxTargets.
+pub type BoundedSupports<A, MaxVoters, MaxTargets> = BoundedVec<(A, BoundedSupport<A, MaxVoters>), MaxTargets>;
 
 /// Linkage from a winner to their [`Support`].
 ///
