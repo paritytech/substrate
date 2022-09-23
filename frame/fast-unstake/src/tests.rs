@@ -140,14 +140,10 @@ fn cannot_deregister_already_head() {
 		// Controller attempts to register, should fail
 		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2), Some(1_u32)));
 		// Insert some Head item for stash.
-<<<<<<< HEAD
 		Head::<T>::put(UnstakeRequest {
 			stashes_and_pool_id: bounded_vec![(1, None)],
 			checked: bounded_vec![],
 		});
-=======
-		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![], maybe_pool_id: None });
->>>>>>> 91d31b46001782f33c447618fc7403ea7d52706e
 		// Controller attempts to deregister
 		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::AlreadyHead);
 	});
