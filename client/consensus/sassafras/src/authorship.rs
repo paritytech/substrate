@@ -45,6 +45,10 @@ fn claim_slot(
 	keystore: &SyncCryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let config = &epoch.config;
+	// TODO-SASS-P2
+	// if epoch.config.authorities.is_empty() {
+	//     return None
+	// }
 	let (authority_idx, ticket_aux) = match ticket {
 		Some(ticket) => {
 			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");

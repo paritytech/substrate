@@ -98,21 +98,14 @@ pub mod pallet {
 
 	/// Configuration parameters.
 	#[pallet::config]
-	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: pallet_timestamp::Config + SendTransactionTypes<Call<Self>> {
+	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+		/// The amount of time, in milliseconds, that each slot should last.
+		#[pallet::constant]
+		type SlotDuration: Get<u64>;
+
 		/// The amount of time, in slots, that each epoch should last.
-		/// NOTE: Currently it is not possible to change the epoch duration after the chain has
-		/// started. Attempting to do so will brick block production.
 		#[pallet::constant]
 		type EpochDuration: Get<u64>;
-
-		/// The expected average block time at which Sassafras should be creating
-		/// blocks. Since Sassafras is probabilistic it is not trivial to figure out
-		/// what the expected average block time should be based on the slot
-		/// duration and the security parameter `c` (where `1 - c` represents
-		/// the probability of a slot being empty).
-		#[pallet::constant]
-		type ExpectedBlockTime: Get<Self::Moment>;
 
 		/// Sassafras requires some logic to be triggered on every block to query for whether an
 		/// epoch has ended and to perform the transition to the next epoch.
@@ -130,13 +123,11 @@ pub mod pallet {
 		type MaxTickets: Get<u32>;
 	}
 
-	// TODO-SASS-P2
 	/// Sassafras runtime errors.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Submitted configuration is invalid.
 		InvalidConfiguration,
-		// TODO-SASS P2 ...
 	}
 
 	/// Current epoch index.
@@ -458,13 +449,13 @@ pub mod pallet {
 
 // Inherent methods
 impl<T: Config> Pallet<T> {
-	/// Determine the Sassafras slot duration based on the Timestamp module configuration.
-	pub fn slot_duration() -> T::Moment {
-		// TODO-SASS-P2: clarify why this is doubled (copied verbatim from BABE)
-		// We double the minimum block-period so each author can always propose within
-		// the majority of their slot.
-		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
-	}
+	// 	// TODO-SASS-P2: I don't think this is really required
+	// /// Determine the Sassafras slot duration based on the Timestamp module configuration.
+	// pub fn slot_duration() -> T::Moment {
+	// 	// We double the minimum block-period so each author can always propose within
+	// 	// the majority of their slot.
+	// 	<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+	// }
 
 	/// Determine whether an epoch change should take place at this block.
 	/// Assumes that initialization has already taken place.

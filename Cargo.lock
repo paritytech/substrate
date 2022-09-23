@@ -8261,6 +8261,7 @@ dependencies = [
  "sc-consensus",
  "sc-consensus-epochs",
  "sc-consensus-slots",
+ "sc-keystore",
  "sc-network-test",
  "sc-telemetry",
  "schnorrkel",
@@ -8279,6 +8280,7 @@ dependencies = [
  "sp-timestamp",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
+ "tempfile",
  "thiserror",
 ]
 

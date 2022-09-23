@@ -316,17 +316,17 @@ impl TestNetFactory for BabeTestNet {
 
 		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 
+		let slot_duration = data.link.config.slot_duration();
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
 				select_chain: longest_chain,
-				create_inherent_data_providers: Box::new(|_, _| async {
+				create_inherent_data_providers: Box::new(move |_, _| async move {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						SlotDuration::from_millis(6000),
+						slot_duration,
 					);
-
 					Ok((timestamp, slot))
 				}),
 				config: data.link.config.clone(),
@@ -426,6 +426,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				.for_each(|_| future::ready(())),
 		);
 
+		let slot_duration = data.link.config.slot_duration();
 		babe_futures.push(
 			start_babe(BabeParams {
 				block_import: data.block_import.lock().take().expect("import set up during init"),
@@ -433,11 +434,11 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				client,
 				env: environ,
 				sync_oracle: DummyOracle,
-				create_inherent_data_providers: Box::new(|_, _| async {
+				create_inherent_data_providers: Box::new(move |_, _| async move {
 					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						*timestamp,
-						SlotDuration::from_millis(6000),
+						slot_duration,
 					);
 
 					Ok((timestamp, slot))

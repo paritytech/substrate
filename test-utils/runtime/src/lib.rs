@@ -63,10 +63,10 @@ use sp_runtime::{
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-// Ensure Babe and Aura use the same crypto to simplify things a bit.
+// Ensure Babe, Sassafras and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, Slot};
-
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
+pub type SassafrasId = sp_consensus_sassafras::AuthorityId;
 
 // Include the WASM binary
 #[cfg(feature = "std")]
@@ -539,6 +539,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some(2)
 		}
+		if type_id == sp_std::any::TypeId::of::<pallet_sassafras::Pallet<Runtime>>() {
+			return Some(3)
+		}
 
 		None
 	}
@@ -552,6 +555,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("Babe")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_sassafras::Pallet<Runtime>>() {
+			return Some("Sassafras")
 		}
 
 		None
@@ -567,6 +573,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("pallet_babe")
 		}
+		if type_id == sp_std::any::TypeId::of::<pallet_sassafras::Pallet<Runtime>>() {
+			return Some("pallet_sassafras")
+		}
 
 		None
 	}
@@ -581,6 +590,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some(pallet_babe::Pallet::<Runtime>::crate_version())
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_sassafras::Pallet<Runtime>>() {
+			return Some(pallet_sassafras::Pallet::<Runtime>::crate_version())
 		}
 
 		None
@@ -634,6 +646,7 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 parameter_types! {
+	pub const SlotDuration: u64 = 1000;
 	pub const EpochDuration: u64 = 6;
 }
 
@@ -671,8 +684,8 @@ where
 }
 
 impl pallet_sassafras::Config for Runtime {
+	type SlotDuration = SlotDuration;
 	type EpochDuration = EpochDuration;
-	type ExpectedBlockTime = ConstU64<10_000>;
 	//type EpochChangeTrigger = pallet_sassafras::ExternalTrigger;
 	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
 	type MaxAuthorities = ConstU32<10>;
@@ -927,10 +940,14 @@ cfg_if! {
 
 			impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
 				fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
+					let authorities = system::authorities().into_iter().map(|x| {
+						let authority: sr25519::Public = x.into();
+						(SassafrasId::from(authority), 1)
+					}).collect();
 					sp_consensus_sassafras::SassafrasConfiguration {
-						slot_duration: <pallet_sassafras::Pallet<Runtime>>::slot_duration(),
+						slot_duration: SlotDuration::get(),
 						epoch_duration: EpochDuration::get(),
-						authorities: <pallet_sassafras::Pallet<Runtime>>::authorities().to_vec(),
+						authorities,
 						randomness: <pallet_sassafras::Pallet<Runtime>>::randomness(),
 						threshold_params: <pallet_sassafras::Pallet<Runtime>>::config(),
 					}
@@ -1240,7 +1257,7 @@ cfg_if! {
 			impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
 				fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
 					sp_consensus_sassafras::SassafrasConfiguration {
-						slot_duration: <pallet_sassafras::Pallet<Runtime>>::slot_duration(),
+						slot_duration: SlotDuration::get(),
 						epoch_duration: EpochDuration::get(),
 						authorities: <pallet_sassafras::Pallet<Runtime>>::authorities().to_vec(),
 						randomness: <pallet_sassafras::Pallet<Runtime>>::randomness(),

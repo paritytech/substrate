@@ -35,6 +35,7 @@ use sp_runtime::{
 	traits::IdentityLookup,
 };
 
+const SLOT_DURATION: u64 = 1000;
 const EPOCH_DURATION: u64 = 10;
 const MAX_TICKETS: u32 = 6;
 
@@ -88,8 +89,8 @@ where
 }
 
 impl pallet_sassafras::Config for Test {
+	type SlotDuration = ConstU64<SLOT_DURATION>;
 	type EpochDuration = ConstU64<EPOCH_DURATION>;
-	type ExpectedBlockTime = ConstU64<1>;
 	type EpochChangeTrigger = SameAuthoritiesForever;
 	type MaxAuthorities = ConstU32<10>;
 	type MaxTickets = ConstU32<MAX_TICKETS>;
@@ -178,20 +179,20 @@ fn make_slot_vrf(slot: Slot, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 }
 
 pub fn make_pre_digest(
-	authority_index: AuthorityIndex,
+	authority_idx: AuthorityIndex,
 	slot: Slot,
 	pair: &AuthorityPair,
 ) -> PreDigest {
 	let (vrf_output, vrf_proof) = make_slot_vrf(slot, pair);
-	PreDigest { authority_index, slot, vrf_output, vrf_proof, ticket_info: None }
+	PreDigest { authority_idx, slot, vrf_output, vrf_proof, ticket_aux: None }
 }
 
 pub fn make_wrapped_pre_digest(
-	authority_index: AuthorityIndex,
+	authority_idx: AuthorityIndex,
 	slot: Slot,
 	pair: &AuthorityPair,
 ) -> Digest {
-	let pre_digest = make_pre_digest(authority_index, slot, pair);
+	let pre_digest = make_pre_digest(authority_idx, slot, pair);
 	let log =
 		DigestItem::PreRuntime(sp_consensus_sassafras::SASSAFRAS_ENGINE_ID, pre_digest.encode());
 	Digest { logs: vec![log] }
