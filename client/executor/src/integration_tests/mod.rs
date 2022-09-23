@@ -21,7 +21,6 @@ mod linux;
 mod sandbox;
 
 use codec::{Decode, Encode};
-use hex_literal::hex;
 use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
 use sc_runtime_test::wasm_binary_unwrap;
 use sp_core::{
@@ -391,16 +390,18 @@ fn sha2_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	assert_eq!(
 		call_in_wasm("test_sha2_256", &[0], wasm_method, &mut ext,).unwrap(),
-		hex!("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-			.to_vec()
-			.encode(),
+		array_bytes::hex2bytes_unchecked(
+			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		)
+		.encode(),
 	);
 	assert_eq!(
 		call_in_wasm("test_sha2_256", &b"Hello world!".to_vec().encode(), wasm_method, &mut ext,)
 			.unwrap(),
-		hex!("c0535e4be2b79ffd93291305436bf889314e4a3faec05ecffcbb7df31ad9e51a")
-			.to_vec()
-			.encode(),
+		array_bytes::hex2bytes_unchecked(
+			"c0535e4be2b79ffd93291305436bf889314e4a3faec05ecffcbb7df31ad9e51a"
+		)
+		.encode(),
 	);
 }
 
@@ -410,16 +411,18 @@ fn twox_256_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	assert_eq!(
 		call_in_wasm("test_twox_256", &[0], wasm_method, &mut ext,).unwrap(),
-		hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a")
-			.to_vec()
-			.encode(),
+		array_bytes::hex2bytes_unchecked(
+			"99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a"
+		)
+		.encode(),
 	);
 	assert_eq!(
 		call_in_wasm("test_twox_256", &b"Hello world!".to_vec().encode(), wasm_method, &mut ext,)
 			.unwrap(),
-		hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74")
-			.to_vec()
-			.encode(),
+		array_bytes::hex2bytes_unchecked(
+			"b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74"
+		)
+		.encode(),
 	);
 }
 
@@ -429,12 +432,12 @@ fn twox_128_should_work(wasm_method: WasmExecutionMethod) {
 	let mut ext = ext.ext();
 	assert_eq!(
 		call_in_wasm("test_twox_128", &[0], wasm_method, &mut ext,).unwrap(),
-		hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
+		array_bytes::hex2bytes_unchecked("99e9d85137db46ef4bbea33613baafd5").encode(),
 	);
 	assert_eq!(
 		call_in_wasm("test_twox_128", &b"Hello world!".to_vec().encode(), wasm_method, &mut ext,)
 			.unwrap(),
-		hex!("b27dfd7f223f177f2a13647b533599af").to_vec().encode(),
+		array_bytes::hex2bytes_unchecked("b27dfd7f223f177f2a13647b533599af").encode(),
 	);
 }
 
@@ -704,7 +707,7 @@ fn parallel_execution(wasm_method: WasmExecutionMethod) {
 							&[0],
 						)
 						.unwrap(),
-					hex!("99e9d85137db46ef4bbea33613baafd5").to_vec().encode(),
+					array_bytes::hex2bytes_unchecked("99e9d85137db46ef4bbea33613baafd5").encode()
 				);
 			})
 		})

@@ -126,7 +126,7 @@ pub mod pallet {
 		type SlashPerEra: Get<BalanceOf<Self>>;
 
 		/// The origin that can control this pallet.
-		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::Origin>;
+		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The number of unstakers released per era.
 		type BatchSize: Get<u32>;

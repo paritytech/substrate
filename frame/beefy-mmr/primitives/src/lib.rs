@@ -235,7 +235,11 @@ where
 	#[cfg(feature = "debug")]
 	log::debug!(
 		"[merkle_proof] Proof: {:?}",
-		collect_proof.proof.iter().map(hex::encode).collect::<Vec<_>>()
+		collect_proof
+			.proof
+			.iter()
+			.map(|s| array_bytes::bytes2hex("", s))
+			.collect::<Vec<_>>()
 	);
 
 	MerkleProof { root, proof: collect_proof.proof, number_of_leaves, leaf_index, leaf }
@@ -308,10 +312,10 @@ where
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"[verify_proof]: (a, b) {:?}, {:?} => {:?} ({:?}) hash",
-			hex::encode(a),
-			hex::encode(b),
-			hex::encode(hash),
-			hex::encode(combined)
+			array_bytes::bytes2hex("", &a),
+			array_bytes::bytes2hex("", &b),
+			array_bytes::bytes2hex("", &hash),
+			array_bytes::bytes2hex("", &combined)
 		);
 		position /= 2;
 		width = ((width - 1) / 2) + 1;
@@ -348,7 +352,11 @@ where
 		visitor.visit(index, &a, &b);
 
 		#[cfg(feature = "debug")]
-		log::debug!("  {:?}\n  {:?}", a.as_ref().map(hex::encode), b.as_ref().map(hex::encode));
+		log::debug!(
+			"  {:?}\n  {:?}",
+			a.as_ref().map(|s| array_bytes::bytes2hex("", s)),
+			b.as_ref().map(|s| array_bytes::bytes2hex("", s))
+		);
 
 		index += 2;
 		match (a, b) {
@@ -369,7 +377,7 @@ where
 				#[cfg(feature = "debug")]
 				log::debug!(
 					"[merkelize_row] Next: {:?}",
-					next.iter().map(hex::encode).collect::<Vec<_>>()
+					next.iter().map(|s| array_bytes::bytes2hex("", s)).collect::<Vec<_>>()
 				);
 				return Err(next)
 			},
@@ -395,7 +403,6 @@ sp_api::decl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use hex_literal::hex;
 
 	#[test]
 	fn should_generate_empty_root() {
@@ -408,7 +415,7 @@ mod tests {
 
 		// then
 		assert_eq!(
-			hex::encode(&out),
+			array_bytes::bytes2hex("", &out),
 			"0000000000000000000000000000000000000000000000000000000000000000"
 		);
 	}
@@ -417,14 +424,16 @@ mod tests {
 	fn should_generate_single_root() {
 		// given
 		let _ = env_logger::try_init();
-		let data = vec![hex!("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b")];
+		let data = vec![array_bytes::hex2array_unchecked::<20>(
+			"E04CC55ebEE1cBCE552f250e85c57B70B2E2625b",
+		)];
 
 		// when
 		let out = merkle_root::<Keccak256, _, _>(data);
 
 		// then
 		assert_eq!(
-			hex::encode(&out),
+			array_bytes::bytes2hex("", &out),
 			"aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7"
 		);
 	}
@@ -434,8 +443,8 @@ mod tests {
 		// given
 		let _ = env_logger::try_init();
 		let data = vec![
-			hex!("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b"),
-			hex!("25451A4de12dcCc2D166922fA938E900fCc4ED24"),
+			array_bytes::hex2array_unchecked::<20>("E04CC55ebEE1cBCE552f250e85c57B70B2E2625b"),
+			array_bytes::hex2array_unchecked::<20>("25451A4de12dcCc2D166922fA938E900fCc4ED24"),
 		];
 
 		// when
@@ -443,7 +452,7 @@ mod tests {
 
 		// then
 		assert_eq!(
-			hex::encode(&out),
+			array_bytes::bytes2hex("", &out),
 			"697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"
 		);
 	}
@@ -452,7 +461,7 @@ mod tests {
 	fn should_generate_root_complex() {
 		let _ = env_logger::try_init();
 		let test = |root, data| {
-			assert_eq!(hex::encode(&merkle_root::<Keccak256, _, _>(data)), root);
+			assert_eq!(array_bytes::bytes2hex("", &merkle_root::<Keccak256, _, _>(data)), root);
 		};
 
 		test(
@@ -511,11 +520,19 @@ mod tests {
 		));
 
 		// then
-		assert_eq!(hex::encode(proof0.root), hex::encode(proof1.root));
-		assert_eq!(hex::encode(proof2.root), hex::encode(proof1.root));
+		assert_eq!(
+			array_bytes::bytes2hex("", &proof0.root),
+			array_bytes::bytes2hex("", &proof1.root)
+		);
+		assert_eq!(
+			array_bytes::bytes2hex("", &proof2.root),
+			array_bytes::bytes2hex("", &proof1.root)
+		);
 
 		assert!(!verify_proof::<Keccak256, _, _>(
-			&hex!("fb3b3be94be9e983ba5e094c9c51a7d96a4fa2e5d8e891df00ca89ba05bb1239"),
+			&array_bytes::hex2array_unchecked(
+				"fb3b3be94be9e983ba5e094c9c51a7d96a4fa2e5d8e891df00ca89ba05bb1239"
+			),
 			proof0.proof,
 			data.len(),
 			proof0.leaf_index,
@@ -779,17 +796,19 @@ mod tests {
 			"0xA4cDc98593CE52d01Fe5Ca47CB3dA5320e0D7592",
 			"0xc26B34D375533fFc4c5276282Fa5D660F3d8cbcB",
 		];
-		let root = hex!("72b0acd7c302a84f1f6b6cefe0ba7194b7398afb440e1b44a9dbbe270394ca53");
+		let root = array_bytes::hex2array_unchecked(
+			"72b0acd7c302a84f1f6b6cefe0ba7194b7398afb440e1b44a9dbbe270394ca53",
+		);
 
 		let data = addresses
 			.into_iter()
-			.map(|address| hex::decode(&address[2..]).unwrap())
+			.map(|address| array_bytes::hex2bytes_unchecked(&address))
 			.collect::<Vec<_>>();
 
 		for l in 0..data.len() {
 			// when
 			let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
-			assert_eq!(hex::encode(&proof.root), hex::encode(&root));
+			assert_eq!(array_bytes::bytes2hex("", &proof.root), array_bytes::bytes2hex("", &root));
 			assert_eq!(proof.leaf_index, l);
 			assert_eq!(&proof.leaf, &data[l]);
 
@@ -810,14 +829,25 @@ mod tests {
 			MerkleProof {
 				root,
 				proof: vec![
-					hex!("340bcb1d49b2d82802ddbcf5b85043edb3427b65d09d7f758fbc76932ad2da2f"),
-					hex!("ba0580e5bd530bc93d61276df7969fb5b4ae8f1864b4a28c280249575198ff1f"),
-					hex!("d02609d2bbdb28aa25f58b85afec937d5a4c85d37925bce6d0cf802f9d76ba79"),
-					hex!("ae3f8991955ed884613b0a5f40295902eea0e0abe5858fc520b72959bc016d4e"),
+					array_bytes::hex2array_unchecked(
+						"340bcb1d49b2d82802ddbcf5b85043edb3427b65d09d7f758fbc76932ad2da2f"
+					),
+					array_bytes::hex2array_unchecked(
+						"ba0580e5bd530bc93d61276df7969fb5b4ae8f1864b4a28c280249575198ff1f"
+					),
+					array_bytes::hex2array_unchecked(
+						"d02609d2bbdb28aa25f58b85afec937d5a4c85d37925bce6d0cf802f9d76ba79"
+					),
+					array_bytes::hex2array_unchecked(
+						"ae3f8991955ed884613b0a5f40295902eea0e0abe5858fc520b72959bc016d4e"
+					),
 				],
 				number_of_leaves: data.len(),
 				leaf_index: data.len() - 1,
-				leaf: hex!("c26B34D375533fFc4c5276282Fa5D660F3d8cbcB").to_vec(),
+				leaf: array_bytes::hex2array_unchecked::<20>(
+					"c26B34D375533fFc4c5276282Fa5D660F3d8cbcB"
+				)
+				.to_vec(),
 			}
 		);
 	}

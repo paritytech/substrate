@@ -49,7 +49,7 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
@@ -145,6 +145,7 @@ impl pallet_staking::Config for Runtime {
 	type SessionInterface = ();
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
 	type NextNewSession = ();
+	type HistoryDepth = ConstU32<84>;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider = MockElection;

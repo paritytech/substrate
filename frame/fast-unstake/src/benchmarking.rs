@@ -221,7 +221,7 @@ benchmarks! {
 	control {
 		let origin = <T as Config>::ControlOrigin::successful_origin();
 	}
-	: _<T::Origin>(origin, 128)
+	: _<T::RuntimeOrigin>(origin, 128)
 	verify {}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::ExtBuilder::default().build(), crate::mock::Runtime)
