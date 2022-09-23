@@ -35,7 +35,9 @@ use jsonrpsee::{
 };
 use log::warn;
 
-use beefy_gadget::communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream};
+use beefy_gadget::communication::notification::{
+	BeefyBestBlockStream, BeefyVersionedFinalityProofStream,
+};
 
 mod notification;
 

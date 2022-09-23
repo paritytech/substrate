@@ -153,8 +153,7 @@ where
 			.client
 			.justifications(&BlockId::Number(request.payload.begin))
 			.map_err(Error::Client)?
-			.map(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
-			.flatten()
+			.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
 			// No BEEFY justification present.
 			.ok_or(());
 
