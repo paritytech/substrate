@@ -35,6 +35,7 @@ use sp_runtime::{
 	traits::IdentityLookup,
 };
 
+const SLOT_DURATION: u64 = 1000;
 const EPOCH_DURATION: u64 = 10;
 const MAX_TICKETS: u32 = 6;
 
@@ -88,8 +89,8 @@ where
 }
 
 impl pallet_sassafras::Config for Test {
+	type SlotDuration = ConstU64<SLOT_DURATION>;
 	type EpochDuration = ConstU64<EPOCH_DURATION>;
-	type ExpectedBlockTime = ConstU64<1>;
 	type EpochChangeTrigger = SameAuthoritiesForever;
 	type MaxAuthorities = ConstU32<10>;
 	type MaxTickets = ConstU32<MAX_TICKETS>;

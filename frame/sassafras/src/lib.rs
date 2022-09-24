@@ -98,21 +98,14 @@ pub mod pallet {
 
 	/// Configuration parameters.
 	#[pallet::config]
-	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: pallet_timestamp::Config + SendTransactionTypes<Call<Self>> {
+	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
+		/// The amount of time, in milliseconds, that each slot should last.
+		#[pallet::constant]
+		type SlotDuration: Get<u64>;
+
 		/// The amount of time, in slots, that each epoch should last.
-		/// NOTE: Currently it is not possible to change the epoch duration after the chain has
-		/// started. Attempting to do so will brick block production.
 		#[pallet::constant]
 		type EpochDuration: Get<u64>;
-
-		/// The expected average block time at which Sassafras should be creating
-		/// blocks. Since Sassafras is probabilistic it is not trivial to figure out
-		/// what the expected average block time should be based on the slot
-		/// duration and the security parameter `c` (where `1 - c` represents
-		/// the probability of a slot being empty).
-		#[pallet::constant]
-		type ExpectedBlockTime: Get<Self::Moment>;
 
 		/// Sassafras requires some logic to be triggered on every block to query for whether an
 		/// epoch has ended and to perform the transition to the next epoch.
@@ -130,13 +123,11 @@ pub mod pallet {
 		type MaxTickets: Get<u32>;
 	}
 
-	// TODO-SASS-P2
 	/// Sassafras runtime errors.
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Submitted configuration is invalid.
 		InvalidConfiguration,
-		// TODO-SASS P2 ...
 	}
 
 	/// Current epoch index.
@@ -302,6 +293,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Submit next epoch tickets.
+		///
 		/// TODO-SASS-P3: this is an unsigned extrinsic. Can we remov ethe weight?
 		#[pallet::weight(10_000)]
 		pub fn submit_tickets(
@@ -321,16 +313,22 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Plan an epoch config change. The epoch config change is recorded and will be enacted on
-		/// the next call to `enact_session_change`. The config will be activated one epoch after.
-		/// Multiple calls to this method will replace any existing planned config change that had
-		/// not been enacted yet.
+		/// Plan an epoch config change.
+		///
+		/// The epoch config change is recorded and will be enacted on the next call to
+		/// `enact_session_change`.
+		///
+		/// The config will be activated one epoch after. Multiple calls to this method will
+		/// replace any existing planned config change that had not been enacted yet.
+		///
+		/// TODO: TODO-SASS-P4: proper weight
 		#[pallet::weight(10_000)]
 		pub fn plan_config_change(
 			origin: OriginFor<T>,
 			config: SassafrasEpochConfiguration,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+
 			ensure!(
 				config.redundancy_factor != 0 && config.attempts_number != 0,
 				Error::<T>::InvalidConfiguration
@@ -425,13 +423,13 @@ pub mod pallet {
 
 // Inherent methods
 impl<T: Config> Pallet<T> {
-	/// Determine the Sassafras slot duration based on the Timestamp module configuration.
-	pub fn slot_duration() -> T::Moment {
-		// TODO-SASS-P2: clarify why this is doubled (copied verbatim from BABE)
-		// We double the minimum block-period so each author can always propose within
-		// the majority of their slot.
-		<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
-	}
+	// 	// TODO-SASS-P2: I don't think this is really required
+	// /// Determine the Sassafras slot duration based on the Timestamp module configuration.
+	// pub fn slot_duration() -> T::Moment {
+	// 	// We double the minimum block-period so each author can always propose within
+	// 	// the majority of their slot.
+	// 	<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
+	// }
 
 	/// Determine whether an epoch change should take place at this block.
 	/// Assumes that initialization has already taken place.
@@ -728,17 +726,26 @@ impl<T: Config> Pallet<T> {
 		metadata.segments_count = segments_count;
 	}
 
-	/// Submit next epoch validator tickets via an unsigned extrinsic.
+	/// Submit next epoch validator tickets via an unsigned extrinsic constructed with a call to
+	/// `submit_unsigned_transaction`.
+	///
 	/// The submitted tickets are added to the `NextTickets` list as long as the extrinsic has
 	/// is called within the first half of the epoch. That is, tickets received within the
 	/// second half are dropped.
+	///
 	/// TODO-SASS-P3: we have to add the zk validity proofs
 	pub fn submit_tickets_unsigned_extrinsic(mut tickets: Vec<Ticket>) -> bool {
 		log::debug!(target: "sassafras", "🌳 @@@@@@@@@@ submitting {} tickets", tickets.len());
 		tickets.sort_unstable();
 		let tickets = BoundedVec::truncate_from(tickets);
 		let call = Call::submit_tickets { tickets };
-		SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()).is_ok()
+		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
+			Ok(_) => true,
+			Err(e) => {
+				log::error!(target: "runtime::sassafras", "Error submitting tickets {:?}", e);
+				false
+			},
+		}
 	}
 }
 

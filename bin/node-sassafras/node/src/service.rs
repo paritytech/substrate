@@ -264,7 +264,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 		let slot_duration = sassafras_link.genesis_config().slot_duration();
 
-		let sassafras_config = sc_consensus_sassafras::SassafrasParams {
+		let sassafras_params = sc_consensus_sassafras::SassafrasParams {
 			client: client.clone(),
 			keystore: keystore_container.sync_keystore(),
 			select_chain,
@@ -274,7 +274,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			sync_oracle: network.clone(),
 			justification_sync_link: network.clone(),
 			force_authoring,
-			create_inherent_data_providers: move |_, ()| async move {
+			create_inherent_data_providers: move |_, _| async move {
 				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
 				let slot =
@@ -286,7 +286,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			},
 		};
 
-		let sassafras = sc_consensus_sassafras::start_sassafras(sassafras_config)?;
+		let sassafras = sc_consensus_sassafras::start_sassafras(sassafras_params)?;
 
 		// the Sassafras authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
