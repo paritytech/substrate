@@ -43,7 +43,7 @@ fn pool_lifecycle_e2e() {
 
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: 50 },]
+			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: 50 }]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
