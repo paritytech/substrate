@@ -50,7 +50,9 @@ impl PruningParams {
 				"archive-canonical" => Ok(PruningMode::ArchiveCanonical),
 				bc => bc
 					.parse()
-					.map_err(|_| error::Error::Input("Invalid state pruning mode specified".to_string()))
+					.map_err(|_| {
+						error::Error::Input("Invalid state pruning mode specified".to_string())
+					})
 					.map(PruningMode::blocks_pruning),
 			})
 			.transpose()
@@ -59,15 +61,15 @@ impl PruningParams {
 	/// Get the block pruning value from the parameters
 	pub fn blocks_pruning(&self) -> error::Result<BlocksPruning> {
 		match self.blocks_pruning.as_ref() {
-			Some(bp) => {
-				match bp.as_str() {
-					"archive" => Ok(BlocksPruning::KeepAll),
-					"archive-canonical" => Ok(BlocksPruning::KeepFinalized),
-					bc => bc
-						.parse()
-						.map_err(|_| error::Error::Input("Invalid blocks pruning mode specified".to_string()))
-						.map(|n| BlocksPruning::Some(n)),
-				}
+			Some(bp) => match bp.as_str() {
+				"archive" => Ok(BlocksPruning::KeepAll),
+				"archive-canonical" => Ok(BlocksPruning::KeepFinalized),
+				bc => bc
+					.parse()
+					.map_err(|_| {
+						error::Error::Input("Invalid blocks pruning mode specified".to_string())
+					})
+					.map(|n| BlocksPruning::Some(n)),
 			},
 			None => Ok(BlocksPruning::KeepFinalized),
 		}

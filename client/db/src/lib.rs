@@ -1080,20 +1080,26 @@ impl<Block: BlockT> Backend<Block> {
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
+
+	/// Same function as `new_test_with_tx_storage`,just change the type of `blocks_pruning` to
+	/// `BlocksPruning`.
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn new_test_with_tx_storage_2(blocks_pruning: BlocksPruning, canonicalization_delay: u64) -> Self {
+	pub fn new_test_with_tx_storage_2(
+		blocks_pruning: BlocksPruning,
+		canonicalization_delay: u64,
+	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let state_pruning = match blocks_pruning {
-			BlocksPruning::KeepAll  => PruningMode::ArchiveAll ,
-			BlocksPruning::KeepFinalized => PruningMode::ArchiveCanonical ,
-			BlocksPruning::Some(n) => PruningMode::blocks_pruning(n) ,
+			BlocksPruning::KeepAll => PruningMode::ArchiveAll,
+			BlocksPruning::KeepFinalized => PruningMode::ArchiveCanonical,
+			BlocksPruning::Some(n) => PruningMode::blocks_pruning(n),
 		};
 		let db_setting = DatabaseSettings {
 			trie_cache_maximum_size: Some(16 * 1024 * 1024),
 			state_pruning: Some(state_pruning),
 			source: DatabaseSource::Custom { db, require_create_flag: true },
-			blocks_pruning: blocks_pruning,
+			blocks_pruning,
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -3251,7 +3257,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
 	}
-	
+
 	#[test]
 	fn prune_blocks_on_finalize_in_keep_all() {
 		let backend = Backend::<Block>::new_test_with_tx_storage_2(BlocksPruning::KeepAll, 0);
@@ -3278,7 +3284,7 @@ pub(crate) mod tests {
 			op.mark_finalized(BlockId::Hash(blocks[i]), None).unwrap();
 		}
 		backend.commit_operation(op).unwrap();
-		
+
 		let bc = backend.blockchain();
 		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
 		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
