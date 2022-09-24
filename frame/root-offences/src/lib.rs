@@ -53,7 +53,7 @@ pub mod pallet {
 			FullIdentificationOf = ExposureOf<Self>,
 		>
 	{
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
 	#[pallet::pallet]

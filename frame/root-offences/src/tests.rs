@@ -1,13 +1,13 @@
 use super::*;
 use frame_support::{assert_err, assert_ok};
-use mock::{active_era, start_session, Balances, ExtBuilder, Origin, RootOffences, System};
+use mock::{active_era, start_session, Balances, ExtBuilder, RootOffences, RuntimeOrigin, System};
 
 #[test]
 fn create_offence_fails_given_signed_origin() {
 	use sp_runtime::traits::BadOrigin;
 	ExtBuilder::default().build_and_execute(|| {
 		let offenders = (&[]).to_vec();
-		assert_err!(RootOffences::create_offence(Origin::signed(1), offenders), BadOrigin);
+		assert_err!(RootOffences::create_offence(RuntimeOrigin::signed(1), offenders), BadOrigin);
 	})
 }
 
@@ -21,7 +21,7 @@ fn create_offence_works_given_root_origin() {
 		assert_eq!(Balances::free_balance(11), 1000);
 
 		let offenders = [(11, Perbill::from_percent(50))].to_vec();
-		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
+		assert_ok!(RootOffences::create_offence(RuntimeOrigin::root(), offenders.clone()));
 
 		System::assert_last_event(Event::CreatedOffence { offenders }.into());
 		// the slash should be applied right away.
@@ -44,7 +44,7 @@ fn create_offence_wont_slash_non_active_validators() {
 		assert_eq!(Balances::free_balance(31), 500);
 
 		let offenders = [(31, Perbill::from_percent(20)), (11, Perbill::from_percent(20))].to_vec();
-		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
+		assert_ok!(RootOffences::create_offence(RuntimeOrigin::root(), offenders.clone()));
 
 		System::assert_last_event(Event::CreatedOffence { offenders }.into());
 
@@ -67,7 +67,7 @@ fn create_offence_wont_slash_idle() {
 		assert_eq!(Balances::free_balance(41), 1000);
 
 		let offenders = [(41, Perbill::from_percent(50))].to_vec();
-		assert_ok!(RootOffences::create_offence(Origin::root(), offenders.clone()));
+		assert_ok!(RootOffences::create_offence(RuntimeOrigin::root(), offenders.clone()));
 
 		System::assert_last_event(Event::CreatedOffence { offenders }.into());
 
