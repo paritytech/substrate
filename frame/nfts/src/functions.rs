@@ -146,6 +146,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 			CollectionMaxSupply::<T, I>::remove(&collection);
+			CollectionConfigOf::<T, I>::remove(&collection);
 
 			Self::deposit_event(Event::Destroyed { collection });
 

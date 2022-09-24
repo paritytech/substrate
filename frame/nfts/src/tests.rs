@@ -167,6 +167,7 @@ fn lifecycle_should_work() {
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
 		assert!(!Collection::<Test>::contains_key(0));
+		assert!(!CollectionConfigOf::<Test>::contains_key(0));
 		assert!(!Item::<Test>::contains_key(0, 42));
 		assert!(!Item::<Test>::contains_key(0, 69));
 		assert!(!CollectionMetadataOf::<Test>::contains_key(0));
