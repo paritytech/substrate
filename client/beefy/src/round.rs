@@ -36,7 +36,7 @@ use crate::keystore::BeefyKeystore;
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
 ///#[derive(Default)]
-struct RoundTracker<AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
+struct RoundTracker<AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	self_vote: bool,
 	votes: HashMap<AuthId, TSignature>,
 	
@@ -75,7 +75,7 @@ fn threshold(authorities: usize) -> usize {
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gos sip).
-pub(crate) struct Rounds<Payload, B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
+pub(crate) struct Rounds<Payload, B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker<AuthId, TSignature>>,
 	best_done: Option<NumberFor<B>>,
 	session_start: NumberFor<B>,
@@ -86,7 +86,7 @@ impl<P, B, AuthId, TSignature> Rounds<P, B, AuthId, TSignature>
 where
 	P: Ord + Hash + Clone,
 	B: Block,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	pub(crate) fn new(session_start: NumberFor<B>, validator_set: ValidatorSet<AuthId>) -> Self {
@@ -98,7 +98,7 @@ impl<P, B, AuthId, TSignature> Rounds<P, B, AuthId, TSignature>
 where
 	P: Ord + Hash + Clone,
 	B: Block,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 {
 	pub(crate) fn validator_set_id(&self) -> ValidatorSetId {
@@ -165,7 +165,7 @@ where
 			Some(
 				self.validators()
 					.iter()
-					.map(|authority_id| &signatures.get(authority_id).cloned())
+					.map(|authority_id| signatures.get(authority_id).cloned())
 					.collect(),
 			)
 		} else {

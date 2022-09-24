@@ -102,7 +102,7 @@ impl<B: Block> KnownVotes<B> {
 pub(crate) struct GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
-        BKS: BeefyKeystore<AuthId, TSignature>,
+        BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
 TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 {
@@ -118,7 +118,7 @@ TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 impl<B, AuthId, TSignature, BKS> GossipValidator<B, AuthId, TSignature, BKS>
 where
 	B: Block,
-	BKS: BeefyKeystore<AuthId, TSignature>,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 {

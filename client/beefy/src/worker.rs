@@ -58,7 +58,7 @@ use crate::{
 	Client,
 };
 
-pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature>> {
+pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub runtime: Arc<R>,
@@ -73,7 +73,7 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, AuthId: Encode + Decode +
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature>> {
+pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	client: Arc<C>,
 	backend: Arc<BE>,
 	runtime: Arc<R>,
@@ -110,9 +110,9 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
-        AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
-        BKS: BeefyKeystore<AuthId,TSignature>,
+        BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 
 {
 	/// Return a new BEEFY worker instance.
@@ -457,7 +457,7 @@ where
 			target: "beefy",
 			"🥩 Produced signature using {:?}, is_valid: {:?}",
 			authority_id,
-			BeefyKeystore::verify(&authority_id, &signature, &*encoded_commitment)
+			BKS::verify(&authority_id, &signature, &*encoded_commitment)
 		);
 
 		let message = VoteMessage { commitment, id: authority_id, signature };
@@ -609,7 +609,7 @@ where
 {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
 
-	let filter = |log: ConsensusLog<ecdsa_crypto::AuthorityId>| match log {
+	let filter = |log: ConsensusLog<AuthId>| match log {
 		ConsensusLog::AuthoritiesChange(validator_set) => Some(validator_set),
 		_ => None,
 	};

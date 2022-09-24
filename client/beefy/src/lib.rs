@@ -120,7 +120,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,        
-	BKS: keystore::BeefyKeystore<AuthId, TSignature>,
+	BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
 	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash>,
@@ -147,7 +147,7 @@ where
 	pub prometheus_registry: Option<Registry>,
 	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
 	pub protocol_name: std::borrow::Cow<'static, str>,
-	_auth_id : PhantomData::<AuthId>
+	pub _auth_id : PhantomData::<AuthId>
 
 }
 
@@ -163,8 +163,9 @@ where
 	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
         BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId> +'static,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send +'static,
-	TSignature: Encode + Decode + Debug + Clone + Sync + Send +'static,
+
+	AuthId: Encode + Decode + Debug + Ord + std::hash::Hash + Sync + Send + 'static,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send + 'static,
 {
 	let BeefyParams {
 		client,

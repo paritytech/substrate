@@ -38,11 +38,11 @@ use sp_application_crypto::Pair as app_crypto_Pair;
 /// A BEEFY specific keystore implemented as a `Newtype`. This is basically a
 /// wrapper around [`sp_keystore::SyncCryptoStore`] and allows to customize
 /// common cryptographic functionality.
-pub(crate)  trait BeefyKeystore<AuthorityId, TSignature> : From<Option<SyncCryptoStorePtr>> + Sync + Send where
+pub  trait BeefyKeystore<AuthorityId, TSignature> : From<Option<SyncCryptoStorePtr>> + Sync + Send where
 	AuthorityId: Encode + Decode + Debug + Ord + Sync + Send,
 	TSignature:  Encode + Decode + Debug + Clone + Sync + Send,
 {
-	type Public;
+	type Public : Encode + Decode + Debug + From<AuthorityId> + Into<AuthorityId>;
 	
         fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public>;
 
@@ -146,7 +146,7 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 	}
 
 	fn authority_id_to_public_key(auth_id: &ECDSAPublic) -> Result<Self::Public,  error::Error> {
-		Ok(*auth_id)
+		Ok((*auth_id).clone())
 	}
 }
 
@@ -230,7 +230,7 @@ impl BeefyKeystore<BLSPublic, BLSSignature> for  BeefyBLSKeystore
 	}
 
 	fn authority_id_to_public_key(auth_id: &BLSPublic) -> Result<Self::Public,  error::Error> {
-		Ok(*auth_id)
+		Ok((*auth_id).clone())
 	}
 
 }
@@ -294,7 +294,7 @@ impl BeefyKeystore<(ECDSAPublic,BLSPublic), (ECDSASignature,BLSSignature)> for B
 	}
 
 	fn authority_id_to_public_key(auth_id: &(ECDSAPublic,BLSPublic)) -> Result<Self::Public,  error::Error> {
-		Ok(*auth_id)
+		Ok((*auth_id).clone())
 	}
 
 }
