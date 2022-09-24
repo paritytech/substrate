@@ -183,12 +183,20 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash);
 
-		let leaf_indices: Vec<LeafIndex> = block_numbers
+		let res: Vec<Result<LeafIndex, CallError>> = block_numbers
 			.iter()
 			.map(|n| {
-				api.block_num_to_leaf_index(&BlockId::hash(block_hash), *n)
+				api.block_num_to_leaf_index(&BlockId::hash(block_hash), n)
 					.map_err(runtime_error_into_rpc_error)?
 					.map_err(mmr_error_into_rpc_error)
+			})
+			.collect();
+
+		let leaf_indices = res
+			.iter()
+			.map(|indx| match indx {
+				Ok(i) => *i,
+				Err(_) => LeafIndex::default(),
 			})
 			.collect::<Vec<LeafIndex>>();
 

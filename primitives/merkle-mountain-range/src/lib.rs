@@ -475,7 +475,8 @@ sp_api::decl_runtime_apis! {
 		fn verify_batch_proof_stateless(root: Hash, leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>)
 			-> Result<(), Error>;
 
-		fn block_num_to_leaf_index(block_num: BlockNumber) -> Result<LeafIndex, Error>;
+		/// Converts `block_num` into a leaf index.
+		fn block_num_to_leaf_index(block_num: &BlockNumber) -> Result<LeafIndex, Error>;
 	}
 }
 

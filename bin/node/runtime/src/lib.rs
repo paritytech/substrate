@@ -2075,8 +2075,8 @@ impl_runtime_apis! {
 			pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, nodes, proof)
 		}
 
-		fn block_num_to_leaf_index(block_num: BlockNumber) -> mmr::LeafIndex {
-			pallet_mmr::block_num_to_leaf_index(block_num)
+		fn block_num_to_leaf_index(block_num: &BlockNumber) -> Result<mmr::LeafIndex, mmr::Error> {
+			Ok(Mmr::block_num_to_leaf_index(*block_num))
 		}
 	}
 

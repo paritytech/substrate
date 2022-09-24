@@ -365,4 +365,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(primitives::Error::Verify.log_debug("The proof is incorrect."))
 		}
 	}
+
+	/// Convert `block_num` into a leaf index.
+	pub fn block_num_to_leaf_index(block_num: <T as frame_system::Config>::BlockNumber) -> LeafIndex
+	where
+		T: frame_system::Config,
+		T: pallet::Config,
+	{
+		// leaf_indx = block_num - (current_block_num - leaves_count) - 1;
+		let leaves_count = Pallet::<T>::mmr_leaves();
+		let current_block_num = <frame_system::Pallet<T>>::block_number();
+		let diff = current_block_num.saturating_sub((leaves_count as u32).into());
+
+		// TODO: Somehow convert BlockNumber into LeafIndex.
+		block_num.saturating_sub(diff).saturating_sub(1u32.into());
+		0
+	}
 }
