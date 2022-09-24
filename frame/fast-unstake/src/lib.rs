@@ -374,22 +374,6 @@ pub mod pallet {
 				// `stash` is not exposed in any era now -- we can let go of them now.
 				let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
 
-				let ctrl = match pallet_staking::Bonded::<T>::get(&stash) {
-					Some(ctrl) => ctrl,
-					None => {
-						Self::deposit_event(Event::<T>::Errored { stash });
-						return <T as Config>::WeightInfo::on_idle_unstake()
-					},
-				};
-
-				let ledger = match pallet_staking::Ledger::<T>::get(ctrl) {
-					Some(ledger) => ledger,
-					None => {
-						Self::deposit_event(Event::<T>::Errored { stash });
-						return <T as Config>::WeightInfo::on_idle_unstake()
-					},
-				};
-
 				let result = pallet_staking::Pallet::<T>::force_unstake(
 					RawOrigin::Root.into(),
 					stash.clone(),
