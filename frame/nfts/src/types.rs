@@ -134,67 +134,62 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum CollectionFeature {
+pub enum CollectionSetting {
 	IsLocked,
 	NonTransferableItems, // LockedItems
 	MetadataIsLocked,     // LockedMetadata
 	AttributesAreLocked,  // LockedAttributes
 }
 
-// TODO: rename CollectionFeatures => CollectionConfig
-// TODO: do we need ::new()?
-// TODO: can we create an alias for BitFlags<CollectionFeature> ?
+pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 
-/// Wrapper type for `BitFlags<CollectionFeature>` that implements `Codec`.
+/// Wrapper type for `CollectionSettings` that implements `Codec`.
 #[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
-pub struct CollectionFeatures(BitFlags<CollectionFeature>);
+pub struct CollectionConfig(pub CollectionSettings);
 
-impl CollectionFeatures {
-	pub fn new(input: BitFlags<CollectionFeature>) -> Self {
-		CollectionFeatures(input)
+impl CollectionConfig {
+	pub fn new(input: CollectionSettings) -> Self {
+		CollectionConfig(input)
 	}
 
-	// TODO: what if we rename to fields()?
-	pub fn get(&self) -> BitFlags<CollectionFeature> {
-		self.0.clone() // TODO: do we need that .clone()?
+	pub fn empty() -> Self {
+		CollectionConfig(BitFlags::EMPTY)
+	}
+
+	pub fn values(&self) -> CollectionSettings {
+		self.0
 	}
 }
 
-impl MaxEncodedLen for CollectionFeatures {
+impl MaxEncodedLen for CollectionConfig {
 	fn max_encoded_len() -> usize {
 		u64::max_encoded_len()
 	}
 }
 
-impl Encode for CollectionFeatures {
+impl Encode for CollectionConfig {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.0.bits().using_encoded(f)
 	}
 }
-impl EncodeLike for CollectionFeatures {}
-impl Decode for CollectionFeatures {
+impl EncodeLike for CollectionConfig {}
+impl Decode for CollectionConfig {
 	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
 		let field = u64::decode(input)?;
-		Ok(Self(
-			<BitFlags<CollectionFeature>>::from_bits(field as u64).map_err(|_| "invalid value")?,
-		))
+		Ok(Self(CollectionSettings::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}
 }
 
-impl TypeInfo for CollectionFeatures {
+impl TypeInfo for CollectionConfig {
 	type Identity = Self;
 
 	fn type_info() -> Type {
 		Type::builder()
 			.path(Path::new("BitFlags", module_path!()))
-			.type_params(vec![TypeParameter::new("T", Some(meta_type::<CollectionFeature>()))])
-			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("CollectionFeature")))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<CollectionSetting>()))])
+			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("CollectionSetting")))
 	}
 }
-
-// TODO: remove
-// #[derive(Encode, Decode, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
-// pub struct CollectionConfig(pub CollectionFeatures);
 
 // Support for up to 64 system-enabled features on a collection.
 #[bitflags]

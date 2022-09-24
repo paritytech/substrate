@@ -18,7 +18,6 @@
 //! Various pieces of common functionality.
 
 use super::*;
-use enumflags2::BitFlags;
 use frame_support::{
 	ensure,
 	traits::{ExistenceRequirement, Get},
@@ -41,10 +40,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
 
 		let config =
-			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		let user_features: BitFlags<CollectionFeature> = config.get(); // TODO: can we omit the type?
+			CollectionConfigOf::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
+
+		let settings = config.values();
 		ensure!(
-			!user_features.contains(CollectionFeature::NonTransferableItems),
+			!settings.contains(CollectionSetting::NonTransferableItems),
 			Error::<T, I>::ItemsNotTransferable
 		);
 
@@ -78,7 +78,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_create_collection(
 		collection: T::CollectionId,
 		owner: T::AccountId,
-		collection_config: CollectionFeatures,
+		config: CollectionConfig,
 		admin: T::AccountId,
 		deposit: DepositBalanceOf<T, I>,
 		free_holding: bool,
@@ -104,8 +104,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
-		// let config/*: BitFlags<CollectionFeature>*/ = CollectionFeatures::new(collection_config);
-		CollectionConfigs::<T, I>::insert(&collection, collection_config);
+		CollectionConfigOf::<T, I>::insert(&collection, config);
 
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
 		Self::deposit_event(event);
@@ -243,10 +242,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
 		let config =
-			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		let user_features: BitFlags<CollectionFeature> = config.get();
+			CollectionConfigOf::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
+
+		let settings = config.values();
 		ensure!(
-			!user_features.contains(CollectionFeature::NonTransferableItems),
+			!settings.contains(CollectionSetting::NonTransferableItems),
 			Error::<T, I>::ItemsNotTransferable
 		);
 
@@ -276,10 +276,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
 
 		let config =
-			CollectionConfigs::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		let user_features: BitFlags<CollectionFeature> = config.get();
+			CollectionConfigOf::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
+
+		let settings = config.values();
 		ensure!(
-			!user_features.contains(CollectionFeature::NonTransferableItems),
+			!settings.contains(CollectionSetting::NonTransferableItems),
 			Error::<T, I>::NotForSale
 		);
 
@@ -318,18 +319,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		id: T::CollectionId,
 		caller: T::AccountId,
 		current_config: CollectionConfig,
-		new_config: CollectionFeatures,
+		new_config: CollectionConfig,
 	) -> DispatchResult {
 		let collection = Collection::<T, I>::get(id).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(collection.owner == caller, Error::<T, I>::NoPermission);
 
-		let user_features: BitFlags<CollectionFeature> = current_config.user_features.get();
+		let settings = current_config.values();
 
-		if user_features.contains(UserFeature::IsLocked) {
+		if settings.contains(CollectionSetting::IsLocked) {
 			return Err(Error::<T, I>::CollectionIsLocked.into())
 		}
 
-		CollectionConfigs::<T, I>::try_mutate(id, |maybe_config| {
+		CollectionConfigOf::<T, I>::try_mutate(id, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 
 			config.user_features = new_config;

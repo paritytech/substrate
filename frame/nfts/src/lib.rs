@@ -42,7 +42,6 @@ mod types;
 pub mod weights;
 
 use codec::{Decode, Encode};
-use enumflags2::BitFlags;
 use frame_support::{
 	traits::{
 		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
@@ -283,9 +282,8 @@ pub mod pallet {
 
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
-	// TODO: rename to CollectionConfigOf ?
-	pub(super) type CollectionConfigs<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionFeatures>;
+	pub(super) type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfig>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -484,7 +482,7 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			config: CollectionFeatures,
+			config: CollectionConfig,
 			admin: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
@@ -523,7 +521,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			owner: AccountIdLookupOf<T>,
-			config: CollectionFeatures,
+			config: CollectionConfig,
 			free_holding: bool,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
@@ -544,11 +542,11 @@ pub mod pallet {
 		pub fn change_collection_config(
 			origin: OriginFor<T>,
 			id: T::CollectionId,
-			new_config: CollectionFeatures,
+			new_config: CollectionConfig,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let current_config =
-				CollectionConfigs::<T, I>::get(id).ok_or(Error::<T, I>::UnknownCollection)?;
+				CollectionConfigOf::<T, I>::get(id).ok_or(Error::<T, I>::UnknownCollection)?;
 			Self::do_change_collection_config(id, sender, current_config, new_config)?;
 			Ok(())
 		}*/
@@ -986,11 +984,12 @@ pub mod pallet {
 
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let config = CollectionConfigs::<T, I>::get(collection)
+			let config = CollectionConfigOf::<T, I>::get(collection)
 				.ok_or(Error::<T, I>::UnknownCollection)?;
-			let user_features: BitFlags<CollectionFeature> = config.get();
+
+			let settings = config.values();
 			ensure!(
-				!user_features.contains(CollectionFeature::NonTransferableItems),
+				!settings.contains(CollectionSetting::NonTransferableItems),
 				Error::<T, I>::ItemsNotTransferable
 			);
 
@@ -1428,12 +1427,12 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let config = CollectionConfigs::<T, I>::get(collection)
+			let config = CollectionConfigOf::<T, I>::get(collection)
 				.ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let user_features: BitFlags<CollectionFeature> = config.get();
+			let settings = config.values();
 			ensure!(
-				!user_features.contains(CollectionFeature::IsLocked),
+				!settings.contains(CollectionSetting::IsLocked),
 				Error::<T, I>::CollectionIsLocked
 			);
 

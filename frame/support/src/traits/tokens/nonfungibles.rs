@@ -122,13 +122,13 @@ pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
 }
 
 /// Trait for providing the ability to create collections of nonfungible items.
-pub trait Create<AccountId, CollectionFeatures>: Inspect<AccountId> {
+pub trait Create<AccountId, CollectionConfig>: Inspect<AccountId> {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
 	fn create_collection(
 		collection: &Self::CollectionId,
 		who: &AccountId,
 		admin: &AccountId,
-		config: &CollectionFeatures,
+		config: &CollectionConfig,
 	) -> DispatchResult;
 }
 
