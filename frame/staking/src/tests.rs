@@ -1346,8 +1346,8 @@ fn too_many_unbond_calls_should_not_work() {
 	ExtBuilder::default().build_and_execute(|| {
 		let mut current_era = 0;
 		// locked at era MaxUnlockingChunks - 1 until 3
-		//maxunlockingchunks
-		for i in 0..<<Test as Config>::MaxUnlockingChunks as Get::<u32>>::get()- 1 {
+
+		for i in 0..<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get()- 1 {
 			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
 			current_era = i as u32;
 			mock::start_active_era(current_era);
@@ -1363,7 +1363,7 @@ fn too_many_unbond_calls_should_not_work() {
 		assert_eq!(
 			Staking::ledger(&10).unwrap().unlocking.len(),
 
-			<<Test as Config>::MaxUnlockingChunks as Get::<u32>>::get() as usize
+			<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
 		);
 		// can't do more.
 		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
@@ -5565,17 +5565,17 @@ fn reducing_history_depth_without_migration() {
 
 #[test]
 fn change_max_unlocking_chunks_effect(){
-	//Concern is on validators only
-	//By Default 11, 10 are stash and ctrl and 21,20
+	// Concern is on validators only
+	// By Default 11, 10 are stash and ctrl and 21,20
 	ExtBuilder::default()
 		.build_and_execute(||{
-			//initial state
+			// initial state
 			assert_eq!(MaxUnlockingChunks::get(),32);
 
-			//starting an era
+			// starting an era
 			let current_era = 10;
 			start_active_era(current_era);
-			//bond some funds
+			// bond some funds
 			assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 300, RewardDestination::Staked));
 			assert_eq!(Staking::ledger(4),Some(StakingLedger {
 				stash: 3,
@@ -5628,7 +5628,7 @@ fn change_max_unlocking_chunks_effect(){
 				unlocking: bounded_vec![UnlockChunk{value:160,era:13}] ,
 				claimed_rewards: bounded_vec![0,1,2,3,4,5,6,7,8,9],
 			}));
-			//rebonding without migration
+			// rebonding without migration
 			assert_ok!(Staking::rebond(RuntimeOrigin::signed(4),100));
 			MaxUnlockingChunks::set(1);
 			assert_ok!(Staking::rebond(RuntimeOrigin::signed(4),120));
