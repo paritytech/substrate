@@ -32,7 +32,7 @@ sp-std = { version = "4.0.0", path = "../../primitives/std" }
 default = ["std"]
 std = [
 	"codec/std",
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
 	"log/std",
