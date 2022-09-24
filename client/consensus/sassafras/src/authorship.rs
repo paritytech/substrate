@@ -27,6 +27,8 @@ use sp_consensus_sassafras::{
 };
 use sp_core::{twox_64, ByteArray};
 
+use std::pin::Pin;
+
 /// Get secondary authority index for the given epoch and slot.
 pub(crate) fn secondary_authority_index(
 	slot: Slot,
@@ -301,17 +303,15 @@ where
 			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
 		let digest_item = <DigestItem as CompatibleDigestItem>::sassafras_seal(signature);
 
-		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
-		import_block.post_digests.push(digest_item);
-		import_block.body = Some(body);
-		import_block.state_action =
+		let mut block = BlockImportParams::new(BlockOrigin::Own, header);
+		block.post_digests.push(digest_item);
+		block.body = Some(body);
+		block.state_action =
 			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
-		import_block.intermediates.insert(
-			Cow::from(INTERMEDIATE_KEY),
-			Box::new(SassafrasIntermediate::<B> { epoch_descriptor }) as Box<_>,
-		);
+		block
+			.insert_intermediate(INTERMEDIATE_KEY, SassafrasIntermediate::<B> { epoch_descriptor });
 
-		Ok(import_block)
+		Ok(block)
 	}
 
 	fn force_authoring(&self) -> bool {
@@ -462,7 +462,7 @@ type SlotNotificationSinks<B> = Arc<
 >;
 
 /// Parameters for Sassafras.
-pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
+pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP> {
 	/// The client to use
 	pub client: Arc<C>,
 	/// The keystore that manages the keys of the node.
@@ -485,12 +485,10 @@ pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP, CAW> {
 	pub force_authoring: bool,
 	/// The source of timestamps for relative slots
 	pub sassafras_link: SassafrasLink<B>,
-	/// Checks if the current native implementation can author with a runtime at a given block.
-	pub can_author_with: CAW,
 }
 
 /// Start the Sassafras worker.
-pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, CAW, L, ER>(
+pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, L, ER>(
 	SassafrasParams {
 		client,
 		keystore,
@@ -502,8 +500,7 @@ pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, CAW, L, ER>(
 		create_inherent_data_providers,
 		force_authoring,
 		sassafras_link,
-		can_author_with,
-	}: SassafrasParams<B, C, SC, EN, I, SO, L, CIDP, CAW>,
+	}: SassafrasParams<B, C, SC, EN, I, SO, L, CIDP>,
 ) -> Result<SassafrasWorker<B>, sp_consensus::Error>
 where
 	B: BlockT,
@@ -528,7 +525,6 @@ where
 	L: sc_consensus::JustificationSyncLink<B> + 'static,
 	CIDP: CreateInherentDataProviders<B, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	CAW: CanAuthorWith<B> + Send + Sync + 'static,
 	ER: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
 {
 	info!(target: "sassafras", "🌳 🍁 Starting Sassafras Authorship worker");
@@ -554,7 +550,6 @@ where
 		sc_consensus_slots::SimpleSlotWorkerToSlotWorker(slot_worker),
 		sync_oracle,
 		create_inherent_data_providers,
-		can_author_with,
 	);
 
 	let tickets_worker = tickets_worker(

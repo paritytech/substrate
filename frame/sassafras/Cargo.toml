@@ -28,9 +28,9 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
+hex-literal = "0.3.4"
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-hex-literal = "0.3"
 
 [features]
 default = ["std"]

@@ -18,14 +18,14 @@
 
 //! Wasmi specific impls for sandbox
 
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use codec::{Decode, Encode};
 use sp_sandbox::HostError;
 use sp_wasm_interface::{FunctionContext, Pointer, ReturnValue, Value, WordSize};
 use wasmi::{
 	memory_units::Pages, ImportResolver, MemoryInstance, Module, ModuleInstance, RuntimeArgs,
-	RuntimeValue, Trap, TrapKind,
+	RuntimeValue, Trap,
 };
 
 use crate::{
@@ -39,9 +39,20 @@ use crate::{
 
 environmental::environmental!(SandboxContextStore: trait SandboxContext);
 
+#[derive(Debug)]
+struct CustomHostError(String);
+
+impl fmt::Display for CustomHostError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "HostError: {}", self.0)
+	}
+}
+
+impl wasmi::HostError for CustomHostError {}
+
 /// Construct trap error from specified message
 fn trap(msg: &'static str) -> Trap {
-	TrapKind::Host(Box::new(Error::Other(msg.into()))).into()
+	Trap::host(CustomHostError(msg.into()))
 }
 
 impl ImportResolver for Imports {

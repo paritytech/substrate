@@ -136,7 +136,7 @@
 //!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
-//!
+//! 	        fn ongoing() -> bool { false }
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
 //!             Self::DataProvider::electable_targets(None)
 //!                 .map_err(|_| "failed to elect")
@@ -370,6 +370,9 @@ pub trait ElectionProvider {
 		BlockNumber = Self::BlockNumber,
 	>;
 
+	/// Indicate if this election provider is currently ongoing an asynchronous election or not.
+	fn ongoing() -> bool;
+
 	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
 	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
@@ -419,6 +422,10 @@ where
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Err("<NoElection as ElectionProvider> cannot do anything.")
+	}
+
+	fn ongoing() -> bool {
+		false
 	}
 }
 
@@ -519,9 +526,7 @@ pub trait SortedListProvider<AccountId> {
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score {
-		Self::Score::max_value()
-	}
+	fn score_update_worst_case(_who: &AccountId, _is_increase: bool) -> Self::Score;
 }
 
 /// Something that can provide the `Score` of an account. Similar to [`ElectionProvider`] and
@@ -533,8 +538,8 @@ pub trait ScoreProvider<AccountId> {
 	/// Get the current `Score` of `who`.
 	fn score(who: &AccountId) -> Self::Score;
 
-	/// For tests and benchmarks, set the `score`.
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	/// For tests, benchmarks and fuzzing, set the `score`.
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
 	fn set_score_of(_: &AccountId, _: Self::Score) {}
 }
 

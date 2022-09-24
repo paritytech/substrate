@@ -27,10 +27,10 @@ use sc_consensus::{BlockImport, BoxBlockImport, BoxJustificationImport};
 use sc_keystore::LocalKeystore;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::SASSAFRAS;
-use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
+use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_sassafras::inherents::InherentDataProvider;
-use sp_consensus_slots::SlotDuration;
 use sp_runtime::{Digest, DigestItem};
+use sp_timestamp::Timestamp;
 use std::{cell::RefCell, sync::Arc};
 
 type TestHeader = <TestBlock as BlockT>::Header;
@@ -88,19 +88,15 @@ impl BlockImport<TestBlock> for TestBlockImport {
 	}
 }
 
-// TODO-SASS-P2: remove as soon as PR removing timestamp requirement is merged
-use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
-
 type SassafrasVerifier = crate::SassafrasVerifier<
 	TestBlock,
 	PeersFullClient,
 	TestSelectChain,
-	AlwaysCanAuthor,
 	Box<
 		dyn CreateInherentDataProviders<
 			TestBlock,
 			(),
-			InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+			InherentDataProviders = (InherentDataProvider,),
 		>,
 	>,
 >;
@@ -190,11 +186,11 @@ impl TestNetFactory for SassafrasTestNet {
 		let slot_duration = config.slot_duration();
 
 		let create_inherent_data_providers = Box::new(move |_, _| async move {
-			let timestamp = TimestampInherentDataProvider::from_system_time();
-			let slot =
-				InherentDataProvider::from_timestamp_and_slot_duration(*timestamp, slot_duration);
-
-			Ok((timestamp, slot))
+			let slot = InherentDataProvider::from_timestamp_and_slot_duration(
+				Timestamp::current(),
+				slot_duration,
+			);
+			Ok((slot,))
 		});
 
 		let inner = SassafrasVerifier::new(
@@ -202,9 +198,8 @@ impl TestNetFactory for SassafrasTestNet {
 			longest_chain,
 			create_inherent_data_providers,
 			data.link.epoch_changes.clone(),
-			AlwaysCanAuthor,
 			None,
-			// TODO-SASS-P2: why babe doesn't have this???
+			// TODO-SASS-P2: why babe doesn't have this config???
 			config,
 		);
 
@@ -386,6 +381,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				.for_each(|_| future::ready(())),
 		);
 
+		let slot_duration = data.link.genesis_config.slot_duration();
 		let sassafras_params = SassafrasParams {
 			client: client.clone(),
 			keystore,
@@ -397,15 +393,12 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 			justification_sync_link: (),
 			force_authoring: false,
 			create_inherent_data_providers: move |_, _| async move {
-				let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
 				let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-					*timestamp,
-					SlotDuration::from_millis(6000),
+					Timestamp::current(),
+					slot_duration,
 				);
-				Ok((timestamp, slot))
+				Ok((slot,))
 			},
-			can_author_with: sp_consensus::AlwaysCanAuthor,
 		};
 		let sassafras_worker = start_sassafras(sassafras_params).unwrap();
 		sassafras_futures.push(sassafras_worker);

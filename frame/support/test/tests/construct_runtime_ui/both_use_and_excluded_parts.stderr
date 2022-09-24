@@ -1,28 +1,19 @@
 error: Unexpected tokens, expected one of `=`, `,`
-  --> $DIR/both_use_and_excluded_parts.rs:29:43
+  --> tests/construct_runtime_ui/both_use_and_excluded_parts.rs:29:43
    |
 29 |         Pallet: pallet exclude_parts { Pallet } use_parts { Pallet },
    |                                                 ^^^^^^^^^
 
-error[E0412]: cannot find type `Call` in this scope
-  --> $DIR/both_use_and_excluded_parts.rs:18:64
+error[E0412]: cannot find type `RuntimeCall` in this scope
+  --> tests/construct_runtime_ui/both_use_and_excluded_parts.rs:18:64
    |
-18 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
-   |                                                                ^^^^ not found in this scope
-   |
-help: consider importing one of these items
-   |
-1  | use crate::pallet::Call;
-   |
-1  | use frame_support_test::Call;
-   |
-1  | use frame_system::Call;
-   |
-1  | use test_pallet::Call;
-   |
+18 | pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+   |                            -                                   ^^^^^^^^^^^ not found in this scope
+   |                            |
+   |                            help: you might be missing a type parameter: `<RuntimeCall>`
 
 error[E0412]: cannot find type `Runtime` in this scope
-  --> $DIR/both_use_and_excluded_parts.rs:20:25
+  --> tests/construct_runtime_ui/both_use_and_excluded_parts.rs:20:25
    |
 20 | impl pallet::Config for Runtime {}
    |                         ^^^^^^^ not found in this scope

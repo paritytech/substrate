@@ -18,10 +18,9 @@
 use crate::*;
 use frame_support::{
 	assert_noop, assert_ok,
-	dispatch::PostDispatchInfo,
-	weights::{Pays, WithPostDispatchInfo},
+	dispatch::{Pays, PostDispatchInfo, WithPostDispatchInfo},
 };
-use mock::{Origin, *};
+use mock::{RuntimeOrigin, *};
 use sp_core::H256;
 use sp_runtime::{
 	traits::{BlakeTwo256, Header},
@@ -30,8 +29,8 @@ use sp_runtime::{
 
 #[test]
 fn origin_works() {
-	let o = Origin::from(RawOrigin::<u64>::Signed(1u64));
-	let x: Result<RawOrigin<u64>, Origin> = o.into();
+	let o = RuntimeOrigin::from(RawOrigin::<u64>::Signed(1u64));
+	let x: Result<RawOrigin<u64>, RuntimeOrigin> = o.into();
 	assert_eq!(x.unwrap(), RawOrigin::<u64>::Signed(1u64));
 }
 
@@ -55,9 +54,9 @@ fn stored_map_works() {
 		System::dec_consumers(&0);
 		assert!(!System::is_provider_required(&0));
 
-		assert!(KILLED.with(|r| r.borrow().is_empty()));
+		assert!(Killed::get().is_empty());
 		assert_ok!(System::remove(&0));
-		assert_eq!(KILLED.with(|r| r.borrow().clone()), vec![0u64]);
+		assert_eq!(Killed::get(), vec![0u64]);
 	});
 }
 
@@ -639,16 +638,16 @@ fn ensure_signed_stuff_works() {
 		}
 	}
 
-	let signed_origin = Origin::signed(0u64);
+	let signed_origin = RuntimeOrigin::signed(0u64);
 	assert_ok!(EnsureSigned::try_origin(signed_origin.clone()));
 	assert_ok!(EnsureSignedBy::<Members, _>::try_origin(signed_origin));
 
 	#[cfg(feature = "runtime-benchmarks")]
 	{
-		let successful_origin: Origin = EnsureSigned::successful_origin();
+		let successful_origin: RuntimeOrigin = EnsureSigned::successful_origin();
 		assert_ok!(EnsureSigned::try_origin(successful_origin));
 
-		let successful_origin: Origin = EnsureSignedBy::<Members, _>::successful_origin();
+		let successful_origin: RuntimeOrigin = EnsureSignedBy::<Members, _>::successful_origin();
 		assert_ok!(EnsureSignedBy::<Members, _>::try_origin(successful_origin));
 	}
 }

@@ -31,7 +31,7 @@ use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_keystore::LocalKeystore;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
-use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
+use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityPair, Slot,
@@ -42,7 +42,7 @@ use sp_runtime::{
 	generic::{Digest, DigestItem},
 	traits::Block as BlockT,
 };
-use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
+use sp_timestamp::Timestamp;
 use std::{cell::RefCell, task::Poll, time::Duration};
 
 type Item = DigestItem;
@@ -71,7 +71,7 @@ type BabeBlockImport =
 struct DummyFactory {
 	client: Arc<TestClient>,
 	epoch_changes: SharedEpochChanges<TestBlock, Epoch>,
-	config: Config,
+	config: BabeConfiguration,
 	mutator: Mutator,
 }
 
@@ -139,7 +139,7 @@ impl DummyProposer {
 				&self.parent_hash,
 				self.parent_number,
 				this_slot,
-				|slot| Epoch::genesis(self.factory.config.genesis_config(), slot),
+				|slot| Epoch::genesis(&self.factory.config, slot),
 			)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block");
@@ -234,12 +234,11 @@ pub struct TestVerifier {
 		TestBlock,
 		PeersFullClient,
 		TestSelectChain,
-		AlwaysCanAuthor,
 		Box<
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+				InherentDataProviders = (InherentDataProvider,),
 			>,
 		>,
 	>,
@@ -288,7 +287,7 @@ impl TestNetFactory for BabeTestNet {
 	) {
 		let client = client.as_client();
 
-		let config = Config::get(&*client).expect("config available");
+		let config = crate::configuration(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
 			.expect("can initialize block-import");
 
@@ -322,16 +321,14 @@ impl TestNetFactory for BabeTestNet {
 				client: client.clone(),
 				select_chain: longest_chain,
 				create_inherent_data_providers: Box::new(move |_, _| async move {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
+						Timestamp::current(),
 						slot_duration,
 					);
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
-				can_author_with: AlwaysCanAuthor,
 				telemetry: None,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
@@ -435,19 +432,16 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				env: environ,
 				sync_oracle: DummyOracle,
 				create_inherent_data_providers: Box::new(move |_, _| async move {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
+						Timestamp::current(),
 						slot_duration,
 					);
-
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				babe_link: data.link.clone(),
 				keystore,
-				can_author_with: sp_consensus::AlwaysCanAuthor,
 				justification_sync_link: (),
 				block_proposal_slot_portion: SlotProportion::new(0.5),
 				max_block_proposal_slot_portion: None,
@@ -560,11 +554,11 @@ fn can_author_block() {
 		},
 	};
 
-	let mut config = crate::BabeGenesisConfiguration {
+	let mut config = crate::BabeConfiguration {
 		slot_duration: 1000,
 		epoch_length: 100,
 		c: (3, 10),
-		genesis_authorities: Vec::new(),
+		authorities: Vec::new(),
 		randomness: [0; 32],
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
@@ -645,10 +639,8 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
 	import.post_digests.push(seal);
 	import.body = Some(block.extrinsics);
-	import.intermediates.insert(
-		Cow::from(INTERMEDIATE_KEY),
-		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<_>,
-	);
+	import
+		.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<TestBlock> { epoch_descriptor });
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 	let import_result = block_on(block_import.import_block(import, Default::default())).unwrap();
 
@@ -709,12 +701,12 @@ fn importing_block_one_sets_genesis_epoch() {
 		&mut block_import,
 	);
 
-	let genesis_epoch = Epoch::genesis(data.link.config.genesis_config(), 999.into());
+	let genesis_epoch = Epoch::genesis(&data.link.config, 999.into());
 
 	let epoch_changes = data.link.epoch_changes.shared_data();
 	let epoch_for_second_block = epoch_changes
 		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
-			Epoch::genesis(data.link.config.genesis_config(), slot)
+			Epoch::genesis(&data.link.config, slot)
 		})
 		.unwrap()
 		.unwrap();
@@ -772,16 +764,14 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 
 	// Load and check epoch changes.
 
-	let actual_nodes = aux_schema::load_epoch_changes::<Block, TestClient>(
-		&*client,
-		data.link.config.genesis_config(),
-	)
-	.expect("load epoch changes")
-	.shared_data()
-	.tree()
-	.iter()
-	.map(|(h, _, _)| *h)
-	.collect::<Vec<_>>();
+	let actual_nodes =
+		aux_schema::load_epoch_changes::<Block, TestClient>(&*client, &data.link.config)
+			.expect("load epoch changes")
+			.shared_data()
+			.tree()
+			.iter()
+			.map(|(h, _, _)| *h)
+			.collect::<Vec<_>>();
 
 	let expected_nodes = vec![
 		canon[0], // A

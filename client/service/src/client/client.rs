@@ -22,7 +22,6 @@ use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 	genesis,
 };
-use codec::{Decode, Encode};
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
@@ -59,12 +58,9 @@ use sp_blockchain::{
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use sp_core::{
-	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
-		StorageData, StorageKey,
-	},
-	NativeOrEncoded,
+use sp_core::storage::{
+	well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild, StorageData,
+	StorageKey,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -85,9 +81,7 @@ use sp_trie::{CompactProof, StorageProof};
 use std::{
 	collections::{hash_map::DefaultHasher, HashMap, HashSet},
 	marker::PhantomData,
-	panic::UnwindSafe,
 	path::PathBuf,
-	result,
 	sync::Arc,
 };
 
@@ -1659,27 +1653,23 @@ where
 {
 	type StateBackend = B::State;
 
-	fn call_api_at<
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
-	>(
+	fn call_api_at(
 		&self,
-		params: CallApiAtParams<Block, NC, B::State>,
-	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
+		params: CallApiAtParams<Block, B::State>,
+	) -> Result<Vec<u8>, sp_api::ApiError> {
 		let at = params.at;
 
 		let (manager, extensions) =
 			self.execution_extensions.manager_and_extensions(at, params.context);
 
 		self.executor
-			.contextual_call::<fn(_, _) -> _, _, _>(
+			.contextual_call(
 				at,
 				params.function,
 				&params.arguments,
 				params.overlayed_changes,
 				Some(params.storage_transaction_cache),
 				manager,
-				params.native_call,
 				params.recorder,
 				Some(extensions),
 			)

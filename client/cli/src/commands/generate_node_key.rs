@@ -57,7 +57,7 @@ impl GenerateNodeKeyCmd {
 		let file_data = if self.bin {
 			secret.as_ref().to_owned()
 		} else {
-			hex::encode(secret.as_ref()).into_bytes()
+			array_bytes::bytes2hex("", secret.as_ref()).into_bytes()
 		};
 
 		match &self.file {
@@ -85,6 +85,6 @@ mod tests {
 		assert!(generate.run().is_ok());
 		let mut buf = String::new();
 		assert!(file.read_to_string(&mut buf).is_ok());
-		assert!(hex::decode(buf).is_ok());
+		assert!(array_bytes::hex2bytes(&buf).is_ok());
 	}
 }

@@ -53,11 +53,12 @@ pub mod weights;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{
-		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo,
+		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, GetDispatchInfo,
+		PostDispatchInfo,
 	},
 	ensure,
 	traits::{Currency, Get, ReservableCurrency, WrapperKeepOpaque},
-	weights::{GetDispatchInfo, Weight},
+	weights::Weight,
 	RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
@@ -99,7 +100,7 @@ pub struct Multisig<BlockNumber, Balance, AccountId> {
 	approvals: Vec<AccountId>,
 }
 
-type OpaqueCall<T> = WrapperKeepOpaque<<T as Config>::Call>;
+type OpaqueCall<T> = WrapperKeepOpaque<<T as Config>::RuntimeCall>;
 
 type CallHash = [u8; 32];
 
@@ -117,11 +118,11 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Parameter
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
 
@@ -266,7 +267,7 @@ pub mod pallet {
 		pub fn as_multi_threshold_1(
 			origin: OriginFor<T>,
 			other_signatories: Vec<T::AccountId>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let max_sigs = T::MaxSignatories::get() as usize;
@@ -563,7 +564,10 @@ impl<T: Config> Pallet<T> {
 
 			if let Some((call, call_len)) = maybe_approved_call {
 				// verify weight
-				ensure!(call.get_dispatch_info().weight <= max_weight, Error::<T>::MaxWeightTooLow);
+				ensure!(
+					call.get_dispatch_info().weight.all_lte(max_weight),
+					Error::<T>::MaxWeightTooLow
+				);
 
 				// Clean up storage before executing call to avoid an possibility of reentrancy
 				// attack.
@@ -695,7 +699,7 @@ impl<T: Config> Pallet<T> {
 	fn get_call(
 		hash: &[u8; 32],
 		maybe_known: Option<&OpaqueCall<T>>,
-	) -> Option<(<T as Config>::Call, usize)> {
+	) -> Option<(<T as Config>::RuntimeCall, usize)> {
 		maybe_known.map_or_else(
 			|| {
 				Calls::<T>::get(hash)
