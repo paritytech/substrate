@@ -33,7 +33,7 @@ benchmarks! {
 	whitelist_call {
 		let origin = T::WhitelistOrigin::successful_origin();
 		let call_hash = Default::default();
-	}: _<T::Origin>(origin, call_hash)
+	}: _<T::RuntimeOrigin>(origin, call_hash)
 	verify {
 		ensure!(
 			WhitelistedCall::<T>::contains_key(call_hash),
@@ -50,7 +50,7 @@ benchmarks! {
 		let call_hash = Default::default();
 		Pallet::<T>::whitelist_call(origin.clone(), call_hash)
 			.expect("whitelisting call must be successful");
-	}: _<T::Origin>(origin, call_hash)
+	}: _<T::RuntimeOrigin>(origin, call_hash)
 	verify {
 		ensure!(
 			!WhitelistedCall::<T>::contains_key(call_hash),
@@ -82,7 +82,7 @@ benchmarks! {
 		let encoded_call = encoded_call.try_into().expect("encoded_call must be small enough");
 		T::PreimageProvider::note_preimage(encoded_call);
 
-	}: _<T::Origin>(origin, call_hash, call_weight)
+	}: _<T::RuntimeOrigin>(origin, call_hash, call_weight)
 	verify {
 		ensure!(
 			!WhitelistedCall::<T>::contains_key(call_hash),
@@ -105,7 +105,7 @@ benchmarks! {
 
 		Pallet::<T>::whitelist_call(origin.clone(), call_hash)
 			.expect("whitelisting call must be successful");
-	}: _<T::Origin>(origin, Box::new(call))
+	}: _<T::RuntimeOrigin>(origin, Box::new(call))
 	verify {
 		ensure!(
 			!WhitelistedCall::<T>::contains_key(call_hash),
