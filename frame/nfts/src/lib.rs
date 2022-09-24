@@ -1432,7 +1432,7 @@ pub mod pallet {
 
 			let settings = config.values();
 			ensure!(
-				!settings.contains(CollectionSetting::IsLocked),
+				!settings.contains(CollectionSetting::LockedMetadata),
 				Error::<T, I>::CollectionIsLocked
 			);
 

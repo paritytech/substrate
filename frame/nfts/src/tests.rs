@@ -1226,23 +1226,24 @@ fn buy_item_should_work() {
 fn various_collection_settings() {
 	new_test_ext().execute_with(|| {
 		// when we set only one value it's required to call .into() on it
-		let config = CollectionConfig(CollectionSetting::IsLocked.into());
+		let config = CollectionConfig(CollectionSetting::NonTransferableItems.into());
 		assert_ok!(Nfts::force_create(Origin::root(), 0, 1, config, false));
 
 		let config = CollectionConfigOf::<Test>::get(0).unwrap();
 		let stored_settings = config.values();
-		assert!(stored_settings.contains(CollectionSetting::IsLocked));
-		assert!(!stored_settings.contains(CollectionSetting::MetadataIsLocked));
+		assert!(stored_settings.contains(CollectionSetting::NonTransferableItems));
+		assert!(!stored_settings.contains(CollectionSetting::LockedMetadata));
 
 		// no need to call .into() for multiple values
-		let settings =
-			CollectionConfig(CollectionSetting::MetadataIsLocked | CollectionSetting::IsLocked);
+		let settings = CollectionConfig(
+			CollectionSetting::LockedMetadata | CollectionSetting::NonTransferableItems,
+		);
 		assert_ok!(Nfts::force_create(Origin::root(), 1, 1, settings, false));
 
 		let config = CollectionConfigOf::<Test>::get(1).unwrap();
 		let stored_settings = config.values();
-		assert!(stored_settings.contains(CollectionSetting::IsLocked));
-		assert!(stored_settings.contains(CollectionSetting::MetadataIsLocked));
+		assert!(stored_settings.contains(CollectionSetting::NonTransferableItems));
+		assert!(stored_settings.contains(CollectionSetting::LockedMetadata));
 
 		assert_ok!(Nfts::force_create(Origin::root(), 2, 1, CollectionConfig::empty(), false));
 	});

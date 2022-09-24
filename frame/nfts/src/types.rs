@@ -135,10 +135,9 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum CollectionSetting {
-	IsLocked,
-	NonTransferableItems, // LockedItems
-	MetadataIsLocked,     // LockedMetadata
-	AttributesAreLocked,  // LockedAttributes
+	NonTransferableItems,
+	LockedMetadata,
+	LockedAttributes,
 }
 
 pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
