@@ -376,7 +376,7 @@ pub mod pallet {
 		/// All approvals of an item got cancelled.
 		AllApprovalsCancelled { collection: T::CollectionId, item: T::ItemId, owner: T::AccountId },
 		/// A `collection` has had its attributes changed by the `Force` origin.
-		ItemStatusChanged { collection: T::CollectionId },
+		CollectionStatusChanged { collection: T::CollectionId },
 		/// New metadata has been set for a `collection`.
 		CollectionMetadataSet {
 			collection: T::CollectionId,
@@ -1175,26 +1175,26 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Alter the attributes of a given item.
+		/// Alter the attributes of a given collection.
 		///
 		/// Origin must be `ForceOrigin`.
 		///
-		/// - `collection`: The identifier of the item.
-		/// - `owner`: The new Owner of this item.
-		/// - `issuer`: The new Issuer of this item.
-		/// - `admin`: The new Admin of this item.
-		/// - `freezer`: The new Freezer of this item.
-		/// - `free_holding`: Whether a deposit is taken for holding an item of this collection.
+		/// - `collection`: The identifier of the collection.
+		/// - `owner`: The new Owner of this collection.
+		/// - `issuer`: The new Issuer of this collection.
+		/// - `admin`: The new Admin of this collection.
+		/// - `freezer`: The new Freezer of this collection.
+		/// - `free_holding`: Whether a deposit is taken for holding an item in this collection.
 		/// - `is_frozen`: Whether this collection is frozen except for permissioned/admin
 		/// instructions.
 		///
-		/// Emits `ItemStatusChanged` with the identity of the item.
+		/// Emits `CollectionStatusChanged` with the identity of the item.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::force_item_status())]
-		pub fn force_item_status(
+		#[pallet::weight(T::WeightInfo::force_collection_status())]
+		pub fn force_collection_status(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
+			collection_id: T::CollectionId,
 			owner: AccountIdLookupOf<T>,
 			issuer: AccountIdLookupOf<T>,
 			admin: AccountIdLookupOf<T>,
@@ -1204,21 +1204,22 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			Collection::<T, I>::try_mutate(collection, |maybe_item| {
-				let mut item = maybe_item.take().ok_or(Error::<T, I>::UnknownCollection)?;
-				let old_owner = item.owner;
+			Collection::<T, I>::try_mutate(collection_id, |maybe_collection| {
+				let mut collection =
+					maybe_collection.take().ok_or(Error::<T, I>::UnknownCollection)?;
+				let old_owner = collection.owner;
 				let new_owner = T::Lookup::lookup(owner)?;
-				item.owner = new_owner.clone();
-				item.issuer = T::Lookup::lookup(issuer)?;
-				item.admin = T::Lookup::lookup(admin)?;
-				item.freezer = T::Lookup::lookup(freezer)?;
-				item.free_holding = free_holding;
-				item.is_frozen = is_frozen;
-				*maybe_item = Some(item);
-				CollectionAccount::<T, I>::remove(&old_owner, &collection);
-				CollectionAccount::<T, I>::insert(&new_owner, &collection, ());
+				collection.owner = new_owner.clone();
+				collection.issuer = T::Lookup::lookup(issuer)?;
+				collection.admin = T::Lookup::lookup(admin)?;
+				collection.freezer = T::Lookup::lookup(freezer)?;
+				collection.free_holding = free_holding;
+				collection.is_frozen = is_frozen;
+				*maybe_collection = Some(collection);
+				CollectionAccount::<T, I>::remove(&old_owner, &collection_id);
+				CollectionAccount::<T, I>::insert(&new_owner, &collection_id, ());
 
-				Self::deposit_event(Event::ItemStatusChanged { collection });
+				Self::deposit_event(Event::CollectionStatusChanged { collection: collection_id });
 				Ok(())
 			})
 		}

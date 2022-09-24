@@ -578,7 +578,7 @@ fn set_attribute_should_respect_freeze() {
 }
 
 #[test]
-fn force_item_status_should_work() {
+fn force_collection_status_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 
@@ -591,7 +591,16 @@ fn force_item_status_should_work() {
 		assert_eq!(Balances::reserved_balance(1), 65);
 
 		// force item status to be free holding
-		assert_ok!(Nfts::force_item_status(RuntimeOrigin::root(), 0, 1, 1, 1, 1, true, false));
+		assert_ok!(Nfts::force_collection_status(
+			RuntimeOrigin::root(),
+			0,
+			1,
+			1,
+			1,
+			1,
+			true,
+			false,
+		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 142, 1));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 169, 2));
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 142, bvec![0; 20], false));

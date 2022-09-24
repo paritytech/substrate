@@ -204,7 +204,7 @@ benchmarks_instance_pallet! {
 		let i in 0 .. 5_000;
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let items = (0..i).map(|x| mint_item::<T, I>(x as u16).0).collect::<Vec<_>>();
-		Nfts::<T, I>::force_item_status(
+		Nfts::<T, I>::force_collection_status(
 			SystemOrigin::Root.into(),
 			collection,
 			caller_lookup.clone(),
@@ -283,10 +283,10 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	force_item_status {
+	force_collection_status {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_item_status {
+		let call = Call::<T, I>::force_collection_status {
 			collection,
 			owner: caller_lookup.clone(),
 			issuer: caller_lookup.clone(),
