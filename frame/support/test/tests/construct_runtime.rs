@@ -49,7 +49,7 @@ mod module1 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call
-			where origin: <T as system::Config>::Origin, system=system
+			where origin: <T as system::Config>::RuntimeOrigin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -89,7 +89,7 @@ mod module2 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call
-			where origin: <T as system::Config>::Origin, system=system
+			where origin: <T as system::Config>::RuntimeOrigin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -134,7 +134,7 @@ mod nested {
 
 		frame_support::decl_module! {
 			pub struct Module<T: Config> for enum Call
-				where origin: <T as system::Config>::Origin, system=system
+				where origin: <T as system::Config>::RuntimeOrigin, system=system
 			{
 				#[weight = 0]
 				pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -180,7 +180,7 @@ pub mod module3 {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call
-			where origin: <T as system::Config>::Origin, system=system
+			where origin: <T as system::Config>::RuntimeOrigin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -247,7 +247,7 @@ fn test_pub() -> AccountId {
 impl system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Hash = H256;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type RuntimeEvent = RuntimeEvent;

@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-hex = { version = "0.4", default-features = false, features = ["alloc"], optional = true }
+array-bytes = { version = "4.1", optional = true }
 sha2 = { version = "0.10.1", default-features = false, optional = true }
 log = { version = "0.4.14", default-features = false }
 
@@ -33,7 +33,7 @@ pallet-identity = { version = "4.0.0-dev", path = "../identity", default-feature
 pallet-collective = { version = "4.0.0-dev", path = "../collective", default-features = false, optional = true }
 
 [dev-dependencies]
-hex-literal = "0.3.1"
+array-bytes = "4.1"
 sha2 = "0.10.1"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-collective = { version = "4.0.0-dev", path = "../collective" }
@@ -55,7 +55,7 @@ std = [
 	"pallet-identity/std",
 ]
 runtime-benchmarks = [
-	"hex",
+	"array-bytes",
 	"sha2",
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-runtime/runtime-benchmarks",
