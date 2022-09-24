@@ -24,7 +24,6 @@ use frame_benchmarking::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
 use frame_support::{
-	bounded_vec,
 	dispatch::UnfilteredDispatchable,
 	traits::{EnsureOrigin, Get},
 	BoundedVec,
@@ -460,10 +459,10 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let collection = T::Helper::collection(0);
 		let item = T::Helper::item(0);
-		let tips: BoundedVec<_, _> = bounded_vec![
+		let tips: BoundedVec<_, _> = vec![
 			ItemTip
 				{ collection, item, receiver: caller.clone(), amount }; n as usize
-		];
+		].try_into().unwrap();
 	}: _(SystemOrigin::Signed(caller.clone()), tips)
 	verify {
 		if !n.is_zero() {
