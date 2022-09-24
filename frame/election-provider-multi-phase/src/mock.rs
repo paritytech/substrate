@@ -99,18 +99,14 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
-fn roll_next() {
-	roll_to(System::block_number() + 1);
-}
-
 pub fn roll_to_unsigned() {
 	while !matches!(MultiPhase::current_phase(), Phase::Unsigned(_)) {
-		roll_next();
+		roll_to(System::block_number() + 1);
 	}
 }
 pub fn roll_to_signed() {
 	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
-		roll_next();
+		roll_to(System::block_number() + 1);
 	}
 }
 
