@@ -24,10 +24,8 @@
 #![forbid(unsafe_code, missing_docs)]
 
 use std::{
-	borrow::Cow,
 	collections::{BTreeMap, HashMap},
 	future::Future,
-	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
 	time::Duration,
@@ -67,8 +65,8 @@ use sp_application_crypto::AppKey;
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::{
-	BlockOrigin, CacheKeyId, CanAuthorWith, Environment, Error as ConsensusError, Proposer,
-	SelectChain, SyncOracle,
+	BlockOrigin, CacheKeyId, Environment, Error as ConsensusError, Proposer, SelectChain,
+	SyncOracle,
 };
 use sp_consensus_slots::Slot;
 use sp_core::{crypto::ByteArray, ExecutionContext, Pair};
@@ -339,7 +337,7 @@ impl<B: BlockT> SassafrasLink<B> {
 ///
 /// The block import object provided must be the `SassafrasBlockImport` or a wrapper of it,
 /// otherwise crucial import logic will be omitted.
-pub fn import_queue<Block: BlockT, Client, SelectChain, BI, CAW, CIDP>(
+pub fn import_queue<Block: BlockT, Client, SelectChain, BI, CIDP>(
 	sassafras_link: SassafrasLink<Block>,
 	block_import: BI,
 	justification_import: Option<BoxJustificationImport<Block>>,
@@ -348,7 +346,6 @@ pub fn import_queue<Block: BlockT, Client, SelectChain, BI, CAW, CIDP>(
 	create_inherent_data_providers: CIDP,
 	spawner: &impl sp_core::traits::SpawnEssentialNamed,
 	registry: Option<&Registry>,
-	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
 ) -> ClientResult<DefaultImportQueue<Block, Client>>
 where
@@ -368,7 +365,6 @@ where
 		+ Sync
 		+ 'static,
 	SelectChain: sp_consensus::SelectChain<Block> + 'static,
-	CAW: CanAuthorWith<Block> + Send + Sync + 'static,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
@@ -377,7 +373,6 @@ where
 		select_chain,
 		create_inherent_data_providers,
 		sassafras_link.epoch_changes,
-		can_author_with,
 		telemetry,
 		sassafras_link.genesis_config,
 	);

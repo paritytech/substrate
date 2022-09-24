@@ -138,7 +138,7 @@ where
 			};
 
 			let intermediate =
-				block.take_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?;
+				block.remove_intermediate::<SassafrasIntermediate<Block>>(INTERMEDIATE_KEY)?;
 
 			let epoch_descriptor = intermediate.epoch_descriptor;
 			let first_in_epoch = parent_slot < epoch_descriptor.start_slot();

@@ -322,11 +322,11 @@ fn submit_enact_claim_tickets() {
 			.map(|(output, _)| output)
 			.collect();
 		let tickets0 = tickets[0..6].to_vec().try_into().unwrap();
-		Sassafras::submit_tickets(Origin::none(), tickets0).unwrap();
+		Sassafras::submit_tickets(RuntimeOrigin::none(), tickets0).unwrap();
 		let tickets1 = tickets[6..12].to_vec().try_into().unwrap();
-		Sassafras::submit_tickets(Origin::none(), tickets1).unwrap();
+		Sassafras::submit_tickets(RuntimeOrigin::none(), tickets1).unwrap();
 		let tickets2 = tickets[12..18].to_vec().try_into().unwrap();
-		Sassafras::submit_tickets(Origin::none(), tickets2).unwrap();
+		Sassafras::submit_tickets(RuntimeOrigin::none(), tickets2).unwrap();
 
 		tickets.sort();
 		tickets.truncate(max_tickets as usize);
@@ -395,8 +395,11 @@ fn block_skips_epochs() {
 			.into_iter()
 			.map(|(output, _)| output)
 			.collect();
-		Sassafras::submit_tickets(Origin::none(), BoundedVec::truncate_from(tickets.clone()))
-			.unwrap();
+		Sassafras::submit_tickets(
+			RuntimeOrigin::none(),
+			BoundedVec::truncate_from(tickets.clone()),
+		)
+		.unwrap();
 
 		// Force enact of next tickets
 		assert_eq!(TicketsMeta::<Test>::get().segments_count, 1);

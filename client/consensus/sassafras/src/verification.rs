@@ -130,26 +130,22 @@ pub fn check_header<B: BlockT + Sized>(
 }
 
 /// A verifier for Sassafras blocks.
-pub struct SassafrasVerifier<Block: BlockT, Client, SelectChain, CAW, CIDP> {
+pub struct SassafrasVerifier<Block: BlockT, Client, SelectChain, CIDP> {
 	client: Arc<Client>,
 	select_chain: SelectChain,
 	create_inherent_data_providers: CIDP,
 	epoch_changes: SharedEpochChanges<Block, Epoch>,
-	can_author_with: CAW,
 	telemetry: Option<TelemetryHandle>,
 	genesis_config: SassafrasConfiguration,
 }
 
-impl<Block: BlockT, Client, SelectChain, CAW, CIDP>
-	SassafrasVerifier<Block, Client, SelectChain, CAW, CIDP>
-{
+impl<Block: BlockT, Client, SelectChain, CIDP> SassafrasVerifier<Block, Client, SelectChain, CIDP> {
 	/// Constructor.
 	pub fn new(
 		client: Arc<Client>,
 		select_chain: SelectChain,
 		create_inherent_data_providers: CIDP,
 		epoch_changes: SharedEpochChanges<Block, Epoch>,
-		can_author_with: CAW,
 		telemetry: Option<TelemetryHandle>,
 		genesis_config: SassafrasConfiguration,
 	) -> Self {
@@ -158,20 +154,18 @@ impl<Block: BlockT, Client, SelectChain, CAW, CIDP>
 			select_chain,
 			create_inherent_data_providers,
 			epoch_changes,
-			can_author_with,
 			telemetry,
 			genesis_config,
 		}
 	}
 }
 
-impl<Block, Client, SelectChain, CAW, CIDP> SassafrasVerifier<Block, Client, SelectChain, CAW, CIDP>
+impl<Block, Client, SelectChain, CIDP> SassafrasVerifier<Block, Client, SelectChain, CIDP>
 where
 	Block: BlockT,
 	Client: AuxStore + HeaderBackend<Block> + HeaderMetadata<Block> + ProvideRuntimeApi<Block>,
 	Client::Api: BlockBuilderApi<Block> + SassafrasApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
-	CAW: CanAuthorWith<Block>,
 	CIDP: CreateInherentDataProviders<Block, ()>,
 {
 	async fn check_inherents(
@@ -182,16 +176,6 @@ where
 		create_inherent_data_providers: CIDP::InherentDataProviders,
 		execution_context: ExecutionContext,
 	) -> Result<(), Error<Block>> {
-		if let Err(e) = self.can_author_with.can_author_with(&block_id) {
-			debug!(
-				target: "sassafras",
-				"🌳 Skipping `check_inherents` as authoring version is not compatible: {}",
-				e,
-			);
-
-			return Ok(())
-		}
-
 		let inherent_res = self
 			.client
 			.runtime_api()
@@ -258,8 +242,8 @@ type BlockVerificationResult<Block> =
 	Result<(BlockImportParams<Block, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String>;
 
 #[async_trait::async_trait]
-impl<Block, Client, SelectChain, CAW, CIDP> Verifier<Block>
-	for SassafrasVerifier<Block, Client, SelectChain, CAW, CIDP>
+impl<Block, Client, SelectChain, CIDP> Verifier<Block>
+	for SassafrasVerifier<Block, Client, SelectChain, CIDP>
 where
 	Block: BlockT,
 	Client: HeaderMetadata<Block, Error = sp_blockchain::Error>
@@ -270,7 +254,6 @@ where
 		+ AuxStore,
 	Client::Api: BlockBuilderApi<Block> + SassafrasApi<Block>,
 	SelectChain: sp_consensus::SelectChain<Block>,
-	CAW: CanAuthorWith<Block> + Send + Sync,
 	CIDP: CreateInherentDataProviders<Block, ()> + Send + Sync,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
@@ -404,9 +387,9 @@ where
 
 				block.header = pre_header;
 				block.post_digests.push(verified_info.seal);
-				block.intermediates.insert(
-					Cow::from(INTERMEDIATE_KEY),
-					Box::new(SassafrasIntermediate::<Block> { epoch_descriptor }) as Box<_>,
+				block.insert_intermediate(
+					INTERMEDIATE_KEY,
+					SassafrasIntermediate::<Block> { epoch_descriptor },
 				);
 				block.post_hash = Some(hash);
 

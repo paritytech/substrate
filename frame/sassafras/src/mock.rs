@@ -46,15 +46,15 @@ type DummyValidatorId = u64;
 type AccountData = u128;
 
 impl frame_system::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Version = ();
 	type Hashing = sp_runtime::traits::BlakeTwo256;
@@ -81,10 +81,10 @@ impl pallet_timestamp::Config for Test {
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
 where
-	Call: From<C>,
+	RuntimeCall: From<C>,
 {
-	type OverarchingCall = Call;
-	type Extrinsic = TestXt<Call, ()>;
+	type OverarchingCall = RuntimeCall;
+	type Extrinsic = TestXt<RuntimeCall, ()>;
 }
 
 impl pallet_sassafras::Config for Test {
@@ -178,20 +178,20 @@ fn make_slot_vrf(slot: Slot, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 }
 
 pub fn make_pre_digest(
-	authority_index: AuthorityIndex,
+	authority_idx: AuthorityIndex,
 	slot: Slot,
 	pair: &AuthorityPair,
 ) -> PreDigest {
 	let (vrf_output, vrf_proof) = make_slot_vrf(slot, pair);
-	PreDigest { authority_index, slot, vrf_output, vrf_proof, ticket_info: None }
+	PreDigest { authority_idx, slot, vrf_output, vrf_proof, ticket_aux: None }
 }
 
 pub fn make_wrapped_pre_digest(
-	authority_index: AuthorityIndex,
+	authority_idx: AuthorityIndex,
 	slot: Slot,
 	pair: &AuthorityPair,
 ) -> Digest {
-	let pre_digest = make_pre_digest(authority_index, slot, pair);
+	let pre_digest = make_pre_digest(authority_idx, slot, pair);
 	let log =
 		DigestItem::PreRuntime(sp_consensus_sassafras::SASSAFRAS_ENGINE_ID, pre_digest.encode());
 	Digest { logs: vec![log] }
