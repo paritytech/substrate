@@ -524,8 +524,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			config: CollectionConfig,
 			admin: AccountIdLookupOf<T>,
+			config: CollectionConfig,
 		) -> DispatchResult {
 			let collection =
 				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
@@ -536,8 +536,8 @@ pub mod pallet {
 			Self::do_create_collection(
 				collection,
 				owner.clone(),
-				config,
 				admin.clone(),
+				config,
 				T::CollectionDeposit::get(),
 				false,
 				Event::Created { collection, creator: owner, owner: admin },
@@ -576,8 +576,8 @@ pub mod pallet {
 			Self::do_create_collection(
 				collection,
 				owner.clone(),
-				config,
 				owner.clone(),
+				config,
 				Zero::zero(),
 				free_holding,
 				Event::ForceCreated { collection, owner },

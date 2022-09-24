@@ -78,8 +78,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_create_collection(
 		collection: T::CollectionId,
 		owner: T::AccountId,
-		config: CollectionConfig,
 		admin: T::AccountId,
+		config: CollectionConfig,
 		deposit: DepositBalanceOf<T, I>,
 		free_holding: bool,
 		event: Event<T, I>,

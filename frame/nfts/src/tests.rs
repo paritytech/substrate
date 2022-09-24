@@ -117,8 +117,7 @@ fn collection_locking_should_work() {
 		let collection_id = 0;
 
 		assert_ok!(Nfts::force_create(
-			Origin::root(),
-			collection_id,
+			RuntimeOrigin::root(),
 			user_id,
 			CollectionConfig::empty(),
 			true
@@ -139,7 +138,7 @@ fn collection_locking_should_work() {
 fn lifecycle_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), CollectionConfig::empty(), 1));
+		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), 1, CollectionConfig::empty()));
 		assert_eq!(Balances::reserved_balance(&1), 2);
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0, 0], false));
@@ -182,7 +181,7 @@ fn lifecycle_should_work() {
 fn destroy_with_bad_witness_should_not_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), CollectionConfig::empty(), 1));
+		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), 1, CollectionConfig::empty()));
 
 		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1));
@@ -286,7 +285,7 @@ fn transfer_owner_should_work() {
 		Balances::make_free_balance_be(&1, 100);
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 100);
-		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), CollectionConfig::empty(), 1));
+		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), 1, CollectionConfig::empty()));
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_noop!(
 			Nfts::transfer_ownership(RuntimeOrigin::signed(1), 0, 2),

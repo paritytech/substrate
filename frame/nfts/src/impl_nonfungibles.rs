@@ -98,8 +98,8 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
-			CollectionConfig(*config),
 			admin.clone(),
+			CollectionConfig(*config),
 			T::CollectionDeposit::get(),
 			false,
 			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
