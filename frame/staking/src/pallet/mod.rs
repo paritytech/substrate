@@ -504,6 +504,7 @@ pub mod pallet {
 
 	/// Slashing spans for stash accounts.
 	#[pallet::storage]
+	#[pallet::getter(fn slashing_spans)]
 	#[pallet::unbounded]
 	pub(crate) type SlashingSpans<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
@@ -656,8 +657,8 @@ pub mod pallet {
 		EraPaid(EraIndex, BalanceOf<T>, BalanceOf<T>),
 		/// The nominator has been rewarded by this amount. \[stash, amount\]
 		Rewarded(T::AccountId, BalanceOf<T>),
-		/// One validator (and its nominators) has been slashed by the given amount.
-		/// \[validator, amount\]
+		/// One staker (and potentially its nominators) has been slashed by the given amount.
+		/// \[staker, amount\]
 		Slashed(T::AccountId, BalanceOf<T>),
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed. \[session_index\]

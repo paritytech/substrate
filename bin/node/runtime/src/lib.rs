@@ -579,6 +579,13 @@ impl pallet_staking::Config for Runtime {
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
 
+impl pallet_fast_unstake::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type SlashPerEra = ConstU128<{ DOLLARS }>;
+	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
+	type WeightInfo = ();
+}
+
 parameter_types! {
 	// phase durations. 1/4 of the last session for each.
 	pub const SignedPhase: u32 = EPOCH_DURATION_IN_BLOCKS / 4;
@@ -1655,6 +1662,7 @@ construct_runtime!(
 		NominationPools: pallet_nomination_pools,
 		RankedPolls: pallet_referenda::<Instance2>,
 		RankedCollective: pallet_ranked_collective,
+		FastUnstake: pallet_fast_unstake,
 	}
 );
 
@@ -1741,6 +1749,7 @@ mod benches {
 		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
 		[pallet_election_provider_support_benchmarking, EPSBench::<Runtime>]
 		[pallet_elections_phragmen, Elections]
+		[pallet_fast_unstake, FastUnstake]
 		[pallet_gilt, Gilt]
 		[pallet_grandpa, Grandpa]
 		[pallet_identity, Identity]
