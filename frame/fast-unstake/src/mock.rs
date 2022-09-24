@@ -17,19 +17,10 @@
 
 use crate::{self as fast_unstake};
 use frame_support::{
-	assert_ok,
-	pallet_prelude::*,
-	parameter_types,
-	traits::{ConstU64, ConstU8, Currency},
-	weights::constants::WEIGHT_PER_SECOND,
-	PalletId,
+	pallet_prelude::*, parameter_types, traits::ConstU64, weights::constants::WEIGHT_PER_SECOND,
 };
-use sp_runtime::{
-	traits::{Convert, IdentityLookup},
-	FixedU128,
-};
+use sp_runtime::traits::{Convert, IdentityLookup};
 
-use frame_system::RawOrigin;
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
 use sp_std::prelude::*;
 

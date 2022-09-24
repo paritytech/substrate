@@ -22,7 +22,7 @@ use crate::{mock::*, types::*, weights::WeightInfo, Event};
 use frame_support::{assert_noop, assert_ok, bounded_vec, pallet_prelude::*, traits::Currency};
 use pallet_staking::{CurrentEra, IndividualExposure, RewardDestination};
 
-use sp_runtime::{traits::BadOrigin, DispatchError, ModuleError};
+use sp_runtime::traits::BadOrigin;
 use sp_staking::StakingInterface;
 
 #[test]
@@ -61,7 +61,7 @@ fn cannot_register_if_not_bonded() {
 fn cannot_register_if_in_queue() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Insert some Queue item
-		Queue::<T>::insert(1);
+		Queue::<T>::insert(1, ());
 		// Cannot re-register, already in queue
 		assert_noop!(
 			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
@@ -165,14 +165,14 @@ mod on_idle {
 
 			// set up Queue item
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(Some(1)));
+			assert_eq!(Queue::<T>::get(1), Some(()));
 
 			// call on_idle with no remaining weight
 			FastUnstake::on_idle(System::block_number(), Weight::from_ref_time(0));
 
 			// assert nothing changed in Queue and Head
 			assert_eq!(Head::<T>::get(), None);
-			assert_eq!(Queue::<T>::get(1), Some(Some(1)));
+			assert_eq!(Queue::<T>::get(1), Some(()));
 		});
 	}
 
@@ -185,7 +185,7 @@ mod on_idle {
 
 			// given
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(Some(1)));
+			assert_eq!(Queue::<T>::get(1), Some(()));
 
 			assert_eq!(Queue::<T>::count(), 1);
 			assert_eq!(Head::<T>::get(), None);
@@ -340,9 +340,9 @@ mod on_idle {
 
 			// register multi accounts for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(Some(1)));
+			assert_eq!(Queue::<T>::get(1), Some(()));
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
-			assert_eq!(Queue::<T>::get(3), Some(Some(1)));
+			assert_eq!(Queue::<T>::get(3), Some(()));
 
 			// assert 2 queue items are in Queue & None in Head to start with
 			assert_eq!(Queue::<T>::count(), 2);
@@ -391,7 +391,7 @@ mod on_idle {
 
 			// register for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(None));
+			assert_eq!(Queue::<T>::get(1), Some(()));
 
 			// process on idle
 			next_block(true);
