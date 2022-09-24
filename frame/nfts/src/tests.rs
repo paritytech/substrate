@@ -1189,10 +1189,10 @@ fn various_collection_settings() {
 		assert!(!stored_settings.contains(CollectionSetting::LockedMetadata));
 
 		// no need to call .into() for multiple values
-		let settings = CollectionConfig(
+		let config = CollectionConfig(
 			CollectionSetting::LockedMetadata | CollectionSetting::NonTransferableItems,
 		);
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, settings, false));
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, config, false));
 
 		let config = CollectionConfigOf::<Test>::get(1).unwrap();
 		let stored_settings = config.values();
