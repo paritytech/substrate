@@ -210,10 +210,6 @@ impl TypeInfo for CollectionConfig {
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq)]
 pub enum SystemFeature {
-	NoCollectionDeposit,
-	NoItemDeposit,
-	NoMetadataDeposit,
-	NoAttributesDeposit,
 	NoTrading,
 	NoAttributes,
 	NoApprovals,
