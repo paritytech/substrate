@@ -35,6 +35,7 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+mod features;
 mod functions;
 mod impl_nonfungibles;
 mod types;
@@ -176,6 +177,10 @@ pub mod pallet {
 		/// The maximum approvals an item could have.
 		#[pallet::constant]
 		type ApprovalsLimit: Get<u32>;
+
+		/// The max number of tips a user could send.
+		#[pallet::constant]
+		type MaxTips: Get<u32>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -419,6 +424,14 @@ pub mod pallet {
 			price: ItemPrice<T, I>,
 			seller: T::AccountId,
 			buyer: T::AccountId,
+		},
+		/// A tip was sent.
+		TipSent {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			sender: T::AccountId,
+			receiver: T::AccountId,
+			amount: DepositBalanceOf<T, I>,
 		},
 	}
 
@@ -1607,6 +1620,23 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_buy_item(collection, item, origin, bid_price)
+		}
+
+		/// Allows to pay the tips.
+		///
+		/// Origin must be Signed.
+		///
+		/// - `tips`: Tips array.
+		///
+		/// Emits `TipSent` on every tip transfer.
+		#[pallet::weight(T::WeightInfo::pay_tips(tips.len() as u32))]
+		#[transactional]
+		pub fn pay_tips(
+			origin: OriginFor<T>,
+			tips: BoundedVec<ItemTipOf<T, I>, T::MaxTips>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_pay_tips(origin, tips)
 		}
 	}
 }

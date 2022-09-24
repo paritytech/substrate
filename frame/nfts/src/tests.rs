@@ -1001,7 +1001,7 @@ fn buy_item_should_work() {
 		);
 
 		// can buy when I'm a whitelisted buyer
-		assert_ok!(Nfts::buy_item(RuntimeOrigin::signed(user_3), collection_id, item_2, price_2,));
+		assert_ok!(Nfts::buy_item(RuntimeOrigin::signed(user_3), collection_id, item_2, price_2));
 
 		assert!(events().contains(&Event::<Test>::ItemBought {
 			collection: collection_id,
@@ -1058,5 +1058,50 @@ fn buy_item_should_work() {
 				Error::<Test>::Frozen
 			);
 		}
+	});
+}
+
+#[test]
+fn pay_tips_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_1 = 1;
+		let user_2 = 2;
+		let user_3 = 3;
+		let collection_id = 0;
+		let item_id = 1;
+		let tip = 2;
+		let initial_balance = 100;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+		Balances::make_free_balance_be(&user_3, initial_balance);
+
+		assert_ok!(Nfts::pay_tips(
+			RuntimeOrigin::signed(user_1),
+			bvec![
+				ItemTip { collection: collection_id, item: item_id, receiver: user_2, amount: tip },
+				ItemTip { collection: collection_id, item: item_id, receiver: user_3, amount: tip },
+			]
+		));
+
+		assert_eq!(Balances::total_balance(&user_1), initial_balance - tip * 2);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance + tip);
+		assert_eq!(Balances::total_balance(&user_3), initial_balance + tip);
+
+		let events = events();
+		assert!(events.contains(&Event::<Test>::TipSent {
+			collection: collection_id,
+			item: item_id,
+			sender: user_1,
+			receiver: user_2,
+			amount: tip,
+		}));
+		assert!(events.contains(&Event::<Test>::TipSent {
+			collection: collection_id,
+			item: item_id,
+			sender: user_1,
+			receiver: user_3,
+			amount: tip,
+		}));
 	});
 }
