@@ -20,7 +20,7 @@
 use super::*;
 use crate as pallet_nfts;
 
-use enumflags2::BitFlags;
+use enumflags2::BitFlag;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
@@ -86,7 +86,7 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub FeatureFlags: SystemFeatures = BitFlags::EMPTY;
+	pub FeatureFlags: SystemFeatures = SystemFeature::empty();
 }
 
 impl Config for Test {
