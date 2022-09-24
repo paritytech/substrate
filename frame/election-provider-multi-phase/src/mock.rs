@@ -199,7 +199,7 @@ pub fn witness() -> SolutionOrSnapshotSize {
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
@@ -302,6 +302,10 @@ impl ElectionProvider for MockFallback {
 	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
+
+	fn ongoing() -> bool {
+		false
+	}
 
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())

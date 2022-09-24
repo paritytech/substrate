@@ -42,13 +42,8 @@ fn create_collection<T: Config<I>, I: 'static>(
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	assert!(Nfts::<T, I>::force_create(
-		SystemOrigin::Root.into(),
-		collection,
-		caller_lookup.clone(),
-		false,
-	)
-	.is_ok());
+	assert!(Nfts::<T, I>::force_create(SystemOrigin::Root.into(), caller_lookup.clone(), false,)
+		.is_ok());
 	(collection, caller, caller_lookup)
 }
 
@@ -142,7 +137,7 @@ benchmarks_instance_pallet! {
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-		let call = Call::<T, I>::create { collection, admin };
+		let call = Call::<T, I>::create { admin };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
@@ -151,7 +146,7 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, T::Helper::collection(0), caller_lookup, true)
+	}: _(SystemOrigin::Root, caller_lookup, true)
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
 	}
@@ -456,6 +451,29 @@ benchmarks_instance_pallet! {
 			seller,
 			buyer,
 		}.into());
+	}
+
+	pay_tips {
+		let n in 0 .. T::MaxTips::get() as u32;
+		let amount = BalanceOf::<T, I>::from(100u32);
+		let caller: T::AccountId = whitelisted_caller();
+		let collection = T::Helper::collection(0);
+		let item = T::Helper::item(0);
+		let tips: BoundedVec<_, _> = vec![
+			ItemTip
+				{ collection, item, receiver: caller.clone(), amount }; n as usize
+		].try_into().unwrap();
+	}: _(SystemOrigin::Signed(caller.clone()), tips)
+	verify {
+		if !n.is_zero() {
+			assert_last_event::<T, I>(Event::TipSent {
+				collection,
+				item,
+				sender: caller.clone(),
+				receiver: caller.clone(),
+				amount,
+			}.into());
+		}
 	}
 
 	impl_benchmark_test_suite!(Nfts, crate::mock::new_test_ext(), crate::mock::Test);

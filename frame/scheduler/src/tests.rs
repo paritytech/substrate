@@ -52,7 +52,7 @@ fn scheduling_with_preimages_works() {
 			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) });
 		let hash = <Test as frame_system::Config>::Hashing::hash_of(&call);
 		let hashed = MaybeHashed::Hash(hash);
-		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(0), call.encode()));
 		assert_ok!(Scheduler::do_schedule(DispatchTime::At(4), None, 127, root(), hashed));
 		assert!(Preimage::preimage_requested(&hash));
 		run_to_block(3);
@@ -82,7 +82,7 @@ fn scheduling_with_preimage_postpones_correctly() {
 		assert!(logger::log().is_empty());
 
 		// Register preimage.
-		assert_ok!(Preimage::note_preimage(Origin::signed(0), call.encode()));
+		assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(0), call.encode()));
 
 		run_to_block(5);
 		// #5 empty since postponement is 2 blocks.
@@ -619,14 +619,21 @@ fn root_calls_works() {
 			RuntimeCall::Logger(LoggerCall::log { i: 42, weight: Weight::from_ref_time(1000) })
 				.into(),
 		);
-		assert_ok!(Scheduler::schedule_named(Origin::root(), 1u32.encode(), 4, None, 127, call,));
-		assert_ok!(Scheduler::schedule(Origin::root(), 4, None, 127, call2));
+		assert_ok!(Scheduler::schedule_named(
+			RuntimeOrigin::root(),
+			1u32.encode(),
+			4,
+			None,
+			127,
+			call,
+		));
+		assert_ok!(Scheduler::schedule(RuntimeOrigin::root(), 4, None, 127, call2));
 		run_to_block(3);
 		// Scheduled calls are in the agenda.
 		assert_eq!(Agenda::<Test>::get(4).len(), 2);
 		assert!(logger::log().is_empty());
-		assert_ok!(Scheduler::cancel_named(Origin::root(), 1u32.encode()));
-		assert_ok!(Scheduler::cancel(Origin::root(), 4, 1));
+		assert_ok!(Scheduler::cancel_named(RuntimeOrigin::root(), 1u32.encode()));
+		assert_ok!(Scheduler::cancel(RuntimeOrigin::root(), 4, 1));
 		// Scheduled calls are made NONE, so should not effect state
 		run_to_block(100);
 		assert!(logger::log().is_empty());
@@ -651,17 +658,17 @@ fn fails_to_schedule_task_in_the_past() {
 				.into(),
 		);
 		assert_err!(
-			Scheduler::schedule_named(Origin::root(), 1u32.encode(), 2, None, 127, call1),
+			Scheduler::schedule_named(RuntimeOrigin::root(), 1u32.encode(), 2, None, 127, call1),
 			Error::<Test>::TargetBlockNumberInPast,
 		);
 
 		assert_err!(
-			Scheduler::schedule(Origin::root(), 2, None, 127, call2),
+			Scheduler::schedule(RuntimeOrigin::root(), 2, None, 127, call2),
 			Error::<Test>::TargetBlockNumberInPast,
 		);
 
 		assert_err!(
-			Scheduler::schedule(Origin::root(), 3, None, 127, call3),
+			Scheduler::schedule(RuntimeOrigin::root(), 3, None, 127, call3),
 			Error::<Test>::TargetBlockNumberInPast,
 		);
 	});

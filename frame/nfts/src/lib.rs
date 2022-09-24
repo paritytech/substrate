@@ -35,6 +35,7 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+mod features;
 mod functions;
 mod impl_nonfungibles;
 mod types;
@@ -60,6 +61,29 @@ pub use types::*;
 pub use weights::WeightInfo;
 
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
+
+pub trait Incrementable {
+	fn increment(&self) -> Self;
+	fn initial_value() -> Self;
+}
+
+macro_rules! impl_incrementable {
+	($($type:ty),+) => {
+		$(
+			impl Incrementable for $type {
+				fn increment(&self) -> Self {
+					self.saturating_add(1)
+				}
+
+				fn initial_value() -> Self {
+					0
+				}
+			}
+		)+
+	};
+}
+
+impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -94,7 +118,7 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Identifier for the collection of item.
-		type CollectionId: Member + Parameter + MaxEncodedLen + Copy;
+		type CollectionId: Member + Parameter + MaxEncodedLen + Copy + Incrementable;
 
 		/// The type used to identify a unique item within a collection.
 		type ItemId: Member + Parameter + MaxEncodedLen + Copy;
@@ -104,12 +128,12 @@ pub mod pallet {
 
 		/// The origin which may forcibly create or destroy an item or otherwise alter privileged
 		/// attributes.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Standard collection creation is only allowed if the origin attempting it and the
 		/// collection are in this set.
 		type CreateOrigin: EnsureOriginWithArg<
-			Self::Origin,
+			Self::RuntimeOrigin,
 			Self::CollectionId,
 			Success = Self::AccountId,
 		>;
@@ -153,6 +177,10 @@ pub mod pallet {
 		/// The maximum approvals an item could have.
 		#[pallet::constant]
 		type ApprovalsLimit: Get<u32>;
+
+		/// The max number of tips a user could send.
+		#[pallet::constant]
+		type MaxTips: Get<u32>;
 
 		type FeatureFlags: Get<SystemFeatures>;
 
@@ -280,6 +308,12 @@ pub mod pallet {
 	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
 
+	#[pallet::storage]
+	/// Stores the `CollectionId` that is going to be used for the next collection.
+	/// This gets incremented by 1 whenever a new collection is created.
+	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, T::CollectionId, OptionQuery>;
+
 	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
 	pub(super) type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
@@ -379,6 +413,8 @@ pub mod pallet {
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
+		/// Event gets emmited when the `NextCollectionId` gets incremented.
+		NextCollectionIdIncremented { next_id: T::CollectionId },
 		/// The config of a collection has change.
 		CollectionConfigChanged { id: T::CollectionId },
 		/// The price was set for the instance.
@@ -397,6 +433,14 @@ pub mod pallet {
 			price: ItemPrice<T, I>,
 			seller: T::AccountId,
 			buyer: T::AccountId,
+		},
+		/// A tip was sent.
+		TipSent {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			sender: T::AccountId,
+			receiver: T::AccountId,
+			amount: DepositBalanceOf<T, I>,
 		},
 	}
 
@@ -471,7 +515,6 @@ pub mod pallet {
 		/// `ItemDeposit` funds of sender are reserved.
 		///
 		/// Parameters:
-		/// - `collection`: The identifier of the new collection. This must not be currently in use.
 		/// - `admin`: The admin of this collection. The admin is the initial address of each
 		/// member of the collection's admin team.
 		///
@@ -481,10 +524,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
 			config: CollectionConfig,
 			admin: AccountIdLookupOf<T>,
 		) -> DispatchResult {
+			let collection =
+				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
+
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
 
@@ -507,7 +552,6 @@ pub mod pallet {
 		///
 		/// Unlike `create`, no funds are reserved.
 		///
-		/// - `collection`: The identifier of the new item. This must not be currently in use.
 		/// - `owner`: The owner of this collection of items. The owner has full superuser
 		///   permissions
 		/// over this item, but may later change and configure the permissions using
@@ -519,13 +563,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
 			owner: AccountIdLookupOf<T>,
 			config: CollectionConfig,
 			free_holding: bool,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
+
+			let collection =
+				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
 
 			Self::do_create_collection(
 				collection,
@@ -1625,6 +1671,23 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_buy_item(collection, item, origin, bid_price)
+		}
+
+		/// Allows to pay the tips.
+		///
+		/// Origin must be Signed.
+		///
+		/// - `tips`: Tips array.
+		///
+		/// Emits `TipSent` on every tip transfer.
+		#[pallet::weight(T::WeightInfo::pay_tips(tips.len() as u32))]
+		#[transactional]
+		pub fn pay_tips(
+			origin: OriginFor<T>,
+			tips: BoundedVec<ItemTipOf<T, I>, T::MaxTips>,
+		) -> DispatchResult {
+			let origin = ensure_signed(origin)?;
+			Self::do_pay_tips(origin, tips)
 		}
 	}
 }

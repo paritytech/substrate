@@ -13,8 +13,8 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+array-bytes = { version = "4.1", optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
-hex-literal = { version = "0.3.4", optional = true }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
@@ -34,7 +34,7 @@ sp-transaction-storage-proof = { version = "4.0.0-dev", default-features = true,
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "hex-literal"]
+runtime-benchmarks = ["array-bytes", "frame-benchmarking/runtime-benchmarks"]
 std = [
 	"log/std",
 	"frame-benchmarking?/std",

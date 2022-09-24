@@ -50,7 +50,7 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -106,6 +106,7 @@ impl Config for Test {
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
 	type ApprovalsLimit = ConstU32<10>;
+	type MaxTips = ConstU32<10>;
 	type FeatureFlags = FeatureFlags;
 	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]
