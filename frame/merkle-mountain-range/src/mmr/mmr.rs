@@ -22,7 +22,7 @@ use crate::{
 		Hasher, Node, NodeOf,
 	},
 	primitives::{self, Error, NodeIndex},
-	Config, HashingOf,
+	Config, HashingOf, LeafIndex, Saturating,
 };
 use sp_std::prelude::*;
 
@@ -115,6 +115,21 @@ where
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
 		p.verify(root, leaves_positions_and_data)
 			.map_err(|e| Error::Verify.log_debug(e))
+	}
+
+	/// Convert `block_num` into a leaf index.
+	pub fn block_num_to_leaf_indx(
+		&self,
+		block_num: <T as frame_system::Config>::BlockNumber,
+	) -> LeafIndex {
+		// leaf_indx = block_num - (current_block_num - leaves_count) - 1;
+		let leaves_count = self.leaves;
+		let current_block_num = <frame_system::Pallet<T>>::block_number();
+		let diff = current_block_num.saturating_sub((leaves_count as u32).into());
+
+		// TODO: Somehow convert BlockNumber into LeafIndex.
+		block_num.saturating_sub(diff).saturating_sub(1u32.into());
+		0
 	}
 
 	/// Return the internal size of the MMR (number of nodes).

@@ -431,7 +431,7 @@ impl Error {
 
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
-	pub trait MmrApi<Hash: codec::Codec> {
+	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
 		/// Generate MMR proof for a leaf under given index.
 		fn generate_proof(leaf_index: LeafIndex) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
 
@@ -474,6 +474,8 @@ sp_api::decl_runtime_apis! {
 		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [BatchProof]
 		fn verify_batch_proof_stateless(root: Hash, leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>)
 			-> Result<(), Error>;
+
+		fn block_num_to_leaf_index(block_num: BlockNumber) -> Result<LeafIndex, Error>;
 	}
 }
 

@@ -2013,6 +2013,7 @@ impl_runtime_apis! {
 	impl pallet_mmr::primitives::MmrApi<
 		Block,
 		mmr::Hash,
+		BlockNumber,
 	> for Runtime {
 		fn generate_proof(leaf_index: pallet_mmr::primitives::LeafIndex)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
@@ -2072,6 +2073,10 @@ impl_runtime_apis! {
 		) -> Result<(), mmr::Error> {
 			let nodes = leaves.into_iter().map(|leaf|mmr::DataOrHash::Data(leaf.into_opaque_leaf())).collect();
 			pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, nodes, proof)
+		}
+
+		fn block_num_to_leaf_index(block_num: BlockNumber) -> mmr::LeafIndex {
+			pallet_mmr::block_num_to_leaf_index(block_num)
 		}
 	}
 

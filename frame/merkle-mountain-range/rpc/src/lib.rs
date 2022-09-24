@@ -96,7 +96,7 @@ impl<BlockHash> LeafBatchProof<BlockHash> {
 
 /// MMR RPC methods.
 #[rpc(client, server)]
-pub trait MmrApi<BlockHash> {
+pub trait MmrApi<BlockHash, BlockNumber> {
 	/// Generate MMR proof for given leaf index.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
@@ -125,7 +125,7 @@ pub trait MmrApi<BlockHash> {
 	#[method(name = "mmr_generateBatchProof")]
 	fn generate_batch_proof(
 		&self,
-		leaf_indices: Vec<LeafIndex>,
+		leaf_indices: Vec<BlockNumber>,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
 }
@@ -144,12 +144,14 @@ impl<C, B> Mmr<C, B> {
 }
 
 #[async_trait]
-impl<Client, Block, MmrHash> MmrApiServer<<Block as BlockT>::Hash> for Mmr<Client, (Block, MmrHash)>
+impl<Client, Block, MmrHash, BlockNumber> MmrApiServer<<Block as BlockT>::Hash, BlockNumber>
+	for Mmr<Client, (Block, MmrHash)>
 where
 	Block: BlockT,
 	Client: Send + Sync + 'static + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-	Client::Api: MmrRuntimeApi<Block, MmrHash>,
+	Client::Api: MmrRuntimeApi<Block, MmrHash, BlockNumber>,
 	MmrHash: Codec + Send + Sync + 'static,
+	BlockNumber: Codec,
 {
 	fn generate_proof(
 		&self,
@@ -173,13 +175,22 @@ where
 
 	fn generate_batch_proof(
 		&self,
-		leaf_indices: Vec<LeafIndex>,
+		block_numbers: Vec<BlockNumber>,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
 		let api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(||
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash);
+
+		let leaf_indices: Vec<LeafIndex> = block_numbers
+			.iter()
+			.map(|n| {
+				api.block_num_to_leaf_index(&BlockId::hash(block_hash), *n)
+					.map_err(runtime_error_into_rpc_error)?
+					.map_err(mmr_error_into_rpc_error)
+			})
+			.collect::<Vec<LeafIndex>>();
 
 		let (leaves, proof) = api
 			.generate_batch_proof_with_context(
