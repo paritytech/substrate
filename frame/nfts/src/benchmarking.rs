@@ -24,6 +24,7 @@ use frame_benchmarking::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
 use frame_support::{
+	bounded_vec,
 	dispatch::UnfilteredDispatchable,
 	traits::{EnsureOrigin, Get},
 	BoundedVec,
