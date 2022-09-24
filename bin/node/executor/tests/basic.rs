@@ -311,10 +311,19 @@ fn full_native_block_import_works() {
 	let mut alice_last_known_balance: Balance = Default::default();
 	let mut fees = t.execute_with(|| transfer_fee(&xt()));
 
-	let transfer_weight = default_transfer_call().get_dispatch_info().weight;
+	let transfer_weight = default_transfer_call().get_dispatch_info().weight.saturating_add(
+		<Runtime as frame_system::Config>::BlockWeights::get()
+			.get(DispatchClass::Normal)
+			.base_extrinsic,
+	);
 	let timestamp_weight = pallet_timestamp::Call::set::<Runtime> { now: Default::default() }
 		.get_dispatch_info()
-		.weight;
+		.weight
+		.saturating_add(
+			<Runtime as frame_system::Config>::BlockWeights::get()
+				.get(DispatchClass::Mandatory)
+				.base_extrinsic,
+		);
 
 	executor_call(&mut t, "Core_execute_block", &block1.0, true).0.unwrap();
 
