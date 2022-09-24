@@ -148,10 +148,6 @@ pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 pub struct CollectionConfig(pub CollectionSettings);
 
 impl CollectionConfig {
-	pub fn new(input: CollectionSettings) -> Self {
-		CollectionConfig(input)
-	}
-
 	pub fn empty() -> Self {
 		CollectionConfig(BitFlags::EMPTY)
 	}
