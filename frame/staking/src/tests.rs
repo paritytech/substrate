@@ -5567,13 +5567,12 @@ fn change_max_unlocking_chunks_effect() {
 	// Concern is on validators only
 	// By Default 11, 10 are stash and ctrl and 21,20
 	ExtBuilder::default().build_and_execute(|| {
-		// initial state
-		assert_eq!(MaxUnlockingChunks::get(), 32);
+		// given a staker at era=10 and MaxUnlockChunks set to 2
+		MaxUnlockingChunks::set(2);
+		start_active_era(10);
+		let expected_claimed_rewards: BoundedVec<_, _> =
+			(0..10).collect::<Vec<_>>().try_into().unwrap();
 
-		// starting an era
-		let current_era = 10;
-		start_active_era(current_era);
-		// bond some funds
 		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 300, RewardDestination::Staked));
 		assert_eq!(
 			Staking::ledger(4),
@@ -5582,10 +5581,15 @@ fn change_max_unlocking_chunks_effect() {
 				total: 300,
 				active: 300,
 				unlocking: Default::default(),
-				claimed_rewards: bounded_vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+				claimed_rewards: expected_claimed_rewards.clone(),
 			})
 		);
+
+		// when staker unbonds
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 20));
+
+		// then an unlocking chunk is added at `current_era + bonding_duration`
+		// => 10 + 3 = 13
 		assert_eq!(
 			Staking::ledger(4),
 			Some(StakingLedger {
@@ -5593,59 +5597,40 @@ fn change_max_unlocking_chunks_effect() {
 				total: 300,
 				active: 280,
 				unlocking: bounded_vec![UnlockChunk { value: 20, era: 13 }],
-				claimed_rewards: bounded_vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+				claimed_rewards: expected_claimed_rewards.clone(),
 			})
 		);
+
+		// when staker unbonds at next era
+		start_active_era(11);
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 50));
+		// then another unlock chunk is added
 		assert_eq!(
 			Staking::ledger(4),
 			Some(StakingLedger {
 				stash: 3,
 				total: 300,
 				active: 230,
-				unlocking: bounded_vec![UnlockChunk { value: 70, era: 13 }],
-				claimed_rewards: bounded_vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-			})
-		);
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 20));
-
-		// changing MaxUnlockingChunks without migration it works
-		MaxUnlockingChunks::set(10);
-
-		assert_eq!(MaxUnlockingChunks::get(), 10);
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 30));
-		assert_eq!(
-			Staking::ledger(4),
-			Some(StakingLedger {
-				stash: 3,
-				total: 300,
-				active: 180,
-				unlocking: bounded_vec![UnlockChunk { value: 120, era: 13 }],
-				claimed_rewards: bounded_vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+				unlocking: bounded_vec![
+					UnlockChunk { value: 20, era: 13 },
+					UnlockChunk { value: 50, era: 14 }
+				],
+				claimed_rewards: expected_claimed_rewards.clone(),
 			})
 		);
 
-		MaxUnlockingChunks::set(3);
+		// when staker unbonds further
+		start_active_era(12);
+		// then further unbonding not possible
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(4), 20), Error::<Test>::NoMoreChunks);
 
-		assert_eq!(MaxUnlockingChunks::get(), 3);
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 20));
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 20));
-		assert_eq!(
-			Staking::ledger(4),
-			Some(StakingLedger {
-				stash: 3,
-				total: 300,
-				active: 140,
-				unlocking: bounded_vec![UnlockChunk { value: 160, era: 13 }],
-				claimed_rewards: bounded_vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-			})
-		);
-		// rebonding without migration
-		assert_ok!(Staking::rebond(RuntimeOrigin::signed(4), 100));
+		// when max unlocking chunks is reduced abruptly to a low value
 		MaxUnlockingChunks::set(1);
-		assert_ok!(Staking::rebond(RuntimeOrigin::signed(4), 120));
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 20));
-		// No effect on storage items changing MaxUnlockingChunks
-		// Note decreasing to zero affects rebond and unbond funtions
+		// then unbond, rebond ops are blocked with ledger in corrupt state
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(4), 20), Error::<Test>::NotController);
+		assert_noop!(Staking::rebond(RuntimeOrigin::signed(4), 100), Error::<Test>::NotController);
+
+		// reset the ledger corruption
+		MaxUnlockingChunks::set(2);
 	})
 }
