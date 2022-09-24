@@ -427,7 +427,7 @@ mod on_idle {
 
 			// register for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), ());
+			assert_eq!(Queue::<T>::get(1), Some(()));
 
 			// process on idle
 			next_block(true);
@@ -464,7 +464,7 @@ mod on_idle {
 
 			// register for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), ());
+			assert_eq!(Queue::<T>::get(1), Some(()));
 
 			// process on idle
 			next_block(true);
@@ -540,7 +540,7 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2], maybe_pool_id: None })
+				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2] })
 			);
 
 			next_block(true);
