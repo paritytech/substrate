@@ -5484,7 +5484,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 }
 
 #[test]
-fn reducing_history_depth_without_migration() {
+fn reducing_history_depth_abrupt() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		let original_history_depth = HistoryDepth::get();
@@ -5563,7 +5563,7 @@ fn reducing_history_depth_without_migration() {
 }
 
 #[test]
-fn change_max_unlocking_chunks_effect() {
+fn reducing_max_unlocking_chunks_abrupt() {
 	// Concern is on validators only
 	// By Default 11, 10 are stash and ctrl and 21,20
 	ExtBuilder::default().build_and_execute(|| {

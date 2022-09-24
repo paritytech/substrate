@@ -142,8 +142,9 @@ pub mod pallet {
 		///
 		/// Note: `HistoryDepth` is used as the upper bound for the `BoundedVec`
 		/// item `StakingLedger.claimed_rewards`. Setting this value lower than
-		/// the existing value can lead to inconsistencies and will need to be
-		/// handled properly in a migration.
+		/// the existing value can lead to inconsistencies in the
+		/// `StakingLedger` and will need to be handled properly in a migration.
+		/// The test `reducing_history_depth_abrupt` shows this effect.
 		#[pallet::constant]
 		type HistoryDepth: Get<u32>;
 
@@ -237,8 +238,16 @@ pub mod pallet {
 		/// VALIDATOR.
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
-		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
-		/// determines how many unique eras a staker may be unbonding in.
+		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can
+		/// have. Effectively determines how many unique eras a staker may be
+		/// unbonding in.
+		///
+		/// Note: `MaxUnlockingChunks` is used as the upper bound for the
+		/// `BoundedVec` item `StakingLedger.unlocking`. Setting this value
+		/// lower than the existing value can lead to inconsistencies in the
+		/// `StakingLedger` and will need to be handled properly in a runtime
+		/// migration. The test `reducing_max_unlocking_chunks_abrupt` shows
+		/// this effect.
 		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
 
