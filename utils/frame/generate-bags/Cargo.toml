@@ -12,7 +12,7 @@ readme = "README.md"
 [dependencies]
 # FRAME
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../../../frame/election-provider-support", features = ["runtime-benchmarks"] }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../../../frame/election-provider-support" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
 

@@ -132,20 +132,20 @@
 //! added, given the right flag:
 //!
 //! ```ignore
+//! 
 //! #[cfg(feature = try-runtime)]
-//! fn pre_upgrade() -> Result<(), &'static str> {}
+//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
 //! #[cfg(feature = try-runtime)]
-//! fn post_upgrade() -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
-//! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
-//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
-//! will not want to mutate any of the storage that is to be migrated.
+//! and after the migration. Moreover, `pre_upgrade` can return a `Vec<u8>` that contains arbitrary
+//! encoded data (usually some pre-upgrade state) which will be passed to `post_upgrade` after
+//! upgrading and used for post checking.
 //!
 //! #### Logging
 //!
@@ -267,7 +267,8 @@
 
 use parity_scale_codec::Decode;
 use remote_externalities::{
-	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
+	rpc_api::RpcService, Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig,
+	TestExternalities,
 };
 use sc_chain_spec::ChainSpec;
 use sc_cli::{
@@ -420,9 +421,9 @@ pub struct SharedParams {
 	#[clap(long)]
 	pub heap_pages: Option<u64>,
 
-	/// When enabled, the spec name check will not panic, and instead only show a warning.
+	/// When enabled, the spec check will not panic, and instead only show a warning.
 	#[clap(long)]
-	pub no_spec_name_check: bool,
+	pub no_spec_check_panic: bool,
 
 	/// State version that is used by the chain.
 	#[clap(long, default_value = "1", parse(try_from_str = parse::state_version))]
@@ -541,8 +542,8 @@ impl State {
 impl TryRuntimeCmd {
 	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
-		Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
-		Block::Header: serde::de::DeserializeOwned,
+		Block: BlockT<Hash = H256> + DeserializeOwned,
+		Block::Header: DeserializeOwned,
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
 		NumberFor<Block>: FromStr,
@@ -626,13 +627,15 @@ where
 ///
 /// If the spec names don't match, if `relaxed`, then it emits a warning, else it panics.
 /// If the spec versions don't match, it only ever emits a warning.
-pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeOwned>(
+pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,
 	expected_spec_version: u32,
 	relaxed: bool,
 ) {
-	match remote_externalities::rpc_api::get_runtime_version::<Block, _>(uri.clone(), None)
+	let rpc_service = RpcService::new(uri.clone(), false).await.unwrap();
+	match rpc_service
+		.get_runtime_version::<Block>(None)
 		.await
 		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))
 		.map(|(spec_name, spec_version)| (spec_name.to_lowercase(), spec_version))
