@@ -1654,8 +1654,6 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::SnapshotUnavailable
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
@@ -1671,8 +1669,6 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::InvalidRound
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
@@ -1690,8 +1686,6 @@ mod feasibility_check {
 
 			// It should succeed
 			assert_ok!(MultiPhase::feasibility_check(raw, COMPUTE));
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
@@ -1715,8 +1709,6 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(raw, COMPUTE),
 				FeasibilityError::WrongWinnerCount,
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
@@ -1750,8 +1742,6 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(raw, COMPUTE),
 				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex)
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
@@ -1780,8 +1770,6 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::NposElection(sp_npos_elections::Error::SolutionInvalidIndex),
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
@@ -1811,8 +1799,6 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::InvalidVote,
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
@@ -1832,8 +1818,6 @@ mod feasibility_check {
 				MultiPhase::feasibility_check(solution, COMPUTE),
 				FeasibilityError::InvalidScore,
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 }
@@ -2405,8 +2389,6 @@ mod tests {
 				MultiPhase::snapshot_metadata().unwrap(),
 				SolutionOrSnapshotSize { voters: 2, targets: 4 }
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
@@ -2437,8 +2419,6 @@ mod tests {
 				MultiPhase::feasibility_check(solution, ElectionCompute::Signed),
 				FeasibilityError::UntrustedScoreTooLow,
 			);
-
-			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 		})
 	}
 
