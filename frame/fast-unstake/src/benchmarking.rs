@@ -176,7 +176,7 @@ benchmarks! {
 		assert_eq!(Queue::<T>::count(), 0);
 
 	}
-	:_(RawOrigin::Signed(who.clone()), None)
+	:_(RawOrigin::Signed(who.clone()))
 	verify {
 		assert_eq!(Queue::<T>::count(), 1);
 	}

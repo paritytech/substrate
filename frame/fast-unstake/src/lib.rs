@@ -317,7 +317,7 @@ pub mod pallet {
 			let UnstakeRequest { stash, mut checked } = match Head::<T>::take().or_else(|| {
 				// NOTE: there is no order guarantees in `Queue`.
 				Queue::<T>::drain()
-					.map(|stash| UnstakeRequest { stash, checked: Default::default() })
+					.map(|(stash, _)| UnstakeRequest { stash, checked: Default::default() })
 					.next()
 			}) {
 				None => {
