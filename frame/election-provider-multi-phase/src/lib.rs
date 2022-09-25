@@ -1633,8 +1633,8 @@ mod feasibility_check {
 
 	use super::*;
 	use crate::mock::{
-		multi_phase_events, raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime,
-		SignedPhase, TargetIndex, UnsignedPhase, VoterIndex,
+		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
+		TargetIndex, UnsignedPhase, VoterIndex,
 	};
 	use frame_support::{assert_noop, assert_ok};
 
