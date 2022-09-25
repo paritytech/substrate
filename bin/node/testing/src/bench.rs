@@ -408,7 +408,7 @@ impl BenchDb {
 		let client_config = sc_service::ClientConfig::default();
 		let genesis_block_builder = sc_service::GenesisBlockBuilder::new(
 			&keyring.generate_genesis(),
-			client_config.no_genesis,
+			!client_config.no_genesis,
 			backend.clone(),
 			executor.clone(),
 		)
