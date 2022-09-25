@@ -30,7 +30,7 @@ mod utils;
 pub mod baseline;
 
 #[cfg(feature = "std")]
-pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector, RegressionModel};
+pub use analysis::{Analysis, AnalysisChoice, BenchmarkSelector};
 #[doc(hidden)]
 pub use frame_support;
 #[doc(hidden)]
@@ -86,12 +86,12 @@ macro_rules! whitelist {
 /// ```
 ///
 /// Note that due to parsing restrictions, if the `from` expression is not a single token (i.e. a
-/// literal or constant), then it must be parenthesised.
+/// literal or constant), then it must be parenthesized.
 ///
 /// The macro allows for a number of "arms", each representing an individual benchmark. Using the
 /// simple syntax, the associated dispatchable function maps 1:1 with the benchmark and the name of
 /// the benchmark is the same as that of the associated function. However, extended syntax allows
-/// for arbitrary expresions to be evaluated in a benchmark (including for example,
+/// for arbitrary expressions to be evaluated in a benchmark (including for example,
 /// `on_initialize`).
 ///
 /// Note that the ranges are *inclusive* on both sides. This is in contrast to ranges in Rust which
@@ -112,14 +112,14 @@ macro_rules! whitelist {
 ///   foo {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
-///   }: _(Origin::Signed(caller), vec![0u8; l])
+///   }: _(RuntimeOrigin::Signed(caller), vec![0u8; l])
 ///
 ///   // second dispatchable: bar; this is a root dispatchable and accepts a `u8` vector of size
 ///   // `l`.
 ///   // In this case, we explicitly name the call using `bar` instead of `_`.
 ///   bar {
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
-///   }: bar(Origin::Root, vec![0u8; l])
+///   }: bar(RuntimeOrigin::Root, vec![0u8; l])
 ///
 ///   // third dispatchable: baz; this is a user dispatchable. It isn't dependent on length like the
 ///   // other two but has its own complexity `c` that needs setting up. It uses `caller` (in the
@@ -128,20 +128,20 @@ macro_rules! whitelist {
 ///   baz1 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c(&caller, c);
-///   }: baz(Origin::Signed(caller))
+///   }: baz(RuntimeOrigin::Signed(caller))
 ///
 ///   // this is a second benchmark of the baz dispatchable with a different setup.
 ///   baz2 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let c = 0 .. 10 => setup_c_in_some_other_way(&caller, c);
-///   }: baz(Origin::Signed(caller))
+///   }: baz(RuntimeOrigin::Signed(caller))
 ///
 ///   // You may optionally specify the origin type if it can't be determined automatically like
 ///   // this.
 ///   baz3 {
 ///     let caller = account::<T>(b"caller", 0, benchmarks_seed);
 ///     let l in 1 .. MAX_LENGTH => initialize_l(l);
-///   }: baz<T::Origin>(Origin::Signed(caller), vec![0u8; l])
+///   }: baz<T::RuntimeOrigin>(RuntimeOrigin::Signed(caller), vec![0u8; l])
 ///
 ///   // this is benchmarking some code that is not a dispatchable.
 ///   populate_a_set {
@@ -617,7 +617,7 @@ macro_rules! to_origin {
 		$origin.into()
 	};
 	($origin:expr, $origin_type:ty) => {
-		<<T as frame_system::Config>::Origin as From<$origin_type>>::from($origin)
+		<<T as frame_system::Config>::RuntimeOrigin as From<$origin_type>>::from($origin)
 	};
 }
 
@@ -975,6 +975,8 @@ macro_rules! impl_benchmark {
 		( $( $name_extra:ident ),* )
 		( $( $name_skip_meta:ident ),* )
 	) => {
+		// We only need to implement benchmarks for the runtime-benchmarks feature or testing.
+		#[cfg(any(feature = "runtime-benchmarks", test))]
 		impl<T: Config $(<$instance>, $instance: $instance_bound )? >
 			$crate::Benchmarking for Pallet<T $(, $instance)? >
 			where T: frame_system::Config, $( $where_clause )*
@@ -1693,13 +1695,13 @@ pub fn show_benchmark_debug_info(
 /// use frame_benchmarking::TrackedStorageKey;
 /// let whitelist: Vec<TrackedStorageKey> = vec![
 /// 	// Block Number
-/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac").to_vec().into(),
+/// 	array_bytes::hex_into_unchecked("26aa394eea5630e07c48ae0c9558cef702a5c1b19ab7a04f536c519aca4983ac"),
 /// 	// Total Issuance
-/// 	hex_literal::hex!("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80").to_vec().into(),
+/// 	array_bytes::hex_into_unchecked("c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80"),
 /// 	// Execution Phase
-/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a").to_vec().into(),
+/// 	array_bytes::hex_into_unchecked("26aa394eea5630e07c48ae0c9558cef7ff553b5a9862a516939d82b3d3d8661a"),
 /// 	// Event Count
-/// 	hex_literal::hex!("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850").to_vec().into(),
+/// 	array_bytes::hex_into_unchecked("26aa394eea5630e07c48ae0c9558cef70a98fdbe9ce6c55837576c60c7af3850"),
 /// ];
 /// ```
 ///

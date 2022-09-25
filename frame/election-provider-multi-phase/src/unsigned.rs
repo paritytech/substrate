@@ -34,7 +34,7 @@ use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
 	DispatchError, SaturatedConversion,
 };
-use sp_std::{cmp::Ordering, prelude::*};
+use sp_std::prelude::*;
 
 /// Storage key used to store the last block number at which offchain worker ran.
 pub(crate) const OFFCHAIN_LAST_BLOCK: &[u8] = b"parity/multi-phase-unsigned-election";
@@ -638,16 +638,17 @@ impl<T: MinerConfig> Miner<T> {
 		};
 
 		let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
-			match current_weight.cmp(&max_weight) {
-				Ordering::Less => {
-					let next_voters = voters.checked_add(step);
-					match next_voters {
-						Some(voters) if voters < max_voters => Ok(voters),
-						_ => Err(()),
-					}
-				},
-				Ordering::Greater => voters.checked_sub(step).ok_or(()),
-				Ordering::Equal => Ok(voters),
+			if current_weight.all_lt(max_weight) {
+				let next_voters = voters.checked_add(step);
+				match next_voters {
+					Some(voters) if voters < max_voters => Ok(voters),
+					_ => Err(()),
+				}
+			} else if current_weight.any_gt(max_weight) {
+				voters.checked_sub(step).ok_or(())
+			} else {
+				// If any of the constituent weights is equal to the max weight, we're at max
+				Ok(voters)
 			}
 		};
 
@@ -672,16 +673,16 @@ impl<T: MinerConfig> Miner<T> {
 
 		// Time to finish. We might have reduced less than expected due to rounding error. Increase
 		// one last time if we have any room left, the reduce until we are sure we are below limit.
-		while voters < max_voters && weight_with(voters + 1) < max_weight {
+		while voters < max_voters && weight_with(voters + 1).all_lt(max_weight) {
 			voters += 1;
 		}
-		while voters.checked_sub(1).is_some() && weight_with(voters) > max_weight {
+		while voters.checked_sub(1).is_some() && weight_with(voters).any_gt(max_weight) {
 			voters -= 1;
 		}
 
 		let final_decision = voters.min(size.voters);
 		debug_assert!(
-			weight_with(final_decision) <= max_weight,
+			weight_with(final_decision).all_lte(max_weight),
 			"weight_with({}) <= {}",
 			final_decision,
 			max_weight,
@@ -699,54 +700,153 @@ mod max_weight {
 	fn find_max_voter_binary_search_works() {
 		let w = SolutionOrSnapshotSize { voters: 10, targets: 0 };
 		MockWeightInfo::set(crate::mock::MockedWeightInfo::Complex);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 0), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 999), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1000), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1001), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1990), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1999), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2000), 2);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2001), 2);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2010), 2);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2990), 2);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2999), 2);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 3000), 3);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 3333), 3);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 5500), 5);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 7777), 7);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 9999), 9);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 10_000), 10);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 10_999), 10);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 11_000), 10);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 22_000), 10);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::zero()), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1)), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(999)), 0);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1000)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1001)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1990)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1999)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2000)),
+			2
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2001)),
+			2
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2010)),
+			2
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2990)),
+			2
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2999)),
+			2
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(3000)),
+			3
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(3333)),
+			3
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(5500)),
+			5
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(7777)),
+			7
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(9999)),
+			9
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(10_000)),
+			10
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(10_999)),
+			10
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(11_000)),
+			10
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(22_000)),
+			10
+		);
 
 		let w = SolutionOrSnapshotSize { voters: 1, targets: 0 };
 
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 0), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 999), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1000), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1001), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1990), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1999), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2000), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2001), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2010), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 3333), 1);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(0)), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1)), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(999)), 0);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1000)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1001)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1990)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1999)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2000)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2001)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2010)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(3333)),
+			1
+		);
 
 		let w = SolutionOrSnapshotSize { voters: 2, targets: 0 };
 
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 0), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 999), 0);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1000), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1001), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 1999), 1);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2000), 2);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2001), 2);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 2010), 2);
-		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, 3333), 2);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(0)), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1)), 0);
+		assert_eq!(Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(999)), 0);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1000)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1001)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(1999)),
+			1
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2000)),
+			2
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2001)),
+			2
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(2010)),
+			2
+		);
+		assert_eq!(
+			Miner::<Runtime>::maximum_voter_for_weight(0, w, Weight::from_ref_time(3333)),
+			2
+		);
 	}
 }
 
@@ -755,8 +855,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, Call as OuterCall,
-			ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Origin, Runtime, System,
+			roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, ExtBuilder, Extrinsic,
+			MinerMaxWeight, MultiPhase, Runtime, RuntimeCall as OuterCall, RuntimeOrigin, System,
 			TestNposSolution, TrimHelpers, UnsignedPhase,
 		},
 		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
@@ -971,7 +1071,7 @@ mod tests {
 				witness: witness(),
 			};
 			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(Origin::none());
+			let _ = outer_call.dispatch(RuntimeOrigin::none());
 		})
 	}
 
@@ -997,7 +1097,7 @@ mod tests {
 				witness: correct_witness,
 			};
 			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(Origin::none());
+			let _ = outer_call.dispatch(RuntimeOrigin::none());
 		})
 	}
 
@@ -1016,7 +1116,11 @@ mod tests {
 
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_ok!(MultiPhase::submit_unsigned(Origin::none(), Box::new(solution), witness));
+			assert_ok!(MultiPhase::submit_unsigned(
+				RuntimeOrigin::none(),
+				Box::new(solution),
+				witness
+			));
 			assert!(MultiPhase::queued_solution().is_some());
 		})
 	}
@@ -1024,7 +1128,7 @@ mod tests {
 	#[test]
 	fn miner_trims_weight() {
 		ExtBuilder::default()
-			.miner_weight(100)
+			.miner_weight(Weight::from_ref_time(100))
 			.mock_weight_info(crate::mock::MockedWeightInfo::Basic)
 			.build_and_execute(|| {
 				roll_to(25);
@@ -1038,11 +1142,11 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, 35);
+				assert_eq!(solution_weight, Weight::from_ref_time(35));
 				assert_eq!(raw.solution.voter_count(), 5);
 
 				// now reduce the max weight
-				<MinerMaxWeight>::set(25);
+				<MinerMaxWeight>::set(Weight::from_ref_time(25));
 
 				let (raw, witness) = MultiPhase::mine_solution().unwrap();
 				let solution_weight = <Runtime as MinerConfig>::solution_weight(
@@ -1052,7 +1156,7 @@ mod tests {
 					raw.solution.unique_targets().len() as u32,
 				);
 				// default solution will have 5 edges (5 * 5 + 10)
-				assert_eq!(solution_weight, 25);
+				assert_eq!(solution_weight, Weight::from_ref_time(25));
 				assert_eq!(raw.solution.voter_count(), 3);
 			})
 	}
@@ -1115,7 +1219,7 @@ mod tests {
 				let solution = RawSolution { solution: raw, score, round: MultiPhase::round() };
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
 				assert_ok!(MultiPhase::submit_unsigned(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					Box::new(solution),
 					witness
 				));
@@ -1176,7 +1280,7 @@ mod tests {
 				// and it is fine
 				assert_ok!(MultiPhase::unsigned_pre_dispatch_checks(&solution));
 				assert_ok!(MultiPhase::submit_unsigned(
-					Origin::none(),
+					RuntimeOrigin::none(),
 					Box::new(solution),
 					witness
 				));

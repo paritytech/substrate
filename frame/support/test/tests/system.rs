@@ -22,28 +22,28 @@ use frame_support::{
 };
 
 pub trait Config: 'static + Eq + Clone {
-	type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+	type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 		+ From<RawOrigin<Self::AccountId>>;
 
-	type BaseCallFilter: frame_support::traits::Contains<Self::Call>;
+	type BaseCallFilter: frame_support::traits::Contains<Self::RuntimeCall>;
 	type BlockNumber: Decode + Encode + EncodeLike + Clone + Default + scale_info::TypeInfo;
 	type Hash;
 	type AccountId: Encode + EncodeLike + Decode + scale_info::TypeInfo;
-	type Call;
-	type Event: From<Event<Self>>;
+	type RuntimeCall;
+	type RuntimeEvent: From<Event<Self>>;
 	type PalletInfo: frame_support::traits::PalletInfo;
 	type DbWeight: Get<RuntimeDbWeight>;
 }
 
 frame_support::decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {
+	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {
 		#[weight = 0]
 		fn noop(_origin) {}
 	}
 }
 
 impl<T: Config> Module<T> {
-	pub fn deposit_event(_event: impl Into<T::Event>) {}
+	pub fn deposit_event(_event: impl Into<T::RuntimeEvent>) {}
 }
 
 frame_support::decl_event!(

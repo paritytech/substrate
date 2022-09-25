@@ -35,6 +35,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+async-trait = "0.1.56"
 
 [dev-dependencies]
 quickcheck = { version = "1.0.3", default-features = false }

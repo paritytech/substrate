@@ -42,12 +42,14 @@ use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::{
 	config::ProtocolId,
-	protocol::event::{Event, ObservedRole},
+	protocol::{
+		event::{Event, ObservedRole},
+		ProtocolName,
+	},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
 };
 use sp_runtime::traits::Block as BlockT;
 use std::{
-	borrow::Cow,
 	collections::{hash_map::Entry, HashMap},
 	iter,
 	num::NonZeroUsize,
@@ -130,8 +132,8 @@ impl<H: ExHashT> Future for PendingTransaction<H> {
 
 /// Prototype for a [`TransactionsHandler`].
 pub struct TransactionsHandlerPrototype {
-	protocol_name: Cow<'static, str>,
-	fallback_protocol_names: Vec<Cow<'static, str>>,
+	protocol_name: ProtocolName,
+	fallback_protocol_names: Vec<ProtocolName>,
 }
 
 impl TransactionsHandlerPrototype {
@@ -141,10 +143,11 @@ impl TransactionsHandlerPrototype {
 		genesis_hash: Hash,
 		fork_id: Option<String>,
 	) -> Self {
+		let genesis_hash = genesis_hash.as_ref();
 		let protocol_name = if let Some(fork_id) = fork_id {
-			format!("/{}/{}/transactions/1", hex::encode(genesis_hash), fork_id)
+			format!("/{}/{}/transactions/1", array_bytes::bytes2hex("", genesis_hash), fork_id)
 		} else {
-			format!("/{}/transactions/1", hex::encode(genesis_hash))
+			format!("/{}/transactions/1", array_bytes::bytes2hex("", genesis_hash))
 		};
 		let legacy_protocol_name = format!("/{}/transactions/1", protocol_id.as_ref());
 
@@ -244,7 +247,7 @@ enum ToHandler<H: ExHashT> {
 
 /// Handler for transactions. Call [`TransactionsHandler::run`] to start the processing.
 pub struct TransactionsHandler<B: BlockT + 'static, H: ExHashT> {
-	protocol_name: Cow<'static, str>,
+	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
 	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Pending transactions verification tasks.
@@ -425,11 +428,11 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	/// Propagate one transaction.
 	pub fn propagate_transaction(&mut self, hash: &H) {
-		debug!(target: "sync", "Propagating transaction [{:?}]", hash);
 		// Accept transactions only when enabled
 		if !self.gossip_enabled.load(Ordering::Relaxed) {
 			return
 		}
+		debug!(target: "sync", "Propagating transaction [{:?}]", hash);
 		if let Some(transaction) = self.transaction_pool.transaction(hash) {
 			let propagated_to = self.do_propagate_transactions(&[(hash.clone(), transaction)]);
 			self.transaction_pool.on_broadcasted(propagated_to);

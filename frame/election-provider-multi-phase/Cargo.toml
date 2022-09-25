@@ -40,7 +40,7 @@ rand = { version = "0.7.3", default-features = false, features = ["alloc", "smal
 strum = { version = "0.24.1",  default-features = false, features = ["derive"], optional = true }
 
 [dev-dependencies]
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 rand = { version = "0.7.3" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../primitives/io" }
@@ -52,6 +52,7 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 [features]
 default = ["std"]
 std = [
+	"pallet-election-provider-support-benchmarking?/std",
 	"codec/std",
 	"scale-info/std",
 	"log/std",
@@ -68,7 +69,7 @@ std = [
 	"frame-election-provider-support/std",
 	"log/std",
 
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"rand/std",
 	"strum/std",
 ]
