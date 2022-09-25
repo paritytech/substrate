@@ -1859,6 +1859,10 @@ pub mod pallet_prelude {
 /// pub(super) type MyStorage<T> = StorageValue<Value = u32>;
 /// ```
 ///
+/// The optional attribute `#[pallet::whitelist_storage]` will declare the
+/// storage as whitelisted from benchmarking. See
+/// [`pallet::whitelist_storage`](`pallet_macros::whitelist_storage`) for more info.
+///
 /// All the `cfg` attributes are automatically copied to the items generated for the storage,
 /// i.e. the getter, storage prefix, and the metadata element etc.
 ///
