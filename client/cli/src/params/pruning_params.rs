@@ -32,7 +32,7 @@ pub struct PruningParams {
 	pub state_pruning: Option<String>,
 	/// Specify the number of finalized blocks to keep in the database.
 	///
-	/// Default is to keep all of finalized blocks.
+	/// Default is to keep all finalized blocks.
 	/// 0 keep all blocks.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
