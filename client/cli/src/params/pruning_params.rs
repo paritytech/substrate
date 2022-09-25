@@ -69,7 +69,7 @@ impl PruningParams {
 					.map_err(|_| {
 						error::Error::Input("Invalid blocks pruning mode specified".to_string())
 					})
-					.map(|n| BlocksPruning::Some(n)),
+					.map(BlocksPruning::Some),
 			},
 			None => Ok(BlocksPruning::KeepFinalized),
 		}
