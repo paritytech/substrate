@@ -187,7 +187,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, u64>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
@@ -219,7 +219,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, u64>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {

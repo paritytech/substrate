@@ -224,7 +224,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, u64>,
 	SO: SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.

@@ -250,7 +250,7 @@ macro_rules! create_test_api {
 					}
 				}
 
-				impl MmrApi<Block, MmrRootHash> for RuntimeApi {
+				impl MmrApi<Block, MmrRootHash, u64> for RuntimeApi {
 					fn generate_proof(_leaf_index: LeafIndex)
 						-> Result<(EncodableOpaqueLeaf, Proof<MmrRootHash>), MmrError> {
 						unimplemented!()
@@ -345,7 +345,7 @@ fn initialize_beefy<API>(
 ) -> impl Future<Output = ()>
 where
 	API: ProvideRuntimeApi<Block> + Default + Sync + Send,
-	API::Api: BeefyApi<Block> + MmrApi<Block, MmrRootHash>,
+	API::Api: BeefyApi<Block> + MmrApi<Block, MmrRootHash, u64>,
 {
 	let voters = FuturesUnordered::new();
 
