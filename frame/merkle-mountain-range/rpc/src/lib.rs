@@ -97,10 +97,10 @@ impl<BlockHash> LeafBatchProof<BlockHash> {
 /// MMR RPC methods.
 #[rpc(client, server)]
 pub trait MmrApi<BlockHash, BlockNumber> {
-	/// Generate MMR proof for given leaf index.
+	/// Generate MMR proof for given block number.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
-	/// MMR proof for leaf at given `leaf_index`.
+	/// MMR proof for leaf at given leaf index that was calculated from the `block_number`.
 	/// Optionally, a block hash at which the runtime should be queried can be specified.
 	///
 	/// Returns the (full) leaf itself and a proof for this leaf (compact encoding, i.e. hash of
@@ -112,11 +112,12 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafProof<BlockHash>>;
 
-	/// Generate MMR proof for the given leaf indices.
+	/// Generate MMR proof for the given block numbers.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
-	/// MMR proof for a set of leaves at the given `leaf_indices`.
-	/// Optionally, a block hash at which the runtime should be queried can be specified.
+	/// MMR proof for a set of leaves at the given leaf indices that were calculated from the
+	/// `block_numbers`. Optionally, a block hash at which the runtime should be queried can be
+	/// specified.
 	///
 	/// Returns the leaves and a proof for these leaves (compact encoding, i.e. hash of
 	/// the leaves). Both parameters are SCALE-encoded.
