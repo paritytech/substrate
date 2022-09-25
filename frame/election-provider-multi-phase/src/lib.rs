@@ -318,6 +318,10 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
 
+	fn ongoing() -> bool {
+		false
+	}
+
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
 		Err("NoFallback.")
@@ -1597,6 +1601,13 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
+
+	fn ongoing() -> bool {
+		match Self::current_phase() {
+			Phase::Off => false,
+			_ => true,
+		}
+	}
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {
