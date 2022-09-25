@@ -161,7 +161,8 @@ where
 		let api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
-		let leaf_index = api.block_num_to_leaf_index(&BlockId::hash(block_hash), &block_number)
+		let leaf_index = api
+			.block_num_to_leaf_index(&BlockId::hash(block_hash), &block_number)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;
 
@@ -191,12 +192,14 @@ where
 		let _ = block_numbers
 			.iter()
 			.map(|n| -> Result<u64, CallError> {
-				let leaf_index = api.block_num_to_leaf_index(&BlockId::hash(block_hash), &n)
+				let leaf_index = api
+					.block_num_to_leaf_index(&BlockId::hash(block_hash), &n)
 					.map_err(runtime_error_into_rpc_error)?
 					.map_err(mmr_error_into_rpc_error)?;
 				leaf_indices.push(leaf_index.clone());
 				Ok(leaf_index)
-			}).collect::<Vec<Result<u64, CallError>>>();
+			})
+			.collect::<Vec<Result<u64, CallError>>>();
 
 		let (leaves, proof) = api
 			.generate_batch_proof_with_context(
