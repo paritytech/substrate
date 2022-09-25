@@ -115,7 +115,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	/// Generate MMR proof for the given block numbers.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
-	/// MMR proof for a set of leaves at the given leaf indices that were calculated from the
+	/// MMR proof for a set of leaves at the given leaf indices that are calculated from the
 	/// `block_numbers`. Optionally, a block hash at which the runtime should be queried can be
 	/// specified.
 	///
