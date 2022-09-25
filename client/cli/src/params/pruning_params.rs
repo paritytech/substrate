@@ -30,10 +30,12 @@ pub struct PruningParams {
 	/// or for all of the canonical blocks (i.e 'archive-canonical').
 	#[clap(alias = "pruning", long, value_name = "PRUNING_MODE")]
 	pub state_pruning: Option<String>,
-	/// Specify the number of finalized blocks to keep in the database.
+	/// Specify the blocks pruning mode, a number of blocks to keep or 'archive'.
 	///
 	/// Default is to keep all finalized blocks.
-	/// 0 keep all blocks.
+	/// otherwise, all blocks can be kept (i.e 'archive'),
+	/// or for all canonical blocks (i.e 'archive-canonical'),
+	/// or for the last N blocks (i.e a number).
 	///
 	/// NOTE: only finalized blocks are subject for removal!
 	#[clap(alias = "keep-blocks", long, value_name = "COUNT")]
