@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_mmr_primitives::{BatchProof, Error as MmrError, LeafIndex, Proof};
+use sp_mmr_primitives::{BatchProof, Error as MmrError, Proof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
@@ -108,7 +108,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	#[method(name = "mmr_generateProof")]
 	fn generate_proof(
 		&self,
-		leaf_index: LeafIndex,
+		block_number: BlockNumber,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafProof<BlockHash>>;
 
@@ -155,11 +155,15 @@ where
 {
 	fn generate_proof(
 		&self,
-		leaf_index: LeafIndex,
+		block_number: BlockNumber,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeafProof<Block::Hash>> {
 		let api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
+
+		let leaf_index = api.block_num_to_leaf_index(&BlockId::hash(block_hash), &block_number)
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
 
 		let (leaf, proof) = api
 			.generate_proof_with_context(
@@ -183,22 +187,16 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash);
 
-		let res: Vec<Result<LeafIndex, CallError>> = block_numbers
+		let mut leaf_indices = vec![];
+		let _ = block_numbers
 			.iter()
-			.map(|n| {
-				api.block_num_to_leaf_index(&BlockId::hash(block_hash), n)
+			.map(|n| -> Result<u64, CallError> {
+				let leaf_index = api.block_num_to_leaf_index(&BlockId::hash(block_hash), &n)
 					.map_err(runtime_error_into_rpc_error)?
-					.map_err(mmr_error_into_rpc_error)
-			})
-			.collect();
-
-		let leaf_indices = res
-			.iter()
-			.map(|indx| match indx {
-				Ok(i) => *i,
-				Err(_) => LeafIndex::default(),
-			})
-			.collect::<Vec<LeafIndex>>();
+					.map_err(mmr_error_into_rpc_error)?;
+				leaf_indices.push(leaf_index.clone());
+				Ok(leaf_index)
+			}).collect::<Vec<Result<u64, CallError>>>();
 
 		let (leaves, proof) = api
 			.generate_batch_proof_with_context(
