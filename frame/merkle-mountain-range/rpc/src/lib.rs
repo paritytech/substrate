@@ -188,18 +188,16 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash);
 
-		let mut leaf_indices = vec![];
-		let _ = block_numbers
+		let leaf_indices = block_numbers
 			.iter()
 			.map(|n| -> Result<u64, CallError> {
 				let leaf_index = api
 					.block_num_to_leaf_index(&BlockId::hash(block_hash), &n)
 					.map_err(runtime_error_into_rpc_error)?
 					.map_err(mmr_error_into_rpc_error)?;
-				leaf_indices.push(leaf_index.clone());
 				Ok(leaf_index)
 			})
-			.collect::<Vec<Result<u64, CallError>>>();
+			.collect::<Result<Vec<u64>, _>>()?;
 
 		let (leaves, proof) = api
 			.generate_batch_proof_with_context(
