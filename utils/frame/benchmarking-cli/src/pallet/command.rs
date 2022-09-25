@@ -39,6 +39,10 @@ use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
 use std::{collections::HashMap, fmt::Debug, fs, sync::Arc, time};
+use log;
+
+/// Logging target
+const LOG_TARGET:&'static str = "frame::benchmark::pallet";
 
 /// The inclusive range of a component.
 #[derive(Serialize, Debug, Clone, Eq, PartialEq)]
@@ -228,7 +232,7 @@ impl PalletCmd {
 		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
 
 		for (pallet, extrinsic, components) in benchmarks_to_run {
-			log::info!(
+			log::info!(target:LOG_TARGET,
 				"Starting benchmark: {}::{}",
 				String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
 				String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
@@ -376,7 +380,7 @@ impl PalletCmd {
 					if let Ok(elapsed) = timer.elapsed() {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
-							log::info!(
+							log::info!(target:LOG_TARGET,
 								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
@@ -422,7 +426,7 @@ impl PalletCmd {
 			if let Some(path) = &self.json_file {
 				fs::write(path, json)?;
 			} else {
-				println!("{}", json);
+				log::info!(target:LOG_TARGET,"{}", json);
 				return Ok(true)
 			}
 		}
@@ -438,7 +442,7 @@ impl PalletCmd {
 	) {
 		for batch in batches.iter() {
 			// Print benchmark metadata
-			println!(
+			log::info!(target:LOG_TARGET,
 					"Pallet: {:?}, Extrinsic: {:?}, Lowest values: {:?}, Highest values: {:?}, Steps: {:?}, Repeat: {:?}",
 					String::from_utf8(batch.pallet.clone()).expect("Encoded from String; qed"),
 					String::from_utf8(batch.benchmark.clone()).expect("Encoded from String; qed"),
@@ -456,51 +460,51 @@ impl PalletCmd {
 			if !self.no_storage_info {
 				let mut comments: Vec<String> = Default::default();
 				writer::add_storage_comments(&mut comments, &batch.db_results, storage_info);
-				println!("Raw Storage Info\n========");
+				log::warn!(target:LOG_TARGET,"Raw Storage Info\n========");
 				for comment in comments {
-					println!("{}", comment);
+					log::warn!(target:LOG_TARGET,"{}", comment);
 				}
-				println!();
+				log::warn!(target:LOG_TARGET,"");
 			}
 
 			// Conduct analysis.
 			if !self.no_median_slopes {
-				println!("Median Slopes Analysis\n========");
+				log::warn!(target:LOG_TARGET,"Median Slopes Analysis\n========");
 				if let Some(analysis) =
 					Analysis::median_slopes(&batch.time_results, BenchmarkSelector::ExtrinsicTime)
 				{
-					println!("-- Extrinsic Time --\n{}", analysis);
+					log::warn!(target:LOG_TARGET,"-- Extrinsic Time --\n{}", analysis);
 				}
 				if let Some(analysis) =
 					Analysis::median_slopes(&batch.db_results, BenchmarkSelector::Reads)
 				{
-					println!("Reads = {:?}", analysis);
+					log::warn!(target:LOG_TARGET,"Reads = {:?}", analysis);
 				}
 				if let Some(analysis) =
 					Analysis::median_slopes(&batch.db_results, BenchmarkSelector::Writes)
 				{
-					println!("Writes = {:?}", analysis);
+					log::warn!(target:LOG_TARGET,"Writes = {:?}", analysis);
 				}
-				println!();
+				log::warn!(target:LOG_TARGET,"");
 			}
 			if !self.no_min_squares {
-				println!("Min Squares Analysis\n========");
+				log::warn!(target:LOG_TARGET,"Min Squares Analysis\n========");
 				if let Some(analysis) =
 					Analysis::min_squares_iqr(&batch.time_results, BenchmarkSelector::ExtrinsicTime)
 				{
-					println!("-- Extrinsic Time --\n{}", analysis);
+					log::warn!(target:LOG_TARGET,"-- Extrinsic Time --\n{}", analysis);
 				}
 				if let Some(analysis) =
 					Analysis::min_squares_iqr(&batch.db_results, BenchmarkSelector::Reads)
 				{
-					println!("Reads = {:?}", analysis);
+					log::warn!(target:LOG_TARGET,"Reads = {:?}", analysis);
 				}
 				if let Some(analysis) =
 					Analysis::min_squares_iqr(&batch.db_results, BenchmarkSelector::Writes)
 				{
-					println!("Writes = {:?}", analysis);
+					log::warn!(target:LOG_TARGET,"Writes = {:?}", analysis);
 				}
-				println!();
+				log::warn!(target:LOG_TARGET,"");
 			}
 		}
 	}
@@ -521,8 +525,8 @@ impl CliConfiguration for PalletCmd {
 
 /// List the benchmarks available in the runtime, in a CSV friendly format.
 fn list_benchmark(benchmarks_to_run: Vec<(Vec<u8>, Vec<u8>, Vec<(BenchmarkParameter, u32, u32)>)>) {
-	println!("pallet, benchmark");
+	log::info!(target:LOG_TARGET,"pallet, benchmark");
 	for (pallet, extrinsic, _components) in benchmarks_to_run {
-		println!("{}, {}", String::from_utf8_lossy(&pallet), String::from_utf8_lossy(&extrinsic));
+		log::info!(target:LOG_TARGET,"{}, {}", String::from_utf8_lossy(&pallet), String::from_utf8_lossy(&extrinsic));
 	}
 }
