@@ -574,3 +574,19 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 
 	(candidates, voters)
 }
+
+/// Trait for getting whether the current vote list is inactive or being used to determine the next
+/// session. In NPoS, voters will be inactive in the `Phase::Off` phase of an election, and actively
+/// being used in all the other stages.
+pub trait VoterListStatusInterface {
+	/// The current status of voter list usage.
+	fn status() -> VoterListStatus;
+}
+
+/// The variants of whether a voter list is being used or not.
+pub enum VoterListStatus {
+	/// the voter list is not currently in use.
+	Idle,
+	/// The voter list is actively being used.
+	InUse,
+}
