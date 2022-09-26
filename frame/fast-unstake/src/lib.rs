@@ -19,8 +19,7 @@
 //!
 //! If a nominator is not exposed in any `ErasStakers` (i.e. "has not actively backed any
 //! validators in the last `BondingDuration` days"), then they can register themselves in this
-//! pallet, unstake faster than having to wait an entire bonding duration, and potentially move
-//! into a nomination pool.
+//! pallet, unstake faster than having to wait an entire bonding duration.
 //!
 //! Appearing in the exposure of a validator means being exposed equal to that validator from the
 //! point of view of the staking system. This usually means earning rewards with the validator, and
@@ -43,8 +42,7 @@
 //! to prevent them from accidentally exposing themselves behind a validator etc.
 //!
 //! Once processed, if successful, no additional fee for the checking process is taken, and the
-//! staker is instantly unbonded. Optionally, if they have asked to join a pool, their *entire*
-//! stake is joined into their pool of choice.
+//! staker is instantly unbonded.
 //!
 //! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
 //! they will end up being slashed for the amount of wasted work they have inflicted on the chian.
@@ -85,7 +83,6 @@ pub mod pallet {
 	use frame_election_provider_support::ElectionProvider;
 	use frame_support::pallet_prelude::*;
 	use frame_system::{pallet_prelude::*, RawOrigin};
-	use pallet_nomination_pools::PoolId;
 	use pallet_staking::Pallet as Staking;
 	use sp_runtime::{
 		traits::{Saturating, Zero},
@@ -109,12 +106,7 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config:
-		frame_system::Config
-		+ pallet_staking::Config<
-			CurrencyBalance = <Self as pallet_nomination_pools::Config>::CurrencyBalance,
-		> + pallet_nomination_pools::Config
-	{
+	pub trait Config: frame_system::Config + pallet_staking::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
@@ -139,10 +131,9 @@ pub mod pallet {
 
 	/// The map of all accounts wishing to be unstaked.
 	///
-	/// Points the `AccountId` wishing to unstake to the optional `PoolId` they wish to join
-	/// thereafter.
+	/// Keeps track of `AccountId` wishing to unstake.
 	#[pallet::storage]
-	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, Option<PoolId>>;
+	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, ()>;
 
 	/// Number of eras to check per block.
 	///
@@ -158,7 +149,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A staker was unstaked.
-		Unstaked { stash: T::AccountId, maybe_pool_id: Option<PoolId>, result: DispatchResult },
+		Unstaked { stash: T::AccountId, result: DispatchResult },
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
 		/// A staker was partially checked for the given eras, but the process did not finish.
@@ -213,16 +204,13 @@ pub mod pallet {
 		/// they are guaranteed to remain eligible, because the call will chill them as well.
 		///
 		/// If the check works, the entire staking data is removed, i.e. the stash is fully
-		/// unstaked, and they potentially join a pool with their entire bonded stake.
+		/// unstaked.
 		///
 		/// If the check fails, the stash remains chilled and waiting for being unbonded as in with
 		/// the normal staking system, but they lose part of their unbonding chunks due to consuming
 		/// the chain's resources.
 		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
-		pub fn register_fast_unstake(
-			origin: OriginFor<T>,
-			maybe_pool_id: Option<PoolId>,
-		) -> DispatchResult {
+		pub fn register_fast_unstake(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
 
 			let ledger =
@@ -243,12 +231,11 @@ pub mod pallet {
 			Staking::<T>::unbond(RawOrigin::Signed(ctrl).into(), ledger.total)?;
 
 			// enqueue them.
-			Queue::<T>::insert(ledger.stash, maybe_pool_id);
+			Queue::<T>::insert(ledger.stash, ());
 			Ok(())
 		}
 
-		/// Deregister oneself from the fast-unstake (also cancels joining the pool if that was
-		/// supplied on `register_fast_unstake` .
+		/// Deregister oneself from the fast-unstake.
 		///
 		/// This is useful if one is registered, they are still waiting, and they change their mind.
 		///
@@ -327,17 +314,12 @@ pub mod pallet {
 				return T::DbWeight::get().reads(2)
 			}
 
-			let UnstakeRequest { stash, mut checked, maybe_pool_id } = match Head::<T>::take()
-				.or_else(|| {
-					// NOTE: there is no order guarantees in `Queue`.
-					Queue::<T>::drain()
-						.map(|(stash, maybe_pool_id)| UnstakeRequest {
-							stash,
-							maybe_pool_id,
-							checked: Default::default(),
-						})
-						.next()
-				}) {
+			let UnstakeRequest { stash, mut checked } = match Head::<T>::take().or_else(|| {
+				// NOTE: there is no order guarantees in `Queue`.
+				Queue::<T>::drain()
+					.map(|(stash, _)| UnstakeRequest { stash, checked: Default::default() })
+					.next()
+			}) {
 				None => {
 					// There's no `Head` and nothing in the `Queue`, nothing to do here.
 					return T::DbWeight::get().reads(4)
@@ -392,48 +374,15 @@ pub mod pallet {
 				// `stash` is not exposed in any era now -- we can let go of them now.
 				let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
 
-				let ctrl = match pallet_staking::Bonded::<T>::get(&stash) {
-					Some(ctrl) => ctrl,
-					None => {
-						Self::deposit_event(Event::<T>::Errored { stash });
-						return <T as Config>::WeightInfo::on_idle_unstake()
-					},
-				};
-
-				let ledger = match pallet_staking::Ledger::<T>::get(ctrl) {
-					Some(ledger) => ledger,
-					None => {
-						Self::deposit_event(Event::<T>::Errored { stash });
-						return <T as Config>::WeightInfo::on_idle_unstake()
-					},
-				};
-
-				let unstake_result = pallet_staking::Pallet::<T>::force_unstake(
+				let result = pallet_staking::Pallet::<T>::force_unstake(
 					RawOrigin::Root.into(),
 					stash.clone(),
 					num_slashing_spans,
 				);
 
-				let pool_stake_result = if let Some(pool_id) = maybe_pool_id {
-					pallet_nomination_pools::Pallet::<T>::join(
-						RawOrigin::Signed(stash.clone()).into(),
-						ledger.total,
-						pool_id,
-					)
-				} else {
-					Ok(())
-				};
+				log!(info, "unstaked {:?}, outcome: {:?}", stash, result);
 
-				let result = unstake_result.and(pool_stake_result);
-				log!(
-					info,
-					"unstaked {:?}, maybe_pool {:?}, outcome: {:?}",
-					stash,
-					maybe_pool_id,
-					result
-				);
-
-				Self::deposit_event(Event::<T>::Unstaked { stash, maybe_pool_id, result });
+				Self::deposit_event(Event::<T>::Unstaked { stash, result });
 				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
 				// eras remaining to be checked.
@@ -471,11 +420,7 @@ pub mod pallet {
 					// Not exposed in these eras.
 					match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
 						Ok(_) => {
-							Head::<T>::put(UnstakeRequest {
-								stash: stash.clone(),
-								checked,
-								maybe_pool_id,
-							});
+							Head::<T>::put(UnstakeRequest { stash: stash.clone(), checked });
 							Self::deposit_event(Event::<T>::Checking {
 								stash,
 								eras: unchecked_eras_to_check,

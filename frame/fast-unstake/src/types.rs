@@ -23,7 +23,6 @@ use frame_support::{
 	traits::{Currency, Get, IsSubType},
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use pallet_nomination_pools::PoolId;
 use scale_info::TypeInfo;
 use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
 use sp_staking::EraIndex;
@@ -42,8 +41,6 @@ pub struct UnstakeRequest<AccountId: Eq + PartialEq + Debug, MaxChecked: Get<u32
 	pub(crate) stash: AccountId,
 	/// The list of eras for which they have been checked.
 	pub(crate) checked: BoundedVec<EraIndex, MaxChecked>,
-	/// The pool they wish to join, if any.
-	pub(crate) maybe_pool_id: Option<PoolId>,
 }
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo, RuntimeDebugNoBound)]
