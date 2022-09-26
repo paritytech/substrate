@@ -15,14 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Compact, Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode, MaxEncodedLen};
 use core::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use sp_arithmetic::traits::{Bounded, CheckedAdd, CheckedSub, Zero};
 use sp_debug_derive::RuntimeDebug;
 
 use super::*;
 
-#[derive(Encode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default)]
+#[derive(
+	Encode, Decode, MaxEncodedLen, TypeInfo, Eq, PartialEq, Copy, Clone, RuntimeDebug, Default,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct Weight {
 	#[codec(compact)]
@@ -33,22 +35,9 @@ pub struct Weight {
 	proof_size: u64,
 }
 
-// Custom Decode implementation for the purposes of migrating from 1D weights.
-impl Decode for Weight {
-	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
-		// Try and decode as V1 first...
-		let ref_time = match u64::decode(input) {
-			Ok(r) => r,
-			// ...and if it fails, decode as V2
-			Err(_) => {
-				let Compact(ref_time) = Compact::<u64>::decode(input)
-					.map_err(|e| e.chain("Could not decode `Weight::ref_time`"))?;
-				let Compact(proof_size) = Compact::<u64>::decode(input)
-					.map_err(|e| e.chain("Could not decode `Weight::proof_size`"))?;
-				return Ok(Self { ref_time, proof_size })
-			},
-		};
-		Ok(Self { ref_time, proof_size: 0 })
+impl From<OldWeight> for Weight {
+	fn from(old: OldWeight) -> Self {
+		Weight::from_ref_time(old.0)
 	}
 }
 
@@ -428,22 +417,5 @@ impl SubAssign for Weight {
 			ref_time: self.ref_time - other.ref_time,
 			proof_size: self.proof_size - other.proof_size,
 		};
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn compact_weight_v1_can_be_decoded_as_v2() {
-		type WeightV1 = u64;
-
-		let weight_v1: WeightV1 = 12345;
-		let encoded = weight_v1.encode();
-
-		// Decode as weight v2
-		let decoded: Weight = Decode::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(decoded, Weight { ref_time: weight_v1, proof_size: 0 });
 	}
 }
