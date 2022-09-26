@@ -167,7 +167,7 @@ pub struct CollectionConfig(pub CollectionSettings);
 
 impl CollectionConfig {
 	pub fn empty() -> Self {
-		CollectionConfig(BitFlags::EMPTY)
+		Self(BitFlags::EMPTY)
 	}
 
 	pub fn values(&self) -> CollectionSettings {
@@ -217,4 +217,4 @@ pub enum SystemFeature {
 	NoPublicMints,
 }
 
-pub(super) type SystemFeatures = BitFlags<SystemFeature>;
+pub type SystemFeatures = BitFlags<SystemFeature>;
