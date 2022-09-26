@@ -161,10 +161,10 @@ where
 	/// Network implementing gossip, requests and sync-oracle.
 	pub network: Arc<N>,
 	/// Chain specific BEEFY gossip protocol name. See
-	/// [`beefy_protocol_name::gossip_protocol_name`].
+	/// [`communication::beefy_protocol_name::gossip_protocol_name`].
 	pub gossip_protocol_name: ProtocolName,
 	/// Chain specific BEEFY on-demand justifications protocol name. See
-	/// [`beefy_protocol_name::justifications_protocol_name`].
+	/// [`communication::beefy_protocol_name::justifications_protocol_name`].
 	pub justifications_protocol_name: ProtocolName,
 
 	pub _phantom: PhantomData<B>,
