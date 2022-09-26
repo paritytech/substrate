@@ -52,6 +52,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
+use sp_npos_elections::OnVoterListUpdate;
 
 #[cfg(test)]
 mod mock;
@@ -87,7 +88,7 @@ pub mod pallet {
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use pallet_nomination_pools::PoolId;
 	use pallet_staking::Pallet as Staking;
-	use sp_npos_elections::{OnVoterListUpdate, VoterListStatusInterface};
+	use sp_npos_elections::VoterListStatusInterface;
 	use sp_runtime::{
 		traits::{Saturating, Zero},
 		DispatchResult,
@@ -527,17 +528,17 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> OnVoterListUpdate<T: AccountId> for Pallet<T> {
-	fn on_new_voter(who: &T::AccountId) {
+impl<T: Config> OnVoterListUpdate<T::AccountId> for Pallet<T> {
+	fn on_new_voter(who: T::AccountId) {
 		// insert the new voter into `IdleNewVoters` if they are not already present.
-		match IdleNewVoters::<T>::try_get(who) {
-			Err(_) => IdleNewVoters::<T>::insert(who),
+		match IdleNewVoters::<T>::try_get(&who) {
+			Err(_) => IdleNewVoters::<T>::insert(who, ()),
 			_ => return,
 		}
 	}
 
 	fn on_finish_idle() {
 		// remove all new voters. They are now in use in other phases of generating a voter list.
-		T::IdleNewVoters::clear();
+		IdleNewVoters::<T>::clear(u32::max_value(), None);
 	}
 }
