@@ -193,13 +193,9 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ TypeInfo;
 
-		/// Max number of accounts to destroy per extrinsic call.
+		/// Max number of storage keys to destroy per extrinsic call.
 		#[pallet::constant]
-		type RemoveAccountsLimit: Get<u32>;
-
-		/// Max number of approvalss to destroy per extrinsic call.
-		#[pallet::constant]
-		type RemoveApprovalsLimit: Get<u32>;
+		type RemoveKeysLimit: Get<u32>;
 
 		/// Identifier for the class of asset.
 		type AssetId: Member
@@ -341,6 +337,7 @@ pub mod pallet {
 						sufficients: 0,
 						approvals: 0,
 						is_frozen: false,
+						status: AssetStatus::Live,
 					},
 				);
 			}
@@ -415,6 +412,10 @@ pub mod pallet {
 		AssetFrozen { asset_id: T::AssetId },
 		/// Some asset `asset_id` was thawed.
 		AssetThawed { asset_id: T::AssetId },
+		/// Accounts were destroyed for given asset.
+		DestroyedAccounts { asset_id: T::AssetId, accounts_destroyed: u32, accounts_remaining: u32 },
+		/// Approvals were destroyed for given asset.
+		DestroyedApprovals { asset_id: T::AssetId, approvals_destroyed: u32 },
 		/// An asset class was destroyed.
 		Destroyed { asset_id: T::AssetId },
 		/// An asset class was only destroyed. The destroy action should be re-executed.
@@ -545,6 +546,7 @@ pub mod pallet {
 					sufficients: 0,
 					approvals: 0,
 					is_frozen: false,
+					status: AssetStatus::Live,
 				},
 			);
 			Self::deposit_event(Event::Created { asset_id: id, creator: owner, owner: admin });
@@ -602,26 +604,166 @@ pub mod pallet {
 		/// - `c = (witness.accounts - witness.sufficients)`
 		/// - `s = witness.sufficients`
 		/// - `a = witness.approvals`
-		/// TODO: Change the weights to T::RemoveKeysLimit::get() like in cloudloads
-		#[pallet::weight(T::WeightInfo::destroy(
-			T::RemoveAccountsLimit::get(),
- 			T::RemoveApprovalsLimit::get(),
- 		))]
-		pub fn destroy(
+		// /// TODO: Change the weights to T::RemoveKeysLimit::get() like in cloudloads
+		// #[pallet::weight(T::WeightInfo::destroy(
+		// 	T::RemoveAccountsLimit::get(),
+		// 	T::RemoveApprovalsLimit::get(),
+		// ))]
+		// pub fn destroy(
+		// 	origin: OriginFor<T>,
+		// 	#[pallet::compact] id: T::AssetId,
+		// 	witness: DestroyWitness,
+		// ) -> DispatchResultWithPostInfo {
+		// 	let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
+		// 		Ok(_) => None,
+		// 		Err(origin) => Some(ensure_signed(origin)?),
+		// 	};
+		// 	let details = Self::do_destroy(id, witness, maybe_check_owner)?;
+		// 	Ok(Some(T::WeightInfo::destroy(details.accounts, details.approvals)).into())
+		// }
+
+		/// Start the process of destroying an asset
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn start_destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			witness: DestroyWitness,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
-			let details = Self::do_destroy(id, witness, maybe_check_owner)?;
-			Ok(Some(T::WeightInfo::destroy(
-				details.accounts,
-				details.approvals,
-			))
-			.into())
+			let _ = Asset::<T, I>::try_mutate_exists(
+				id,
+				|maybe_details| -> Result<(), DispatchError> {
+					let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+					if let Some(check_owner) = maybe_check_owner {
+						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
+					}
+					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
+					details.status = AssetStatus::Destroying;
+					// TODO: Remove previlleged roles. How?
+
+					Ok(())
+				},
+			)?;
+			Ok(())
+		}
+
+		/// Cleanup Accounts
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn destroy_accounts(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+		) -> DispatchResult {
+			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
+				Ok(_) => None,
+				Err(origin) => Some(ensure_signed(origin)?),
+			};
+			let mut dead_accounts: Vec<T::AccountId> = vec![];
+			let _ = Asset::<T, I>::try_mutate_exists(
+				id,
+				|maybe_details| -> Result<(), DispatchError> {
+					let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+					if let Some(check_owner) = maybe_check_owner {
+						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
+					}
+					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
+					// Should only destroy accounts while the asset is being destroyed
+					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::Unknown);
+
+					let mut removed_accounts = 0;
+					for (who, v) in Account::<T, I>::drain_prefix(id) {
+						if removed_accounts >= T::RemoveKeysLimit::get() {
+							break
+						}
+						let _ = Self::dead_account(&who, &mut details, &v.reason, true);
+						dead_accounts.push(who);
+						removed_accounts += 1;
+					}
+
+					Self::deposit_event(Event::DestroyedAccounts {
+						asset_id: id,
+						accounts_destroyed: removed_accounts as u32,
+						accounts_remaining: details.accounts as u32,
+					});
+
+					Ok(())
+				},
+			)?;
+
+			for who in dead_accounts {
+				T::Freezer::died(id, &who);
+			}
+			Ok(())
+		}
+
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn destroy_approvals(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+		) -> DispatchResult {
+			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
+				Ok(_) => None,
+				Err(origin) => Some(ensure_signed(origin)?),
+			};
+
+			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			if let Some(check_owner) = maybe_check_owner {
+				ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
+			}
+			ensure!(details.is_frozen, Error::<T, I>::BadWitness);
+			// Should only destroy accounts while the asset is being destroyed
+			ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::Unknown);
+
+			let mut removed_approvals = 0;
+			for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((id,)) {
+				if removed_approvals >= T::RemoveKeysLimit::get() {
+					break
+				}
+				T::Currency::unreserve(&owner, approval.deposit);
+				removed_approvals += 1;
+			}
+
+			Self::deposit_event(Event::DestroyedApprovals {
+				asset_id: id,
+				approvals_destroyed: removed_approvals as u32,
+			});
+
+			Ok(())
+		}
+
+		///
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn finish_destroy(
+			origin: OriginFor<T>,
+			#[pallet::compact] id: T::AssetId,
+		) -> DispatchResult {
+			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
+				Ok(_) => None,
+				Err(origin) => Some(ensure_signed(origin)?),
+			};
+			let _ = Asset::<T, I>::try_mutate_exists(
+				id,
+				|maybe_details| -> Result<(), DispatchError> {
+					let details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
+					if let Some(check_owner) = maybe_check_owner {
+						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
+					}
+					ensure!(details.is_frozen, Error::<T, I>::Unknown);
+					ensure!(details.accounts == 0, Error::<T, I>::Unknown);
+					ensure!(details.approvals == 0, Error::<T, I>::Unknown);
+
+					let metadata = Metadata::<T, I>::take(&id);
+					T::Currency::unreserve(
+						&details.owner,
+						details.deposit.saturating_add(metadata.deposit),
+					);
+					Self::deposit_event(Event::Destroyed { asset_id: id });
+
+					Ok(())
+				},
+			)?;
+			Ok(())
 		}
 
 		/// Mint assets of a particular class.

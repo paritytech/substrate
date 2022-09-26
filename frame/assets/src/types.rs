@@ -30,6 +30,15 @@ pub(super) type AssetAccountOf<T, I> =
 	AssetAccount<<T as Config<I>>::Balance, DepositBalanceOf<T, I>, <T as Config<I>>::Extra>;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+pub(super) enum AssetStatus {
+	/// The asset is active and able to be used.
+	Live,
+	/// The asset is currently being destroyed, and all actions are no longer permitted on the
+	/// asset
+	Destroying,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	pub(super) owner: AccountId,
@@ -56,6 +65,8 @@ pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	pub(super) approvals: u32,
 	/// Whether the asset is frozen for non-admin transfers.
 	pub(super) is_frozen: bool,
+	/// The status of the asset
+	pub(super) status: AssetStatus,
 }
 
 impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, DepositBalance> {

@@ -1428,8 +1428,7 @@ impl pallet_assets::Config for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
-	type RemoveAccountsLimit = RemoveAccountsLimit;
-	type RemoveApprovalsLimit = RemoveApprovalsLimit;
+	type RemoveKeysLimit = RemoveKeysLimit;
 }
 
 parameter_types! {

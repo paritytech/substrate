@@ -85,8 +85,7 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub const RemoveAccountsLimit: u32 = 5;
-	pub const RemoveApprovalsLimit: u32 = 5;
+	pub const RemoveKeysLimit: u32 = 5;
 }
 
 impl Config for Test {
@@ -104,8 +103,7 @@ impl Config for Test {
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
 	type Extra = ();
-	type RemoveAccountsLimit = RemoveAccountsLimit;
-	type RemoveApprovalsLimit = RemoveApprovalsLimit;
+	type RemoveKeysLimit = RemoveKeysLimit;
 }
 
 use std::collections::HashMap;

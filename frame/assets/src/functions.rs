@@ -652,6 +652,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				sufficients: 0,
 				approvals: 0,
 				is_frozen: false,
+				status: AssetStatus::Live,
 			},
 		);
 		Self::deposit_event(Event::ForceCreated { asset_id: id, owner });
@@ -689,11 +690,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let mut removed_approvals = 0u32;
 
 				let accounts_to_delete: Vec<(T::AccountId, _)> = Account::<T, I>::iter_prefix(id)
-					.take(T::RemoveAccountsLimit::get() as usize)
+					.take(T::RemoveKeysLimit::get() as usize)
 					.collect();
 
 				for (who, v) in accounts_to_delete {
-					if removed_accounts >= T::RemoveAccountsLimit::get() {
+					if removed_accounts >= T::RemoveKeysLimit::get() {
 						break
 					}
 
@@ -708,7 +709,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 
 				for ((owner, destination), approval) in Approvals::<T, I>::iter_prefix((id,)) {
-					if removed_approvals >= T::RemoveApprovalsLimit::get() {
+					if removed_approvals >= T::RemoveKeysLimit::get() {
 						break
 					}
 

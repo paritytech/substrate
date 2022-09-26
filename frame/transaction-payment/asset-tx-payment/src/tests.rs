@@ -152,6 +152,10 @@ impl pallet_transaction_payment::Config for Runtime {
 	type OperationalFeeMultiplier = ConstU8<5>;
 }
 
+parameter_types! {
+	pub const RemoveKeysLimit: u32 = 1000;
+}
+
 impl pallet_assets::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
@@ -167,6 +171,7 @@ impl pallet_assets::Config for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = ();
+	type RemoveKeysLimit = RemoveKeysLimit;
 }
 
 pub struct HardcodedAuthor;

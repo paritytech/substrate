@@ -316,8 +316,11 @@ fn lifecycle_should_work() {
 		assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
 		assert!(!Asset::<Test>::contains_key(0));
@@ -337,30 +340,16 @@ fn lifecycle_should_work() {
 		assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(RuntimeOrigin::root(), 0, w));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
 		assert!(!Asset::<Test>::contains_key(0));
 		assert!(!Metadata::<Test>::contains_key(0));
 		assert_eq!(Account::<Test>::iter_prefix(0).count(), 0);
-	});
-}
-
-#[test]
-fn destroy_with_bad_witness_should_not_work() {
-	new_test_ext().execute_with(|| {
-		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 1));
-		let mut w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 10, 100));
-		// witness too low
-		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
-		assert_noop!(Assets::destroy(RuntimeOrigin::signed(1), 0, w), Error::<Test>::BadWitness);
-		// witness too high is okay though
-		w.accounts += 2;
-		w.sufficients += 2;
-		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
 	});
 }
 
@@ -376,8 +365,12 @@ fn destroy_should_refund_approvals() {
 		assert_eq!(Balances::reserved_balance(&1), 3);
 
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
+
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
 		// all approvals are removed
@@ -397,8 +390,11 @@ fn partial_destroy_should_work() {
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 6, 10));
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+
 		System::assert_has_event(RuntimeEvent::Assets(crate::Event::PartiallyDestroyed {
 			asset_id: 0,
 			accounts_destroyed: 5,
@@ -408,8 +404,12 @@ fn partial_destroy_should_work() {
 		assert!(Asset::<Test>::contains_key(0));
 
 		// Second call to destroy on PartiallyDestroyed asset
-		let w2 = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w2));
+
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+
 		System::assert_has_event(RuntimeEvent::Assets(crate::Event::Destroyed { asset_id: 0 }));
 
 		// Destroyed Asset should not exist
@@ -607,8 +607,22 @@ fn origin_guards_should_work() {
 			Assets::force_transfer(RuntimeOrigin::signed(2), 0, 1, 2, 100),
 			Error::<Test>::NoPermission
 		);
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_noop!(Assets::destroy(RuntimeOrigin::signed(2), 0, w), Error::<Test>::NoPermission);
+		assert_noop!(
+			Assets::start_destroy(RuntimeOrigin::signed(2), 0),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			Assets::destroy_accounts(RuntimeOrigin::signed(2), 0),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			Assets::destroy_approvals(RuntimeOrigin::signed(2), 0),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			Assets::finish_destroy(RuntimeOrigin::signed(2), 0),
+			Error::<Test>::NoPermission
+		);
 	});
 }
 
@@ -819,20 +833,34 @@ fn set_metadata_should_work() {
 
 /// Destroying an asset calls the `FrozenBalance::died` hooks of all accounts.
 #[test]
-fn destroy_calls_died_hooks() {
+fn destroy_accounts_calls_died_hooks() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 50));
 		// Create account 1 and 2.
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 2, 100));
-		// Destroy the asset.
+		// Destroy the accounts.
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
-		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
-		assert_ok!(Assets::destroy(RuntimeOrigin::signed(1), 0, w));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
 
-		// Asset is gone and accounts 1 and 2 died.
-		assert!(Asset::<Test>::get(0).is_none());
+		// Accounts 1 and 2 died.
 		assert_eq!(hooks(), vec![Hook::Died(0, 1), Hook::Died(0, 2)]);
+	})
+}
+
+/// Destroying an asset calls the `FrozenBalance::died` hooks of all accounts.
+#[test]
+fn finish_destroy_asset_destroys_asset() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(RuntimeOrigin::root(), 0, 1, true, 50));
+		// Destroy the accounts.
+		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0));
+
+		// Asset is gone
+		assert!(Asset::<Test>::get(0).is_none());
 	})
 }
 
