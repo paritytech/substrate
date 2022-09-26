@@ -284,7 +284,7 @@ benchmarks_instance_pallet! {
 			admin: caller_lookup.clone(),
 			freezer: caller_lookup,
 			free_holding: true,
-			is_frozen: false,
+			config: CollectionConfig::empty(),
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {

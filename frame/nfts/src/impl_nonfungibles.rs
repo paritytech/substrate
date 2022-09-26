@@ -78,8 +78,11 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	///
 	/// Default implementation is that all items are transferable.
 	fn can_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
-		match (Collection::<T, I>::get(collection), Item::<T, I>::get(collection, item)) {
-			(Some(cd), Some(id)) if !cd.is_frozen && !id.is_frozen => true,
+		match (CollectionConfigOf::<T, I>::get(collection), Item::<T, I>::get(collection, item)) {
+			(Some(cc), Some(id))
+				if !cc.values().contains(CollectionSetting::NonTransferableItems) &&
+					!id.is_frozen =>
+				true,
 			_ => false,
 		}
 	}

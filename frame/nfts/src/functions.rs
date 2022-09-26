@@ -36,17 +36,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let collection_details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(!collection_details.is_frozen, Error::<T, I>::Frozen);
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
 
-		let config =
-			CollectionConfigOf::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
-		let settings = config.values();
-		ensure!(
-			!settings.contains(CollectionSetting::NonTransferableItems),
-			Error::<T, I>::ItemsNotTransferable
-		);
+		let action_allowed = Self::is_collection_setting_disabled(
+			&collection,
+			CollectionSetting::NonTransferableItems,
+		)?;
+		ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
 
 		let mut details =
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
@@ -100,7 +96,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				items: 0,
 				item_metadatas: 0,
 				attributes: 0,
-				is_frozen: false,
 			},
 		);
 
@@ -246,14 +241,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
-		let config =
-			CollectionConfigOf::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
-		let settings = config.values();
-		ensure!(
-			!settings.contains(CollectionSetting::NonTransferableItems),
-			Error::<T, I>::ItemsNotTransferable
-		);
+		let action_allowed = Self::is_collection_setting_disabled(
+			&collection,
+			CollectionSetting::NonTransferableItems,
+		)?;
+		ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
 
 		if let Some(ref price) = price {
 			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));
@@ -279,15 +271,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
-
-		let config =
-			CollectionConfigOf::<T, I>::get(collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
-		let settings = config.values();
-		ensure!(
-			!settings.contains(CollectionSetting::NonTransferableItems),
-			Error::<T, I>::NotForSale
-		);
 
 		let price_info =
 			ItemPriceOf::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::NotForSale)?;

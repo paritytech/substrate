@@ -63,8 +63,6 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 	pub(super) item_metadatas: u32,
 	/// The total number of attributes for this collection.
 	pub(super) attributes: u32,
-	/// Whether the collection is frozen for non-admin transfers.
-	pub(super) is_frozen: bool,
 }
 
 /// Witness data for the destroy transactions.

@@ -245,7 +245,10 @@ fn freezing_should_work() {
 
 		assert_ok!(Nfts::thaw(RuntimeOrigin::signed(1), 0, 42));
 		assert_ok!(Nfts::freeze_collection(RuntimeOrigin::signed(1), 0));
-		assert_noop!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2), Error::<Test>::Frozen);
+		assert_noop!(
+			Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2),
+			Error::<Test>::ItemsNotTransferable
+		);
 
 		assert_ok!(Nfts::force_collection_status(
 			RuntimeOrigin::root(),
@@ -1137,7 +1140,7 @@ fn buy_item_should_work() {
 			Error::<Test>::NotForSale
 		);
 
-		// ensure we can't buy an item when the collection or an item is frozen
+		// ensure we can't buy an item when the collection or an item are frozen
 		{
 			assert_ok!(Nfts::set_price(
 				RuntimeOrigin::signed(user_1),
@@ -1147,7 +1150,7 @@ fn buy_item_should_work() {
 				None,
 			));
 
-			// freeze collection
+			// freeze the collection
 			assert_ok!(Nfts::freeze_collection(RuntimeOrigin::signed(user_1), collection_id));
 
 			let buy_item_call = mock::RuntimeCall::Nfts(crate::Call::<Test>::buy_item {
@@ -1157,10 +1160,22 @@ fn buy_item_should_work() {
 			});
 			assert_noop!(
 				buy_item_call.dispatch(RuntimeOrigin::signed(user_2)),
-				Error::<Test>::Frozen
+				Error::<Test>::ItemsNotTransferable
 			);
 
-			// freeze item
+			// un-freeze the collection
+			assert_ok!(Nfts::force_collection_status(
+				RuntimeOrigin::root(),
+				collection_id,
+				user_1,
+				user_1,
+				user_1,
+				user_1,
+				false,
+				CollectionConfig::empty(),
+			));
+
+			// freeze the item
 			assert_ok!(Nfts::freeze(RuntimeOrigin::signed(user_1), collection_id, item_3));
 
 			let buy_item_call = mock::RuntimeCall::Nfts(crate::Call::<Test>::buy_item {
@@ -1173,22 +1188,6 @@ fn buy_item_should_work() {
 				Error::<Test>::Frozen
 			);
 		}
-
-		// ensure we can't buy an item when the collection has a NonTransferableItems flag
-		let collection_id = 1;
-		assert_ok!(Nfts::force_create(
-			RuntimeOrigin::root(),
-			user_1,
-			CollectionConfig(CollectionSetting::NonTransferableItems.into()),
-			true
-		));
-
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_1, user_1));
-
-		assert_noop!(
-			Nfts::buy_item(RuntimeOrigin::signed(user_2), collection_id, item_1, price_1.into()),
-			Error::<Test>::NotForSale
-		);
 	});
 }
 

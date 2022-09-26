@@ -15,5 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod buy_sell;
-pub mod common;
+use crate::*;
+use frame_support::pallet_prelude::*;
+
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn is_collection_setting_disabled(
+		collection_id: &T::CollectionId,
+		setting: CollectionSetting,
+	) -> Result<bool, DispatchError> {
+		let config = CollectionConfigOf::<T, I>::get(&collection_id)
+			.ok_or(Error::<T, I>::UnknownCollection)?;
+
+		let settings = config.values();
+		Ok(!settings.contains(setting))
+	}
+}

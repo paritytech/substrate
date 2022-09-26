@@ -878,11 +878,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			Collection::<T, I>::try_mutate(collection, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-				ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
+			let details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+			ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
 
-				details.is_frozen = true;
+			CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
+				let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
+				let mut settings = config.values();
+				settings.insert(CollectionSetting::NonTransferableItems);
+				config.0 = settings;
 
 				Self::deposit_event(Event::<T, I>::CollectionFrozen { collection });
 				Ok(())
@@ -1001,19 +1005,16 @@ pub mod pallet {
 
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let config = CollectionConfigOf::<T, I>::get(collection)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
-
-			let settings = config.values();
-			ensure!(
-				!settings.contains(CollectionSetting::NonTransferableItems),
-				Error::<T, I>::ItemsNotTransferable
-			);
-
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			let mut details =
 				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
+
+			let action_allowed = Self::is_collection_setting_disabled(
+				&collection,
+				CollectionSetting::NonTransferableItems,
+			)?;
+			ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
 
 			if let Some(check) = maybe_check {
 				let permitted = check == collection_details.admin || check == details.owner;
@@ -1156,8 +1157,7 @@ pub mod pallet {
 		/// - `admin`: The new Admin of this collection.
 		/// - `freezer`: The new Freezer of this collection.
 		/// - `free_holding`: Whether a deposit is taken for holding an item in this collection.
-		/// - `is_frozen`: Whether this collection is frozen except for permissioned/admin
-		/// instructions.
+		/// - `config`: Collection's config.
 		///
 		/// Emits `CollectionStatusChanged` with the identity of the item.
 		///
@@ -1171,7 +1171,7 @@ pub mod pallet {
 			admin: AccountIdLookupOf<T>,
 			freezer: AccountIdLookupOf<T>,
 			free_holding: bool,
-			is_frozen: bool,
+			config: CollectionConfig,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -1185,10 +1185,10 @@ pub mod pallet {
 				collection.admin = T::Lookup::lookup(admin)?;
 				collection.freezer = T::Lookup::lookup(freezer)?;
 				collection.free_holding = free_holding;
-				collection.is_frozen = is_frozen;
 				*maybe_collection = Some(collection);
 				CollectionAccount::<T, I>::remove(&old_owner, &collection_id);
 				CollectionAccount::<T, I>::insert(&new_owner, &collection_id, ());
+				CollectionConfigOf::<T, I>::insert(&collection_id, config);
 
 				Self::deposit_event(Event::CollectionStatusChanged { collection: collection_id });
 				Ok(())
@@ -1445,14 +1445,14 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let config = CollectionConfigOf::<T, I>::get(collection)
+			/*let config = CollectionConfigOf::<T, I>::get(collection)
 				.ok_or(Error::<T, I>::UnknownCollection)?;
 
 			let settings = config.values();
 			ensure!(
 				!settings.contains(CollectionSetting::LockedMetadata),
 				Error::<T, I>::CollectionIsLocked
-			);
+			);*/
 
 			let mut details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
