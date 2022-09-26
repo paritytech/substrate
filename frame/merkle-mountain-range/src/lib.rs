@@ -385,8 +385,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		}
 
-		// TODO: Somehow convert BlockNumber into LeafIndex.
-		block_num.saturating_sub(diff).saturating_sub(1u32.into());
-		Ok(0)
+		let leaf_index =
+			(block_num.saturating_sub(diff).saturating_sub(1u32.into())).saturated_into::<u64>();
+		Ok(leaf_index)
 	}
 }
