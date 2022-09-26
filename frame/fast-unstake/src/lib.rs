@@ -274,6 +274,21 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// Request an immediate unstake.
+		/// This will only be satisfied iff:
+		///
+		/// 1. The sender called `nominate() or `vcalidate()` during an `Idle` voter list status.
+		/// 2. The sender calls `immediate_unstake` in the same era and the voter list status is
+		/// still `Idle`.
+		///
+		/// In the context of election multi phase, the voter list will be idle in the Phase::Off
+		/// period. If `nominate()` or `validate()` was called during this phase, and the phase is
+		/// *still* Idle, then immediate unstake will be successful.
+		#[pallet::weight(0)]
+		pub fn immediate_unstake(origin: OriginFor<T>) -> DispatchResult {
+			todo!("Implement function");
+		}
+
 		/// Control the operation of this pallet.
 		///
 		/// Dispatch origin must be signed by the [`Config::ControlOrigin`].
