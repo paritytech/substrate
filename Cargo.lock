@@ -4400,7 +4400,6 @@ dependencies = [
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
  "pallet-treasury",
- "pallet-uniques",
  "pallet-utility",
  "pallet-vesting",
  "parity-scale-codec",

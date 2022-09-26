@@ -1078,30 +1078,6 @@ impl pallet_ddc_metrics_offchain_worker::Config for Runtime {
 	type Call = Call;
 }
 
-parameter_types! {
-	pub const ClassDeposit: Balance = 100 * DOLLARS;
-	pub const InstanceDeposit: Balance = 1 * DOLLARS;
-	pub const KeyLimit: u32 = 32;
-	pub const ValueLimit: u32 = 256;
-}
-
-impl pallet_uniques::Config for Runtime {
-	type Event = Event;
-	type ClassId = u32;
-	type InstanceId = u32;
-	type Currency = Balances;
-	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-	type ClassDeposit = ClassDeposit;
-	type InstanceDeposit = InstanceDeposit;
-	type MetadataDepositBase = MetadataDepositBase;
-	type AttributeDepositBase = MetadataDepositBase;
-	type DepositPerByte = MetadataDepositPerByte;
-	type StringLimit = StringLimit;
-	type KeyLimit = KeyLimit;
-	type ValueLimit = ValueLimit;
-	type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
-}
-
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1142,7 +1118,6 @@ construct_runtime!(
 		Multisig: pallet_multisig::{Pallet, Call, Storage, Event<T>},
 		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
 		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
-		Uniques: pallet_uniques::{Pallet, Call, Storage, Event<T>},
 		CereDDCModule: pallet_cere_ddc::{Pallet, Call, Storage, Event<T>},
 		ChainBridge: pallet_chainbridge::{Pallet, Call, Storage, Event<T>},
 		Erc721: pallet_erc721::{Pallet, Call, Storage, Event<T>},
@@ -1473,7 +1448,6 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_tips, Tips);
 			add_benchmark!(params, batches, pallet_treasury, Treasury);
-			add_benchmark!(params, batches, pallet_uniques, Uniques);
 			add_benchmark!(params, batches, pallet_utility, Utility);
 			add_benchmark!(params, batches, pallet_vesting, Vesting);
 
