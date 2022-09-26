@@ -22,11 +22,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn is_collection_setting_disabled(
 		collection_id: &T::CollectionId,
 		setting: CollectionSetting,
-	) -> Result<bool, DispatchError> {
+	) -> Result<(bool, CollectionSettings), DispatchError> {
 		let config = CollectionConfigOf::<T, I>::get(&collection_id)
 			.ok_or(Error::<T, I>::UnknownCollection)?;
 
 		let settings = config.values();
-		Ok(!settings.contains(setting))
+		Ok((!settings.contains(setting), settings))
 	}
 }

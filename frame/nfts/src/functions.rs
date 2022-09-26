@@ -38,14 +38,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
 
-		let action_allowed = Self::is_collection_setting_disabled(
+		let (action_allowed, _) = Self::is_collection_setting_disabled(
 			&collection,
 			CollectionSetting::NonTransferableItems,
 		)?;
 		ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
 
 		let mut details =
-			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
+			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		with_details(&collection_details, &mut details)?;
 
@@ -243,7 +243,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
-		let action_allowed = Self::is_collection_setting_disabled(
+		let (action_allowed, _) = Self::is_collection_setting_disabled(
 			&collection,
 			CollectionSetting::NonTransferableItems,
 		)?;

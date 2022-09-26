@@ -340,9 +340,9 @@ benchmarks_instance_pallet! {
 		let data: BoundedVec<_, _> = vec![0u8; T::StringLimit::get() as usize].try_into().unwrap();
 
 		let (collection, caller, _) = create_collection::<T, I>();
-	}: _(SystemOrigin::Signed(caller), collection, data.clone(), false)
+	}: _(SystemOrigin::Signed(caller), collection, data.clone())
 	verify {
-		assert_last_event::<T, I>(Event::CollectionMetadataSet { collection, data, is_frozen: false }.into());
+		assert_last_event::<T, I>(Event::CollectionMetadataSet { collection, data }.into());
 	}
 
 	clear_collection_metadata {

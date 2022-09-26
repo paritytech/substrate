@@ -121,7 +121,7 @@ fn lifecycle_should_work() {
 		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), 1, default_config()));
 		assert_eq!(Balances::reserved_balance(&1), 2);
 		assert_eq!(collections(), vec![(1, 0)]);
-		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0, 0], false));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0, 0]));
 		assert_eq!(Balances::reserved_balance(&1), 5);
 		assert!(CollectionMetadataOf::<Test>::contains_key(0));
 
@@ -304,12 +304,7 @@ fn transfer_owner_should_work() {
 		);
 
 		// Mint and set metadata now and make sure that deposit gets transferred back.
-		assert_ok!(Nfts::set_collection_metadata(
-			RuntimeOrigin::signed(2),
-			0,
-			bvec![0u8; 20],
-			false
-		));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(2), 0, bvec![0u8; 20]));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1));
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(2), 0, 42, bvec![0u8; 20], false));
 		assert_ok!(Nfts::set_accept_ownership(RuntimeOrigin::signed(3), Some(0)));
@@ -348,70 +343,55 @@ fn set_collection_metadata_should_work() {
 	new_test_ext().execute_with(|| {
 		// Cannot add metadata to unknown item
 		assert_noop!(
-			Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 20], false),
+			Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 20]),
 			Error::<Test>::UnknownCollection,
 		);
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::empty()));
 		// Cannot add metadata to unowned item
 		assert_noop!(
-			Nfts::set_collection_metadata(RuntimeOrigin::signed(2), 0, bvec![0u8; 20], false),
+			Nfts::set_collection_metadata(RuntimeOrigin::signed(2), 0, bvec![0u8; 20]),
 			Error::<Test>::NoPermission,
 		);
 
 		// Successfully add metadata and take deposit
 		Balances::make_free_balance_be(&1, 30);
-		assert_ok!(Nfts::set_collection_metadata(
-			RuntimeOrigin::signed(1),
-			0,
-			bvec![0u8; 20],
-			false
-		));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 20]));
 		assert_eq!(Balances::free_balance(&1), 9);
 		assert!(CollectionMetadataOf::<Test>::contains_key(0));
 
 		// Force origin works, too.
-		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::root(), 0, bvec![0u8; 18], false));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::root(), 0, bvec![0u8; 18]));
 
 		// Update deposit
-		assert_ok!(Nfts::set_collection_metadata(
-			RuntimeOrigin::signed(1),
-			0,
-			bvec![0u8; 15],
-			false
-		));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 15]));
 		assert_eq!(Balances::free_balance(&1), 14);
-		assert_ok!(Nfts::set_collection_metadata(
-			RuntimeOrigin::signed(1),
-			0,
-			bvec![0u8; 25],
-			false
-		));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 25]));
 		assert_eq!(Balances::free_balance(&1), 4);
 
 		// Cannot over-reserve
 		assert_noop!(
-			Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 40], false),
+			Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 40]),
 			BalancesError::<Test, _>::InsufficientBalance,
 		);
 
 		// Can't set or clear metadata once frozen
-		assert_ok!(Nfts::set_collection_metadata(
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 15]));
+		assert_ok!(Nfts::lock_collection(
 			RuntimeOrigin::signed(1),
 			0,
-			bvec![0u8; 15],
-			true
+			CollectionConfig(CollectionSetting::LockedMetadata.into())
 		));
 		assert_noop!(
-			Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 15], false),
-			Error::<Test, _>::Frozen,
+			Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 15]),
+			Error::<Test, _>::CollectionMetadataIsLocked,
 		);
 		assert_noop!(
 			Nfts::clear_collection_metadata(RuntimeOrigin::signed(1), 0),
-			Error::<Test>::Frozen
+			Error::<Test>::CollectionMetadataIsLocked
 		);
 
 		// Clear Metadata
-		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::root(), 0, bvec![0u8; 15], false));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::root(), 0, bvec![0u8; 15]));
 		assert_noop!(
 			Nfts::clear_collection_metadata(RuntimeOrigin::signed(2), 0),
 			Error::<Test>::NoPermission
@@ -420,7 +400,11 @@ fn set_collection_metadata_should_work() {
 			Nfts::clear_collection_metadata(RuntimeOrigin::signed(1), 1),
 			Error::<Test>::UnknownCollection
 		);
-		assert_ok!(Nfts::clear_collection_metadata(RuntimeOrigin::signed(1), 0));
+		assert_noop!(
+			Nfts::clear_collection_metadata(RuntimeOrigin::signed(1), 0),
+			Error::<Test>::CollectionMetadataIsLocked
+		);
+		assert_ok!(Nfts::clear_collection_metadata(RuntimeOrigin::root(), 0));
 		assert!(!CollectionMetadataOf::<Test>::contains_key(0));
 	});
 }
@@ -558,7 +542,13 @@ fn set_attribute_should_respect_freeze() {
 		);
 		assert_eq!(Balances::reserved_balance(1), 9);
 
-		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![], true));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![]));
+		assert_ok!(Nfts::lock_collection(
+			RuntimeOrigin::signed(1),
+			0,
+			CollectionConfig(CollectionSetting::LockedAttributes.into())
+		));
+
 		let e = Error::<Test>::Frozen;
 		assert_noop!(Nfts::set_attribute(RuntimeOrigin::signed(1), 0, None, bvec![0], bvec![0]), e);
 		assert_ok!(Nfts::set_attribute(RuntimeOrigin::signed(1), 0, Some(0), bvec![0], bvec![1]));
@@ -581,7 +571,7 @@ fn force_collection_status_should_work() {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::empty()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 69, 2));
-		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0; 20], false));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0; 20]));
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 42, bvec![0; 20], false));
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 69, bvec![0; 20], false));
 		assert_eq!(Balances::reserved_balance(1), 65);
@@ -611,7 +601,7 @@ fn force_collection_status_should_work() {
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 69, bvec![0; 20], false));
 		assert_eq!(Balances::reserved_balance(1), 21);
 
-		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0; 20], false));
+		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0; 20]));
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
 }

@@ -113,8 +113,6 @@ pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// will generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
 	pub(super) data: BoundedVec<u8, StringLimit>,
-	/// Whether the collection's metadata may be changed by a non Force origin.
-	pub(super) is_frozen: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
@@ -156,7 +154,7 @@ pub enum CollectionSetting {
 	LockedMetadata,
 	/// Disallow to modify attributes of this collection.
 	LockedAttributes,
-	/// When this is set then no deposit needed to hold items of this collection.
+	/// When is set then no deposit needed to hold items of this collection.
 	FreeHolding,
 }
 
