@@ -57,7 +57,7 @@ function check_does_not_imply() {
 
 	RET=0
 	# Check if the forbidden feature is enabled anywhere in the workspace.
-	cargo tree --no-default-features --locked --offline --workspace -e features --features "$ENABLED" | grep -q "feature \"$STAYS_DISABLED\"" || RET=$?
+	cargo tree --no-default-features --locked --workspace -e features --features "$ENABLED" | grep -q "feature \"$STAYS_DISABLED\"" || RET=$?
 	if [ $RET -ne 0 ]; then
 		echo "✅ Feature '$ENABLED' does not imply '$STAYS_DISABLED' in the workspace"
 		return
@@ -79,7 +79,7 @@ function check_does_not_imply() {
 
 	for CRATE in $CRATES; do
 		RET=0
-		OUTPUT=$(cargo tree --no-default-features --locked --offline -e features --features $ENABLED -p $CRATE 2>&1 || true)
+		OUTPUT=$(cargo tree --no-default-features --locked -e features --features $ENABLED -p $CRATE 2>&1 || true)
 		IS_NOT_SUPPORTED=$(echo $OUTPUT | grep -q "not supported for packages in this workspace" || echo $?)
 
 		if [ $IS_NOT_SUPPORTED -eq 0 ]; then
