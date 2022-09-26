@@ -251,11 +251,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the block pruning mode.
 	///
 	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
-	/// `BlocksPruning::All`.
+	/// `BlocksPruning::KeepFinalized`.
 	fn blocks_pruning(&self) -> Result<BlocksPruning> {
 		self.pruning_params()
 			.map(|x| x.blocks_pruning())
-			.unwrap_or_else(|| Ok(BlocksPruning::All))
+			.unwrap_or_else(|| Ok(BlocksPruning::KeepFinalized))
 	}
 
 	/// Get the chain ID (string).

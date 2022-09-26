@@ -653,10 +653,10 @@ impl<T: Config> Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn add_era_stakers(
 		current_era: EraIndex,
-		controller: T::AccountId,
+		stash: T::AccountId,
 		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 	) {
-		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
+		<ErasStakers<T>>::insert(&current_era, &stash, &exposure);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
