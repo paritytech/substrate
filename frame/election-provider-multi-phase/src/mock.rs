@@ -303,6 +303,10 @@ impl ElectionProvider for MockFallback {
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 
+	fn ongoing() -> bool {
+		false
+	}
+
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
 	}
