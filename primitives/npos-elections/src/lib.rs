@@ -581,14 +581,14 @@ pub trait OnVoterListUpdate<AccountId> {
 	/// A hook for any operations to perform when voter list changes from idle.
 	fn on_finish_idle();
 	/// A hook for any operations to perform when a new voter is added.
-	fn on_new_voter(who: &AccountId);
+	fn on_new_voter(who: AccountId);
 }
 
 impl<AccountId> OnVoterListUpdate<AccountId> for () {
 	fn on_finish_idle() {
 		// Nothing to do here
 	}
-	fn on_new_voter(who: &AccountId) {
+	fn on_new_voter(_: AccountId) {
 		// Nothing to do here
 	}
 }

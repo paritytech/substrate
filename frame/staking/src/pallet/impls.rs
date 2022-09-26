@@ -808,7 +808,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Nominators::<T>::insert(who, nominations);
 
-		T::OnVoterListUpdate::on_new_voter(who);
+		T::OnVoterListUpdate::on_new_voter(who.clone());
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
@@ -856,7 +856,7 @@ impl<T: Config> Pallet<T> {
 		}
 		Validators::<T>::insert(who, prefs);
 
-		T::OnVoterListUpdate::on_new_voter(who);
+		T::OnVoterListUpdate::on_new_voter(who.clone());
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
