@@ -63,11 +63,13 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		CreatedOffence { offenders: Vec<(T::AccountId, Perbill)> },
+		/// An offence was created by root.
+		OffenceCreated { offenders: Vec<(T::AccountId, Perbill)> },
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
+		/// Failed to get the active era from the staking pallet.
 		FailedToGetActiveEra,
 	}
 
@@ -91,7 +93,7 @@ pub mod pallet {
 			let offence_details = Self::get_offence_details(offenders.clone())?;
 
 			Self::submit_offence(&offence_details, &slash_fraction);
-			Self::deposit_event(Event::CreatedOffence { offenders });
+			Self::deposit_event(Event::OffenceCreated { offenders });
 			Ok(())
 		}
 	}
