@@ -35,6 +35,8 @@ use super::{
 	watcher::Watcher,
 };
 
+use sp_blockchain::TreeRoute;
+
 /// Modification notification event stream type;
 pub type EventStream<H> = Receiver<H>;
 
@@ -97,6 +99,13 @@ pub trait ChainApi: Send + Sync {
 		&self,
 		at: &BlockId<Self::Block>,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
+
+	/// Returns a tree route
+	fn tree_route(
+		&self,
+		from: <Self::Block as BlockT>::Hash,
+		to: <Self::Block as BlockT>::Hash,
+	) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.
