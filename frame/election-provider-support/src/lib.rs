@@ -349,45 +349,7 @@ pub trait ElectionDataProvider {
 	fn clear() {}
 }
 
-/// Something that can compute the result of an election and pass it back to the caller.
-///
-/// This trait only provides an interface to _request_ an election, i.e.
-/// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
-/// implemented of this trait through [`ElectionProvider::DataProvider`].
-pub trait BoundedElectionProvider {
-	/// The account identifier type.
-	type AccountId;
-
-	/// The block number type.
-	type BlockNumber;
-
-	/// The error type that is returned by the provider.
-	type Error: Debug;
-
-	/// The data provider of the election.
-	type DataProvider: ElectionDataProvider<
-		AccountId = Self::AccountId,
-		BlockNumber = Self::BlockNumber,
-	>;
-
-	/// The upper bound on election winners. The [`Self::DataProvider`] should
-	/// respect these bounds such that: `desired_targets() <= MaxTargets`.
-	type MaxTargets: Get<u32>;
-	
-	/// The upper bound on max voters per target.
-	type MaxVoters: Get<u32>;
-	
-	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
-	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
-	///
-	/// The result is returned in a target major format, namely as *vector of supports*.
-	///
-	/// This should be implemented as a self-weighing function. The implementor should register its
-	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxVoters, Self::MaxTargets>, Self::Error>;
-}
-
-pub trait ElectionProvider {
+pub trait ElectionProviderBase {
 	/// The account identifier type.
 	type AccountId;
 
@@ -405,7 +367,27 @@ pub trait ElectionProvider {
 
 	/// Indicate if this election provider is currently ongoing an asynchronous election or not.
 	fn ongoing() -> bool;
+}
 
+pub trait BoundedElectionProvider: ElectionProviderBase {
+	/// The upper bound on election winners. The [`Self::DataProvider`] should
+	/// respect these bounds such that: `desired_targets() <= MaxTargets`.
+	type MaxTargets: Get<u32>;
+	
+	/// The upper bound on max voters per target.
+	type MaxVoters: Get<u32>;
+	
+	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
+	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
+	///
+	/// The result is returned in a target major format, namely as *vector of supports*.
+	///
+	/// This should be implemented as a self-weighing function. The implementor should register its
+	/// appropriate weight at the end of execution with the system pallet directly.
+	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxVoters, Self::MaxTargets>, Self::Error>;
+}
+
+pub trait ElectionProvider: ElectionProviderBase {
 	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
 	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
@@ -443,7 +425,7 @@ pub trait InstantElectionProvider: ElectionProvider {
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+impl<AccountId, BlockNumber, DataProvider> ElectionProviderBase
 	for NoElection<(AccountId, BlockNumber, DataProvider)>
 where
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
@@ -453,12 +435,19 @@ where
 	type Error = &'static str;
 	type DataProvider = DataProvider;
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		Err("<NoElection as ElectionProvider> cannot do anything.")
-	}
-
 	fn ongoing() -> bool {
 		false
+	}
+}
+
+#[cfg(feature = "std")]
+impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider)>
+where
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+{
+	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+		Err("<NoElection as ElectionProvider> cannot do anything.")
 	}
 }
 
