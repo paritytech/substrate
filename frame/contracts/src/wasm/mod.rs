@@ -1545,14 +1545,11 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let gas_left = Weight::decode(&mut &*output.data).unwrap();
+		let gas_left = u64::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
 		// TODO: maybe factor in proof size weight
-		assert!(gas_left.ref_time() < gas_limit.ref_time(), "gas_left must be less than initial");
-		assert!(
-			gas_left.ref_time() > actual_left.ref_time(),
-			"gas_left must be greater than final"
-		);
+		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
+		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
