@@ -47,9 +47,7 @@ use sc_telemetry::TelemetryHandle;
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::{AppKey, AppPublic};
 use sp_blockchain::{HeaderBackend, Result as CResult};
-use sp_consensus::{
-	BlockOrigin, CanAuthorWith, Environment, Error as ConsensusError, Proposer, SelectChain,
-};
+use sp_consensus::{BlockOrigin, Environment, Error as ConsensusError, Proposer, SelectChain};
 use sp_consensus_slots::Slot;
 use sp_core::crypto::{ByteArray, Pair, Public};
 use sp_inherents::CreateInherentDataProviders;
@@ -108,7 +106,7 @@ fn slot_author<P: Pair>(slot: Slot, authorities: &[AuthorityId<P>]) -> Option<&A
 }
 
 /// Parameters of [`start_aura`].
-pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
+pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS> {
 	/// The duration of a slot.
 	pub slot_duration: SlotDuration,
 	/// The client to interact with the chain.
@@ -131,8 +129,6 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 	pub backoff_authoring_blocks: Option<BS>,
 	/// The keystore used by the node.
 	pub keystore: SyncCryptoStorePtr,
-	/// Can we author a block with this node?
-	pub can_author_with: CAW,
 	/// The proportion of the slot dedicated to proposing.
 	///
 	/// The block proposing will be limited to this proportion of the slot from the starting of the
@@ -147,7 +143,7 @@ pub struct StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW> {
 }
 
 /// Start the aura worker. The returned future should be run in a futures executor.
-pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
+pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, Error>(
 	StartAuraParams {
 		slot_duration,
 		client,
@@ -160,11 +156,10 @@ pub fn start_aura<P, B, C, SC, I, PF, SO, L, CIDP, BS, CAW, Error>(
 		force_authoring,
 		backoff_authoring_blocks,
 		keystore,
-		can_author_with,
 		block_proposal_slot_portion,
 		max_block_proposal_slot_portion,
 		telemetry,
-	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS, CAW>,
+	}: StartAuraParams<C, SC, I, PF, SO, L, CIDP, BS>,
 ) -> Result<impl Future<Output = ()>, sp_consensus::Error>
 where
 	P: Pair + Send + Sync,
@@ -182,7 +177,6 @@ where
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
-	CAW: CanAuthorWith<B> + Send,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
 	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
@@ -205,7 +199,6 @@ where
 		SimpleSlotWorkerToSlotWorker(worker),
 		sync_oracle,
 		create_inherent_data_providers,
-		can_author_with,
 	))
 }
 
@@ -566,12 +559,9 @@ mod tests {
 	use sc_consensus::BoxJustificationImport;
 	use sc_consensus_slots::{BackoffAuthoringOnFinalizedHeadLagging, SimpleSlotWorker};
 	use sc_keystore::LocalKeystore;
-	use sc_network::config::ProtocolConfig;
 	use sc_network_test::{Block as TestBlock, *};
 	use sp_application_crypto::key_types::AURA;
-	use sp_consensus::{
-		AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal,
-	};
+	use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 	use sp_consensus_aura::sr25519::AuthorityPair;
 	use sp_inherents::InherentData;
 	use sp_keyring::sr25519::Keyring;
@@ -579,7 +569,7 @@ mod tests {
 		traits::{Block as BlockT, Header as _},
 		Digest,
 	};
-	use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
+	use sp_timestamp::Timestamp;
 	use std::{
 		task::Poll,
 		time::{Duration, Instant},
@@ -588,6 +578,8 @@ mod tests {
 		runtime::{Header, H256},
 		TestClient,
 	};
+
+	const SLOT_DURATION_MS: u64 = 1000;
 
 	type Error = sp_blockchain::Error;
 
@@ -629,22 +621,20 @@ mod tests {
 		}
 	}
 
-	const SLOT_DURATION: u64 = 1000;
-
 	type AuraVerifier = import_queue::AuraVerifier<
 		PeersFullClient,
 		AuthorityPair,
-		AlwaysCanAuthor,
 		Box<
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+				InherentDataProviders = (InherentDataProvider,),
 			>,
 		>,
 	>;
 	type AuraPeer = Peer<(), PeersClient>;
 
+	#[derive(Default)]
 	pub struct AuraTestNet {
 		peers: Vec<AuraPeer>,
 	}
@@ -654,33 +644,20 @@ mod tests {
 		type PeerData = ();
 		type BlockImport = PeersClient;
 
-		/// Create new test network with peers and given config.
-		fn from_config(_config: &ProtocolConfig) -> Self {
-			AuraTestNet { peers: Vec::new() }
-		}
-
-		fn make_verifier(
-			&self,
-			client: PeersClient,
-			_cfg: &ProtocolConfig,
-			_peer_data: &(),
-		) -> Self::Verifier {
+		fn make_verifier(&self, client: PeersClient, _peer_data: &()) -> Self::Verifier {
 			let client = client.as_client();
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION);
+			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION_MS);
 			import_queue::AuraVerifier::new(
 				client,
 				Box::new(|_, _| async {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						SlotDuration::from_millis(6000),
+						Timestamp::current(),
+						SlotDuration::from_millis(SLOT_DURATION_MS),
 					);
-
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
-				AlwaysCanAuthor,
 				CheckForEquivocation::Yes,
 				None,
 			)
@@ -748,7 +725,7 @@ mod tests {
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
 			aura_futures.push(
-				start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
+				start_aura::<AuthorityPair, _, _, _, _, _, _, _, _, _, _>(StartAuraParams {
 					slot_duration,
 					block_import: client.clone(),
 					select_chain,
@@ -757,20 +734,18 @@ mod tests {
 					sync_oracle: DummyOracle,
 					justification_sync_link: (),
 					create_inherent_data_providers: |_, _| async {
-						let timestamp = TimestampInherentDataProvider::from_system_time();
 						let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-							*timestamp,
-							SlotDuration::from_millis(6000),
+							Timestamp::current(),
+							SlotDuration::from_millis(SLOT_DURATION_MS),
 						);
 
-						Ok((timestamp, slot))
+						Ok((slot,))
 					},
 					force_authoring: false,
 					backoff_authoring_blocks: Some(
 						BackoffAuthoringOnFinalizedHeadLagging::default(),
 					),
 					keystore,
-					can_author_with: sp_consensus::AlwaysCanAuthor,
 					block_proposal_slot_portion: SlotProportion::new(0.5),
 					max_block_proposal_slot_portion: None,
 					telemetry: None,
@@ -831,7 +806,7 @@ mod tests {
 			block_import: client,
 			env: environ,
 			keystore: keystore.into(),
-			sync_oracle: DummyOracle.clone(),
+			sync_oracle: DummyOracle,
 			justification_sync_link: (),
 			force_authoring: false,
 			backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
@@ -883,7 +858,7 @@ mod tests {
 			block_import: client.clone(),
 			env: environ,
 			keystore: keystore.into(),
-			sync_oracle: DummyOracle.clone(),
+			sync_oracle: DummyOracle,
 			justification_sync_link: (),
 			force_authoring: false,
 			backoff_authoring_blocks: Option::<()>::None,
@@ -897,7 +872,6 @@ mod tests {
 
 		let res = executor::block_on(worker.on_slot(SlotInfo {
 			slot: 0.into(),
-			timestamp: 0.into(),
 			ends_at: Instant::now() + Duration::from_secs(100),
 			inherent_data: InherentData::new(),
 			duration: Duration::from_millis(1000),

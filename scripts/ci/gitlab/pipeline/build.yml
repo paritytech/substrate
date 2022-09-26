@@ -11,7 +11,7 @@
   script:
     - git clone
         --depth=1
-        "--branch=$PIPELINE_SCRIPTS_TAG"
+        --branch="$PIPELINE_SCRIPTS_TAG"
         https://github.com/paritytech/pipeline-scripts
     - ./pipeline-scripts/check_dependent_project.sh
         --org paritytech
@@ -34,15 +34,16 @@ check-dependent-polkadot:
   rules:
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  #PRs
 
-# TODO: Re-enable after https://github.com/paritytech/pipeline-scripts/issues/44
-#check-dependent-cumulus:
-#  extends:                         .check-dependent-project
-#  variables:
-#    DEPENDENT_REPO:                cumulus
-#    EXTRA_DEPENDENCIES:            polkadot
-#    COMPANION_OVERRIDES: |
-#      substrate: polkadot-v*
-#      polkadot: release-v*
+check-dependent-cumulus:
+  extends:                         .check-dependent-project
+  variables:
+    DEPENDENT_REPO:                cumulus
+    EXTRA_DEPENDENCIES:            polkadot
+    COMPANION_OVERRIDES: |
+      substrate: polkadot-v*
+      polkadot: release-v*
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/  #PRs
 
 build-linux-substrate:
   stage:                           build
@@ -52,7 +53,7 @@ build-linux-substrate:
     - .build-refs
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
-    CARGO_TARGET_DIR:              "./target"
+    CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
   needs:
     - job:                         test-linux-stable
       artifacts:                   false
@@ -61,7 +62,7 @@ build-linux-substrate:
     - !reference [.rusty-cachier, before_script]
   script:
     - rusty-cachier snapshot create
-    - WASM_BUILD_NO_COLOR=1 time cargo build --release --verbose
+    - WASM_BUILD_NO_COLOR=1 time cargo build --locked --release --verbose
     - mv $CARGO_TARGET_DIR/release/substrate ./artifacts/substrate/.
     - echo -n "Substrate version = "
     - if [ "${CI_COMMIT_TAG}" ]; then
@@ -84,7 +85,7 @@ build-linux-substrate:
     - .build-refs
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
-    CARGO_TARGET_DIR:              "./target"
+    CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
   needs:
     - job:                         cargo-check-subkey
       artifacts:                   false
@@ -94,7 +95,7 @@ build-linux-substrate:
   script:
     - rusty-cachier snapshot create
     - cd ./bin/utils/subkey
-    - SKIP_WASM_BUILD=1 time cargo build --release --verbose
+    - SKIP_WASM_BUILD=1 time cargo build --locked --release --verbose
     - cd -
     - mv $CARGO_TARGET_DIR/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
@@ -116,7 +117,7 @@ build-subkey-macos:
     - mkdir -p ./artifacts/subkey
   script:
     - cd ./bin/utils/subkey
-    - SKIP_WASM_BUILD=1 time cargo build --release --verbose
+    - SKIP_WASM_BUILD=1 time cargo build --locked --release --verbose
     - cd -
     - mv ./target/release/subkey ./artifacts/subkey/.
     - echo -n "Subkey version = "
@@ -125,6 +126,7 @@ build-subkey-macos:
           tee ./artifacts/subkey/VERSION;
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
+  after_script: [""]
   tags:
     - osx
 
@@ -138,7 +140,7 @@ build-rustdoc:
     DOC_INDEX_PAGE:                "sc_service/index.html" # default redirected page
     RUSTY_CACHIER_TOOLCHAIN:       nightly
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
-    CARGO_TARGET_DIR:              "./target"
+    CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}-doc"
     when:                          on_success
@@ -147,7 +149,7 @@ build-rustdoc:
     - ./crate-docs/
   script:
     - rusty-cachier snapshot create
-    - time cargo +nightly doc --workspace --all-features --verbose
+    - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
     - rm -f $CARGO_TARGET_DIR/doc/.lock
     - mv $CARGO_TARGET_DIR/doc ./crate-docs
     # FIXME: remove me after CI image gets nonroot

@@ -36,9 +36,6 @@ pub type Message<B> = generic::Message<
 	<B as BlockT>::Extrinsic,
 >;
 
-/// A set of transactions.
-pub type Transactions<E> = Vec<E>;
-
 /// Remote call response.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct RemoteCallResponse {
@@ -59,14 +56,16 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use super::{RemoteCallResponse, RemoteReadResponse, Transactions};
+	use super::{RemoteCallResponse, RemoteReadResponse};
 	use bitflags::bitflags;
 	use codec::{Decode, Encode, Input, Output};
 	use sc_client_api::StorageProof;
-	use sc_network_common::message::RequestId;
-	use sc_network_sync::message::{
-		generic::{BlockRequest, BlockResponse},
-		BlockAnnounce,
+	use sc_network_common::{
+		message::RequestId,
+		sync::message::{
+			generic::{BlockRequest, BlockResponse},
+			BlockAnnounce,
+		},
 	};
 	use sp_runtime::ConsensusEngineId;
 
@@ -105,7 +104,6 @@ pub mod generic {
 		fn from(roles: &'a crate::config::Role) -> Self {
 			match roles {
 				crate::config::Role::Full => Self::FULL,
-				crate::config::Role::Light => Self::LIGHT,
 				crate::config::Role::Authority { .. } => Self::AUTHORITY,
 			}
 		}
@@ -145,9 +143,10 @@ pub mod generic {
 		BlockResponse(BlockResponse<Header, Hash, Extrinsic>),
 		/// Block announce.
 		BlockAnnounce(BlockAnnounce<Header>),
-		/// Transactions.
-		Transactions(Transactions<Extrinsic>),
 		/// Consensus protocol message.
+		// NOTE: index is incremented by 1 due to transaction-related
+		// message that was removed
+		#[codec(index = 6)]
 		Consensus(ConsensusMessage),
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),

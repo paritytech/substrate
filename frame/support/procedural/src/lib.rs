@@ -311,7 +311,7 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///         System: frame_system::{Pallet, Call, Event<T>, Config<T>} = 0,
 ///         Test: path::to::test::{Pallet, Call} = 1,
 ///
-///         // Pallets with instances
+///         // Pallets with instances.
 ///         Test2_Instance1: test2::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
 ///         Test2_DefaultInstance: test2::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
 ///
@@ -429,7 +429,6 @@ pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-#[deprecated(note = "This is now the default behaviour for all extrinsics.")]
 pub fn transactional(attr: TokenStream, input: TokenStream) -> TokenStream {
 	transactional::transactional(attr, input).unwrap_or_else(|e| e.to_compile_error().into())
 }

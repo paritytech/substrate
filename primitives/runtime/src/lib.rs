@@ -19,10 +19,6 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-// to allow benchmarking
-#![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")]
-extern crate test;
 
 #[doc(hidden)]
 pub use codec;
@@ -36,6 +32,8 @@ pub use sp_std;
 
 #[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
+pub use sp_arithmetic::traits::Saturating;
 
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
@@ -78,9 +76,13 @@ pub use generic::{Digest, DigestItem};
 pub use sp_application_crypto::{BoundToRuntimeAppPublic, RuntimeAppPublic};
 /// Re-export this since it's part of the API of this crate.
 pub use sp_core::{
+	bounded::{BoundedBTreeMap, BoundedBTreeSet, BoundedSlice, BoundedVec, WeakBoundedVec},
 	crypto::{key_types, AccountId32, CryptoType, CryptoTypeId, KeyTypeId},
 	TypeId,
 };
+/// Re-export bounded_vec and bounded_btree_map macros only when std is enabled.
+#[cfg(feature = "std")]
+pub use sp_core::{bounded_btree_map, bounded_vec};
 
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
@@ -93,7 +95,7 @@ pub use sp_arithmetic::helpers_128bit;
 pub use sp_arithmetic::{
 	traits::SaturatedConversion, FixedI128, FixedI64, FixedPointNumber, FixedPointOperand,
 	FixedU128, InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
-	UpperOf,
+	Rounding, UpperOf,
 };
 
 pub use either::Either;
@@ -145,6 +147,11 @@ impl Justifications {
 	/// exists.
 	pub fn get(&self, engine_id: ConsensusEngineId) -> Option<&EncodedJustification> {
 		self.iter().find(|j| j.0 == engine_id).map(|j| &j.1)
+	}
+
+	/// Remove the encoded justification for the given consensus engine, if it exists.
+	pub fn remove(&mut self, engine_id: ConsensusEngineId) {
+		self.0.retain(|j| j.0 != engine_id)
 	}
 
 	/// Return a copy of the encoded justification for the given consensus
@@ -816,7 +823,24 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			($x >= $crate::Saturating::saturating_sub($y, $error)) &&
+				($x <= $crate::Saturating::saturating_add($y, $error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
+
+/// Same as [`assert_eq_error_rate`], but intended to be used with floating point number, or
+/// generally those who do not have over/underflow potentials.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_error_rate_float {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
+		assert!(
+			($x >= $y - $error) && ($x <= $y + $error),
 			"{:?} != {:?} (with error rate {:?})",
 			$x,
 			$y,
@@ -1070,7 +1094,7 @@ mod tests {
 		ext.insert(b"c".to_vec(), vec![3u8; 33]);
 		ext.insert(b"d".to_vec(), vec![4u8; 33]);
 
-		let pre_root = ext.backend.root().clone();
+		let pre_root = *ext.backend.root();
 		let (_, proof) = ext.execute_and_prove(|| {
 			sp_io::storage::get(b"a");
 			sp_io::storage::get(b"b");

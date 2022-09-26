@@ -27,7 +27,6 @@ use sp_core::{
 	crypto::KeyTypeId,
 	sr25519::Signature,
 	traits::{CodeExecutor, RuntimeCode},
-	NativeOrEncoded, NeverNativeValue,
 };
 use sp_runtime::{
 	traits::{BlakeTwo256, Header as HeaderT},
@@ -35,12 +34,12 @@ use sp_runtime::{
 };
 use sp_state_machine::TestExternalities as CoreTestExternalities;
 
-use node_executor::ExecutorDispatch;
-use node_primitives::{BlockNumber, Hash};
-use node_runtime::{
+use kitchensink_runtime::{
 	constants::currency::*, Block, BuildStorage, CheckedExtrinsic, Header, Runtime,
 	UncheckedExtrinsic,
 };
+use node_executor::ExecutorDispatch;
+use node_primitives::{BlockNumber, Hash};
 use node_testing::keyring::*;
 use sp_externalities::Externalities;
 
@@ -69,7 +68,7 @@ impl AppCrypto<MultiSigner, MultiSignature> for TestAuthorityId {
 /// making the binary slimmer. There is a convention to use compact version of the runtime
 /// as canonical.
 pub fn compact_code_unwrap() -> &'static [u8] {
-	node_runtime::WASM_BINARY.expect(
+	kitchensink_runtime::WASM_BINARY.expect(
 		"Development wasm binary is not available. Testing is only supported with the flag \
 		 disabled.",
 	)
@@ -77,9 +76,9 @@ pub fn compact_code_unwrap() -> &'static [u8] {
 
 pub const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
-pub const SPEC_VERSION: u32 = node_runtime::VERSION.spec_version;
+pub const SPEC_VERSION: u32 = kitchensink_runtime::VERSION.spec_version;
 
-pub const TRANSACTION_VERSION: u32 = node_runtime::VERSION.transaction_version;
+pub const TRANSACTION_VERSION: u32 = kitchensink_runtime::VERSION.transaction_version;
 
 pub type TestExternalities<H> = CoreTestExternalities<H>;
 
@@ -99,17 +98,12 @@ pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
 	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
 }
 
-pub fn executor_call<
-	R: Decode + Encode + PartialEq,
-	NC: FnOnce() -> std::result::Result<R, Box<dyn std::error::Error + Send + Sync>>
-		+ std::panic::UnwindSafe,
->(
+pub fn executor_call(
 	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,
 	data: &[u8],
 	use_native: bool,
-	native_call: Option<NC>,
-) -> (Result<NativeOrEncoded<R>>, bool) {
+) -> (Result<Vec<u8>>, bool) {
 	let mut t = t.ext();
 
 	let code = t.storage(sp_core::storage::well_known_keys::CODE).unwrap();
@@ -120,7 +114,7 @@ pub fn executor_call<
 		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
 	};
 	sp_tracing::try_init_simple();
-	executor().call::<R, NC>(&mut t, &runtime_code, method, data, use_native, native_call)
+	executor().call(&mut t, &runtime_code, method, data, use_native)
 }
 
 pub fn new_test_ext(code: &[u8]) -> TestExternalities<BlakeTwo256> {
@@ -171,29 +165,15 @@ pub fn construct_block(
 	};
 
 	// execute the block to get the real header.
-	executor_call::<NeverNativeValue, fn() -> _>(
-		env,
-		"Core_initialize_block",
-		&header.encode(),
-		true,
-		None,
-	)
-	.0
-	.unwrap();
+	executor_call(env, "Core_initialize_block", &header.encode(), true).0.unwrap();
 
 	for extrinsic in extrinsics.iter() {
 		// Try to apply the `extrinsic`. It should be valid, in the sense that it passes
 		// all pre-inclusion checks.
-		let r = executor_call::<NeverNativeValue, fn() -> _>(
-			env,
-			"BlockBuilder_apply_extrinsic",
-			&extrinsic.encode(),
-			true,
-			None,
-		)
-		.0
-		.expect("application of an extrinsic failed")
-		.into_encoded();
+		let r = executor_call(env, "BlockBuilder_apply_extrinsic", &extrinsic.encode(), true)
+			.0
+			.expect("application of an extrinsic failed");
+
 		match ApplyExtrinsicResult::decode(&mut &r[..])
 			.expect("apply result deserialization failed")
 		{
@@ -202,19 +182,10 @@ pub fn construct_block(
 		}
 	}
 
-	let header = match executor_call::<NeverNativeValue, fn() -> _>(
-		env,
-		"BlockBuilder_finalize_block",
-		&[0u8; 0],
-		true,
-		None,
+	let header = Header::decode(
+		&mut &executor_call(env, "BlockBuilder_finalize_block", &[0u8; 0], true).0.unwrap()[..],
 	)
-	.0
-	.unwrap()
-	{
-		NativeOrEncoded::Native(_) => unreachable!(),
-		NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
-	};
+	.unwrap();
 
 	let hash = header.blake2_256();
 	(Block { header, extrinsics }.encode(), hash.into())

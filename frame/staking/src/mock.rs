@@ -33,11 +33,10 @@ use sp_core::H256;
 use sp_io;
 use sp_runtime::{
 	curve::PiecewiseLinear,
-	testing::{Header, TestXt, UintAuthorityId},
+	testing::{Header, UintAuthorityId},
 	traits::{IdentityLookup, Zero},
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
-use std::cell::RefCell;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -100,7 +99,7 @@ frame_support::construct_runtime!(
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Historical: pallet_session::historical::{Pallet, Storage},
-		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
+		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -132,16 +131,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -158,7 +157,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -175,7 +174,7 @@ impl pallet_session::Config for Test {
 	type Keys = SessionKeys;
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = (OtherSessionHandler,);
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = crate::StashOf<Test>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
@@ -216,16 +215,16 @@ parameter_types! {
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
 }
 
-thread_local! {
-	pub static REWARD_REMAINDER_UNBALANCED: RefCell<u128> = RefCell::new(0);
+parameter_types! {
+	pub static RewardRemainderUnbalanced: u128 = 0;
 }
 
 pub struct RewardRemainderMock;
 
 impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 	fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<Test>) {
-		REWARD_REMAINDER_UNBALANCED.with(|v| {
-			*v.borrow_mut() += amount.peek();
+		RewardRemainderUnbalanced::mutate(|v| {
+			*v += amount.peek();
 		});
 		drop(amount);
 	}
@@ -237,13 +236,16 @@ const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
 	pub static MaxNominations: u32 = 16;
+	pub static HistoryDepth: u32 = 80;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 }
 
-impl pallet_bags_list::Config for Test {
-	type Event = Event;
+type VoterBagsListInstance = pallet_bags_list::Instance1;
+impl pallet_bags_list::Config<VoterBagsListInstance> for Test {
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
+	// Staking is the source of truth for voter bags list, since they are not kept up to date.
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
@@ -282,7 +284,7 @@ impl crate::pallet::pallet::Config for Test {
 	type UnixTime = Timestamp;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = RewardRemainderMock;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
 	type Reward = MockReward;
 	type SessionsPerEra = SessionsPerEra;
@@ -297,24 +299,17 @@ impl crate::pallet::pallet::Config for Test {
 	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
-	type VoterList = BagsList;
+	type VoterList = VoterBagsList;
+	type TargetList = UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
 
-impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Test
-where
-	Call: From<LocalCall>,
-{
-	type OverarchingCall = Call;
-	type Extrinsic = Extrinsic;
-}
-
-pub type Extrinsic = TestXt<Call, ()>;
 pub(crate) type StakingCall = crate::Call<Test>;
-pub(crate) type TestRuntimeCall = <Test as frame_system::Config>::Call;
+pub(crate) type TestCall = <Test as frame_system::Config>::RuntimeCall;
 
 pub struct ExtBuilder {
 	nominate: bool,
@@ -549,6 +544,7 @@ impl ExtBuilder {
 		ext
 	}
 	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+		sp_tracing::try_init_simple();
 		let mut ext = self.build();
 		ext.execute_with(test);
 		ext.execute_with(post_conditions);
@@ -666,13 +662,22 @@ pub(crate) fn current_era() -> EraIndex {
 pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
 	let _ = Balances::make_free_balance_be(&stash, val);
 	let _ = Balances::make_free_balance_be(&ctrl, val);
-	assert_ok!(Staking::bond(Origin::signed(stash), ctrl, val, RewardDestination::Controller));
+	assert_ok!(Staking::bond(
+		RuntimeOrigin::signed(stash),
+		ctrl,
+		val,
+		RewardDestination::Controller
+	));
 }
 
 pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
 	bond(stash, ctrl, val);
-	assert_ok!(Staking::validate(Origin::signed(ctrl), ValidatorPrefs::default()));
-	assert_ok!(Session::set_keys(Origin::signed(ctrl), SessionKeys { other: ctrl.into() }, vec![]));
+	assert_ok!(Staking::validate(RuntimeOrigin::signed(ctrl), ValidatorPrefs::default()));
+	assert_ok!(Session::set_keys(
+		RuntimeOrigin::signed(ctrl),
+		SessionKeys { other: ctrl.into() },
+		vec![]
+	));
 }
 
 pub(crate) fn bond_nominator(
@@ -682,7 +687,7 @@ pub(crate) fn bond_nominator(
 	target: Vec<AccountId>,
 ) {
 	bond(stash, ctrl, val);
-	assert_ok!(Staking::nominate(Origin::signed(ctrl), target));
+	assert_ok!(Staking::nominate(RuntimeOrigin::signed(ctrl), target));
 }
 
 /// Progress to the given block, triggering session and era changes as we progress.
@@ -834,7 +839,7 @@ pub(crate) fn on_offence_now(
 pub(crate) fn add_slash(who: &AccountId) {
 	on_offence_now(
 		&[OffenceDetails {
-			offender: (who.clone(), Staking::eras_stakers(active_era(), who.clone())),
+			offender: (*who, Staking::eras_stakers(active_era(), *who)),
 			reporters: vec![],
 		}],
 		&[Perbill::from_percent(10)],
@@ -852,7 +857,7 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
 	// reward validators
 	for validator_controller in validators_with_reward.iter().filter_map(Staking::bonded) {
 		let ledger = <Ledger<Test>>::get(&validator_controller).unwrap();
-		assert_ok!(Staking::payout_stakers(Origin::signed(1337), ledger.stash, era));
+		assert_ok!(Staking::payout_stakers(RuntimeOrigin::signed(1337), ledger.stash, era));
 	}
 }
 
@@ -880,8 +885,22 @@ pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
 	System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let Event::Staking(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let RuntimeEvent::Staking(inner) = e { Some(inner) } else { None })
 		.collect()
+}
+
+parameter_types! {
+	static StakingEventsIndex: usize = 0;
+}
+
+pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
+	let all: Vec<_> = System::events()
+		.into_iter()
+		.filter_map(|r| if let RuntimeEvent::Staking(inner) = r.event { Some(inner) } else { None })
+		.collect();
+	let seen = StakingEventsIndex::get();
+	StakingEventsIndex::set(all.len());
+	all.into_iter().skip(seen).collect()
 }
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {

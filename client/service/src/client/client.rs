@@ -22,7 +22,6 @@ use super::{
 	block_rules::{BlockRules, LookupResult as BlockLookupResult},
 	genesis,
 };
-use codec::{Decode, Encode};
 use log::{info, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use prometheus_endpoint::Registry;
@@ -59,12 +58,9 @@ use sp_blockchain::{
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use sp_core::{
-	storage::{
-		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
-		StorageData, StorageKey,
-	},
-	NativeOrEncoded,
+use sp_core::storage::{
+	well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild, StorageData,
+	StorageKey,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -85,9 +81,7 @@ use sp_trie::{CompactProof, StorageProof};
 use std::{
 	collections::{hash_map::DefaultHasher, HashMap, HashSet},
 	marker::PhantomData,
-	panic::UnwindSafe,
 	path::PathBuf,
-	result,
 	sync::Arc,
 };
 
@@ -1327,7 +1321,7 @@ where
 			Some(&root),
 		)
 		.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
-		let proving_backend = sp_state_machine::TrieBackend::new(db, root);
+		let proving_backend = sp_state_machine::TrieBackendBuilder::new(db, root).build();
 		let state = read_range_proof_check_with_child_on_proving_backend::<HashFor<Block>>(
 			&proving_backend,
 			start_key,
@@ -1614,11 +1608,11 @@ where
 	RA: Send + Sync,
 {
 	fn header(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Block::Header>> {
-		(**self).backend.blockchain().header(id)
+		self.backend.blockchain().header(id)
 	}
 
 	fn info(&self) -> blockchain::Info<Block> {
-		(**self).backend.blockchain().info()
+		self.backend.blockchain().info()
 	}
 
 	fn status(&self, id: BlockId<Block>) -> sp_blockchain::Result<blockchain::BlockStatus> {
@@ -1659,27 +1653,23 @@ where
 {
 	type StateBackend = B::State;
 
-	fn call_api_at<
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
-	>(
+	fn call_api_at(
 		&self,
-		params: CallApiAtParams<Block, NC, B::State>,
-	) -> Result<NativeOrEncoded<R>, sp_api::ApiError> {
+		params: CallApiAtParams<Block, B::State>,
+	) -> Result<Vec<u8>, sp_api::ApiError> {
 		let at = params.at;
 
 		let (manager, extensions) =
 			self.execution_extensions.manager_and_extensions(at, params.context);
 
 		self.executor
-			.contextual_call::<fn(_, _) -> _, _, _>(
+			.contextual_call(
 				at,
 				params.function,
 				&params.arguments,
 				params.overlayed_changes,
 				Some(params.storage_transaction_cache),
 				manager,
-				params.native_call,
 				params.recorder,
 				Some(extensions),
 			)
@@ -1688,6 +1678,10 @@ where
 
 	fn runtime_version_at(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, sp_api::ApiError> {
 		CallExecutor::runtime_version(&self.executor, at).map_err(Into::into)
+	}
+
+	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, sp_api::ApiError> {
+		self.state_at(at).map_err(Into::into)
 	}
 }
 

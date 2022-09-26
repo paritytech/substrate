@@ -1,0 +1,5 @@
+error: Invalid pallet::storage, unexpected generic args for ResultQuery, expected angle-bracketed arguments, found `(NonExistentValue)`
+  --> tests/pallet_ui/storage_result_query_parenthesized_generics.rs:18:55
+   |
+18 |     type Foo<T: Config> = StorageValue<_, u8, ResultQuery(NonExistentValue)>;
+   |                                                          ^^^^^^^^^^^^^^^^^^

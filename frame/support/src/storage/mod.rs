@@ -46,6 +46,7 @@ pub mod child;
 pub mod generator;
 pub mod hashed;
 pub mod migration;
+pub mod storage_noop_guard;
 pub mod transactional;
 pub mod types;
 pub mod unhashed;
@@ -1267,7 +1268,7 @@ pub trait StoragePrefixedMap<Value: FullCodec> {
 pub trait StorageAppend<Item: Encode>: private::Sealed {}
 
 /// Marker trait that will be implemented for types that support to decode their length in an
-/// effificent way. It is expected that the length is at the beginning of the encoded object
+/// efficient way. It is expected that the length is at the beginning of the encoded object
 /// and that the length is a `Compact<u32>`.
 ///
 /// This trait is sealed.

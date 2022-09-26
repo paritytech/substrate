@@ -23,8 +23,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 bls-like = "*"
 
 [dev-dependencies]
-hex = "0.4.3"
-hex-literal = "0.3"
+array-bytes = "4.1"
 sp-keystore = { version = "0.12.0", path = "../keystore" }
 
 [features]

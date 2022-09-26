@@ -36,7 +36,9 @@ use futures::{
 	future::{self, ready},
 	prelude::*,
 };
-pub use graph::{base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transaction};
+pub use graph::{
+	base_pool::Limit as PoolLimit, ChainApi, Options, Pool, Transaction, ValidatedTransaction,
+};
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
@@ -407,7 +409,6 @@ where
 		at: &BlockId<Self::Block>,
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
-		use graph::ValidatedTransaction;
 		use sp_runtime::{
 			traits::SaturatedConversion, transaction_validity::TransactionValidityError,
 		};

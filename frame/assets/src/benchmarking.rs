@@ -37,7 +37,7 @@ const SEED: u32 = 0;
 
 fn create_default_asset<T: Config<I>, I: 'static>(
 	is_sufficient: bool,
-) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AccountId, AccountIdLookupOf<T>) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let root = SystemOrigin::Root.into();
@@ -55,7 +55,7 @@ fn create_default_asset<T: Config<I>, I: 'static>(
 fn create_default_minted_asset<T: Config<I>, I: 'static>(
 	is_sufficient: bool,
 	amount: T::Balance,
-) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
+) -> (T::AccountId, AccountIdLookupOf<T>) {
 	let (caller, caller_lookup) = create_default_asset::<T, I>(is_sufficient);
 	if !is_sufficient {
 		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
@@ -140,11 +140,11 @@ fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	}
 }
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
-fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_has_event(generic_event.into());
 }
 

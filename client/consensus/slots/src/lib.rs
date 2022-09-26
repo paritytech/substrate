@@ -38,14 +38,10 @@ use log::{debug, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SyncOracle};
+use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, HashFor, Header as HeaderT},
-};
-use sp_timestamp::Timestamp;
+use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
 use std::{fmt::Debug, ops::Deref, time::Duration};
 
 /// The changes that need to applied to the storage to create the state for a block.
@@ -103,7 +99,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Proposer: Proposer<B> + Send;
 
 	/// Data associated with a slot claim.
-	type Claim: Send + 'static;
+	type Claim: Send + Sync + 'static;
 
 	/// Epoch data necessary for authoring.
 	type EpochData: Send + Sync + 'static;
@@ -183,6 +179,70 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	/// Remaining duration for proposing.
 	fn proposing_remaining_duration(&self, slot_info: &SlotInfo<B>) -> Duration;
 
+	/// Propose a block by `Proposer`.
+	async fn propose(
+		&mut self,
+		proposer: Self::Proposer,
+		claim: &Self::Claim,
+		slot_info: SlotInfo<B>,
+		proposing_remaining: Delay,
+	) -> Option<
+		Proposal<
+			B,
+			<Self::Proposer as Proposer<B>>::Transaction,
+			<Self::Proposer as Proposer<B>>::Proof,
+		>,
+	> {
+		let slot = slot_info.slot;
+		let telemetry = self.telemetry();
+		let logging_target = self.logging_target();
+		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
+		let logs = self.pre_digest_data(slot, claim);
+
+		// deadline our production to 98% of the total time left for proposing. As we deadline
+		// the proposing below to the same total time left, the 2% margin should be enough for
+		// the result to be returned.
+		let proposing = proposer
+			.propose(
+				slot_info.inherent_data,
+				sp_runtime::generic::Digest { logs },
+				proposing_remaining_duration.mul_f32(0.98),
+				None,
+			)
+			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
+
+		let proposal = match futures::future::select(proposing, proposing_remaining).await {
+			Either::Left((Ok(p), _)) => p,
+			Either::Left((Err(err), _)) => {
+				warn!(target: logging_target, "Proposing failed: {}", err);
+
+				return None
+			},
+			Either::Right(_) => {
+				info!(
+					target: logging_target,
+					"⌛️ Discarding proposal for slot {}; block production took too long", slot,
+				);
+				// If the node was compiled with debug, tell the user to use release optimizations.
+				#[cfg(build_type = "debug")]
+				info!(
+					target: logging_target,
+					"👉 Recompile your node in `--release` mode to mitigate this problem.",
+				);
+				telemetry!(
+					telemetry;
+					CONSENSUS_INFO;
+					"slots.discarding_proposal_took_too_long";
+					"slot" => *slot,
+				);
+
+				return None
+			},
+		};
+
+		Some(proposal)
+	}
+
 	/// Implements [`SlotWorker::on_slot`].
 	async fn on_slot(
 		&mut self,
@@ -191,7 +251,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	where
 		Self: Sync,
 	{
-		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
+		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
 
@@ -255,25 +315,14 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
-		debug!(
-			target: self.logging_target(),
-			"Starting authorship at slot {}; timestamp = {}",
-			slot,
-			*timestamp,
-		);
+		debug!(target: logging_target, "Starting authorship at slot: {slot}");
 
-		telemetry!(
-			telemetry;
-			CONSENSUS_DEBUG;
-			"slots.starting_authorship";
-			"slot_num" => *slot,
-			"timestamp" => *timestamp,
-		);
+		telemetry!(telemetry; CONSENSUS_DEBUG; "slots.starting_authorship"; "slot_num" => slot);
 
 		let proposer = match self.proposer(&slot_info.chain_head).await {
 			Ok(p) => p,
 			Err(err) => {
-				warn!(target: logging_target, "Unable to author block in slot {:?}: {}", slot, err,);
+				warn!(target: logging_target, "Unable to author block in slot {slot:?}: {err}");
 
 				telemetry!(
 					telemetry;
@@ -287,48 +336,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
-		let logs = self.pre_digest_data(slot, &claim);
-
-		// deadline our production to 98% of the total time left for proposing. As we deadline
-		// the proposing below to the same total time left, the 2% margin should be enough for
-		// the result to be returned.
-		let proposing = proposer
-			.propose(
-				slot_info.inherent_data,
-				sp_runtime::generic::Digest { logs },
-				proposing_remaining_duration.mul_f32(0.98),
-				None,
-			)
-			.map_err(|e| sp_consensus::Error::ClientImport(e.to_string()));
-
-		let proposal = match futures::future::select(proposing, proposing_remaining).await {
-			Either::Left((Ok(p), _)) => p,
-			Either::Left((Err(err), _)) => {
-				warn!(target: logging_target, "Proposing failed: {}", err);
-
-				return None
-			},
-			Either::Right(_) => {
-				info!(
-					target: logging_target,
-					"⌛️ Discarding proposal for slot {}; block production took too long", slot,
-				);
-				// If the node was compiled with debug, tell the user to use release optimizations.
-				#[cfg(build_type = "debug")]
-				info!(
-					target: logging_target,
-					"👉 Recompile your node in `--release` mode to mitigate this problem.",
-				);
-				telemetry!(
-					telemetry;
-					CONSENSUS_INFO;
-					"slots.discarding_proposal_took_too_long";
-					"slot" => *slot,
-				);
-
-				return None
-			},
-		};
+		let proposal = self.propose(proposer, &claim, slot_info, proposing_remaining).await?;
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
@@ -422,56 +430,46 @@ impl<T: SimpleSlotWorker<B> + Send + Sync, B: BlockT>
 
 /// Slot specific extension that the inherent data provider needs to implement.
 pub trait InherentDataProviderExt {
-	/// The current timestamp that will be found in the
-	/// [`InherentData`](`sp_inherents::InherentData`).
-	fn timestamp(&self) -> Timestamp;
-
 	/// The current slot that will be found in the [`InherentData`](`sp_inherents::InherentData`).
 	fn slot(&self) -> Slot;
 }
 
 /// Small macro for implementing `InherentDataProviderExt` for inherent data provider tuple.
 macro_rules! impl_inherent_data_provider_ext_tuple {
-	( T, S $(, $TN:ident)* $( , )?) => {
-		impl<T, S, $( $TN ),*>  InherentDataProviderExt for (T, S, $($TN),*)
+	( S $(, $TN:ident)* $( , )?) => {
+		impl<S, $( $TN ),*>  InherentDataProviderExt for (S, $($TN),*)
 		where
-			T: Deref<Target = Timestamp>,
 			S: Deref<Target = Slot>,
 		{
-			fn timestamp(&self) -> Timestamp {
-				*self.0.deref()
-			}
-
 			fn slot(&self) -> Slot {
-				*self.1.deref()
+				*self.0.deref()
 			}
 		}
 	}
 }
 
-impl_inherent_data_provider_ext_tuple!(T, S);
-impl_inherent_data_provider_ext_tuple!(T, S, A);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I);
-impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
+impl_inherent_data_provider_ext_tuple!(S);
+impl_inherent_data_provider_ext_tuple!(S, A);
+impl_inherent_data_provider_ext_tuple!(S, A, B);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F, G);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F, G, H);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F, G, H, I);
+impl_inherent_data_provider_ext_tuple!(S, A, B, C, D, E, F, G, H, I, J);
 
 /// Start a new slot worker.
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
+pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 	slot_duration: SlotDuration,
 	client: C,
 	mut worker: W,
-	mut sync_oracle: SO,
+	sync_oracle: SO,
 	create_inherent_data_providers: CIDP,
-	can_author_with: CAW,
 ) where
 	B: BlockT,
 	C: SelectChain<B>,
@@ -479,7 +477,6 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
 	SO: SyncOracle + Send,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
-	CAW: CanAuthorWith<B> + Send,
 {
 	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
 
@@ -497,19 +494,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
 			continue
 		}
 
-		if let Err(err) =
-			can_author_with.can_author_with(&BlockId::Hash(slot_info.chain_head.hash()))
-		{
-			warn!(
-				target: "slots",
-				"Unable to author block in slot {},. `can_author_with` returned: {} \
-				Probably a node update is required!",
-				slot_info.slot,
-				err,
-			);
-		} else {
-			let _ = worker.on_slot(slot_info).await;
-		}
+		let _ = worker.on_slot(slot_info).await;
 	}
 }
 
@@ -802,7 +787,6 @@ mod test {
 		super::slots::SlotInfo {
 			slot: slot.into(),
 			duration: SLOT_DURATION,
-			timestamp: Default::default(),
 			inherent_data: Default::default(),
 			ends_at: Instant::now() + SLOT_DURATION,
 			chain_head: Header::new(
