@@ -1413,36 +1413,62 @@ pub mod pallet_prelude {
 	pub use sp_weights::Weight;
 }
 
-/// `pallet` attribute macro allows to define a pallet to be used in `construct_runtime!`.
+/// The `pallet` attribute macro defines a pallet that can be used with
+/// [`construct_runtime!`]. It must be attached to a module named `pallet` as
+/// follows:
 ///
-/// It is define by a module item:
 /// ```ignore
 /// #[pallet]
 /// pub mod pallet {
-/// ...
+/// 	...
 /// }
 /// ```
 ///
-/// Inside the module the macro will parse item with the attribute: `#[pallet::*]`, some
-/// attributes are mandatory, some other optional.
+/// # pallet::* Attributes
 ///
-/// The attribute are explained with the syntax of non instantiable pallets, to see how pallet
-/// with instance work see below example.
+/// The `pallet` macro will parse any items within your `pallet` module that
+/// are annotated with `#[pallet::*]` attributes. Some of these attributes are
+/// mandatory and some are optional. The full list of `#[pallet::*]` attributes
+/// is shown below:
 ///
-/// Note various type can be automatically imported using pallet_prelude in frame_support and
-/// frame_system:
+/// |                                           Attribute
+/// | Mandatory |
+/// |:--------------------------------------------------------------------------------------------------|:---------:|
+/// | [`pallet::pallet`](#pallet-struct-placeholder-palletpallet-mandatory)
+/// |    ❎     | | [`pallet::config`](#config-trait-palletconfig-mandatory)
+/// |    ❎     | | ↳ [`pallet::constant`](#palletconstant)
+/// |           | | ↳ [`pallet::disable_frame_system_supertrait_check`](#
+/// palletdisable_frame_system_supertrait_check) |           | | [`pallet::generate_store($vis
+/// trait Store)`](#palletgenerate_storevis-trait-store)                |           |
+/// | [`pallet::generate_storage_info`](#palletgenerate_storage_info)
+/// |           | | [`pallet::storage_version`](#palletstorage_version)
+/// |           |
+///
+/// Note that at compile-time, the `#[pallet]` macro will analyze and expand all
+/// of these attributes, ultimately removing their AST nodes before they can be
+/// parsed as real attribute macro calls. This means that technically we do not
+/// need attribute macro definitions for any of these attributes, however, for
+/// consistency and discoverability reasons, we still maintain stub attribute
+/// macro definitions for all of these attributes in the [`pallet_macros`] module
+/// which is automatically included in all pallets as part of the pallet
+/// prelude. The actual "work" for all of these attribute macros can be found in
+/// the macro expansion for `#[pallet]`.
+///
+/// # Pallet Struct placeholder: `#[pallet::pallet]` (mandatory)
+///
+/// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows
+/// you to specify pallet information.
+///
+/// The struct must be defined as follows:
 /// ```ignore
-/// #[pallet]
-/// pub mod pallet {
-/// 		use frame_support::pallet_prelude::*;
-/// 		use frame_system::pallet_prelude::*;
-/// 		...
-/// }
+/// #[pallet::pallet]
+/// pub struct Pallet<T>(_);
 /// ```
+/// I.e. a regular struct definition named `Pallet`, with generic T and no where
+/// clause.
 ///
-/// # Config trait: `#[pallet::config]` mandatory
-///
-/// The trait defining generics of the pallet.
+/// # Config trait: `#[pallet::config]` (mandatory)
+/// The `#[pallet::config]` attribute defines the generics of the pallet.
 ///
 /// Item must be defined as
 /// ```ignore
@@ -1453,74 +1479,85 @@ pub mod pallet_prelude {
 /// ...
 /// }
 /// ```
-/// I.e. a regular trait definition named `Config`, with supertrait `frame_system::Config`,
-/// optionally other supertrait and where clause.
+/// I.e. a regular trait definition named `Config`, with the supertrait
+/// `frame_system::pallet::Config`, and optionally other supertraits and a
+/// where clause.
 ///
-/// The associated type `RuntimeEvent` is reserved, if defined it must bounds
-/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`, see
-/// `#[pallet::event]` for more information.
+/// The associated type `RuntimeEvent` is reserved. If defined, it must have the
+/// bounds `From<Event>` and `IsType<<Self as
+/// frame_system::Config>::RuntimeEvent>`.
 ///
-/// To put `Get` associated type into metadatas, use the attribute `#[pallet::constant]`, e.g.:
+/// See [`pallet::event`](#palletevent) for more information.
+///
+/// ## `pallet::constant`
+///
+/// The `#[pallet::constant]` attribute can be used to add the `Get` associated
+/// type from [`pallet::config`](#palletconfig) into metadata, e.g.:
+///
 /// ```ignore
 /// #[pallet::config]
 /// pub trait Config: frame_system::Config {
-/// 		#[pallet::constant]
-/// 		type Foo: Get<u32>;
+/// 	#[pallet::constant]
+/// 	type Foo: Get<u32>;
 /// }
 /// ```
+/// ## `pallet::disable_frame_system_supertrait_check`
 ///
 /// To bypass the `frame_system::Config` supertrait check, use the attribute
-/// `#[pallet::disable_frame_system_supertrait_check]`, e.g.:
+/// `pallet::disable_frame_system_supertrait_check`, e.g.:
+///
 /// ```ignore
 /// #[pallet::config]
 /// #[pallet::disable_frame_system_supertrait_check]
 /// pub trait Config: pallet_timestamp::Config {}
 /// ```
 ///
-/// ### Macro expansion:
+/// ## `pallet::config` macro expansion:
 ///
-/// The macro expand pallet constant metadata with the information given by
+/// The macro expands pallet constant metadata with the information given by
 /// `#[pallet::constant]`.
 ///
-/// # Pallet struct placeholder: `#[pallet::pallet]` mandatory
-///
-/// The placeholder struct, on which is implemented pallet informations.
-///
-/// Item must be defined as followed:
-/// ```ignore
-/// #[pallet::pallet]
-/// pub struct Pallet<T>(_);
-/// ```
-/// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
+/// # `pallet::generate_store($vis trait Store)`
 ///
 /// To generate a `Store` trait associating all storages, use the attribute
 /// `#[pallet::generate_store($vis trait Store)]`, e.g.:
+///
 /// ```ignore
 /// #[pallet::pallet]
 /// #[pallet::generate_store(pub(super) trait Store)]
 /// pub struct Pallet<T>(_);
 /// ```
-/// More precisely the store trait contains an associated type for each storage. It is
-/// implemented for `Pallet` allowing to access the storage from pallet struct.
+/// More precisely, the `Store` trait contains an associated type for each
+/// storage. It is implemented for `Pallet` allowing access to the storage from
+/// pallet struct.
 ///
-/// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
-/// `<Pallet as Store>::Foo`.
+/// Thus when defining a storage named `Foo`, it can later be accessed from
+/// `Pallet` using `<Pallet as Store>::Foo`.
 ///
-/// To generate the full storage info (used for PoV calculation) use the attribute
-/// `#[pallet::generate_storage_info]`, e.g.:
+/// # `pallet::generate_storage_info`
+///
+/// To generate the full storage info (used for PoV calculation) use the
+/// attribute `#[pallet::generate_storage_info]`, e.g.:
+///
 /// ```ignore
 /// #[pallet::pallet]
 /// #[pallet::generate_storage_info]
 /// pub struct Pallet<T>(_);
 /// ```
 ///
-/// This require all storage to implement the trait [`traits::StorageInfoTrait`], thus all keys
-/// and value types must bound [`pallet_prelude::MaxEncodedLen`].
-/// Some individual storage can opt-out from this constraint by using `#[pallet::unbounded]`,
-/// see `#[pallet::storage]` documentation.
+/// This requires all storage items to implement the trait
+/// [`traits::StorageInfoTrait`], thus all keys and value types must be bound by
+/// [`pallet_prelude::MaxEncodedLen`]. Individual storages can opt-out from this
+/// constraint by using `#[pallet::unbounded]` (see `#[pallet::storage]` for
+/// more info).
 ///
-/// As the macro implements [`traits::GetStorageVersion`], the current storage version needs to
-/// be communicated to the macro. This can be done by using the `storage_version` attribute:
+/// # `pallet::storage_version`
+///
+/// Because the
+/// [`pallet::pallet`](#pallet-struct-placeholder-palletpallet-mandatory) macro
+/// implements [`traits::GetStorageVersion`], the current storage version needs
+/// to be communicated to the macro. This can be done by using the
+/// `pallet::storage_version` attribute:
 ///
 /// ```ignore
 /// const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
