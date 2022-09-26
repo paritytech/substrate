@@ -333,7 +333,7 @@ pub fn testnet_genesis(
 			pot: 0,
 			max_members: 999,
 		},
-		pallet_vesting: Default::default(),
+		vesting: Default::default(),
 		transaction_storage: Default::default(),
 	}
 }
