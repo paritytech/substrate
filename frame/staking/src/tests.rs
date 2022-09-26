@@ -5570,9 +5570,6 @@ fn reducing_max_unlocking_chunks_abrupt() {
 		// given a staker at era=10 and MaxUnlockChunks set to 2
 		MaxUnlockingChunks::set(2);
 		start_active_era(10);
-		let expected_claimed_rewards: BoundedVec<_, _> =
-			(0..10).collect::<Vec<_>>().try_into().unwrap();
-
 		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 300, RewardDestination::Staked));
 		assert!(matches!(Staking::ledger(4), Some(_)));
 
