@@ -60,7 +60,7 @@ mod tests;
 // NOTE: enable benchmarking in tests as well.
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod types;
+pub mod types;
 pub mod weights;
 
 pub const LOG_TARGET: &'static str = "runtime::fast-unstake";
@@ -91,6 +91,7 @@ pub mod pallet {
 	use sp_staking::EraIndex;
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
+	pub use types::PreventStakingOpsIfUnbonding;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	#[codec(mel_bound(T: Config))]
