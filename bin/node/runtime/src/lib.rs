@@ -2076,7 +2076,7 @@ impl_runtime_apis! {
 		}
 
 		fn block_num_to_leaf_index(block_num: &BlockNumber) -> Result<mmr::LeafIndex, mmr::Error> {
-			Ok(Mmr::block_num_to_leaf_index(*block_num))
+			Mmr::block_num_to_leaf_index(*block_num)
 		}
 	}
 
