@@ -28,6 +28,13 @@
 # Invocation scheme:
 # 	./rust-features.sh <CARGO-ROOT-PATH>
 #
+# The steps of this script:
+#   1. Check that all required dependencies are installed.
+#   2. Check that all rules are fullfilled for the whole workspace. If not:
+#   3. Print an error and check if `cargo-workspaces` is installed. If so:
+#   4. List all crates and go through each one to find the offending crate.
+#   5. Print all offending crates and exit with failure.
+#
 #######################################################################
 
 set -eu
