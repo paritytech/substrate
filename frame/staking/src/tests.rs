@@ -5574,42 +5574,32 @@ fn reducing_max_unlocking_chunks_abrupt() {
 			(0..10).collect::<Vec<_>>().try_into().unwrap();
 
 		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 300, RewardDestination::Staked));
-		assert!(matches!(
-			Staking::ledger(4),
-			Some(_))
-		);
+		assert!(matches!(Staking::ledger(4), Some(_)));
 
 		// when staker unbonds
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 20));
 
 		// then an unlocking chunk is added at `current_era + bonding_duration`
 		// => 10 + 3 = 13
-		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> = bounded_vec![UnlockChunk { value: 20 as Balance, era: 13 as EraIndex }];
-		assert!(
-			matches!(Staking::ledger(4),
+		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
+			bounded_vec![UnlockChunk { value: 20 as Balance, era: 13 as EraIndex }];
+		assert!(matches!(Staking::ledger(4),
 			Some(StakingLedger {
-				unlocking, 
+				unlocking,
 				..
-			}) if unlocking==expected_unlocking)
-		);
+			}) if unlocking==expected_unlocking));
 
 		// when staker unbonds at next era
 		start_active_era(11);
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 50));
 		// then another unlock chunk is added
-		assert_eq!(
-			Staking::ledger(4),
+		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
+			bounded_vec![UnlockChunk { value: 20, era: 13 }, UnlockChunk { value: 50, era: 14 }];
+		assert!(matches!(Staking::ledger(4),
 			Some(StakingLedger {
-				stash: 3,
-				total: 300,
-				active: 230,
-				unlocking: bounded_vec![
-					UnlockChunk { value: 20, era: 13 },
-					UnlockChunk { value: 50, era: 14 }
-				],
-				claimed_rewards: expected_claimed_rewards.clone(),
-			})
-		);
+				unlocking,
+				..
+			}) if unlocking==expected_unlocking));
 
 		// when staker unbonds further
 		start_active_era(12);
