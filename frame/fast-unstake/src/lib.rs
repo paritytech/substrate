@@ -87,6 +87,7 @@ pub mod pallet {
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use pallet_nomination_pools::PoolId;
 	use pallet_staking::Pallet as Staking;
+	use sp_npos_elections::VoterListStatusInterface;
 	use sp_runtime::{
 		traits::{Saturating, Zero},
 		DispatchResult,
@@ -130,6 +131,9 @@ pub mod pallet {
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// Information of the current voter list status.
+		type VoterListStatusInterface: VoterListStatusInterface;
 	}
 
 	/// The current "head of the queue" being unstaked.

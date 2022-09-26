@@ -21,6 +21,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-npos-elections = { default-features = false, path = "../../primitives/npos-elections" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { default-features = false, path = "../../primitives/staking" }
@@ -50,6 +51,7 @@ std = [
 	"frame-system/std",
 
 	"sp-io/std",
+	"sp-npos-elections/std",
 	"sp-staking/std",
 	"sp-runtime/std",
 	"sp-std/std",

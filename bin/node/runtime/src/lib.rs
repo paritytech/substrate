@@ -583,6 +583,7 @@ impl pallet_fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type SlashPerEra = ConstU128<{ DOLLARS }>;
 	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
+	type VoterListStatusInterface = pallet_election_provider_multi_phase::Pallet<Self>;
 	type WeightInfo = ();
 }
 
