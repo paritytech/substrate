@@ -90,7 +90,7 @@ pub mod pallet {
 	};
 	use sp_staking::EraIndex;
 	use sp_std::{prelude::*, vec::Vec};
-	use weights::WeightInfo;
+	pub use weights::WeightInfo;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	#[codec(mel_bound(T: Config))]
