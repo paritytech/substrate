@@ -198,7 +198,7 @@ benchmarks! {
 		let origin = T::CancellationOrigin::successful_origin();
 		let referendum_index = add_referendum::<T>(0)?;
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
-	}: _<T::Origin>(origin, referendum_index)
+	}: _<T::RuntimeOrigin>(origin, referendum_index)
 	verify {
 		// Referendum has been canceled
 		assert_noop!(
@@ -225,7 +225,7 @@ benchmarks! {
 		// Add a referendum of our proposal.
 		let referendum_index = add_referendum::<T>(0)?;
 		assert_ok!(Democracy::<T>::referendum_status(referendum_index));
-	}: _<T::Origin>(origin, hash, Some(referendum_index))
+	}: _<T::RuntimeOrigin>(origin, hash, Some(referendum_index))
 	verify {
 		// Referendum has been canceled
 		assert_noop!(
@@ -250,7 +250,7 @@ benchmarks! {
 			proposal_hash,
 			(T::BlockNumber::zero(), addresses),
 		);
-	}: _<T::Origin>(origin, proposal_hash)
+	}: _<T::RuntimeOrigin>(origin, proposal_hash)
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -259,7 +259,7 @@ benchmarks! {
 	external_propose_majority {
 		let origin = T::ExternalMajorityOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
-	}: _<T::Origin>(origin, proposal_hash)
+	}: _<T::RuntimeOrigin>(origin, proposal_hash)
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -268,7 +268,7 @@ benchmarks! {
 	external_propose_default {
 		let origin = T::ExternalDefaultOrigin::successful_origin();
 		let proposal_hash = T::Hashing::hash_of(&0);
-	}: _<T::Origin>(origin, proposal_hash)
+	}: _<T::RuntimeOrigin>(origin, proposal_hash)
 	verify {
 		// External proposal created
 		ensure!(<NextExternal<T>>::exists(), "External proposal didn't work");
@@ -283,7 +283,7 @@ benchmarks! {
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
 		let voting_period = T::FastTrackVotingPeriod::get();
 		let delay = 0u32;
-	}: _<T::Origin>(origin_fast_track, proposal_hash, voting_period, delay.into())
+	}: _<T::RuntimeOrigin>(origin_fast_track, proposal_hash, voting_period, delay.into())
 	verify {
 		assert_eq!(Democracy::<T>::referendum_count(), 1, "referendum not created")
 	}
@@ -306,7 +306,7 @@ benchmarks! {
 
 		let origin = T::VetoOrigin::successful_origin();
 		ensure!(NextExternal::<T>::get().is_some(), "no external proposal");
-	}: _<T::Origin>(origin, proposal_hash)
+	}: _<T::RuntimeOrigin>(origin, proposal_hash)
 	verify {
 		assert!(NextExternal::<T>::get().is_none());
 		let (_, new_vetoers) = <Blacklist<T>>::get(&proposal_hash).ok_or("no blacklist")?;
@@ -322,7 +322,7 @@ benchmarks! {
 		}
 
 		let cancel_origin = T::CancelProposalOrigin::successful_origin();
-	}: _<T::Origin>(cancel_origin, 0)
+	}: _<T::RuntimeOrigin>(cancel_origin, 0)
 
 	cancel_referendum {
 		let referendum_index = add_referendum::<T>(0)?;

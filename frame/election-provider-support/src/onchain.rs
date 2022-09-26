@@ -22,7 +22,7 @@
 use crate::{
 	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
 };
-use frame_support::{traits::Get, weights::DispatchClass};
+use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
@@ -138,6 +138,10 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
+	fn ongoing() -> bool {
+		false
+	}
+
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
 		// testing)
@@ -166,6 +170,10 @@ impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
 	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
 	type Error = Error;
 	type DataProvider = T::DataProvider;
+
+	fn ongoing() -> bool {
+		false
+	}
 
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))
@@ -211,7 +219,7 @@ mod tests {
 	impl frame_system::Config for Runtime {
 		type SS58Prefix = ();
 		type BaseCallFilter = frame_support::traits::Everything;
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = AccountId;
 		type BlockNumber = BlockNumber;
 		type RuntimeCall = RuntimeCall;

@@ -42,8 +42,8 @@ fn funded_account<T: Config<I>, I: 'static>(name: &'static str, index: u32) -> T
 	caller
 }
 
-fn create_referendum<T: Config<I>, I: 'static>() -> (T::Origin, ReferendumIndex) {
-	let origin: T::Origin = T::SubmitOrigin::successful_origin();
+fn create_referendum<T: Config<I>, I: 'static>() -> (T::RuntimeOrigin, ReferendumIndex) {
+	let origin: T::RuntimeOrigin = T::SubmitOrigin::successful_origin();
 	if let Ok(caller) = frame_system::ensure_signed(origin.clone()) {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T, I>::max_value());
 		whitelist_account!(caller);
@@ -188,12 +188,12 @@ fn is_not_confirming<T: Config<I>, I: 'static>(index: ReferendumIndex) -> bool {
 
 benchmarks_instance_pallet! {
 	submit {
-		let origin: T::Origin = T::SubmitOrigin::successful_origin();
+		let origin: T::RuntimeOrigin = T::SubmitOrigin::successful_origin();
 		if let Ok(caller) = frame_system::ensure_signed(origin.clone()) {
 			T::Currency::make_free_balance_be(&caller, BalanceOf::<T, I>::max_value());
 			whitelist_account!(caller);
 		}
-	}: _<T::Origin>(
+	}: _<T::RuntimeOrigin>(
 		origin,
 		Box::new(RawOrigin::Root.into()),
 		T::Hashing::hash_of(&0),
@@ -205,7 +205,7 @@ benchmarks_instance_pallet! {
 
 	place_decision_deposit_preparing {
 		let (origin, index) = create_referendum::<T, I>();
-	}: place_decision_deposit<T::Origin>(origin, index)
+	}: place_decision_deposit<T::RuntimeOrigin>(origin, index)
 	verify {
 		assert!(Referenda::<T, I>::ensure_ongoing(index).unwrap().decision_deposit.is_some());
 	}
@@ -213,7 +213,7 @@ benchmarks_instance_pallet! {
 	place_decision_deposit_queued {
 		let (origin, index) = create_referendum::<T, I>();
 		fill_queue::<T, I>(index, 1, 90);
-	}: place_decision_deposit<T::Origin>(origin, index)
+	}: place_decision_deposit<T::RuntimeOrigin>(origin, index)
 	verify {
 		let track = Referenda::<T, I>::ensure_ongoing(index).unwrap().track;
 		assert_eq!(TrackQueue::<T, I>::get(&track).len() as u32, T::MaxQueued::get());
@@ -226,7 +226,7 @@ benchmarks_instance_pallet! {
 		let track = Referenda::<T, I>::ensure_ongoing(index).unwrap().track;
 		assert_eq!(TrackQueue::<T, I>::get(&track).len() as u32, T::MaxQueued::get());
 		assert!(TrackQueue::<T, I>::get(&track).into_iter().all(|(i, _)| i != index));
-	}: place_decision_deposit<T::Origin>(origin, index)
+	}: place_decision_deposit<T::RuntimeOrigin>(origin, index)
 	verify {
 		assert_eq!(TrackQueue::<T, I>::get(&track).len() as u32, T::MaxQueued::get());
 		assert!(TrackQueue::<T, I>::get(&track).into_iter().all(|(i, _)| i != index));
@@ -236,7 +236,7 @@ benchmarks_instance_pallet! {
 		let (origin, index) = create_referendum::<T, I>();
 		skip_prepare_period::<T, I>(index);
 		make_passing::<T, I>(index);
-	}: place_decision_deposit<T::Origin>(origin, index)
+	}: place_decision_deposit<T::RuntimeOrigin>(origin, index)
 	verify {
 		assert!(is_confirming::<T, I>(index));
 	}
@@ -244,7 +244,7 @@ benchmarks_instance_pallet! {
 	place_decision_deposit_failing {
 		let (origin, index) = create_referendum::<T, I>();
 		skip_prepare_period::<T, I>(index);
-	}: place_decision_deposit<T::Origin>(origin, index)
+	}: place_decision_deposit<T::RuntimeOrigin>(origin, index)
 	verify {
 		assert!(is_not_confirming::<T, I>(index));
 	}
@@ -253,7 +253,7 @@ benchmarks_instance_pallet! {
 		let (origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
 		assert_ok!(Referenda::<T, I>::cancel(T::CancelOrigin::successful_origin(), index));
-	}: _<T::Origin>(origin, index)
+	}: _<T::RuntimeOrigin>(origin, index)
 	verify {
 		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, _, None)));
 	}
@@ -261,7 +261,7 @@ benchmarks_instance_pallet! {
 	cancel {
 		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
-	}: _<T::Origin>(T::CancelOrigin::successful_origin(), index)
+	}: _<T::RuntimeOrigin>(T::CancelOrigin::successful_origin(), index)
 	verify {
 		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(..)));
 	}
@@ -269,7 +269,7 @@ benchmarks_instance_pallet! {
 	kill {
 		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
-	}: _<T::Origin>(T::KillOrigin::successful_origin(), index)
+	}: _<T::RuntimeOrigin>(T::KillOrigin::successful_origin(), index)
 	verify {
 		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Killed(..)));
 	}

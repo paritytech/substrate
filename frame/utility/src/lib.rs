@@ -58,9 +58,8 @@ pub mod weights;
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::PostDispatchInfo,
+	dispatch::{extract_actual_weight, GetDispatchInfo, PostDispatchInfo},
 	traits::{IsSubType, OriginTrait, UnfilteredDispatchable},
-	weights::{extract_actual_weight, GetDispatchInfo},
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
@@ -88,17 +87,17 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type RuntimeCall: Parameter
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>
-			+ UnfilteredDispatchable<Origin = Self::Origin>
+			+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ IsSubType<Call<Self>>
 			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// The caller origin, overarching type of all pallets origins.
 		type PalletsOrigin: Parameter +
-			Into<<Self as frame_system::Config>::Origin> +
-			IsType<<<Self as frame_system::Config>::Origin as frame_support::traits::OriginTrait>::PalletsOrigin>;
+			Into<<Self as frame_system::Config>::RuntimeOrigin> +
+			IsType<<<Self as frame_system::Config>::RuntimeOrigin as frame_support::traits::OriginTrait>::PalletsOrigin>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -204,7 +203,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_root(origin.clone()).is_ok();
+			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
@@ -320,7 +319,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_root(origin.clone()).is_ok();
+			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
@@ -427,7 +426,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_root(origin.clone()).is_ok();
+			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 

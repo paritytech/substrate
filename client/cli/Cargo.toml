@@ -13,11 +13,11 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+array-bytes = "4.1"
 chrono = "0.4.10"
 clap = { version = "3.1.18", features = ["derive"] }
 fdlimit = "0.2.1"
 futures = "0.3.21"
-hex = "0.4.2"
 libp2p = "0.46.1"
 log = "0.4.17"
 names = { version = "0.13.0", default-features = false }

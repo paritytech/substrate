@@ -53,11 +53,12 @@ pub mod weights;
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::{
-		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, PostDispatchInfo,
+		DispatchErrorWithPostInfo, DispatchResult, DispatchResultWithPostInfo, GetDispatchInfo,
+		PostDispatchInfo,
 	},
 	ensure,
 	traits::{Currency, Get, ReservableCurrency, WrapperKeepOpaque},
-	weights::{GetDispatchInfo, Weight},
+	weights::Weight,
 	RuntimeDebug,
 };
 use frame_system::{self as system, RawOrigin};
@@ -121,7 +122,7 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type RuntimeCall: Parameter
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
 

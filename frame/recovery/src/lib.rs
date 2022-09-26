@@ -160,9 +160,8 @@ use sp_runtime::traits::{CheckedAdd, CheckedMul, Dispatchable, SaturatedConversi
 use sp_std::prelude::*;
 
 use frame_support::{
-	dispatch::PostDispatchInfo,
+	dispatch::{GetDispatchInfo, PostDispatchInfo},
 	traits::{BalanceStatus, Currency, ReservableCurrency},
-	weights::GetDispatchInfo,
 	BoundedVec, RuntimeDebug,
 };
 
@@ -233,7 +232,7 @@ pub mod pallet {
 
 		/// The overarching call type.
 		type RuntimeCall: Parameter
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
 

@@ -813,6 +813,15 @@ where
 				return Ok(output)
 			}
 
+			// Storage limit is enforced as late as possible (when the last frame returns) so that
+			// the ordering of storage accesses does not matter.
+			if self.frames.is_empty() {
+				let frame = &mut self.first_frame;
+				frame.contract_info.load(&frame.account_id);
+				let contract = frame.contract_info.as_contract();
+				frame.nested_storage.enforce_limit(contract)?;
+			}
+
 			let frame = self.top_frame();
 			let account_id = &frame.account_id;
 			match (entry_point, delegated_code_hash) {
@@ -911,12 +920,7 @@ where
 			// it was invalidated.
 			frame.contract_info.load(account_id);
 			let mut contract = frame.contract_info.into_contract();
-			prev.nested_storage.absorb(
-				frame.nested_storage,
-				&self.origin,
-				account_id,
-				contract.as_mut(),
-			);
+			prev.nested_storage.absorb(frame.nested_storage, account_id, contract.as_mut());
 
 			// In case the contract wasn't terminated we need to persist changes made to it.
 			if let Some(contract) = contract {
@@ -954,7 +958,6 @@ where
 			let mut contract = self.first_frame.contract_info.as_contract();
 			self.storage_meter.absorb(
 				mem::take(&mut self.first_frame.nested_storage),
-				&self.origin,
 				&self.first_frame.account_id,
 				contract.as_deref_mut(),
 			);
@@ -1306,7 +1309,7 @@ where
 	}
 
 	fn call_runtime(&self, call: <Self::T as Config>::RuntimeCall) -> DispatchResultWithPostInfo {
-		let mut origin: T::Origin = RawOrigin::Signed(self.address().clone()).into();
+		let mut origin: T::RuntimeOrigin = RawOrigin::Signed(self.address().clone()).into();
 		origin.add_filter(T::CallFilter::contains);
 		call.dispatch(origin)
 	}
@@ -1379,7 +1382,6 @@ mod tests {
 	use codec::{Decode, Encode};
 	use frame_support::{assert_err, assert_ok, parameter_types};
 	use frame_system::{EventRecord, Phase};
-	use hex_literal::hex;
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
 	use sp_core::Bytes;
@@ -2355,10 +2357,10 @@ mod tests {
 		let code_bob = MockLoader::insert(Call, |ctx, _| {
 			if ctx.input_data[0] == 0 {
 				let info = ctx.ext.contract_info();
-				assert_eq!(info.storage_deposit, 0);
-				info.storage_deposit = 42;
+				assert_eq!(info.storage_byte_deposit, 0);
+				info.storage_byte_deposit = 42;
 				assert_eq!(ctx.ext.call(Weight::zero(), CHARLIE, 0, vec![], true), exec_trapped());
-				assert_eq!(ctx.ext.contract_info().storage_deposit, 42);
+				assert_eq!(ctx.ext.contract_info().storage_byte_deposit, 42);
 			}
 			exec_success()
 		});
@@ -3210,13 +3212,12 @@ mod tests {
 	#[test]
 	fn ecdsa_to_eth_address_returns_proper_value() {
 		let bob_ch = MockLoader::insert(Call, |ctx, _| {
-			let pubkey_compressed: [u8; 33] =
-				hex!("028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91")[..]
-					.try_into()
-					.unwrap();
+			let pubkey_compressed = array_bytes::hex2array_unchecked(
+				"028db55b05db86c0b1786ca49f095d76344c9e6056b2f02701a7e7f3c20aabfd91",
+			);
 			assert_eq!(
 				ctx.ext.ecdsa_to_eth_address(&pubkey_compressed).unwrap(),
-				hex!("09231da7b19A016f9e576d23B16277062F4d46A8")[..]
+				array_bytes::hex2array_unchecked::<20>("09231da7b19A016f9e576d23B16277062F4d46A8")
 			);
 			exec_success()
 		});

@@ -20,6 +20,7 @@ rocksdb = ["sc-client-db/rocksdb"]
 wasmtime = ["sc-executor/wasmtime"]
 # exposes the client type
 test-helpers = []
+runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
 
 [dependencies]
 jsonrpsee = { version = "0.15.1", features = ["server"] }
@@ -85,6 +86,7 @@ async-trait = "0.1.57"
 tokio = { version = "1.17.0", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
+static_init = "1.0.3"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

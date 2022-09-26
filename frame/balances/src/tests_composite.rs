@@ -21,9 +21,10 @@
 
 use crate::{self as pallet_balances, decl_tests, Config, Pallet};
 use frame_support::{
+	dispatch::DispatchInfo,
 	parameter_types,
 	traits::{ConstU32, ConstU64, ConstU8},
-	weights::{DispatchInfo, IdentityFee, Weight},
+	weights::{IdentityFee, Weight},
 };
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
@@ -54,7 +55,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;

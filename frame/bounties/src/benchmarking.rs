@@ -98,7 +98,7 @@ benchmarks_instance_pallet! {
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: _<T::Origin>(approve_origin, bounty_id)
+	}: _<T::RuntimeOrigin>(approve_origin, bounty_id)
 
 	propose_curator {
 		setup_pot_account::<T, I>();
@@ -110,7 +110,7 @@ benchmarks_instance_pallet! {
 		Bounties::<T, I>::approve_bounty(approve_origin, bounty_id)?;
 		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: _<T::Origin>(approve_origin, bounty_id, curator_lookup, fee)
+	}: _<T::RuntimeOrigin>(approve_origin, bounty_id, curator_lookup, fee)
 
 	// Worst case when curator is inactive and any sender unassigns the curator.
 	unassign_curator {
@@ -171,7 +171,7 @@ benchmarks_instance_pallet! {
 		Bounties::<T, I>::propose_bounty(RawOrigin::Signed(caller).into(), value, reason)?;
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: close_bounty<T::Origin>(approve_origin, bounty_id)
+	}: close_bounty<T::RuntimeOrigin>(approve_origin, bounty_id)
 
 	close_bounty_active {
 		setup_pot_account::<T, I>();
@@ -179,7 +179,7 @@ benchmarks_instance_pallet! {
 		Treasury::<T, I>::on_initialize(T::BlockNumber::zero());
 		let bounty_id = BountyCount::<T, I>::get() - 1;
 		let approve_origin = T::ApproveOrigin::successful_origin();
-	}: close_bounty<T::Origin>(approve_origin, bounty_id)
+	}: close_bounty<T::RuntimeOrigin>(approve_origin, bounty_id)
 	verify {
 		assert_last_event::<T, I>(Event::BountyCanceled { index: bounty_id }.into())
 	}

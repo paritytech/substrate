@@ -84,20 +84,20 @@ use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResult, DispatchResultWithPostInfo},
+	dispatch::{
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
+	},
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
-	weights::{
-		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
-		PerDispatchClass, RuntimeDbWeight, Weight,
-	},
 	Parameter,
 };
 use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
+use sp_weights::{RuntimeDbWeight, Weight};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -215,8 +215,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type BlockLength: Get<limits::BlockLength>;
 
-		/// The `Origin` type used by dispatchable calls.
-		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+		/// The `RuntimeOrigin` type used by dispatchable calls.
+		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
 			+ OriginTrait<Call = Self::RuntimeCall>;
@@ -562,6 +562,7 @@ pub mod pallet {
 
 	/// The current weight for the block.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_weight)]
 	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
 
@@ -584,6 +585,7 @@ pub mod pallet {
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_number)]
 	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
@@ -606,12 +608,14 @@ pub mod pallet {
 	/// Events have a large in-memory size. Box the events to not go out-of-memory
 	/// just in case someone still reads them from within the runtime.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::unbounded]
 	pub(super) type Events<T: Config> =
 		StorageValue<_, Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn event_count)]
 	pub(super) type EventCount<T: Config> = StorageValue<_, EventIndex, ValueQuery>;
 
@@ -647,6 +651,7 @@ pub mod pallet {
 
 	/// The execution phase of the block.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -1504,9 +1509,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
+	///
+	/// Emits an `ExtrinsicSuccess` or `ExtrinsicFailed` event depending on the outcome.
+	/// The emitted event contains the post-dispatch corrected weight including
+	/// the base-weight for its dispatch class.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
-		info.weight = extract_actual_weight(r, &info);
+		info.weight = extract_actual_weight(r, &info)
+			.saturating_add(T::BlockWeights::get().get(info.class).base_extrinsic);
 		info.pays_fee = extract_actual_pays_fee(r, &info);
+
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
@@ -1696,7 +1707,7 @@ pub mod pallet_prelude {
 	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root};
 
 	/// Type alias for the `Origin` associated type of system config.
-	pub type OriginFor<T> = <T as crate::Config>::Origin;
+	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;

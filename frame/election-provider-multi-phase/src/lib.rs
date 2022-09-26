@@ -234,9 +234,10 @@ use frame_election_provider_support::{
 	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
+	dispatch::DispatchClass,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::{DispatchClass, Weight},
+	weights::Weight,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -316,6 +317,10 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
+
+	fn ongoing() -> bool {
+		false
+	}
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
@@ -699,7 +704,7 @@ pub mod pallet {
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
@@ -1597,6 +1602,13 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
 
+	fn ongoing() -> bool {
+		match Self::current_phase() {
+			Phase::Off => false,
+			_ => true,
+		}
+	}
+
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
@@ -1827,7 +1839,7 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, raw_solution, roll_to, AccountId, ExtBuilder, MockWeightInfo,
-			MockedWeightInfo, MultiPhase, Origin, Runtime, SignedMaxSubmissions, System,
+			MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin, SignedMaxSubmissions, System,
 			TargetIndex, Targets,
 		},
 		Phase,
@@ -2029,7 +2041,10 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
+				assert_ok!(MultiPhase::submit(
+					crate::mock::RuntimeOrigin::signed(99),
+					Box::new(solution)
+				));
 			}
 
 			// an unexpected call to elect.
@@ -2056,7 +2071,10 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
-			assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
+			assert_ok!(MultiPhase::submit(
+				crate::mock::RuntimeOrigin::signed(99),
+				Box::new(solution)
+			));
 
 			roll_to(30);
 			assert_ok!(MultiPhase::elect());
@@ -2097,7 +2115,7 @@ mod tests {
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
 			assert_ok!(MultiPhase::submit_unsigned(
-				crate::mock::Origin::none(),
+				crate::mock::RuntimeOrigin::none(),
 				Box::new(solution),
 				witness
 			));
@@ -2175,12 +2193,12 @@ mod tests {
 
 			// no single account can trigger this
 			assert_noop!(
-				MultiPhase::governance_fallback(Origin::signed(99), None, None),
+				MultiPhase::governance_fallback(RuntimeOrigin::signed(99), None, None),
 				DispatchError::BadOrigin
 			);
 
 			// only root can
-			assert_ok!(MultiPhase::governance_fallback(Origin::root(), None, None));
+			assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
 			// something is queued now
 			assert!(MultiPhase::queued_solution().is_some());
 			// next election call with fix everything.;

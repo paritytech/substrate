@@ -18,8 +18,8 @@
 use crate::{limits::BlockWeights, Config, Pallet};
 use codec::{Decode, Encode};
 use frame_support::{
+	dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo},
 	traits::Get,
-	weights::{DispatchClass, DispatchInfo, PostDispatchInfo, Weight},
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -27,6 +27,7 @@ use sp_runtime::{
 	transaction_validity::{InvalidTransaction, TransactionValidity, TransactionValidityError},
 	DispatchResult,
 };
+use sp_weights::Weight;
 
 /// Block resource (weight) limit check.
 ///
@@ -269,10 +270,7 @@ mod tests {
 		mock::{new_test_ext, System, Test, CALL},
 		AllExtrinsicsLen, BlockWeight,
 	};
-	use frame_support::{
-		assert_err, assert_ok,
-		weights::{Pays, Weight},
-	};
+	use frame_support::{assert_err, assert_ok, dispatch::Pays, weights::Weight};
 	use sp_std::marker::PhantomData;
 
 	fn block_weights() -> crate::limits::BlockWeights {
@@ -344,7 +342,7 @@ mod tests {
 				.get(DispatchClass::Operational)
 				.max_total
 				.unwrap_or_else(|| weights.max_block);
-			let base_weight = weights.get(DispatchClass::Normal).base_extrinsic;
+			let base_weight = weights.get(DispatchClass::Operational).base_extrinsic;
 
 			let weight = operational_limit - base_weight;
 			let okay =
@@ -380,11 +378,11 @@ mod tests {
 			// Max normal is 768 (75%)
 			// 10 is taken for block execution weight
 			// So normal extrinsic can be 758 weight (-5 for base extrinsic weight)
-			// And Operational can be 256 to produce a full block (-5 for base)
+			// And Operational can be 246 to produce a full block (-10 for base)
 			let max_normal =
 				DispatchInfo { weight: Weight::from_ref_time(753), ..Default::default() };
 			let rest_operational = DispatchInfo {
-				weight: Weight::from_ref_time(251),
+				weight: Weight::from_ref_time(246),
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
@@ -408,7 +406,7 @@ mod tests {
 			let max_normal =
 				DispatchInfo { weight: Weight::from_ref_time(753), ..Default::default() };
 			let rest_operational = DispatchInfo {
-				weight: Weight::from_ref_time(251),
+				weight: Weight::from_ref_time(246),
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
@@ -416,7 +414,7 @@ mod tests {
 			let len = 0_usize;
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
-			// Extra 15 here from block execution + base extrinsic weight
+			// Extra 20 here from block execution + base extrinsic weight
 			assert_eq!(System::block_weight().total(), Weight::from_ref_time(266));
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024));
@@ -435,7 +433,7 @@ mod tests {
 				..Default::default()
 			};
 			let dispatch_operational = DispatchInfo {
-				weight: Weight::from_ref_time(251),
+				weight: Weight::from_ref_time(246),
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
