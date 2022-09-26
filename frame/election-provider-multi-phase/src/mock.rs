@@ -395,6 +395,7 @@ impl crate::Config for Runtime {
 	type MaxElectableTargets = MaxElectableTargets;
 	type MinerConfig = Self;
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Runtime>, Balancing>;
+	type OnVoterListUpdate = ();
 }
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime

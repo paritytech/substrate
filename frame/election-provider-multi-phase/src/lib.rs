@@ -246,8 +246,8 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
-	VoterListStatus, VoterListStatusInterface,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, OnVoterListUpdate,
+	Supports, VoteWeight, VoterListStatus, VoterListStatusInterface,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -586,6 +586,10 @@ pub mod pallet {
 		/// Something that can predict the fee of a call. Used to sensibly distribute rewards.
 		type EstimateCallFee: EstimateCallFee<Call<Self>, BalanceOf<Self>>;
 
+		/// A hook called when a staker is added to the system in the form of a nominator or
+		/// validator.
+		type OnVoterListUpdate: sp_npos_elections::OnVoterListUpdate<Self::AccountId>;
+
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
 		type UnsignedPhase: Get<Self::BlockNumber>;
@@ -757,6 +761,7 @@ pub mod pallet {
 					match Self::create_snapshot() {
 						Ok(_) => {
 							Self::on_initialize_open_signed();
+							T::OnVoterListUpdate::on_finish_idle();
 							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
