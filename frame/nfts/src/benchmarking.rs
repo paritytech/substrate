@@ -288,8 +288,7 @@ benchmarks_instance_pallet! {
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
 			freezer: caller_lookup,
-			free_holding: true,
-			config: CollectionConfig::empty(),
+			config: CollectionConfig(CollectionSetting::FreeHolding),
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {

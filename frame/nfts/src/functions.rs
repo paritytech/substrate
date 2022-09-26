@@ -77,7 +77,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		admin: T::AccountId,
 		config: CollectionConfig,
 		deposit: DepositBalanceOf<T, I>,
-		free_holding: bool,
 		event: Event<T, I>,
 	) -> DispatchResult {
 		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::CollectionIdInUse);
@@ -92,7 +91,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				admin: admin.clone(),
 				freezer: admin,
 				total_deposit: deposit,
-				free_holding,
 				items: 0,
 				item_metadatas: 0,
 				attributes: 0,
@@ -177,7 +175,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				collection_details.items = items;
 
-				let deposit = match collection_details.free_holding {
+				let config = CollectionConfigOf::<T, I>::get(&collection)
+					.ok_or(Error::<T, I>::UnknownCollection)?;
+				let settings = config.values();
+
+				let deposit = match settings.contains(CollectionSetting::FreeHolding) {
 					true => Zero::zero(),
 					false => T::ItemDeposit::get(),
 				};

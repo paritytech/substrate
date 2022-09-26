@@ -55,8 +55,6 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// The total balance deposited for the all storage associated with this collection.
 	/// Used by `destroy`.
 	pub(super) total_deposit: DepositBalance,
-	/// If `true`, then no deposit is needed to hold items of this collection.
-	pub(super) free_holding: bool,
 	/// The total number of outstanding items of this collection.
 	pub(super) items: u32,
 	/// The total number of outstanding item metadata of this collection.
@@ -152,9 +150,14 @@ pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum CollectionSetting {
+	/// Disallow to transfer items in this collection.
 	NonTransferableItems,
+	/// Disallow to modify metadata of this collection.
 	LockedMetadata,
+	/// Disallow to modify attributes of this collection.
 	LockedAttributes,
+	/// When this is set then no deposit needed to hold items of this collection.
+	FreeHolding,
 }
 
 pub(super) type CollectionSettings = BitFlags<CollectionSetting>;

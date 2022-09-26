@@ -96,15 +96,19 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
-		config: &CollectionSettings,
+		settings: &CollectionSettings,
 	) -> DispatchResult {
+		let mut settings = *settings;
+		// FreeHolding could be set by calling the force_create() only
+		if settings.contains(CollectionSetting::FreeHolding) {
+			settings.remove(CollectionSetting::FreeHolding);
+		}
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
 			admin.clone(),
-			CollectionConfig(*config),
+			CollectionConfig(settings),
 			T::CollectionDeposit::get(),
-			false,
 			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
 		)
 	}
