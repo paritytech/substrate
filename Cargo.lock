@@ -5729,7 +5729,6 @@ dependencies = [
  "frame-system",
  "log",
  "pallet-balances",
- "pallet-nomination-pools",
  "pallet-staking",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
@@ -8246,7 +8245,6 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
- "sp-timestamp",
  "substrate-test-runtime-client",
  "thiserror",
 ]

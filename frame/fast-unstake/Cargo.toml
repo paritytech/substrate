@@ -28,7 +28,6 @@ sp-staking = { default-features = false, path = "../../primitives/staking" }
 pallet-balances = { default-features = false, path = "../balances" }
 pallet-timestamp = { default-features = false, path = "../timestamp" }
 pallet-staking = { default-features = false, path = "../staking" }
-pallet-nomination-pools = { default-features = false, path = "../nomination-pools" }
 frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
@@ -55,7 +54,6 @@ std = [
 	"sp-std/std",
 
 	"pallet-staking/std",
-	"pallet-nomination-pools/std",
 	"pallet-balances/std",
 	"pallet-timestamp/std",
 	"frame-election-provider-support/std",

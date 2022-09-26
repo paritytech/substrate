@@ -228,7 +228,7 @@ impl PalletCmd {
 		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
 
 		for (pallet, extrinsic, components) in benchmarks_to_run {
-			log::info!(
+			println!(
 				"Starting benchmark: {}::{}",
 				String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
 				String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
@@ -376,7 +376,7 @@ impl PalletCmd {
 					if let Ok(elapsed) = timer.elapsed() {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
-							log::info!(
+							println!(
 								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
@@ -398,16 +398,17 @@ impl PalletCmd {
 		// are together.
 		let batches: Vec<BenchmarkBatchSplitResults> = combine_batches(batches, batches_db);
 
-		// Create the weights.rs file.
-		if let Some(output_path) = &self.output {
-			writer::write_results(&batches, &storage_info, &component_ranges, output_path, self)?;
-		}
-
 		// Jsonify the result and write it to a file or stdout if desired.
 		if !self.jsonify(&batches)? {
 			// Print the summary only if `jsonify` did not write to stdout.
 			self.print_summary(&batches, &storage_info)
 		}
+
+		// Create the weights.rs file.
+		if let Some(output_path) = &self.output {
+			writer::write_results(&batches, &storage_info, &component_ranges, output_path, self)?;
+		}
+
 		Ok(())
 	}
 
