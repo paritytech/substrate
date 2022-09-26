@@ -575,6 +575,24 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 	(candidates, voters)
 }
 
+/// Trait describing something that implements a hook for any operations to perform when the voter
+/// list updates.
+pub trait OnVoterListUpdate<AccountId> {
+	/// A hook for any operations to perform when voter list changes from idle.
+	fn on_finish_idle();
+	/// A hook for any operations to perform when a new voter is added.
+	fn on_new_voter(who: &AccountId);
+}
+
+impl<AccountId> OnVoterListUpdate<AccountId> for () {
+	fn on_finish_idle() {
+		// Nothing to do here
+	}
+	fn on_new_voter(who: &AccountId) {
+		// Nothing to do here
+	}
+}
+
 /// Trait for getting whether the current vote list is inactive or being used to determine the next
 /// session. In NPoS, voters will be inactive in the `Phase::Off` phase of an election, and actively
 /// being used in all the other stages.

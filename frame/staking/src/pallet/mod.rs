@@ -246,6 +246,10 @@ pub mod pallet {
 		/// other pallets exist that are affected by slashing per-staker.
 		type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
 
+		/// A hook called when a staker is added to the system in the form of a nominator or
+		/// validator.
+		type OnVoterListUpdate: sp_npos_elections::OnVoterListUpdate<Self::AccountId>;
+
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
 

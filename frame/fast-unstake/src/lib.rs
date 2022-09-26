@@ -87,7 +87,7 @@ pub mod pallet {
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use pallet_nomination_pools::PoolId;
 	use pallet_staking::Pallet as Staking;
-	use sp_npos_elections::VoterListStatusInterface;
+	use sp_npos_elections::{OnVoterListUpdate, VoterListStatusInterface};
 	use sp_runtime::{
 		traits::{Saturating, Zero},
 		DispatchResult,
@@ -156,6 +156,10 @@ pub mod pallet {
 	/// nominator might be checked.
 	#[pallet::storage]
 	pub type ErasToCheckPerBlock<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+	/// A map of all new idle voter accounts.
+	#[pallet::storage]
+	pub type IdleNewVoters<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, ()>;
 
 	/// The events of this pallet.
 	#[pallet::event]
@@ -520,5 +524,20 @@ pub mod pallet {
 				validator == *staker || exposures.others.iter().any(|i| i.who == *staker)
 			})
 		}
+	}
+}
+
+impl<T: Config> OnVoterListUpdate<T: AccountId> for Pallet<T> {
+	fn on_new_voter(who: &T::AccountId) {
+		// insert the new voter into `IdleNewVoters` if they are not already present.
+		match IdleNewVoters::<T>::try_get(who) {
+			Err(_) => IdleNewVoters::<T>::insert(who),
+			_ => return,
+		}
+	}
+
+	fn on_finish_idle() {
+		// remove all new voters. They are now in use in other phases of generating a voter list.
+		T::IdleNewVoters::clear();
 	}
 }

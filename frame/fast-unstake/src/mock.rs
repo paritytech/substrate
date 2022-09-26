@@ -31,8 +31,8 @@ use sp_runtime::{
 
 use frame_system::RawOrigin;
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
-use sp_std::prelude::*;
 use sp_npos_elections::{VoterListStatus, VoterListStatusInterface};
+use sp_std::prelude::*;
 
 pub type AccountId = u128;
 pub type AccountIndex = u32;

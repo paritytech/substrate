@@ -32,6 +32,7 @@ use frame_support::{
 };
 use frame_system::{pallet_prelude::BlockNumberFor, RawOrigin};
 use pallet_session::historical;
+use sp_npos_elections::OnVoterListUpdate as _;
 use sp_runtime::{
 	traits::{Bounded, Convert, One, SaturatedConversion, Saturating, StaticLookup, Zero},
 	Perbill,
@@ -807,6 +808,8 @@ impl<T: Config> Pallet<T> {
 		}
 		Nominators::<T>::insert(who, nominations);
 
+		T::OnVoterListUpdate::on_new_voter(who);
+
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
 			T::VoterList::count()
@@ -852,6 +855,8 @@ impl<T: Config> Pallet<T> {
 				.defensive_unwrap_or_default();
 		}
 		Validators::<T>::insert(who, prefs);
+
+		T::OnVoterListUpdate::on_new_voter(who);
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
