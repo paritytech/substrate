@@ -396,6 +396,8 @@ pub enum Error {
 	GenerateProof,
 	/// Proof verification error.
 	Verify,
+	/// Error while converting a block number to leaf index.
+	BlockNumToLeafIndex,
 	/// Leaf not found in the storage.
 	LeafNotFound,
 	/// Mmr Pallet not included in runtime

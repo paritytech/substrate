@@ -367,7 +367,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Convert `block_num` into a leaf index.
-	pub fn block_num_to_leaf_index(block_num: <T as frame_system::Config>::BlockNumber) -> LeafIndex
+	pub fn block_num_to_leaf_index(
+		block_num: <T as frame_system::Config>::BlockNumber,
+	) -> Result<LeafIndex, primitives::Error>
 	where
 		T: frame_system::Config,
 		T: pallet::Config,
@@ -377,8 +379,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let current_block_num = <frame_system::Pallet<T>>::block_number();
 		let diff = current_block_num.saturating_sub((leaves_count as u32).into());
 
+		if block_num < diff {
+			return Err(
+				primitives::Error::BlockNumToLeafIndex.log_debug("The block_number is incorrect.")
+			)
+		}
+
 		// TODO: Somehow convert BlockNumber into LeafIndex.
 		block_num.saturating_sub(diff).saturating_sub(1u32.into());
-		0
+		Ok(0)
 	}
 }
