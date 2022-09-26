@@ -22,7 +22,7 @@ use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_consensus::BlockImport;
 use sc_network::ProtocolName;
 use sc_network_gossip::Network as GossipNetwork;
-use sp_api::ProvideRuntimeApi;
+use sp_api::{ProvideRuntimeApi, NumberFor};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_keystore::SyncCryptoStorePtr;
@@ -187,7 +187,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, u64>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
@@ -219,7 +219,7 @@ where
 	BE: Backend<B>,
 	C: Client<B, BE>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, u64>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
