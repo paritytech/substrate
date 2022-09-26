@@ -9060,6 +9060,7 @@ dependencies = [
  "futures",
  "log",
  "serde",
+ "serde_json",
  "sp-blockchain",
  "sp-runtime",
  "thiserror",

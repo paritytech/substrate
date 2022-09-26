@@ -110,6 +110,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	Broadcast(Vec<String>),
 	/// Transaction has been included in block with given hash
 	/// at the given position.
+	#[serde(with = "v1_compatible")]
 	InBlock((BlockHash, TxIndex)),
 	/// The block this transaction was included in has been retracted.
 	Retracted(BlockHash),
@@ -117,6 +118,7 @@ pub enum TransactionStatus<Hash, BlockHash> {
 	/// old watchers are being removed.
 	FinalityTimeout(BlockHash),
 	/// Transaction has been finalized by a finality-gadget, e.g GRANDPA.
+	#[serde(with = "v1_compatible")]
 	Finalized((BlockHash, TxIndex)),
 	/// Transaction has been replaced in the pool, by another transaction
 	/// that provides the same tags. (e.g. same (sender, nonce)).
@@ -363,5 +365,54 @@ impl<TPool: LocalTransactionPool> OffchainSubmitTransaction<TPool::Block> for TP
 				e
 			)
 		})
+	}
+}
+
+/// Wrapper functions to keep the API backwards compatible over the wire for the old RPC spec.
+mod v1_compatible {
+	use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+	pub fn serialize<S, H>(data: &(H, usize), serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+		H: Serialize,
+	{
+		let (hash, _) = data;
+		serde::Serialize::serialize(&hash, serializer)
+	}
+
+	pub fn deserialize<'de, D, H>(deserializer: D) -> Result<(H, usize), D::Error>
+	where
+		D: Deserializer<'de>,
+		H: Deserialize<'de>,
+	{
+		let hash: H = serde::Deserialize::deserialize(deserializer)?;
+		Ok((hash, 0))
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn tx_status_compatibility() {
+		let event: TransactionStatus<u8, u8> = TransactionStatus::InBlock((1, 2));
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"inBlock":1}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionStatus<u8, u8> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, TransactionStatus::InBlock((1, 0)));
+
+		let event: TransactionStatus<u8, u8> = TransactionStatus::Finalized((1, 2));
+		let ser = serde_json::to_string(&event).unwrap();
+
+		let exp = r#"{"finalized":1}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: TransactionStatus<u8, u8> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, TransactionStatus::Finalized((1, 0)));
 	}
 }
