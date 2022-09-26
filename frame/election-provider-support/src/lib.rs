@@ -370,12 +370,8 @@ pub trait ElectionProviderBase {
 }
 
 pub trait BoundedElectionProvider: ElectionProviderBase {
-	/// The upper bound on election winners. The [`Self::DataProvider`] should
-	/// respect these bounds such that: `desired_targets() <= MaxTargets`.
-	type MaxTargets: Get<u32>;
-
-	/// The upper bound on max voters per target.
-	type MaxVoters: Get<u32>;
+	/// The upper bound on election winners
+	type MaxWinners: Get<u32>;
 
 	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
 	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
@@ -385,7 +381,7 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
 	fn elect(
-	) -> Result<BoundedSupports<Self::AccountId, Self::MaxVoters, Self::MaxTargets>, Self::Error>;
+	) -> Result<BoundedSupports<Self::AccountId, Self::MaxWinners>, Self::Error>;
 }
 
 pub trait ElectionProvider: ElectionProviderBase {
