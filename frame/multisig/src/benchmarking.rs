@@ -41,7 +41,7 @@ fn setup_multi<T: Config>(
 		signatories.push(signatory);
 	}
 	signatories.sort();
-	// Must first convert to outer call type.
+	// Must first convert to runtime call type.
 	let call: <T as Config>::RuntimeCall =
 		frame_system::Call::<T>::remark { remark: vec![0; z as usize] }.into();
 	let call_data = OpaqueCall::<T>::from_encoded(call.encode());
