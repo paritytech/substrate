@@ -40,8 +40,6 @@ test-rust-features:
   extends:
     - .kubernetes-env
     - .test-refs-no-trigger-prs-only
-  variables:
-    CI_IMAGE:                      "paritytech/tools:latest"
   script:
     - bash ./scripts/ci/gitlab/rust-features.sh .
 
