@@ -344,7 +344,7 @@ pub mod pallet {
 		/// Some `item` was thawed.
 		Thawed { collection: T::CollectionId, item: T::ItemId },
 		/// Some `collection` was frozen.
-		CollectionFrozen { collection: T::CollectionId },
+		CollectionLocked { collection: T::CollectionId },
 		/// The owner changed.
 		OwnerChanged { collection: T::CollectionId, new_owner: T::AccountId },
 		/// The management team changed.
@@ -581,19 +581,6 @@ pub mod pallet {
 				Event::ForceCreated { collection, owner },
 			)
 		}
-
-		/*#[pallet::weight(0)]
-		pub fn change_collection_config(
-			origin: OriginFor<T>,
-			id: T::CollectionId,
-			new_config: CollectionConfig,
-		) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			let current_config =
-				CollectionConfigOf::<T, I>::get(id).ok_or(Error::<T, I>::UnknownCollection)?;
-			Self::do_change_collection_config(id, sender, current_config, new_config)?;
-			Ok(())
-		}*/
 
 		/// Destroy a collection of fungible items.
 		///
@@ -862,19 +849,22 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Disallow further unprivileged transfers for a whole collection.
+		/// Disallows specified settings for the whole collection.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
-		/// - `collection`: The collection to be frozen.
+		/// - `collection`: The collection to be locked.
+		/// - `lock_config`: The config with the settings to be locked.
 		///
-		/// Emits `CollectionFrozen`.
+		/// Note: it's possible to only lock(set) the setting, but not to unset it.
+		/// Emits `CollectionLocked`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::freeze_collection())]
-		pub fn freeze_collection(
+		#[pallet::weight(T::WeightInfo::lock_collection())]
+		pub fn lock_collection(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
+			lock_config: CollectionConfig,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -885,10 +875,21 @@ pub mod pallet {
 			CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 				let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				let mut settings = config.values();
-				settings.insert(CollectionSetting::NonTransferableItems);
+				let lock_settings = lock_config.values();
+
+				if lock_settings.contains(CollectionSetting::NonTransferableItems) {
+					settings.insert(CollectionSetting::NonTransferableItems);
+				}
+				if lock_settings.contains(CollectionSetting::LockedMetadata) {
+					settings.insert(CollectionSetting::LockedMetadata);
+				}
+				if lock_settings.contains(CollectionSetting::LockedAttributes) {
+					settings.insert(CollectionSetting::LockedAttributes);
+				}
+
 				config.0 = settings;
 
-				Self::deposit_event(Event::<T, I>::CollectionFrozen { collection });
+				Self::deposit_event(Event::<T, I>::CollectionLocked { collection });
 				Ok(())
 			})
 		}

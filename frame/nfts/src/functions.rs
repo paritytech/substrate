@@ -303,32 +303,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/*pub fn do_change_collection_config(
-		id: T::CollectionId,
-		caller: T::AccountId,
-		current_config: CollectionConfig,
-		new_config: CollectionConfig,
-	) -> DispatchResult {
-		let collection = Collection::<T, I>::get(id).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(collection.owner == caller, Error::<T, I>::NoPermission);
-
-		let settings = current_config.values();
-
-		if settings.contains(CollectionSetting::IsLocked) {
-			return Err(Error::<T, I>::CollectionIsLocked.into())
-		}
-
-		CollectionConfigOf::<T, I>::try_mutate(id, |maybe_config| {
-			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-
-			config.user_features = new_config;
-
-			Self::deposit_event(Event::<T, I>::CollectionConfigChanged { id });
-
-			Ok(())
-		})
-	}*/
-
 	#[cfg(any(test, feature = "runtime-benchmarks"))]
 	pub fn set_next_id(id: T::CollectionId) {
 		NextCollectionId::<T, I>::set(Some(id));

@@ -240,11 +240,16 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::Thawed { collection, item }.into());
 	}
 
-	freeze_collection {
+	lock_collection {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-	}: _(SystemOrigin::Signed(caller.clone()), collection)
+		let lock_config = CollectionConfig(
+			CollectionSetting::NonTransferableItems |
+				CollectionSetting::LockedMetadata |
+				CollectionSetting::LockedAttributes,
+		);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_config)
 	verify {
-		assert_last_event::<T, I>(Event::CollectionFrozen { collection }.into());
+		assert_last_event::<T, I>(Event::CollectionLocked { collection }.into());
 	}
 
 	transfer_ownership {

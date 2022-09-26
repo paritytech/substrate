@@ -110,30 +110,6 @@ fn basic_minting_should_work() {
 	});
 }
 
-/*#[test]
-fn collection_locking_should_work() {
-	new_test_ext().execute_with(|| {
-		let user_id = 1;
-		let collection_id = 0;
-
-		assert_ok!(Nfts::force_create(
-			RuntimeOrigin::root(),
-			user_id,
-			CollectionConfig::empty(),
-			true
-		));
-
-		let new_config = CollectionConfig(CollectionSetting::IsLocked.into());
-
-		assert_ok!(Nfts::change_collection_config(RuntimeOrigin::signed(user_id), collection_id, new_config));
-
-		let collection_config = CollectionConfigOf::<Test>::get(collection_id);
-
-		let expected_config = CollectionConfig(new_config);
-		assert_eq!(Some(expected_config), collection_config);
-	});
-}*/
-
 #[test]
 fn lifecycle_should_work() {
 	new_test_ext().execute_with(|| {
@@ -244,7 +220,11 @@ fn freezing_should_work() {
 		assert_noop!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2), Error::<Test>::Frozen);
 
 		assert_ok!(Nfts::thaw(RuntimeOrigin::signed(1), 0, 42));
-		assert_ok!(Nfts::freeze_collection(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Nfts::lock_collection(
+			RuntimeOrigin::signed(1),
+			0,
+			CollectionConfig(CollectionSetting::NonTransferableItems.into())
+		));
 		assert_noop!(
 			Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2),
 			Error::<Test>::ItemsNotTransferable
@@ -1150,8 +1130,12 @@ fn buy_item_should_work() {
 				None,
 			));
 
-			// freeze the collection
-			assert_ok!(Nfts::freeze_collection(RuntimeOrigin::signed(user_1), collection_id));
+			// lock the collection
+			assert_ok!(Nfts::lock_collection(
+				RuntimeOrigin::signed(user_1),
+				collection_id,
+				CollectionConfig(CollectionSetting::NonTransferableItems.into())
+			));
 
 			let buy_item_call = mock::RuntimeCall::Nfts(crate::Call::<Test>::buy_item {
 				collection: collection_id,
@@ -1188,33 +1172,6 @@ fn buy_item_should_work() {
 				Error::<Test>::Frozen
 			);
 		}
-	});
-}
-
-#[test]
-fn various_collection_settings() {
-	new_test_ext().execute_with(|| {
-		// when we set only one value it's required to call .into() on it
-		let config = CollectionConfig(CollectionSetting::NonTransferableItems.into());
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, config, false));
-
-		let config = CollectionConfigOf::<Test>::get(0).unwrap();
-		let stored_settings = config.values();
-		assert!(stored_settings.contains(CollectionSetting::NonTransferableItems));
-		assert!(!stored_settings.contains(CollectionSetting::LockedMetadata));
-
-		// no need to call .into() for multiple values
-		let config = CollectionConfig(
-			CollectionSetting::LockedMetadata | CollectionSetting::NonTransferableItems,
-		);
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, config, false));
-
-		let config = CollectionConfigOf::<Test>::get(1).unwrap();
-		let stored_settings = config.values();
-		assert!(stored_settings.contains(CollectionSetting::NonTransferableItems));
-		assert!(stored_settings.contains(CollectionSetting::LockedMetadata));
-
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::empty(), false));
 	});
 }
 
@@ -1260,5 +1217,75 @@ fn pay_tips_should_work() {
 			receiver: user_3,
 			amount: tip,
 		}));
+	});
+}
+
+#[test]
+fn various_collection_settings() {
+	new_test_ext().execute_with(|| {
+		// when we set only one value it's required to call .into() on it
+		let config = CollectionConfig(CollectionSetting::NonTransferableItems.into());
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, config, false));
+
+		let config = CollectionConfigOf::<Test>::get(0).unwrap();
+		let stored_settings = config.values();
+		assert!(stored_settings.contains(CollectionSetting::NonTransferableItems));
+		assert!(!stored_settings.contains(CollectionSetting::LockedMetadata));
+
+		// no need to call .into() for multiple values
+		let config = CollectionConfig(
+			CollectionSetting::LockedMetadata | CollectionSetting::NonTransferableItems,
+		);
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, config, false));
+
+		let config = CollectionConfigOf::<Test>::get(1).unwrap();
+		let stored_settings = config.values();
+		assert!(stored_settings.contains(CollectionSetting::NonTransferableItems));
+		assert!(stored_settings.contains(CollectionSetting::LockedMetadata));
+
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::empty(), false));
+	});
+}
+
+#[test]
+fn collection_locking_should_work() {
+	new_test_ext().execute_with(|| {
+		let user_id = 1;
+		let collection_id = 0;
+
+		assert_ok!(Nfts::force_create(
+			RuntimeOrigin::root(),
+			user_id,
+			CollectionConfig::empty(),
+			false
+		));
+
+		// validate partial lock
+		let lock_config = CollectionConfig(
+			CollectionSetting::NonTransferableItems | CollectionSetting::LockedAttributes,
+		);
+		assert_ok!(Nfts::lock_collection(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			lock_config
+		));
+
+		let stored_config = CollectionConfigOf::<Test>::get(collection_id).unwrap();
+		assert_eq!(stored_config, lock_config);
+
+		// validate full lock
+		let full_lock_config = CollectionConfig(
+			CollectionSetting::NonTransferableItems |
+				CollectionSetting::LockedMetadata |
+				CollectionSetting::LockedAttributes,
+		);
+		assert_ok!(Nfts::lock_collection(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			CollectionConfig(CollectionSetting::LockedMetadata.into()),
+		));
+
+		let stored_config = CollectionConfigOf::<Test>::get(collection_id).unwrap();
+		assert_eq!(stored_config, full_lock_config);
 	});
 }
