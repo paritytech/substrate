@@ -456,8 +456,8 @@ pub mod pallet {
 		WrongOwner,
 		/// Invalid witness data given.
 		BadWitness,
-		/// The item ID is already taken.
-		InUse,
+		/// Collection ID is already taken.
+		CollectionIdInUse,
 		/// Items within that collection are non-transferable.
 		ItemsNotTransferable,
 		/// The item or collection is frozen.
@@ -733,7 +733,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Reevaluate the deposits on some items.
+		/// Re-evaluate the deposits on some items.
 		///
 		/// Origin must be Signed and the sender should be the Owner of the `collection`.
 		///

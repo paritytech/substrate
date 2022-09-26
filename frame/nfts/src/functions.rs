@@ -84,7 +84,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		free_holding: bool,
 		event: Event<T, I>,
 	) -> DispatchResult {
-		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::InUse);
+		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::CollectionIdInUse);
 
 		T::Currency::reserve(&owner, deposit)?;
 
