@@ -690,7 +690,6 @@ impl pallet_election_provider_multi_phase::MinerConfig for Runtime {
 	type Solution = NposSolution16;
 	type MaxVotesPerVoter =
 	<<Self as pallet_election_provider_multi_phase::Config>::DataProvider as ElectionDataProvider>::MaxVotesPerVoter;
-	type OnVoterListUpdate = FastUnstake;
 
 	// The unsigned submissions have to respect the weight of the submit_unsigned call, thus their
 	// weight estimate function is wired to this call's weight.
@@ -732,6 +731,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectingVoters = MaxElectingVoters;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
+	type OnVoterListUpdate = FastUnstake;
 }
 
 parameter_types! {
