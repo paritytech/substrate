@@ -75,6 +75,7 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId,
 		IdentificationTuple<T>,
 	>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Allows the `root`, for example sudo to create an offence.
