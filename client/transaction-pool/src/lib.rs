@@ -62,7 +62,7 @@ use std::time::Instant;
 use crate::metrics::MetricsLink as PrometheusMetrics;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
-use sp_blockchain::{tree_route, CachedHeaderMetadata, HeaderMetadata, HeaderMetadataCache};
+use sp_blockchain::TreeRoute;
 
 type BoxedReadyIterator<Hash, Data> =
 	Box<dyn ReadyTransactions<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
@@ -364,6 +364,7 @@ where
 		+ sp_runtime::traits::BlockIdTo<Block>
 		+ sc_client_api::ExecutorProvider<Block>
 		+ sc_client_api::UsageProvider<Block>
+		+ sp_blockchain::HeaderMetadata<Block, Error = sp_blockchain::Error>
 		+ Send
 		+ Sync
 		+ 'static,
@@ -402,7 +403,8 @@ where
 	Client: sp_api::ProvideRuntimeApi<Block>
 		+ sc_client_api::BlockBackend<Block>
 		+ sc_client_api::blockchain::HeaderBackend<Block>
-		+ sp_runtime::traits::BlockIdTo<Block>,
+		+ sp_runtime::traits::BlockIdTo<Block>
+		+ sp_blockchain::HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
 	Client::Api: sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
 {
@@ -588,11 +590,20 @@ where
 	fn handle_enactment(
 		&self,
 		hash: Block::Hash,
-		enacted: Arc<Vec<Block::Hash>>,
-		retracted: Arc<Vec<Block::Hash>>,
+		tree_route: Option<Arc<TreeRoute<Block>>>,
 	) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+		log::trace!(target: "txpool", "handle_enactment hash:{hash:?} tree_route: {tree_route:?}");
 		let pool = self.pool.clone();
 		let api = self.api.clone();
+
+		let (enacted, retracted) = if let Some(tree_route) = tree_route {
+			(
+				tree_route.enacted().iter().map(|block| block.hash).collect(),
+				tree_route.retracted().iter().map(|block| block.hash).collect(),
+			)
+		} else {
+			(vec![], vec![])
+		};
 
 		let id = BlockId::hash(hash);
 		let block_number = match api.block_id_to_number(&id) {
@@ -643,7 +654,9 @@ where
 				pruned_log.extend(enacted_log);
 			});
 
-			pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
+			if enacted.iter().all(|h| *h != hash) {
+				pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
+			}
 
 			metrics.report(|metrics| {
 				metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
@@ -733,37 +746,37 @@ where
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-		let (proceed, enacted, retracted) =
-			self.enactment_helper.lock().should_handle_enactment(&event);
+		let (proceed, tree_route) = self.enactment_helper.lock().should_handle_enactment(&event);
 
 		let hash = match event {
-			ChainEvent::NewBestBlock { hash, .. } => hash,
-			ChainEvent::Finalized { hash, .. } => hash,
+			ChainEvent::NewBestBlock { hash, .. } | ChainEvent::Finalized { hash, .. } => hash,
 		};
 
 		let handle_enactment = if proceed {
-			self.handle_enactment(hash, enacted, retracted)
+			self.handle_enactment(hash, tree_route.clone())
 		} else {
 			Box::pin(ready(()))
 		};
 
 		match event {
-			ChainEvent::NewBestBlock { hash, tree_route } => {
-				println!("xxx NewBestBlock {hash:?} tree_route: {tree_route:?}");
-				handle_enactment
-			},
-			ChainEvent::Finalized { hash, tree_route } => {
+			ChainEvent::NewBestBlock { .. } => handle_enactment,
+			ChainEvent::Finalized { hash, .. } => {
 				let pool = self.pool.clone();
-				println!("xxx Finalized {hash:?} {tree_route:?}");
 
 				async move {
 					handle_enactment.await;
-					for hash in tree_route.iter().chain(&[hash]) {
-						if let Err(e) = pool.validated_pool().on_block_finalized(*hash).await {
+					let enacted = if let Some(tree_route) = tree_route {
+						tree_route.enacted().to_vec()
+					} else {
+						vec![]
+					};
+
+					for hash in enacted.iter().map(|b| b.hash).chain(std::iter::once(hash)) {
+						if let Err(e) = pool.validated_pool().on_block_finalized(hash).await {
 							log::warn!(
-								target: "txpool",
-								"Error [{}] occurred while attempting to notify watchers of finalization {}",
-								e, hash
+							target: "txpool",
+							"Error [{}] occurred while attempting to notify watchers of finalization {}",
+							e, hash
 							)
 						}
 					}
@@ -784,21 +797,24 @@ where
 ///   B2-C2-D2-E2
 ///
 /// Some scenarios and expected behavior:
-/// nbb(C1), f(C1) -> false (handle_enactmanet was already performed in nbb(C1))
-/// f(C1), nbb(C1) -> false (handle_enactmanet was already performed in f(C1))
+/// nbb(C1), f(C1) -> false (handle_enactment was already performed in nbb(C1))
+/// f(C1), nbb(C1) -> false (handle_enactment was already performed in f(C1))
 ///
-/// f(C1), nbb(D2) -> false (handle_enactmanet was already performed in f(C1), we should not retract
-/// finalized block) f(C1), f(C2), nbb(C1) -> false
-///
+/// f(C1), nbb(D2) -> false (handle_enactment was already performed in f(C1), we should not retract
+/// finalized block)
+/// f(C1), f(C2), nbb(C1) -> false
 /// nbb(C1), nbb(C2) -> true (switching fork is OK)
+/// nbb(B1), nbb(B2) -> true
+/// nbb(B1), nbb(C1), f(C1) -> false (handle_enactment was already performed in nbb(B1)
+/// nbb(C1), f(B1) -> false (handle_enactment was already performed in nbb(B2)
 pub trait EnactmentPolicy<Block: BlockT> {
-	/// Based on provided ChainEvent the decision if maintainance/enactment procedure for evented
-	/// header shall proceed.
-	/// Additionally enacted and retracted paths are returned respectively.
+	/// Basing on provided ChainEvent returns true if maintainance/enactment procedure for evented
+	/// header shall be performed. Otherwise returns false.
+	/// Additionally tree_route from recent best_block to event's hash is returned.
 	fn should_handle_enactment(
-		&self,
+		&mut self,
 		event: &ChainEvent<Block>,
-	) -> (bool, Arc<Vec<Block::Hash>>, Arc<Vec<Block::Hash>>);
+	) -> (bool, Option<Arc<TreeRoute<Block>>>);
 }
 
 struct EnactmentHelper<Block, PoolApi>
@@ -806,9 +822,8 @@ where
 	Block: BlockT,
 	PoolApi: graph::ChainApi<Block = Block>,
 {
-	best_block: Arc<Mutex<Option<Block::Hash>>>,
-	finalized_block: Arc<Mutex<Option<Block::Hash>>>,
-	metadata_cache: Arc<Mutex<HeaderMetadataCache<Block>>>,
+	best_block: Option<Block::Hash>,
+	finalized_block: Option<Block::Hash>,
 	api: Arc<PoolApi>,
 }
 
@@ -818,34 +833,23 @@ where
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
 	fn should_handle_enactment(
-		&self,
+		&mut self,
 		event: &ChainEvent<Block>,
-	) -> (bool, Arc<Vec<Block::Hash>>, Arc<Vec<Block::Hash>>) {
-		match event {
-			ChainEvent::NewBestBlock { hash, tree_route } => {
-				println!("--------------------------------------------------------------------------------");
-				println!("process_new_best_block_event");
-				let (enacted, retracted) = if let Some(tree_route) = tree_route {
-					(
-						tree_route.enacted().iter().map(|block| block.hash).collect(),
-						tree_route.retracted().iter().map(|block| block.hash).collect(),
-					)
-				} else {
-					(vec![], vec![])
-				};
+	) -> (bool, Option<Arc<TreeRoute<Block>>>) {
+		let (hash, finalized) = match event {
+			ChainEvent::NewBestBlock { hash, .. } => (hash, false),
+			ChainEvent::Finalized { hash, .. } => (hash, true),
+		};
 
-				let result = self.resolve(*hash, &enacted, &retracted, false);
+		//compute t
+		let tree_route = if let Some(best_block) = self.best_block {
+			Some(Arc::new(self.api.tree_route(best_block, *hash).unwrap()))
+		} else {
+			None
+		};
 
-				(result, Arc::from(enacted), Arc::from(retracted))
-			},
-			ChainEvent::Finalized { hash, tree_route } => {
-				println!("--------------------------------------------------------------------------------");
-				println!("process_finalized_event");
-				let tree_route = Arc::new(tree_route.to_vec()); //todo: cleanup
-				let result = self.resolve(*hash, &tree_route, &vec![], true);
-				(result, tree_route, Arc::from(vec![]))
-			},
-		}
+		let result = self.resolve(*hash, tree_route.clone(), finalized);
+		(result, tree_route)
 	}
 }
 
@@ -855,136 +859,81 @@ where
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
 	fn new(api: Arc<PoolApi>) -> Self {
-		EnactmentHelper {
-			best_block: Arc::new(Mutex::new(None)),
-			finalized_block: Arc::new(Mutex::new(None)),
-			metadata_cache: Arc::new(Mutex::new(HeaderMetadataCache::new(16))),
-			api,
-		}
+		EnactmentHelper { best_block: None, finalized_block: None, api }
 	}
 
 	fn resolve(
-		&self,
+		&mut self,
 		hash: Block::Hash,
-		enacted: &Vec<Block::Hash>,
-		retracted: &Vec<Block::Hash>,
+		tree_route: Option<Arc<TreeRoute<Block>>>,
 		finalized: bool,
 	) -> bool {
-		println!(
-			"--------------------------------------------------------------------------------"
-		);
-		println!("xxx handle_enactment hash:{hash:?} finalized:{finalized:?} retracted: {retracted:?} enacted: {enacted:?}");
+		let finalized_block = &mut self.finalized_block;
+		let best_block = &mut self.best_block;
+		log::trace!(target: "txpool", "resolve hash:{hash:?} finalized:{finalized:?} tree_route:{tree_route:?}, best_block:{best_block:?}, finalized_block:{finalized_block:?}");
 
-		//update the metadata_cache with all incoming data
-		{
-			let cache = self.metadata_cache.lock();
-			enacted.iter().chain(retracted.iter()).chain(std::iter::once(&hash)).for_each(
-				|&hash| {
-					let id = BlockId::hash(hash);
-					if let Ok(Some(header)) = self.api.block_header(&id) {
-						println!("into cache: {:?} {:?}", hash, header);
-						cache.insert_header_metadata(hash, CachedHeaderMetadata::from(&header));
-					}
-				},
-			);
+		//block was already finalized
+		if let Some(finalized_block) = *finalized_block {
+			if finalized_block == hash {
+				log::trace!(target:"txpool", "handle_enactment: block already finalized: exit 3b");
+				return false
+			}
 		}
 
-		//compute the tree_route from recently finalized block to provided hash
-		//check if recently finalized block is on retracted path
-		let mut tr_retracted_contains = false;
-		if let Some(finalized_block) = *self.finalized_block.lock() {
-			println!("compute tr: finalized_block:{finalized_block:?} hash:{hash:?}");
-			match tree_route(self, finalized_block, hash) {
-				Ok(tr) => {
-					tr_retracted_contains = tr
-						.retracted()
-						.iter()
-						.map(|x| {
-							/* println!("{:?}",x); */
-							x.hash
-						})
-						.any(|x| x == finalized_block);
-					println!(
-						"computed tr: retracted {:?} {:?}",
-						tr_retracted_contains,
-						tr.retracted()
-					);
-				},
-				Err(e) => {
-					println!("computed tr: error {:?}", e);
-				},
+		// check if recently finalized block is on retracted path...
+		let was_finalized_retracted = if let Some(finalized_block) = *finalized_block {
+			match tree_route {
+				Some(ref tr) => tr.retracted().iter().map(|x| x.hash).any(|x| x == finalized_block),
+				None => false,
 			}
 		} else {
-			println!("computed tr: no finalized block");
-		}
+			false
+		};
 
-		if tr_retracted_contains {
-			println!("handle_enactment: exit 2");
+		if was_finalized_retracted {
+			log::trace!(target: "txpool", "handle_enactment: recently finalized block is on retracted path: exit 1");
 			return false
 		}
 
+		// If there are no enacted blocks in best_block -> hash tree_route, it means that
+		// block being finalized was already enacted. (This case also covers best_block == hash)
 		if finalized {
-			if let Some(best_block) = *self.best_block.lock() {
-				if best_block == hash {
-					println!("handle_enactment: exit 1a");
+			if let Some(ref tree_route) = tree_route {
+				if tree_route.enacted().len() == 0 {
+					log::trace!(
+						target: "txpool",
+						"handle_enactment: no newly enacted blocks since recent best block: exit 2"
+					);
+					*finalized_block = Some(hash);
 					return false
 				}
+			}
+		}
+
+		log::trace!(target: "txpool", "handle_enactment: proceed....");
+
+		if finalized {
+			*finalized_block = Some(hash);
+
+			//check if the recent best_block was retracted
+			let best_block_retracted = if let Some(best_block) = *best_block {
+				match tree_route {
+					Some(tr) => tr.retracted().iter().map(|x| x.hash).any(|x| x == best_block),
+					None => false,
+				}
+			} else {
+				false
+			};
+
+			//...if it was retracted, or was not set, newly finalized block becomes new best_block
+			if best_block_retracted || best_block.is_none() {
+				*best_block = Some(hash)
 			}
 		} else {
-			if let Some(finalized_block) = *self.finalized_block.lock() {
-				if finalized_block == hash {
-					println!("handle_enactment: exit 1b");
-					return false
-				}
-			}
+			*best_block = Some(hash);
 		}
-
-		println!("handle_enactment: proceed....");
-
-		if finalized {
-			*self.finalized_block.lock() = Some(hash);
-		}
-		*self.best_block.lock() = Some(hash);
 
 		return true
-	}
-}
-
-#[derive(Debug, thiserror::Error)]
-#[allow(missing_docs)]
-#[non_exhaustive]
-pub enum EnactmentPolicyError<Block: BlockT> {
-	#[error("HeaderMissing for hash: {0}")]
-	HeaderMissing(Block::Hash),
-}
-
-impl<Block, PoolApi> HeaderMetadata<Block> for EnactmentHelper<Block, PoolApi>
-where
-	Block: BlockT,
-	PoolApi: 'static + graph::ChainApi<Block = Block>,
-{
-	type Error = EnactmentPolicyError<Block>;
-
-	fn header_metadata(
-		&self,
-		hash: Block::Hash,
-	) -> Result<CachedHeaderMetadata<Block>, Self::Error> {
-		self.metadata_cache
-			.lock()
-			.header_metadata(hash)
-			.ok_or(EnactmentPolicyError::HeaderMissing(hash))
-	}
-
-	fn insert_header_metadata(
-		&self,
-		hash: Block::Hash,
-		header_metadata: CachedHeaderMetadata<Block>,
-	) {
-		self.metadata_cache.lock().insert_header_metadata(hash, header_metadata)
-	}
-
-	fn remove_header_metadata(&self, hash: Block::Hash) {
-		self.metadata_cache.lock().remove_header_metadata(hash)
 	}
 }
 

@@ -22,7 +22,7 @@ use crate::graph::{BlockHash, ChainApi, ExtrinsicFor, NumberFor, Pool};
 use codec::Encode;
 use parking_lot::Mutex;
 use sc_transaction_pool_api::error;
-use sp_blockchain::{tree_route, TreeRoute};
+use sp_blockchain::TreeRoute;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Hash},
@@ -178,8 +178,8 @@ impl ChainApi for TestApi {
 	/// Returns a tree route
 	fn tree_route(
 		&self,
-		from: <Self::Block as BlockT>::Hash,
-		to: <Self::Block as BlockT>::Hash,
+		_from: <Self::Block as BlockT>::Hash,
+		_to: <Self::Block as BlockT>::Hash,
 	) -> Result<TreeRoute<Self::Block>, Self::Error> {
 		todo!()
 	}

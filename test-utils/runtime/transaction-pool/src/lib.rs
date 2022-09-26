@@ -22,7 +22,7 @@
 use codec::Encode;
 use futures::future::ready;
 use parking_lot::RwLock;
-use sp_blockchain::{tree_route, CachedHeaderMetadata, HeaderMetadata, TreeRoute};
+use sp_blockchain::{CachedHeaderMetadata, TreeRoute};
 use sp_runtime::{
 	generic::{self, BlockId},
 	traits::{
