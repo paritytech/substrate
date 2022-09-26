@@ -1,0 +1,5 @@
+error: Invalid pallet::storage, multiple argument pallet::getter found
+  --> $DIR/storage_multiple_getters.rs:20:3
+   |
+20 |     #[pallet::getter(fn foo_error)]
+   |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

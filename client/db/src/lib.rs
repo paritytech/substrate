@@ -67,7 +67,7 @@ use codec::{Decode, Encode};
 use hash_db::Prefix;
 use sp_trie::{MemoryDB, PrefixedMemoryDB, prefixed_key};
 use sp_database::Transaction;
-use sp_core::{Hasher, ChangesTrieConfiguration};
+use sp_core::ChangesTrieConfiguration;
 use sp_core::offchain::OffchainOverlayedChange;
 use sp_core::storage::{well_known_keys, ChildInfo};
 use sp_arithmetic::traits::Saturating;
@@ -590,6 +590,37 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 
 	fn has_indexed_transaction(&self, hash: &Block::Hash) -> ClientResult<bool> {
 		Ok(self.db.contains(columns::TRANSACTION, hash.as_ref()))
+	}
+
+	fn block_indexed_body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Vec<u8>>>> {
+		match self.transaction_storage {
+			TransactionStorageMode::BlockBody => Ok(None),
+			TransactionStorageMode::StorageChain => {
+				let body = match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
+					Some(body) => body,
+					None => return Ok(None),
+				};
+				match Vec::<ExtrinsicHeader>::decode(&mut &body[..]) {
+					Ok(index) => {
+						let mut transactions = Vec::new();
+						for ExtrinsicHeader { indexed_hash, .. } in index.into_iter() {
+							if indexed_hash != Default::default() {
+								match self.db.get(columns::TRANSACTION, indexed_hash.as_ref()) {
+									Some(t) => transactions.push(t),
+									None => return Err(sp_blockchain::Error::Backend(
+										format!("Missing indexed transaction {:?}", indexed_hash))
+									)
+								}
+							}
+						}
+						Ok(Some(transactions))
+					}
+					Err(err) => return Err(sp_blockchain::Error::Backend(
+							format!("Error decoding body list: {}", err)
+					)),
+				}
+			}
+		}
 	}
 }
 
@@ -1624,10 +1655,10 @@ fn apply_index_ops<Block: BlockT>(
 	let mut renewed_map = HashMap::new();
 	for op in ops {
 		match op {
-			IndexOperation::Insert { extrinsic, offset } => {
-				index_map.insert(extrinsic, offset);
+			IndexOperation::Insert { extrinsic, hash, size } => {
+				index_map.insert(extrinsic, (hash, size));
 			}
-			IndexOperation::Renew { extrinsic, hash, .. } => {
+			IndexOperation::Renew { extrinsic, hash } => {
 				renewed_map.insert(extrinsic, DbHash::from_slice(hash.as_ref()));
 			}
 		}
@@ -1643,9 +1674,8 @@ fn apply_index_ops<Block: BlockT>(
 			}
 		} else {
 			match index_map.get(&(index as u32)) {
-				Some(offset) if *offset as usize <= extrinsic.len() => {
-					let offset = *offset as usize;
-					let hash = HashFor::<Block>::hash(&extrinsic[offset..]);
+				Some((hash, size)) if *size as usize <= extrinsic.len() => {
+					let offset = extrinsic.len() - *size as usize;
 					transaction.store(
 						columns::TRANSACTION,
 						DbHash::from_slice(hash.as_ref()),
@@ -3024,13 +3054,16 @@ pub(crate) mod tests {
 		for i in 0 .. 10 {
 			let mut index = Vec::new();
 			if i == 0 {
-				index.push(IndexOperation::Insert { extrinsic: 0, offset: 1 });
+				index.push(IndexOperation::Insert {
+					extrinsic: 0,
+					hash: x1_hash.as_ref().to_vec(),
+					size: (x1.len() - 1) as u32,
+				});
 			} else if i < 5 {
 				// keep renewing 1st
 				index.push(IndexOperation::Renew {
 					extrinsic: 0,
 					hash: x1_hash.as_ref().to_vec(),
-					size: (x1.len() - 1) as u32,
 				});
 			} // else stop renewing
 			let hash = insert_block(

@@ -24,4 +24,4 @@ proc-macro-crate = "1.0.0"
 parity-scale-codec = "2.0.1"
 sp-arithmetic = { path = "../../arithmetic" }
 sp-npos-elections = { path = ".." }
-trybuild = "1.0.41"
+trybuild = "1.0.42"

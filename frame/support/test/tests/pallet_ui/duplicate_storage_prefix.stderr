@@ -1,0 +1,17 @@
+error: Duplicate storage prefixes found for `Foo`
+  --> $DIR/duplicate_storage_prefix.rs:16:32
+   |
+16 |     #[pallet::storage_prefix = "Foo"]
+   |                                ^^^^^
+
+error[E0412]: cannot find type `_GeneratedPrefixForStorageFoo` in this scope
+  --> $DIR/duplicate_storage_prefix.rs:13:7
+   |
+13 |     type Foo<T> = StorageValue<_, u8>;
+   |          ^^^ not found in this scope
+
+error[E0121]: the type placeholder `_` is not allowed within types on item signatures
+  --> $DIR/duplicate_storage_prefix.rs:17:35
+   |
+17 |     type NotFoo<T> = StorageValue<_, u16>;
+   |                                   ^ not allowed in type signatures

@@ -135,6 +135,13 @@ impl<S, Block> BlockchainBackend<Block> for Blockchain<S> where Block: BlockT, S
 	) -> ClientResult<Option<Vec<u8>>> {
 		Err(ClientError::NotAvailableOnLightClient)
 	}
+
+	fn block_indexed_body(
+		&self,
+		_id: BlockId<Block>
+	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
+		Err(ClientError::NotAvailableOnLightClient)
+	}
 }
 
 impl<S: Storage<Block>, Block: BlockT> ProvideCache<Block> for Blockchain<S> {

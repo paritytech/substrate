@@ -24,7 +24,7 @@ use ::grandpa as finality_grandpa;
 use codec::Encode;
 use frame_support::{
 	parameter_types,
-	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize},
+	traits::{KeyOwnerProofSystem, OnFinalize, OnInitialize, GenesisBuild},
 };
 use pallet_staking::EraIndex;
 use sp_core::{crypto::KeyTypeId, H256};
@@ -150,6 +150,8 @@ parameter_types! {
 
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
 	type Balance = u128;
 	type DustRemoval = ();
 	type Event = Event;
@@ -217,6 +219,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
+	type GenesisElectionProvider = Self::ElectionProvider;
 	type WeightInfo = ();
 }
 

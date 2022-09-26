@@ -736,17 +736,20 @@ macro_rules! impl_benchmark {
 					SelectedBenchmark as $crate::BenchmarkingSetup<T $(, $instance)?>
 				>::components(&selected_benchmark);
 
+				let mut progress = $crate::benchmarking::current_time();
 				// Default number of steps for a component.
 				let mut prev_steps = 10;
 
-				let repeat_benchmark = |
+				let mut repeat_benchmark = |
 					repeat: u32,
 					c: &[($crate::BenchmarkParameter, u32)],
 					results: &mut $crate::Vec<$crate::BenchmarkResults>,
 					verify: bool,
+					step: u32,
+					num_steps: u32,
 				| -> Result<(), &'static str> {
 					// Run the benchmark `repeat` times.
-					for _ in 0..repeat {
+					for r in 0..repeat {
 						// Set up the externalities environment for the setup we want to
 						// benchmark.
 						let closure_to_benchmark = <
@@ -801,6 +804,20 @@ macro_rules! impl_benchmark {
 								"Read/Write Count {:?}", read_write_count
 							);
 
+							let time = $crate::benchmarking::current_time();
+							if time.saturating_sub(progress) > 5000000000 {
+								progress = $crate::benchmarking::current_time();
+								$crate::log::info!(
+									target: "benchmark",
+									"Benchmarking {} {}/{}, run {}/{}",
+									extrinsic,
+									step,
+									num_steps,
+									r,
+									repeat,
+								);
+							}
+
 							// Time the storage root recalculation.
 							let start_storage_root = $crate::benchmarking::current_time();
 							$crate::storage_root();
@@ -829,9 +846,9 @@ macro_rules! impl_benchmark {
 				if components.is_empty() {
 					if verify {
 						// If `--verify` is used, run the benchmark once to verify it would complete.
-						repeat_benchmark(1, Default::default(), &mut $crate::Vec::new(), true)?;
+						repeat_benchmark(1, Default::default(), &mut $crate::Vec::new(), true, 1, 1)?;
 					}
-					repeat_benchmark(repeat, Default::default(), &mut results, false)?;
+					repeat_benchmark(repeat, Default::default(), &mut results, false, 1, 1)?;
 				} else {
 					// Select the component we will be benchmarking. Each component will be benchmarked.
 					for (idx, (name, low, high)) in components.iter().enumerate() {
@@ -869,9 +886,9 @@ macro_rules! impl_benchmark {
 
 							if verify {
 								// If `--verify` is used, run the benchmark once to verify it would complete.
-								repeat_benchmark(1, &c, &mut $crate::Vec::new(), true)?;
+								repeat_benchmark(1, &c, &mut $crate::Vec::new(), true, s, num_of_steps)?;
 							}
-							repeat_benchmark(repeat, &c, &mut results, false)?;
+							repeat_benchmark(repeat, &c, &mut results, false, s, num_of_steps)?;
 						}
 					}
 				}

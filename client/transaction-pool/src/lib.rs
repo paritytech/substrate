@@ -42,7 +42,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor, AtLeast32Bit, Extrinsic, Zero, Header as HeaderT},
 };
-use sp_core::traits::SpawnNamed;
+use sp_core::traits::SpawnEssentialNamed;
 use sp_transaction_pool::{
 	TransactionPool, PoolStatus, ImportNotificationStream, TxHash, TransactionFor,
 	TransactionStatusStreamFor, MaintainedTransactionPool, PoolFuture, ChainEvent,
@@ -195,20 +195,26 @@ impl<PoolApi, Block> BasicPool<PoolApi, Block>
 		pool_api: Arc<PoolApi>,
 		prometheus: Option<&PrometheusRegistry>,
 		revalidation_type: RevalidationType,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
 		best_block_number: NumberFor<Block>,
 	) -> Self {
 		let pool = Arc::new(sc_transaction_graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
-			RevalidationType::Light => (revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()), None),
+			RevalidationType::Light => (
+				revalidation::RevalidationQueue::new(pool_api.clone(), pool.clone()),
+				None,
+			),
 			RevalidationType::Full => {
-				let (queue, background) = revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
+				let (queue, background) = revalidation::RevalidationQueue::new_background(
+					pool_api.clone(),
+					pool.clone(),
+				);
 				(queue, Some(background))
 			},
 		};
 
 		if let Some(background_task) = background_task {
-			spawner.spawn("txpool-background", background_task);
+			spawner.spawn_essential("txpool-background", background_task);
 		}
 
 		Self {
@@ -357,7 +363,7 @@ where
 	pub fn new_light(
 		options: sc_transaction_graph::Options,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,
 		fetcher: Arc<Fetcher>,
 	) -> Self {
@@ -393,10 +399,10 @@ where
 		options: sc_transaction_graph::Options,
 		is_validator: txpool::IsValidator,
 		prometheus: Option<&PrometheusRegistry>,
-		spawner: impl SpawnNamed,
+		spawner: impl SpawnEssentialNamed,
 		client: Arc<Client>,
 	) -> Arc<Self> {
-		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus));
+		let pool_api = Arc::new(FullChainApi::new(client.clone(), prometheus, &spawner));
 		let pool = Arc::new(Self::with_revalidation_type(
 			options,
 			is_validator,

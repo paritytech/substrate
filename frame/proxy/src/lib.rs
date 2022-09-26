@@ -64,12 +64,12 @@ type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Con
 #[derive(Encode, Decode, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, MaxEncodedLen)]
 pub struct ProxyDefinition<AccountId, ProxyType, BlockNumber> {
 	/// The account which may act on behalf of another.
-	delegate: AccountId,
+	pub delegate: AccountId,
 	/// A value defining the subset of calls that it is allowed to make.
-	proxy_type: ProxyType,
+	pub proxy_type: ProxyType,
 	/// The number of blocks that an announcement must be in place for before the corresponding call
 	/// may be dispatched. If zero, then no announcement is needed.
-	delay: BlockNumber,
+	pub delay: BlockNumber,
 }
 
 /// Details surrounding a specific instance of an announcement to make a call.
@@ -183,7 +183,7 @@ pub mod pallet {
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			di.class)
 		})]
-		pub(super) fn proxy(
+		pub fn proxy(
 			origin: OriginFor<T>,
 			real: T::AccountId,
 			force_proxy_type: Option<T::ProxyType>,
@@ -212,7 +212,7 @@ pub mod pallet {
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::add_proxy(T::MaxProxies::get().into()))]
-		pub(super) fn add_proxy(
+		pub fn add_proxy(
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
 			proxy_type: T::ProxyType,
@@ -234,7 +234,7 @@ pub mod pallet {
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::remove_proxy(T::MaxProxies::get().into()))]
-		pub(super) fn remove_proxy(
+		pub fn remove_proxy(
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
 			proxy_type: T::ProxyType,
@@ -255,7 +255,7 @@ pub mod pallet {
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get().into()))]
-		pub(super) fn remove_proxies(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
+		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 			let (_, old_deposit) = Proxies::<T>::take(&who);
 			T::Currency::unreserve(&who, old_deposit);
@@ -287,7 +287,7 @@ pub mod pallet {
 		/// # </weight>
 		/// TODO: Might be over counting 1 read
 		#[pallet::weight(T::WeightInfo::anonymous(T::MaxProxies::get().into()))]
-		pub(super) fn anonymous(
+		pub fn anonymous(
 			origin: OriginFor<T>,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
@@ -337,7 +337,7 @@ pub mod pallet {
 		/// Weight is a function of the number of proxies the user has (P).
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::kill_anonymous(T::MaxProxies::get().into()))]
-		pub(super) fn kill_anonymous(
+		pub fn kill_anonymous(
 			origin: OriginFor<T>,
 			spawner: T::AccountId,
 			proxy_type: T::ProxyType,
@@ -379,7 +379,7 @@ pub mod pallet {
 		/// - P: the number of proxies the user has.
 		/// # </weight>
 		#[pallet::weight(T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get().into()))]
-		pub(super) fn announce(
+		pub fn announce(
 			origin: OriginFor<T>,
 			real: T::AccountId,
 			call_hash: CallHashOf<T>
@@ -430,7 +430,7 @@ pub mod pallet {
 		#[pallet::weight(
 			T::WeightInfo::remove_announcement(T::MaxPending::get(), T::MaxProxies::get().into())
 		)]
-		pub(super) fn remove_announcement(
+		pub fn remove_announcement(
 			origin: OriginFor<T>,
 			real: T::AccountId,
 			call_hash: CallHashOf<T>
@@ -460,7 +460,7 @@ pub mod pallet {
 		#[pallet::weight(
 			T::WeightInfo::reject_announcement(T::MaxPending::get(), T::MaxProxies::get().into())
 		)]
-		pub(super) fn reject_announcement(
+		pub fn reject_announcement(
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
 			call_hash: CallHashOf<T>
@@ -496,7 +496,7 @@ pub mod pallet {
 				.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
 			di.class)
 		})]
-		pub(super) fn proxy_announced(
+		pub fn proxy_announced(
 			origin: OriginFor<T>,
 			delegate: T::AccountId,
 			real: T::AccountId,
@@ -734,7 +734,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	fn find_proxy(
+	pub fn find_proxy(
 		real: &T::AccountId,
 		delegate: &T::AccountId,
 		force_proxy_type: Option<T::ProxyType>,

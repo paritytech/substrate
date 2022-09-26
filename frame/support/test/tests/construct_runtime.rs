@@ -383,31 +383,31 @@ fn origin_codec() {
 	let origin = OriginCaller::system(system::RawOrigin::None);
 	assert_eq!(origin.encode()[0], 30);
 
-	let origin = OriginCaller::module1_Instance1(module1::Origin(Default::default()));
+	let origin = OriginCaller::Module1_1(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 31);
 
-	let origin = OriginCaller::module2(module2::Origin);
+	let origin = OriginCaller::Module2(module2::Origin);
 	assert_eq!(origin.encode()[0], 32);
 
-	let origin = OriginCaller::module1_Instance2(module1::Origin(Default::default()));
+	let origin = OriginCaller::Module1_2(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 33);
 
-	let origin = OriginCaller::nested_module3(nested::module3::Origin);
+	let origin = OriginCaller::NestedModule3(nested::module3::Origin);
 	assert_eq!(origin.encode()[0], 34);
 
-	let origin = OriginCaller::module3(module3::Origin(Default::default()));
+	let origin = OriginCaller::Module3(module3::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 35);
 
-	let origin = OriginCaller::module1_Instance6(module1::Origin(Default::default()));
+	let origin = OriginCaller::Module1_6(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 1);
 
-	let origin = OriginCaller::module1_Instance7(module1::Origin(Default::default()));
+	let origin = OriginCaller::Module1_7(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 2);
 
-	let origin = OriginCaller::module1_Instance8(module1::Origin(Default::default()));
+	let origin = OriginCaller::Module1_8(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 12);
 
-	let origin = OriginCaller::module1_Instance9(module1::Origin(Default::default()));
+	let origin = OriginCaller::Module1_9(module1::Origin(Default::default()));
 	assert_eq!(origin.encode()[0], 13);
 }
 

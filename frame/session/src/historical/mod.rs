@@ -124,10 +124,17 @@ impl<T: Config> ValidatorSetWithIdentification<T::AccountId> for Module<T> {
 
 /// Specialization of the crate-level `SessionManager` which returns the set of full identification
 /// when creating a new session.
-pub trait SessionManager<ValidatorId, FullIdentification>: crate::SessionManager<ValidatorId> {
+pub trait SessionManager<ValidatorId, FullIdentification>:
+	crate::SessionManager<ValidatorId>
+{
 	/// If there was a validator set change, its returns the set of new validators along with their
 	/// full identifications.
 	fn new_session(new_index: SessionIndex) -> Option<Vec<(ValidatorId, FullIdentification)>>;
+	fn new_session_genesis(
+		new_index: SessionIndex,
+	) -> Option<Vec<(ValidatorId, FullIdentification)>> {
+		<Self as SessionManager<_, _>>::new_session(new_index)
+	}
 	fn start_session(start_index: SessionIndex);
 	fn end_session(end_index: SessionIndex);
 }
@@ -136,19 +143,20 @@ pub trait SessionManager<ValidatorId, FullIdentification>: crate::SessionManager
 /// sets the historical trie root of the ending session.
 pub struct NoteHistoricalRoot<T, I>(sp_std::marker::PhantomData<(T, I)>);
 
-impl<T: Config, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T, I>
-	where I: SessionManager<T::ValidatorId, T::FullIdentification>
-{
-	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
-
+impl<T: Config, I: SessionManager<T::ValidatorId, T::FullIdentification>> NoteHistoricalRoot<T, I> {
+	fn do_new_session(new_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::ValidatorId>> {
 		StoredRange::mutate(|range| {
 			range.get_or_insert_with(|| (new_index, new_index)).1 = new_index + 1;
 		});
 
-		let new_validators_and_id = <I as SessionManager<_, _>>::new_session(new_index);
-		let new_validators = new_validators_and_id.as_ref().map(|new_validators| {
-			new_validators.iter().map(|(v, _id)| v.clone()).collect()
-		});
+		let new_validators_and_id = if is_genesis {
+			<I as SessionManager<_, _>>::new_session_genesis(new_index)
+		} else {
+			<I as SessionManager<_, _>>::new_session(new_index)
+		};
+		let new_validators_opt = new_validators_and_id
+			.as_ref()
+			.map(|new_validators| new_validators.iter().map(|(v, _id)| v.clone()).collect());
 
 		if let Some(new_validators) = new_validators_and_id {
 			let count = new_validators.len() as ValidatorCount;
@@ -166,7 +174,20 @@ impl<T: Config, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<
 			}
 		}
 
-		new_validators
+		new_validators_opt
+	}
+}
+
+impl<T: Config, I> crate::SessionManager<T::ValidatorId> for NoteHistoricalRoot<T, I>
+where
+	I: SessionManager<T::ValidatorId, T::FullIdentification>,
+{
+	fn new_session(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+		Self::do_new_session(new_index, false)
+	}
+
+	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<T::ValidatorId>> {
+		Self::do_new_session(new_index, true)
 	}
 
 	fn start_session(start_index: SessionIndex) {

@@ -317,43 +317,6 @@ impl<B: BlockT, C, P, CAW, CIDP> Verifier<B> for AuraVerifier<C, P, CAW, CIDP> w
 	}
 }
 
-fn initialize_authorities_cache<A, B, C>(client: &C) -> Result<(), ConsensusError> where
-	A: Codec + Debug,
-	B: BlockT,
-	C: ProvideRuntimeApi<B> + BlockOf + ProvideCache<B> + UsageProvider<B>,
-	C::Api: AuraApi<B, A>,
-{
-	// no cache => no initialization
-	let cache = match client.cache() {
-		Some(cache) => cache,
-		None => return Ok(()),
-	};
-
-	let best_hash = client.usage_info().chain.best_hash;
-
-	// check if we already have initialized the cache
-	let map_err = |error| sp_consensus::Error::from(sp_consensus::Error::ClientImport(
-		format!(
-			"Error initializing authorities cache: {}",
-			error,
-		)));
-
-	let block_id = BlockId::hash(best_hash);
-	let authorities: Option<Vec<A>> = cache
-		.get_at(&well_known_cache_keys::AUTHORITIES, &block_id)
-		.unwrap_or(None)
-		.and_then(|(_, _, v)| Decode::decode(&mut &v[..]).ok());
-	if authorities.is_some() {
-		return Ok(());
-	}
-
-	let authorities = crate::authorities(client, &block_id)?;
-	cache.initialize(&well_known_cache_keys::AUTHORITIES, authorities.encode())
-		.map_err(map_err)?;
-
-	Ok(())
-}
-
 /// Should we check for equivocation of a block author?
 #[derive(Debug, Clone, Copy)]
 pub enum CheckForEquivocation {
@@ -438,8 +401,6 @@ pub fn import_queue<'a, P, Block, I, C, S, CAW, CIDP>(
 	CIDP: CreateInherentDataProviders<Block, ()> + Sync + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send + Sync,
 {
-	initialize_authorities_cache(&*client)?;
-
 	let verifier = build_verifier::<P, _, _, _>(
 		BuildVerifierParams {
 			client,

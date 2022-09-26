@@ -65,6 +65,7 @@ codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-executor = { version = "0.9.0", path = "../executor" }
 sc-transaction-pool = { version = "3.0.0", path = "../transaction-pool" }
 sp-transaction-pool = { version = "3.0.0", path = "../../primitives/transaction-pool" }
+sp-transaction-storage-proof = { version = "3.0.0", path = "../../primitives/transaction-storage-proof" }
 sc-rpc-server = { version = "3.0.0", path = "../rpc-servers" }
 sc-rpc = { version = "3.0.0", path = "../rpc" }
 sc-block-builder = { version = "0.9.0", path = "../block-builder" }

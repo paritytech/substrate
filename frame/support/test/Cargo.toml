@@ -20,7 +20,7 @@ frame-support = { version = "3.0.0", default-features = false, path = "../" }
 sp-runtime = { version = "3.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-core = { version = "3.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "3.0.0", default-features = false, path = "../../../primitives/std" }
-trybuild = "1.0.38"
+trybuild = "1.0.42"
 pretty_assertions = "0.6.1"
 rustversion = "1.0.0"
 frame-metadata = { version = "13.0.0", default-features = false, path = "../../metadata" }

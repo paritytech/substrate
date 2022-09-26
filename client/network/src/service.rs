@@ -976,6 +976,13 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 			.unbounded_send(ServiceToWorkerMsg::RequestJustification(*hash, number));
 	}
 
+	/// Clear all pending justification requests.
+	pub fn clear_justification_requests(&self) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::ClearJustificationRequests);
+	}
+
 	/// Are we in the process of downloading the chain?
 	pub fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
@@ -1219,6 +1226,16 @@ impl<'a, B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle
 	}
 }
 
+impl<B: BlockT, H: ExHashT> sp_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
+	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+		NetworkService::request_justification(self, hash, number);
+	}
+
+	fn clear_justification_requests(&self) {
+		NetworkService::clear_justification_requests(self);
+	}
+}
+
 impl<B, H> NetworkStateInfo for NetworkService<B, H>
 	where
 		B: sp_runtime::traits::Block,
@@ -1323,6 +1340,7 @@ enum ServiceToWorkerMsg<B: BlockT, H: ExHashT> {
 	PropagateTransaction(H),
 	PropagateTransactions,
 	RequestJustification(B::Hash, NumberFor<B>),
+	ClearJustificationRequests,
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(record::Key),
 	PutValue(record::Key, Vec<u8>),
@@ -1444,6 +1462,8 @@ impl<B: BlockT + 'static, H: ExHashT> Future for NetworkWorker<B, H> {
 					this.network_service.behaviour_mut().user_protocol_mut().announce_block(hash, data),
 				ServiceToWorkerMsg::RequestJustification(hash, number) =>
 					this.network_service.behaviour_mut().user_protocol_mut().request_justification(&hash, number),
+				ServiceToWorkerMsg::ClearJustificationRequests =>
+					this.network_service.behaviour_mut().user_protocol_mut().clear_justification_requests(),
 				ServiceToWorkerMsg::PropagateTransaction(hash) =>
 					this.tx_handler_controller.propagate_transaction(hash),
 				ServiceToWorkerMsg::PropagateTransactions =>

@@ -15,18 +15,21 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 log = "0.4.8"
 parity-scale-codec = { version = "2.0.0" }
+serde = "1.0.0"
+structopt = "0.3.8"
 
 sc-service = { version = "0.9.0", default-features = false, path = "../../../../client/service" }
 sc-cli = { version = "0.9.0", path = "../../../../client/cli" }
 sc-executor = { version = "0.9.0", path = "../../../../client/executor" }
 sc-client-api = { version = "3.0.0", path = "../../../../client/api" }
-structopt = "0.3.8"
+sc-chain-spec = { version = "3.0.0", path = "../../../../client/chain-spec" }
 sp-state-machine = { version = "0.9.0", path = "../../../../primitives/state-machine" }
 sp-api = { version = "3.0.0", path = "../../../../primitives/api" }
 sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" }
 sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
 sp-externalities = { version = "0.9.0", path = "../../../../primitives/externalities" }
 sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
+sp-keystore = { version = "0.9.0", path = "../../../../primitives/keystore" }
 frame-try-runtime = { version = "0.9.0", path = "../../../../frame/try-runtime" }
 
 remote-externalities = { version = "0.9.0", path = "../../remote-externalities" }

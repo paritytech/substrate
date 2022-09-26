@@ -23,7 +23,8 @@ pub mod tokens;
 pub use tokens::fungible;
 pub use tokens::fungibles;
 pub use tokens::currency::{
-	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, VestingSchedule,
+	Currency, LockIdentifier, LockableCurrency, ReservableCurrency, NamedReservableCurrency,
+	VestingSchedule,
 };
 pub use tokens::imbalance::{Imbalance, OnUnbalanced, SignedImbalance};
 pub use tokens::{ExistenceRequirement, WithdrawReasons, BalanceStatus};

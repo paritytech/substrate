@@ -39,7 +39,9 @@ use futures_timer::Delay;
 use log::{debug, error, info, warn};
 use sp_api::{ProvideRuntimeApi, ApiRef};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{BlockImport, Proposer, SyncOracle, SelectChain, CanAuthorWith, SlotData};
+use sp_consensus::{
+	BlockImport, CanAuthorWith, JustificationSyncLink, Proposer, SelectChain, SlotData, SyncOracle,
+};
 use sp_consensus_slots::Slot;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
@@ -91,6 +93,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// A handle to a `SyncOracle`.
 	type SyncOracle: SyncOracle;
+
+	/// A handle to a `JustificationSyncLink`, allows hooking into the sync module to control the
+	/// justification sync process.
+	type JustificationSyncLink: JustificationSyncLink<B>;
 
 	/// The type of future resolving to the proposer.
 	type CreateProposer: Future<Output = Result<Self::Proposer, sp_consensus::Error>>
@@ -177,6 +183,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 	/// Returns a handle to a `SyncOracle`.
 	fn sync_oracle(&mut self) -> &mut Self::SyncOracle;
+
+	/// Returns a handle to a `JustificationSyncLink`.
+	fn justification_sync_link(&mut self) -> &mut Self::JustificationSyncLink;
 
 	/// Returns a `Proposer` to author on top of the given block.
 	fn proposer(&mut self, block: &B::Header) -> Self::CreateProposer;
@@ -392,27 +401,37 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		);
 
 		let header = block_import_params.post_header();
-		if let Err(err) = block_import
+		match block_import
 			.import_block(block_import_params, Default::default())
 			.await
 		{
-			warn!(
-				target: logging_target,
-				"Error with block built on {:?}: {:?}",
-				parent_hash,
-				err,
-			);
+			Ok(res) => {
+				res.handle_justification(
+					&header.hash(),
+					*header.number(),
+					self.justification_sync_link(),
+				);
+			}
+			Err(err) => {
+				warn!(
+					target: logging_target,
+					"Error with block built on {:?}: {:?}", parent_hash, err,
+				);
 
-			telemetry!(
-				telemetry;
-				CONSENSUS_WARN;
-				"slots.err_with_block_built_on";
-				"hash" => ?parent_hash,
-				"err" => ?err,
-			);
+				telemetry!(
+					telemetry;
+					CONSENSUS_WARN;
+					"slots.err_with_block_built_on";
+					"hash" => ?parent_hash,
+					"err" => ?err,
+				);
+			}
 		}
 
-		Some(SlotResult { block: B::new(header, body), storage_proof })
+		Some(SlotResult {
+			block: B::new(header, body),
+			storage_proof,
+		})
 	}
 }
 
@@ -481,7 +500,7 @@ where
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, T, SO, CAW, CIDP, Proof>(
+pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
 	slot_duration: SlotDuration<T>,
 	client: C,
 	mut worker: W,
@@ -495,9 +514,9 @@ where
 	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
 	T: SlotData + Clone,
-	CAW: CanAuthorWith<B> + Send,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+	CAW: CanAuthorWith<B> + Send,
 {
 	let SlotDuration(slot_duration) = slot_duration;
 

@@ -30,12 +30,12 @@ use crate::{
 	},
 };
 
-use codec::{Decode, Encode};
+use codec::Decode;
 use hash_db::Hasher;
 use sp_core::{
 	offchain::testing::TestPersistentOffchainDB,
 	storage::{
-		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, HEAP_PAGES, is_child_storage_key},
+		well_known_keys::{CHANGES_TRIE_CONFIG, CODE, is_child_storage_key},
 		Storage,
 	},
 	traits::TaskExecutorExt,
@@ -103,7 +103,6 @@ where
 		assert!(storage.top.keys().all(|key| !is_child_storage_key(key)));
 		assert!(storage.children_default.keys().all(|key| is_child_storage_key(key)));
 
-		storage.top.insert(HEAP_PAGES.to_vec(), 8u64.encode());
 		storage.top.insert(CODE.to_vec(), code.to_vec());
 
 		let mut extensions = Extensions::default();
@@ -308,7 +307,7 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		let root = H256::from(hex!("2a340d3dfd52f5992c6b117e9e45f479e6da5afffafeb26ab619cf137a95aeb8"));
+		let root = H256::from(hex!("ed4d8c799d996add422395a6abd7545491d40bd838d738afafa1b8a4de625489"));
 		assert_eq!(H256::from_slice(ext.storage_root().as_slice()), root);
 	}
 

@@ -23,7 +23,7 @@ codec = { version = "2.0.0", package = "parity-scale-codec", default-features = 
 tracing = { version = "0.1.25", default-features = false }
 tracing-core = { version = "0.1.17", default-features = false }
 log = { version = "0.4.8", optional = true }
-tracing-subscriber = { version = "0.2.15", optional = true, features = ["tracing-log"] }
+tracing-subscriber = { version = "0.2.18", optional = true, features = ["tracing-log"] }
 parking_lot = { version = "0.10.0", optional = true }
 erased-serde = { version = "0.3.9", optional = true }
 serde = { version = "1.0.101", optional = true }

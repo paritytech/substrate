@@ -398,7 +398,7 @@ mod tests {
 	#[test]
 	fn prefix_in_log_lines() {
 		let re = regex::Regex::new(&format!(
-			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  \[{}\] {}$",
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}} \[{}\] {}$",
 			EXPECTED_NODE_NAME, EXPECTED_LOG_MESSAGE,
 		))
 		.unwrap();
@@ -448,7 +448,7 @@ mod tests {
 	#[test]
 	fn do_not_write_with_colors_on_tty() {
 		let re = regex::Regex::new(&format!(
-			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}}  {}$",
+			r"^\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}} {}$",
 			EXPECTED_LOG_MESSAGE,
 		))
 		.unwrap();

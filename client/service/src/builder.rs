@@ -804,6 +804,7 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 			client.clone(),
 			subscriptions.clone(),
 			deny_unsafe,
+			config.rpc_max_payload,
 		);
 		(chain, state, child_state)
 	};

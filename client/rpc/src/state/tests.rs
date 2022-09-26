@@ -63,6 +63,7 @@ fn should_return_storage() {
 		Arc::new(client),
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
+		None,
 	);
 	let key = StorageKey(KEY.to_vec());
 
@@ -105,6 +106,7 @@ fn should_return_child_storage() {
 		client,
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
+		None,
 	);
 	let child_key = prefixed_storage_key();
 	let key = StorageKey(b"key".to_vec());
@@ -144,6 +146,7 @@ fn should_call_contract() {
 		client,
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
+		None,
 	);
 
 	assert_matches!(
@@ -162,6 +165,7 @@ fn should_notify_about_storage_changes() {
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
+			None,
 		);
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
@@ -200,6 +204,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
+			None,
 		);
 
 		let alice_balance_key = blake2_256(&runtime::system::balance_of_key(AccountKeyring::Alice.into()));
@@ -242,6 +247,7 @@ fn should_query_storage() {
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
+			None,
 		);
 
 		let mut add_block = |nonce| {
@@ -463,6 +469,7 @@ fn should_return_runtime_version() {
 		client.clone(),
 		SubscriptionManager::new(Arc::new(TaskExecutor)),
 		DenyUnsafe::No,
+		None,
 	);
 
 	let result = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
@@ -490,6 +497,7 @@ fn should_notify_on_runtime_version_initially() {
 			client.clone(),
 			SubscriptionManager::new(Arc::new(TaskExecutor)),
 			DenyUnsafe::No,
+			None,
 		);
 
 		api.subscribe_runtime_version(Default::default(), subscriber);

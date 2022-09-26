@@ -44,6 +44,7 @@ frame-benchmarking = { version = "3.1.0", default-features = false, path = "../.
 frame-support = { version = "3.0.0", default-features = false, path = "../../../frame/support" }
 frame-system = { version = "3.0.0", default-features = false, path = "../../../frame/system" }
 frame-system-benchmarking = { version = "3.0.0", default-features = false, path = "../../../frame/system/benchmarking", optional = true }
+frame-election-provider-support = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-support" }
 frame-system-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/system/rpc/runtime-api/" }
 frame-try-runtime = { version = "0.9.0", default-features = false, path = "../../../frame/try-runtime", optional = true }
 pallet-authority-discovery = { version = "3.0.0", default-features = false, path = "../../../frame/authority-discovery" }
@@ -58,7 +59,7 @@ pallet-contracts-rpc-runtime-api = { version = "3.0.0", default-features = false
 pallet-democracy = { version = "3.0.0", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "3.0.0", default-features = false, path = "../../../frame/election-provider-multi-phase" }
 pallet-elections-phragmen = { version = "4.0.0", default-features = false, path = "../../../frame/elections-phragmen" }
-pallet-grandpa = { version = "3.0.0", default-features = false, path = "../../../frame/grandpa" }
+pallet-grandpa = { version = "3.1.0", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "3.0.0", default-features = false, path = "../../../frame/im-online" }
 pallet-indices = { version = "3.0.0", default-features = false, path = "../../../frame/indices" }
 pallet-identity = { version = "3.0.0", default-features = false, path = "../../../frame/identity" }
@@ -82,6 +83,7 @@ pallet-treasury = { version = "3.0.0", default-features = false, path = "../../.
 pallet-utility = { version = "3.0.0", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+pallet-transaction-storage = { version = "3.0.0", default-features = false, path = "../../../frame/transaction-storage" }
 pallet-vesting = { version = "3.0.0", default-features = false, path = "../../../frame/vesting" }
 pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../../../frame/chainbridge" }
 pallet-cere-ddc = { version = "5.0.0", default-features = false, path = "../../../frame/ddc-pallet" }
@@ -151,6 +153,7 @@ std = [
 	"pallet-tips/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
+	"pallet-transaction-storage/std",
 	"pallet-treasury/std",
 	"sp-transaction-pool/std",
 	"pallet-utility/std",
@@ -189,6 +192,7 @@ runtime-benchmarks = [
 	"pallet-staking/runtime-benchmarks",
 	"pallet-timestamp/runtime-benchmarks",
 	"pallet-tips/runtime-benchmarks",
+	"pallet-transaction-storage/runtime-benchmarks",
 	"pallet-treasury/runtime-benchmarks",
 	"pallet-utility/runtime-benchmarks",
 	"pallet-vesting/runtime-benchmarks",

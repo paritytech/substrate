@@ -381,11 +381,13 @@ fn start_rpc_servers<
 			config.rpc_http,
 			|address| sc_rpc_server::start_http(
 				address,
+				config.rpc_http_threads,
 				config.rpc_cors.as_ref(),
 				gen_handler(
 					deny_unsafe(&address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "http")
 				),
+				config.rpc_max_payload
 			),
 		)?.map(|s| waiting::HttpServer(Some(s))),
 		maybe_start_server(
@@ -398,6 +400,7 @@ fn start_rpc_servers<
 					deny_unsafe(&address, &config.rpc_methods),
 					sc_rpc_server::RpcMiddleware::new(rpc_metrics.clone(), "ws")
 				),
+				config.rpc_max_payload
 			),
 		)?.map(|s| waiting::WsServer(Some(s))),
 	)))

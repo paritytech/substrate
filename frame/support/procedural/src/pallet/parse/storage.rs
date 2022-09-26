@@ -25,28 +25,60 @@ mod keyword {
 	syn::custom_keyword!(Error);
 	syn::custom_keyword!(pallet);
 	syn::custom_keyword!(getter);
+	syn::custom_keyword!(storage_prefix);
 	syn::custom_keyword!(OptionQuery);
 	syn::custom_keyword!(ValueQuery);
 }
 
-/// Parse for `#[pallet::getter(fn dummy)]`
-pub struct PalletStorageAttr {
-	getter: syn::Ident,
+/// Parse for one of the following:
+/// * `#[pallet::getter(fn dummy)]`
+/// * `#[pallet::storage_prefix = "CustomName"]`
+pub enum PalletStorageAttr {
+	Getter(syn::Ident, proc_macro2::Span),
+	StorageName(syn::LitStr, proc_macro2::Span),
+}
+
+impl PalletStorageAttr {
+	fn attr_span(&self) -> proc_macro2::Span {
+		match self {
+			Self::Getter(_, span) | Self::StorageName(_, span) => *span,
+		}
+	}
 }
 
 impl syn::parse::Parse for PalletStorageAttr {
 	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
 		input.parse::<syn::Token![#]>()?;
+		let attr_span = input.span();
 		let content;
 		syn::bracketed!(content in input);
 		content.parse::<keyword::pallet>()?;
 		content.parse::<syn::Token![::]>()?;
-		content.parse::<keyword::getter>()?;
 
-		let generate_content;
-		syn::parenthesized!(generate_content in content);
-		generate_content.parse::<syn::Token![fn]>()?;
-		Ok(Self { getter: generate_content.parse::<syn::Ident>()? })
+		let lookahead = content.lookahead1();
+		if lookahead.peek(keyword::getter) {
+			content.parse::<keyword::getter>()?;
+
+			let generate_content;
+			syn::parenthesized!(generate_content in content);
+			generate_content.parse::<syn::Token![fn]>()?;
+			Ok(Self::Getter(generate_content.parse::<syn::Ident>()?, attr_span))
+		} else if lookahead.peek(keyword::storage_prefix) {
+			content.parse::<keyword::storage_prefix>()?;
+			content.parse::<syn::Token![=]>()?;
+
+			let renamed_prefix = content.parse::<syn::LitStr>()?;
+			// Ensure the renamed prefix is a proper Rust identifier
+			syn::parse_str::<syn::Ident>(&renamed_prefix.value())
+				.map_err(|_| {
+					let msg = format!("`{}` is not a valid identifier", renamed_prefix.value());
+					syn::Error::new(renamed_prefix.span(), msg)
+				})?;
+
+			Ok(Self::StorageName(renamed_prefix, attr_span))
+		} else {
+			Err(lookahead.error())
+		}
 	}
 }
 
@@ -89,6 +121,8 @@ pub struct StorageDef {
 	pub instances: Vec<helper::InstanceUsage>,
 	/// Optional getter to generate. If some then query_kind is ensured to be some as well.
 	pub getter: Option<syn::Ident>,
+	/// Optional expression that evaluates to a type that can be used as StoragePrefix instead of ident.
+	pub rename_as: Option<syn::LitStr>,
 	/// Whereas the querytype of the storage is OptionQuery or ValueQuery.
 	/// Note that this is best effort as it can't be determined when QueryKind is generic, and
 	/// result can be false if user do some unexpected type alias.
@@ -104,7 +138,6 @@ pub struct StorageDef {
 	/// If generics are not named, this is none.
 	pub named_generics: Option<StorageGenerics>,
 }
-
 
 /// The parsed generic from the
 #[derive(Clone)]
@@ -541,6 +574,25 @@ fn extract_key(ty: &syn::Type) -> syn::Result<syn::Type> {
 }
 
 impl StorageDef {
+	/// Return the storage prefix for this storage item
+	pub fn prefix(&self) -> String {
+		self
+			.rename_as
+			.as_ref()
+			.map(syn::LitStr::value)
+			.unwrap_or(self.ident.to_string())
+	}
+
+	/// Return either the span of the ident or the span of the literal in the
+	/// #[storage_prefix] attribute
+	pub fn prefix_span(&self) -> proc_macro2::Span {
+		self
+			.rename_as
+			.as_ref()
+			.map(syn::LitStr::span)
+			.unwrap_or(self.ident.span())
+	}
+
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,
@@ -552,12 +604,30 @@ impl StorageDef {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::storage, expect item type."));
 		};
 
-		let mut attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
-		if attrs.len() > 1 {
+		let attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
+		let (mut getters, mut names) = attrs
+			.into_iter()
+			.partition::<Vec<_>, _>(|attr| matches!(attr, PalletStorageAttr::Getter(..)));
+		if getters.len() > 1 {
 			let msg = "Invalid pallet::storage, multiple argument pallet::getter found";
-			return Err(syn::Error::new(attrs[1].getter.span(), msg));
+			return Err(syn::Error::new(getters[1].attr_span(), msg));
 		}
-		let getter = attrs.pop().map(|attr| attr.getter);
+		if names.len() > 1 {
+			let msg = "Invalid pallet::storage, multiple argument pallet::storage_prefix found";
+			return Err(syn::Error::new(names[1].attr_span(), msg));
+		}
+		let getter = getters.pop().map(|attr| {
+			match attr {
+				PalletStorageAttr::Getter(ident, _) => ident,
+				_ => unreachable!(),
+			}
+		});
+		let rename_as = names.pop().map(|attr| {
+			match attr {
+				PalletStorageAttr::StorageName(lit, _) => lit,
+				_ => unreachable!(),
+			}
+		});
 
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 
@@ -609,6 +679,7 @@ impl StorageDef {
 			metadata,
 			docs,
 			getter,
+			rename_as,
 			query_kind,
 			where_clause,
 			cfg_attrs,

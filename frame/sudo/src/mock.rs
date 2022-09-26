@@ -45,7 +45,7 @@ pub mod logger {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(*weight)]
-		pub(crate) fn privileged_i32_log(
+		pub fn privileged_i32_log(
 			origin: OriginFor<T>,
 			i: i32,
 			weight: Weight
@@ -58,7 +58,7 @@ pub mod logger {
 		}
 
 		#[pallet::weight(*weight)]
-		pub(crate) fn non_privileged_log(
+		pub fn non_privileged_log(
 			origin: OriginFor<T>,
 			i: i32,
 			weight: Weight
