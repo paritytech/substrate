@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBroadcasted {
 	/// The number of peers the transaction was broadcasted to.
-	#[serde(with = "as_hex")]
+	#[serde(with = "as_string")]
 	pub num_peers: usize,
 }
 
@@ -45,7 +45,7 @@ pub struct TransactionBlock<Hash> {
 	/// The hash of the block the transaction was included into.
 	pub hash: Hash,
 	/// The index (zero-based) of the transaction within the body of the block.
-	#[serde(with = "as_hex")]
+	#[serde(with = "as_string")]
 	pub index: usize,
 }
 
@@ -224,27 +224,19 @@ impl<Hash> From<TransactionEventIR<Hash>> for TransactionEvent<Hash> {
 	}
 }
 
-/// Serialize and deserialize to hexadecimal representation.
-mod as_hex {
+/// Serialize and deserialize helper as string.
+mod as_string {
+	use super::*;
 	use serde::{Deserializer, Serializer};
-	use sp_core::U256;
 
-	pub fn serialize<S, T>(data: &T, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-		T: Copy + Into<U256> + TryFrom<U256>,
-	{
-		let u256: U256 = (*data).into();
-		serde::Serialize::serialize(&u256, serializer)
+	pub fn serialize<S: Serializer>(data: &usize, serializer: S) -> Result<S::Ok, S::Error> {
+		data.to_string().serialize(serializer)
 	}
 
-	pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-	where
-		D: Deserializer<'de>,
-		T: Copy + Into<U256> + TryFrom<U256>,
-	{
-		let u256: U256 = serde::Deserialize::deserialize(deserializer)?;
-		TryFrom::try_from(u256).map_err(|_| serde::de::Error::custom("Try from failed"))
+	pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<usize, D::Error> {
+		String::deserialize(deserializer)?
+			.parse()
+			.map_err(|e| serde::de::Error::custom(format!("Parsing failed: {}", e)))
 	}
 }
 
@@ -271,7 +263,7 @@ mod tests {
 			TransactionEvent::Broadcasted(TransactionBroadcasted { num_peers: 2 });
 		let ser = serde_json::to_string(&event).unwrap();
 
-		let exp = r#"{"event":"broadcasted","numPeers":"0x2"}"#;
+		let exp = r#"{"event":"broadcasted","numPeers":"2"}"#;
 		assert_eq!(ser, exp);
 
 		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
@@ -296,7 +288,7 @@ mod tests {
 			}));
 		let ser = serde_json::to_string(&event).unwrap();
 
-		let exp = r#"{"event":"bestChainBlockIncluded","block":{"hash":"0x0000000000000000000000000000000000000000000000000000000000000001","index":"0x2"}}"#;
+		let exp = r#"{"event":"bestChainBlockIncluded","block":{"hash":"0x0000000000000000000000000000000000000000000000000000000000000001","index":"2"}}"#;
 		assert_eq!(ser, exp);
 
 		let event_dec: TransactionEvent<H256> = serde_json::from_str(exp).unwrap();
@@ -311,7 +303,7 @@ mod tests {
 		});
 		let ser = serde_json::to_string(&event).unwrap();
 
-		let exp = r#"{"event":"finalized","block":{"hash":"0x0000000000000000000000000000000000000000000000000000000000000001","index":"0xa"}}"#;
+		let exp = r#"{"event":"finalized","block":{"hash":"0x0000000000000000000000000000000000000000000000000000000000000001","index":"10"}}"#;
 		assert_eq!(ser, exp);
 
 		let event_dec: TransactionEvent<H256> = serde_json::from_str(exp).unwrap();
