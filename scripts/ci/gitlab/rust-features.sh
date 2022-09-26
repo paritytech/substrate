@@ -22,17 +22,13 @@
 # are used to gate specific functionality which should only be enabled
 # if the feature is present.
 #
-# Has `cargo-workspaces` as optional dependency:
-# https://github.com/pksunkara/cargo-workspaces
-#
 # Invocation scheme:
 # 	./rust-features.sh <CARGO-ROOT-PATH>
 #
 # The steps of this script:
 #   1. Check that all required dependencies are installed.
 #   2. Check that all rules are fullfilled for the whole workspace. If not:
-#   3. Print an error and check if `cargo-workspaces` is installed. If so:
-#   4. List all crates and go through each one to find the offending crate.
+#   4. Check all crates to find the offending ones.
 #   5. Print all offending crates and exit with failure.
 #
 #######################################################################
@@ -53,33 +49,28 @@ declare -a RULES=(
 function check_does_not_imply() {
 	ENABLED=$1
 	STAYS_DISABLED=$2
-	echo "📏 Checking that '$ENABLED' does not imply '$STAYS_DISABLED'"
+	echo "📏 Checking that $ENABLED does not imply $STAYS_DISABLED ..."
 
 	RET=0
 	# Check if the forbidden feature is enabled anywhere in the workspace.
 	cargo tree --no-default-features --locked --workspace -e features --features "$ENABLED" | grep -q "feature \"$STAYS_DISABLED\"" || RET=$?
 	if [ $RET -ne 0 ]; then
-		echo "✅ Feature '$ENABLED' does not imply '$STAYS_DISABLED' in the workspace"
+		echo "✅ $ENABLED does not imply $STAYS_DISABLED in the workspace"
 		return
 	else
-		echo "❌ Feature '$ENABLED' implies '$STAYS_DISABLED' in the workspace"
+		echo "❌ $ENABLED implies $STAYS_DISABLED in the workspace"
 	fi
 
-	# Check if `cargo-workspaces` is installed.
-	# If not, the user only gets a generic error instead of a nicer one.
-	if ! cargo workspaces --version > /dev/null 2>&1; then
-		echo "❌ Install 'cargo-workspaces' for a more detailed error message."
-		exit 1
-	fi
-
-	CRATES=`cargo workspaces list --all | egrep -o '^(\w|-)+'`
+	# Find all Cargo.toml files but exclude the root one since we know that it is broken.
+	CARGOS=`find $SUBSTRATE_ROOT -name Cargo.toml -not -path "$SUBSTRATE_ROOT/Cargo.toml"`
 	FAILED=0
 	PASSED=0
-	echo "🔍 Checking individual crates"
+	# number of all cargos
+	echo "🔍 Checking individual crates - this takes some time."
 
-	for CRATE in $CRATES; do
+	for CARGO in $CARGOS; do
 		RET=0
-		OUTPUT=$(cargo tree --no-default-features --locked -e features --features $ENABLED -p $CRATE 2>&1 || true)
+		OUTPUT=$(cargo tree --no-default-features --locked -e features --features $ENABLED --manifest-path $CARGO 2>&1 || true)
 		IS_NOT_SUPPORTED=$(echo $OUTPUT | grep -q "not supported for packages in this workspace" || echo $?)
 
 		if [ $IS_NOT_SUPPORTED -eq 0 ]; then
@@ -87,7 +78,8 @@ function check_does_not_imply() {
 			# requested feature which is fine.
 			PASSED=$((PASSED+1))
 		elif echo "$OUTPUT" | grep -q "feature \"$STAYS_DISABLED\""; then
-			echo "❌ Feature '$ENABLED' implies '$STAYS_DISABLED' in $CRATE; enabled by"
+			echo "❌ Violation in $CARGO enabled by dependency"
+			# Best effort hint for which dependency needs to be fixed.
 			echo "$OUTPUT" | grep -w "feature \"$STAYS_DISABLED\"" | head -n 1
 			FAILED=$((FAILED+1))
 		else
@@ -97,15 +89,19 @@ function check_does_not_imply() {
 
 	TOTAL=$((PASSED + FAILED))
 	echo "Checked $TOTAL crates in total of which $FAILED failed and $PASSED passed."
-
-	if [ $FAILED -ne 0 ]; then
-		exit 1
-	fi
+	echo "Exiting with code 1"
+	exit 1
 }
 
 cd "$SUBSTRATE_ROOT"
 
 for RULE in "${RULES[@]}"; do
     read -a splits <<< "$RULE"
-	check_does_not_imply "${splits[0]}" "${splits[3]}"
+	ENABLED=${splits[0]}
+	STAYS_DISABLED=${splits[3]}
+	# Split ENABLED at , and check each one.
+	IFS=',' read -ra ENABLED_SPLIT <<< "$ENABLED"
+	for ENABLED_SPLIT in "${ENABLED_SPLIT[@]}"; do
+		check_does_not_imply "$ENABLED_SPLIT" "$STAYS_DISABLED"
+	done	
 done

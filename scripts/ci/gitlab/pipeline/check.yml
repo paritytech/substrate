@@ -41,7 +41,6 @@ test-rust-features:
     - .kubernetes-env
     - .test-refs-no-trigger-prs-only
   script:
-    - cargo install --git https://github.com/pksunkara/cargo-workspaces --tag v0.2.35 --force cargo-workspaces
     - bash ./scripts/ci/gitlab/rust-features.sh .
 
 test-prometheus-alerting-rules:
