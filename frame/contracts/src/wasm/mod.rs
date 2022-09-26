@@ -35,7 +35,7 @@ use crate::{
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::dispatch::{DispatchError, DispatchResult};
+use frame_support::{dispatch::{DispatchError, DispatchResult}, weights::OldWeight};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
@@ -1545,7 +1545,7 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let gas_left = u64::decode(&mut &*output.data).unwrap();
+		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
 		// TODO: maybe factor in proof size weight
 		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");

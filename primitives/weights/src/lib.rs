@@ -70,7 +70,7 @@ pub mod constants {
 	MaxEncodedLen,
 	TypeInfo,
 )]
-pub struct OldWeight(u64);
+pub struct OldWeight(pub u64);
 
 /// The weight of database operations that the runtime can invoke.
 ///
