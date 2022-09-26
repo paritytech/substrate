@@ -177,8 +177,8 @@ pub use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, BalancingConfig, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128,
-	Support, Supports, VoteWeight, BoundedSupports,
+	Assignment, BalancingConfig, BoundedSupports, ElectionResult, Error, ExtendedBalance,
+	IdentifierT, PerThing128, Support, Supports, VoteWeight,
 };
 pub use traits::NposSolution;
 
@@ -373,10 +373,10 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 	/// The upper bound on election winners. The [`Self::DataProvider`] should
 	/// respect these bounds such that: `desired_targets() <= MaxTargets`.
 	type MaxTargets: Get<u32>;
-	
+
 	/// The upper bound on max voters per target.
 	type MaxVoters: Get<u32>;
-	
+
 	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
 	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
@@ -384,7 +384,8 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 	///
 	/// This should be implemented as a self-weighing function. The implementor should register its
 	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxVoters, Self::MaxTargets>, Self::Error>;
+	fn elect(
+	) -> Result<BoundedSupports<Self::AccountId, Self::MaxVoters, Self::MaxTargets>, Self::Error>;
 }
 
 pub trait ElectionProvider: ElectionProviderBase {

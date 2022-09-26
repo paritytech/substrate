@@ -74,15 +74,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_arithmetic::{traits::Zero, Normalizable, PerThing, Rational128, ThresholdOrd};
-use sp_core::{RuntimeDebug, bounded::BoundedVec};
+use sp_core::{bounded::BoundedVec, RuntimeDebug};
 use sp_std::{
 	cell::RefCell, cmp::Ordering, collections::btree_map::BTreeMap, prelude::*, rc::Rc, vec,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod mock;
@@ -463,7 +463,8 @@ impl<AccountId> Default for Support<AccountId> {
 pub type Supports<A> = Vec<(A, Support<A>)>;
 
 /// A bounded `Supports` with MaxVoters and MaxTargets.
-pub type BoundedSupports<A, MaxVoters, MaxTargets> = BoundedVec<(A, BoundedSupport<A, MaxVoters>), MaxTargets>;
+pub type BoundedSupports<A, MaxVoters, MaxTargets> =
+	BoundedVec<(A, BoundedSupport<A, MaxVoters>), MaxTargets>;
 
 /// Linkage from a winner to their [`Support`].
 ///

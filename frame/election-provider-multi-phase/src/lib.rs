@@ -231,7 +231,8 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProviderBase, ElectionProvider, InstantElectionProvider, NposSolution,
+	ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,

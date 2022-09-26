@@ -20,7 +20,8 @@
 //! careful when using it onchain.
 
 use crate::{
-	Debug, ElectionDataProvider, ElectionProviderBase, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
+	Debug, ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	NposSolver, WeightInfo,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::*;
