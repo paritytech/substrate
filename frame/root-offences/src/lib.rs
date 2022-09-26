@@ -88,11 +88,9 @@ pub mod pallet {
 
 			let slash_fraction =
 				offenders.clone().into_iter().map(|(_, fraction)| fraction).collect::<Vec<_>>();
-
 			let offence_details = Self::get_offence_details(offenders.clone())?;
 
 			Self::submit_offence(&offence_details, &slash_fraction);
-
 			Self::deposit_event(Event::CreatedOffence { offenders });
 			Ok(())
 		}
