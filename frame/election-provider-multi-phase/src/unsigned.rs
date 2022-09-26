@@ -856,7 +856,7 @@ mod tests {
 	use crate::{
 		mock::{
 			roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, ExtBuilder, Extrinsic,
-			MinerMaxWeight, MultiPhase, Runtime, RuntimeCall as OuterCall, RuntimeOrigin, System,
+			MinerMaxWeight, MultiPhase, Runtime, RuntimeCall, RuntimeOrigin, System,
 			TestNposSolution, TrimHelpers, UnsignedPhase,
 		},
 		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
@@ -1070,8 +1070,8 @@ mod tests {
 				raw_solution: Box::new(solution.clone()),
 				witness: witness(),
 			};
-			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(RuntimeOrigin::none());
+			let runtime_call: RuntimeCall = call.into();
+			let _ = runtime_call.dispatch(RuntimeOrigin::none());
 		})
 	}
 
@@ -1096,8 +1096,8 @@ mod tests {
 				raw_solution: Box::new(solution.clone()),
 				witness: correct_witness,
 			};
-			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(RuntimeOrigin::none());
+			let runtime_call: RuntimeCall = call.into();
+			let _ = runtime_call.dispatch(RuntimeOrigin::none());
 		})
 	}
 
@@ -1560,7 +1560,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = codec::Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned { .. })));
+			assert!(matches!(call, RuntimeCall::MultiPhase(Call::submit_unsigned { .. })));
 		})
 	}
 
@@ -1577,7 +1577,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
 			let call = match extrinsic.call {
-				OuterCall::MultiPhase(call @ Call::submit_unsigned { .. }) => call,
+				RuntimeCall::MultiPhase(call @ Call::submit_unsigned { .. }) => call,
 				_ => panic!("bad call: unexpected submission"),
 			};
 

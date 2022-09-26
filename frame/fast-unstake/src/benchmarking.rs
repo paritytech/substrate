@@ -26,7 +26,6 @@ use frame_support::{
 	traits::{Currency, EnsureOrigin, Get, Hooks},
 };
 use frame_system::RawOrigin;
-use pallet_nomination_pools::{Pallet as Pools, PoolId};
 use pallet_staking::Pallet as Staking;
 use sp_runtime::traits::{StaticLookup, Zero};
 use sp_staking::EraIndex;
@@ -76,25 +75,6 @@ pub(crate) fn fast_unstake_events<T: Config>() -> Vec<crate::Event<T>> {
 		.collect::<Vec<_>>()
 }
 
-fn setup_pool<T: Config>() -> PoolId {
-	let depositor = frame_benchmarking::account::<T::AccountId>("depositor_42", 0, USER_SEED);
-	let depositor_lookup = l::<T>(depositor.clone());
-
-	let stake = Pools::<T>::depositor_min_bond();
-	CurrencyOf::<T>::make_free_balance_be(&depositor, stake * 10u32.into());
-
-	Pools::<T>::create(
-		RawOrigin::Signed(depositor.clone()).into(),
-		stake,
-		depositor_lookup.clone(),
-		depositor_lookup.clone(),
-		depositor_lookup,
-	)
-	.unwrap();
-
-	pallet_nomination_pools::LastPoolId::<T>::get()
-}
-
 fn setup_staking<T: Config>(v: u32, until: EraIndex) {
 	let ed = CurrencyOf::<T>::minimum_balance();
 
@@ -131,10 +111,8 @@ benchmarks! {
 	// on_idle, we we don't check anyone, but fully unbond and move them to another pool.
 	on_idle_unstake {
 		let who = create_unexposed_nominator::<T>();
-		let pool_id = setup_pool::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
-			Some(pool_id)
 		));
 		ErasToCheckPerBlock::<T>::put(1);
 
@@ -143,7 +121,7 @@ benchmarks! {
 		on_idle_full_block::<T>();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap(), maybe_pool_id: Some(pool_id) })
+			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap() })
 		);
 	}
 	: {
@@ -172,7 +150,6 @@ benchmarks! {
 		let who = create_unexposed_nominator::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
-			None,
 		));
 
 		// no one is queued thus far.
@@ -185,7 +162,7 @@ benchmarks! {
 		let checked: frame_support::BoundedVec<_, _> = (1..=u).rev().collect::<Vec<EraIndex>>().try_into().unwrap();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked, maybe_pool_id: None })
+			Some(UnstakeRequest { stash: who.clone(), checked })
 		);
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
@@ -199,7 +176,7 @@ benchmarks! {
 		assert_eq!(Queue::<T>::count(), 0);
 
 	}
-	:_(RawOrigin::Signed(who.clone()), None)
+	:_(RawOrigin::Signed(who.clone()))
 	verify {
 		assert_eq!(Queue::<T>::count(), 1);
 	}
@@ -208,7 +185,6 @@ benchmarks! {
 		let who = create_unexposed_nominator::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
-			None
 		));
 		assert_eq!(Queue::<T>::count(), 1);
 		whitelist_account!(who);

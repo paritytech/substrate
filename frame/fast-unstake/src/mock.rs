@@ -17,19 +17,10 @@
 
 use crate::{self as fast_unstake};
 use frame_support::{
-	assert_ok,
-	pallet_prelude::*,
-	parameter_types,
-	traits::{ConstU64, ConstU8, Currency},
-	weights::constants::WEIGHT_PER_SECOND,
-	PalletId,
+	pallet_prelude::*, parameter_types, traits::ConstU64, weights::constants::WEIGHT_PER_SECOND,
 };
-use sp_runtime::{
-	traits::{Convert, IdentityLookup},
-	FixedU128,
-};
+use sp_runtime::traits::{Convert, IdentityLookup};
 
-use frame_system::RawOrigin;
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
 use sp_std::prelude::*;
 
@@ -153,7 +144,7 @@ impl pallet_staking::Config for Runtime {
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
-	type OnStakerSlash = Pools;
+	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -170,29 +161,6 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 	fn convert(n: sp_core::U256) -> Balance {
 		n.try_into().unwrap()
 	}
-}
-
-parameter_types! {
-	pub const PostUnbondingPoolsWindow: u32 = 10;
-	pub const PoolsPalletId: PalletId = PalletId(*b"py/nopls");
-	pub static MaxMetadataLen: u32 = 10;
-	pub static CheckLevel: u8 = 255;
-}
-
-impl pallet_nomination_pools::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = ();
-	type Currency = Balances;
-	type CurrencyBalance = Balance;
-	type RewardCounter = FixedU128;
-	type BalanceToU256 = BalanceToU256;
-	type U256ToBalance = U256ToBalance;
-	type StakingInterface = Staking;
-	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
-	type MaxMetadataLen = MaxMetadataLen;
-	type MaxUnbonding = ConstU32<8>;
-	type MaxPointsToBalance = ConstU8<10>;
-	type PalletId = PoolsPalletId;
 }
 
 parameter_types! {
@@ -218,7 +186,6 @@ frame_support::construct_runtime!(
 		Timestamp: pallet_timestamp,
 		Balances: pallet_balances,
 		Staking: pallet_staking,
-		Pools: pallet_nomination_pools,
 		FastUnstake: fast_unstake,
 	}
 );
@@ -287,10 +254,6 @@ impl ExtBuilder {
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
-		// create one default pool.
-		let _ = pallet_nomination_pools::GenesisConfig::<Runtime> { ..Default::default() }
-			.assimilate_storage(&mut storage);
-
 		let validators_range = VALIDATOR_PREFIX..VALIDATOR_PREFIX + VALIDATORS_PER_ERA;
 		let nominators_range =
 			NOMINATOR_PREFIX..NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA;
@@ -337,11 +300,6 @@ impl ExtBuilder {
 
 			// because we read this value as a measure of how many validators we have.
 			pallet_staking::ValidatorCount::<Runtime>::put(VALIDATORS_PER_ERA as u32);
-
-			// make a pool
-			let amount_to_bond = Pools::depositor_min_bond();
-			Balances::make_free_balance_be(&10, amount_to_bond * 5);
-			assert_ok!(Pools::create(RawOrigin::Signed(10).into(), amount_to_bond, 900, 901, 902));
 		});
 		ext
 	}
@@ -359,14 +317,12 @@ pub(crate) fn run_to_block(n: u64, on_idle: bool) {
 	while System::block_number() < n {
 		Balances::on_finalize(System::block_number());
 		Staking::on_finalize(System::block_number());
-		Pools::on_finalize(System::block_number());
 		FastUnstake::on_finalize(System::block_number());
 
 		System::set_block_number(System::block_number() + 1);
 
 		Balances::on_initialize(System::block_number());
 		Staking::on_initialize(System::block_number());
-		Pools::on_initialize(System::block_number());
 		FastUnstake::on_initialize(System::block_number());
 		if on_idle {
 			FastUnstake::on_idle(System::block_number(), BlockWeights::get().max_block);
