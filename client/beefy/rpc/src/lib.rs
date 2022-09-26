@@ -166,6 +166,10 @@ where
 mod tests {
 	use super::*;
 
+	use beefy_gadget::{
+		communication::notification::BeefyVersionedFinalityProofSender,
+		justification::BeefyVersionedFinalityProof,
+	};
 	use beefy_primitives::{known_payload_ids, Payload, SignedCommitment};
 	use codec::{Decode, Encode};
 	use jsonrpsee::{types::EmptyParams, RpcModule};
