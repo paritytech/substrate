@@ -56,7 +56,6 @@ pub trait WeightInfo {
 	fn freeze() -> Weight;
 	fn thaw() -> Weight;
 	fn freeze_collection() -> Weight;
-	fn thaw_collection() -> Weight;
 	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
 	fn force_collection_status() -> Weight;
@@ -175,12 +174,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Nfts Class (r:1 w:1)
 	fn freeze_collection() -> Weight {
 		Weight::from_ref_time(23_129_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
-			.saturating_add(T::DbWeight::get().writes(1 as u64))
-	}
-	// Storage: Nfts Class (r:1 w:1)
-	fn thaw_collection() -> Weight {
-		Weight::from_ref_time(22_584_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
@@ -405,12 +398,6 @@ impl WeightInfo for () {
 	// Storage: Nfts Class (r:1 w:1)
 	fn freeze_collection() -> Weight {
 		Weight::from_ref_time(23_129_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
-			.saturating_add(RocksDbWeight::get().writes(1 as u64))
-	}
-	// Storage: Nfts Class (r:1 w:1)
-	fn thaw_collection() -> Weight {
-		Weight::from_ref_time(22_584_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}

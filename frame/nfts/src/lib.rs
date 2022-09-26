@@ -345,8 +345,6 @@ pub mod pallet {
 		Thawed { collection: T::CollectionId, item: T::ItemId },
 		/// Some `collection` was frozen.
 		CollectionFrozen { collection: T::CollectionId },
-		/// Some `collection` was thawed.
-		CollectionThawed { collection: T::CollectionId },
 		/// The owner changed.
 		OwnerChanged { collection: T::CollectionId, new_owner: T::AccountId },
 		/// The management team changed.
@@ -887,33 +885,6 @@ pub mod pallet {
 				details.is_frozen = true;
 
 				Self::deposit_event(Event::<T, I>::CollectionFrozen { collection });
-				Ok(())
-			})
-		}
-
-		/// Re-allow unprivileged transfers for a whole collection.
-		///
-		/// Origin must be Signed and the sender should be the Admin of the `collection`.
-		///
-		/// - `collection`: The collection to be thawed.
-		///
-		/// Emits `CollectionThawed`.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::thaw_collection())]
-		pub fn thaw_collection(
-			origin: OriginFor<T>,
-			collection: T::CollectionId,
-		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
-
-			Collection::<T, I>::try_mutate(collection, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-				ensure!(origin == details.admin, Error::<T, I>::NoPermission);
-
-				details.is_frozen = false;
-
-				Self::deposit_event(Event::<T, I>::CollectionThawed { collection });
 				Ok(())
 			})
 		}

@@ -212,7 +212,7 @@ benchmarks_instance_pallet! {
 			caller_lookup.clone(),
 			caller_lookup,
 			true,
-			false,
+			CollectionConfig::empty(),
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
 	verify {
@@ -245,15 +245,6 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), collection)
 	verify {
 		assert_last_event::<T, I>(Event::CollectionFrozen { collection }.into());
-	}
-
-	thaw_collection {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let origin = SystemOrigin::Signed(caller.clone()).into();
-		Nfts::<T, I>::freeze_collection(origin, collection)?;
-	}: _(SystemOrigin::Signed(caller.clone()), collection)
-	verify {
-		assert_last_event::<T, I>(Event::CollectionThawed { collection }.into());
 	}
 
 	transfer_ownership {

@@ -247,7 +247,16 @@ fn freezing_should_work() {
 		assert_ok!(Nfts::freeze_collection(RuntimeOrigin::signed(1), 0));
 		assert_noop!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2), Error::<Test>::Frozen);
 
-		assert_ok!(Nfts::thaw_collection(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Nfts::force_collection_status(
+			RuntimeOrigin::root(),
+			0,
+			1,
+			1,
+			1,
+			1,
+			false,
+			CollectionConfig::empty(),
+		));
 		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2));
 	});
 }
@@ -599,7 +608,7 @@ fn force_collection_status_should_work() {
 			1,
 			1,
 			true,
-			false,
+			CollectionConfig::empty(),
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 142, 1));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 169, 2));
@@ -1150,8 +1159,6 @@ fn buy_item_should_work() {
 				buy_item_call.dispatch(RuntimeOrigin::signed(user_2)),
 				Error::<Test>::Frozen
 			);
-
-			assert_ok!(Nfts::thaw_collection(RuntimeOrigin::signed(user_1), collection_id));
 
 			// freeze item
 			assert_ok!(Nfts::freeze(RuntimeOrigin::signed(user_1), collection_id, item_3));
