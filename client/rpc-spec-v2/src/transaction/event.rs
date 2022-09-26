@@ -251,6 +251,7 @@ mod as_hex {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_core::H256;
 
 	#[test]
 	fn validated_event() {
@@ -270,7 +271,7 @@ mod tests {
 			TransactionEvent::Broadcasted(TransactionBroadcasted { num_peers: 2 });
 		let ser = serde_json::to_string(&event).unwrap();
 
-		let exp = r#"{"event":"broadcasted","numPeers":2}"#;
+		let exp = r#"{"event":"broadcasted","numPeers":"0x2"}"#;
 		assert_eq!(ser, exp);
 
 		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
@@ -288,27 +289,32 @@ mod tests {
 		let event_dec: TransactionEvent<()> = serde_json::from_str(exp).unwrap();
 		assert_eq!(event_dec, event);
 
-		let event: TransactionEvent<u8> =
-			TransactionEvent::BestChainBlockIncluded(Some(TransactionBlock { hash: 1, index: 2 }));
+		let event: TransactionEvent<H256> =
+			TransactionEvent::BestChainBlockIncluded(Some(TransactionBlock {
+				hash: H256::from_low_u64_be(1),
+				index: 2,
+			}));
 		let ser = serde_json::to_string(&event).unwrap();
 
-		let exp = r#"{"event":"bestChainBlockIncluded","block":{"hash":1,"index":"0x2"}}"#;
+		let exp = r#"{"event":"bestChainBlockIncluded","block":{"hash":"0x0000000000000000000000000000000000000000000000000000000000000001","index":"0x2"}}"#;
 		assert_eq!(ser, exp);
 
-		let event_dec: TransactionEvent<u8> = serde_json::from_str(exp).unwrap();
+		let event_dec: TransactionEvent<H256> = serde_json::from_str(exp).unwrap();
 		assert_eq!(event_dec, event);
 	}
 
 	#[test]
 	fn finalized_event() {
-		let event: TransactionEvent<u8> =
-			TransactionEvent::Finalized(TransactionBlock { hash: 1, index: 10 });
+		let event: TransactionEvent<H256> = TransactionEvent::Finalized(TransactionBlock {
+			hash: H256::from_low_u64_be(1),
+			index: 10,
+		});
 		let ser = serde_json::to_string(&event).unwrap();
 
-		let exp = r#"{"event":"finalized","block":{"hash":1,"index":"0xa"}}"#;
+		let exp = r#"{"event":"finalized","block":{"hash":"0x0000000000000000000000000000000000000000000000000000000000000001","index":"0xa"}}"#;
 		assert_eq!(ser, exp);
 
-		let event_dec: TransactionEvent<u8> = serde_json::from_str(exp).unwrap();
+		let event_dec: TransactionEvent<H256> = serde_json::from_str(exp).unwrap();
 		assert_eq!(event_dec, event);
 	}
 
