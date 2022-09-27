@@ -680,7 +680,7 @@ pub mod pallet {
 		/// An account has stopped participating as either a validator or nominator.
 		Chilled { stash: T::AccountId },
 		/// The stakers' rewards are getting paid.
-		PayoutStarted { era_indx: EraIndex, validator_stash: T::AccountId },
+		PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
 		/// A validator has set their preferences.
 		ValidatorPrefsSet { stash: T::AccountId, prefs: ValidatorPrefs },
 	}
