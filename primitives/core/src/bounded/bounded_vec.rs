@@ -280,7 +280,7 @@ impl<'a, T, S: Get<u32>> BoundedSlice<'a, T, S> {
 	/// Create an instance from the first elements of the given slice (or all of it if it is smaller
 	/// than the length bound).
 	pub fn truncate_from(s: &'a [T]) -> Self {
-		Self(&s[0..(S::get() as usize)], PhantomData)
+		Self(&s[0..(s.len().min(S::get() as usize))], PhantomData)
 	}
 }
 
@@ -893,6 +893,16 @@ where
 pub mod test {
 	use super::*;
 	use crate::{bounded_vec, ConstU32};
+
+	#[test]
+	fn slice_truncate_from_works() {
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3, 4, 5]);
+		assert_eq!(bounded.deref(), &[1, 2, 3, 4]);
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3, 4]);
+		assert_eq!(bounded.deref(), &[1, 2, 3, 4]);
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3]);
+		assert_eq!(bounded.deref(), &[1, 2, 3]);
+	}
 
 	#[test]
 	fn slide_works() {
