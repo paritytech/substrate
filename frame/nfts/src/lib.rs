@@ -470,8 +470,6 @@ pub mod pallet {
 		Locked,
 		/// The collection's metadata is locked.
 		CollectionMetadataIsLocked,
-		/// The collection's attributes are locked.
-		CollectionAttributesAreLocked,
 		/// All items have been minted.
 		MaxSupplyReached,
 		/// The max supply has already been set.
