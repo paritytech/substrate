@@ -392,14 +392,14 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxWinners>, Self::Error>;
 }
 
-/// Elect a new set of winners, without specifying any bounds on the amount
-/// of data fetched from [`ElectionProviderBase::DataProvider`].
-/// An implementation could nonetheless impose its own custom limits.
+/// Same a [`BoundedElectionProvider`], but no bounds are imposed on the number
+/// of winners.
 ///
 /// The result is returned in a target major format, namely as
-/// *Vec<(AccountId, Vec<Support>)>*.
+///*Vec<(AccountId, Vec<Support>)>*.
 pub trait ElectionProvider: ElectionProviderBase {
-	/// Performs the election. This should be implemented as a self-weighing function.
+	/// Performs the election. This should be implemented as a self-weighing
+	/// function, similar to [`BoundedElectionProvider::elect()`].
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
