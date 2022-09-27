@@ -90,7 +90,6 @@ pub mod pallet {
 	};
 	use sp_staking::EraIndex;
 	use sp_std::{prelude::*, vec::Vec};
-	pub use types::PreventStakingOpsIfUnbonding;
 	pub use weights::WeightInfo;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
