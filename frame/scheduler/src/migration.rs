@@ -18,7 +18,7 @@
 //! Migrations for the scheduler pallet.
 
 use super::*;
-use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::traits::{schedule::MaybeHashed, OnRuntimeUpgrade};
 
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
@@ -126,6 +126,27 @@ pub mod v3 {
 						max_scheduled_per_block,
 					);
 					return Err("Agenda would overflow `MaxScheduledPerBlock`.")
+				}
+			}
+			// Check that bounding the calls will not overflow `MAX_LENGTH`.
+			let max_length = T::Preimages::MAX_LENGTH as usize;
+			for (block_number, agenda) in Agenda::<T>::iter() {
+				for schedule in agenda.iter().cloned().filter_map(|s| s) {
+					match schedule.call {
+						MaybeHashed::Value(call) => {
+							let l = call.using_encoded(|c| c.len());
+							if l > max_length {
+								log::error!(
+									target: TARGET,
+									"Call in agenda of block {:?} is too large: {} byte",
+									block_number,
+									l,
+								);
+								return Err("Call is too large.")
+							}
+						},
+						_ => (),
+					}
 				}
 			}
 
