@@ -954,7 +954,7 @@ where
 			R::report_offence(reporters, offence)
 		} else {
 			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded {
-				session_indx: offence_session,
+				session_index: offence_session,
 			});
 			Ok(())
 		}
