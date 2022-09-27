@@ -322,9 +322,9 @@ benchmarks_instance_pallet! {
 
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-	}: _(SystemOrigin::Signed(caller), collection, item, data.clone(), false)
+	}: _(SystemOrigin::Signed(caller), collection, item, data.clone())
 	verify {
-		assert_last_event::<T, I>(Event::MetadataSet { collection, item, data, is_frozen: false }.into());
+		assert_last_event::<T, I>(Event::MetadataSet { collection, item, data }.into());
 	}
 
 	clear_metadata {

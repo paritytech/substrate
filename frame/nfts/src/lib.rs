@@ -357,7 +357,14 @@ pub mod pallet {
 		Frozen { collection: T::CollectionId, item: T::ItemId },
 		/// Some `item` was thawed.
 		Thawed { collection: T::CollectionId, item: T::ItemId },
-		/// Some `collection` was frozen.
+		/// Some `item` was locked.
+		ItemLocked {
+			collection: T::CollectionId,
+			item: T::ItemId,
+			lock_metadata: bool,
+			lock_attributes: bool,
+		},
+		/// Some `collection` was locked.
 		CollectionLocked { collection: T::CollectionId },
 		/// The owner changed.
 		OwnerChanged { collection: T::CollectionId, new_owner: T::AccountId },
@@ -398,7 +405,6 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			data: BoundedVec<u8, T::StringLimit>,
-			is_frozen: bool,
 		},
 		/// Metadata has been cleared for an item.
 		MetadataCleared { collection: T::CollectionId, item: T::ItemId },
@@ -1226,6 +1232,61 @@ pub mod pallet {
 			})
 		}
 
+		/// Disallows changing the metadata of attributes of the item.
+		///
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// `collection`.
+		///
+		/// - `collection`: The collection if the `item`.
+		/// - `item`: An item to be locked.
+		/// - `lock_config`: The config with the settings to be locked.
+		///
+		/// Note: when the metadata or attributes are locked, it won't be possible the unlock them.
+		/// Emits `ItemLocked`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(0)]
+		pub fn lock_item(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			lock_metadata: bool,
+			lock_attributes: bool,
+		) -> DispatchResult {
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some))?;
+
+			let collection_details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+
+			if let Some(check_owner) = &maybe_check_owner {
+				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
+			}
+
+			ItemConfigOf::<T, I>::try_mutate(collection, item, |maybe_config| {
+				let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownItem)?;
+				let mut settings = config.values();
+
+				if lock_metadata {
+					settings.insert(ItemSetting::LockedMetadata);
+				}
+				if lock_attributes {
+					settings.insert(ItemSetting::LockedAttributes);
+				}
+
+				config.0 = settings;
+
+				Self::deposit_event(Event::<T, I>::ItemLocked {
+					collection,
+					item,
+					lock_metadata,
+					lock_attributes,
+				});
+				Ok(())
+			})
+		}
+
 		/// Set an attribute for a collection or item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
@@ -1270,9 +1331,9 @@ pub mod pallet {
 			let maybe_is_frozen = match maybe_item {
 				None => Ok(collection_settings.contains(CollectionSetting::LockedAttributes)),
 				Some(item) => Self::get_item_settings(&collection, &item)
-					.map(|v| v.contains(ItemSetting::NonTransferable)),
-			};
-			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+					.map(|v| v.contains(ItemSetting::LockedAttributes)),
+			}?;
+			ensure!(!maybe_is_frozen, Error::<T, I>::Frozen);
 
 			let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
 			if attribute.is_none() {
@@ -1340,9 +1401,9 @@ pub mod pallet {
 			let maybe_is_frozen = match maybe_item {
 				None => Ok(collection_settings.contains(CollectionSetting::LockedAttributes)),
 				Some(item) => Self::get_item_settings(&collection, &item)
-					.map(|v| v.contains(ItemSetting::NonTransferable)),
-			};
-			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
+					.map(|v| v.contains(ItemSetting::LockedAttributes)),
+			}?;
+			ensure!(!maybe_is_frozen, Error::<T, I>::Frozen);
 
 			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_item, &key)) {
 				collection_details.attributes.saturating_dec();
@@ -1366,7 +1427,6 @@ pub mod pallet {
 		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `item`: The identifier of the item whose metadata to set.
 		/// - `data`: The general information of this item. Limited in length by `StringLimit`.
-		/// - `is_frozen`: Whether the metadata should be frozen against further changes.
 		///
 		/// Emits `MetadataSet`.
 		///
@@ -1377,7 +1437,6 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			data: BoundedVec<u8, T::StringLimit>,
-			is_frozen: bool,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1386,23 +1445,25 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let settings = Self::get_collection_settings(&collection)?;
+			let (action_allowed, _) =
+				Self::is_item_setting_disabled(&collection, &item, ItemSetting::LockedMetadata)?;
+			ensure!(maybe_check_owner.is_none() || action_allowed, Error::<T, I>::Frozen);
+
+			let collection_settings = Self::get_collection_settings(&collection)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
 			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
-				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
-
 				if metadata.is_none() {
 					collection_details.item_metadatas.saturating_inc();
 				}
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				collection_details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
-				if !settings.contains(CollectionSetting::FreeHolding) && maybe_check_owner.is_some()
+				if !collection_settings.contains(CollectionSetting::FreeHolding) &&
+					maybe_check_owner.is_some()
 				{
 					deposit = T::DepositPerByte::get()
 						.saturating_mul(((data.len()) as u32).into())
@@ -1415,10 +1476,10 @@ pub mod pallet {
 				}
 				collection_details.total_deposit.saturating_accrue(deposit);
 
-				*metadata = Some(ItemMetadata { deposit, data: data.clone(), is_frozen });
+				*metadata = Some(ItemMetadata { deposit, data: data.clone() });
 
 				Collection::<T, I>::insert(&collection, &collection_details);
-				Self::deposit_event(Event::MetadataSet { collection, item, data, is_frozen });
+				Self::deposit_event(Event::MetadataSet { collection, item, data });
 				Ok(())
 			})
 		}
@@ -1452,10 +1513,11 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
-				let was_frozen = metadata.as_ref().map_or(false, |m| m.is_frozen);
-				ensure!(maybe_check_owner.is_none() || !was_frozen, Error::<T, I>::Frozen);
+			let (action_allowed, _) =
+				Self::is_item_setting_disabled(&collection, &item, ItemSetting::LockedMetadata)?;
+			ensure!(maybe_check_owner.is_none() || action_allowed, Error::<T, I>::Frozen);
 
+			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
 				if metadata.is_some() {
 					collection_details.item_metadatas.saturating_dec();
 				}
