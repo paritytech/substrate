@@ -92,7 +92,7 @@ pub mod pallet {
 		traits::{Saturating, Zero},
 		DispatchResult,
 	};
-	use sp_staking::{EraIndex, StakersStatusInterface};
+	use sp_staking::{EraIndex, StakersStatus, StakersStatusInterface};
 	use sp_std::{prelude::*, vec::Vec};
 	use weights::WeightInfo;
 
@@ -554,10 +554,13 @@ pub mod pallet {
 
 impl<T: Config> OnStakersUpdate<T::AccountId> for Pallet<T> {
 	fn on_new_staker(who: T::AccountId) {
-		// insert the new voter into `IdleNewStakers` if they are not already present.
-		match IdleNewStakers::<T>::try_get(&who) {
-			Err(_) => IdleNewStakers::<T>::insert(who, ()),
-			_ => return,
+		// add to idle new stakers if the stakers list is idle
+		if (T::StakersStatusInterface::status() == StakersStatus::Idle) {
+			// insert the new voter into `IdleNewStakers` if they are not already present.
+			match IdleNewStakers::<T>::try_get(&who) {
+				Err(_) => IdleNewStakers::<T>::insert(who, ()),
+				_ => return,
+			}
 		}
 	}
 
