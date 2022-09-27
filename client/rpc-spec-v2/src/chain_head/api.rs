@@ -16,16 +16,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate JSON-RPC interface v2.
-//!
-//! Specification [document](https://paritytech.github.io/json-rpc-interface-spec/).
+//! API trait for transactions.
 
-#![warn(missing_docs)]
-#![deny(unused_crate_dependencies)]
+use crate::chain_head::chain_head::FollowEvent;
+use jsonrpsee::proc_macros::rpc;
 
-pub mod chain_head;
-pub mod chain_spec;
-pub mod transaction;
-
-/// Task executor that is being used by RPC subscriptions.
-pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;
+#[rpc(client, server)]
+pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
+	/// Track the state of the head of the chain: the finalized, non-finalized, and best blocks.
+	///
+	/// See [`TransactionEvent`](crate::transaction::event::TransactionEvent) for details on
+	/// transaction life cycle.
+	#[subscription(
+		name = "chainHead_unstable_follow" => "chainHead_unstable_followBlock",
+		unsubscribe = "chainHead_unstable_unfollow",
+		item = FollowEvent<Header>,
+	)]
+	fn follow(&self);
+}
